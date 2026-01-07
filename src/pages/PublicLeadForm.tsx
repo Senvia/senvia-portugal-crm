@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
+import { PRODUCTION_URL } from '@/lib/constants';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -226,9 +227,9 @@ export default function PublicLeadForm() {
               />
               <Label htmlFor="gdpr" className="text-sm text-slate-600 leading-tight cursor-pointer">
                 Li e aceito a{' '}
-                <Link to="/privacy" target="_blank" className="text-primary hover:underline">
+                <a href={`${PRODUCTION_URL}/privacy`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
                   Política de Privacidade
-                </Link>
+                </a>
                 {' '}*
               </Label>
             </div>
