@@ -73,7 +73,7 @@ export default function Landing() {
             
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Button size="lg" className="bg-primary hover:bg-primary/90 text-base px-8" asChild>
-                <Link to="/login">
+                <Link to="/login?tab=signup">
                   Começar Gratuitamente
                   <ArrowRight className="ml-2 w-4 h-4" />
                 </Link>
@@ -272,7 +272,7 @@ export default function Landing() {
                   </li>
                 </ul>
                 <Button variant="outline" className="w-full border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white" asChild>
-                  <Link to="/login">Começar</Link>
+                  <Link to="/login?tab=signup">Começar</Link>
                 </Button>
               </CardContent>
             </Card>
@@ -316,7 +316,7 @@ export default function Landing() {
                   </li>
                 </ul>
                 <Button className="w-full bg-primary hover:bg-primary/90" asChild>
-                  <Link to="/login">Começar</Link>
+                  <Link to="/login?tab=signup">Começar</Link>
                 </Button>
               </CardContent>
             </Card>
@@ -335,7 +335,7 @@ export default function Landing() {
               Junte-se a dezenas de empresas portuguesas que já usam o Senvia para crescer.
             </p>
             <Button size="lg" className="bg-primary hover:bg-primary/90 text-base px-8" asChild>
-              <Link to="/login">
+              <Link to="/login?tab=signup">
                 Começar Agora
                 <ArrowRight className="ml-2 w-4 h-4" />
               </Link>

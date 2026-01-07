@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -45,9 +45,14 @@ const generateSlug = (name: string): string => {
 
 export default function Login() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { signIn, user, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  
+  // Tab state - default to signup if query param is set
+  const defaultTab = searchParams.get('tab') === 'signup' ? 'signup' : 'login';
+  const [activeTab, setActiveTab] = useState(defaultTab);
   
   // Login form state
   const [loginEmail, setLoginEmail] = useState('');
@@ -198,6 +203,18 @@ export default function Login() {
       if (authError) throw authError;
       if (!authData.user) throw new Error('Não foi possível criar o utilizador');
 
+      // Check if email confirmation is required (no session means confirmation needed)
+      if (!authData.session) {
+        toast({
+          title: 'Confirme o seu email',
+          description: 'Enviámos um email de confirmação. Confirme o seu email e depois faça login.',
+        });
+        setActiveTab('login');
+        setLoginEmail(signupEmail);
+        setIsLoading(false);
+        return;
+      }
+
       // 2. Create the organization (this also assigns admin role)
       const { error: orgError } = await supabase.rpc('create_organization_for_current_user', {
         _name: organizationName,
@@ -269,7 +286,7 @@ export default function Login() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Tabs defaultValue="login" className="w-full">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
               <TabsList className="grid w-full grid-cols-2 bg-slate-800">
                 <TabsTrigger value="login" className="data-[state=active]:bg-primary data-[state=active]:text-white">
                   Entrar

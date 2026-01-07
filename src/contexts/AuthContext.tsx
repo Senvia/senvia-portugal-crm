@@ -45,77 +45,86 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const isSuperAdmin = roles.includes('super_admin');
 
-  // Fetch profile, organization and roles
-  const fetchUserData = async (userId: string) => {
-    try {
-      // Fetch profile
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .maybeSingle();
-      
-      setProfile(profileData);
+  // Fetch profile, organization and roles - separate from auth listener to avoid deadlock
+  useEffect(() => {
+    let cancelled = false;
 
-      // Fetch roles
-      const { data: rolesData } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', userId);
-      
-      if (rolesData) {
-        setRoles(rolesData.map(r => r.role as AppRole));
-      }
-
-      // Fetch organization if profile has one
-      if (profileData?.organization_id) {
-        const { data: orgData } = await supabase
-          .from('organizations')
+    const fetchUserData = async (userId: string) => {
+      try {
+        // Fetch profile
+        const { data: profileData } = await supabase
+          .from('profiles')
           .select('*')
-          .eq('id', profileData.organization_id)
+          .eq('id', userId)
           .maybeSingle();
         
-        setOrganization(orgData);
-      }
-    } catch (error) {
-      console.error('Error fetching user data:', error);
-    }
-  };
+        if (cancelled) return;
+        setProfile(profileData);
 
+        // Fetch roles
+        const { data: rolesData } = await supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', userId);
+        
+        if (cancelled) return;
+        if (rolesData) {
+          setRoles(rolesData.map(r => r.role as AppRole));
+        }
+
+        // Fetch organization if profile has one
+        if (profileData?.organization_id) {
+          const { data: orgData } = await supabase
+            .from('organizations')
+            .select('*')
+            .eq('id', profileData.organization_id)
+            .maybeSingle();
+          
+          if (cancelled) return;
+          setOrganization(orgData);
+        }
+      } catch (error) {
+        console.error('Error fetching user data:', error);
+      }
+    };
+
+    if (user?.id) {
+      fetchUserData(user.id);
+    } else {
+      setProfile(null);
+      setOrganization(null);
+      setRoles([]);
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
+
+  // Auth state listener - MUST be synchronous, no async calls inside
   useEffect(() => {
     let mounted = true;
     
-    // Set up auth state listener FIRST
+    // Set up auth state listener FIRST (synchronous callback only!)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      (event, session) => {
         if (!mounted) return;
         
         setSession(session);
         setUser(session?.user ?? null);
-        
-        if (session?.user) {
-          await fetchUserData(session.user.id);
-        } else {
-          setProfile(null);
-          setOrganization(null);
-          setRoles([]);
-        }
         setIsLoading(false);
       }
     );
 
     // THEN check for existing session
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
       if (!mounted) return;
       
       setSession(session);
       setUser(session?.user ?? null);
-      
-      if (session?.user) {
-        await fetchUserData(session.user.id);
-      }
-      
       setIsLoading(false);
+    }).catch(() => {
+      if (mounted) setIsLoading(false);
     });
 
     return () => {
