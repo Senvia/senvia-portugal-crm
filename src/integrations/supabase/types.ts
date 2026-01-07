@@ -114,6 +114,7 @@ export type Database = {
       organizations: {
         Row: {
           created_at: string | null
+          form_settings: Json | null
           id: string
           name: string
           plan: string | null
@@ -123,6 +124,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          form_settings?: Json | null
           id?: string
           name: string
           plan?: string | null
@@ -132,6 +134,7 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          form_settings?: Json | null
           id?: string
           name?: string
           plan?: string | null

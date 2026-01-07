@@ -11,10 +11,11 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Copy, ExternalLink, Code, Shield, User, Building, Webhook, Send, Loader2, Link2, Check, Users } from "lucide-react";
+import { Copy, ExternalLink, Code, Shield, User, Building, Webhook, Send, Loader2, Link2, Check, Users, Palette } from "lucide-react";
 import { PLAN_LABELS, OrganizationPlan } from "@/types";
 import { supabase } from '@/integrations/supabase/client';
 import { TeamTab } from '@/components/settings/TeamTab';
+import { FormCustomizationSection } from '@/components/settings/FormCustomizationSection';
 import { PRODUCTION_URL } from '@/lib/constants';
 
 export default function Settings() {
@@ -107,6 +108,12 @@ export default function Settings() {
               </TabsTrigger>
             )}
             {canManageIntegrations && (
+              <TabsTrigger value="form" className="gap-2">
+                <Palette className="h-4 w-4" />
+                Formulário
+              </TabsTrigger>
+            )}
+            {canManageIntegrations && (
               <TabsTrigger value="integrations" className="gap-2">
                 <Link2 className="h-4 w-4" />
                 Integrações
@@ -168,6 +175,13 @@ export default function Settings() {
           {canManageTeam && (
             <TabsContent value="team">
               <TeamTab />
+            </TabsContent>
+          )}
+
+          {/* Tab Formulário */}
+          {canManageIntegrations && (
+            <TabsContent value="form">
+              <FormCustomizationSection />
             </TabsContent>
           )}
 
