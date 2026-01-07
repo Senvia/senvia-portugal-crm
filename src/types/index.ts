@@ -124,17 +124,17 @@ export interface FormSettings {
   custom_fields: CustomField[];
 }
 
-// Default Form Settings
+// Default Form Settings - TODOS os campos começam invisíveis
 export const DEFAULT_FORM_SETTINGS: FormSettings = {
   title: 'Deixe o seu Contacto',
   subtitle: 'Preencha os dados abaixo e entraremos em contacto consigo.',
   logo_url: null,
   primary_color: '#3B82F6',
   fields: {
-    name: { visible: true, required: true, label: 'Nome Completo' },
-    email: { visible: true, required: true, label: 'Email' },
-    phone: { visible: true, required: true, label: 'Telemóvel' },
-    message: { visible: false, required: false, label: 'Mensagem (opcional)' },
+    name: { visible: false, required: false, label: 'Nome Completo' },
+    email: { visible: false, required: false, label: 'Email' },
+    phone: { visible: false, required: false, label: 'Telemóvel' },
+    message: { visible: false, required: false, label: 'Mensagem' },
   },
   success_message: {
     title: 'Obrigado!',
