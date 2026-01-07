@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useTeamMembers, usePendingInvites, useCreateInvite, useCancelInvite, PendingInvite } from '@/hooks/useTeam';
+import { useTeamMembers, usePendingInvites, useCreateInvite, useCancelInvite, useResendInvite, PendingInvite } from '@/hooks/useTeam';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
-import { Users, UserPlus, Copy, X, Check, Clock, Loader2 } from 'lucide-react';
+import { Users, UserPlus, Copy, X, Check, Clock, Loader2, RefreshCw } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { pt } from 'date-fns/locale';
 
@@ -31,6 +31,7 @@ export function TeamTab() {
   const { data: invites, isLoading: loadingInvites } = usePendingInvites();
   const createInvite = useCreateInvite();
   const cancelInvite = useCancelInvite();
+  const resendInvite = useResendInvite();
   const { toast } = useToast();
 
   const [isInviteOpen, setIsInviteOpen] = useState(false);
@@ -38,6 +39,7 @@ export function TeamTab() {
   const [inviteRole, setInviteRole] = useState<'admin' | 'viewer'>('viewer');
   const [generatedLink, setGeneratedLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null);
 
   const handleCreateInvite = async () => {
     if (!inviteEmail.trim()) return;
@@ -58,6 +60,18 @@ export function TeamTab() {
     setCopied(true);
     toast({ title: 'Copiado!', description: 'Link copiado para a área de transferência.' });
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const copyInviteLink = (invite: PendingInvite) => {
+    const link = `${window.location.origin}/invite/${invite.token}`;
+    navigator.clipboard.writeText(link);
+    setCopiedInviteId(invite.id);
+    toast({ title: 'Link copiado!', description: 'Link de convite copiado para a área de transferência.' });
+    setTimeout(() => setCopiedInviteId(null), 2000);
+  };
+
+  const handleResendInvite = (invite: PendingInvite) => {
+    resendInvite.mutate(invite.id);
   };
 
   const handleCloseDialog = () => {
@@ -266,14 +280,38 @@ export function TeamTab() {
                         })}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleCancelInvite(invite)}
-                          disabled={cancelInvite.isPending}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() => copyInviteLink(invite)}
+                            title="Copiar link de convite"
+                          >
+                            {copiedInviteId === invite.id ? (
+                              <Check className="h-4 w-4 text-green-500" />
+                            ) : (
+                              <Copy className="h-4 w-4" />
+                            )}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() => handleResendInvite(invite)}
+                            disabled={resendInvite.isPending}
+                            title="Reenviar convite (renova expiração)"
+                          >
+                            <RefreshCw className={`h-4 w-4 ${resendInvite.isPending ? 'animate-spin' : ''}`} />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() => handleCancelInvite(invite)}
+                            disabled={cancelInvite.isPending}
+                            title="Cancelar convite"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
