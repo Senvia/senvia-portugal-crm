@@ -1,22 +1,30 @@
 // Senvia OS Type Definitions
 
-export type LeadStatus = 'new' | 'conversation' | 'scheduled' | 'sold' | 'lost';
+export type AppRole = 'super_admin' | 'admin' | 'viewer';
+export type LeadStatus = 'new' | 'contacted' | 'scheduled' | 'won' | 'lost';
+export type OrganizationPlan = 'basic' | 'pro';
 
 export interface Organization {
   id: string;
   name: string;
-  plan: 'starter' | 'professional' | 'enterprise';
-  public_api_key: string;
+  slug: string;
+  public_key: string;
+  plan: OrganizationPlan;
   created_at: string;
 }
 
 export interface Profile {
   id: string;
-  organization_id: string;
-  role: 'admin' | 'manager' | 'user';
+  organization_id: string | null;
   full_name: string;
   avatar_url?: string;
-  email: string;
+  created_at: string;
+}
+
+export interface UserRole {
+  id: string;
+  user_id: string;
+  role: AppRole;
 }
 
 export interface Lead {
@@ -36,23 +44,25 @@ export interface Lead {
 
 // PT-PT Status Labels
 export const STATUS_LABELS: Record<LeadStatus, string> = {
-  new: 'Novos',
-  conversation: 'Em Conversação',
+  new: 'Novo',
+  contacted: 'Contactado',
   scheduled: 'Agendado',
-  sold: 'Vendido',
+  won: 'Ganho',
   lost: 'Perdido',
 };
 
 // PT-PT Role Labels
-export const ROLE_LABELS: Record<Profile['role'], string> = {
+export const ROLE_LABELS: Record<AppRole, string> = {
+  super_admin: 'Super Administrador',
   admin: 'Administrador',
-  manager: 'Gestor',
-  user: 'Utilizador',
+  viewer: 'Visualizador',
 };
 
 // PT-PT Plan Labels
-export const PLAN_LABELS: Record<Organization['plan'], string> = {
-  starter: 'Inicial',
-  professional: 'Profissional',
-  enterprise: 'Empresarial',
+export const PLAN_LABELS: Record<OrganizationPlan, string> = {
+  basic: 'Básico',
+  pro: 'Profissional',
 };
+
+// Kanban column order
+export const KANBAN_COLUMNS: LeadStatus[] = ['new', 'contacted', 'scheduled', 'won', 'lost'];

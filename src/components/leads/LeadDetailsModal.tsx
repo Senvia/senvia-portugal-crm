@@ -27,7 +27,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { 
   MessageCircle, 
@@ -50,9 +49,9 @@ interface LeadDetailsModalProps {
 
 const statusStyles: Record<LeadStatus, string> = {
   new: "bg-primary/10 text-primary border-primary/20",
-  conversation: "bg-[hsl(280,84%,60%)]/10 text-[hsl(280,84%,50%)] border-[hsl(280,84%,60%)]/20",
+  contacted: "bg-[hsl(280,84%,60%)]/10 text-[hsl(280,84%,50%)] border-[hsl(280,84%,60%)]/20",
   scheduled: "bg-warning/10 text-warning border-warning/20",
-  sold: "bg-success/10 text-success border-success/20",
+  won: "bg-success/10 text-success border-success/20",
   lost: "bg-muted text-muted-foreground border-muted",
 };
 

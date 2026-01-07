@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Lead, LeadStatus, STATUS_LABELS } from "@/types";
+import { Lead, LeadStatus, STATUS_LABELS, KANBAN_COLUMNS } from "@/types";
 import { LeadCard } from "./LeadCard";
 import { cn } from "@/lib/utils";
 
@@ -10,21 +10,19 @@ interface KanbanBoardProps {
   onDelete: (leadId: string) => void;
 }
 
-const columns: LeadStatus[] = ['new', 'conversation', 'scheduled', 'sold', 'lost'];
-
 const columnColors: Record<LeadStatus, string> = {
   new: "border-t-primary",
-  conversation: "border-t-[hsl(280,84%,60%)]",
+  contacted: "border-t-[hsl(280,84%,60%)]",
   scheduled: "border-t-warning",
-  sold: "border-t-success",
+  won: "border-t-success",
   lost: "border-t-muted-foreground",
 };
 
 const columnBadgeColors: Record<LeadStatus, string> = {
   new: "bg-primary/10 text-primary",
-  conversation: "bg-[hsl(280,84%,60%)]/10 text-[hsl(280,84%,50%)]",
+  contacted: "bg-[hsl(280,84%,60%)]/10 text-[hsl(280,84%,50%)]",
   scheduled: "bg-warning/10 text-warning",
-  sold: "bg-success/10 text-success",
+  won: "bg-success/10 text-success",
   lost: "bg-muted text-muted-foreground",
 };
 
@@ -60,7 +58,7 @@ export function KanbanBoard({ leads, onStatusChange, onViewDetails, onDelete }: 
 
   return (
     <div className="flex gap-4 overflow-x-auto pb-4">
-      {columns.map((status) => {
+      {KANBAN_COLUMNS.map((status) => {
         const columnLeads = getLeadsByStatus(status);
         const isOver = dragOverColumn === status;
 
