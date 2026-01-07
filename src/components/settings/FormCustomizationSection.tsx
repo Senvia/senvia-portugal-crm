@@ -52,7 +52,8 @@ export function FormCustomizationSection() {
 
   const handlePreview = () => {
     if (organization?.public_key) {
-      window.open(`${PRODUCTION_URL}/p/${organization.public_key}`, '_blank');
+      // Use current origin for preview (works in both test and production)
+      window.open(`${window.location.origin}/p/${organization.public_key}`, '_blank');
     }
   };
 
