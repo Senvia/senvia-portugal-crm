@@ -7,11 +7,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, CheckCircle, AlertCircle, Zap } from 'lucide-react';
 import { z } from 'zod';
-import { FormSettings, DEFAULT_FORM_SETTINGS } from '@/types';
+import { FormSettings, DEFAULT_FORM_SETTINGS, CustomField } from '@/types';
 
 interface Organization {
   id: string;
@@ -36,6 +37,7 @@ export default function PublicLeadForm() {
   const [phone, setPhone] = useState('');
   const [message, setMessage] = useState('');
   const [gdprConsent, setGdprConsent] = useState(false);
+  const [customData, setCustomData] = useState<Record<string, string | number | boolean>>({});
 
   // Validate public_key on mount
   useEffect(() => {
@@ -47,7 +49,6 @@ export default function PublicLeadForm() {
       }
 
       try {
-        // Use public RPC function that doesn't require authentication
         const { data, error } = await supabase
           .rpc('get_public_form_by_key', { _public_key: public_key });
 
@@ -60,10 +61,9 @@ export default function PublicLeadForm() {
             name: org.name,
             form_settings: org.form_settings as unknown as FormSettings | null,
           });
-          // Merge with defaults
           if (org.form_settings) {
             const fetchedSettings = org.form_settings as unknown as Partial<FormSettings>;
-            setSettings({ ...DEFAULT_FORM_SETTINGS, ...fetchedSettings });
+            setSettings({ ...DEFAULT_FORM_SETTINGS, ...fetchedSettings, custom_fields: fetchedSettings.custom_fields || [] });
           }
           setIsValid(true);
         }
@@ -77,46 +77,36 @@ export default function PublicLeadForm() {
     validatePublicKey();
   }, [public_key]);
 
-  // Dynamic schema based on settings
-  const getSchema = () => {
-    const baseSchema = {
-      name: z.string().min(2, 'O nome deve ter pelo menos 2 caracteres'),
-      email: z.string().email('Email inválido'),
-      phone: z.string().regex(/^(\+351)?[0-9]{9}$/, 'Formato de telemóvel inválido'),
-      gdprConsent: z.literal(true, {
-        errorMap: () => ({ message: 'É necessário aceitar a Política de Privacidade' }),
-      }),
-    };
-
-    if (settings.show_message_field) {
-      return z.object({
-        ...baseSchema,
-        message: z.string().optional(),
-      });
-    }
-
-    return z.object(baseSchema);
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Clean phone number
     const cleanPhone = phone.replace(/\s/g, '');
     
-    // Validate form
-    const formData = settings.show_message_field 
-      ? { name, email, phone: cleanPhone, message, gdprConsent }
-      : { name, email, phone: cleanPhone, gdprConsent };
-    
-    const result = getSchema().safeParse(formData);
-    if (!result.success) {
-      toast({
-        title: 'Erro de validação',
-        description: result.error.errors[0].message,
-        variant: 'destructive',
-      });
+    // Basic validation
+    if (!name || name.length < 2) {
+      toast({ title: 'Erro', description: 'O nome deve ter pelo menos 2 caracteres', variant: 'destructive' });
       return;
+    }
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      toast({ title: 'Erro', description: 'Email inválido', variant: 'destructive' });
+      return;
+    }
+    if (!cleanPhone || !/^(\+351)?[0-9]{9}$/.test(cleanPhone)) {
+      toast({ title: 'Erro', description: 'Formato de telemóvel inválido', variant: 'destructive' });
+      return;
+    }
+    if (!gdprConsent) {
+      toast({ title: 'Erro', description: 'É necessário aceitar a Política de Privacidade', variant: 'destructive' });
+      return;
+    }
+
+    // Validate required custom fields
+    const sortedFields = [...(settings.custom_fields || [])].sort((a, b) => a.order - b.order);
+    for (const field of sortedFields) {
+      if (field.required && !customData[field.id]) {
+        toast({ title: 'Erro', description: `O campo "${field.label}" é obrigatório`, variant: 'destructive' });
+        return;
+      }
     }
 
     setIsSubmitting(true);
@@ -129,6 +119,7 @@ export default function PublicLeadForm() {
         gdpr_consent: true,
         public_key,
         source: 'Formulário Público',
+        custom_data: customData,
       };
 
       if (settings.show_message_field && message.trim()) {
@@ -154,7 +145,71 @@ export default function PublicLeadForm() {
     }
   };
 
-  // Loading state
+  const updateCustomField = (fieldId: string, value: string | number | boolean) => {
+    setCustomData(prev => ({ ...prev, [fieldId]: value }));
+  };
+
+  const renderCustomField = (field: CustomField) => {
+    switch (field.type) {
+      case 'text':
+      case 'number':
+        return (
+          <div key={field.id} className="space-y-2">
+            <Label htmlFor={field.id}>{field.label} {field.required && '*'}</Label>
+            <Input
+              id={field.id}
+              type={field.type}
+              placeholder={field.placeholder}
+              value={customData[field.id] as string || ''}
+              onChange={(e) => updateCustomField(field.id, field.type === 'number' ? Number(e.target.value) : e.target.value)}
+            />
+          </div>
+        );
+      case 'textarea':
+        return (
+          <div key={field.id} className="space-y-2">
+            <Label htmlFor={field.id}>{field.label} {field.required && '*'}</Label>
+            <Textarea
+              id={field.id}
+              placeholder={field.placeholder}
+              value={customData[field.id] as string || ''}
+              onChange={(e) => updateCustomField(field.id, e.target.value)}
+              rows={3}
+            />
+          </div>
+        );
+      case 'select':
+        return (
+          <div key={field.id} className="space-y-2">
+            <Label>{field.label} {field.required && '*'}</Label>
+            <Select value={customData[field.id] as string || ''} onValueChange={(v) => updateCustomField(field.id, v)}>
+              <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+              <SelectContent>
+                {field.options?.map((opt) => (
+                  <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        );
+      case 'checkbox':
+        return (
+          <div key={field.id} className="flex items-start space-x-2 pt-2">
+            <Checkbox
+              id={field.id}
+              checked={customData[field.id] as boolean || false}
+              onCheckedChange={(checked) => updateCustomField(field.id, checked === true)}
+            />
+            <Label htmlFor={field.id} className="text-sm text-slate-600 leading-tight cursor-pointer">
+              {field.label} {field.required && '*'}
+            </Label>
+          </div>
+        );
+      default:
+        return null;
+    }
+  };
+
   if (isValidating) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
@@ -163,7 +218,6 @@ export default function PublicLeadForm() {
     );
   }
 
-  // Invalid public_key
   if (!isValid) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
@@ -173,58 +227,39 @@ export default function PublicLeadForm() {
               <AlertCircle className="w-8 h-8 text-red-500" />
             </div>
             <CardTitle className="text-slate-900">Formulário Não Encontrado</CardTitle>
-            <CardDescription>
-              O link que está a usar é inválido ou expirou.
-            </CardDescription>
+            <CardDescription>O link que está a usar é inválido ou expirou.</CardDescription>
           </CardHeader>
         </Card>
       </div>
     );
   }
 
-  // Success state
   if (isSuccess) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
         <Card className="w-full max-w-md text-center">
           <CardHeader>
-            <div 
-              className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"
-              style={{ backgroundColor: `${settings.primary_color}20` }}
-            >
+            <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: `${settings.primary_color}20` }}>
               <CheckCircle className="w-8 h-8" style={{ color: settings.primary_color }} />
             </div>
             <CardTitle className="text-slate-900">{settings.success_message.title}</CardTitle>
-            <CardDescription className="text-base">
-              {settings.success_message.description}
-            </CardDescription>
+            <CardDescription className="text-base">{settings.success_message.description}</CardDescription>
           </CardHeader>
         </Card>
       </div>
     );
   }
 
-  // Form
+  const sortedCustomFields = [...(settings.custom_fields || [])].sort((a, b) => a.order - b.order);
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           {settings.logo_url ? (
-            <img 
-              src={settings.logo_url} 
-              alt={organization?.name || 'Logo'}
-              className="h-12 w-auto object-contain mx-auto mb-4"
-              onError={(e) => {
-                e.currentTarget.style.display = 'none';
-              }}
-            />
+            <img src={settings.logo_url} alt={organization?.name || 'Logo'} className="h-12 w-auto object-contain mx-auto mb-4" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
           ) : (
-            <div 
-              className="w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-4"
-              style={{ 
-                background: `linear-gradient(135deg, ${settings.primary_color}, ${settings.primary_color}dd)` 
-              }}
-            >
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-4" style={{ background: `linear-gradient(135deg, ${settings.primary_color}, ${settings.primary_color}dd)` }}>
               <Zap className="w-6 h-6 text-white" />
             </div>
           )}
@@ -235,90 +270,36 @@ export default function PublicLeadForm() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="name">{settings.labels.name} *</Label>
-              <Input
-                id="name"
-                type="text"
-                placeholder="João Silva"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-              />
+              <Input id="name" type="text" placeholder="João Silva" value={name} onChange={(e) => setName(e.target.value)} required />
             </div>
-            
             <div className="space-y-2">
               <Label htmlFor="phone">{settings.labels.phone} *</Label>
-              <Input
-                id="phone"
-                type="tel"
-                placeholder="912 345 678"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                required
-              />
+              <Input id="phone" type="tel" placeholder="912 345 678" value={phone} onChange={(e) => setPhone(e.target.value)} required />
             </div>
-            
             <div className="space-y-2">
               <Label htmlFor="email">{settings.labels.email} *</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="joao@exemplo.pt"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
+              <Input id="email" type="email" placeholder="joao@exemplo.pt" value={email} onChange={(e) => setEmail(e.target.value)} required />
             </div>
-
             {settings.show_message_field && (
               <div className="space-y-2">
                 <Label htmlFor="message">{settings.labels.message}</Label>
-                <Textarea
-                  id="message"
-                  placeholder="Escreva a sua mensagem..."
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  rows={3}
-                />
+                <Textarea id="message" placeholder="Escreva a sua mensagem..." value={message} onChange={(e) => setMessage(e.target.value)} rows={3} />
               </div>
             )}
-            
+            {sortedCustomFields.map(renderCustomField)}
             <div className="flex items-start space-x-2 pt-2">
-              <Checkbox
-                id="gdpr"
-                checked={gdprConsent}
-                onCheckedChange={(checked) => setGdprConsent(checked === true)}
-              />
+              <Checkbox id="gdpr" checked={gdprConsent} onCheckedChange={(checked) => setGdprConsent(checked === true)} />
               <Label htmlFor="gdpr" className="text-sm text-slate-600 leading-tight cursor-pointer">
-                Li e aceito a{' '}
-                <a href={`${PRODUCTION_URL}/privacy`} target="_blank" rel="noopener noreferrer" className="hover:underline" style={{ color: settings.primary_color }}>
-                  Política de Privacidade
-                </a>
-                {' '}*
+                Li e aceito a <a href={`${PRODUCTION_URL}/privacy`} target="_blank" rel="noopener noreferrer" className="hover:underline" style={{ color: settings.primary_color }}>Política de Privacidade</a> *
               </Label>
             </div>
-            
-            <Button 
-              type="submit" 
-              className="w-full"
-              style={{ backgroundColor: settings.primary_color }}
-              disabled={isSubmitting || !gdprConsent}
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  A enviar...
-                </>
-              ) : (
-                'Enviar'
-              )}
+            <Button type="submit" className="w-full" style={{ backgroundColor: settings.primary_color }} disabled={isSubmitting || !gdprConsent}>
+              {isSubmitting ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" />A enviar...</>) : 'Enviar'}
             </Button>
           </form>
         </CardContent>
       </Card>
-      
-      <p className="text-xs text-slate-400 mt-6">
-        Powered by <span className="font-medium">Senvia</span>
-      </p>
+      <p className="text-xs text-slate-400 mt-6">Powered by <span className="font-medium">Senvia</span></p>
     </div>
   );
 }

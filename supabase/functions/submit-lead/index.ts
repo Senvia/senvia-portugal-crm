@@ -12,6 +12,8 @@ interface LeadSubmission {
   gdpr_consent: boolean;
   public_key: string;
   source?: string;
+  notes?: string;
+  custom_data?: Record<string, unknown>;
 }
 
 Deno.serve(async (req) => {
@@ -103,7 +105,7 @@ Deno.serve(async (req) => {
 
     console.log('Organization found:', org.name);
 
-    // Insert lead
+    // Insert lead with custom data
     const { data: lead, error: leadError } = await supabase
       .from('leads')
       .insert({
@@ -114,6 +116,8 @@ Deno.serve(async (req) => {
         gdpr_consent: true,
         source: body.source || 'Formulário Público',
         status: 'new',
+        notes: body.notes || null,
+        custom_data: body.custom_data || {},
       })
       .select()
       .single();

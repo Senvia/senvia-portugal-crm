@@ -38,6 +38,7 @@ export interface Lead {
   source?: string;
   value?: number;
   gdpr_consent: boolean;
+  custom_data?: Record<string, string | number | boolean | string[] | null>;
   created_at: string;
   updated_at?: string;
 }
@@ -67,6 +68,35 @@ export const PLAN_LABELS: Record<OrganizationPlan, string> = {
 // Kanban column order
 export const KANBAN_COLUMNS: LeadStatus[] = ['new', 'contacted', 'scheduled', 'won', 'lost'];
 
+// Custom Field Types
+export type FieldType = 'text' | 'number' | 'select' | 'checkbox' | 'textarea';
+
+export interface CustomField {
+  id: string;
+  type: FieldType;
+  label: string;
+  placeholder?: string;
+  required: boolean;
+  options?: string[];
+  order: number;
+}
+
+export const FIELD_TYPE_LABELS: Record<FieldType, string> = {
+  text: 'Texto',
+  number: 'Número',
+  select: 'Seleção',
+  checkbox: 'Checkbox',
+  textarea: 'Texto Longo',
+};
+
+export const FIELD_TYPE_ICONS: Record<FieldType, string> = {
+  text: 'Type',
+  number: 'Hash',
+  select: 'List',
+  checkbox: 'CheckSquare',
+  textarea: 'AlignLeft',
+};
+
 // Form Settings Interface
 export interface FormSettings {
   title: string;
@@ -85,6 +115,7 @@ export interface FormSettings {
     description: string;
   };
   error_message: string;
+  custom_fields: CustomField[];
 }
 
 // Default Form Settings
@@ -105,4 +136,5 @@ export const DEFAULT_FORM_SETTINGS: FormSettings = {
     description: 'Recebemos o seu contacto e entraremos em contacto brevemente.',
   },
   error_message: 'Não foi possível enviar o formulário. Tente novamente.',
+  custom_fields: [],
 };

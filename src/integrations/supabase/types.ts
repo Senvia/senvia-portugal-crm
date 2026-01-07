@@ -17,6 +17,7 @@ export type Database = {
       leads: {
         Row: {
           created_at: string | null
+          custom_data: Json | null
           email: string
           gdpr_consent: boolean
           id: string
@@ -31,6 +32,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          custom_data?: Json | null
           email: string
           gdpr_consent?: boolean
           id?: string
@@ -45,6 +47,7 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          custom_data?: Json | null
           email?: string
           gdpr_consent?: boolean
           id?: string
