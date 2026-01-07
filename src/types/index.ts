@@ -66,3 +66,43 @@ export const PLAN_LABELS: Record<OrganizationPlan, string> = {
 
 // Kanban column order
 export const KANBAN_COLUMNS: LeadStatus[] = ['new', 'contacted', 'scheduled', 'won', 'lost'];
+
+// Form Settings Interface
+export interface FormSettings {
+  title: string;
+  subtitle: string;
+  logo_url: string | null;
+  primary_color: string;
+  show_message_field: boolean;
+  labels: {
+    name: string;
+    email: string;
+    phone: string;
+    message: string;
+  };
+  success_message: {
+    title: string;
+    description: string;
+  };
+  error_message: string;
+}
+
+// Default Form Settings
+export const DEFAULT_FORM_SETTINGS: FormSettings = {
+  title: 'Deixe o seu Contacto',
+  subtitle: 'Preencha os dados abaixo e entraremos em contacto consigo.',
+  logo_url: null,
+  primary_color: '#3B82F6',
+  show_message_field: false,
+  labels: {
+    name: 'Nome Completo',
+    email: 'Email',
+    phone: 'Telemóvel',
+    message: 'Mensagem (opcional)',
+  },
+  success_message: {
+    title: 'Obrigado!',
+    description: 'Recebemos o seu contacto e entraremos em contacto brevemente.',
+  },
+  error_message: 'Não foi possível enviar o formulário. Tente novamente.',
+};
