@@ -21,9 +21,9 @@ interface LeadCardProps {
 
 const statusStyles: Record<LeadStatus, string> = {
   new: "status-new",
-  conversation: "status-conversation",
+  contacted: "status-contacted",
   scheduled: "status-scheduled",
-  sold: "status-sold",
+  won: "status-won",
   lost: "status-lost",
 };
 
