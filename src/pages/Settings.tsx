@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUpdateOrganization, useTestWebhook } from '@/hooks/useOrganization';
+import { useUpdateProfile, useChangePassword } from '@/hooks/useProfile';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,7 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Copy, ExternalLink, Code, Shield, User, Building, Webhook, Send, Loader2, Link2, Check, Users, Palette } from "lucide-react";
+import { Copy, ExternalLink, Code, Shield, User, Building, Webhook, Send, Loader2, Link2, Check, Users, Palette, Eye, EyeOff, Save, Key } from "lucide-react";
 import { PLAN_LABELS, OrganizationPlan } from "@/types";
 import { supabase } from '@/integrations/supabase/client';
 import { TeamTab } from '@/components/settings/TeamTab';
@@ -23,13 +24,35 @@ export default function Settings() {
   const { toast } = useToast();
   const updateOrganization = useUpdateOrganization();
   const testWebhook = useTestWebhook();
-  const { canManageTeam, canManageIntegrations } = usePermissions();
+  const updateProfile = useUpdateProfile();
+  const changePassword = useChangePassword();
+  const { canManageTeam, canManageIntegrations, isAdmin } = usePermissions();
 
   const [copied, setCopied] = useState<string | null>(null);
   const [webhookUrl, setWebhookUrl] = useState('');
   const [isLoadingWebhook, setIsLoadingWebhook] = useState(true);
 
+  // Organization edit state
+  const [orgName, setOrgName] = useState('');
+  
+  // Profile edit state
+  const [fullName, setFullName] = useState('');
+  
+  // Password change state
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+
   const publicFormUrl = organization?.public_key ? `${PRODUCTION_URL}/p/${organization.public_key}` : '';
+
+  // Initialize editable fields
+  useEffect(() => {
+    if (organization?.name) setOrgName(organization.name);
+  }, [organization?.name]);
+
+  useEffect(() => {
+    if (profile?.full_name) setFullName(profile.full_name);
+  }, [profile?.full_name]);
   const iframeCode = organization?.public_key ? `<iframe src="${publicFormUrl}" width="100%" height="500" frameborder="0"></iframe>` : '';
 
   // Fetch current webhook_url
@@ -87,6 +110,44 @@ export default function Settings() {
     }
   };
 
+  const handleSaveOrgName = () => {
+    if (!orgName.trim()) {
+      toast({ title: 'Nome inválido', description: 'O nome da organização não pode estar vazio.', variant: 'destructive' });
+      return;
+    }
+    updateOrganization.mutate({ name: orgName.trim() });
+  };
+
+  const handleSaveProfile = () => {
+    if (!fullName.trim()) {
+      toast({ title: 'Nome inválido', description: 'O nome não pode estar vazio.', variant: 'destructive' });
+      return;
+    }
+    updateProfile.mutate({ full_name: fullName.trim() });
+  };
+
+  const handleChangePassword = () => {
+    if (!newPassword || !confirmPassword) {
+      toast({ title: 'Campos em falta', description: 'Preencha ambos os campos de password.', variant: 'destructive' });
+      return;
+    }
+    if (newPassword.length < 6) {
+      toast({ title: 'Password muito curta', description: 'A password deve ter pelo menos 6 caracteres.', variant: 'destructive' });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast({ title: 'Passwords não coincidem', description: 'As passwords introduzidas não são iguais.', variant: 'destructive' });
+      return;
+    }
+    changePassword.mutate({ newPassword }, {
+      onSuccess: () => {
+        setNewPassword('');
+        setConfirmPassword('');
+        setShowPassword(false);
+      }
+    });
+  };
+
   return (
     <AppLayout userName={profile?.full_name} organizationName={organization?.name}>
       <div className="p-4 sm:p-6 lg:p-8">
@@ -130,13 +191,31 @@ export default function Settings() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid gap-4 md:grid-cols-2">
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground">Nome</label>
-                    <p className="text-foreground font-medium">{organization?.name || '-'}</p>
+                  <div className="space-y-2">
+                    <Label htmlFor="org-name">Nome</Label>
+                    {isAdmin ? (
+                      <div className="flex gap-2">
+                        <Input
+                          id="org-name"
+                          value={orgName}
+                          onChange={(e) => setOrgName(e.target.value)}
+                          placeholder="Nome da organização"
+                        />
+                        <Button
+                          size="icon"
+                          onClick={handleSaveOrgName}
+                          disabled={updateOrganization.isPending || orgName === organization?.name}
+                        >
+                          {updateOrganization.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                        </Button>
+                      </div>
+                    ) : (
+                      <p className="text-foreground font-medium">{organization?.name || '-'}</p>
+                    )}
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Plano</label>
-                    <div className="flex items-center gap-2 mt-1">
+                    <Label>Plano</Label>
+                    <div className="flex items-center gap-2 mt-2">
                       <Badge variant={organization?.plan === 'pro' ? 'default' : 'secondary'}>
                         {organization?.plan ? PLAN_LABELS[organization.plan as OrganizationPlan] : 'Básico'}
                       </Badge>
@@ -149,9 +228,78 @@ export default function Settings() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2"><User className="h-5 w-5" />A Minha Conta</CardTitle>
+                <CardDescription>Edite as suas informações pessoais.</CardDescription>
               </CardHeader>
-              <CardContent>
-                <div><label className="text-sm font-medium text-muted-foreground">Nome</label><p className="text-foreground font-medium">{profile?.full_name || '-'}</p></div>
+              <CardContent className="space-y-6">
+                {/* Nome */}
+                <div className="space-y-2">
+                  <Label htmlFor="full-name">Nome Completo</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="full-name"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      placeholder="O seu nome"
+                    />
+                    <Button
+                      size="icon"
+                      onClick={handleSaveProfile}
+                      disabled={updateProfile.isPending || fullName === profile?.full_name}
+                    >
+                      {updateProfile.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Alterar Password */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <Key className="h-4 w-4 text-muted-foreground" />
+                    <Label>Alterar Password</Label>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="new-password" className="text-sm text-muted-foreground">Nova Password</Label>
+                      <div className="relative">
+                        <Input
+                          id="new-password"
+                          type={showPassword ? 'text' : 'password'}
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
+                          placeholder="Mínimo 6 caracteres"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="absolute right-0 top-0 h-full px-3"
+                          onClick={() => setShowPassword(!showPassword)}
+                        >
+                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="confirm-password" className="text-sm text-muted-foreground">Confirmar Password</Label>
+                      <Input
+                        id="confirm-password"
+                        type={showPassword ? 'text' : 'password'}
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        placeholder="Repetir password"
+                      />
+                    </div>
+                  </div>
+                  <Button
+                    onClick={handleChangePassword}
+                    disabled={changePassword.isPending || !newPassword || !confirmPassword}
+                  >
+                    {changePassword.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Alterar Password
+                  </Button>
+                </div>
               </CardContent>
             </Card>
 

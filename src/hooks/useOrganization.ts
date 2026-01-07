@@ -7,6 +7,7 @@ import { FormSettings } from '@/types';
 import { Json } from '@/integrations/supabase/types';
 
 interface UpdateOrganizationData {
+  name?: string;
   webhook_url?: string | null;
   form_settings?: Json;
 }
