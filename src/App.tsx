@@ -14,6 +14,7 @@ import Dashboard from "./pages/Dashboard";
 import Leads from "./pages/Leads";
 import Settings from "./pages/Settings";
 import PublicLeadForm from "./pages/PublicLeadForm";
+import InviteRegister from "./pages/InviteRegister";
 import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
 import NotFound from "./pages/NotFound";
@@ -37,6 +38,7 @@ const App = () => (
             <Route path="/" element={<Landing />} />
             <Route path="/login" element={<Login />} />
             <Route path="/p/:public_key" element={<PublicLeadForm />} />
+            <Route path="/invite/:token" element={<InviteRegister />} />
             <Route path="/privacy" element={<Privacy />} />
             <Route path="/terms" element={<Terms />} />
 

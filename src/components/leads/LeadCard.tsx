@@ -1,5 +1,6 @@
 import { Lead, STATUS_LABELS, LeadStatus } from "@/types";
 import { formatRelativeTime, getWhatsAppUrl, formatCurrency } from "@/lib/format";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Button } from "@/components/ui/button";
 import { MessageCircle, Phone, Mail, MoreVertical, GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -34,6 +35,8 @@ export function LeadCard({
   onDelete,
   isDragging 
 }: LeadCardProps) {
+  const { canDeleteLeads } = usePermissions();
+  
   return (
     <div 
       className={cn(
@@ -74,13 +77,17 @@ export function LeadCard({
                 Mover para {label}
               </DropdownMenuItem>
             ))}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem 
-              className="text-destructive focus:text-destructive"
-              onClick={(e) => { e.stopPropagation(); onDelete?.(lead.id); }}
-            >
-              Eliminar lead
-            </DropdownMenuItem>
+            {canDeleteLeads && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem 
+                  className="text-destructive focus:text-destructive"
+                  onClick={(e) => { e.stopPropagation(); onDelete?.(lead.id); }}
+                >
+                  Eliminar lead
+                </DropdownMenuItem>
+              </>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
