@@ -3,6 +3,13 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 
+interface CreateTeamMemberParams {
+  email: string;
+  password: string;
+  fullName: string;
+  role: 'admin' | 'viewer';
+}
+
 export interface TeamMember {
   id: string;
   full_name: string;
@@ -194,6 +201,48 @@ export function useResendInvite() {
       toast({
         title: 'Erro',
         description: 'Não foi possível renovar o convite.',
+        variant: 'destructive',
+      });
+    },
+  });
+}
+
+export function useCreateTeamMember() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ email, password, fullName, role }: CreateTeamMemberParams) => {
+      const { data, error } = await supabase.functions.invoke('create-team-member', {
+        body: { 
+          email: email.toLowerCase().trim(), 
+          password, 
+          full_name: fullName.trim(), 
+          role 
+        }
+      });
+
+      if (error) {
+        throw new Error(error.message || 'Erro ao criar membro');
+      }
+
+      if (data?.error) {
+        throw new Error(data.error);
+      }
+
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['team-members'] });
+      toast({
+        title: 'Acesso criado',
+        description: 'O novo membro foi adicionado com sucesso.',
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Erro ao criar acesso',
+        description: error.message,
         variant: 'destructive',
       });
     },

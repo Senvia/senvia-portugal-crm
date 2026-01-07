@@ -1,1 +1,4 @@
 project_id = "zppcobirzgpfcrnxznwe"
+
+[functions.create-team-member]
+verify_jwt = false
