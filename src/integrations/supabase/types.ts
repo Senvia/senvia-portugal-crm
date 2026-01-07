@@ -212,6 +212,14 @@ export type Database = {
         Args: { _token: string }
         Returns: string
       }
+      get_public_form_by_key: {
+        Args: { _public_key: string }
+        Returns: {
+          form_settings: Json
+          id: string
+          name: string
+        }[]
+      }
       get_user_org_id: { Args: { _user_id: string }; Returns: string }
       has_role: {
         Args: {

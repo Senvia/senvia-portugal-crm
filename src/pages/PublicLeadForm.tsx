@@ -47,23 +47,22 @@ export default function PublicLeadForm() {
       }
 
       try {
+        // Use public RPC function that doesn't require authentication
         const { data, error } = await supabase
-          .from('organizations')
-          .select('id, name, form_settings')
-          .eq('public_key', public_key)
-          .maybeSingle();
+          .rpc('get_public_form_by_key', { _public_key: public_key });
 
-        if (error || !data) {
+        if (error || !data || data.length === 0) {
           setIsValid(false);
         } else {
+          const org = data[0];
           setOrganization({
-            id: data.id,
-            name: data.name,
-            form_settings: data.form_settings as unknown as FormSettings | null,
+            id: org.id,
+            name: org.name,
+            form_settings: org.form_settings as unknown as FormSettings | null,
           });
           // Merge with defaults
-          if (data.form_settings) {
-            const fetchedSettings = data.form_settings as unknown as Partial<FormSettings>;
+          if (org.form_settings) {
+            const fetchedSettings = org.form_settings as unknown as Partial<FormSettings>;
             setSettings({ ...DEFAULT_FORM_SETTINGS, ...fetchedSettings });
           }
           setIsValid(true);
