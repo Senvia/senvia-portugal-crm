@@ -1,5 +1,5 @@
 import { Lead, STATUS_LABELS, LeadStatus } from "@/types";
-import { formatDate, formatDateTime, formatCurrency, getWhatsAppUrl } from "@/lib/format";
+import { formatDate, formatDateTime, getWhatsAppUrl } from "@/lib/format";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,6 +29,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { 
   MessageCircle, 
   Phone, 
@@ -36,9 +39,11 @@ import {
   Calendar, 
   Shield,
   Trash2,
-  ExternalLink
+  ExternalLink,
+  Euro,
+  FileText
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface LeadDetailsModalProps {
   lead: Lead | null;
@@ -46,6 +51,7 @@ interface LeadDetailsModalProps {
   onOpenChange: (open: boolean) => void;
   onStatusChange: (leadId: string, newStatus: LeadStatus) => void;
   onDelete: (leadId: string) => void;
+  onUpdate?: (leadId: string, updates: Partial<Lead>) => void;
 }
 
 const statusStyles: Record<LeadStatus, string> = {
@@ -61,12 +67,51 @@ export function LeadDetailsModal({
   open, 
   onOpenChange, 
   onStatusChange,
-  onDelete 
+  onDelete,
+  onUpdate
 }: LeadDetailsModalProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const { canDeleteLeads } = usePermissions();
+  
+  // Editable fields state
+  const [editValue, setEditValue] = useState<string>("");
+  const [editNotes, setEditNotes] = useState<string>("");
+  const [editSource, setEditSource] = useState<string>("");
+
+  // Sync state when lead changes
+  useEffect(() => {
+    if (lead) {
+      setEditValue(lead.value?.toString() || "");
+      setEditNotes(lead.notes || "");
+      setEditSource(lead.source || "");
+    }
+  }, [lead]);
 
   if (!lead) return null;
+
+  const handleFieldSave = (field: keyof Lead, value: string | number | null) => {
+    if (!onUpdate) return;
+    onUpdate(lead.id, { [field]: value });
+  };
+
+  const handleValueBlur = () => {
+    const numValue = editValue ? parseFloat(editValue) : null;
+    if (numValue !== lead.value) {
+      handleFieldSave("value", numValue);
+    }
+  };
+
+  const handleNotesBlur = () => {
+    if (editNotes !== (lead.notes || "")) {
+      handleFieldSave("notes", editNotes || null);
+    }
+  };
+
+  const handleSourceBlur = () => {
+    if (editSource !== (lead.source || "")) {
+      handleFieldSave("source", editSource || null);
+    }
+  };
 
   const handleDelete = () => {
     onDelete(lead.id);
@@ -112,15 +157,27 @@ export function LeadDetailsModal({
             </Select>
           </div>
 
-          {/* Value */}
-          {lead.value && (
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-muted-foreground">Valor</span>
-              <span className="text-lg font-bold text-primary">
-                {formatCurrency(lead.value)}
-              </span>
+          {/* Editable Value */}
+          <div className="space-y-2">
+            <Label htmlFor="lead-value" className="flex items-center gap-2 text-sm font-medium">
+              <Euro className="h-4 w-4 text-muted-foreground" />
+              Valor do Negócio
+            </Label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">€</span>
+              <Input
+                id="lead-value"
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder="0,00"
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                onBlur={handleValueBlur}
+                className="pl-8"
+              />
             </div>
-          )}
+          </div>
 
           <Separator />
 
@@ -138,29 +195,47 @@ export function LeadDetailsModal({
               <span>{lead.email}</span>
             </div>
 
-            {lead.source && (
-              <div className="flex items-center gap-3 text-sm">
-                <ExternalLink className="h-4 w-4 text-muted-foreground" />
-                <span>Origem: {lead.source}</span>
-              </div>
-            )}
-
             <div className="flex items-center gap-3 text-sm">
               <Calendar className="h-4 w-4 text-muted-foreground" />
               <span>Criada: {formatDateTime(lead.created_at)}</span>
             </div>
           </div>
 
-          {/* Notes */}
-          {lead.notes && (
-            <>
-              <Separator />
-              <div className="space-y-2">
-                <h4 className="text-sm font-semibold text-foreground">Notas</h4>
-                <p className="text-sm text-muted-foreground">{lead.notes}</p>
-              </div>
-            </>
-          )}
+          <Separator />
+
+          {/* Editable Source */}
+          <div className="space-y-2">
+            <Label htmlFor="lead-source" className="flex items-center gap-2 text-sm font-medium">
+              <ExternalLink className="h-4 w-4 text-muted-foreground" />
+              Origem do Lead
+            </Label>
+            <Input
+              id="lead-source"
+              placeholder="Ex: Facebook Ads, Google, Indicação..."
+              value={editSource}
+              onChange={(e) => setEditSource(e.target.value)}
+              onBlur={handleSourceBlur}
+            />
+          </div>
+
+          <Separator />
+
+          {/* Editable Notes */}
+          <div className="space-y-2">
+            <Label htmlFor="lead-notes" className="flex items-center gap-2 text-sm font-medium">
+              <FileText className="h-4 w-4 text-muted-foreground" />
+              Observações Internas
+            </Label>
+            <Textarea
+              id="lead-notes"
+              placeholder="Notas sobre este lead..."
+              rows={3}
+              value={editNotes}
+              onChange={(e) => setEditNotes(e.target.value)}
+              onBlur={handleNotesBlur}
+              className="resize-none"
+            />
+          </div>
 
           <Separator />
 
