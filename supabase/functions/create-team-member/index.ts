@@ -1,0 +1,190 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+interface CreateMemberRequest {
+  email: string;
+  password: string;
+  full_name: string;
+  role: 'admin' | 'viewer';
+}
+
+serve(async (req) => {
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+
+    // Get authorization header
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: 'Não autorizado' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Create client with user's token to verify who is calling
+    const supabaseUser = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } }
+    });
+
+    // Get current user
+    const { data: { user: currentUser }, error: userError } = await supabaseUser.auth.getUser();
+    if (userError || !currentUser) {
+      console.error('Error getting user:', userError);
+      return new Response(
+        JSON.stringify({ error: 'Utilizador não autenticado' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Create admin client for privileged operations
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Get current user's organization
+    const { data: profile, error: profileError } = await supabaseAdmin
+      .from('profiles')
+      .select('organization_id')
+      .eq('id', currentUser.id)
+      .single();
+
+    if (profileError || !profile?.organization_id) {
+      console.error('Error getting profile:', profileError);
+      return new Response(
+        JSON.stringify({ error: 'Organização não encontrada' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const organizationId = profile.organization_id;
+
+    // Check if current user is admin of this organization
+    const { data: roleData, error: roleError } = await supabaseAdmin
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', currentUser.id)
+      .in('role', ['admin', 'super_admin'])
+      .single();
+
+    if (roleError || !roleData) {
+      console.error('Error checking role:', roleError);
+      return new Response(
+        JSON.stringify({ error: 'Apenas administradores podem adicionar membros' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Parse request body
+    const { email, password, full_name, role }: CreateMemberRequest = await req.json();
+
+    // Validate input
+    if (!email || !password || !full_name || !role) {
+      return new Response(
+        JSON.stringify({ error: 'Todos os campos são obrigatórios' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (password.length < 6) {
+      return new Response(
+        JSON.stringify({ error: 'A password deve ter pelo menos 6 caracteres' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (!['admin', 'viewer'].includes(role)) {
+      return new Response(
+        JSON.stringify({ error: 'Perfil inválido' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log(`Creating user: ${email} with role: ${role} for org: ${organizationId}`);
+
+    // Create the user with admin API (auto-confirms email)
+    const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
+      email: email.toLowerCase().trim(),
+      password,
+      email_confirm: true,
+      user_metadata: { full_name }
+    });
+
+    if (createError) {
+      console.error('Error creating user:', createError);
+      if (createError.message.includes('already been registered')) {
+        return new Response(
+          JSON.stringify({ error: 'Este email já está registado' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      return new Response(
+        JSON.stringify({ error: 'Erro ao criar utilizador: ' + createError.message }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (!newUser.user) {
+      return new Response(
+        JSON.stringify({ error: 'Erro ao criar utilizador' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log(`User created: ${newUser.user.id}`);
+
+    // Update profile with organization_id and full_name
+    const { error: updateProfileError } = await supabaseAdmin
+      .from('profiles')
+      .update({
+        organization_id: organizationId,
+        full_name: full_name.trim()
+      })
+      .eq('id', newUser.user.id);
+
+    if (updateProfileError) {
+      console.error('Error updating profile:', updateProfileError);
+      // Don't fail completely, the user was created
+    }
+
+    // Add role to user_roles table
+    const { error: roleInsertError } = await supabaseAdmin
+      .from('user_roles')
+      .insert({
+        user_id: newUser.user.id,
+        role: role
+      });
+
+    if (roleInsertError) {
+      console.error('Error inserting role:', roleInsertError);
+      // Don't fail completely, the user was created
+    }
+
+    console.log(`Successfully created team member: ${email}`);
+
+    return new Response(
+      JSON.stringify({ 
+        success: true, 
+        user_id: newUser.user.id,
+        email: newUser.user.email
+      }),
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+
+  } catch (error) {
+    console.error('Unexpected error:', error);
+    return new Response(
+      JSON.stringify({ error: 'Erro interno do servidor' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+});

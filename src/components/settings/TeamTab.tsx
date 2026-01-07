@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useTeamMembers, usePendingInvites, useCreateInvite, useCancelInvite, useResendInvite, PendingInvite } from '@/hooks/useTeam';
+import { useTeamMembers, usePendingInvites, useCancelInvite, useResendInvite, useCreateTeamMember, PendingInvite } from '@/hooks/useTeam';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -10,9 +10,10 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
-import { Users, UserPlus, Copy, X, Check, Clock, Loader2, RefreshCw } from 'lucide-react';
+import { Users, UserPlus, Copy, X, Check, Clock, Loader2, RefreshCw, Eye, EyeOff } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { pt } from 'date-fns/locale';
+import { getBaseUrl } from '@/lib/constants';
 
 const ROLE_LABELS: Record<string, string> = {
   admin: 'Administrador',
@@ -29,41 +30,62 @@ const ROLE_VARIANTS: Record<string, 'default' | 'secondary' | 'outline'> = {
 export function TeamTab() {
   const { data: members, isLoading: loadingMembers } = useTeamMembers();
   const { data: invites, isLoading: loadingInvites } = usePendingInvites();
-  const createInvite = useCreateInvite();
   const cancelInvite = useCancelInvite();
   const resendInvite = useResendInvite();
+  const createTeamMember = useCreateTeamMember();
   const { toast } = useToast();
 
-  const [isInviteOpen, setIsInviteOpen] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<'admin' | 'viewer'>('viewer');
-  const [generatedLink, setGeneratedLink] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  // Modal state
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [role, setRole] = useState<'admin' | 'viewer'>('viewer');
+  const [showPassword, setShowPassword] = useState(false);
+  
+  // Success state
+  const [createdMember, setCreatedMember] = useState<{ email: string; password: string } | null>(null);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+  
+  // Invite list state
   const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null);
 
-  const handleCreateInvite = async () => {
-    if (!inviteEmail.trim()) return;
+  const handleCreateMember = async () => {
+    if (!fullName.trim() || !email.trim() || !password || !confirmPassword) {
+      toast({ title: 'Preencha todos os campos', variant: 'destructive' });
+      return;
+    }
 
-    createInvite.mutate(
-      { email: inviteEmail, role: inviteRole },
+    if (password !== confirmPassword) {
+      toast({ title: 'As passwords não coincidem', variant: 'destructive' });
+      return;
+    }
+
+    if (password.length < 6) {
+      toast({ title: 'A password deve ter pelo menos 6 caracteres', variant: 'destructive' });
+      return;
+    }
+
+    createTeamMember.mutate(
+      { email, password, fullName, role },
       {
-        onSuccess: (data) => {
-          const link = `${window.location.origin}/invite/${data.token}`;
-          setGeneratedLink(link);
+        onSuccess: () => {
+          setCreatedMember({ email, password });
         },
       }
     );
   };
 
-  const copyToClipboard = (text: string) => {
+  const copyToClipboard = (text: string, field: string) => {
     navigator.clipboard.writeText(text);
-    setCopied(true);
-    toast({ title: 'Copiado!', description: 'Link copiado para a área de transferência.' });
-    setTimeout(() => setCopied(false), 2000);
+    setCopiedField(field);
+    toast({ title: 'Copiado!', description: `${field} copiado para a área de transferência.` });
+    setTimeout(() => setCopiedField(null), 2000);
   };
 
   const copyInviteLink = (invite: PendingInvite) => {
-    const link = `${window.location.origin}/invite/${invite.token}`;
+    const link = `${getBaseUrl()}/invite/${invite.token}`;
     navigator.clipboard.writeText(link);
     setCopiedInviteId(invite.id);
     toast({ title: 'Link copiado!', description: 'Link de convite copiado para a área de transferência.' });
@@ -75,16 +97,22 @@ export function TeamTab() {
   };
 
   const handleCloseDialog = () => {
-    setIsInviteOpen(false);
-    setInviteEmail('');
-    setInviteRole('viewer');
-    setGeneratedLink(null);
-    setCopied(false);
+    setIsAddOpen(false);
+    setFullName('');
+    setEmail('');
+    setPassword('');
+    setConfirmPassword('');
+    setRole('viewer');
+    setShowPassword(false);
+    setCreatedMember(null);
+    setCopiedField(null);
   };
 
   const handleCancelInvite = (invite: PendingInvite) => {
     cancelInvite.mutate(invite.id);
   };
+
+  const loginUrl = `${getBaseUrl()}/login`;
 
   return (
     <div className="space-y-6">
@@ -99,36 +127,76 @@ export function TeamTab() {
               Gerencie os utilizadores da sua organização.
             </CardDescription>
           </div>
-          <Dialog open={isInviteOpen} onOpenChange={(open) => !open && handleCloseDialog()}>
+          <Dialog open={isAddOpen} onOpenChange={(open) => !open && handleCloseDialog()}>
             <DialogTrigger asChild>
-              <Button onClick={() => setIsInviteOpen(true)}>
+              <Button onClick={() => setIsAddOpen(true)}>
                 <UserPlus className="mr-2 h-4 w-4" />
-                Convidar Membro
+                Adicionar Acesso
               </Button>
             </DialogTrigger>
-            <DialogContent>
-              {!generatedLink ? (
+            <DialogContent className="sm:max-w-md">
+              {!createdMember ? (
                 <>
                   <DialogHeader>
-                    <DialogTitle>Convidar Novo Membro</DialogTitle>
+                    <DialogTitle>Adicionar Novo Acesso</DialogTitle>
                     <DialogDescription>
-                      Gere um link de convite para adicionar um novo membro à sua organização.
+                      Crie credenciais de acesso para um novo membro da equipa.
                     </DialogDescription>
                   </DialogHeader>
                   <div className="space-y-4 py-4">
                     <div className="space-y-2">
-                      <Label htmlFor="invite-email">Email</Label>
+                      <Label htmlFor="full-name">Nome Completo</Label>
                       <Input
-                        id="invite-email"
+                        id="full-name"
+                        placeholder="João Silva"
+                        value={fullName}
+                        onChange={(e) => setFullName(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="email">Email</Label>
+                      <Input
+                        id="email"
                         type="email"
-                        placeholder="email@exemplo.com"
-                        value={inviteEmail}
-                        onChange={(e) => setInviteEmail(e.target.value)}
+                        placeholder="joao@exemplo.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="password">Password</Label>
+                      <div className="relative">
+                        <Input
+                          id="password"
+                          type={showPassword ? 'text' : 'password'}
+                          placeholder="Mínimo 6 caracteres"
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="absolute right-0 top-0 h-full px-3"
+                          onClick={() => setShowPassword(!showPassword)}
+                        >
+                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="confirm-password">Confirmar Password</Label>
+                      <Input
+                        id="confirm-password"
+                        type={showPassword ? 'text' : 'password'}
+                        placeholder="Repetir password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
                       />
                     </div>
                     <div className="space-y-3">
                       <Label>Perfil</Label>
-                      <RadioGroup value={inviteRole} onValueChange={(v) => setInviteRole(v as 'admin' | 'viewer')}>
+                      <RadioGroup value={role} onValueChange={(v) => setRole(v as 'admin' | 'viewer')}>
                         <div className="flex items-start space-x-3 rounded-lg border p-3">
                           <RadioGroupItem value="admin" id="role-admin" className="mt-1" />
                           <div className="flex-1">
@@ -159,35 +227,79 @@ export function TeamTab() {
                       Cancelar
                     </Button>
                     <Button
-                      onClick={handleCreateInvite}
-                      disabled={!inviteEmail.trim() || createInvite.isPending}
+                      onClick={handleCreateMember}
+                      disabled={!fullName.trim() || !email.trim() || !password || !confirmPassword || createTeamMember.isPending}
                     >
-                      {createInvite.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                      Gerar Link de Convite
+                      {createTeamMember.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Criar Acesso
                     </Button>
                   </DialogFooter>
                 </>
               ) : (
                 <>
                   <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2 text-success">
+                    <DialogTitle className="flex items-center gap-2 text-green-600">
                       <Check className="h-5 w-5" />
-                      Link de Convite Gerado!
+                      Acesso Criado com Sucesso!
                     </DialogTitle>
                     <DialogDescription>
-                      Copie este link e envie-o por WhatsApp ou email ao novo membro.
+                      Envie estas informações ao colaborador por WhatsApp ou email.
                     </DialogDescription>
                   </DialogHeader>
                   <div className="space-y-4 py-4">
-                    <div className="flex gap-2">
-                      <Input value={generatedLink} readOnly className="font-mono text-sm" />
-                      <Button variant="outline" size="icon" onClick={() => copyToClipboard(generatedLink)}>
-                        {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                      </Button>
+                    <div className="space-y-2">
+                      <Label className="text-muted-foreground">Link de Acesso</Label>
+                      <div className="flex gap-2">
+                        <Input value={loginUrl} readOnly className="font-mono text-sm" />
+                        <Button 
+                          variant="outline" 
+                          size="icon" 
+                          onClick={() => copyToClipboard(loginUrl, 'Link')}
+                        >
+                          {copiedField === 'Link' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                        </Button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Clock className="h-4 w-4" />
-                      Este link expira em 7 dias.
+                    <div className="space-y-2">
+                      <Label className="text-muted-foreground">Email</Label>
+                      <div className="flex gap-2">
+                        <Input value={createdMember.email} readOnly className="font-mono text-sm" />
+                        <Button 
+                          variant="outline" 
+                          size="icon" 
+                          onClick={() => copyToClipboard(createdMember.email, 'Email')}
+                        >
+                          {copiedField === 'Email' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-muted-foreground">Password</Label>
+                      <div className="flex gap-2">
+                        <Input 
+                          value={showPassword ? createdMember.password : '••••••••'} 
+                          readOnly 
+                          className="font-mono text-sm" 
+                        />
+                        <Button 
+                          variant="outline" 
+                          size="icon" 
+                          onClick={() => setShowPassword(!showPassword)}
+                        >
+                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="icon" 
+                          onClick={() => copyToClipboard(createdMember.password, 'Password')}
+                        >
+                          {copiedField === 'Password' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2 p-3 bg-muted/50 rounded-lg text-sm text-muted-foreground">
+                      <Clock className="h-4 w-4 mt-0.5 shrink-0" />
+                      <p>Guarde estas informações - a password não poderá ser recuperada por si.</p>
                     </div>
                   </div>
                   <DialogFooter>
@@ -242,7 +354,7 @@ export function TeamTab() {
         </CardContent>
       </Card>
 
-      {/* Pending Invites */}
+      {/* Pending Invites - legacy */}
       {(invites && invites.length > 0) && (
         <Card>
           <CardHeader>
