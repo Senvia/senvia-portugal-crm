@@ -18,14 +18,13 @@ import {
 import { 
   Loader2, 
   Palette, 
-  Type, 
   MessageSquare, 
   CheckCircle, 
   ExternalLink, 
   Save,
   Sparkles,
   ImageIcon,
-  Tag
+  LayoutList
 } from "lucide-react";
 import { useUpdateOrganization } from '@/hooks/useOrganization';
 import { useAuth } from '@/contexts/AuthContext';
@@ -35,6 +34,7 @@ import { Json } from '@/integrations/supabase/types';
 import { useToast } from '@/hooks/use-toast';
 import { FormPreview } from './FormPreview';
 import { LogoUploader } from './LogoUploader';
+import { CustomFieldsEditor } from './CustomFieldsEditor';
 import { cn } from '@/lib/utils';
 
 const PRESET_COLORS = [
@@ -73,7 +73,7 @@ export function FormCustomizationSection() {
 
       if (!error && data?.form_settings) {
         const fetchedSettings = data.form_settings as unknown as Partial<FormSettings>;
-        setSettings({ ...DEFAULT_FORM_SETTINGS, ...fetchedSettings });
+        setSettings({ ...DEFAULT_FORM_SETTINGS, ...fetchedSettings, custom_fields: fetchedSettings.custom_fields || [] });
       }
       setIsLoading(false);
     }
@@ -96,20 +96,20 @@ export function FormCustomizationSection() {
   };
 
   const handlePreview = () => {
-    if (organization?.public_key) {
-      window.open(`${window.location.origin}/p/${organization.public_key}`, '_blank');
+    if (!organization?.public_key) {
+      toast({
+        title: "Erro",
+        description: "Não foi possível obter o link do formulário.",
+        variant: "destructive",
+      });
+      return;
     }
+    const url = `${window.location.origin}/p/${organization.public_key}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
   };
 
   const updateSetting = <K extends keyof FormSettings>(key: K, value: FormSettings[K]) => {
     setSettings(prev => ({ ...prev, [key]: value }));
-  };
-
-  const updateLabel = (key: keyof FormSettings['labels'], value: string) => {
-    setSettings(prev => ({
-      ...prev,
-      labels: { ...prev.labels, [key]: value }
-    }));
   };
 
   const updateSuccessMessage = (key: keyof FormSettings['success_message'], value: string) => {
@@ -144,7 +144,12 @@ export function FormCustomizationSection() {
                 </p>
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={handlePreview}>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handlePreview}
+                  disabled={!organization?.public_key}
+                >
                   <ExternalLink className="h-4 w-4 mr-2" />
                   Abrir
                 </Button>
@@ -182,7 +187,6 @@ export function FormCustomizationSection() {
                     {/* Title */}
                     <div className="space-y-2">
                       <Label htmlFor="form-title" className="flex items-center gap-2 text-sm">
-                        <Type className="h-3.5 w-3.5 text-muted-foreground" />
                         Título do Formulário
                       </Label>
                       <Input
@@ -199,7 +203,6 @@ export function FormCustomizationSection() {
                     {/* Subtitle */}
                     <div className="space-y-2">
                       <Label htmlFor="form-subtitle" className="flex items-center gap-2 text-sm">
-                        <MessageSquare className="h-3.5 w-3.5 text-muted-foreground" />
                         Subtítulo
                       </Label>
                       <Textarea
@@ -282,78 +285,21 @@ export function FormCustomizationSection() {
                   <AccordionTrigger className="hover:no-underline py-4">
                     <div className="flex items-center gap-3">
                       <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/10">
-                        <Tag className="h-5 w-5 text-emerald-600" />
+                        <LayoutList className="h-5 w-5 text-emerald-600" />
                       </div>
                       <div className="text-left">
                         <span className="font-medium">Campos</span>
                         <p className="text-xs text-muted-foreground font-normal">
-                          Labels e visibilidade dos campos
+                          Labels, campos fixos e personalizados
                         </p>
                       </div>
                     </div>
                   </AccordionTrigger>
-                  <AccordionContent className="pb-4 pt-2 space-y-5">
-                    {/* Message Field Toggle */}
-                    <div className="flex items-center justify-between rounded-lg border p-4 bg-muted/30">
-                      <div className="space-y-0.5">
-                        <Label htmlFor="show-message" className="font-medium cursor-pointer">
-                          Campo de Mensagem
-                        </Label>
-                        <p className="text-xs text-muted-foreground">
-                          Permitir que visitantes deixem uma mensagem
-                        </p>
-                      </div>
-                      <Switch
-                        id="show-message"
-                        checked={settings.show_message_field}
-                        onCheckedChange={(checked) => updateSetting('show_message_field', checked)}
-                      />
-                    </div>
-
-                    {/* Labels */}
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label htmlFor="label-name" className="text-sm">Label Nome</Label>
-                        <Input
-                          id="label-name"
-                          value={settings.labels.name}
-                          onChange={(e) => updateLabel('name', e.target.value)}
-                          maxLength={50}
-                          className="h-10"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="label-email" className="text-sm">Label Email</Label>
-                        <Input
-                          id="label-email"
-                          value={settings.labels.email}
-                          onChange={(e) => updateLabel('email', e.target.value)}
-                          maxLength={50}
-                          className="h-10"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="label-phone" className="text-sm">Label Telemóvel</Label>
-                        <Input
-                          id="label-phone"
-                          value={settings.labels.phone}
-                          onChange={(e) => updateLabel('phone', e.target.value)}
-                          maxLength={50}
-                          className="h-10"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="label-message" className="text-sm">Label Mensagem</Label>
-                        <Input
-                          id="label-message"
-                          value={settings.labels.message}
-                          onChange={(e) => updateLabel('message', e.target.value)}
-                          maxLength={50}
-                          className="h-10"
-                          disabled={!settings.show_message_field}
-                        />
-                      </div>
-                    </div>
+                  <AccordionContent className="pb-4 pt-2">
+                    <CustomFieldsEditor 
+                      settings={settings} 
+                      onUpdateSettings={setSettings} 
+                    />
                   </AccordionContent>
                 </AccordionItem>
 

@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import type { Lead, LeadStatus } from '@/types';
 import { useToast } from '@/hooks/use-toast';
+import { Json } from '@/integrations/supabase/types';
 
 export function useLeads() {
   const { organization } = useAuth();
@@ -60,7 +61,7 @@ export function useUpdateLead() {
   const { toast } = useToast();
   
   return useMutation({
-    mutationFn: async ({ leadId, updates }: { leadId: string; updates: Partial<Lead> }) => {
+    mutationFn: async ({ leadId, updates }: { leadId: string; updates: Partial<Omit<Lead, 'custom_data'>> & { custom_data?: Json } }) => {
       const { data, error } = await supabase
         .from('leads')
         .update(updates)
