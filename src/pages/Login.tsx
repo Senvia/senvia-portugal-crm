@@ -20,11 +20,15 @@ const signupSchema = z.object({
   fullName: z.string().min(2, 'O nome deve ter pelo menos 2 caracteres'),
   email: z.string().email('Email inválido'),
   password: z.string().min(6, 'A palavra-passe deve ter pelo menos 6 caracteres'),
+  confirmPassword: z.string().min(6, 'A palavra-passe deve ter pelo menos 6 caracteres'),
   organizationName: z.string().min(2, 'O nome da empresa deve ter pelo menos 2 caracteres'),
   organizationSlug: z.string()
     .min(2, 'O slug deve ter pelo menos 2 caracteres')
     .max(50, 'O slug deve ter no máximo 50 caracteres')
     .regex(/^[a-z0-9-]+$/, 'O slug só pode conter letras minúsculas, números e hífens'),
+}).refine((data) => data.password === data.confirmPassword, {
+  message: 'As palavras-passe não coincidem',
+  path: ['confirmPassword'],
 });
 
 // Helper to generate slug from company name
@@ -53,6 +57,7 @@ export default function Login() {
   const [signupFullName, setSignupFullName] = useState('');
   const [signupEmail, setSignupEmail] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
+  const [signupConfirmPassword, setSignupConfirmPassword] = useState('');
   const [organizationName, setOrganizationName] = useState('');
   const [organizationSlug, setOrganizationSlug] = useState('');
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
@@ -151,6 +156,7 @@ export default function Login() {
       fullName: signupFullName, 
       email: signupEmail, 
       password: signupPassword,
+      confirmPassword: signupConfirmPassword,
       organizationName,
       organizationSlug,
     });
@@ -300,7 +306,41 @@ export default function Login() {
                       required
                     />
                   </div>
-                  <Button 
+                  <div className="text-right">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!loginEmail) {
+                          toast({
+                            title: 'Email necessário',
+                            description: 'Insira o seu email para recuperar a palavra-passe.',
+                            variant: 'destructive',
+                          });
+                          return;
+                        }
+                        supabase.auth.resetPasswordForEmail(loginEmail, {
+                          redirectTo: `${window.location.origin}/reset-password`,
+                        }).then(({ error }) => {
+                          if (error) {
+                            toast({
+                              title: 'Erro',
+                              description: error.message,
+                              variant: 'destructive',
+                            });
+                          } else {
+                            toast({
+                              title: 'Email enviado',
+                              description: 'Verifique o seu email para redefinir a palavra-passe.',
+                            });
+                          }
+                        });
+                      }}
+                      className="text-sm text-primary hover:underline"
+                    >
+                      Esqueceu a palavra-passe?
+                    </button>
+                  </div>
+                  <Button
                     type="submit" 
                     className="w-full bg-primary hover:bg-primary/90"
                     disabled={isLoading}
@@ -352,6 +392,18 @@ export default function Login() {
                       placeholder="••••••••"
                       value={signupPassword}
                       onChange={(e) => setSignupPassword(e.target.value)}
+                      className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="signup-confirm-password" className="text-slate-300">Confirmar Palavra-passe</Label>
+                    <Input
+                      id="signup-confirm-password"
+                      type="password"
+                      placeholder="••••••••"
+                      value={signupConfirmPassword}
+                      onChange={(e) => setSignupConfirmPassword(e.target.value)}
                       className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
                       required
                     />

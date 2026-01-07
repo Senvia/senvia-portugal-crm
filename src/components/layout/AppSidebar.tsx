@@ -1,18 +1,28 @@
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { 
   LayoutDashboard, 
   Users, 
   Settings, 
   LogOut,
-  Sparkles
+  Sparkles,
+  Shield
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
+import type { AppRole } from "@/types";
 
 const navItems = [
   { to: "/dashboard", icon: LayoutDashboard, label: "Painel" },
   { to: "/leads", icon: Users, label: "Leads" },
   { to: "/settings", icon: Settings, label: "Configurações" },
 ];
+
+const getRoleLabel = (roles: AppRole[]): string => {
+  if (roles.includes('super_admin')) return 'Super Admin';
+  if (roles.includes('admin')) return 'Administrador';
+  if (roles.includes('viewer')) return 'Visualizador';
+  return 'Membro';
+};
 
 interface AppSidebarProps {
   userName?: string;
@@ -21,6 +31,13 @@ interface AppSidebarProps {
 
 export function AppSidebar({ userName = "Utilizador", organizationName = "A Minha Empresa" }: AppSidebarProps) {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { signOut, roles, isSuperAdmin } = useAuth();
+
+  const handleLogout = async () => {
+    await signOut();
+    navigate('/login');
+  };
 
   return (
     <aside className="fixed left-0 top-0 z-40 h-screen w-64 gradient-sidebar border-r border-sidebar-border">
@@ -65,6 +82,22 @@ export function AppSidebar({ userName = "Utilizador", organizationName = "A Minh
               </NavLink>
             );
           })}
+          
+          {/* Super Admin Link */}
+          {isSuperAdmin && (
+            <NavLink
+              to="/system-admin"
+              className={cn(
+                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
+                location.pathname.startsWith("/system-admin")
+                  ? "bg-sidebar-accent text-sidebar-foreground"
+                  : "text-sidebar-muted hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+              )}
+            >
+              <Shield className="h-5 w-5" />
+              System Admin
+            </NavLink>
+          )}
         </nav>
 
         {/* User Section */}
@@ -77,9 +110,10 @@ export function AppSidebar({ userName = "Utilizador", organizationName = "A Minh
               <p className="truncate text-sm font-medium text-sidebar-foreground">
                 {userName}
               </p>
-              <p className="text-xs text-sidebar-muted">Administrador</p>
+              <p className="text-xs text-sidebar-muted">{getRoleLabel(roles)}</p>
             </div>
             <button 
+              onClick={handleLogout}
               className="rounded-lg p-2 text-sidebar-muted transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
               title="Terminar sessão"
             >
