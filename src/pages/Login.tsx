@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -7,8 +7,9 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Zap } from 'lucide-react';
+import { Loader2, Zap, Check, X } from 'lucide-react';
 import { z } from 'zod';
+import { supabase } from '@/integrations/supabase/client';
 
 const loginSchema = z.object({
   email: z.string().email('Email inválido'),
@@ -19,11 +20,28 @@ const signupSchema = z.object({
   fullName: z.string().min(2, 'O nome deve ter pelo menos 2 caracteres'),
   email: z.string().email('Email inválido'),
   password: z.string().min(6, 'A palavra-passe deve ter pelo menos 6 caracteres'),
+  organizationName: z.string().min(2, 'O nome da empresa deve ter pelo menos 2 caracteres'),
+  organizationSlug: z.string()
+    .min(2, 'O slug deve ter pelo menos 2 caracteres')
+    .max(50, 'O slug deve ter no máximo 50 caracteres')
+    .regex(/^[a-z0-9-]+$/, 'O slug só pode conter letras minúsculas, números e hífens'),
 });
+
+// Helper to generate slug from company name
+const generateSlug = (name: string): string => {
+  return name
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // Remove accents
+    .replace(/[^a-z0-9\s-]/g, '') // Remove special chars
+    .replace(/\s+/g, '-') // Replace spaces with hyphens
+    .replace(/-+/g, '-') // Remove duplicate hyphens
+    .replace(/^-|-$/g, ''); // Remove leading/trailing hyphens
+};
 
 export default function Login() {
   const navigate = useNavigate();
-  const { signIn, signUp, user } = useAuth();
+  const { signIn, user } = useAuth();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   
@@ -35,6 +53,45 @@ export default function Login() {
   const [signupFullName, setSignupFullName] = useState('');
   const [signupEmail, setSignupEmail] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
+  const [organizationName, setOrganizationName] = useState('');
+  const [organizationSlug, setOrganizationSlug] = useState('');
+  const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
+  
+  // Slug availability state
+  const [isCheckingSlug, setIsCheckingSlug] = useState(false);
+  const [isSlugAvailable, setIsSlugAvailable] = useState<boolean | null>(null);
+
+  // Auto-generate slug when organization name changes
+  useEffect(() => {
+    if (!slugManuallyEdited && organizationName) {
+      const generatedSlug = generateSlug(organizationName);
+      setOrganizationSlug(generatedSlug);
+    }
+  }, [organizationName, slugManuallyEdited]);
+
+  // Check slug availability with debounce
+  useEffect(() => {
+    if (organizationSlug.length < 2) {
+      setIsSlugAvailable(null);
+      return;
+    }
+
+    const timeoutId = setTimeout(async () => {
+      setIsCheckingSlug(true);
+      try {
+        const { data, error } = await supabase.rpc('is_slug_available', { _slug: organizationSlug });
+        if (!error) {
+          setIsSlugAvailable(data);
+        }
+      } catch (e) {
+        console.error('Error checking slug:', e);
+      } finally {
+        setIsCheckingSlug(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [organizationSlug]);
 
   // Redirect if already logged in
   if (user) {
@@ -83,8 +140,11 @@ export default function Login() {
     const result = signupSchema.safeParse({ 
       fullName: signupFullName, 
       email: signupEmail, 
-      password: signupPassword 
+      password: signupPassword,
+      organizationName,
+      organizationSlug,
     });
+    
     if (!result.success) {
       toast({
         title: 'Erro de validação',
@@ -94,11 +154,63 @@ export default function Login() {
       return;
     }
 
-    setIsLoading(true);
-    const { error } = await signUp(signupEmail, signupPassword, signupFullName);
-    setIsLoading(false);
+    if (isSlugAvailable === false) {
+      toast({
+        title: 'Slug indisponível',
+        description: 'Este slug já está em uso. Por favor, escolha outro.',
+        variant: 'destructive',
+      });
+      return;
+    }
 
-    if (error) {
+    setIsLoading(true);
+
+    try {
+      // 1. Create the user account
+      const redirectUrl = `${window.location.origin}/`;
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: signupEmail,
+        password: signupPassword,
+        options: {
+          emailRedirectTo: redirectUrl,
+          data: {
+            full_name: signupFullName,
+          },
+        },
+      });
+
+      if (authError) throw authError;
+      if (!authData.user) throw new Error('Não foi possível criar o utilizador');
+
+      // 2. Create the organization (this also assigns admin role)
+      const { error: orgError } = await supabase.rpc('create_organization_for_current_user', {
+        _name: organizationName,
+        _slug: organizationSlug,
+      });
+
+      if (orgError) {
+        // If org creation fails, we should handle it gracefully
+        if (orgError.message.includes('Slug already exists')) {
+          toast({
+            title: 'Slug indisponível',
+            description: 'Este slug já está em uso. Por favor, escolha outro.',
+            variant: 'destructive',
+          });
+          setIsLoading(false);
+          return;
+        }
+        throw orgError;
+      }
+
+      toast({
+        title: 'Conta criada com sucesso!',
+        description: 'Bem-vindo ao SENVIA. A redirecionar para o dashboard...',
+      });
+
+      // Force page reload to ensure AuthContext picks up all data
+      window.location.href = '/dashboard';
+      
+    } catch (error: any) {
       let message = error.message;
       if (error.message.includes('already registered')) {
         message = 'Este email já está registado';
@@ -108,14 +220,16 @@ export default function Login() {
         description: message,
         variant: 'destructive',
       });
-      return;
+    } finally {
+      setIsLoading(false);
     }
+  };
 
-    toast({
-      title: 'Conta criada!',
-      description: 'A sua conta foi criada com sucesso.',
-    });
-    navigate('/dashboard');
+  const handleSlugChange = (value: string) => {
+    setSlugManuallyEdited(true);
+    // Sanitize slug input in real-time
+    const sanitized = value.toLowerCase().replace(/[^a-z0-9-]/g, '');
+    setOrganizationSlug(sanitized);
   };
 
   return (
@@ -232,13 +346,62 @@ export default function Login() {
                       required
                     />
                   </div>
-                  <p className="text-xs text-slate-500 text-center">
-                    Nota: O acesso a organizações é gerido pelo administrador.
-                  </p>
+                  
+                  <div className="border-t border-slate-700 pt-4 mt-4">
+                    <p className="text-sm text-slate-400 mb-3">Dados da sua empresa</p>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="org-name" className="text-slate-300">Nome da Empresa</Label>
+                      <Input
+                        id="org-name"
+                        type="text"
+                        placeholder="Minha Empresa Lda"
+                        value={organizationName}
+                        onChange={(e) => setOrganizationName(e.target.value)}
+                        className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
+                        required
+                      />
+                    </div>
+                    
+                    <div className="space-y-2 mt-3">
+                      <Label htmlFor="org-slug" className="text-slate-300">
+                        Slug (URL da empresa)
+                      </Label>
+                      <div className="relative">
+                        <Input
+                          id="org-slug"
+                          type="text"
+                          placeholder="minha-empresa"
+                          value={organizationSlug}
+                          onChange={(e) => handleSlugChange(e.target.value)}
+                          className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 pr-10"
+                          required
+                        />
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                          {isCheckingSlug && (
+                            <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+                          )}
+                          {!isCheckingSlug && isSlugAvailable === true && (
+                            <Check className="h-4 w-4 text-green-500" />
+                          )}
+                          {!isCheckingSlug && isSlugAvailable === false && (
+                            <X className="h-4 w-4 text-red-500" />
+                          )}
+                        </div>
+                      </div>
+                      <p className="text-xs text-slate-500">
+                        senvia.app/<span className="text-primary">{organizationSlug || 'slug'}</span>
+                      </p>
+                      {isSlugAvailable === false && (
+                        <p className="text-xs text-red-400">Este slug já está em uso</p>
+                      )}
+                    </div>
+                  </div>
+
                   <Button 
                     type="submit" 
                     className="w-full bg-primary hover:bg-primary/90"
-                    disabled={isLoading}
+                    disabled={isLoading || isSlugAvailable === false}
                   >
                     {isLoading ? (
                       <>

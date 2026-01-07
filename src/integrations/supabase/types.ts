@@ -213,6 +213,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_slug_available: { Args: { _slug: string }; Returns: boolean }
     }
     Enums: {
       app_role: "super_admin" | "admin" | "viewer"
