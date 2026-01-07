@@ -162,3 +162,40 @@ export function useCancelInvite() {
     },
   });
 }
+
+export function useResendInvite() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (inviteId: string) => {
+      // Renovar data de expiração para +7 dias
+      const newExpiry = new Date();
+      newExpiry.setDate(newExpiry.getDate() + 7);
+      
+      const { data, error } = await supabase
+        .from('organization_invites')
+        .update({ expires_at: newExpiry.toISOString() })
+        .eq('id', inviteId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['pending-invites'] });
+      toast({
+        title: 'Convite renovado',
+        description: `O convite para ${data.email} foi renovado por mais 7 dias.`,
+      });
+    },
+    onError: () => {
+      toast({
+        title: 'Erro',
+        description: 'Não foi possível renovar o convite.',
+        variant: 'destructive',
+      });
+    },
+  });
+}

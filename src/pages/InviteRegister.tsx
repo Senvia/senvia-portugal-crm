@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, UserPlus, AlertCircle, CheckCircle2, Building } from 'lucide-react';
+import { Loader2, UserPlus, AlertCircle, CheckCircle2, Building, LogOut } from 'lucide-react';
 
 interface InviteData {
   id: string;
@@ -34,6 +34,8 @@ export default function InviteRegister() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [shouldRedirect, setShouldRedirect] = useState(false);
+  const [currentSession, setCurrentSession] = useState<boolean | null>(null);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const [fullName, setFullName] = useState('');
   const [password, setPassword] = useState('');
@@ -46,6 +48,24 @@ export default function InviteRegister() {
       return () => clearTimeout(timer);
     }
   }, [shouldRedirect, navigate]);
+
+  // Check for existing session
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setCurrentSession(!!session);
+    });
+  }, []);
+
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    await supabase.auth.signOut();
+    setCurrentSession(false);
+    setLoggingOut(false);
+    toast({
+      title: 'Sessão terminada',
+      description: 'Pode agora criar uma nova conta.',
+    });
+  };
 
   useEffect(() => {
     async function validateInvite() {
@@ -190,6 +210,49 @@ export default function InviteRegister() {
             <Button asChild>
               <Link to="/login">Ir para Login</Link>
             </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Show warning if user is already logged in
+  if (currentSession === true) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-4">
+        <Card className="max-w-md w-full bg-slate-900/50 border-slate-800">
+          <CardHeader className="text-center">
+            <div className="mx-auto mb-4 w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center">
+              <LogOut className="h-6 w-6 text-amber-500" />
+            </div>
+            <CardTitle className="text-white">Já está autenticado</CardTitle>
+            <CardDescription>
+              Para aceitar este convite e criar uma nova conta, precisa primeiro terminar a sessão atual.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="p-4 rounded-lg bg-slate-800/50 border border-slate-700">
+              <div className="flex items-center gap-2 text-sm">
+                <Building className="h-4 w-4 text-muted-foreground" />
+                <span className="font-medium text-white">{invite?.organization_name}</span>
+              </div>
+              <p className="text-sm text-muted-foreground mt-1">
+                Convite para: {invite?.email}
+              </p>
+            </div>
+            <div className="flex flex-col gap-2">
+              <Button 
+                onClick={handleLogout} 
+                disabled={loggingOut}
+                className="w-full"
+              >
+                {loggingOut && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Terminar Sessão e Continuar
+              </Button>
+              <Button variant="outline" asChild className="w-full">
+                <Link to="/dashboard">Voltar ao Dashboard</Link>
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>
