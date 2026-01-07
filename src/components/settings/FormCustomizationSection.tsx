@@ -29,7 +29,7 @@ import {
 import { useUpdateOrganization } from '@/hooks/useOrganization';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { FormSettings, DEFAULT_FORM_SETTINGS } from '@/types';
+import { FormSettings, DEFAULT_FORM_SETTINGS, migrateFormSettings } from '@/types';
 import { Json } from '@/integrations/supabase/types';
 import { useToast } from '@/hooks/use-toast';
 import { FormPreview } from './FormPreview';
@@ -72,8 +72,9 @@ export function FormCustomizationSection() {
         .single();
 
       if (!error && data?.form_settings) {
-        const fetchedSettings = data.form_settings as unknown as Partial<FormSettings>;
-        setSettings({ ...DEFAULT_FORM_SETTINGS, ...fetchedSettings, custom_fields: fetchedSettings.custom_fields || [] });
+        // Migrate old format to new format if needed
+        const migratedSettings = migrateFormSettings(data.form_settings);
+        setSettings(migratedSettings);
       }
       setIsLoading(false);
     }
@@ -130,10 +131,10 @@ export function FormCustomizationSection() {
   }
 
   return (
-    <div className="h-[calc(100vh-12rem)] min-h-[600px]">
+    <div className="h-[calc(100vh-14rem)] min-h-[500px]">
       <ResizablePanelGroup direction="horizontal" className="h-full rounded-xl border bg-background">
         {/* Editor Panel */}
-        <ResizablePanel defaultSize={55} minSize={40}>
+        <ResizablePanel defaultSize={50} minSize={35}>
           <div className="flex h-full flex-col">
             {/* Header */}
             <div className="flex items-center justify-between border-b px-6 py-4">
@@ -165,8 +166,8 @@ export function FormCustomizationSection() {
             </div>
 
             {/* Accordion Sections */}
-            <div className="flex-1 overflow-y-auto p-6">
-              <Accordion type="multiple" defaultValue={["appearance", "fields", "messages"]} className="space-y-4">
+            <div className="flex-1 overflow-y-auto p-3 sm:p-6">
+              <Accordion type="multiple" defaultValue={["appearance", "fields", "messages"]} className="space-y-3 sm:space-y-4">
                 
                 {/* Appearance Section */}
                 <AccordionItem value="appearance" className="border rounded-xl px-4">
@@ -383,7 +384,7 @@ export function FormCustomizationSection() {
         <ResizableHandle withHandle />
 
         {/* Preview Panel */}
-        <ResizablePanel defaultSize={45} minSize={30}>
+        <ResizablePanel defaultSize={50} minSize={35}>
           <div className="flex h-full flex-col bg-muted/30">
             {/* Preview Header */}
             <div className="flex items-center justify-between border-b bg-background px-6 py-4">
@@ -400,8 +401,8 @@ export function FormCustomizationSection() {
             </div>
 
             {/* Preview Content */}
-            <div className="flex-1 overflow-y-auto p-6">
-              <div className="mx-auto max-w-sm">
+            <div className="flex-1 overflow-y-auto p-3 sm:p-6">
+              <div className="mx-auto w-full max-w-md">
                 <FormPreview settings={settings} showSuccess={showSuccessPreview} />
               </div>
             </div>
