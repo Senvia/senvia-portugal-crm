@@ -15,7 +15,6 @@ import Leads from "./pages/Leads";
 import Settings from "./pages/Settings";
 import PublicLeadForm from "./pages/PublicLeadForm";
 import InviteRegister from "./pages/InviteRegister";
-import Onboarding from "./pages/Onboarding";
 import ResetPassword from "./pages/ResetPassword";
 import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
@@ -42,11 +41,6 @@ const App = () => (
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/p/:public_key" element={<PublicLeadForm />} />
             <Route path="/invite/:token" element={<InviteRegister />} />
-            <Route path="/onboarding" element={
-              <ProtectedRoute skipOnboardingCheck>
-                <Onboarding />
-              </ProtectedRoute>
-            } />
             <Route path="/privacy" element={<Privacy />} />
             <Route path="/terms" element={<Terms />} />
 

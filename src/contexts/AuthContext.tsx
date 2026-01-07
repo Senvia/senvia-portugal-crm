@@ -42,6 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [roles, setRoles] = useState<AppRole[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingUserData, setIsLoadingUserData] = useState(false);
 
   const isSuperAdmin = roles.includes('super_admin');
 
@@ -50,6 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     const fetchUserData = async (userId: string) => {
+      setIsLoadingUserData(true);
       try {
         // Fetch profile
         const { data: profileData } = await supabase
@@ -85,6 +87,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       } catch (error) {
         console.error('Error fetching user data:', error);
+      } finally {
+        if (!cancelled) setIsLoadingUserData(false);
       }
     };
 
@@ -94,6 +98,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setProfile(null);
       setOrganization(null);
       setRoles([]);
+      setIsLoadingUserData(false);
     }
 
     return () => {
@@ -172,7 +177,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         profile,
         organization,
         roles,
-        isLoading,
+        isLoading: isLoading || isLoadingUserData,
         isSuperAdmin,
         signIn,
         signUp,
