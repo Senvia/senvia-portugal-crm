@@ -1,6 +1,19 @@
 import { Lead, STATUS_LABELS, LeadStatus } from "@/types";
 import { formatDate, formatDateTime, getWhatsAppUrl } from "@/lib/format";
 import { usePermissions } from "@/hooks/usePermissions";
+
+// Formata número com espaços nos milhares (estilo PT)
+const formatNumberWithSpaces = (value: string | number): string => {
+  const num = String(value).replace(/\s/g, '').replace(/[^\d]/g, '');
+  if (!num) return '';
+  return num.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+};
+
+// Remove espaços para obter o valor numérico
+const parseFormattedNumber = (value: string): number | null => {
+  const cleaned = value.replace(/\s/g, '');
+  return cleaned ? parseFloat(cleaned) : null;
+};
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -81,7 +94,7 @@ export function LeadDetailsModal({
   // Sync state when lead changes
   useEffect(() => {
     if (lead) {
-      setEditValue(lead.value?.toString() || "");
+      setEditValue(lead.value ? formatNumberWithSpaces(lead.value) : "");
       setEditNotes(lead.notes || "");
       setEditSource(lead.source || "");
     }
@@ -94,8 +107,13 @@ export function LeadDetailsModal({
     onUpdate(lead.id, { [field]: value });
   };
 
+  const handleValueChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatNumberWithSpaces(e.target.value);
+    setEditValue(formatted);
+  };
+
   const handleValueBlur = () => {
-    const numValue = editValue ? parseFloat(editValue) : null;
+    const numValue = parseFormattedNumber(editValue);
     if (numValue !== lead.value) {
       handleFieldSave("value", numValue);
     }
@@ -167,12 +185,11 @@ export function LeadDetailsModal({
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">€</span>
               <Input
                 id="lead-value"
-                type="number"
-                step="0.01"
-                min="0"
-                placeholder="0,00"
+                type="text"
+                inputMode="numeric"
+                placeholder="0"
                 value={editValue}
-                onChange={(e) => setEditValue(e.target.value)}
+                onChange={handleValueChange}
                 onBlur={handleValueBlur}
                 className="pl-8"
               />
