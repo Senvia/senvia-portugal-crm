@@ -24,7 +24,7 @@ import {
   ExternalLink, 
   Save,
   Sparkles,
-  Image,
+  ImageIcon,
   Tag
 } from "lucide-react";
 import { useUpdateOrganization } from '@/hooks/useOrganization';
@@ -34,6 +34,7 @@ import { FormSettings, DEFAULT_FORM_SETTINGS } from '@/types';
 import { Json } from '@/integrations/supabase/types';
 import { useToast } from '@/hooks/use-toast';
 import { FormPreview } from './FormPreview';
+import { LogoUploader } from './LogoUploader';
 import { cn } from '@/lib/utils';
 
 const PRESET_COLORS = [
@@ -213,23 +214,16 @@ export function FormCustomizationSection() {
                       <p className="text-xs text-muted-foreground text-right">{settings.subtitle.length}/200</p>
                     </div>
 
-                    {/* Logo URL */}
+                    {/* Logo Upload */}
                     <div className="space-y-2">
-                      <Label htmlFor="form-logo" className="flex items-center gap-2 text-sm">
-                        <Image className="h-3.5 w-3.5 text-muted-foreground" />
-                        URL do Logo
+                      <Label className="flex items-center gap-2 text-sm">
+                        <ImageIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                        Logo
                       </Label>
-                      <Input
-                        id="form-logo"
-                        type="url"
-                        value={settings.logo_url || ''}
-                        onChange={(e) => updateSetting('logo_url', e.target.value || null)}
-                        placeholder="https://exemplo.com/logo.png"
-                        className="h-11"
+                      <LogoUploader
+                        value={settings.logo_url}
+                        onChange={(url) => updateSetting('logo_url', url)}
                       />
-                      <p className="text-xs text-muted-foreground">
-                        Deixe vazio para usar o ícone padrão
-                      </p>
                     </div>
 
                     {/* Primary Color */}
