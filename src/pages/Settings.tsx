@@ -15,6 +15,7 @@ import { Copy, ExternalLink, Code, Shield, User, Building, Webhook, Send, Loader
 import { PLAN_LABELS, OrganizationPlan } from "@/types";
 import { supabase } from '@/integrations/supabase/client';
 import { TeamTab } from '@/components/settings/TeamTab';
+import { PRODUCTION_URL } from '@/lib/constants';
 
 export default function Settings() {
   const { profile, organization } = useAuth();
@@ -27,7 +28,7 @@ export default function Settings() {
   const [webhookUrl, setWebhookUrl] = useState('');
   const [isLoadingWebhook, setIsLoadingWebhook] = useState(true);
 
-  const publicFormUrl = organization?.public_key ? `${window.location.origin}/p/${organization.public_key}` : '';
+  const publicFormUrl = organization?.public_key ? `${PRODUCTION_URL}/p/${organization.public_key}` : '';
   const iframeCode = organization?.public_key ? `<iframe src="${publicFormUrl}" width="100%" height="500" frameborder="0"></iframe>` : '';
 
   // Fetch current webhook_url

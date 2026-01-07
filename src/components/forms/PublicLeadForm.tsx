@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { PRODUCTION_URL } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -176,7 +177,7 @@ export function PublicLeadForm({ organizationName = "Senvia OS", onSubmit }: Pub
                 <div className="space-y-1 leading-none">
                   <FormLabel className="text-sm font-normal">
                     Li e aceito a{" "}
-                    <a href="/privacy" className="text-primary underline hover:no-underline">
+                    <a href={`${PRODUCTION_URL}/privacy`} target="_blank" rel="noopener noreferrer" className="text-primary underline hover:no-underline">
                       Política de Privacidade
                     </a>{" "}
                     *
