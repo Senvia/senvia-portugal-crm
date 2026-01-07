@@ -89,14 +89,20 @@ export function LeadDetailsModal({
   // Editable fields state
   const [editValue, setEditValue] = useState<string>("");
   const [editNotes, setEditNotes] = useState<string>("");
+  const [isEditingValue, setIsEditingValue] = useState(false);
+  const [isEditingNotes, setIsEditingNotes] = useState(false);
 
-  // Sync state when lead changes
+  // Sync state when lead changes (but not while editing)
   useEffect(() => {
     if (lead) {
-      setEditValue(lead.value ? formatNumberWithSpaces(lead.value) : "");
-      setEditNotes(lead.notes || "");
+      if (!isEditingValue) {
+        setEditValue(lead.value ? formatNumberWithSpaces(lead.value) : "");
+      }
+      if (!isEditingNotes) {
+        setEditNotes(lead.notes || "");
+      }
     }
-  }, [lead]);
+  }, [lead, isEditingValue, isEditingNotes]);
 
   if (!lead) return null;
 
@@ -183,7 +189,11 @@ export function LeadDetailsModal({
                 placeholder="0"
                 value={editValue}
                 onChange={handleValueChange}
-                onBlur={handleValueBlur}
+                onFocus={() => setIsEditingValue(true)}
+                onBlur={() => {
+                  handleValueBlur();
+                  setIsEditingValue(false);
+                }}
                 className="pl-8"
               />
             </div>
@@ -238,7 +248,11 @@ export function LeadDetailsModal({
               rows={3}
               value={editNotes}
               onChange={(e) => setEditNotes(e.target.value)}
-              onBlur={handleNotesBlur}
+              onFocus={() => setIsEditingNotes(true)}
+              onBlur={() => {
+                handleNotesBlur();
+                setIsEditingNotes(false);
+              }}
               className="resize-none"
             />
           </div>
