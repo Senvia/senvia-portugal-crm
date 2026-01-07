@@ -89,7 +89,7 @@ export default function Settings() {
 
   return (
     <AppLayout userName={profile?.full_name} organizationName={organization?.name}>
-      <div className="p-6 lg:p-8 max-w-4xl">
+      <div className="p-4 sm:p-6 lg:p-8">
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-foreground">Definições</h1>
           <p className="text-muted-foreground">Configure a sua organização e integrações.</p>
@@ -122,7 +122,7 @@ export default function Settings() {
           </TabsList>
 
           {/* Tab Geral */}
-          <TabsContent value="general" className="space-y-6">
+          <TabsContent value="general" className="space-y-6 max-w-4xl">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2"><Building className="h-5 w-5" />Organização</CardTitle>
@@ -173,21 +173,21 @@ export default function Settings() {
 
           {/* Tab Equipa */}
           {canManageTeam && (
-            <TabsContent value="team">
+            <TabsContent value="team" className="max-w-4xl">
               <TeamTab />
             </TabsContent>
           )}
 
           {/* Tab Formulário */}
           {canManageIntegrations && (
-            <TabsContent value="form">
+            <TabsContent value="form" className="w-full max-w-none">
               <FormCustomizationSection />
             </TabsContent>
           )}
 
           {/* Tab Integrações */}
           {canManageIntegrations && (
-            <TabsContent value="integrations" className="space-y-6">
+            <TabsContent value="integrations" className="space-y-6 max-w-4xl">
             {/* Formulário Público */}
             {organization && (
               <Card>

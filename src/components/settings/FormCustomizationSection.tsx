@@ -131,10 +131,10 @@ export function FormCustomizationSection() {
   }
 
   return (
-    <div className="h-[calc(100vh-14rem)] min-h-[500px]">
+    <div className="h-[calc(100vh-12rem)] min-h-[600px]">
       <ResizablePanelGroup direction="horizontal" className="h-full rounded-xl border bg-background">
         {/* Editor Panel */}
-        <ResizablePanel defaultSize={50} minSize={35}>
+        <ResizablePanel defaultSize={50} minSize={30} maxSize={70}>
           <div className="flex h-full flex-col">
             {/* Header */}
             <div className="flex items-center justify-between border-b px-6 py-4">
@@ -166,7 +166,7 @@ export function FormCustomizationSection() {
             </div>
 
             {/* Accordion Sections */}
-            <div className="flex-1 overflow-y-auto p-3 sm:p-6">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
               <Accordion type="multiple" defaultValue={["appearance", "fields", "messages"]} className="space-y-3 sm:space-y-4">
                 
                 {/* Appearance Section */}
@@ -384,7 +384,7 @@ export function FormCustomizationSection() {
         <ResizableHandle withHandle />
 
         {/* Preview Panel */}
-        <ResizablePanel defaultSize={50} minSize={35}>
+        <ResizablePanel defaultSize={50} minSize={30} maxSize={70}>
           <div className="flex h-full flex-col bg-muted/30">
             {/* Preview Header */}
             <div className="flex items-center justify-between border-b bg-background px-6 py-4">
@@ -401,8 +401,8 @@ export function FormCustomizationSection() {
             </div>
 
             {/* Preview Content */}
-            <div className="flex-1 overflow-y-auto p-3 sm:p-6">
-              <div className="mx-auto w-full max-w-md">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+              <div className="mx-auto w-full max-w-lg xl:max-w-xl">
                 <FormPreview settings={settings} showSuccess={showSuccessPreview} />
               </div>
             </div>
