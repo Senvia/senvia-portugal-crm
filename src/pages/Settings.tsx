@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUpdateOrganization, useTestWebhook } from '@/hooks/useOrganization';
+import { usePermissions } from '@/hooks/usePermissions';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -10,15 +11,17 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Copy, ExternalLink, Code, Shield, User, Building, Webhook, Send, Loader2, Link2, Check } from "lucide-react";
+import { Copy, ExternalLink, Code, Shield, User, Building, Webhook, Send, Loader2, Link2, Check, Users } from "lucide-react";
 import { PLAN_LABELS, OrganizationPlan } from "@/types";
 import { supabase } from '@/integrations/supabase/client';
+import { TeamTab } from '@/components/settings/TeamTab';
 
 export default function Settings() {
   const { profile, organization } = useAuth();
   const { toast } = useToast();
   const updateOrganization = useUpdateOrganization();
   const testWebhook = useTestWebhook();
+  const { canManageTeam, canManageIntegrations } = usePermissions();
 
   const [copied, setCopied] = useState<string | null>(null);
   const [webhookUrl, setWebhookUrl] = useState('');
@@ -96,10 +99,18 @@ export default function Settings() {
               <Building className="h-4 w-4" />
               Geral
             </TabsTrigger>
-            <TabsTrigger value="integrations" className="gap-2">
-              <Link2 className="h-4 w-4" />
-              Integrações
-            </TabsTrigger>
+            {canManageTeam && (
+              <TabsTrigger value="team" className="gap-2">
+                <Users className="h-4 w-4" />
+                Equipa
+              </TabsTrigger>
+            )}
+            {canManageIntegrations && (
+              <TabsTrigger value="integrations" className="gap-2">
+                <Link2 className="h-4 w-4" />
+                Integrações
+              </TabsTrigger>
+            )}
           </TabsList>
 
           {/* Tab Geral */}
@@ -152,8 +163,16 @@ export default function Settings() {
             </Card>
           </TabsContent>
 
+          {/* Tab Equipa */}
+          {canManageTeam && (
+            <TabsContent value="team">
+              <TeamTab />
+            </TabsContent>
+          )}
+
           {/* Tab Integrações */}
-          <TabsContent value="integrations" className="space-y-6">
+          {canManageIntegrations && (
+            <TabsContent value="integrations" className="space-y-6">
             {/* Formulário Público */}
             {organization && (
               <Card>
@@ -283,6 +302,7 @@ export default function Settings() {
               </CardContent>
             </Card>
           </TabsContent>
+          )}
         </Tabs>
       </div>
     </AppLayout>

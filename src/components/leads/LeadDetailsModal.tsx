@@ -1,5 +1,6 @@
 import { Lead, STATUS_LABELS, LeadStatus } from "@/types";
 import { formatDate, formatDateTime, formatCurrency, getWhatsAppUrl } from "@/lib/format";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -63,6 +64,7 @@ export function LeadDetailsModal({
   onDelete 
 }: LeadDetailsModalProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const { canDeleteLeads } = usePermissions();
 
   if (!lead) return null;
 
@@ -193,32 +195,34 @@ export function LeadDetailsModal({
           </div>
         </div>
 
-        <DialogFooter className="flex-col gap-2 sm:flex-row">
-          {/* GDPR: Right to Erasure */}
-          <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
-            <AlertDialogTrigger asChild>
-              <Button variant="destructive" className="w-full sm:w-auto">
-                <Trash2 className="h-4 w-4" />
-                Eliminar Lead (RGPD)
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Confirmar eliminação</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Está prestes a eliminar permanentemente esta lead e todos os dados associados, 
-                  em conformidade com o Direito ao Esquecimento do RGPD. Esta ação não pode ser revertida.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                  Eliminar permanentemente
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </DialogFooter>
+        {canDeleteLeads && (
+          <DialogFooter className="flex-col gap-2 sm:flex-row">
+            {/* GDPR: Right to Erasure */}
+            <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" className="w-full sm:w-auto">
+                  <Trash2 className="h-4 w-4" />
+                  Eliminar Lead (RGPD)
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Confirmar eliminação</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Está prestes a eliminar permanentemente esta lead e todos os dados associados, 
+                    em conformidade com o Direito ao Esquecimento do RGPD. Esta ação não pode ser revertida.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                    Eliminar permanentemente
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </DialogFooter>
+        )}
       </DialogContent>
     </Dialog>
   );
