@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, forwardRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -39,9 +39,9 @@ const generateSlug = (name: string): string => {
     .replace(/^-|-$/g, ''); // Remove leading/trailing hyphens
 };
 
-export default function Login() {
+const Login = forwardRef<HTMLDivElement>((props, ref) => {
   const navigate = useNavigate();
-  const { signIn, user } = useAuth();
+  const { signIn, user, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   
@@ -93,10 +93,20 @@ export default function Login() {
     return () => clearTimeout(timeoutId);
   }, [organizationSlug]);
 
-  // Redirect if already logged in
-  if (user) {
-    navigate('/dashboard', { replace: true });
-    return null;
+  // Redirect if already logged in (moved to useEffect)
+  useEffect(() => {
+    if (user && !authLoading) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [user, authLoading, navigate]);
+
+  // Show loading while checking auth or redirecting
+  if (authLoading || user) {
+    return (
+      <div ref={ref} className="min-h-screen flex items-center justify-center bg-slate-950">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
   }
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -426,4 +436,7 @@ export default function Login() {
       </div>
     </div>
   );
-}
+});
+
+Login.displayName = 'Login';
+export default Login;
