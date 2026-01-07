@@ -1,4 +1,4 @@
-import { useState, useEffect, forwardRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -39,7 +39,7 @@ const generateSlug = (name: string): string => {
     .replace(/^-|-$/g, ''); // Remove leading/trailing hyphens
 };
 
-const Login = forwardRef<HTMLDivElement>((props, ref) => {
+export default function Login() {
   const navigate = useNavigate();
   const { signIn, user, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
@@ -103,7 +103,7 @@ const Login = forwardRef<HTMLDivElement>((props, ref) => {
   // Show loading while checking auth or redirecting
   if (authLoading || user) {
     return (
-      <div ref={ref} className="min-h-screen flex items-center justify-center bg-slate-950">
+      <div className="min-h-screen flex items-center justify-center bg-slate-950">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
@@ -436,7 +436,4 @@ const Login = forwardRef<HTMLDivElement>((props, ref) => {
       </div>
     </div>
   );
-});
-
-Login.displayName = 'Login';
-export default Login;
+}
