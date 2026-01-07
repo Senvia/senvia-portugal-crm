@@ -75,6 +75,7 @@ export type Database = {
           plan: string | null
           public_key: string
           slug: string
+          webhook_url: string | null
         }
         Insert: {
           created_at?: string | null
@@ -83,6 +84,7 @@ export type Database = {
           plan?: string | null
           public_key?: string
           slug: string
+          webhook_url?: string | null
         }
         Update: {
           created_at?: string | null
@@ -91,6 +93,7 @@ export type Database = {
           plan?: string | null
           public_key?: string
           slug?: string
+          webhook_url?: string | null
         }
         Relationships: []
       }

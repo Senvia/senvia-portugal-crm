@@ -78,10 +78,10 @@ Deno.serve(async (req) => {
     
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    // Validate public_key and get organization_id
+    // Validate public_key and get organization_id (including webhook_url)
     const { data: org, error: orgError } = await supabase
       .from('organizations')
-      .select('id, name')
+      .select('id, name, webhook_url')
       .eq('public_key', body.public_key)
       .maybeSingle();
 
@@ -127,6 +127,43 @@ Deno.serve(async (req) => {
     }
 
     console.log('Lead created successfully:', lead.id);
+
+    // Dispatch webhook if configured (non-blocking)
+    if (org.webhook_url) {
+      console.log('Dispatching webhook to:', org.webhook_url);
+      
+      const webhookPayload = {
+        event: 'lead.created',
+        timestamp: new Date().toISOString(),
+        organization: {
+          id: org.id,
+          name: org.name,
+        },
+        lead: {
+          id: lead.id,
+          name: lead.name,
+          email: lead.email,
+          phone: lead.phone,
+          source: lead.source,
+          status: lead.status,
+          created_at: lead.created_at,
+        },
+      };
+
+      // Fire and forget - don't block the response
+      // Fire and forget - don't block the response
+      fetch(org.webhook_url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(webhookPayload),
+      })
+        .then((res) => {
+          console.log('Webhook dispatched successfully, status:', res.status);
+        })
+        .catch((err) => {
+          console.error('Webhook dispatch failed:', err.message);
+        });
+    }
 
     return new Response(
       JSON.stringify({ 

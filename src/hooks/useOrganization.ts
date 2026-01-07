@@ -1,0 +1,101 @@
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/use-toast';
+
+interface UpdateOrganizationData {
+  webhook_url?: string | null;
+}
+
+export function useUpdateOrganization() {
+  const { organization } = useAuth();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (data: UpdateOrganizationData) => {
+      if (!organization?.id) {
+        throw new Error('Organização não encontrada');
+      }
+
+      const { error } = await supabase
+        .from('organizations')
+        .update(data)
+        .eq('id', organization.id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['organization'] });
+      toast({
+        title: 'Guardado',
+        description: 'Definições atualizadas com sucesso.',
+      });
+    },
+    onError: (error) => {
+      console.error('Error updating organization:', error);
+      toast({
+        title: 'Erro',
+        description: 'Não foi possível atualizar as definições.',
+        variant: 'destructive',
+      });
+    },
+  });
+}
+
+export function useTestWebhook() {
+  const { organization } = useAuth();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (webhookUrl: string) => {
+      if (!webhookUrl) {
+        throw new Error('URL do webhook não definido');
+      }
+
+      const testPayload = {
+        event: 'webhook.test',
+        timestamp: new Date().toISOString(),
+        organization: {
+          id: organization?.id,
+          name: organization?.name,
+        },
+        lead: {
+          id: 'test-lead-id',
+          name: 'Lead de Teste',
+          email: 'teste@exemplo.com',
+          phone: '+351912345678',
+          source: 'Teste de Webhook',
+          status: 'new',
+          created_at: new Date().toISOString(),
+        },
+      };
+
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(testPayload),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Webhook retornou status ${response.status}`);
+      }
+
+      return response;
+    },
+    onSuccess: () => {
+      toast({
+        title: 'Webhook testado',
+        description: 'O webhook respondeu com sucesso!',
+      });
+    },
+    onError: (error) => {
+      console.error('Webhook test failed:', error);
+      toast({
+        title: 'Erro no teste',
+        description: 'O webhook não respondeu corretamente. Verifique o URL.',
+        variant: 'destructive',
+      });
+    },
+  });
+}
