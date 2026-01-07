@@ -89,14 +89,12 @@ export function LeadDetailsModal({
   // Editable fields state
   const [editValue, setEditValue] = useState<string>("");
   const [editNotes, setEditNotes] = useState<string>("");
-  const [editSource, setEditSource] = useState<string>("");
 
   // Sync state when lead changes
   useEffect(() => {
     if (lead) {
       setEditValue(lead.value ? formatNumberWithSpaces(lead.value) : "");
       setEditNotes(lead.notes || "");
-      setEditSource(lead.source || "");
     }
   }, [lead]);
 
@@ -125,11 +123,6 @@ export function LeadDetailsModal({
     }
   };
 
-  const handleSourceBlur = () => {
-    if (editSource !== (lead.source || "")) {
-      handleFieldSave("source", editSource || null);
-    }
-  };
 
   const handleDelete = () => {
     onDelete(lead.id);
@@ -220,19 +213,15 @@ export function LeadDetailsModal({
 
           <Separator />
 
-          {/* Editable Source */}
+          {/* Source (Read-only) */}
           <div className="space-y-2">
-            <Label htmlFor="lead-source" className="flex items-center gap-2 text-sm font-medium">
+            <Label className="flex items-center gap-2 text-sm font-medium">
               <ExternalLink className="h-4 w-4 text-muted-foreground" />
               Origem do Lead
             </Label>
-            <Input
-              id="lead-source"
-              placeholder="Ex: Facebook Ads, Google, Indicação..."
-              value={editSource}
-              onChange={(e) => setEditSource(e.target.value)}
-              onBlur={handleSourceBlur}
-            />
+            <div className="flex items-center gap-2 px-3 py-2 bg-muted rounded-md text-sm">
+              {lead.source || 'Não identificada'}
+            </div>
           </div>
 
           <Separator />
