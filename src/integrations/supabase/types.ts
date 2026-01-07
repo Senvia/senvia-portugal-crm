@@ -200,6 +200,10 @@ export type Database = {
         Args: { _token: string; _user_id: string }
         Returns: boolean
       }
+      create_organization_for_current_user: {
+        Args: { _name: string; _slug: string }
+        Returns: string
+      }
       get_org_by_public_key: { Args: { _public_key: string }; Returns: string }
       get_user_org_id: { Args: { _user_id: string }; Returns: string }
       has_role: {
