@@ -4,10 +4,11 @@ import { Loader2 } from 'lucide-react';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
+  skipOnboardingCheck?: boolean;
 }
 
-export function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { user, isLoading } = useAuth();
+export function ProtectedRoute({ children, skipOnboardingCheck = false }: ProtectedRouteProps) {
+  const { user, organization, isLoading } = useAuth();
   const location = useLocation();
 
   if (isLoading) {
@@ -20,6 +21,11 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   if (!user) {
     return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  // Redirect to onboarding if user has no organization (except on onboarding page itself)
+  if (!skipOnboardingCheck && !organization && location.pathname !== '/onboarding') {
+    return <Navigate to="/onboarding" replace />;
   }
 
   return <>{children}</>;
