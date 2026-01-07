@@ -1,4 +1,4 @@
-import { FormSettings, CustomField, FieldType } from '@/types';
+import { FormSettings, CustomField } from '@/types';
 import { Sparkles, CheckCircle2 } from 'lucide-react';
 
 interface FormPreviewProps {
@@ -137,38 +137,44 @@ export function FormPreview({ settings, showSuccess = false }: FormPreviewProps)
 
       {/* Form Fields Preview */}
       <div className="space-y-4">
-        {/* Fixed Fields */}
-        <div className="space-y-1.5">
-          <label className="text-xs font-medium text-foreground">
-            {settings.labels.name} *
-          </label>
-          <div className="h-10 rounded-lg border bg-muted/30 px-3 flex items-center">
-            <span className="text-sm text-muted-foreground/50">João Silva</span>
-          </div>
-        </div>
-
-        <div className="space-y-1.5">
-          <label className="text-xs font-medium text-foreground">
-            {settings.labels.email} *
-          </label>
-          <div className="h-10 rounded-lg border bg-muted/30 px-3 flex items-center">
-            <span className="text-sm text-muted-foreground/50">joao@exemplo.pt</span>
-          </div>
-        </div>
-
-        <div className="space-y-1.5">
-          <label className="text-xs font-medium text-foreground">
-            {settings.labels.phone} *
-          </label>
-          <div className="h-10 rounded-lg border bg-muted/30 px-3 flex items-center">
-            <span className="text-sm text-muted-foreground/50">+351 912 345 678</span>
-          </div>
-        </div>
-
-        {settings.show_message_field && (
+        {/* Fixed Fields - conditionally rendered based on visibility */}
+        {settings.fields.name.visible && (
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-foreground">
-              {settings.labels.message}
+              {settings.fields.name.label} {settings.fields.name.required && '*'}
+            </label>
+            <div className="h-10 rounded-lg border bg-muted/30 px-3 flex items-center">
+              <span className="text-sm text-muted-foreground/50">João Silva</span>
+            </div>
+          </div>
+        )}
+
+        {settings.fields.email.visible && (
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-foreground">
+              {settings.fields.email.label} {settings.fields.email.required && '*'}
+            </label>
+            <div className="h-10 rounded-lg border bg-muted/30 px-3 flex items-center">
+              <span className="text-sm text-muted-foreground/50">joao@exemplo.pt</span>
+            </div>
+          </div>
+        )}
+
+        {settings.fields.phone.visible && (
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-foreground">
+              {settings.fields.phone.label} {settings.fields.phone.required && '*'}
+            </label>
+            <div className="h-10 rounded-lg border bg-muted/30 px-3 flex items-center">
+              <span className="text-sm text-muted-foreground/50">+351 912 345 678</span>
+            </div>
+          </div>
+        )}
+
+        {settings.fields.message.visible && (
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-foreground">
+              {settings.fields.message.label} {settings.fields.message.required && '*'}
             </label>
             <div className="h-20 rounded-lg border bg-muted/30 px-3 py-2">
               <span className="text-sm text-muted-foreground/50">A sua mensagem aqui...</span>
