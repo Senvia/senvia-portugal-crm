@@ -205,6 +205,10 @@ export type Database = {
         Returns: string
       }
       get_org_by_public_key: { Args: { _public_key: string }; Returns: string }
+      get_org_name_by_invite_token: {
+        Args: { _token: string }
+        Returns: string
+      }
       get_user_org_id: { Args: { _user_id: string }; Returns: string }
       has_role: {
         Args: {
