@@ -3,6 +3,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { 
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { 
   Type, 
   Hash, 
   List, 
@@ -121,45 +126,70 @@ export function CustomFieldsEditor({ settings, onUpdateSettings }: CustomFieldsE
       <div 
         key={fieldKey}
         className={cn(
-          "flex items-center gap-2 sm:gap-3 rounded-lg border p-2 sm:p-3 transition-colors",
-          field.visible ? "bg-card" : "bg-muted/50 opacity-60"
+          "flex items-center gap-2 sm:gap-3 rounded-lg border p-2 sm:p-3 transition-all",
+          field.visible 
+            ? "bg-card border-border" 
+            : "bg-destructive/5 border-destructive/30 opacity-75"
         )}
       >
         {/* Visibility Toggle */}
-        <button
-          type="button"
-          onClick={() => updateFixedField(fieldKey, { visible: !field.visible })}
-          className={cn(
-            "p-1.5 rounded-md transition-colors shrink-0",
-            field.visible 
-              ? "text-primary hover:bg-primary/10" 
-              : "text-muted-foreground hover:bg-muted"
-          )}
-          title={field.visible ? "Ocultar campo" : "Mostrar campo"}
-        >
-          {field.visible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-        </button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={() => updateFixedField(fieldKey, { visible: !field.visible })}
+              className={cn(
+                "p-2 rounded-md transition-all shrink-0 hover:scale-110",
+                field.visible 
+                  ? "text-primary bg-primary/10 hover:bg-primary/20" 
+                  : "text-destructive bg-destructive/10 hover:bg-destructive/20"
+              )}
+            >
+              {field.visible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="top">
+            {field.visible ? "Clique para ocultar este campo" : "Clique para mostrar este campo"}
+          </TooltipContent>
+        </Tooltip>
         
         {/* Required Toggle (only if visible) */}
-        <button
-          type="button"
-          onClick={() => field.visible && updateFixedField(fieldKey, { required: !field.required })}
-          disabled={!field.visible}
-          className={cn(
-            "p-1.5 rounded-md transition-colors shrink-0",
-            !field.visible && "opacity-30 cursor-not-allowed",
-            field.required 
-              ? "text-amber-500 hover:bg-amber-500/10" 
-              : "text-muted-foreground hover:bg-muted"
-          )}
-          title={field.required ? "Tornar opcional" : "Tornar obrigatório"}
-        >
-          <Asterisk className="h-4 w-4" />
-        </button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={() => field.visible && updateFixedField(fieldKey, { required: !field.required })}
+              disabled={!field.visible}
+              className={cn(
+                "p-2 rounded-md transition-all shrink-0",
+                !field.visible && "opacity-30 cursor-not-allowed",
+                field.visible && "hover:scale-110",
+                field.required 
+                  ? "text-amber-500 bg-amber-500/10 hover:bg-amber-500/20" 
+                  : "text-muted-foreground hover:bg-muted"
+              )}
+            >
+              <Asterisk className="h-4 w-4" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="top">
+            {!field.visible 
+              ? "Active o campo primeiro" 
+              : field.required 
+                ? "Clique para tornar opcional" 
+                : "Clique para tornar obrigatório"}
+          </TooltipContent>
+        </Tooltip>
         
         {/* Field Icon */}
-        <div className="h-8 w-8 sm:h-9 sm:w-9 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
-          <Icon className="h-4 w-4 text-primary" />
+        <div className={cn(
+          "h-8 w-8 sm:h-9 sm:w-9 rounded-md flex items-center justify-center shrink-0 transition-colors",
+          field.visible ? "bg-primary/10" : "bg-muted"
+        )}>
+          <Icon className={cn(
+            "h-4 w-4 transition-colors",
+            field.visible ? "text-primary" : "text-muted-foreground"
+          )} />
         </div>
         
         {/* Label Input */}
@@ -167,15 +197,21 @@ export function CustomFieldsEditor({ settings, onUpdateSettings }: CustomFieldsE
           value={field.label}
           onChange={(e) => updateFixedField(fieldKey, { label: e.target.value })}
           disabled={!field.visible}
-          className="flex-1 min-w-0 h-9"
+          className={cn(
+            "flex-1 min-w-0 h-9 transition-all",
+            !field.visible && "line-through text-muted-foreground"
+          )}
           placeholder="Label do campo"
           maxLength={50}
         />
         
         {/* Status Badge */}
         <Badge 
-          variant={field.visible ? (field.required ? "default" : "outline") : "secondary"}
-          className="shrink-0 hidden sm:flex"
+          variant={field.visible ? (field.required ? "default" : "outline") : "destructive"}
+          className={cn(
+            "shrink-0 transition-all",
+            !field.visible && "bg-destructive/10 text-destructive border-destructive/30"
+          )}
         >
           {!field.visible ? 'Oculto' : field.required ? 'Obrigatório' : 'Opcional'}
         </Badge>
@@ -192,9 +228,16 @@ export function CustomFieldsEditor({ settings, onUpdateSettings }: CustomFieldsE
           <span>Campos Base</span>
           <div className="h-px flex-1 bg-border" />
         </div>
-        <p className="text-xs text-muted-foreground text-center">
-          Clique nos ícones 👁 e * para configurar visibilidade e obrigatoriedade
-        </p>
+        <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground bg-muted/50 rounded-lg p-2">
+          <span className="flex items-center gap-1.5">
+            <Eye className="h-3.5 w-3.5 text-primary" />
+            Mostrar/Ocultar
+          </span>
+          <span className="flex items-center gap-1.5">
+            <Asterisk className="h-3.5 w-3.5 text-amber-500" />
+            Obrigatório
+          </span>
+        </div>
         <div className="space-y-2">
           {renderFixedField('name', FIXED_FIELD_ICONS.name)}
           {renderFixedField('email', FIXED_FIELD_ICONS.email)}
