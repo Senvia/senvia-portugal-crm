@@ -21,7 +21,9 @@ import {
   Asterisk,
   Mail,
   Phone,
-  RotateCcw,
+  User,
+  MessageSquare,
+  FileText,
 } from 'lucide-react';
 import { FormSettings, CustomField, FieldType, FIELD_TYPE_LABELS } from '@/types';
 import { AddFieldModal } from './AddFieldModal';
@@ -43,17 +45,17 @@ const FIELD_ICONS: Record<FieldType, React.ComponentType<{ className?: string }>
 type FixedFieldKey = 'name' | 'email' | 'phone' | 'message';
 
 const FIXED_FIELD_ICONS: Record<FixedFieldKey, React.ComponentType<{ className?: string }>> = {
-  name: Type,
+  name: User,
   email: Mail,
   phone: Phone,
-  message: AlignLeft,
+  message: MessageSquare,
 };
 
-const FIXED_FIELD_NAMES: Record<FixedFieldKey, string> = {
-  name: 'Nome Completo',
+const FIXED_FIELD_TYPES: Record<FixedFieldKey, string> = {
+  name: 'Texto',
   email: 'Email',
-  phone: 'Telemóvel',
-  message: 'Mensagem',
+  phone: 'Telefone',
+  message: 'Texto Longo',
 };
 
 export function CustomFieldsEditor({ settings, onUpdateSettings }: CustomFieldsEditorProps) {
@@ -77,14 +79,14 @@ export function CustomFieldsEditor({ settings, onUpdateSettings }: CustomFieldsE
     });
   };
 
+  // Add (show) a fixed field
+  const addFixedField = (fieldKey: FixedFieldKey) => {
+    updateFixedField(fieldKey, { visible: true, required: true });
+  };
+
   // Remove (hide) a fixed field
   const removeFixedField = (fieldKey: FixedFieldKey) => {
     updateFixedField(fieldKey, { visible: false, required: false });
-  };
-
-  // Restore a fixed field
-  const restoreFixedField = (fieldKey: FixedFieldKey) => {
-    updateFixedField(fieldKey, { visible: true });
   };
 
   const addField = (field: Omit<CustomField, 'id' | 'order'>) => {
@@ -134,10 +136,12 @@ export function CustomFieldsEditor({ settings, onUpdateSettings }: CustomFieldsE
 
   const sortedCustomFields = [...settings.custom_fields].sort((a, b) => a.order - b.order);
 
-  // Separate active and removed fixed fields
+  // Get active fixed fields (visible = true)
   const fixedFieldKeys: FixedFieldKey[] = ['name', 'email', 'phone', 'message'];
-  const activeFixedFields = fixedFieldKeys.filter(key => settings.fields[key]?.visible !== false);
-  const removedFixedFields = fixedFieldKeys.filter(key => settings.fields[key]?.visible === false);
+  const activeFixedFields = fixedFieldKeys.filter(key => settings.fields[key]?.visible === true);
+
+  // Total active fields count
+  const totalActiveFields = activeFixedFields.length + sortedCustomFields.length;
 
   const renderActiveFixedField = (fieldKey: FixedFieldKey) => {
     const field = settings.fields[fieldKey];
@@ -182,6 +186,11 @@ export function CustomFieldsEditor({ settings, onUpdateSettings }: CustomFieldsE
           placeholder="Label do campo"
           maxLength={50}
         />
+
+        {/* Type Badge */}
+        <Badge variant="secondary" className="shrink-0 hidden sm:inline-flex">
+          {FIXED_FIELD_TYPES[fieldKey]}
+        </Badge>
         
         {/* Status Badge */}
         <Badge 
@@ -207,39 +216,6 @@ export function CustomFieldsEditor({ settings, onUpdateSettings }: CustomFieldsE
             Remover campo
           </TooltipContent>
         </Tooltip>
-      </div>
-    );
-  };
-
-  const renderRemovedFixedField = (fieldKey: FixedFieldKey) => {
-    const Icon = FIXED_FIELD_ICONS[fieldKey];
-    const fieldName = FIXED_FIELD_NAMES[fieldKey];
-    
-    return (
-      <div 
-        key={fieldKey}
-        className="flex items-center gap-2 sm:gap-3 rounded-lg border border-dashed p-2 sm:p-3 bg-muted/30 border-muted-foreground/30"
-      >
-        {/* Field Icon */}
-        <div className="h-8 w-8 sm:h-9 sm:w-9 rounded-md flex items-center justify-center shrink-0 bg-muted">
-          <Icon className="h-4 w-4 text-muted-foreground" />
-        </div>
-        
-        {/* Field Name */}
-        <span className="flex-1 text-sm text-muted-foreground line-through">
-          {fieldName}
-        </span>
-
-        {/* Restore Button */}
-        <Button
-          variant="outline"
-          size="sm"
-          className="shrink-0"
-          onClick={() => restoreFixedField(fieldKey)}
-        >
-          <RotateCcw className="h-4 w-4 mr-2" />
-          Restaurar
-        </Button>
       </div>
     );
   };
@@ -363,30 +339,37 @@ export function CustomFieldsEditor({ settings, onUpdateSettings }: CustomFieldsE
   };
 
   return (
-    <div className="space-y-6">
-      {/* Active Fields Section */}
-      <div className="space-y-3">
-        <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-          <div className="h-px flex-1 bg-border" />
-          <span>Campos Ativos</span>
-          <div className="h-px flex-1 bg-border" />
-        </div>
-        <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground bg-muted/50 rounded-lg p-2">
-          <span className="flex items-center gap-1.5">
-            <Asterisk className="h-3.5 w-3.5 text-amber-500" />
-            Obrigatório
-          </span>
-          <span className="flex items-center gap-1.5">
-            <Trash2 className="h-3.5 w-3.5 text-destructive" />
-            Remover
-          </span>
-        </div>
-        
-        {activeFixedFields.length === 0 && sortedCustomFields.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-8 text-center">
-            <p className="text-sm text-muted-foreground">Nenhum campo ativo</p>
+    <div className="space-y-4">
+      {/* Empty State */}
+      {totalActiveFields === 0 ? (
+        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-12 text-center">
+          <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-4">
+            <FileText className="h-6 w-6 text-muted-foreground" />
           </div>
-        ) : (
+          <h3 className="text-sm font-medium mb-1">Nenhum campo adicionado</h3>
+          <p className="text-xs text-muted-foreground mb-4 max-w-[200px]">
+            Clique no botão abaixo para adicionar campos ao formulário
+          </p>
+          <Button onClick={() => setIsAddModalOpen(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Adicionar Campo
+          </Button>
+        </div>
+      ) : (
+        <>
+          {/* Legend */}
+          <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground bg-muted/50 rounded-lg p-2">
+            <span className="flex items-center gap-1.5">
+              <Asterisk className="h-3.5 w-3.5 text-amber-500" />
+              Obrigatório
+            </span>
+            <span className="flex items-center gap-1.5">
+              <Trash2 className="h-3.5 w-3.5 text-destructive" />
+              Remover
+            </span>
+          </div>
+          
+          {/* Fields List */}
           <div className="space-y-2">
             {/* Active Fixed Fields */}
             {activeFixedFields.map(fieldKey => renderActiveFixedField(fieldKey))}
@@ -394,30 +377,17 @@ export function CustomFieldsEditor({ settings, onUpdateSettings }: CustomFieldsE
             {/* Custom Fields */}
             {sortedCustomFields.map((field, idx) => renderCustomField(field, idx))}
           </div>
-        )}
 
-        <Button 
-          variant="outline" 
-          className="w-full" 
-          onClick={() => setIsAddModalOpen(true)}
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Adicionar Campo Personalizado
-        </Button>
-      </div>
-
-      {/* Removed Fields Section */}
-      {removedFixedFields.length > 0 && (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-            <div className="h-px flex-1 bg-border" />
-            <span>Campos Removidos</span>
-            <div className="h-px flex-1 bg-border" />
-          </div>
-          <div className="space-y-2">
-            {removedFixedFields.map(fieldKey => renderRemovedFixedField(fieldKey))}
-          </div>
-        </div>
+          {/* Add Field Button */}
+          <Button 
+            variant="outline" 
+            className="w-full" 
+            onClick={() => setIsAddModalOpen(true)}
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Adicionar Campo
+          </Button>
+        </>
       )}
 
       {/* Add Field Modal */}
@@ -425,6 +395,8 @@ export function CustomFieldsEditor({ settings, onUpdateSettings }: CustomFieldsE
         open={isAddModalOpen}
         onOpenChange={setIsAddModalOpen}
         onAdd={addField}
+        onAddFixedField={addFixedField}
+        currentSettings={settings}
       />
 
       {/* Edit Field Modal */}
