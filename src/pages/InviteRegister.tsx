@@ -33,10 +33,19 @@ export default function InviteRegister() {
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [shouldRedirect, setShouldRedirect] = useState(false);
 
   const [fullName, setFullName] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+
+  // Handle redirect with proper cleanup
+  useEffect(() => {
+    if (shouldRedirect) {
+      const timer = setTimeout(() => navigate('/dashboard'), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [shouldRedirect, navigate]);
 
   useEffect(() => {
     async function validateInvite() {
@@ -47,7 +56,7 @@ export default function InviteRegister() {
       }
 
       try {
-        // Fetch invite with organization name
+        // Fetch invite data
         const { data: inviteData, error: inviteError } = await supabase
           .from('organization_invites')
           .select('id, email, role, organization_id, token')
@@ -62,16 +71,14 @@ export default function InviteRegister() {
           return;
         }
 
-        // Get organization name
-        const { data: orgData } = await supabase
-          .from('organizations')
-          .select('name')
-          .eq('id', inviteData.organization_id)
-          .single();
+        // Get organization name using RPC function (bypasses RLS)
+        const { data: orgName } = await supabase.rpc('get_org_name_by_invite_token', {
+          _token: token
+        });
 
         setInvite({
           ...inviteData,
-          organization_name: orgData?.name || 'Organização',
+          organization_name: orgName || 'Organização',
         });
       } catch {
         setError('Ocorreu um erro ao validar o convite.');
@@ -116,7 +123,7 @@ export default function InviteRegister() {
     setIsSubmitting(true);
 
     try {
-      // Create user account
+      // Create user account with emailRedirectTo
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: invite.email,
         password,
@@ -124,6 +131,7 @@ export default function InviteRegister() {
           data: {
             full_name: fullName.trim(),
           },
+          emailRedirectTo: `${window.location.origin}/dashboard`,
         },
       });
 
@@ -145,10 +153,8 @@ export default function InviteRegister() {
         description: 'A redirecionar para o dashboard...',
       });
 
-      // Redirect after a short delay
-      setTimeout(() => {
-        navigate('/dashboard');
-      }, 2000);
+      // Trigger redirect via useEffect
+      setShouldRedirect(true);
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : 'Ocorreu um erro ao criar a conta.';
       toast({
@@ -163,7 +169,7 @@ export default function InviteRegister() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
@@ -171,13 +177,13 @@ export default function InviteRegister() {
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background p-4">
-        <Card className="max-w-md w-full">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-4">
+        <Card className="max-w-md w-full bg-slate-900/50 border-slate-800">
           <CardHeader className="text-center">
             <div className="mx-auto mb-4 w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center">
               <AlertCircle className="h-6 w-6 text-destructive" />
             </div>
-            <CardTitle>Convite Inválido</CardTitle>
+            <CardTitle className="text-white">Convite Inválido</CardTitle>
             <CardDescription>{error}</CardDescription>
           </CardHeader>
           <CardContent className="text-center">
@@ -192,13 +198,13 @@ export default function InviteRegister() {
 
   if (success) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background p-4">
-        <Card className="max-w-md w-full">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-4">
+        <Card className="max-w-md w-full bg-slate-900/50 border-slate-800">
           <CardHeader className="text-center">
-            <div className="mx-auto mb-4 w-12 h-12 rounded-full bg-success/10 flex items-center justify-center">
-              <CheckCircle2 className="h-6 w-6 text-success" />
+            <div className="mx-auto mb-4 w-12 h-12 rounded-full bg-green-500/10 flex items-center justify-center">
+              <CheckCircle2 className="h-6 w-6 text-green-500" />
             </div>
-            <CardTitle>Conta Criada!</CardTitle>
+            <CardTitle className="text-white">Conta Criada!</CardTitle>
             <CardDescription>
               A sua conta foi criada e já está associada à organização.
             </CardDescription>
@@ -213,22 +219,22 @@ export default function InviteRegister() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <Card className="max-w-md w-full">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-4">
+      <Card className="max-w-md w-full bg-slate-900/50 border-slate-800">
         <CardHeader className="text-center">
           <div className="mx-auto mb-4 w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
             <UserPlus className="h-6 w-6 text-primary" />
           </div>
-          <CardTitle>Criar Conta</CardTitle>
+          <CardTitle className="text-white">Criar Conta</CardTitle>
           <CardDescription>
             Foi convidado para se juntar a uma organização.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="mb-6 p-4 rounded-lg bg-muted/50 space-y-2">
+          <div className="mb-6 p-4 rounded-lg bg-slate-800/50 border border-slate-700 space-y-2">
             <div className="flex items-center gap-2 text-sm">
               <Building className="h-4 w-4 text-muted-foreground" />
-              <span className="font-medium">{invite?.organization_name}</span>
+              <span className="font-medium text-white">{invite?.organization_name}</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground">Perfil:</span>
@@ -240,48 +246,51 @@ export default function InviteRegister() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email" className="text-slate-200">Email</Label>
               <Input
                 id="email"
                 type="email"
                 value={invite?.email || ''}
                 disabled
-                className="bg-muted"
+                className="bg-slate-800/50 border-slate-700 text-slate-400"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="fullName">Nome Completo</Label>
+              <Label htmlFor="fullName" className="text-slate-200">Nome Completo</Label>
               <Input
                 id="fullName"
                 type="text"
                 placeholder="O seu nome"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
+                className="bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500"
                 required
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password" className="text-slate-200">Password</Label>
               <Input
                 id="password"
                 type="password"
                 placeholder="Mínimo 6 caracteres"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                className="bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500"
                 required
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Confirmar Password</Label>
+              <Label htmlFor="confirmPassword" className="text-slate-200">Confirmar Password</Label>
               <Input
                 id="confirmPassword"
                 type="password"
                 placeholder="Repita a password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
+                className="bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500"
                 required
               />
             </div>
