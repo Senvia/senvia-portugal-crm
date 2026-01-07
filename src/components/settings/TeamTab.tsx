@@ -1,16 +1,19 @@
 import { useState } from 'react';
-import { useTeamMembers, usePendingInvites, useCancelInvite, useResendInvite, useCreateTeamMember, PendingInvite } from '@/hooks/useTeam';
+import { useTeamMembers, usePendingInvites, useCancelInvite, useResendInvite, useCreateTeamMember, PendingInvite, TeamMember } from '@/hooks/useTeam';
+import { useManageTeamMember } from '@/hooks/useProfile';
+import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
-import { Users, UserPlus, Copy, X, Check, Clock, Loader2, RefreshCw, Eye, EyeOff } from 'lucide-react';
+import { Users, UserPlus, Copy, X, Check, Clock, Loader2, RefreshCw, Eye, EyeOff, MoreHorizontal, Key, UserCog, Ban, CheckCircle } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { getBaseUrl } from '@/lib/constants';
@@ -28,14 +31,16 @@ const ROLE_VARIANTS: Record<string, 'default' | 'secondary' | 'outline'> = {
 };
 
 export function TeamTab() {
+  const { user } = useAuth();
   const { data: members, isLoading: loadingMembers } = useTeamMembers();
   const { data: invites, isLoading: loadingInvites } = usePendingInvites();
   const cancelInvite = useCancelInvite();
   const resendInvite = useResendInvite();
   const createTeamMember = useCreateTeamMember();
+  const manageTeamMember = useManageTeamMember();
   const { toast } = useToast();
 
-  // Modal state
+  // Modal state - Add member
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -50,6 +55,17 @@ export function TeamTab() {
   
   // Invite list state
   const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null);
+
+  // Change password modal state
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
+  const [selectedMember, setSelectedMember] = useState<TeamMember | null>(null);
+  const [memberNewPassword, setMemberNewPassword] = useState('');
+  const [memberConfirmPassword, setMemberConfirmPassword] = useState('');
+  const [showMemberPassword, setShowMemberPassword] = useState(false);
+
+  // Change role modal state
+  const [changeRoleOpen, setChangeRoleOpen] = useState(false);
+  const [newRole, setNewRole] = useState<'admin' | 'viewer'>('viewer');
 
   const handleCreateMember = async () => {
     if (!fullName.trim() || !email.trim() || !password || !confirmPassword) {
@@ -112,7 +128,74 @@ export function TeamTab() {
     cancelInvite.mutate(invite.id);
   };
 
+  // Member management handlers
+  const openChangePasswordModal = (member: TeamMember) => {
+    setSelectedMember(member);
+    setMemberNewPassword('');
+    setMemberConfirmPassword('');
+    setShowMemberPassword(false);
+    setChangePasswordOpen(true);
+  };
+
+  const openChangeRoleModal = (member: TeamMember) => {
+    setSelectedMember(member);
+    setNewRole(member.role === 'admin' ? 'viewer' : 'admin');
+    setChangeRoleOpen(true);
+  };
+
+  const handleChangePassword = () => {
+    if (!selectedMember) return;
+    
+    if (!memberNewPassword || !memberConfirmPassword) {
+      toast({ title: 'Preencha todos os campos', variant: 'destructive' });
+      return;
+    }
+
+    if (memberNewPassword.length < 6) {
+      toast({ title: 'A password deve ter pelo menos 6 caracteres', variant: 'destructive' });
+      return;
+    }
+
+    if (memberNewPassword !== memberConfirmPassword) {
+      toast({ title: 'As passwords não coincidem', variant: 'destructive' });
+      return;
+    }
+
+    manageTeamMember.mutate(
+      { action: 'change_password', user_id: selectedMember.user_id, new_password: memberNewPassword },
+      {
+        onSuccess: () => {
+          setChangePasswordOpen(false);
+          setSelectedMember(null);
+          setMemberNewPassword('');
+          setMemberConfirmPassword('');
+        },
+      }
+    );
+  };
+
+  const handleChangeRole = () => {
+    if (!selectedMember) return;
+
+    manageTeamMember.mutate(
+      { action: 'change_role', user_id: selectedMember.user_id, new_role: newRole },
+      {
+        onSuccess: () => {
+          setChangeRoleOpen(false);
+          setSelectedMember(null);
+        },
+      }
+    );
+  };
+
+  const handleToggleStatus = (member: TeamMember) => {
+    manageTeamMember.mutate({ action: 'toggle_status', user_id: member.user_id });
+  };
+
   const loginUrl = `${getBaseUrl()}/login`;
+
+  // Check if member is current user
+  const isCurrentUser = (member: TeamMember) => member.user_id === user?.id;
 
   return (
     <div className="space-y-6">
@@ -323,12 +406,18 @@ export function TeamTab() {
                   <TableHead>Nome</TableHead>
                   <TableHead>Perfil</TableHead>
                   <TableHead>Estado</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {members?.map((member) => (
                   <TableRow key={member.id}>
-                    <TableCell className="font-medium">{member.full_name}</TableCell>
+                    <TableCell className="font-medium">
+                      {member.full_name}
+                      {isCurrentUser(member) && (
+                        <span className="ml-2 text-xs text-muted-foreground">(você)</span>
+                      )}
+                    </TableCell>
                     <TableCell>
                       <Badge variant={ROLE_VARIANTS[member.role] || 'secondary'}>
                         {ROLE_LABELS[member.role] || member.role}
@@ -339,11 +428,43 @@ export function TeamTab() {
                         Ativo
                       </Badge>
                     </TableCell>
+                    <TableCell className="text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon-sm">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => openChangePasswordModal(member)}>
+                            <Key className="mr-2 h-4 w-4" />
+                            Redefinir Password
+                          </DropdownMenuItem>
+                          {!isCurrentUser(member) && member.role !== 'super_admin' && (
+                            <>
+                              <DropdownMenuItem onClick={() => openChangeRoleModal(member)}>
+                                <UserCog className="mr-2 h-4 w-4" />
+                                Alterar Perfil
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem 
+                                onClick={() => handleToggleStatus(member)}
+                                className="text-destructive focus:text-destructive"
+                                disabled={manageTeamMember.isPending}
+                              >
+                                <Ban className="mr-2 h-4 w-4" />
+                                Desativar Acesso
+                              </DropdownMenuItem>
+                            </>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
                   </TableRow>
                 ))}
                 {(!members || members.length === 0) && (
                   <TableRow>
-                    <TableCell colSpan={3} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
                       Nenhum membro encontrado.
                     </TableCell>
                   </TableRow>
@@ -353,6 +474,125 @@ export function TeamTab() {
           )}
         </CardContent>
       </Card>
+
+      {/* Change Password Modal */}
+      <Dialog open={changePasswordOpen} onOpenChange={setChangePasswordOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Key className="h-5 w-5" />
+              Redefinir Password
+            </DialogTitle>
+            <DialogDescription>
+              Defina uma nova password para {selectedMember?.full_name}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="member-new-password">Nova Password</Label>
+              <div className="relative">
+                <Input
+                  id="member-new-password"
+                  type={showMemberPassword ? 'text' : 'password'}
+                  placeholder="Mínimo 6 caracteres"
+                  value={memberNewPassword}
+                  onChange={(e) => setMemberNewPassword(e.target.value)}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-0 top-0 h-full px-3"
+                  onClick={() => setShowMemberPassword(!showMemberPassword)}
+                >
+                  {showMemberPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="member-confirm-password">Confirmar Password</Label>
+              <Input
+                id="member-confirm-password"
+                type={showMemberPassword ? 'text' : 'password'}
+                placeholder="Repetir password"
+                value={memberConfirmPassword}
+                onChange={(e) => setMemberConfirmPassword(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setChangePasswordOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleChangePassword}
+              disabled={!memberNewPassword || !memberConfirmPassword || manageTeamMember.isPending}
+            >
+              {manageTeamMember.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Guardar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Change Role Modal */}
+      <Dialog open={changeRoleOpen} onOpenChange={setChangeRoleOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserCog className="h-5 w-5" />
+              Alterar Perfil
+            </DialogTitle>
+            <DialogDescription>
+              Altere o perfil de {selectedMember?.full_name}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <div className="space-y-2 mb-4">
+              <Label className="text-muted-foreground">Perfil Atual</Label>
+              <Badge variant={selectedMember ? ROLE_VARIANTS[selectedMember.role] : 'secondary'}>
+                {selectedMember ? ROLE_LABELS[selectedMember.role] : ''}
+              </Badge>
+            </div>
+            <RadioGroup value={newRole} onValueChange={(v) => setNewRole(v as 'admin' | 'viewer')}>
+              <div className="flex items-start space-x-3 rounded-lg border p-3">
+                <RadioGroupItem value="admin" id="new-role-admin" className="mt-1" />
+                <div className="flex-1">
+                  <Label htmlFor="new-role-admin" className="font-medium cursor-pointer">
+                    Administrador
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    Pode editar tudo: leads, definições e equipa.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start space-x-3 rounded-lg border p-3">
+                <RadioGroupItem value="viewer" id="new-role-viewer" className="mt-1" />
+                <div className="flex-1">
+                  <Label htmlFor="new-role-viewer" className="font-medium cursor-pointer">
+                    Visualizador
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    Só pode ver leads e mudar estados. Não pode eliminar nem aceder a definições.
+                  </p>
+                </div>
+              </div>
+            </RadioGroup>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setChangeRoleOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleChangeRole}
+              disabled={manageTeamMember.isPending}
+            >
+              {manageTeamMember.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Guardar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Pending Invites - legacy */}
       {(invites && invites.length > 0) && (
