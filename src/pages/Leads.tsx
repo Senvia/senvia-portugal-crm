@@ -3,7 +3,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { KanbanBoard } from "@/components/leads/KanbanBoard";
 import { LeadDetailsModal } from "@/components/leads/LeadDetailsModal";
 import { useAuth } from "@/contexts/AuthContext";
-import { useLeads, useUpdateLeadStatus, useDeleteLead } from "@/hooks/useLeads";
+import { useLeads, useUpdateLeadStatus, useDeleteLead, useUpdateLead } from "@/hooks/useLeads";
 import { Input } from "@/components/ui/input";
 import { Search, Users, Loader2 } from "lucide-react";
 import type { Lead, LeadStatus } from "@/types";
@@ -13,6 +13,7 @@ export default function Leads() {
   const { data: leads = [], isLoading } = useLeads();
   const updateStatus = useUpdateLeadStatus();
   const deleteLead = useDeleteLead();
+  const updateLead = useUpdateLead();
   
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -35,6 +36,10 @@ export default function Leads() {
 
   const handleDelete = (leadId: string) => {
     deleteLead.mutate(leadId);
+  };
+
+  const handleUpdate = (leadId: string, updates: Partial<Lead>) => {
+    updateLead.mutate({ leadId, updates });
   };
 
   return (
@@ -69,7 +74,7 @@ export default function Leads() {
           )}
         </div>
 
-        <LeadDetailsModal lead={selectedLead} open={isModalOpen} onOpenChange={setIsModalOpen} onStatusChange={handleStatusChange} onDelete={handleDelete} />
+        <LeadDetailsModal lead={selectedLead} open={isModalOpen} onOpenChange={setIsModalOpen} onStatusChange={handleStatusChange} onDelete={handleDelete} onUpdate={handleUpdate} />
       </div>
     </AppLayout>
   );
