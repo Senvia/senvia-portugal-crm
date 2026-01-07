@@ -11,8 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, CheckCircle, AlertCircle, Zap } from 'lucide-react';
-import { z } from 'zod';
-import { FormSettings, DEFAULT_FORM_SETTINGS, CustomField } from '@/types';
+import { FormSettings, DEFAULT_FORM_SETTINGS, CustomField, migrateFormSettings } from '@/types';
 
 interface Organization {
   id: string;
@@ -56,15 +55,15 @@ export default function PublicLeadForm() {
           setIsValid(false);
         } else {
           const org = data[0];
+          // Migrate old format to new format if needed
+          const migratedSettings = migrateFormSettings(org.form_settings || {});
+          
           setOrganization({
             id: org.id,
             name: org.name,
-            form_settings: org.form_settings as unknown as FormSettings | null,
+            form_settings: migratedSettings,
           });
-          if (org.form_settings) {
-            const fetchedSettings = org.form_settings as unknown as Partial<FormSettings>;
-            setSettings({ ...DEFAULT_FORM_SETTINGS, ...fetchedSettings, custom_fields: fetchedSettings.custom_fields || [] });
-          }
+          setSettings(migratedSettings);
           setIsValid(true);
         }
       } catch {
@@ -82,19 +81,35 @@ export default function PublicLeadForm() {
 
     const cleanPhone = phone.replace(/\s/g, '');
     
-    // Basic validation
-    if (!name || name.length < 2) {
-      toast({ title: 'Erro', description: 'O nome deve ter pelo menos 2 caracteres', variant: 'destructive' });
-      return;
+    // Dynamic validation based on field settings
+    if (settings.fields.name.visible && settings.fields.name.required) {
+      if (!name || name.length < 2) {
+        toast({ title: 'Erro', description: `${settings.fields.name.label} deve ter pelo menos 2 caracteres`, variant: 'destructive' });
+        return;
+      }
     }
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      toast({ title: 'Erro', description: 'Email inválido', variant: 'destructive' });
-      return;
+    
+    if (settings.fields.email.visible && settings.fields.email.required) {
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        toast({ title: 'Erro', description: 'Email inválido', variant: 'destructive' });
+        return;
+      }
     }
-    if (!cleanPhone || !/^(\+351)?[0-9]{9}$/.test(cleanPhone)) {
-      toast({ title: 'Erro', description: 'Formato de telemóvel inválido', variant: 'destructive' });
-      return;
+    
+    if (settings.fields.phone.visible && settings.fields.phone.required) {
+      if (!cleanPhone || cleanPhone.length < 9) {
+        toast({ title: 'Erro', description: `${settings.fields.phone.label} é obrigatório`, variant: 'destructive' });
+        return;
+      }
     }
+    
+    if (settings.fields.message.visible && settings.fields.message.required) {
+      if (!message || message.trim().length < 1) {
+        toast({ title: 'Erro', description: `${settings.fields.message.label} é obrigatório`, variant: 'destructive' });
+        return;
+      }
+    }
+    
     if (!gdprConsent) {
       toast({ title: 'Erro', description: 'É necessário aceitar a Política de Privacidade', variant: 'destructive' });
       return;
@@ -113,16 +128,16 @@ export default function PublicLeadForm() {
 
     try {
       const body: Record<string, unknown> = {
-        name,
-        email,
-        phone: cleanPhone,
+        name: name.trim() || null,
+        email: email.trim() || null,
+        phone: cleanPhone || null,
         gdpr_consent: true,
         public_key,
         source: 'Formulário Público',
         custom_data: customData,
       };
 
-      if (settings.show_message_field && message.trim()) {
+      if (settings.fields.message.visible && message.trim()) {
         body.notes = message;
       }
 
@@ -268,31 +283,76 @@ export default function PublicLeadForm() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">{settings.labels.name} *</Label>
-              <Input id="name" type="text" placeholder="João Silva" value={name} onChange={(e) => setName(e.target.value)} required />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="phone">{settings.labels.phone} *</Label>
-              <Input id="phone" type="tel" placeholder="912 345 678" value={phone} onChange={(e) => setPhone(e.target.value)} required />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="email">{settings.labels.email} *</Label>
-              <Input id="email" type="email" placeholder="joao@exemplo.pt" value={email} onChange={(e) => setEmail(e.target.value)} required />
-            </div>
-            {settings.show_message_field && (
+            {/* Fixed Fields - conditionally rendered */}
+            {settings.fields.name.visible && (
               <div className="space-y-2">
-                <Label htmlFor="message">{settings.labels.message}</Label>
-                <Textarea id="message" placeholder="Escreva a sua mensagem..." value={message} onChange={(e) => setMessage(e.target.value)} rows={3} />
+                <Label htmlFor="name">
+                  {settings.fields.name.label} {settings.fields.name.required && '*'}
+                </Label>
+                <Input 
+                  id="name" 
+                  type="text" 
+                  placeholder="João Silva" 
+                  value={name} 
+                  onChange={(e) => setName(e.target.value)} 
+                />
               </div>
             )}
+            
+            {settings.fields.phone.visible && (
+              <div className="space-y-2">
+                <Label htmlFor="phone">
+                  {settings.fields.phone.label} {settings.fields.phone.required && '*'}
+                </Label>
+                <Input 
+                  id="phone" 
+                  type="tel" 
+                  placeholder="912 345 678" 
+                  value={phone} 
+                  onChange={(e) => setPhone(e.target.value)} 
+                />
+              </div>
+            )}
+            
+            {settings.fields.email.visible && (
+              <div className="space-y-2">
+                <Label htmlFor="email">
+                  {settings.fields.email.label} {settings.fields.email.required && '*'}
+                </Label>
+                <Input 
+                  id="email" 
+                  type="email" 
+                  placeholder="joao@exemplo.pt" 
+                  value={email} 
+                  onChange={(e) => setEmail(e.target.value)} 
+                />
+              </div>
+            )}
+            
+            {settings.fields.message.visible && (
+              <div className="space-y-2">
+                <Label htmlFor="message">
+                  {settings.fields.message.label} {settings.fields.message.required && '*'}
+                </Label>
+                <Textarea 
+                  id="message" 
+                  placeholder="Escreva a sua mensagem..." 
+                  value={message} 
+                  onChange={(e) => setMessage(e.target.value)} 
+                  rows={3} 
+                />
+              </div>
+            )}
+            
             {sortedCustomFields.map(renderCustomField)}
+            
             <div className="flex items-start space-x-2 pt-2">
               <Checkbox id="gdpr" checked={gdprConsent} onCheckedChange={(checked) => setGdprConsent(checked === true)} />
               <Label htmlFor="gdpr" className="text-sm text-slate-600 leading-tight cursor-pointer">
                 Li e aceito a <a href={`${PRODUCTION_URL}/privacy`} target="_blank" rel="noopener noreferrer" className="hover:underline" style={{ color: settings.primary_color }}>Política de Privacidade</a> *
               </Label>
             </div>
+            
             <Button type="submit" className="w-full" style={{ backgroundColor: settings.primary_color }} disabled={isSubmitting || !gdprConsent}>
               {isSubmitting ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" />A enviar...</>) : 'Enviar'}
             </Button>
