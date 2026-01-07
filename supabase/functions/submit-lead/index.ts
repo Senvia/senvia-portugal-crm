@@ -6,13 +6,13 @@ const corsHeaders = {
 };
 
 interface LeadSubmission {
-  name: string;
-  email: string;
-  phone: string;
+  name?: string | null;
+  email?: string | null;
+  phone?: string | null;
   gdpr_consent: boolean;
   public_key: string;
   source?: string;
-  notes?: string;
+  notes?: string | null;
   custom_data?: Record<string, unknown>;
 }
 
@@ -35,11 +35,11 @@ Deno.serve(async (req) => {
     const body: LeadSubmission = await req.json();
     console.log('Lead submission received:', { ...body, email: '[REDACTED]' });
 
-    // Validate required fields
-    if (!body.name || !body.email || !body.phone || !body.public_key) {
-      console.error('Missing required fields');
+    // Validate public_key is required
+    if (!body.public_key) {
+      console.error('Missing public_key');
       return new Response(
-        JSON.stringify({ error: 'Campos obrigatórios em falta' }),
+        JSON.stringify({ error: 'Formulário inválido' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -53,25 +53,30 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(body.email)) {
-      console.error('Invalid email format');
-      return new Response(
-        JSON.stringify({ error: 'Formato de email inválido' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    // Validate email format if provided
+    if (body.email) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(body.email)) {
+        console.error('Invalid email format');
+        return new Response(
+          JSON.stringify({ error: 'Formato de email inválido' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
     }
 
-    // Validate phone (Portuguese format)
-    const phoneRegex = /^(\+351)?[0-9]{9}$/;
-    const cleanPhone = body.phone.replace(/\s/g, '');
-    if (!phoneRegex.test(cleanPhone)) {
-      console.error('Invalid phone format');
-      return new Response(
-        JSON.stringify({ error: 'Formato de telemóvel inválido' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    // Clean phone number if provided
+    let cleanPhone = null;
+    if (body.phone) {
+      cleanPhone = body.phone.replace(/\s/g, '');
+      // More flexible phone validation - just check it has reasonable length
+      if (cleanPhone.length < 9 || cleanPhone.length > 15) {
+        console.error('Invalid phone format');
+        return new Response(
+          JSON.stringify({ error: 'Formato de telemóvel inválido' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
     }
 
     // Create Supabase client with service role to bypass RLS
@@ -105,14 +110,27 @@ Deno.serve(async (req) => {
 
     console.log('Organization found:', org.name);
 
-    // Insert lead with custom data
+    // At least one contact method should be provided
+    const hasName = body.name && body.name.trim().length > 0;
+    const hasEmail = body.email && body.email.trim().length > 0;
+    const hasPhone = cleanPhone && cleanPhone.length > 0;
+    
+    if (!hasName && !hasEmail && !hasPhone) {
+      console.error('No contact information provided');
+      return new Response(
+        JSON.stringify({ error: 'É necessário fornecer pelo menos um método de contacto' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Insert lead with custom data - use defaults for required DB fields
     const { data: lead, error: leadError } = await supabase
       .from('leads')
       .insert({
         organization_id: org.id,
-        name: body.name.trim(),
-        email: body.email.trim().toLowerCase(),
-        phone: cleanPhone,
+        name: body.name?.trim() || 'Anónimo',
+        email: body.email?.trim()?.toLowerCase() || 'nao-fornecido@placeholder.local',
+        phone: cleanPhone || '000000000',
         gdpr_consent: true,
         source: body.source || 'Formulário Público',
         status: 'new',
@@ -154,7 +172,6 @@ Deno.serve(async (req) => {
         },
       };
 
-      // Fire and forget - don't block the response
       // Fire and forget - don't block the response
       fetch(org.webhook_url, {
         method: 'POST',

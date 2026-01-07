@@ -97,18 +97,24 @@ export const FIELD_TYPE_ICONS: Record<FieldType, string> = {
   textarea: 'AlignLeft',
 };
 
+// Fixed Field Configuration
+export interface FixedFieldConfig {
+  visible: boolean;
+  required: boolean;
+  label: string;
+}
+
 // Form Settings Interface
 export interface FormSettings {
   title: string;
   subtitle: string;
   logo_url: string | null;
   primary_color: string;
-  show_message_field: boolean;
-  labels: {
-    name: string;
-    email: string;
-    phone: string;
-    message: string;
+  fields: {
+    name: FixedFieldConfig;
+    email: FixedFieldConfig;
+    phone: FixedFieldConfig;
+    message: FixedFieldConfig;
   };
   success_message: {
     title: string;
@@ -124,12 +130,11 @@ export const DEFAULT_FORM_SETTINGS: FormSettings = {
   subtitle: 'Preencha os dados abaixo e entraremos em contacto consigo.',
   logo_url: null,
   primary_color: '#3B82F6',
-  show_message_field: false,
-  labels: {
-    name: 'Nome Completo',
-    email: 'Email',
-    phone: 'Telemóvel',
-    message: 'Mensagem (opcional)',
+  fields: {
+    name: { visible: true, required: true, label: 'Nome Completo' },
+    email: { visible: true, required: true, label: 'Email' },
+    phone: { visible: true, required: true, label: 'Telemóvel' },
+    message: { visible: false, required: false, label: 'Mensagem (opcional)' },
   },
   success_message: {
     title: 'Obrigado!',
@@ -138,3 +143,31 @@ export const DEFAULT_FORM_SETTINGS: FormSettings = {
   error_message: 'Não foi possível enviar o formulário. Tente novamente.',
   custom_fields: [],
 };
+
+// Helper to migrate old settings format to new format
+export function migrateFormSettings(settings: any): FormSettings {
+  // If already in new format, return as-is
+  if (settings?.fields?.name?.visible !== undefined) {
+    return settings as FormSettings;
+  }
+  
+  // Migrate from old format
+  const oldLabels = settings?.labels || {};
+  const showMessage = settings?.show_message_field ?? false;
+  
+  return {
+    title: settings?.title || DEFAULT_FORM_SETTINGS.title,
+    subtitle: settings?.subtitle || DEFAULT_FORM_SETTINGS.subtitle,
+    logo_url: settings?.logo_url || null,
+    primary_color: settings?.primary_color || DEFAULT_FORM_SETTINGS.primary_color,
+    fields: {
+      name: { visible: true, required: true, label: oldLabels.name || 'Nome Completo' },
+      email: { visible: true, required: true, label: oldLabels.email || 'Email' },
+      phone: { visible: true, required: true, label: oldLabels.phone || 'Telemóvel' },
+      message: { visible: showMessage, required: false, label: oldLabels.message || 'Mensagem (opcional)' },
+    },
+    success_message: settings?.success_message || DEFAULT_FORM_SETTINGS.success_message,
+    error_message: settings?.error_message || DEFAULT_FORM_SETTINGS.error_message,
+    custom_fields: settings?.custom_fields || [],
+  };
+}
