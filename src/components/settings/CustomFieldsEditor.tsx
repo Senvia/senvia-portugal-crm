@@ -18,11 +18,10 @@ import {
   Trash2,
   ChevronUp,
   ChevronDown,
-  Eye,
-  EyeOff,
   Asterisk,
   Mail,
   Phone,
+  RotateCcw,
 } from 'lucide-react';
 import { FormSettings, CustomField, FieldType, FIELD_TYPE_LABELS } from '@/types';
 import { AddFieldModal } from './AddFieldModal';
@@ -50,6 +49,13 @@ const FIXED_FIELD_ICONS: Record<FixedFieldKey, React.ComponentType<{ className?:
   message: AlignLeft,
 };
 
+const FIXED_FIELD_NAMES: Record<FixedFieldKey, string> = {
+  name: 'Nome Completo',
+  email: 'Email',
+  phone: 'Telemóvel',
+  message: 'Mensagem',
+};
+
 export function CustomFieldsEditor({ settings, onUpdateSettings }: CustomFieldsEditorProps) {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingField, setEditingField] = useState<CustomField | null>(null);
@@ -69,6 +75,16 @@ export function CustomFieldsEditor({ settings, onUpdateSettings }: CustomFieldsE
         },
       },
     });
+  };
+
+  // Remove (hide) a fixed field
+  const removeFixedField = (fieldKey: FixedFieldKey) => {
+    updateFixedField(fieldKey, { visible: false, required: false });
+  };
+
+  // Restore a fixed field
+  const restoreFixedField = (fieldKey: FixedFieldKey) => {
+    updateFixedField(fieldKey, { visible: true });
   };
 
   const addField = (field: Omit<CustomField, 'id' | 'order'>) => {
@@ -118,52 +134,28 @@ export function CustomFieldsEditor({ settings, onUpdateSettings }: CustomFieldsE
 
   const sortedCustomFields = [...settings.custom_fields].sort((a, b) => a.order - b.order);
 
-  const renderFixedField = (fieldKey: FixedFieldKey, icon: React.ComponentType<{ className?: string }>) => {
+  // Separate active and removed fixed fields
+  const fixedFieldKeys: FixedFieldKey[] = ['name', 'email', 'phone', 'message'];
+  const activeFixedFields = fixedFieldKeys.filter(key => settings.fields[key]?.visible !== false);
+  const removedFixedFields = fixedFieldKeys.filter(key => settings.fields[key]?.visible === false);
+
+  const renderActiveFixedField = (fieldKey: FixedFieldKey) => {
     const field = settings.fields[fieldKey];
-    const Icon = icon;
+    const Icon = FIXED_FIELD_ICONS[fieldKey];
     
     return (
       <div 
         key={fieldKey}
-        className={cn(
-          "flex items-center gap-2 sm:gap-3 rounded-lg border p-2 sm:p-3 transition-all",
-          field.visible 
-            ? "bg-card border-border" 
-            : "bg-destructive/5 border-destructive/30 opacity-75"
-        )}
+        className="group flex items-center gap-2 sm:gap-3 rounded-lg border p-2 sm:p-3 bg-card border-border"
       >
-        {/* Visibility Toggle */}
+        {/* Required Toggle */}
         <Tooltip>
           <TooltipTrigger asChild>
             <button
               type="button"
-              onClick={() => updateFixedField(fieldKey, { visible: !field.visible })}
+              onClick={() => updateFixedField(fieldKey, { required: !field.required })}
               className={cn(
                 "p-2 rounded-md transition-all shrink-0 hover:scale-110",
-                field.visible 
-                  ? "text-primary bg-primary/10 hover:bg-primary/20" 
-                  : "text-destructive bg-destructive/10 hover:bg-destructive/20"
-              )}
-            >
-              {field.visible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="top">
-            {field.visible ? "Clique para ocultar este campo" : "Clique para mostrar este campo"}
-          </TooltipContent>
-        </Tooltip>
-        
-        {/* Required Toggle (only if visible) */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={() => field.visible && updateFixedField(fieldKey, { required: !field.required })}
-              disabled={!field.visible}
-              className={cn(
-                "p-2 rounded-md transition-all shrink-0",
-                !field.visible && "opacity-30 cursor-not-allowed",
-                field.visible && "hover:scale-110",
                 field.required 
                   ? "text-amber-500 bg-amber-500/10 hover:bg-amber-500/20" 
                   : "text-muted-foreground hover:bg-muted"
@@ -173,158 +165,234 @@ export function CustomFieldsEditor({ settings, onUpdateSettings }: CustomFieldsE
             </button>
           </TooltipTrigger>
           <TooltipContent side="top">
-            {!field.visible 
-              ? "Active o campo primeiro" 
-              : field.required 
-                ? "Clique para tornar opcional" 
-                : "Clique para tornar obrigatório"}
+            {field.required ? "Clique para tornar opcional" : "Clique para tornar obrigatório"}
           </TooltipContent>
         </Tooltip>
         
         {/* Field Icon */}
-        <div className={cn(
-          "h-8 w-8 sm:h-9 sm:w-9 rounded-md flex items-center justify-center shrink-0 transition-colors",
-          field.visible ? "bg-primary/10" : "bg-muted"
-        )}>
-          <Icon className={cn(
-            "h-4 w-4 transition-colors",
-            field.visible ? "text-primary" : "text-muted-foreground"
-          )} />
+        <div className="h-8 w-8 sm:h-9 sm:w-9 rounded-md flex items-center justify-center shrink-0 bg-primary/10">
+          <Icon className="h-4 w-4 text-primary" />
         </div>
         
         {/* Label Input */}
         <Input
           value={field.label}
           onChange={(e) => updateFixedField(fieldKey, { label: e.target.value })}
-          disabled={!field.visible}
-          className={cn(
-            "flex-1 min-w-0 h-9 transition-all",
-            !field.visible && "line-through text-muted-foreground"
-          )}
+          className="flex-1 min-w-0 h-9"
           placeholder="Label do campo"
           maxLength={50}
         />
         
         {/* Status Badge */}
         <Badge 
-          variant={field.visible ? (field.required ? "default" : "outline") : "destructive"}
-          className={cn(
-            "shrink-0 transition-all",
-            !field.visible && "bg-destructive/10 text-destructive border-destructive/30"
-          )}
+          variant={field.required ? "default" : "outline"}
+          className="shrink-0 hidden sm:inline-flex"
         >
-          {!field.visible ? 'Oculto' : field.required ? 'Obrigatório' : 'Opcional'}
+          {field.required ? 'Obrigatório' : 'Opcional'}
         </Badge>
+
+        {/* Remove Button */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 shrink-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+              onClick={() => removeFixedField(fieldKey)}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top">
+            Remover campo
+          </TooltipContent>
+        </Tooltip>
+      </div>
+    );
+  };
+
+  const renderRemovedFixedField = (fieldKey: FixedFieldKey) => {
+    const Icon = FIXED_FIELD_ICONS[fieldKey];
+    const fieldName = FIXED_FIELD_NAMES[fieldKey];
+    
+    return (
+      <div 
+        key={fieldKey}
+        className="flex items-center gap-2 sm:gap-3 rounded-lg border border-dashed p-2 sm:p-3 bg-muted/30 border-muted-foreground/30"
+      >
+        {/* Field Icon */}
+        <div className="h-8 w-8 sm:h-9 sm:w-9 rounded-md flex items-center justify-center shrink-0 bg-muted">
+          <Icon className="h-4 w-4 text-muted-foreground" />
+        </div>
+        
+        {/* Field Name */}
+        <span className="flex-1 text-sm text-muted-foreground line-through">
+          {fieldName}
+        </span>
+
+        {/* Restore Button */}
+        <Button
+          variant="outline"
+          size="sm"
+          className="shrink-0"
+          onClick={() => restoreFixedField(fieldKey)}
+        >
+          <RotateCcw className="h-4 w-4 mr-2" />
+          Restaurar
+        </Button>
+      </div>
+    );
+  };
+
+  const renderCustomField = (field: CustomField, idx: number) => {
+    const Icon = FIELD_ICONS[field.type];
+    
+    return (
+      <div 
+        key={field.id} 
+        className="group flex items-center gap-2 sm:gap-3 rounded-lg border bg-card p-2 sm:p-3 border-border"
+      >
+        {/* Required Toggle */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={() => updateField(field.id, { required: !field.required })}
+              className={cn(
+                "p-2 rounded-md transition-all shrink-0 hover:scale-110",
+                field.required 
+                  ? "text-amber-500 bg-amber-500/10 hover:bg-amber-500/20" 
+                  : "text-muted-foreground hover:bg-muted"
+              )}
+            >
+              <Asterisk className="h-4 w-4" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="top">
+            {field.required ? "Clique para tornar opcional" : "Clique para tornar obrigatório"}
+          </TooltipContent>
+        </Tooltip>
+
+        {/* Field Icon */}
+        <div className="h-8 w-8 sm:h-9 sm:w-9 rounded-md flex items-center justify-center shrink-0 bg-primary/10">
+          <Icon className="h-4 w-4 text-primary" />
+        </div>
+        
+        {/* Label Input */}
+        <Input
+          value={field.label}
+          onChange={(e) => updateField(field.id, { label: e.target.value })}
+          className="flex-1 min-w-0 h-9"
+          placeholder="Label do campo"
+          maxLength={50}
+        />
+        
+        {/* Type Badge */}
+        <Badge variant="secondary" className="shrink-0 hidden sm:inline-flex">
+          {FIELD_TYPE_LABELS[field.type]}
+          {field.type === 'select' && field.options && ` (${field.options.length})`}
+        </Badge>
+        
+        {/* Status Badge */}
+        <Badge 
+          variant={field.required ? "default" : "outline"}
+          className="shrink-0 hidden sm:inline-flex"
+        >
+          {field.required ? 'Obrigatório' : 'Opcional'}
+        </Badge>
+
+        {/* Actions - always visible on mobile, hover on desktop */}
+        <div className="flex items-center gap-0.5 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => moveField(field.id, 'up')}
+                disabled={idx === 0}
+              >
+                <ChevronUp className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">Mover para cima</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => moveField(field.id, 'down')}
+                disabled={idx === sortedCustomFields.length - 1}
+              >
+                <ChevronDown className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">Mover para baixo</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setEditingField(field)}
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">Editar campo</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                onClick={() => removeField(field.id)}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">Remover campo</TooltipContent>
+          </Tooltip>
+        </div>
       </div>
     );
   };
 
   return (
     <div className="space-y-6">
-      {/* Fixed Fields */}
+      {/* Active Fields Section */}
       <div className="space-y-3">
         <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
           <div className="h-px flex-1 bg-border" />
-          <span>Campos Base</span>
+          <span>Campos Ativos</span>
           <div className="h-px flex-1 bg-border" />
         </div>
         <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground bg-muted/50 rounded-lg p-2">
           <span className="flex items-center gap-1.5">
-            <Eye className="h-3.5 w-3.5 text-primary" />
-            Mostrar/Ocultar
-          </span>
-          <span className="flex items-center gap-1.5">
             <Asterisk className="h-3.5 w-3.5 text-amber-500" />
             Obrigatório
           </span>
+          <span className="flex items-center gap-1.5">
+            <Trash2 className="h-3.5 w-3.5 text-destructive" />
+            Remover
+          </span>
         </div>
-        <div className="space-y-2">
-          {renderFixedField('name', FIXED_FIELD_ICONS.name)}
-          {renderFixedField('email', FIXED_FIELD_ICONS.email)}
-          {renderFixedField('phone', FIXED_FIELD_ICONS.phone)}
-          {renderFixedField('message', FIXED_FIELD_ICONS.message)}
-        </div>
-      </div>
-
-      {/* Custom Fields */}
-      <div className="space-y-3">
-        <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-          <div className="h-px flex-1 bg-border" />
-          <span>Campos Personalizados</span>
-          <div className="h-px flex-1 bg-border" />
-        </div>
-
-        {sortedCustomFields.length === 0 ? (
+        
+        {activeFixedFields.length === 0 && sortedCustomFields.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-8 text-center">
-            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-              <Plus className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <p className="text-sm font-medium">Sem campos personalizados</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Adicione campos para recolher mais informação
-            </p>
+            <p className="text-sm text-muted-foreground">Nenhum campo ativo</p>
           </div>
         ) : (
           <div className="space-y-2">
-            {sortedCustomFields.map((field, idx) => {
-              const Icon = FIELD_ICONS[field.type];
-              return (
-                <div 
-                  key={field.id} 
-                  className="group flex items-center gap-2 rounded-lg border bg-card p-3 transition-colors hover:bg-muted/30"
-                >
-                  <div className="flex h-9 w-9 items-center justify-center rounded-md bg-secondary shrink-0">
-                    <Icon className="h-4 w-4 text-secondary-foreground" />
-                  </div>
-                  
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm truncate">{field.label}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {FIELD_TYPE_LABELS[field.type]}
-                      {field.required && ' • Obrigatório'}
-                      {field.type === 'select' && field.options && ` • ${field.options.length} opções`}
-                    </p>
-                  </div>
-                  
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => moveField(field.id, 'up')}
-                      disabled={idx === 0}
-                    >
-                      <ChevronUp className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => moveField(field.id, 'down')}
-                      disabled={idx === sortedCustomFields.length - 1}
-                    >
-                      <ChevronDown className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => setEditingField(field)}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-destructive hover:text-destructive"
-                      onClick={() => removeField(field.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              );
-            })}
+            {/* Active Fixed Fields */}
+            {activeFixedFields.map(fieldKey => renderActiveFixedField(fieldKey))}
+            
+            {/* Custom Fields */}
+            {sortedCustomFields.map((field, idx) => renderCustomField(field, idx))}
           </div>
         )}
 
@@ -334,9 +402,23 @@ export function CustomFieldsEditor({ settings, onUpdateSettings }: CustomFieldsE
           onClick={() => setIsAddModalOpen(true)}
         >
           <Plus className="h-4 w-4 mr-2" />
-          Adicionar Campo
+          Adicionar Campo Personalizado
         </Button>
       </div>
+
+      {/* Removed Fields Section */}
+      {removedFixedFields.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+            <div className="h-px flex-1 bg-border" />
+            <span>Campos Removidos</span>
+            <div className="h-px flex-1 bg-border" />
+          </div>
+          <div className="space-y-2">
+            {removedFixedFields.map(fieldKey => renderRemovedFixedField(fieldKey))}
+          </div>
+        </div>
+      )}
 
       {/* Add Field Modal */}
       <AddFieldModal
