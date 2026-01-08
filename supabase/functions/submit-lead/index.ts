@@ -85,10 +85,10 @@ Deno.serve(async (req) => {
     
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    // Validate public_key and get organization_id (including webhook_url, whatsapp config and AI rules)
+    // Validate public_key and get organization_id (including webhook_url, whatsapp config, AI rules and templates)
     const { data: org, error: orgError } = await supabase
       .from('organizations')
-      .select('id, name, webhook_url, whatsapp_instance, whatsapp_number, whatsapp_api_key, ai_qualification_rules')
+      .select('id, name, webhook_url, whatsapp_instance, whatsapp_api_key, whatsapp_base_url, ai_qualification_rules, msg_template_hot, msg_template_warm, msg_template_cold')
       .eq('public_key', body.public_key)
       .maybeSingle();
 
@@ -155,15 +155,16 @@ Deno.serve(async (req) => {
       console.info(`Dispatching webhook to: ${org.webhook_url}`);
       
       // Check if any WhatsApp field is configured
-      const hasWhatsApp = org.whatsapp_instance || org.whatsapp_number || org.whatsapp_api_key;
+      const hasWhatsApp = org.whatsapp_instance || org.whatsapp_base_url || org.whatsapp_api_key;
       
       // Secure logging (never log full API key)
       console.info(`WhatsApp configured: ${hasWhatsApp ? 'yes' : 'no'}`);
       if (hasWhatsApp) {
         console.info(`WhatsApp instance: ${org.whatsapp_instance || 'not set'}`);
-        console.info(`WhatsApp number: ${org.whatsapp_number || 'not set'}`);
+        console.info(`WhatsApp base URL: ${org.whatsapp_base_url || 'not set'}`);
         console.info(`WhatsApp API key set: ${org.whatsapp_api_key ? 'yes' : 'no'}`);
       }
+      console.info(`Message templates set: hot=${!!org.msg_template_hot}, warm=${!!org.msg_template_warm}, cold=${!!org.msg_template_cold}`);
       
       const webhookPayload = {
         event: 'lead.created',
@@ -172,13 +173,14 @@ Deno.serve(async (req) => {
           id: org.id,
           name: org.name,
         },
-        whatsapp: hasWhatsApp ? {
-          instance: org.whatsapp_instance || null,
-          number: org.whatsapp_number || null,
-          api_key: org.whatsapp_api_key || null,
-        } : null,
         config: {
+          whatsapp_instance: org.whatsapp_instance || null,
+          whatsapp_api_key: org.whatsapp_api_key || null,
+          whatsapp_base_url: org.whatsapp_base_url || null,
           ai_qualification_rules: org.ai_qualification_rules || null,
+          msg_template_hot: org.msg_template_hot || null,
+          msg_template_warm: org.msg_template_warm || null,
+          msg_template_cold: org.msg_template_cold || null,
         },
         lead: {
           id: lead.id,
