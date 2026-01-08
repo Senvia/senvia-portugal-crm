@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.submit-lead]
 verify_jwt = false
+
+[functions.update-lead-temperature]
+verify_jwt = false
