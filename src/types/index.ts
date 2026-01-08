@@ -168,9 +168,24 @@ export const DEFAULT_FORM_SETTINGS: FormSettings = {
 
 // Helper to migrate old settings format to new format
 export function migrateFormSettings(settings: any): FormSettings {
-  // If already in new format, return as-is
+  // Sanitize custom_fields to ensure all have labels
+  const sanitizeCustomFields = (fields: any[]): CustomField[] => {
+    if (!Array.isArray(fields)) return [];
+    return fields.map((f: any) => ({
+      ...f,
+      label: f.label || '',
+      type: f.type || 'text',
+      required: f.required ?? false,
+      order: f.order ?? 0,
+    }));
+  };
+
+  // If already in new format, return with sanitized custom_fields
   if (settings?.fields?.name?.visible !== undefined) {
-    return settings as FormSettings;
+    return {
+      ...settings,
+      custom_fields: sanitizeCustomFields(settings.custom_fields),
+    } as FormSettings;
   }
   
   // Migrate from old format
@@ -190,6 +205,6 @@ export function migrateFormSettings(settings: any): FormSettings {
     },
     success_message: settings?.success_message || DEFAULT_FORM_SETTINGS.success_message,
     error_message: settings?.error_message || DEFAULT_FORM_SETTINGS.error_message,
-    custom_fields: settings?.custom_fields || [],
+    custom_fields: sanitizeCustomFields(settings?.custom_fields),
   };
 }

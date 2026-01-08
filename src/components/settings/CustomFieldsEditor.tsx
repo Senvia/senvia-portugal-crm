@@ -180,7 +180,7 @@ export function CustomFieldsEditor({ settings, onUpdateSettings }: CustomFieldsE
         
         {/* Label Input */}
         <Input
-          value={field.label}
+          value={field.label || ''}
           onChange={(e) => updateFixedField(fieldKey, { label: e.target.value })}
           className="flex-1 min-w-0 h-9"
           placeholder="Label do campo"
@@ -256,7 +256,7 @@ export function CustomFieldsEditor({ settings, onUpdateSettings }: CustomFieldsE
         
         {/* Label Input */}
         <Input
-          value={field.label}
+          value={field.label || ''}
           onChange={(e) => updateField(field.id, { label: e.target.value })}
           className="flex-1 min-w-0 h-9"
           placeholder="Label do campo"
