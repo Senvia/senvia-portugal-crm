@@ -1,49 +1,25 @@
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { 
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { 
   CheckCircle, 
   Clock,
-  Trash2,
-  Frown,
+  MessageSquare,
+  HelpCircle,
   Zap,
   Brain,
-  Crown,
+  Users,
   Stethoscope,
   HardHat,
   Home,
   ArrowDown
 } from 'lucide-react';
-import { useState } from 'react';
 import senviaLogo from "@/assets/senvia-logo.png";
 
 export default function Landing() {
-  const [formData, setFormData] = useState({
-    empresa: '',
-    responsavel: '',
-    telemovel: '',
-    email: '',
-    tipoNegocio: ''
-  });
-
   const scrollToContacto = () => {
     const element = document.getElementById('contacto');
     element?.scrollIntoView({ behavior: 'smooth' });
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    // TODO: Integrar com sistema de leads
-    console.log('Form submitted:', formData);
   };
 
   return (
@@ -62,7 +38,7 @@ export default function Landing() {
         </div>
       </header>
 
-      {/* Hero Section - A Promessa Única */}
+      {/* Hero Section - A Promessa Real */}
       <section className="py-16 md:py-24 lg:py-32 relative overflow-hidden">
         {/* Background glow */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] bg-primary/15 rounded-full blur-[120px] pointer-events-none" />
@@ -72,14 +48,18 @@ export default function Landing() {
             {/* Left - Copy */}
             <div className="text-center lg:text-left">
               <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight">
-                Pare de Perder Dinheiro com Leads que{' '}
+                Não deixe o lead esperar enquanto a sua equipa está{' '}
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-blue-400">
-                  Ninguém Responde.
+                  ocupada.
                 </span>
               </h1>
               
-              <p className="text-base sm:text-lg md:text-xl text-slate-400 mb-8 leading-relaxed">
-                O Senvia OS atende os seus clientes no WhatsApp em <strong className="text-white">10 segundos</strong>, separa os Curiosos dos Compradores e entrega leads prontos para fechar à sua equipa.
+              <p className="text-base sm:text-lg md:text-xl text-slate-400 mb-4 leading-relaxed">
+                O Senvia OS recebe o lead do seu site, a IA analisa o potencial (<strong className="text-green-400">Quente</strong>/<strong className="text-blue-400">Frio</strong>) e envia imediatamente a primeira mensagem de WhatsApp.
+              </p>
+              
+              <p className="text-base sm:text-lg text-slate-300 mb-8 leading-relaxed bg-slate-800/30 border border-slate-700/50 rounded-xl p-4">
+                <strong className="text-primary">O Resultado:</strong> O cliente sente-se atendido na hora, e a sua equipa já recebe o lead organizado no nosso CRM para continuar a conversa.
               </p>
               
               <Button 
@@ -87,7 +67,7 @@ export default function Landing() {
                 className="bg-primary hover:bg-primary/90 text-base px-6 sm:px-8 py-6 h-auto text-sm sm:text-base"
                 onClick={scrollToContacto}
               >
-                QUERO AUTOMATIZAR O MEU ATENDIMENTO
+                QUERO ORGANIZAR O MEU ATENDIMENTO
                 <ArrowDown className="ml-2 w-4 h-4" />
               </Button>
             </div>
@@ -127,17 +107,17 @@ export default function Landing() {
                           Olá <strong>Carlos</strong>! 👋
                         </p>
                         <p className="text-white text-sm mt-1">
-                          O Dr. João viu a sua mensagem e vai contactá-lo em breve.
+                          Recebemos o seu pedido de informação sobre <strong>Implantes Dentários</strong>.
                         </p>
                         <p className="text-white text-sm mt-2">
-                          Enquanto isso, pode confirmar o seu interesse em <strong>Implantes Dentários</strong>?
+                          A nossa equipa vai contactá-lo em breve!
                         </p>
                         <p className="text-slate-400 text-[10px] text-right mt-1">09:41</p>
                       </div>
                       
                       {/* Outgoing Message */}
                       <div className="bg-[#005C4B] rounded-lg rounded-tr-none p-3 max-w-[75%] ml-auto">
-                        <p className="text-white text-sm">Sim, quero agendar consulta! 🦷</p>
+                        <p className="text-white text-sm">Obrigado! Aguardo contacto 🦷</p>
                         <p className="text-slate-300 text-[10px] text-right mt-1">09:41 ✓✓</p>
                       </div>
                     </div>
@@ -152,52 +132,54 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* O Problema - Agitação */}
+      {/* O Problema - Caos e Cegueira */}
       <section className="py-16 md:py-24 bg-slate-900/50 border-y border-slate-800/50">
         <div className="container mx-auto px-4">
           <div className="text-center mb-12 md:mb-16">
             <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-4">
-              A sua equipa é humana.{' '}
-              <span className="text-slate-400">Eles não conseguem estar em todo o lado.</span>
+              O seu WhatsApp atual é uma{' '}
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-orange-400">
+                confusão?
+              </span>
             </h2>
           </div>
 
           <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-6 md:gap-8 max-w-5xl mx-auto">
-            {/* O Vácuo */}
+            {/* Leads Misturados */}
             <Card className="bg-slate-800/50 border-slate-700 hover:border-red-500/50 transition-colors group">
               <CardContent className="pt-6 text-center">
                 <div className="w-16 h-16 bg-red-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:bg-red-500/20 transition-colors">
-                  <Clock className="w-8 h-8 text-red-400" />
+                  <MessageSquare className="w-8 h-8 text-red-400" />
                 </div>
-                <h3 className="text-xl font-semibold text-white mb-3">O Vácuo</h3>
+                <h3 className="text-xl font-semibold text-white mb-3">Leads Misturados</h3>
                 <p className="text-slate-400 text-sm leading-relaxed">
-                  O cliente chama às 19h, ninguém responde, ele fecha com o concorrente às <strong className="text-red-400">19h10</strong>.
+                  Leads misturados com mensagens pessoais e <strong className="text-red-400">grupos de família</strong>.
                 </p>
               </CardContent>
             </Card>
 
-            {/* O Lixo */}
+            {/* Sem Visibilidade */}
             <Card className="bg-slate-800/50 border-slate-700 hover:border-orange-500/50 transition-colors group">
               <CardContent className="pt-6 text-center">
                 <div className="w-16 h-16 bg-orange-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:bg-orange-500/20 transition-colors">
-                  <Trash2 className="w-8 h-8 text-orange-400" />
+                  <HelpCircle className="w-8 h-8 text-orange-400" />
                 </div>
-                <h3 className="text-xl font-semibold text-white mb-3">O Lixo</h3>
+                <h3 className="text-xl font-semibold text-white mb-3">Sem Visibilidade</h3>
                 <p className="text-slate-400 text-sm leading-relaxed">
-                  A sua rececionista perde <strong className="text-orange-400">3 horas por dia</strong> a falar com curiosos que não têm dinheiro.
+                  Você não sabe quem veio do <strong className="text-orange-400">anúncio de hoje</strong> ou quem é apenas curioso.
                 </p>
               </CardContent>
             </Card>
 
-            {/* A Demora */}
+            {/* O Vácuo */}
             <Card className="bg-slate-800/50 border-slate-700 hover:border-yellow-500/50 transition-colors group sm:col-span-2 md:col-span-1 sm:max-w-md sm:mx-auto md:max-w-none">
               <CardContent className="pt-6 text-center">
                 <div className="w-16 h-16 bg-yellow-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:bg-yellow-500/20 transition-colors">
-                  <Frown className="w-8 h-8 text-yellow-400" />
+                  <Clock className="w-8 h-8 text-yellow-400" />
                 </div>
-                <h3 className="text-xl font-semibold text-white mb-3">A Demora</h3>
+                <h3 className="text-xl font-semibold text-white mb-3">O Vácuo</h3>
                 <p className="text-slate-400 text-sm leading-relaxed">
-                  Demorar <strong className="text-yellow-400">4 horas</strong> a responder esfria o interesse de qualquer comprador.
+                  O lead preenche o formulário e fica no <strong className="text-yellow-400">"vácuo"</strong> até alguém ver o email.
                 </p>
               </CardContent>
             </Card>
@@ -205,20 +187,20 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* A Solução - Como Funciona */}
+      {/* Como o Senvia OS Funciona - Workflow Real */}
       <section className="py-16 md:py-24">
         <div className="container mx-auto px-4">
           <div className="text-center mb-12 md:mb-16">
             <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-4">
-              Transforme o seu WhatsApp numa{' '}
+              Como o{' '}
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-blue-400">
-                Máquina de Vendas 24/7.
+                Senvia OS Funciona
               </span>
             </h2>
           </div>
 
           <div className="grid md:grid-cols-3 gap-6 md:gap-8 max-w-5xl mx-auto">
-            {/* Passo 1 */}
+            {/* Passo 1 - Receção & Análise */}
             <div className="relative">
               <div className="text-center">
                 <div className="w-12 h-12 bg-primary text-white rounded-full flex items-center justify-center mx-auto mb-4 text-xl font-bold">
@@ -227,44 +209,44 @@ export default function Landing() {
                 <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
                   <Zap className="w-8 h-8 text-primary" />
                 </div>
-                <h3 className="text-xl font-semibold text-white mb-3">Receção Imediata</h3>
+                <h3 className="text-xl font-semibold text-white mb-3">Receção & Análise</h3>
                 <p className="text-slate-400 text-sm leading-relaxed">
-                  O lead preenche o formulário e recebe um WhatsApp personalizado em <strong className="text-primary">segundos</strong>. O concorrente nem teve tempo de abrir o email.
+                  O lead preenche o formulário. O nosso sistema lê as respostas e coloca uma <strong className="text-primary">"Etiqueta de Temperatura"</strong> (Hot, Warm, Cold).
                 </p>
               </div>
               {/* Connector Line - Hidden on mobile */}
               <div className="hidden md:block absolute top-10 left-full w-full h-[2px] bg-gradient-to-r from-primary/50 to-transparent -translate-x-1/2"></div>
             </div>
 
-            {/* Passo 2 */}
+            {/* Passo 2 - Primeiro Contacto Imediato */}
             <div className="relative">
               <div className="text-center">
                 <div className="w-12 h-12 bg-primary text-white rounded-full flex items-center justify-center mx-auto mb-4 text-xl font-bold">
                   2
                 </div>
-                <div className="w-16 h-16 bg-purple-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  <Brain className="w-8 h-8 text-purple-400" />
+                <div className="w-16 h-16 bg-green-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                  <MessageSquare className="w-8 h-8 text-green-400" />
                 </div>
-                <h3 className="text-xl font-semibold text-white mb-3">Inteligência Artificial</h3>
+                <h3 className="text-xl font-semibold text-white mb-3">Primeiro Contacto Imediato</h3>
                 <p className="text-slate-400 text-sm leading-relaxed">
-                  O nosso "<strong className="text-purple-400">Cérebro Digital</strong>" conversa com o cliente e classifica: É Urgente (Hot)? É Curioso (Cold)?
+                  O sistema envia uma <strong className="text-green-400">mensagem automática personalizada</strong> (diferente para cada temperatura) para garantir que o cliente sabe que foi recebido.
                 </p>
               </div>
               {/* Connector Line - Hidden on mobile */}
-              <div className="hidden md:block absolute top-10 left-full w-full h-[2px] bg-gradient-to-r from-purple-500/50 to-transparent -translate-x-1/2"></div>
+              <div className="hidden md:block absolute top-10 left-full w-full h-[2px] bg-gradient-to-r from-green-500/50 to-transparent -translate-x-1/2"></div>
             </div>
 
-            {/* Passo 3 */}
+            {/* Passo 3 - A Sua Vez (Gestão) */}
             <div className="text-center">
               <div className="w-12 h-12 bg-primary text-white rounded-full flex items-center justify-center mx-auto mb-4 text-xl font-bold">
                 3
               </div>
-              <div className="w-16 h-16 bg-green-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <Crown className="w-8 h-8 text-green-400" />
+              <div className="w-16 h-16 bg-purple-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <Users className="w-8 h-8 text-purple-400" />
               </div>
-              <h3 className="text-xl font-semibold text-white mb-3">Entrega VIP</h3>
+              <h3 className="text-xl font-semibold text-white mb-3">A Sua Vez (Gestão)</h3>
               <p className="text-slate-400 text-sm leading-relaxed">
-                A sua equipa só recebe notificação para falar com quem <strong className="text-green-400">realmente quer comprar</strong>. O resto fica no piloto automático.
+                O lead cai no <strong className="text-purple-400">Painel Senvia (CRM)</strong> já classificado. A sua equipa entra, vê quem é Prioridade e assume a conversa humana.
               </p>
             </div>
           </div>
@@ -329,7 +311,7 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* A Oferta - Ancoragem de Valor */}
+      {/* O Que Está Incluído - Features Reais */}
       <section className="py-16 md:py-24">
         <div className="container mx-auto px-4">
           <div className="max-w-3xl mx-auto">
@@ -349,8 +331,8 @@ export default function Landing() {
                     <CheckCircle className="w-4 h-4 text-green-400" />
                   </div>
                   <div>
-                    <span className="text-white font-medium">Configuração completa do Servidor de WhatsApp</span>
-                    <span className="text-slate-500 text-sm ml-2">(Sem risco de bloqueio)</span>
+                    <span className="text-white font-medium">CRM Próprio (Senvia OS)</span>
+                    <span className="text-slate-500 text-sm ml-2">— Um painel visual (Kanban) para gerir os seus leads num só lugar.</span>
                   </div>
                 </li>
                 <li className="flex items-start gap-4">
@@ -358,8 +340,8 @@ export default function Landing() {
                     <CheckCircle className="w-4 h-4 text-green-400" />
                   </div>
                   <div>
-                    <span className="text-white font-medium">Treino da IA com as regras do SEU negócio</span>
-                    <span className="text-slate-500 text-sm ml-2">(Personalizado)</span>
+                    <span className="text-white font-medium">Classificação por Formulário</span>
+                    <span className="text-slate-500 text-sm ml-2">— A IA lê o que o cliente respondeu e diz-lhe o potencial de compra antes de você dizer "olá".</span>
                   </div>
                 </li>
                 <li className="flex items-start gap-4">
@@ -367,8 +349,8 @@ export default function Landing() {
                     <CheckCircle className="w-4 h-4 text-green-400" />
                   </div>
                   <div>
-                    <span className="text-white font-medium">Criação dos Scripts de Venda</span>
-                    <span className="text-slate-500 text-sm ml-2">(Copywriting profissional)</span>
+                    <span className="text-white font-medium">Disparo de WhatsApp</span>
+                    <span className="text-slate-500 text-sm ml-2">— Envio da mensagem de abertura via API (sem depender do telemóvel estar ligado).</span>
                   </div>
                 </li>
                 <li className="flex items-start gap-4">
@@ -376,17 +358,8 @@ export default function Landing() {
                     <CheckCircle className="w-4 h-4 text-green-400" />
                   </div>
                   <div>
-                    <span className="text-white font-medium">Integração com o seu CRM atual</span>
-                    <span className="text-slate-500 text-sm ml-2">(Se aplicável)</span>
-                  </div>
-                </li>
-                <li className="flex items-start gap-4">
-                  <div className="w-6 h-6 bg-green-500/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <CheckCircle className="w-4 h-4 text-green-400" />
-                  </div>
-                  <div>
-                    <span className="text-white font-medium">Relatório de Leads</span>
-                    <span className="text-slate-500 text-sm ml-2">(Quem é Hot vs. Cold)</span>
+                    <span className="text-white font-medium">Landing Page & Formulário</span>
+                    <span className="text-slate-500 text-sm ml-2">— Nós entregamos a página de captura pronta a usar.</span>
                   </div>
                 </li>
               </ul>
@@ -395,15 +368,15 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Formulário de Contacto - CTA Final */}
+      {/* Formulário de Contacto - CTA Final com Iframe */}
       <section id="contacto" className="py-16 md:py-24 bg-gradient-to-b from-slate-900/50 to-slate-950 border-t border-slate-800/50">
         <div className="container mx-auto px-4">
           <div className="max-w-xl mx-auto">
             <div className="text-center mb-10">
               <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-4">
-                Pronto para parar de{' '}
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-orange-400">
-                  perder leads?
+                Pronto para{' '}
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-blue-400">
+                  organizar o seu atendimento?
                 </span>
               </h2>
               <p className="text-slate-400">
@@ -411,90 +384,20 @@ export default function Landing() {
               </p>
             </div>
 
-            <form onSubmit={handleSubmit} className="bg-slate-800/30 border border-slate-700 rounded-2xl p-6 sm:p-8 space-y-5">
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="empresa" className="text-slate-300">Nome da Empresa</Label>
-                  <Input
-                    id="empresa"
-                    placeholder="Clínica Exemplo, Lda"
-                    className="bg-slate-900/50 border-slate-700 text-white placeholder:text-slate-500 focus:border-primary"
-                    value={formData.empresa}
-                    onChange={(e) => setFormData({ ...formData, empresa: e.target.value })}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="responsavel" className="text-slate-300">Nome do Responsável</Label>
-                  <Input
-                    id="responsavel"
-                    placeholder="João Silva"
-                    className="bg-slate-900/50 border-slate-700 text-white placeholder:text-slate-500 focus:border-primary"
-                    value={formData.responsavel}
-                    onChange={(e) => setFormData({ ...formData, responsavel: e.target.value })}
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="telemovel" className="text-slate-300">Telemóvel (WhatsApp)</Label>
-                  <Input
-                    id="telemovel"
-                    type="tel"
-                    placeholder="+351 912 345 678"
-                    className="bg-slate-900/50 border-slate-700 text-white placeholder:text-slate-500 focus:border-primary"
-                    value={formData.telemovel}
-                    onChange={(e) => setFormData({ ...formData, telemovel: e.target.value })}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email" className="text-slate-300">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="joao@clinica.pt"
-                    className="bg-slate-900/50 border-slate-700 text-white placeholder:text-slate-500 focus:border-primary"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="tipoNegocio" className="text-slate-300">Tipo de Negócio</Label>
-                <Select 
-                  value={formData.tipoNegocio} 
-                  onValueChange={(value) => setFormData({ ...formData, tipoNegocio: value })}
-                >
-                  <SelectTrigger className="bg-slate-900/50 border-slate-700 text-white focus:ring-primary">
-                    <SelectValue placeholder="Selecione o seu setor" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-slate-800 border-slate-700">
-                    <SelectItem value="clinica" className="text-white hover:bg-slate-700">Clínica / Saúde</SelectItem>
-                    <SelectItem value="imobiliaria" className="text-white hover:bg-slate-700">Imobiliária</SelectItem>
-                    <SelectItem value="construcao" className="text-white hover:bg-slate-700">Construção / Reformas</SelectItem>
-                    <SelectItem value="energia" className="text-white hover:bg-slate-700">Energias Renováveis</SelectItem>
-                    <SelectItem value="outro" className="text-white hover:bg-slate-700">Outro</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <Button 
-                type="submit" 
-                size="lg" 
-                className="w-full bg-primary hover:bg-primary/90 text-base py-6 h-auto"
-              >
-                QUERO SER CONTACTADO
-              </Button>
-
-              <p className="text-center text-slate-500 text-xs">
-                Os seus dados estão seguros. Respeitamos a sua privacidade.
-              </p>
-            </form>
+            <div className="bg-slate-800/30 border border-slate-700 rounded-2xl p-2 sm:p-4 overflow-hidden">
+              <iframe 
+                src="https://senvia-portugal-crm.lovable.app/p/c2f636c7-a29a-46ec-9563-db2b14ac5c6e" 
+                width="100%" 
+                height="500" 
+                frameBorder="0"
+                className="rounded-xl"
+                title="Formulário de Contacto Senvia"
+              />
+            </div>
+            
+            <p className="text-center text-slate-500 text-xs mt-4">
+              Os seus dados estão seguros. Respeitamos a sua privacidade.
+            </p>
           </div>
         </div>
       </section>
