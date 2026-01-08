@@ -13,6 +13,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Copy, ExternalLink, Code, Shield, User, Building, Webhook, Send, Loader2, Link2, Check, Users, Palette, Eye, EyeOff, Save, Key, MessageCircle } from "lucide-react";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { PLAN_LABELS, OrganizationPlan } from "@/types";
 import { supabase } from '@/integrations/supabase/client';
 import { TeamTab } from '@/components/settings/TeamTab';
@@ -352,113 +358,126 @@ export default function Settings() {
 
           {/* Tab Integrações */}
           {canManageIntegrations && (
-            <TabsContent value="integrations" className="space-y-6 max-w-4xl">
-            {/* Formulário Público */}
-            {organization && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2"><Code className="h-5 w-5" />Formulário Público</CardTitle>
-                  <CardDescription>Use este link para capturar leads.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="space-y-2">
-                    <Label>Link Direto</Label>
-                    <div className="flex gap-2">
-                      <Input value={publicFormUrl} readOnly className="font-mono text-sm" />
-                      <Button variant="outline" size="icon" onClick={() => copyToClipboard(publicFormUrl, 'Link')}>
-                        {copied === 'Link' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                      </Button>
-                      <Button variant="outline" size="icon" onClick={() => window.open(publicFormUrl, '_blank')}><ExternalLink className="h-4 w-4" /></Button>
-                    </div>
-                  </div>
-                  <Separator />
-                  <div className="space-y-2">
-                    <Label>Código iframe</Label>
-                    <div className="flex gap-2">
-                      <Input value={iframeCode} readOnly className="font-mono text-xs" />
-                      <Button variant="outline" size="icon" onClick={() => copyToClipboard(iframeCode, 'Código')}>
-                        {copied === 'Código' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                      </Button>
-                    </div>
-                  </div>
-                  <Separator />
-                  <div className="space-y-2">
-                    <Label>Chave Pública</Label>
-                    <div className="flex gap-2">
-                      <Input value={organization.public_key} readOnly className="font-mono text-sm" />
-                      <Button variant="outline" size="icon" onClick={() => copyToClipboard(organization.public_key, 'API Key')}>
-                        {copied === 'API Key' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+            <TabsContent value="integrations" className="max-w-4xl">
+              <Accordion type="multiple" className="w-full">
+                {/* Formulário Público */}
+                {organization && (
+                  <AccordionItem value="form">
+                    <AccordionTrigger className="hover:no-underline">
+                      <div className="flex flex-col items-start gap-1">
+                        <div className="flex items-center gap-2">
+                          <Code className="h-5 w-5" />
+                          <span className="font-medium">Formulário Público</span>
+                        </div>
+                        <span className="text-xs text-muted-foreground font-normal">
+                          Use este link para capturar leads.
+                        </span>
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <div className="space-y-6 pt-4">
+                        <div className="space-y-2">
+                          <Label>Link Direto</Label>
+                          <div className="flex gap-2">
+                            <Input value={publicFormUrl} readOnly className="font-mono text-sm" />
+                            <Button variant="outline" size="icon" onClick={() => copyToClipboard(publicFormUrl, 'Link')}>
+                              {copied === 'Link' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                            </Button>
+                            <Button variant="outline" size="icon" onClick={() => window.open(publicFormUrl, '_blank')}><ExternalLink className="h-4 w-4" /></Button>
+                          </div>
+                        </div>
+                        <Separator />
+                        <div className="space-y-2">
+                          <Label>Código iframe</Label>
+                          <div className="flex gap-2">
+                            <Input value={iframeCode} readOnly className="font-mono text-xs" />
+                            <Button variant="outline" size="icon" onClick={() => copyToClipboard(iframeCode, 'Código')}>
+                              {copied === 'Código' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                            </Button>
+                          </div>
+                        </div>
+                        <Separator />
+                        <div className="space-y-2">
+                          <Label>Chave Pública</Label>
+                          <div className="flex gap-2">
+                            <Input value={organization.public_key} readOnly className="font-mono text-sm" />
+                            <Button variant="outline" size="icon" onClick={() => copyToClipboard(organization.public_key, 'API Key')}>
+                              {copied === 'API Key' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                )}
 
-            {/* Webhook */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Webhook className="h-5 w-5" />
-                  Webhook (n8n / Automações)
-                </CardTitle>
-                <CardDescription>
-                  Receba notificações em tempo real quando um novo lead é criado.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {isLoadingIntegrations ? (
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span className="text-sm">A carregar...</span>
-                  </div>
-                ) : (
-                  <>
-                    <div className="space-y-2">
-                      <Label htmlFor="webhook-url">URL do Webhook</Label>
-                      <Input
-                        id="webhook-url"
-                        type="url"
-                        placeholder="https://seu-n8n.com/webhook/..."
-                        value={webhookUrl}
-                        onChange={(e) => setWebhookUrl(e.target.value)}
-                        className={!isValidUrl(webhookUrl) ? 'border-destructive' : ''}
-                      />
-                      {!isValidUrl(webhookUrl) && (
-                        <p className="text-xs text-destructive">URL inválido</p>
-                      )}
-                      <p className="text-xs text-muted-foreground">
-                        O webhook receberá um POST com os dados do lead sempre que um novo contacto for registado.
-                      </p>
+                {/* Webhook */}
+                <AccordionItem value="webhook">
+                  <AccordionTrigger className="hover:no-underline">
+                    <div className="flex flex-col items-start gap-1">
+                      <div className="flex items-center gap-2">
+                        <Webhook className="h-5 w-5" />
+                        <span className="font-medium">Webhook (n8n / Automações)</span>
+                      </div>
+                      <span className="text-xs text-muted-foreground font-normal">
+                        Receba notificações em tempo real quando um novo lead é criado.
+                      </span>
                     </div>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="space-y-4 pt-4">
+                      {isLoadingIntegrations ? (
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <span className="text-sm">A carregar...</span>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="space-y-2">
+                            <Label htmlFor="webhook-url">URL do Webhook</Label>
+                            <Input
+                              id="webhook-url"
+                              type="url"
+                              placeholder="https://seu-n8n.com/webhook/..."
+                              value={webhookUrl}
+                              onChange={(e) => setWebhookUrl(e.target.value)}
+                              className={!isValidUrl(webhookUrl) ? 'border-destructive' : ''}
+                            />
+                            {!isValidUrl(webhookUrl) && (
+                              <p className="text-xs text-destructive">URL inválido</p>
+                            )}
+                            <p className="text-xs text-muted-foreground">
+                              O webhook receberá um POST com os dados do lead sempre que um novo contacto for registado.
+                            </p>
+                          </div>
 
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        onClick={handleTestWebhook}
-                        disabled={!webhookUrl.trim() || !isValidUrl(webhookUrl) || testWebhook.isPending}
-                      >
-                        {testWebhook.isPending ? (
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        ) : (
-                          <Send className="mr-2 h-4 w-4" />
-                        )}
-                        Testar Webhook
-                      </Button>
-                      <Button
-                        onClick={handleSaveWebhook}
-                        disabled={!isValidUrl(webhookUrl) || updateOrganization.isPending}
-                      >
-                        {updateOrganization.isPending ? (
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        ) : null}
-                        Guardar
-                      </Button>
-                    </div>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              onClick={handleTestWebhook}
+                              disabled={!webhookUrl.trim() || !isValidUrl(webhookUrl) || testWebhook.isPending}
+                            >
+                              {testWebhook.isPending ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              ) : (
+                                <Send className="mr-2 h-4 w-4" />
+                              )}
+                              Testar Webhook
+                            </Button>
+                            <Button
+                              onClick={handleSaveWebhook}
+                              disabled={!isValidUrl(webhookUrl) || updateOrganization.isPending}
+                            >
+                              {updateOrganization.isPending ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              ) : null}
+                              Guardar
+                            </Button>
+                          </div>
 
-                    <div className="rounded-md bg-muted p-3">
-                      <p className="text-xs font-medium mb-2">Exemplo de payload:</p>
-                      <pre className="text-xs text-muted-foreground overflow-x-auto whitespace-pre-wrap">
+                          <div className="rounded-md bg-muted p-3">
+                            <p className="text-xs font-medium mb-2">Exemplo de payload:</p>
+                            <pre className="text-xs text-muted-foreground overflow-x-auto whitespace-pre-wrap">
 {`{
   "event": "lead.created",
   "timestamp": "2026-01-07T16:45:00.000Z",
@@ -490,96 +509,102 @@ export default function Settings() {
     "updated_at": "..."
   }
 }`}
-                      </pre>
+                            </pre>
+                          </div>
+                        </>
+                      )}
                     </div>
-                  </>
-                )}
-              </CardContent>
-            </Card>
+                  </AccordionContent>
+                </AccordionItem>
 
-            {/* WhatsApp Business */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <MessageCircle className="h-5 w-5" />
-                  WhatsApp Business
-                </CardTitle>
-                <CardDescription>
-                  Configure a integração com Evolution API para enviar mensagens automáticas.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {isLoadingIntegrations ? (
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span className="text-sm">A carregar...</span>
-                  </div>
-                ) : (
-                  <>
-                    <div className="space-y-2">
-                      <Label htmlFor="whatsapp-instance">Instância</Label>
-                      <Input
-                        id="whatsapp-instance"
-                        placeholder="nome-da-instancia"
-                        value={whatsappInstance}
-                        onChange={(e) => setWhatsappInstance(e.target.value)}
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Nome da instância configurada na Evolution API.
-                      </p>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="whatsapp-number">Número WhatsApp</Label>
-                      <Input
-                        id="whatsapp-number"
-                        type="tel"
-                        placeholder="+351912345678"
-                        value={whatsappNumber}
-                        onChange={(e) => setWhatsappNumber(e.target.value)}
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Número de telefone associado à conta WhatsApp Business.
-                      </p>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="whatsapp-api-key">API Key</Label>
-                      <div className="relative">
-                        <Input
-                          id="whatsapp-api-key"
-                          type={showWhatsappApiKey ? 'text' : 'password'}
-                          placeholder="Chave de autenticação"
-                          value={whatsappApiKey}
-                          onChange={(e) => setWhatsappApiKey(e.target.value)}
-                        />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="absolute right-0 top-0 h-full px-3"
-                          onClick={() => setShowWhatsappApiKey(!showWhatsappApiKey)}
-                        >
-                          {showWhatsappApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                        </Button>
+                {/* WhatsApp Business */}
+                <AccordionItem value="whatsapp">
+                  <AccordionTrigger className="hover:no-underline">
+                    <div className="flex flex-col items-start gap-1">
+                      <div className="flex items-center gap-2">
+                        <MessageCircle className="h-5 w-5" />
+                        <span className="font-medium">WhatsApp Business</span>
                       </div>
-                      <p className="text-xs text-muted-foreground">
-                        Chave de autenticação da Evolution API.
-                      </p>
+                      <span className="text-xs text-muted-foreground font-normal">
+                        Configure a integração com Evolution API.
+                      </span>
                     </div>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="space-y-4 pt-4">
+                      {isLoadingIntegrations ? (
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <span className="text-sm">A carregar...</span>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="space-y-2">
+                            <Label htmlFor="whatsapp-instance">Instância</Label>
+                            <Input
+                              id="whatsapp-instance"
+                              placeholder="nome-da-instancia"
+                              value={whatsappInstance}
+                              onChange={(e) => setWhatsappInstance(e.target.value)}
+                            />
+                            <p className="text-xs text-muted-foreground">
+                              Nome da instância configurada na Evolution API.
+                            </p>
+                          </div>
 
-                    <Button
-                      onClick={handleSaveWhatsApp}
-                      disabled={updateOrganization.isPending}
-                    >
-                      {updateOrganization.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                      Guardar
-                    </Button>
-                  </>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
+                          <div className="space-y-2">
+                            <Label htmlFor="whatsapp-number">Número WhatsApp</Label>
+                            <Input
+                              id="whatsapp-number"
+                              type="tel"
+                              placeholder="+351912345678"
+                              value={whatsappNumber}
+                              onChange={(e) => setWhatsappNumber(e.target.value)}
+                            />
+                            <p className="text-xs text-muted-foreground">
+                              Número de telefone associado à conta WhatsApp Business.
+                            </p>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label htmlFor="whatsapp-api-key">API Key</Label>
+                            <div className="relative">
+                              <Input
+                                id="whatsapp-api-key"
+                                type={showWhatsappApiKey ? 'text' : 'password'}
+                                placeholder="Chave de autenticação"
+                                value={whatsappApiKey}
+                                onChange={(e) => setWhatsappApiKey(e.target.value)}
+                              />
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="absolute right-0 top-0 h-full px-3"
+                                onClick={() => setShowWhatsappApiKey(!showWhatsappApiKey)}
+                              >
+                                {showWhatsappApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                              </Button>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              Chave de autenticação da Evolution API.
+                            </p>
+                          </div>
+
+                          <Button
+                            onClick={handleSaveWhatsApp}
+                            disabled={updateOrganization.isPending}
+                          >
+                            {updateOrganization.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Guardar
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+            </TabsContent>
           )}
         </Tabs>
       </div>
