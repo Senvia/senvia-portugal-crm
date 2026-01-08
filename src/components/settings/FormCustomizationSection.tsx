@@ -24,15 +24,20 @@ import {
   Save,
   Sparkles,
   ImageIcon,
-  LayoutList
+  LayoutList,
+  FileText,
+  MessagesSquare,
+  Copy,
+  Check
 } from "lucide-react";
 import { useUpdateOrganization } from '@/hooks/useOrganization';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { FormSettings, DEFAULT_FORM_SETTINGS, migrateFormSettings } from '@/types';
+import { FormSettings, FormMode, DEFAULT_FORM_SETTINGS, migrateFormSettings } from '@/types';
 import { Json } from '@/integrations/supabase/types';
 import { useToast } from '@/hooks/use-toast';
 import { FormPreview } from './FormPreview';
+import { ConversationalFormPreview } from './ConversationalFormPreview';
 import { LogoUploader } from './LogoUploader';
 import { CustomFieldsEditor } from './CustomFieldsEditor';
 import { cn } from '@/lib/utils';
@@ -58,6 +63,7 @@ export function FormCustomizationSection() {
   const [isLoading, setIsLoading] = useState(true);
   const [settings, setSettings] = useState<FormSettings>(DEFAULT_FORM_SETTINGS);
   const [showSuccessPreview, setShowSuccessPreview] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
 
   // Fetch current form_settings
   useEffect(() => {
@@ -105,8 +111,28 @@ export function FormCustomizationSection() {
       });
       return;
     }
-    const url = `${window.location.origin}/p/${organization.public_key}`;
+    const prefix = settings.mode === 'conversational' ? '/c/' : '/p/';
+    const url = `${window.location.origin}${prefix}${organization.public_key}`;
     window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  const getFormUrl = () => {
+    if (!organization?.public_key) return '';
+    const prefix = settings.mode === 'conversational' ? '/c/' : '/p/';
+    return `${window.location.origin}${prefix}${organization.public_key}`;
+  };
+
+  const handleCopyLink = async () => {
+    const url = getFormUrl();
+    if (!url) return;
+    
+    await navigator.clipboard.writeText(url);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2000);
+    toast({
+      title: "Link copiado!",
+      description: "O link do formulário foi copiado para a área de transferência.",
+    });
   };
 
   const updateSetting = <K extends keyof FormSettings>(key: K, value: FormSettings[K]) => {
@@ -167,8 +193,125 @@ export function FormCustomizationSection() {
 
             {/* Accordion Sections */}
             <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
-              <Accordion type="multiple" defaultValue={["appearance", "fields", "messages"]} className="space-y-3 sm:space-y-4">
+              <Accordion type="multiple" defaultValue={["mode", "appearance", "fields", "messages"]} className="space-y-3 sm:space-y-4">
                 
+                {/* Form Mode Section */}
+                <AccordionItem value="mode" className="border rounded-xl px-4">
+                  <AccordionTrigger className="hover:no-underline py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-500/10">
+                        <MessagesSquare className="h-5 w-5 text-violet-600" />
+                      </div>
+                      <div className="text-left">
+                        <span className="font-medium">Tipo de Formulário</span>
+                        <p className="text-xs text-muted-foreground font-normal">
+                          Escolha entre tradicional ou conversacional
+                        </p>
+                      </div>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent className="pb-4 pt-2 space-y-4">
+                    <div className="grid grid-cols-2 gap-3">
+                      {/* Traditional Mode */}
+                      <button
+                        type="button"
+                        onClick={() => updateSetting('mode', 'traditional')}
+                        className={cn(
+                          "relative flex flex-col items-center gap-3 p-4 rounded-xl border-2 transition-all",
+                          settings.mode === 'traditional'
+                            ? "border-primary bg-primary/5"
+                            : "border-border hover:border-primary/50"
+                        )}
+                      >
+                        <div className={cn(
+                          "flex h-12 w-12 items-center justify-center rounded-xl",
+                          settings.mode === 'traditional' ? "bg-primary/10" : "bg-muted"
+                        )}>
+                          <FileText className={cn(
+                            "h-6 w-6",
+                            settings.mode === 'traditional' ? "text-primary" : "text-muted-foreground"
+                          )} />
+                        </div>
+                        <div className="text-center">
+                          <p className={cn(
+                            "font-medium text-sm",
+                            settings.mode === 'traditional' ? "text-primary" : "text-foreground"
+                          )}>Tradicional</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            Todos os campos visíveis
+                          </p>
+                        </div>
+                        {settings.mode === 'traditional' && (
+                          <div className="absolute top-2 right-2">
+                            <Check className="h-4 w-4 text-primary" />
+                          </div>
+                        )}
+                      </button>
+
+                      {/* Conversational Mode */}
+                      <button
+                        type="button"
+                        onClick={() => updateSetting('mode', 'conversational')}
+                        className={cn(
+                          "relative flex flex-col items-center gap-3 p-4 rounded-xl border-2 transition-all",
+                          settings.mode === 'conversational'
+                            ? "border-primary bg-primary/5"
+                            : "border-border hover:border-primary/50"
+                        )}
+                      >
+                        <div className={cn(
+                          "flex h-12 w-12 items-center justify-center rounded-xl",
+                          settings.mode === 'conversational' ? "bg-primary/10" : "bg-muted"
+                        )}>
+                          <MessagesSquare className={cn(
+                            "h-6 w-6",
+                            settings.mode === 'conversational' ? "text-primary" : "text-muted-foreground"
+                          )} />
+                        </div>
+                        <div className="text-center">
+                          <p className={cn(
+                            "font-medium text-sm",
+                            settings.mode === 'conversational' ? "text-primary" : "text-foreground"
+                          )}>Conversacional</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            Uma pergunta de cada vez
+                          </p>
+                        </div>
+                        {settings.mode === 'conversational' && (
+                          <div className="absolute top-2 right-2">
+                            <Check className="h-4 w-4 text-primary" />
+                          </div>
+                        )}
+                      </button>
+                    </div>
+
+                    {/* Form URL */}
+                    <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/50 border">
+                      <code className="flex-1 text-xs text-muted-foreground truncate">
+                        {getFormUrl()}
+                      </code>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={handleCopyLink}
+                        className="flex-shrink-0"
+                      >
+                        {copiedLink ? (
+                          <Check className="h-4 w-4 text-green-500" />
+                        ) : (
+                          <Copy className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+
+                    {settings.mode === 'conversational' && (
+                      <p className="text-xs text-muted-foreground bg-amber-500/10 text-amber-700 dark:text-amber-400 p-3 rounded-lg">
+                        💡 O modo conversacional usa um fluxo passo-a-passo otimizado para conversão. As configurações de campos abaixo aplicam-se apenas ao modo tradicional.
+                      </p>
+                    )}
+                  </AccordionContent>
+                </AccordionItem>
+
                 {/* Appearance Section */}
                 <AccordionItem value="appearance" className="border rounded-xl px-4">
                   <AccordionTrigger className="hover:no-underline py-4">
@@ -403,7 +546,14 @@ export function FormCustomizationSection() {
             {/* Preview Content */}
             <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
               <div className="mx-auto w-full max-w-lg xl:max-w-xl">
-                <FormPreview settings={settings} showSuccess={showSuccessPreview} />
+                {settings.mode === 'conversational' ? (
+                  <ConversationalFormPreview 
+                    primaryColor={settings.primary_color}
+                    organizationName={organization?.name}
+                  />
+                ) : (
+                  <FormPreview settings={settings} showSuccess={showSuccessPreview} />
+                )}
               </div>
             </div>
           </div>
