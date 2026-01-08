@@ -11,6 +11,11 @@ export interface Organization {
   slug: string;
   public_key: string;
   plan: OrganizationPlan;
+  webhook_url?: string | null;
+  whatsapp_instance?: string | null;
+  whatsapp_number?: string | null;
+  whatsapp_api_key?: string | null;
+  form_settings?: FormSettings;
   created_at: string;
 }
 

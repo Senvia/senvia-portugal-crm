@@ -12,7 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Copy, ExternalLink, Code, Shield, User, Building, Webhook, Send, Loader2, Link2, Check, Users, Palette, Eye, EyeOff, Save, Key } from "lucide-react";
+import { Copy, ExternalLink, Code, Shield, User, Building, Webhook, Send, Loader2, Link2, Check, Users, Palette, Eye, EyeOff, Save, Key, MessageCircle } from "lucide-react";
 import { PLAN_LABELS, OrganizationPlan } from "@/types";
 import { supabase } from '@/integrations/supabase/client';
 import { TeamTab } from '@/components/settings/TeamTab';
@@ -30,7 +30,13 @@ export default function Settings() {
 
   const [copied, setCopied] = useState<string | null>(null);
   const [webhookUrl, setWebhookUrl] = useState('');
-  const [isLoadingWebhook, setIsLoadingWebhook] = useState(true);
+  const [isLoadingIntegrations, setIsLoadingIntegrations] = useState(true);
+  
+  // WhatsApp Business state
+  const [whatsappInstance, setWhatsappInstance] = useState('');
+  const [whatsappNumber, setWhatsappNumber] = useState('');
+  const [whatsappApiKey, setWhatsappApiKey] = useState('');
+  const [showWhatsappApiKey, setShowWhatsappApiKey] = useState(false);
 
   // Organization edit state
   const [orgName, setOrgName] = useState('');
@@ -55,25 +61,28 @@ export default function Settings() {
   }, [profile?.full_name]);
   const iframeCode = organization?.public_key ? `<iframe src="${publicFormUrl}" width="100%" height="500" frameborder="0"></iframe>` : '';
 
-  // Fetch current webhook_url
+  // Fetch current integrations data (webhook + whatsapp)
   useEffect(() => {
-    async function fetchWebhookUrl() {
+    async function fetchIntegrations() {
       if (!organization?.id) return;
       
-      setIsLoadingWebhook(true);
+      setIsLoadingIntegrations(true);
       const { data, error } = await supabase
         .from('organizations')
-        .select('webhook_url')
+        .select('webhook_url, whatsapp_instance, whatsapp_number, whatsapp_api_key')
         .eq('id', organization.id)
         .single();
       
       if (!error && data) {
         setWebhookUrl(data.webhook_url || '');
+        setWhatsappInstance(data.whatsapp_instance || '');
+        setWhatsappNumber(data.whatsapp_number || '');
+        setWhatsappApiKey(data.whatsapp_api_key || '');
       }
-      setIsLoadingWebhook(false);
+      setIsLoadingIntegrations(false);
     }
 
-    fetchWebhookUrl();
+    fetchIntegrations();
   }, [organization?.id]);
 
   const copyToClipboard = (text: string, label: string) => {
@@ -86,6 +95,14 @@ export default function Settings() {
   const handleSaveWebhook = () => {
     const urlToSave = webhookUrl.trim() || null;
     updateOrganization.mutate({ webhook_url: urlToSave });
+  };
+
+  const handleSaveWhatsApp = () => {
+    updateOrganization.mutate({
+      whatsapp_instance: whatsappInstance.trim() || null,
+      whatsapp_number: whatsappNumber.trim() || null,
+      whatsapp_api_key: whatsappApiKey.trim() || null,
+    });
   };
 
   const handleTestWebhook = () => {
@@ -390,7 +407,7 @@ export default function Settings() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {isLoadingWebhook ? (
+                {isLoadingIntegrations ? (
                   <div className="flex items-center gap-2 text-muted-foreground">
                     <Loader2 className="h-4 w-4 animate-spin" />
                     <span className="text-sm">A carregar...</span>
@@ -449,6 +466,11 @@ export default function Settings() {
     "id": "uuid",
     "name": "${organization?.name || 'Nome da Empresa'}"
   },
+  "whatsapp": {
+    "instance": "minha-instancia",
+    "number": "+351912345678",
+    "api_key": "xxx-api-key-xxx"
+  },
   "lead": {
     "id": "uuid",
     "name": "João Silva",
@@ -470,6 +492,89 @@ export default function Settings() {
 }`}
                       </pre>
                     </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* WhatsApp Business */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <MessageCircle className="h-5 w-5" />
+                  WhatsApp Business
+                </CardTitle>
+                <CardDescription>
+                  Configure a integração com Evolution API para enviar mensagens automáticas.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {isLoadingIntegrations ? (
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span className="text-sm">A carregar...</span>
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="whatsapp-instance">Instância</Label>
+                      <Input
+                        id="whatsapp-instance"
+                        placeholder="nome-da-instancia"
+                        value={whatsappInstance}
+                        onChange={(e) => setWhatsappInstance(e.target.value)}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Nome da instância configurada na Evolution API.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="whatsapp-number">Número WhatsApp</Label>
+                      <Input
+                        id="whatsapp-number"
+                        type="tel"
+                        placeholder="+351912345678"
+                        value={whatsappNumber}
+                        onChange={(e) => setWhatsappNumber(e.target.value)}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Número de telefone associado à conta WhatsApp Business.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="whatsapp-api-key">API Key</Label>
+                      <div className="relative">
+                        <Input
+                          id="whatsapp-api-key"
+                          type={showWhatsappApiKey ? 'text' : 'password'}
+                          placeholder="Chave de autenticação"
+                          value={whatsappApiKey}
+                          onChange={(e) => setWhatsappApiKey(e.target.value)}
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="absolute right-0 top-0 h-full px-3"
+                          onClick={() => setShowWhatsappApiKey(!showWhatsappApiKey)}
+                        >
+                          {showWhatsappApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </Button>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Chave de autenticação da Evolution API.
+                      </p>
+                    </div>
+
+                    <Button
+                      onClick={handleSaveWhatsApp}
+                      disabled={updateOrganization.isPending}
+                    >
+                      {updateOrganization.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Guardar
+                    </Button>
                   </>
                 )}
               </CardContent>

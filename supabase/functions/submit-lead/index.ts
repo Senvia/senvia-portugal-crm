@@ -85,10 +85,10 @@ Deno.serve(async (req) => {
     
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    // Validate public_key and get organization_id (including webhook_url)
+    // Validate public_key and get organization_id (including webhook_url and whatsapp config)
     const { data: org, error: orgError } = await supabase
       .from('organizations')
-      .select('id, name, webhook_url')
+      .select('id, name, webhook_url, whatsapp_instance, whatsapp_number, whatsapp_api_key')
       .eq('public_key', body.public_key)
       .maybeSingle();
 
@@ -161,6 +161,11 @@ Deno.serve(async (req) => {
           id: org.id,
           name: org.name,
         },
+        whatsapp: org.whatsapp_instance ? {
+          instance: org.whatsapp_instance,
+          number: org.whatsapp_number,
+          api_key: org.whatsapp_api_key,
+        } : null,
         lead: {
           id: lead.id,
           name: lead.name,
