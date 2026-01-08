@@ -5,8 +5,16 @@ import { LeadDetailsModal } from "@/components/leads/LeadDetailsModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLeads, useUpdateLeadStatus, useDeleteLead, useUpdateLead } from "@/hooks/useLeads";
 import { Input } from "@/components/ui/input";
-import { Search, Users, Loader2 } from "lucide-react";
-import type { Lead, LeadStatus } from "@/types";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Search, Users, Loader2, CalendarIcon, X } from "lucide-react";
+import { format, endOfDay } from "date-fns";
+import { pt } from "date-fns/locale";
+import { normalizeString, cn } from "@/lib/utils";
+import type { Lead } from "@/types";
+import { LeadStatus, KANBAN_COLUMNS, STATUS_LABELS } from "@/types";
 
 export default function Leads() {
   const { profile, organization } = useAuth();
@@ -18,6 +26,8 @@ export default function Leads() {
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<LeadStatus[]>([]);
+  const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({ from: undefined, to: undefined });
 
   // Keep selectedLead synchronized with updated data from query
   useEffect(() => {
@@ -29,11 +39,42 @@ export default function Leads() {
     }
   }, [leads]);
 
-  const filteredLeads = leads.filter(lead =>
-    lead.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    lead.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    lead.phone.includes(searchQuery)
-  );
+  const toggleStatus = (status: LeadStatus) => {
+    setStatusFilter(prev => 
+      prev.includes(status) 
+        ? prev.filter(s => s !== status) 
+        : [...prev, status]
+    );
+  };
+
+  const clearFilters = () => {
+    setSearchQuery("");
+    setStatusFilter([]);
+    setDateRange({ from: undefined, to: undefined });
+  };
+
+  const hasActiveFilters = searchQuery || statusFilter.length > 0 || dateRange.from || dateRange.to;
+
+  const filteredLeads = leads.filter(lead => {
+    // 1. Pesquisa accent-insensitive
+    const query = normalizeString(searchQuery);
+    const matchesSearch = query === "" || 
+      normalizeString(lead.name).includes(query) ||
+      normalizeString(lead.email).includes(query) ||
+      lead.phone.includes(searchQuery);
+    
+    // 2. Filtro de status
+    const matchesStatus = statusFilter.length === 0 || 
+      statusFilter.includes(lead.status);
+    
+    // 3. Filtro de data
+    const leadDate = lead.created_at ? new Date(lead.created_at) : null;
+    const matchesDate = 
+      (!dateRange.from || (leadDate && leadDate >= dateRange.from)) &&
+      (!dateRange.to || (leadDate && leadDate <= endOfDay(dateRange.to)));
+    
+    return matchesSearch && matchesStatus && matchesDate;
+  });
 
   const handleStatusChange = (leadId: string, newStatus: LeadStatus) => {
     updateStatus.mutate({ leadId, status: newStatus });
@@ -55,14 +96,79 @@ export default function Leads() {
   return (
     <AppLayout userName={profile?.full_name} organizationName={organization?.name}>
       <div className="p-6 lg:p-8">
-        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Leads</h1>
-            <p className="text-muted-foreground">Gerencie os contactos da sua organização.</p>
+        <div className="mb-6 space-y-4">
+          {/* Linha 1: Título + Pesquisa */}
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-foreground">Leads</h1>
+              <p className="text-muted-foreground">Gerencie os contactos da sua organização.</p>
+            </div>
+            <div className="relative w-full sm:w-64">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input placeholder="Pesquisar leads..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9" />
+            </div>
           </div>
-          <div className="relative w-full sm:w-64">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input placeholder="Pesquisar leads..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9" />
+
+          {/* Linha 2: Filtros de Data + Status + Limpar */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Date Range Picker */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className={cn("h-8", dateRange.from && "border-primary")}>
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {dateRange.from ? format(dateRange.from, "dd/MM/yyyy", { locale: pt }) : "De"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={dateRange.from}
+                  onSelect={(date) => setDateRange(prev => ({ ...prev, from: date }))}
+                  className="pointer-events-auto"
+                  locale={pt}
+                />
+              </PopoverContent>
+            </Popover>
+
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className={cn("h-8", dateRange.to && "border-primary")}>
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {dateRange.to ? format(dateRange.to, "dd/MM/yyyy", { locale: pt }) : "Até"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={dateRange.to}
+                  onSelect={(date) => setDateRange(prev => ({ ...prev, to: date }))}
+                  className="pointer-events-auto"
+                  locale={pt}
+                />
+              </PopoverContent>
+            </Popover>
+
+            <div className="h-4 w-px bg-border mx-1 hidden sm:block" />
+
+            {/* Status Filter Badges */}
+            {KANBAN_COLUMNS.map((status) => (
+              <Badge
+                key={status}
+                variant={statusFilter.includes(status) ? "default" : "outline"}
+                className="cursor-pointer transition-colors hover:bg-primary/10"
+                onClick={() => toggleStatus(status)}
+              >
+                {STATUS_LABELS[status]}
+              </Badge>
+            ))}
+
+            {/* Clear Filters */}
+            {hasActiveFilters && (
+              <Button variant="ghost" size="sm" onClick={clearFilters} className="h-8 text-muted-foreground hover:text-foreground">
+                <X className="mr-1 h-4 w-4" />
+                Limpar
+              </Button>
+            )}
           </div>
         </div>
 
