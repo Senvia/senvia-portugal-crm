@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -12,70 +11,26 @@ import {
   Stethoscope,
   HardHat,
   Home,
-  ArrowDown
+  ArrowDown,
+  ExternalLink
 } from 'lucide-react';
 import senviaLogo from "@/assets/senvia-logo.png";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerTrigger } from '@/components/ui/drawer';
-import { useIsMobile } from '@/hooks/use-mobile';
 
-function ResponsiveFormModal() {
-  const isMobile = useIsMobile();
-  const [open, setOpen] = useState(false);
+const CONVERSATIONAL_FORM_URL = "https://senvia-portugal-crm.lovable.app/c/c2f636c7-a29a-46ec-9563-db2b14ac5c6e";
 
-  const formIframe = (
-    <iframe 
-      src="https://senvia-portugal-crm.lovable.app/p/c2f636c7-a29a-46ec-9563-db2b14ac5c6e" 
-      width="100%" 
-      height="500" 
-      frameBorder="0"
-      className="rounded-xl"
-      title="Formulário de Contacto Senvia"
-    />
-  );
-
-  const triggerButton = (
+function ConversationalFormButton() {
+  return (
     <Button 
       size="lg" 
       className="bg-[#25D366] hover:bg-[#22c55e] text-white text-base px-8 py-6 h-auto shadow-lg hover:shadow-xl transition-all"
+      asChild
     >
-      <MessageSquare className="mr-2 w-5 h-5" />
-      RECEBER MENSAGEM DE TESTE
+      <a href={CONVERSATIONAL_FORM_URL} target="_blank" rel="noopener noreferrer">
+        <MessageSquare className="mr-2 w-5 h-5" />
+        RECEBER MENSAGEM DE TESTE
+        <ExternalLink className="ml-2 w-4 h-4" />
+      </a>
     </Button>
-  );
-
-  if (isMobile) {
-    return (
-      <Drawer open={open} onOpenChange={setOpen}>
-        <DrawerTrigger asChild>
-          {triggerButton}
-        </DrawerTrigger>
-        <DrawerContent className="bg-slate-900 border-slate-700">
-          <DrawerHeader>
-            <DrawerTitle className="text-white">Receba uma Mensagem de Teste</DrawerTitle>
-          </DrawerHeader>
-          <div className="px-4 pb-6">
-            {formIframe}
-          </div>
-        </DrawerContent>
-      </Drawer>
-    );
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {triggerButton}
-      </DialogTrigger>
-      <DialogContent className="bg-slate-900 border-slate-700 sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="text-white">Receba uma Mensagem de Teste</DialogTitle>
-        </DialogHeader>
-        <div className="mt-4">
-          {formIframe}
-        </div>
-      </DialogContent>
-    </Dialog>
   );
 }
 
@@ -445,7 +400,7 @@ export default function Landing() {
               Teste o sistema agora e receba uma mensagem automática no seu WhatsApp.
             </p>
             
-            <ResponsiveFormModal />
+            <ConversationalFormButton />
             
             <p className="text-slate-500 text-xs mt-6">
               Os seus dados estão seguros. Respeitamos a sua privacidade.
