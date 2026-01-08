@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import type { Lead, LeadStatus } from '@/types';
+import type { Lead, LeadStatus, LeadTemperature } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { Json } from '@/integrations/supabase/types';
 
@@ -117,6 +117,55 @@ export function useDeleteLead() {
         variant: 'destructive',
       });
       console.error('Error deleting lead:', error);
+    },
+  });
+}
+
+export function useCreateLead() {
+  const queryClient = useQueryClient();
+  const { organization } = useAuth();
+  const { toast } = useToast();
+  
+  return useMutation({
+    mutationFn: async (leadData: {
+      name: string;
+      email: string;
+      phone: string;
+      source?: string;
+      temperature?: LeadTemperature;
+      value?: number;
+      notes?: string;
+      gdpr_consent: boolean;
+    }) => {
+      if (!organization?.id) throw new Error('Sem organização');
+      
+      const { data, error } = await supabase
+        .from('leads')
+        .insert({
+          ...leadData,
+          organization_id: organization.id,
+          status: 'new',
+        })
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      toast({
+        title: 'Lead criado',
+        description: 'O lead foi adicionado com sucesso.',
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: 'Erro',
+        description: 'Não foi possível criar o lead.',
+        variant: 'destructive',
+      });
+      console.error('Error creating lead:', error);
     },
   });
 }
