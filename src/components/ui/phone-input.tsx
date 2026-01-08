@@ -1,0 +1,133 @@
+import * as React from 'react';
+import { useState, useEffect } from 'react';
+import { ChevronDown, Check } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import { COUNTRIES, DEFAULT_COUNTRY, parsePhoneNumber, type Country } from '@/lib/countries';
+
+interface PhoneInputProps {
+  value: string;
+  onChange: (fullNumber: string) => void;
+  placeholder?: string;
+  className?: string;
+  disabled?: boolean;
+}
+
+export function PhoneInput({ 
+  value, 
+  onChange, 
+  placeholder = "912 345 678", 
+  className,
+  disabled 
+}: PhoneInputProps) {
+  const [open, setOpen] = useState(false);
+  const [selectedCountry, setSelectedCountry] = useState<Country>(DEFAULT_COUNTRY);
+  const [localNumber, setLocalNumber] = useState('');
+  const [isInitialized, setIsInitialized] = useState(false);
+
+  // Parse initial value on mount
+  useEffect(() => {
+    if (value && !isInitialized) {
+      const { country, localNumber: parsed } = parsePhoneNumber(value);
+      setSelectedCountry(country);
+      setLocalNumber(parsed);
+      setIsInitialized(true);
+    } else if (!value && !isInitialized) {
+      setIsInitialized(true);
+    }
+  }, [value, isInitialized]);
+
+  // Propagate changes to parent
+  useEffect(() => {
+    if (!isInitialized) return;
+    
+    const cleanNumber = localNumber.replace(/\s/g, '');
+    const fullNumber = cleanNumber ? `${selectedCountry.dialCode}${cleanNumber}` : '';
+    
+    // Only call onChange if value actually changed
+    if (fullNumber !== value) {
+      onChange(fullNumber);
+    }
+  }, [selectedCountry, localNumber, isInitialized]);
+
+  const handleCountrySelect = (country: Country) => {
+    setSelectedCountry(country);
+    setOpen(false);
+  };
+
+  const handleLocalNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Only allow numbers and spaces
+    const cleaned = e.target.value.replace(/[^\d\s]/g, '');
+    setLocalNumber(cleaned);
+  };
+
+  return (
+    <div className={cn("flex", className)}>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            className="rounded-r-none border-r-0 px-3 h-10 min-w-[100px] justify-between"
+            disabled={disabled}
+          >
+            <span className="flex items-center gap-1.5">
+              <span className="text-base leading-none">{selectedCountry.flag}</span>
+              <span className="text-sm text-muted-foreground">{selectedCountry.dialCode}</span>
+            </span>
+            <ChevronDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[250px] p-0 z-50" align="start">
+          <Command>
+            <CommandInput placeholder="Procurar país..." />
+            <CommandList>
+              <CommandEmpty>País não encontrado.</CommandEmpty>
+              <CommandGroup>
+                {COUNTRIES.map((country) => (
+                  <CommandItem
+                    key={country.code}
+                    value={`${country.name} ${country.dialCode}`}
+                    onSelect={() => handleCountrySelect(country)}
+                    className="cursor-pointer"
+                  >
+                    <span className="text-base mr-2">{country.flag}</span>
+                    <span className="flex-1">{country.name}</span>
+                    <span className="text-muted-foreground text-sm">{country.dialCode}</span>
+                    {selectedCountry.code === country.code && (
+                      <Check className="ml-2 h-4 w-4 text-primary" />
+                    )}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+      
+      <Input
+        type="tel"
+        value={localNumber}
+        onChange={handleLocalNumberChange}
+        placeholder={placeholder}
+        className="rounded-l-none flex-1"
+        disabled={disabled}
+      />
+    </div>
+  );
+}

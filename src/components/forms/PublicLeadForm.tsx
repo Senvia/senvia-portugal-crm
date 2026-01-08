@@ -4,9 +4,10 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { PRODUCTION_URL } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { PhoneInput } from "@/components/ui/phone-input";
 import {
   Form,
   FormControl,
@@ -138,7 +139,11 @@ export function PublicLeadForm({ organizationName = "Senvia OS", onSubmit }: Pub
               <FormItem>
                 <FormLabel>Telefone *</FormLabel>
                 <FormControl>
-                  <Input type="tel" placeholder="+351 912 345 678" {...field} />
+                  <PhoneInput
+                    value={field.value}
+                    onChange={field.onChange}
+                    placeholder="912 345 678"
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>

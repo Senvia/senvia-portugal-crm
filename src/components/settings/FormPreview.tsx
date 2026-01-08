@@ -165,8 +165,12 @@ export function FormPreview({ settings, showSuccess = false }: FormPreviewProps)
             <label className="text-xs font-medium text-foreground">
               {settings.fields.phone.label} {settings.fields.phone.required && '*'}
             </label>
-            <div className="h-10 rounded-lg border bg-muted/30 px-3 flex items-center">
-              <span className="text-sm text-muted-foreground/50">+351 912 345 678</span>
+            <div className="h-10 rounded-lg border bg-muted/30 flex items-center overflow-hidden">
+              <div className="px-3 border-r bg-muted/50 h-full flex items-center gap-1.5">
+                <span className="text-base leading-none">🇵🇹</span>
+                <span className="text-xs text-muted-foreground">+351</span>
+              </div>
+              <span className="px-3 text-sm text-muted-foreground/50">912 345 678</span>
             </div>
           </div>
         )}
