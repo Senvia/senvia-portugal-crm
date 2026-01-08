@@ -5,6 +5,14 @@ export type LeadStatus = 'new' | 'contacted' | 'scheduled' | 'won' | 'lost';
 export type LeadTemperature = 'cold' | 'warm' | 'hot';
 export type OrganizationPlan = 'basic' | 'pro';
 
+// Meta Ads Pixel
+export interface MetaPixel {
+  id: string;
+  name: string;
+  pixel_id: string;
+  enabled: boolean;
+}
+
 export interface Organization {
   id: string;
   name: string;
@@ -17,6 +25,7 @@ export interface Organization {
   whatsapp_api_key?: string | null;
   ai_qualification_rules?: string | null;
   form_settings?: FormSettings;
+  meta_pixels?: MetaPixel[];
   created_at: string;
 }
 

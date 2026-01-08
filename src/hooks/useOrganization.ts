@@ -17,6 +17,7 @@ interface UpdateOrganizationData {
   msg_template_hot?: string | null;
   msg_template_warm?: string | null;
   msg_template_cold?: string | null;
+  meta_pixels?: Json;
 }
 
 export function useUpdateOrganization() {
