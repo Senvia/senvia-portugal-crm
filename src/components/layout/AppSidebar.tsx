@@ -4,13 +4,13 @@ import {
   Users, 
   Settings, 
   LogOut,
-  Sparkles,
   Shield
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { APP_VERSION } from "@/lib/constants";
 import type { AppRole } from "@/types";
+import senviaLogo from "@/assets/senvia-logo.png";
 
 const navItems = [
   { to: "/dashboard", icon: LayoutDashboard, label: "Painel" },
@@ -45,9 +45,7 @@ export function AppSidebar({ userName = "Utilizador", organizationName = "A Minh
       <div className="flex h-full flex-col">
         {/* Logo */}
         <div className="flex h-16 items-center gap-2 border-b border-sidebar-border px-6">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg gradient-senvia">
-            <Sparkles className="h-4 w-4 text-primary-foreground" />
-          </div>
+          <img src={senviaLogo} alt="SENVIA OS" className="h-8 w-8 object-contain rounded-lg" />
           <span className="text-lg font-bold text-sidebar-foreground">Senvia OS</span>
         </div>
 

@@ -7,9 +7,10 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Zap, Check, X } from 'lucide-react';
+import { Loader2, Check, X } from 'lucide-react';
 import { z } from 'zod';
 import { supabase } from '@/integrations/supabase/client';
+import senviaLogo from "@/assets/senvia-logo.png";
 
 const loginSchema = z.object({
   email: z.string().email('Email inválido'),
@@ -271,9 +272,7 @@ export default function Login() {
         {/* Logo */}
         <div className="text-center mb-8">
           <Link to="/" className="inline-flex items-center gap-2">
-            <div className="w-10 h-10 bg-gradient-to-br from-primary to-blue-600 rounded-xl flex items-center justify-center">
-              <Zap className="w-6 h-6 text-white" />
-            </div>
+            <img src={senviaLogo} alt="SENVIA" className="w-10 h-10 object-contain rounded-xl" />
             <span className="text-2xl font-bold text-white tracking-tight">SENVIA</span>
           </Link>
         </div>
