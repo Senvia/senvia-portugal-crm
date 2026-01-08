@@ -18,6 +18,7 @@ interface Organization {
   public_key: string;
   plan: string;
   created_at: string;
+  form_settings?: unknown;
 }
 
 interface AuthContextType {

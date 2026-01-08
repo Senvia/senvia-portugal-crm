@@ -1,6 +1,7 @@
-import { Lead, STATUS_LABELS, LeadStatus, LeadTemperature, TEMPERATURE_LABELS, TEMPERATURE_STYLES } from "@/types";
+import { Lead, STATUS_LABELS, LeadStatus, LeadTemperature, TEMPERATURE_LABELS, TEMPERATURE_STYLES, FormSettings, CustomField } from "@/types";
 import { formatDate, formatDateTime, getWhatsAppUrl } from "@/lib/format";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useAuth } from "@/contexts/AuthContext";
 
 // Formata número com espaços nos milhares (estilo PT)
 const formatNumberWithSpaces = (value: string | number): string => {
@@ -55,9 +56,11 @@ import {
   ExternalLink,
   Euro,
   FileText,
-  Thermometer
+  Thermometer,
+  ClipboardList,
+  Target
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { cn } from "@/lib/utils";
 
 interface LeadDetailsModalProps {
@@ -87,12 +90,69 @@ export function LeadDetailsModal({
 }: LeadDetailsModalProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const { canDeleteLeads } = usePermissions();
+  const { organization } = useAuth();
   
   // Editable fields state
   const [editValue, setEditValue] = useState<string>("");
   const [editNotes, setEditNotes] = useState<string>("");
   const [isEditingValue, setIsEditingValue] = useState(false);
   const [isEditingNotes, setIsEditingNotes] = useState(false);
+
+  // Get form settings for custom field labels
+  const formSettings = organization?.form_settings as FormSettings | undefined;
+  const customFields = formSettings?.custom_fields || [];
+
+  // Parse custom_data and map to labels
+  const customDataEntries = useMemo(() => {
+    if (!lead?.custom_data || typeof lead.custom_data !== 'object') return [];
+    
+    const entries: { label: string; value: string; isUtm: boolean }[] = [];
+    const utmKeys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'];
+    
+    Object.entries(lead.custom_data).forEach(([key, value]) => {
+      if (value === null || value === undefined || value === '') return;
+      
+      // Check if it's a UTM param
+      const isUtm = utmKeys.includes(key);
+      
+      // Find the label for this field
+      let label = key;
+      if (!isUtm) {
+        // Try to find by ID first
+        const fieldById = customFields.find((f: CustomField) => f.id === key);
+        if (fieldById) {
+          label = fieldById.label;
+        } else {
+          // Try to find by label (for backwards compatibility)
+          const fieldByLabel = customFields.find((f: CustomField) => f.label === key);
+          if (fieldByLabel) {
+            label = fieldByLabel.label;
+          } else {
+            // Clean up the key for display
+            label = key.replace(/_/g, ' ').replace(/^(.)/, (m) => m.toUpperCase());
+          }
+        }
+      } else {
+        // Format UTM labels
+        label = key.replace('utm_', 'UTM ').replace(/^(.)/, (m) => m.toUpperCase());
+      }
+      
+      // Format the value
+      let displayValue = String(value);
+      if (typeof value === 'boolean') {
+        displayValue = value ? 'Sim' : 'Não';
+      } else if (Array.isArray(value)) {
+        displayValue = value.join(', ');
+      }
+      
+      entries.push({ label, value: displayValue, isUtm });
+    });
+    
+    return entries;
+  }, [lead?.custom_data, customFields]);
+
+  const formResponses = customDataEntries.filter(e => !e.isUtm);
+  const utmData = customDataEntries.filter(e => e.isUtm);
 
   // Sync state when lead changes (but not while editing)
   useEffect(() => {
@@ -241,47 +301,89 @@ export function LeadDetailsModal({
               <span>{lead.email}</span>
             </div>
 
-            <div className="flex items-center gap-3 text-sm">
-              <Calendar className="h-4 w-4 text-muted-foreground" />
-              <span>Criada: {formatDateTime(lead.created_at)}</span>
+          <div className="flex items-center gap-3 text-sm">
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+            <span>Criada: {formatDateTime(lead.created_at)}</span>
+          </div>
+        </div>
+
+        {/* Form Responses Section */}
+        {formResponses.length > 0 && (
+          <>
+            <Separator />
+            <div className="space-y-3">
+              <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                <ClipboardList className="h-4 w-4 text-muted-foreground" />
+                Respostas do Formulário
+              </h4>
+              <div className="space-y-2">
+                {formResponses.map((entry, index) => (
+                  <div key={index} className="rounded-lg bg-muted/50 p-3">
+                    <p className="text-xs text-muted-foreground mb-1">{entry.label}</p>
+                    <p className="text-sm text-foreground">{entry.value}</p>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+          </>
+        )}
 
-          <Separator />
-
-          {/* Source (Read-only) */}
-          <div className="space-y-2">
-            <Label className="flex items-center gap-2 text-sm font-medium">
-              <ExternalLink className="h-4 w-4 text-muted-foreground" />
-              Origem do Lead
-            </Label>
-            <div className="flex items-center gap-2 px-3 py-2 bg-muted rounded-md text-sm">
-              {lead.source || 'Não identificada'}
+        {/* UTM Data Section */}
+        {utmData.length > 0 && (
+          <>
+            <Separator />
+            <div className="space-y-3">
+              <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                <Target className="h-4 w-4 text-muted-foreground" />
+                Dados de Campanha
+              </h4>
+              <div className="grid grid-cols-2 gap-2">
+                {utmData.map((entry, index) => (
+                  <div key={index} className="rounded-lg bg-muted/50 p-2">
+                    <p className="text-xs text-muted-foreground">{entry.label}</p>
+                    <p className="text-sm text-foreground">{entry.value}</p>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+          </>
+        )}
 
-          <Separator />
+        <Separator />
 
-          {/* Editable Notes */}
-          <div className="space-y-2">
-            <Label htmlFor="lead-notes" className="flex items-center gap-2 text-sm font-medium">
-              <FileText className="h-4 w-4 text-muted-foreground" />
-              Observações Internas
-            </Label>
-            <Textarea
-              id="lead-notes"
-              placeholder="Notas sobre este lead..."
-              rows={3}
-              value={editNotes}
-              onChange={(e) => setEditNotes(e.target.value)}
-              onFocus={() => setIsEditingNotes(true)}
-              onBlur={() => {
-                handleNotesBlur();
-                setIsEditingNotes(false);
-              }}
-              className="resize-none"
-            />
+        {/* Source (Read-only) */}
+        <div className="space-y-2">
+          <Label className="flex items-center gap-2 text-sm font-medium">
+            <ExternalLink className="h-4 w-4 text-muted-foreground" />
+            Origem do Lead
+          </Label>
+          <div className="flex items-center gap-2 px-3 py-2 bg-muted rounded-md text-sm">
+            {lead.source || 'Não identificada'}
           </div>
+        </div>
+
+        <Separator />
+
+        {/* Editable Notes */}
+        <div className="space-y-2">
+          <Label htmlFor="lead-notes" className="flex items-center gap-2 text-sm font-medium">
+            <FileText className="h-4 w-4 text-muted-foreground" />
+            Observações Internas
+          </Label>
+          <Textarea
+            id="lead-notes"
+            placeholder="Notas sobre este lead..."
+            rows={3}
+            value={editNotes}
+            onChange={(e) => setEditNotes(e.target.value)}
+            onFocus={() => setIsEditingNotes(true)}
+            onBlur={() => {
+              handleNotesBlur();
+              setIsEditingNotes(false);
+            }}
+            className="resize-none"
+          />
+        </div>
 
           <Separator />
 
