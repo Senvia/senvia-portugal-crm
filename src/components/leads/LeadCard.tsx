@@ -60,8 +60,13 @@ export function LeadCard({
           {/* Temperature Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-              <Button variant="ghost" size="icon-sm" className="h-7 w-7">
-                <Thermometer className={cn("h-4 w-4", tempStyle.color)} />
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className={cn("h-7 px-2 gap-1.5", tempStyle.color)}
+              >
+                <Thermometer className="h-4 w-4" />
+                <span className="text-xs font-medium">{TEMPERATURE_LABELS[temperature]}</span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-32">
