@@ -12,7 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Copy, ExternalLink, Code, Shield, User, Building, Webhook, Send, Loader2, Link2, Check, Users, Palette, Eye, EyeOff, Save, Key, MessageCircle, Brain, MessageSquareText } from "lucide-react";
+import { Copy, ExternalLink, Code, Shield, User, Building, Webhook, Send, Loader2, Link2, Check, Users, Palette, Eye, EyeOff, Save, Key, MessageCircle, Brain, MessageSquareText, Target, Plus, Trash2, ToggleLeft, ToggleRight } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Accordion,
@@ -20,8 +20,9 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { PLAN_LABELS, OrganizationPlan } from "@/types";
+import { PLAN_LABELS, OrganizationPlan, MetaPixel } from "@/types";
 import { supabase } from '@/integrations/supabase/client';
+import { Json } from '@/integrations/supabase/types';
 import { TeamTab } from '@/components/settings/TeamTab';
 import { FormCustomizationSection } from '@/components/settings/FormCustomizationSection';
 import { PRODUCTION_URL } from '@/lib/constants';
@@ -52,6 +53,9 @@ export default function Settings() {
   const [msgTemplateHot, setMsgTemplateHot] = useState('');
   const [msgTemplateWarm, setMsgTemplateWarm] = useState('');
   const [msgTemplateCold, setMsgTemplateCold] = useState('');
+
+  // Meta Ads Pixels state
+  const [metaPixels, setMetaPixels] = useState<MetaPixel[]>([]);
 
   // Organization edit state
   const [orgName, setOrgName] = useState('');
@@ -84,7 +88,7 @@ export default function Settings() {
       setIsLoadingIntegrations(true);
       const { data, error } = await supabase
         .from('organizations')
-        .select('webhook_url, whatsapp_base_url, whatsapp_instance, whatsapp_api_key, ai_qualification_rules, msg_template_hot, msg_template_warm, msg_template_cold')
+        .select('webhook_url, whatsapp_base_url, whatsapp_instance, whatsapp_api_key, ai_qualification_rules, msg_template_hot, msg_template_warm, msg_template_cold, meta_pixels')
         .eq('id', organization.id)
         .single();
       
@@ -97,6 +101,7 @@ export default function Settings() {
         setMsgTemplateHot(data.msg_template_hot || '');
         setMsgTemplateWarm(data.msg_template_warm || '');
         setMsgTemplateCold(data.msg_template_cold || '');
+        setMetaPixels(Array.isArray(data.meta_pixels) ? data.meta_pixels as unknown as MetaPixel[] : []);
       }
       setIsLoadingIntegrations(false);
     }
@@ -136,6 +141,55 @@ export default function Settings() {
       msg_template_warm: msgTemplateWarm.trim() || null,
       msg_template_cold: msgTemplateCold.trim() || null,
     });
+  };
+
+  // Meta Ads Pixels handlers
+  const handleAddPixel = () => {
+    const newPixel: MetaPixel = {
+      id: crypto.randomUUID(),
+      name: '',
+      pixel_id: '',
+      enabled: true,
+    };
+    setMetaPixels([...metaPixels, newPixel]);
+  };
+
+  const handleRemovePixel = (id: string) => {
+    setMetaPixels(metaPixels.filter(p => p.id !== id));
+  };
+
+  const handleUpdatePixel = (id: string, field: keyof MetaPixel, value: string | boolean) => {
+    setMetaPixels(metaPixels.map(p => 
+      p.id === id ? { ...p, [field]: value } : p
+    ));
+  };
+
+  const isValidPixelId = (pixelId: string) => {
+    return /^\d{15,16}$/.test(pixelId);
+  };
+
+  const handleSaveMetaPixels = () => {
+    // Validate all pixels
+    for (const pixel of metaPixels) {
+      if (!pixel.name.trim()) {
+        toast({ title: 'Erro', description: 'Todos os pixels devem ter um nome.', variant: 'destructive' });
+        return;
+      }
+      if (pixel.pixel_id && !isValidPixelId(pixel.pixel_id)) {
+        toast({ title: 'Erro', description: `Pixel ID "${pixel.pixel_id}" inválido. Deve ter 15-16 dígitos.`, variant: 'destructive' });
+        return;
+      }
+    }
+
+    // Check for duplicates
+    const pixelIds = metaPixels.filter(p => p.pixel_id).map(p => p.pixel_id);
+    const uniqueIds = new Set(pixelIds);
+    if (pixelIds.length !== uniqueIds.size) {
+      toast({ title: 'Erro', description: 'Existem Pixel IDs duplicados.', variant: 'destructive' });
+      return;
+    }
+
+    updateOrganization.mutate({ meta_pixels: metaPixels as unknown as Json });
   };
 
   const handleTestWebhook = () => {
@@ -729,6 +783,111 @@ export default function Settings() {
                             {updateOrganization.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                             Guardar
                           </Button>
+                        </>
+                      )}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+
+                {/* Meta Ads Pixels */}
+                <AccordionItem value="meta-ads">
+                  <AccordionTrigger className="hover:no-underline">
+                    <div className="flex flex-col items-start gap-1">
+                      <div className="flex items-center gap-2">
+                        <Target className="h-5 w-5" />
+                        <span className="font-medium">Meta Ads Pixels</span>
+                      </div>
+                      <span className="text-xs text-muted-foreground font-normal">
+                        Adicione pixels do Facebook/Meta para rastrear conversões.
+                      </span>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="space-y-4 pt-4">
+                      {isLoadingIntegrations ? (
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <span className="text-sm">A carregar...</span>
+                        </div>
+                      ) : (
+                        <>
+                          {/* Info notice */}
+                          <div className="rounded-lg bg-blue-500/10 border border-blue-500/20 p-3">
+                            <p className="text-sm text-blue-600 dark:text-blue-400">
+                              Os pixels serão carregados no formulário público e dispararão eventos <strong>PageView</strong> e <strong>Lead</strong> automaticamente.
+                            </p>
+                          </div>
+
+                          {/* List of pixels */}
+                          {metaPixels.length === 0 ? (
+                            <p className="text-sm text-muted-foreground">Nenhum pixel configurado.</p>
+                          ) : (
+                            <div className="space-y-3">
+                              {metaPixels.map((pixel, index) => (
+                                <div key={pixel.id} className="flex flex-col sm:flex-row gap-3 p-3 rounded-lg border bg-card">
+                                  <div className="flex-1 space-y-2">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs text-muted-foreground font-medium">#{index + 1}</span>
+                                      <Input
+                                        placeholder="Nome do pixel (ex: Pixel Principal)"
+                                        value={pixel.name}
+                                        onChange={(e) => handleUpdatePixel(pixel.id, 'name', e.target.value)}
+                                        className="flex-1"
+                                      />
+                                    </div>
+                                    <Input
+                                      placeholder="Pixel ID (15-16 dígitos)"
+                                      value={pixel.pixel_id}
+                                      onChange={(e) => handleUpdatePixel(pixel.id, 'pixel_id', e.target.value.replace(/\D/g, '').slice(0, 16))}
+                                      className={pixel.pixel_id && !isValidPixelId(pixel.pixel_id) ? 'border-destructive' : ''}
+                                    />
+                                    {pixel.pixel_id && !isValidPixelId(pixel.pixel_id) && (
+                                      <p className="text-xs text-destructive">Pixel ID deve ter 15-16 dígitos</p>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-2 sm:flex-col sm:justify-center">
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => handleUpdatePixel(pixel.id, 'enabled', !pixel.enabled)}
+                                      className={pixel.enabled ? 'text-green-500' : 'text-muted-foreground'}
+                                      title={pixel.enabled ? 'Ativo' : 'Inativo'}
+                                    >
+                                      {pixel.enabled ? <ToggleRight className="h-5 w-5" /> : <ToggleLeft className="h-5 w-5" />}
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => handleRemovePixel(pixel.id)}
+                                      className="text-destructive hover:text-destructive"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          <div className="flex gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={handleAddPixel}
+                            >
+                              <Plus className="mr-2 h-4 w-4" />
+                              Adicionar Pixel
+                            </Button>
+                            <Button
+                              onClick={handleSaveMetaPixels}
+                              disabled={updateOrganization.isPending}
+                            >
+                              {updateOrganization.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                              Guardar
+                            </Button>
+                          </div>
                         </>
                       )}
                     </div>

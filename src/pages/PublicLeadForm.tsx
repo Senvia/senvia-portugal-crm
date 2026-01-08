@@ -12,12 +12,21 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { PhoneInput } from '@/components/ui/phone-input';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, CheckCircle, AlertCircle, Zap } from 'lucide-react';
-import { FormSettings, DEFAULT_FORM_SETTINGS, CustomField, migrateFormSettings } from '@/types';
+import { FormSettings, DEFAULT_FORM_SETTINGS, CustomField, migrateFormSettings, MetaPixel } from '@/types';
+
+// Declare fbq for TypeScript
+declare global {
+  interface Window {
+    fbq: (...args: unknown[]) => void;
+    _fbq: unknown;
+  }
+}
 
 interface Organization {
   id: string;
   name: string;
   form_settings: FormSettings | null;
+  meta_pixels?: MetaPixel[];
 }
 
 export default function PublicLeadForm() {
@@ -81,20 +90,40 @@ export default function PublicLeadForm() {
       }
 
       try {
-        const { data, error } = await supabase
-          .rpc('get_public_form_by_key', { _public_key: public_key });
+        // Fetch organization with meta_pixels
+        const { data: orgData, error: orgError } = await supabase
+          .from('organizations')
+          .select('id, name, form_settings, meta_pixels')
+          .eq('public_key', public_key)
+          .single();
 
-        if (error || !data || data.length === 0) {
-          setIsValid(false);
+        if (orgError || !orgData) {
+          // Fallback to RPC if direct query fails
+          const { data, error } = await supabase
+            .rpc('get_public_form_by_key', { _public_key: public_key });
+
+          if (error || !data || data.length === 0) {
+            setIsValid(false);
+          } else {
+            const org = data[0];
+            const migratedSettings = migrateFormSettings(org.form_settings || {});
+            
+            setOrganization({
+              id: org.id,
+              name: org.name,
+              form_settings: migratedSettings,
+            });
+            setSettings(migratedSettings);
+            setIsValid(true);
+          }
         } else {
-          const org = data[0];
-          // Migrate old format to new format if needed
-          const migratedSettings = migrateFormSettings(org.form_settings || {});
+          const migratedSettings = migrateFormSettings(orgData.form_settings || {});
           
           setOrganization({
-            id: org.id,
-            name: org.name,
+            id: orgData.id,
+            name: orgData.name,
             form_settings: migratedSettings,
+            meta_pixels: Array.isArray(orgData.meta_pixels) ? orgData.meta_pixels as unknown as MetaPixel[] : [],
           });
           setSettings(migratedSettings);
           setIsValid(true);
@@ -108,6 +137,68 @@ export default function PublicLeadForm() {
 
     validatePublicKey();
   }, [public_key]);
+
+  // Inject Meta Pixels
+  useEffect(() => {
+    if (!organization?.meta_pixels) return;
+    
+    const activePixels = organization.meta_pixels.filter(p => p.enabled && p.pixel_id);
+    if (activePixels.length === 0) return;
+
+    // Inject the base Facebook Pixel code (only once)
+    const baseScript = document.createElement('script');
+    baseScript.innerHTML = `
+      !function(f,b,e,v,n,t,s)
+      {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+      n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+      if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+      n.queue=[];t=b.createElement(e);t.async=!0;
+      t.src=v;s=b.getElementsByTagName(e)[0];
+      s.parentNode.insertBefore(t,s)}(window, document,'script',
+      'https://connect.facebook.net/en_US/fbevents.js');
+    `;
+    document.head.appendChild(baseScript);
+
+    // Initialize each pixel and track PageView
+    activePixels.forEach(pixel => {
+      if (window.fbq) {
+        window.fbq('init', pixel.pixel_id);
+        window.fbq('track', 'PageView');
+      }
+    });
+
+    // Add noscript fallback
+    activePixels.forEach(pixel => {
+      const noscript = document.createElement('noscript');
+      const img = document.createElement('img');
+      img.height = 1;
+      img.width = 1;
+      img.style.display = 'none';
+      img.src = `https://www.facebook.com/tr?id=${pixel.pixel_id}&ev=PageView&noscript=1`;
+      noscript.appendChild(img);
+      document.body.appendChild(noscript);
+    });
+
+    // Cleanup on unmount
+    return () => {
+      // We don't remove the scripts as it could cause issues with async loading
+    };
+  }, [organization?.meta_pixels]);
+
+  // Function to track Lead event
+  const trackLeadEvent = () => {
+    if (!organization?.meta_pixels) return;
+    
+    const activePixels = organization.meta_pixels.filter(p => p.enabled && p.pixel_id);
+    activePixels.forEach(pixel => {
+      if (window.fbq) {
+        window.fbq('track', 'Lead', {
+          content_name: organization.name,
+          content_category: 'form_submission',
+        });
+      }
+    });
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -186,6 +277,9 @@ export default function PublicLeadForm() {
       if (response.error) {
         throw new Error(response.error.message || 'Erro ao enviar');
       }
+
+      // Track Lead event on Meta Pixels
+      trackLeadEvent();
 
       setIsSuccess(true);
     } catch (error) {

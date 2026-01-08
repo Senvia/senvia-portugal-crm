@@ -123,6 +123,7 @@ export type Database = {
           created_at: string | null
           form_settings: Json | null
           id: string
+          meta_pixels: Json | null
           msg_template_cold: string | null
           msg_template_hot: string | null
           msg_template_warm: string | null
@@ -140,6 +141,7 @@ export type Database = {
           created_at?: string | null
           form_settings?: Json | null
           id?: string
+          meta_pixels?: Json | null
           msg_template_cold?: string | null
           msg_template_hot?: string | null
           msg_template_warm?: string | null
@@ -157,6 +159,7 @@ export type Database = {
           created_at?: string | null
           form_settings?: Json | null
           id?: string
+          meta_pixels?: Json | null
           msg_template_cold?: string | null
           msg_template_hot?: string | null
           msg_template_warm?: string | null
