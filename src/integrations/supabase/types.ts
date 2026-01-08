@@ -119,6 +119,7 @@ export type Database = {
       }
       organizations: {
         Row: {
+          ai_qualification_rules: string | null
           created_at: string | null
           form_settings: Json | null
           id: string
@@ -132,6 +133,7 @@ export type Database = {
           whatsapp_number: string | null
         }
         Insert: {
+          ai_qualification_rules?: string | null
           created_at?: string | null
           form_settings?: Json | null
           id?: string
@@ -145,6 +147,7 @@ export type Database = {
           whatsapp_number?: string | null
         }
         Update: {
+          ai_qualification_rules?: string | null
           created_at?: string | null
           form_settings?: Json | null
           id?: string

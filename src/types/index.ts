@@ -15,6 +15,7 @@ export interface Organization {
   whatsapp_instance?: string | null;
   whatsapp_number?: string | null;
   whatsapp_api_key?: string | null;
+  ai_qualification_rules?: string | null;
   form_settings?: FormSettings;
   created_at: string;
 }

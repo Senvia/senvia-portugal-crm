@@ -12,7 +12,8 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Copy, ExternalLink, Code, Shield, User, Building, Webhook, Send, Loader2, Link2, Check, Users, Palette, Eye, EyeOff, Save, Key, MessageCircle } from "lucide-react";
+import { Copy, ExternalLink, Code, Shield, User, Building, Webhook, Send, Loader2, Link2, Check, Users, Palette, Eye, EyeOff, Save, Key, MessageCircle, Brain } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Accordion,
   AccordionContent,
@@ -43,6 +44,9 @@ export default function Settings() {
   const [whatsappNumber, setWhatsappNumber] = useState('');
   const [whatsappApiKey, setWhatsappApiKey] = useState('');
   const [showWhatsappApiKey, setShowWhatsappApiKey] = useState(false);
+  
+  // AI Qualification Rules state
+  const [aiQualificationRules, setAiQualificationRules] = useState('');
 
   // Organization edit state
   const [orgName, setOrgName] = useState('');
@@ -67,7 +71,7 @@ export default function Settings() {
   }, [profile?.full_name]);
   const iframeCode = organization?.public_key ? `<iframe src="${publicFormUrl}" width="100%" height="500" frameborder="0"></iframe>` : '';
 
-  // Fetch current integrations data (webhook + whatsapp)
+  // Fetch current integrations data (webhook + whatsapp + AI rules)
   useEffect(() => {
     async function fetchIntegrations() {
       if (!organization?.id) return;
@@ -75,7 +79,7 @@ export default function Settings() {
       setIsLoadingIntegrations(true);
       const { data, error } = await supabase
         .from('organizations')
-        .select('webhook_url, whatsapp_instance, whatsapp_number, whatsapp_api_key')
+        .select('webhook_url, whatsapp_instance, whatsapp_number, whatsapp_api_key, ai_qualification_rules')
         .eq('id', organization.id)
         .single();
       
@@ -84,6 +88,7 @@ export default function Settings() {
         setWhatsappInstance(data.whatsapp_instance || '');
         setWhatsappNumber(data.whatsapp_number || '');
         setWhatsappApiKey(data.whatsapp_api_key || '');
+        setAiQualificationRules(data.ai_qualification_rules || '');
       }
       setIsLoadingIntegrations(false);
     }
@@ -108,6 +113,12 @@ export default function Settings() {
       whatsapp_instance: whatsappInstance.trim() || null,
       whatsapp_number: whatsappNumber.trim() || null,
       whatsapp_api_key: whatsappApiKey.trim() || null,
+    });
+  };
+
+  const handleSaveAiRules = () => {
+    updateOrganization.mutate({
+      ai_qualification_rules: aiQualificationRules.trim() || null,
     });
   };
 
@@ -490,6 +501,9 @@ export default function Settings() {
     "number": "+351912345678",
     "api_key": "xxx-api-key-xxx"
   },
+  "config": {
+    "ai_qualification_rules": "Classifica como HOT se..."
+  },
   "lead": {
     "id": "uuid",
     "name": "João Silva",
@@ -593,6 +607,55 @@ export default function Settings() {
 
                           <Button
                             onClick={handleSaveWhatsApp}
+                            disabled={updateOrganization.isPending}
+                          >
+                            {updateOrganization.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Guardar
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+
+                {/* Inteligência Artificial */}
+                <AccordionItem value="ai">
+                  <AccordionTrigger className="hover:no-underline">
+                    <div className="flex flex-col items-start gap-1">
+                      <div className="flex items-center gap-2">
+                        <Brain className="h-5 w-5" />
+                        <span className="font-medium">Inteligência Artificial</span>
+                      </div>
+                      <span className="text-xs text-muted-foreground font-normal">
+                        Configure as regras de qualificação automática de leads.
+                      </span>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="space-y-4 pt-4">
+                      {isLoadingIntegrations ? (
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <span className="text-sm">A carregar...</span>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="space-y-2">
+                            <Label htmlFor="ai-rules">Regras de Qualificação</Label>
+                            <Textarea
+                              id="ai-rules"
+                              placeholder={`Exemplo:\n\nClassifica como HOT se:\n- Lead mencionar urgência ou dor específica\n- Tiver orçamento definido\n- Quiser agendar para esta semana\n\nClassifica como WARM se:\n- Mostrar interesse mas sem urgência\n\nClassifica como COLD se:\n- Apenas pedir informações genéricas`}
+                              value={aiQualificationRules}
+                              onChange={(e) => setAiQualificationRules(e.target.value)}
+                              className="min-h-[200px] font-mono text-sm"
+                            />
+                            <p className="text-xs text-muted-foreground">
+                              Descreva aqui as regras para a IA decidir se um Lead é Quente, Morno ou Frio. Estas instruções serão enviadas para o n8n processar automaticamente.
+                            </p>
+                          </div>
+
+                          <Button
+                            onClick={handleSaveAiRules}
                             disabled={updateOrganization.isPending}
                           >
                             {updateOrganization.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

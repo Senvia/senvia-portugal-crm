@@ -12,6 +12,7 @@ interface UpdateOrganizationData {
   whatsapp_instance?: string | null;
   whatsapp_number?: string | null;
   whatsapp_api_key?: string | null;
+  ai_qualification_rules?: string | null;
   form_settings?: Json;
 }
 
@@ -65,10 +66,10 @@ export function useTestWebhook() {
         throw new Error('Organização não encontrada');
       }
 
-      // Fetch real WhatsApp data from organization
+      // Fetch real WhatsApp data and AI rules from organization
       const { data: orgData, error: orgError } = await supabase
         .from('organizations')
-        .select('whatsapp_instance, whatsapp_number, whatsapp_api_key')
+        .select('whatsapp_instance, whatsapp_number, whatsapp_api_key, ai_qualification_rules')
         .eq('id', organization.id)
         .single();
 
@@ -90,6 +91,9 @@ export function useTestWebhook() {
           number: orgData?.whatsapp_number || null,
           api_key: orgData?.whatsapp_api_key || null,
         } : null,
+        config: {
+          ai_qualification_rules: orgData?.ai_qualification_rules || null,
+        },
         lead: {
           id: 'test-lead-id',
           name: 'Lead de Teste',
