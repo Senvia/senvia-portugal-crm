@@ -132,8 +132,8 @@ export type Database = {
           slug: string
           webhook_url: string | null
           whatsapp_api_key: string | null
+          whatsapp_base_url: string | null
           whatsapp_instance: string | null
-          whatsapp_number: string | null
         }
         Insert: {
           ai_qualification_rules?: string | null
@@ -149,8 +149,8 @@ export type Database = {
           slug: string
           webhook_url?: string | null
           whatsapp_api_key?: string | null
+          whatsapp_base_url?: string | null
           whatsapp_instance?: string | null
-          whatsapp_number?: string | null
         }
         Update: {
           ai_qualification_rules?: string | null
@@ -166,8 +166,8 @@ export type Database = {
           slug?: string
           webhook_url?: string | null
           whatsapp_api_key?: string | null
+          whatsapp_base_url?: string | null
           whatsapp_instance?: string | null
-          whatsapp_number?: string | null
         }
         Relationships: []
       }

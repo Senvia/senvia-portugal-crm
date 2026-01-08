@@ -10,8 +10,8 @@ interface UpdateOrganizationData {
   name?: string;
   webhook_url?: string | null;
   whatsapp_instance?: string | null;
-  whatsapp_number?: string | null;
   whatsapp_api_key?: string | null;
+  whatsapp_base_url?: string | null;
   ai_qualification_rules?: string | null;
   form_settings?: Json;
   msg_template_hot?: string | null;
@@ -72,15 +72,13 @@ export function useTestWebhook() {
       // Fetch real WhatsApp data and AI rules from organization
       const { data: orgData, error: orgError } = await supabase
         .from('organizations')
-        .select('whatsapp_instance, whatsapp_number, whatsapp_api_key, ai_qualification_rules, form_settings')
+        .select('whatsapp_instance, whatsapp_api_key, whatsapp_base_url, ai_qualification_rules, form_settings, msg_template_hot, msg_template_warm, msg_template_cold')
         .eq('id', organization.id)
         .single();
 
       if (orgError) {
         console.error('Error fetching org data for webhook test:', orgError);
       }
-
-      const hasWhatsApp = orgData?.whatsapp_instance || orgData?.whatsapp_number || orgData?.whatsapp_api_key;
 
       // Gerar custom_data dinâmico baseado nos campos personalizados
       const generateTestCustomData = (formSettings: any) => {
@@ -119,13 +117,14 @@ export function useTestWebhook() {
           id: organization.id,
           name: organization.name,
         },
-        whatsapp: hasWhatsApp ? {
-          instance: orgData?.whatsapp_instance || null,
-          number: orgData?.whatsapp_number || null,
-          api_key: orgData?.whatsapp_api_key || null,
-        } : null,
         config: {
+          whatsapp_instance: orgData?.whatsapp_instance || null,
+          whatsapp_api_key: orgData?.whatsapp_api_key || null,
+          whatsapp_base_url: orgData?.whatsapp_base_url || null,
           ai_qualification_rules: orgData?.ai_qualification_rules || null,
+          msg_template_hot: orgData?.msg_template_hot || null,
+          msg_template_warm: orgData?.msg_template_warm || null,
+          msg_template_cold: orgData?.msg_template_cold || null,
         },
         lead: {
           id: 'test-lead-id',

@@ -40,8 +40,8 @@ export default function Settings() {
   const [isLoadingIntegrations, setIsLoadingIntegrations] = useState(true);
   
   // WhatsApp Business state
+  const [whatsappBaseUrl, setWhatsappBaseUrl] = useState('');
   const [whatsappInstance, setWhatsappInstance] = useState('');
-  const [whatsappNumber, setWhatsappNumber] = useState('');
   const [whatsappApiKey, setWhatsappApiKey] = useState('');
   const [showWhatsappApiKey, setShowWhatsappApiKey] = useState(false);
   
@@ -84,14 +84,14 @@ export default function Settings() {
       setIsLoadingIntegrations(true);
       const { data, error } = await supabase
         .from('organizations')
-        .select('webhook_url, whatsapp_instance, whatsapp_number, whatsapp_api_key, ai_qualification_rules, msg_template_hot, msg_template_warm, msg_template_cold')
+        .select('webhook_url, whatsapp_base_url, whatsapp_instance, whatsapp_api_key, ai_qualification_rules, msg_template_hot, msg_template_warm, msg_template_cold')
         .eq('id', organization.id)
         .single();
       
       if (!error && data) {
         setWebhookUrl(data.webhook_url || '');
+        setWhatsappBaseUrl(data.whatsapp_base_url || '');
         setWhatsappInstance(data.whatsapp_instance || '');
-        setWhatsappNumber(data.whatsapp_number || '');
         setWhatsappApiKey(data.whatsapp_api_key || '');
         setAiQualificationRules(data.ai_qualification_rules || '');
         setMsgTemplateHot(data.msg_template_hot || '');
@@ -118,8 +118,8 @@ export default function Settings() {
 
   const handleSaveWhatsApp = () => {
     updateOrganization.mutate({
+      whatsapp_base_url: whatsappBaseUrl.trim() || null,
       whatsapp_instance: whatsappInstance.trim() || null,
-      whatsapp_number: whatsappNumber.trim() || null,
       whatsapp_api_key: whatsappApiKey.trim() || null,
     });
   };
@@ -530,8 +530,29 @@ export default function Settings() {
                         </div>
                       ) : (
                         <>
+                          {/* Aviso informativo */}
+                          <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-3">
+                            <p className="text-sm text-amber-600 dark:text-amber-400">
+                              Dados de conexão da Instância do WhatsApp deste cliente.
+                            </p>
+                          </div>
+
                           <div className="space-y-2">
-                            <Label htmlFor="whatsapp-instance">Instância</Label>
+                            <Label htmlFor="whatsapp-base-url">URL do Servidor</Label>
+                            <Input
+                              id="whatsapp-base-url"
+                              type="url"
+                              placeholder="https://api.senvia.com"
+                              value={whatsappBaseUrl}
+                              onChange={(e) => setWhatsappBaseUrl(e.target.value)}
+                            />
+                            <p className="text-xs text-muted-foreground">
+                              Endereço do seu servidor Evolution API.
+                            </p>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label htmlFor="whatsapp-instance">Nome da Instância</Label>
                             <Input
                               id="whatsapp-instance"
                               placeholder="nome-da-instancia"
@@ -544,21 +565,7 @@ export default function Settings() {
                           </div>
 
                           <div className="space-y-2">
-                            <Label htmlFor="whatsapp-number">Número WhatsApp</Label>
-                            <Input
-                              id="whatsapp-number"
-                              type="tel"
-                              placeholder="+351912345678"
-                              value={whatsappNumber}
-                              onChange={(e) => setWhatsappNumber(e.target.value)}
-                            />
-                            <p className="text-xs text-muted-foreground">
-                              Número de telefone associado à conta WhatsApp Business.
-                            </p>
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label htmlFor="whatsapp-api-key">API Key</Label>
+                            <Label htmlFor="whatsapp-api-key">API Key da Instância</Label>
                             <div className="relative">
                               <Input
                                 id="whatsapp-api-key"
