@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
+import { APP_VERSION } from "@/lib/constants";
 import type { AppRole } from "@/types";
 
 const navItems = [
@@ -120,6 +121,13 @@ export function AppSidebar({ userName = "Utilizador", organizationName = "A Minh
               <LogOut className="h-4 w-4" />
             </button>
           </div>
+        </div>
+
+        {/* Version */}
+        <div className="px-4 py-2 text-center">
+          <span className="text-[10px] text-sidebar-muted/60">
+            Senvia OS v{APP_VERSION}
+          </span>
         </div>
       </div>
     </aside>
