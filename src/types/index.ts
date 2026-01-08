@@ -156,6 +156,7 @@ export interface FormSettings {
     description: string;
   };
   error_message: string;
+  submit_button_text: string;
   custom_fields: CustomField[];
 }
 
@@ -177,6 +178,7 @@ export const DEFAULT_FORM_SETTINGS: FormSettings = {
     description: 'Recebemos o seu contacto e entraremos em contacto brevemente.',
   },
   error_message: 'Não foi possível enviar o formulário. Tente novamente.',
+  submit_button_text: 'Enviar',
   custom_fields: [],
 };
 
@@ -198,6 +200,7 @@ export function migrateFormSettings(settings: any): FormSettings {
   if (settings?.fields?.name?.visible !== undefined) {
     return {
       mode: settings.mode || 'traditional',
+      submit_button_text: settings.submit_button_text || DEFAULT_FORM_SETTINGS.submit_button_text,
       ...settings,
       custom_fields: sanitizeCustomFields(settings.custom_fields),
     } as FormSettings;
@@ -221,6 +224,7 @@ export function migrateFormSettings(settings: any): FormSettings {
     },
     success_message: settings?.success_message || DEFAULT_FORM_SETTINGS.success_message,
     error_message: settings?.error_message || DEFAULT_FORM_SETTINGS.error_message,
+    submit_button_text: settings?.submit_button_text || DEFAULT_FORM_SETTINGS.submit_button_text,
     custom_fields: sanitizeCustomFields(settings?.custom_fields),
   };
 }

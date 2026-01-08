@@ -1,79 +1,81 @@
 import { motion } from "framer-motion";
-import { CheckCircle2, MessageCircle } from "lucide-react";
+import { CheckCircle, MessageCircle } from "lucide-react";
 
 interface SuccessScreenProps {
-  userName: string;
+  userName?: string;
+  title: string;
+  description: string;
 }
 
-export const SuccessScreen = ({ userName }: SuccessScreenProps) => {
+export const SuccessScreen = ({ userName, title, description }: SuccessScreenProps) => {
+  // Replace {name} placeholder with actual name
+  const formattedTitle = title.replace(/{name}/gi, userName || "");
+  const formattedDescription = description.replace(/{name}/gi, userName || "");
+
   return (
-    <div className="flex flex-col items-center justify-center text-center space-y-6 py-8">
+    <div className="text-center space-y-6 py-4">
+      {/* Success Animation */}
       <motion.div
         initial={{ scale: 0 }}
         animate={{ scale: 1 }}
         transition={{ 
-          type: "spring", 
-          stiffness: 200, 
-          damping: 15,
-          delay: 0.2 
+          type: "spring",
+          stiffness: 200,
+          damping: 15
         }}
-        className="relative"
+        className="relative mx-auto w-20 h-20"
       >
-        <motion.div
-          className="w-20 h-20 rounded-full bg-green-500/20 flex items-center justify-center"
-          animate={{ scale: [1, 1.1, 1] }}
-          transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
-        >
-          <CheckCircle2 className="h-12 w-12 text-green-500" />
-        </motion.div>
-        <motion.div
-          className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-[#25D366] flex items-center justify-center"
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          transition={{ delay: 0.5, type: "spring" }}
-        >
-          <MessageCircle className="h-4 w-4 text-white" />
-        </motion.div>
+        <div className="absolute inset-0 bg-green-500/20 rounded-full animate-ping" />
+        <div className="relative flex items-center justify-center w-full h-full bg-green-500/10 rounded-full">
+          <CheckCircle className="h-10 w-10 text-green-500" />
+        </div>
       </motion.div>
 
-      <motion.div 
-        className="space-y-3"
+      {/* WhatsApp Icon */}
+      <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.4 }}
+        transition={{ delay: 0.3 }}
+        className="flex justify-center"
       >
-        <h1 className="text-2xl md:text-3xl font-semibold text-foreground">
-          Enviado, {userName}!
-        </h1>
-        <p className="text-lg text-muted-foreground max-w-sm">
-          Verifique o seu WhatsApp em <span className="font-semibold text-green-500">10 segundos</span>.
-        </p>
+        <div className="bg-[#25D366]/10 p-3 rounded-full">
+          <MessageCircle className="h-6 w-6 text-[#25D366]" />
+        </div>
       </motion.div>
 
-      <motion.div
-        className="flex items-center gap-2 text-sm text-muted-foreground"
+      {/* Title */}
+      <motion.h2
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.4 }}
+        className="text-xl font-semibold text-foreground"
+      >
+        {formattedTitle}
+      </motion.h2>
+
+      {/* Description */}
+      <motion.p
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ delay: 0.8 }}
+        transition={{ delay: 0.5 }}
+        className="text-muted-foreground"
       >
-        <div className="flex space-x-1">
-          <motion.div
-            className="w-2 h-2 rounded-full bg-green-500"
-            animate={{ opacity: [0.3, 1, 0.3] }}
-            transition={{ repeat: Infinity, duration: 1, delay: 0 }}
-          />
-          <motion.div
-            className="w-2 h-2 rounded-full bg-green-500"
-            animate={{ opacity: [0.3, 1, 0.3] }}
-            transition={{ repeat: Infinity, duration: 1, delay: 0.2 }}
-          />
-          <motion.div
-            className="w-2 h-2 rounded-full bg-green-500"
-            animate={{ opacity: [0.3, 1, 0.3] }}
-            transition={{ repeat: Infinity, duration: 1, delay: 0.4 }}
-          />
-        </div>
-        <span>A preparar a sua mensagem</span>
+        {formattedDescription}
+      </motion.p>
+
+      {/* Pulsing indicator */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.6 }}
+        className="flex items-center justify-center gap-2 text-sm text-muted-foreground"
+      >
+        <motion.span
+          animate={{ opacity: [0.5, 1, 0.5] }}
+          transition={{ duration: 1.5, repeat: Infinity }}
+          className="w-2 h-2 bg-[#25D366] rounded-full"
+        />
+        A preparar mensagem...
       </motion.div>
     </div>
   );
