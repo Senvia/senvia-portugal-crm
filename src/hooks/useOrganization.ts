@@ -69,7 +69,7 @@ export function useTestWebhook() {
       // Fetch real WhatsApp data and AI rules from organization
       const { data: orgData, error: orgError } = await supabase
         .from('organizations')
-        .select('whatsapp_instance, whatsapp_number, whatsapp_api_key, ai_qualification_rules')
+        .select('whatsapp_instance, whatsapp_number, whatsapp_api_key, ai_qualification_rules, form_settings')
         .eq('id', organization.id)
         .single();
 
@@ -78,6 +78,39 @@ export function useTestWebhook() {
       }
 
       const hasWhatsApp = orgData?.whatsapp_instance || orgData?.whatsapp_number || orgData?.whatsapp_api_key;
+
+      // Gerar custom_data dinâmico baseado nos campos personalizados
+      const generateTestCustomData = (formSettings: any) => {
+        const customData: Record<string, any> = {
+          utm_source: 'facebook',
+          utm_campaign: 'campanha_teste',
+        };
+        
+        const customFields = formSettings?.custom_fields || [];
+        customFields.forEach((field: any) => {
+          if (!field.label) return;
+          
+          switch (field.type) {
+            case 'text':
+            case 'textarea':
+              customData[field.label] = 'Resposta de exemplo';
+              break;
+            case 'number':
+              customData[field.label] = 100;
+              break;
+            case 'select':
+              customData[field.label] = field.options?.[0] || 'Opção de exemplo';
+              break;
+            case 'checkbox':
+              customData[field.label] = true;
+              break;
+            default:
+              customData[field.label] = 'Valor de exemplo';
+          }
+        });
+        
+        return customData;
+      };
 
       const testPayload = {
         event: 'lead.created',
@@ -105,11 +138,7 @@ export function useTestWebhook() {
           value: 1500,
           notes: 'Mensagem de exemplo do lead',
           gdpr_consent: true,
-          custom_data: {
-            campo_exemplo: 'Valor de exemplo',
-            utm_source: 'facebook',
-            utm_campaign: 'campanha_teste',
-          },
+          custom_data: generateTestCustomData(orgData?.form_settings),
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         },
