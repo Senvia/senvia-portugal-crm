@@ -63,20 +63,6 @@ export const SuccessScreen = ({ userName, title, description }: SuccessScreenPro
         {formattedDescription}
       </motion.p>
 
-      {/* Pulsing indicator */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.6 }}
-        className="flex items-center justify-center gap-2 text-sm text-muted-foreground"
-      >
-        <motion.span
-          animate={{ opacity: [0.5, 1, 0.5] }}
-          transition={{ duration: 1.5, repeat: Infinity }}
-          className="w-2 h-2 bg-[#25D366] rounded-full"
-        />
-        A preparar mensagem...
-      </motion.div>
     </div>
   );
 };
