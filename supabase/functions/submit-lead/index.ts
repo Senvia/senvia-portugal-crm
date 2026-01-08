@@ -152,7 +152,18 @@ Deno.serve(async (req) => {
 
     // Dispatch webhook if configured (non-blocking)
     if (org.webhook_url) {
-      console.log('Dispatching webhook to:', org.webhook_url);
+      console.info(`Dispatching webhook to: ${org.webhook_url}`);
+      
+      // Check if any WhatsApp field is configured
+      const hasWhatsApp = org.whatsapp_instance || org.whatsapp_number || org.whatsapp_api_key;
+      
+      // Secure logging (never log full API key)
+      console.info(`WhatsApp configured: ${hasWhatsApp ? 'yes' : 'no'}`);
+      if (hasWhatsApp) {
+        console.info(`WhatsApp instance: ${org.whatsapp_instance || 'not set'}`);
+        console.info(`WhatsApp number: ${org.whatsapp_number || 'not set'}`);
+        console.info(`WhatsApp API key set: ${org.whatsapp_api_key ? 'yes' : 'no'}`);
+      }
       
       const webhookPayload = {
         event: 'lead.created',
@@ -161,10 +172,10 @@ Deno.serve(async (req) => {
           id: org.id,
           name: org.name,
         },
-        whatsapp: org.whatsapp_instance ? {
-          instance: org.whatsapp_instance,
-          number: org.whatsapp_number,
-          api_key: org.whatsapp_api_key,
+        whatsapp: hasWhatsApp ? {
+          instance: org.whatsapp_instance || null,
+          number: org.whatsapp_number || null,
+          api_key: org.whatsapp_api_key || null,
         } : null,
         lead: {
           id: lead.id,
@@ -190,7 +201,7 @@ Deno.serve(async (req) => {
         body: JSON.stringify(webhookPayload),
       })
         .then((res) => {
-          console.log('Webhook dispatched successfully, status:', res.status);
+          console.info(`Webhook dispatched successfully, status: ${res.status}`);
         })
         .catch((err) => {
           console.error('Webhook dispatch failed:', err.message);

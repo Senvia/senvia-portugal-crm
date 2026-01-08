@@ -61,18 +61,35 @@ export function useTestWebhook() {
         throw new Error('URL do webhook não definido');
       }
 
+      if (!organization?.id) {
+        throw new Error('Organização não encontrada');
+      }
+
+      // Fetch real WhatsApp data from organization
+      const { data: orgData, error: orgError } = await supabase
+        .from('organizations')
+        .select('whatsapp_instance, whatsapp_number, whatsapp_api_key')
+        .eq('id', organization.id)
+        .single();
+
+      if (orgError) {
+        console.error('Error fetching org data for webhook test:', orgError);
+      }
+
+      const hasWhatsApp = orgData?.whatsapp_instance || orgData?.whatsapp_number || orgData?.whatsapp_api_key;
+
       const testPayload = {
-        event: 'webhook.test',
+        event: 'lead.created',
         timestamp: new Date().toISOString(),
         organization: {
-          id: organization?.id,
-          name: organization?.name,
+          id: organization.id,
+          name: organization.name,
         },
-        whatsapp: {
-          instance: 'instancia-teste',
-          number: '+351912345678',
-          api_key: 'xxx-api-key-exemplo-xxx',
-        },
+        whatsapp: hasWhatsApp ? {
+          instance: orgData?.whatsapp_instance || null,
+          number: orgData?.whatsapp_number || null,
+          api_key: orgData?.whatsapp_api_key || null,
+        } : null,
         lead: {
           id: 'test-lead-id',
           name: 'Lead de Teste',
@@ -101,6 +118,10 @@ export function useTestWebhook() {
       });
 
       if (!response.ok) {
+        const isWebhookTest = webhookUrl.includes('/webhook-test/');
+        if (response.status === 404 && isWebhookTest) {
+          throw new Error('404_WEBHOOK_TEST');
+        }
         throw new Error(`Webhook retornou status ${response.status}`);
       }
 
@@ -112,13 +133,22 @@ export function useTestWebhook() {
         description: 'O webhook respondeu com sucesso!',
       });
     },
-    onError: (error) => {
+    onError: (error: Error) => {
       console.error('Webhook test failed:', error);
-      toast({
-        title: 'Erro no teste',
-        description: 'O webhook não respondeu corretamente. Verifique o URL.',
-        variant: 'destructive',
-      });
+      
+      if (error.message === '404_WEBHOOK_TEST') {
+        toast({
+          title: 'n8n não está a escutar',
+          description: 'O endpoint /webhook-test/ só funciona quando o workflow n8n está em modo Teste. Use a Production URL (/webhook/) para produção.',
+          variant: 'destructive',
+        });
+      } else {
+        toast({
+          title: 'Erro no teste',
+          description: 'O webhook não respondeu corretamente. Verifique o URL.',
+          variant: 'destructive',
+        });
+      }
     },
   });
 }
