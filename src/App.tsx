@@ -18,6 +18,7 @@ import InviteRegister from "./pages/InviteRegister";
 import ResetPassword from "./pages/ResetPassword";
 import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
+import Install from "./pages/Install";
 import NotFound from "./pages/NotFound";
 
 // Super Admin Pages
@@ -43,6 +44,7 @@ const App = () => (
             <Route path="/invite/:token" element={<InviteRegister />} />
             <Route path="/privacy" element={<Privacy />} />
             <Route path="/terms" element={<Terms />} />
+            <Route path="/install" element={<Install />} />
 
             {/* Protected Routes (Authenticated Users) */}
             <Route path="/dashboard" element={

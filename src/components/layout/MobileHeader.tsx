@@ -1,0 +1,34 @@
+import { Menu, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import senviaLogo from "@/assets/senvia-logo.png";
+
+interface MobileHeaderProps {
+  onMenuToggle: () => void;
+  isMenuOpen: boolean;
+  organizationName?: string;
+}
+
+export function MobileHeader({ onMenuToggle, isMenuOpen, organizationName = "Senvia OS" }: MobileHeaderProps) {
+  return (
+    <header className="fixed top-0 left-0 right-0 z-50 h-14 bg-background/95 backdrop-blur-md border-b border-border flex items-center justify-between px-4 safe-top">
+      <div className="flex items-center gap-3">
+        <img src={senviaLogo} alt="Senvia OS" className="h-8 w-8 object-contain rounded-lg" />
+        <div className="flex flex-col">
+          <span className="text-sm font-semibold text-foreground leading-tight">Senvia OS</span>
+          <span className="text-[10px] text-muted-foreground leading-tight truncate max-w-[150px]">
+            {organizationName}
+          </span>
+        </div>
+      </div>
+      
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={onMenuToggle}
+        className="h-9 w-9"
+      >
+        {isMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+      </Button>
+    </header>
+  );
+}

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { KanbanBoard } from "@/components/leads/KanbanBoard";
+import { ResponsiveKanban } from "@/components/leads/ResponsiveKanban";
 import { LeadDetailsModal } from "@/components/leads/LeadDetailsModal";
 import { AddLeadModal } from "@/components/leads/AddLeadModal";
 import { useAuth } from "@/contexts/AuthContext";
@@ -101,34 +101,34 @@ export default function Leads() {
 
   return (
     <AppLayout userName={profile?.full_name} organizationName={organization?.name}>
-      <div className="p-6 lg:p-8">
-        <div className="mb-6 space-y-4">
+      <div className="p-4 lg:p-8">
+        <div className="mb-4 lg:mb-6 space-y-3 lg:space-y-4">
           {/* Linha 1: Título + Pesquisa */}
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-foreground">Leads</h1>
-              <p className="text-muted-foreground">Gerencie os contactos da sua organização.</p>
+              <h1 className="text-xl lg:text-2xl font-bold text-foreground">Leads</h1>
+              <p className="text-sm text-muted-foreground hidden sm:block">Gerencie os contactos da sua organização.</p>
             </div>
             <div className="flex items-center gap-2 w-full sm:w-auto">
               <div className="relative flex-1 sm:w-64">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input placeholder="Pesquisar leads..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9" />
+                <Input placeholder="Pesquisar..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9 h-9 lg:h-10" />
               </div>
-              <Button onClick={() => setIsAddModalOpen(true)} className="shrink-0">
+              <Button onClick={() => setIsAddModalOpen(true)} className="shrink-0 h-9 lg:h-10">
                 <Plus className="h-4 w-4 sm:mr-2" />
                 <span className="hidden sm:inline">Adicionar</span>
               </Button>
             </div>
           </div>
 
-          {/* Linha 2: Filtros de Data + Status + Limpar */}
-          <div className="flex flex-wrap items-center gap-2">
+          {/* Linha 2: Filtros de Data + Status + Limpar - scrollable on mobile */}
+          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
             {/* Date Range Picker */}
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className={cn("h-8", dateRange.from && "border-primary")}>
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {dateRange.from ? format(dateRange.from, "dd/MM/yyyy", { locale: pt }) : "De"}
+                <Button variant="outline" size="sm" className={cn("h-8 shrink-0", dateRange.from && "border-primary")}>
+                  <CalendarIcon className="mr-1.5 h-3.5 w-3.5" />
+                  <span className="text-xs">{dateRange.from ? format(dateRange.from, "dd/MM", { locale: pt }) : "De"}</span>
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="start">
@@ -144,9 +144,9 @@ export default function Leads() {
 
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className={cn("h-8", dateRange.to && "border-primary")}>
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {dateRange.to ? format(dateRange.to, "dd/MM/yyyy", { locale: pt }) : "Até"}
+                <Button variant="outline" size="sm" className={cn("h-8 shrink-0", dateRange.to && "border-primary")}>
+                  <CalendarIcon className="mr-1.5 h-3.5 w-3.5" />
+                  <span className="text-xs">{dateRange.to ? format(dateRange.to, "dd/MM", { locale: pt }) : "Até"}</span>
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="start">
@@ -160,14 +160,14 @@ export default function Leads() {
               </PopoverContent>
             </Popover>
 
-            <div className="h-4 w-px bg-border mx-1 hidden sm:block" />
+            <div className="h-4 w-px bg-border shrink-0 hidden sm:block" />
 
             {/* Status Filter Badges */}
             {KANBAN_COLUMNS.map((status) => (
               <Badge
                 key={status}
                 variant={statusFilter.includes(status) ? "default" : "outline"}
-                className="cursor-pointer transition-colors hover:bg-primary/10"
+                className="cursor-pointer transition-colors hover:bg-primary/10 shrink-0 text-xs"
                 onClick={() => toggleStatus(status)}
               >
                 {STATUS_LABELS[status]}
@@ -176,15 +176,15 @@ export default function Leads() {
 
             {/* Clear Filters */}
             {hasActiveFilters && (
-              <Button variant="ghost" size="sm" onClick={clearFilters} className="h-8 text-muted-foreground hover:text-foreground">
-                <X className="mr-1 h-4 w-4" />
-                Limpar
+              <Button variant="ghost" size="sm" onClick={clearFilters} className="h-8 text-muted-foreground hover:text-foreground shrink-0">
+                <X className="mr-1 h-3.5 w-3.5" />
+                <span className="text-xs">Limpar</span>
               </Button>
             )}
           </div>
         </div>
 
-        <div className="rounded-xl border bg-card p-4">
+        <div className="rounded-xl border bg-card p-3 lg:p-4">
           {isLoading ? (
             <div className="flex h-64 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
           ) : filteredLeads.length === 0 && searchQuery ? (
@@ -198,7 +198,7 @@ export default function Leads() {
               <p className="text-lg font-medium">Sem leads por agora</p>
             </div>
           ) : (
-            <KanbanBoard leads={filteredLeads} onStatusChange={handleStatusChange} onTemperatureChange={handleTemperatureChange} onViewDetails={handleViewDetails} onDelete={handleDelete} />
+            <ResponsiveKanban leads={filteredLeads} onStatusChange={handleStatusChange} onTemperatureChange={handleTemperatureChange} onViewDetails={handleViewDetails} onDelete={handleDelete} />
           )}
         </div>
 
