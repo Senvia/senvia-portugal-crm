@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { MetricCard } from "@/components/dashboard/MetricCard";
-import { KanbanBoard } from "@/components/leads/KanbanBoard";
+import { ResponsiveKanban } from "@/components/leads/ResponsiveKanban";
 import { LeadDetailsModal } from "@/components/leads/LeadDetailsModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLeads, useLeadStats, useUpdateLeadStatus, useDeleteLead, useUpdateLead } from "@/hooks/useLeads";
@@ -87,7 +87,7 @@ export default function Dashboard() {
               <p className="text-sm">Os novos leads aparecerão aqui automaticamente.</p>
             </div>
           ) : (
-            <KanbanBoard leads={leads} onStatusChange={handleStatusChange} onTemperatureChange={handleTemperatureChange} onViewDetails={handleViewDetails} onDelete={handleDelete} />
+            <ResponsiveKanban leads={leads} onStatusChange={handleStatusChange} onTemperatureChange={handleTemperatureChange} onViewDetails={handleViewDetails} onDelete={handleDelete} />
           )}
         </div>
 
