@@ -231,6 +231,9 @@ const ConversationalLeadForm = () => {
     // Dynamic field step
     const isLastStep = currentStep === totalSteps - 1;
 
+    // Show name only on the first step after welcome (step 1)
+    const isFirstStepAfterWelcome = currentStep === 1;
+
     return (
       <DynamicStep
         field={{
@@ -243,6 +246,7 @@ const ConversationalLeadForm = () => {
           placeholder: step.placeholder,
         }}
         userName={getFirstName(formData.welcome || formData.name)}
+        showUserName={isFirstStepAfterWelcome}
         onNext={(value) => handleStepComplete(step.key, value)}
         isSubmitting={isSubmitting}
         submitButtonText={settings.submit_button_text}

@@ -19,6 +19,7 @@ interface DynamicStepProps {
     placeholder?: string;
   };
   userName?: string;
+  showUserName?: boolean;
   onNext: (value: string) => void;
   isSubmitting?: boolean;
   submitButtonText?: string;
@@ -28,6 +29,7 @@ interface DynamicStepProps {
 export const DynamicStep = ({ 
   field, 
   userName, 
+  showUserName = false,
   onNext, 
   isSubmitting, 
   submitButtonText = "Continuar",
@@ -61,7 +63,7 @@ export const DynamicStep = ({
           animate={{ opacity: 1, y: 0 }}
           className="text-lg font-medium text-foreground text-center"
         >
-          {userName ? `${userName}, ` : ""}{field.label}
+          {showUserName && userName ? `Prazer, ${userName}! ` : ""}{field.label}
         </motion.p>
 
         <motion.div
@@ -92,7 +94,7 @@ export const DynamicStep = ({
         animate={{ opacity: 1, y: 0 }}
         className="text-lg font-medium text-foreground text-center"
       >
-        {userName ? `${userName}, ` : ""}{field.label}
+        {showUserName && userName ? `Prazer, ${userName}! ` : ""}{field.label}
       </motion.p>
 
       <motion.div
