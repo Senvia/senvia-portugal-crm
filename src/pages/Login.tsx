@@ -27,6 +27,9 @@ const signupSchema = z.object({
     .min(2, 'O slug deve ter pelo menos 2 caracteres')
     .max(50, 'O slug deve ter no máximo 50 caracteres')
     .regex(/^[a-z0-9-]+$/, 'O slug só pode conter letras minúsculas, números e hífens'),
+  registrationCode: z.string().refine((val) => val === '4330', {
+    message: 'Código de registo inválido',
+  }),
 }).refine((data) => data.password === data.confirmPassword, {
   message: 'As palavras-passe não coincidem',
   path: ['confirmPassword'],
@@ -67,6 +70,7 @@ export default function Login() {
   const [organizationName, setOrganizationName] = useState('');
   const [organizationSlug, setOrganizationSlug] = useState('');
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
+  const [registrationCode, setRegistrationCode] = useState('');
   
   // Slug availability state
   const [isCheckingSlug, setIsCheckingSlug] = useState(false);
@@ -165,6 +169,7 @@ export default function Login() {
       confirmPassword: signupConfirmPassword,
       organizationName,
       organizationSlug,
+      registrationCode,
     });
     
     if (!result.success) {
@@ -474,9 +479,27 @@ export default function Login() {
                         <p className="text-xs text-red-400">Este slug já está em uso</p>
                       )}
                     </div>
+                    
+                    <div className="space-y-2 mt-3">
+                      <Label htmlFor="registration-code" className="text-slate-300">
+                        Código de Registo
+                      </Label>
+                      <Input
+                        id="registration-code"
+                        type="text"
+                        placeholder="Insira o código"
+                        value={registrationCode}
+                        onChange={(e) => setRegistrationCode(e.target.value)}
+                        className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
+                        required
+                      />
+                      <p className="text-xs text-slate-500">
+                        Precisa de um código para se registar. Contacte-nos para obter o seu.
+                      </p>
+                    </div>
                   </div>
 
-                  <Button 
+                  <Button
                     type="submit" 
                     className="w-full bg-primary hover:bg-primary/90"
                     disabled={isLoading || isSlugAvailable === false}
