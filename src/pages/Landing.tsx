@@ -50,7 +50,7 @@ export default function Landing() {
             <span className="text-xl font-bold text-white tracking-tight">SENVIA OS</span>
           </Link>
           
-          <Button variant="outline" className="border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white" asChild>
+          <Button variant="outline" className="border-primary/50 bg-primary/10 text-white hover:bg-primary/20 hover:border-primary" asChild>
             <Link to="/login">Área do Cliente</Link>
           </Button>
         </div>
