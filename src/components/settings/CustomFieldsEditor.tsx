@@ -258,7 +258,7 @@ export function CustomFieldsEditor({ settings, onUpdateSettings }: CustomFieldsE
         <Input
           value={field.label || ''}
           onChange={(e) => updateField(field.id, { label: e.target.value })}
-          className="flex-1 min-w-0 h-9"
+          className="flex-1 min-w-[140px] h-9"
           placeholder="Label do campo"
           maxLength={50}
         />
@@ -277,8 +277,46 @@ export function CustomFieldsEditor({ settings, onUpdateSettings }: CustomFieldsE
           {field.required ? 'Obrigatório' : 'Opcional'}
         </Badge>
 
-        {/* Actions - always visible on mobile, hover on desktop */}
-        <div className="flex items-center gap-0.5 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+        {/* Actions - Mobile: always visible */}
+        <div className="flex items-center gap-0.5 sm:hidden">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => moveField(field.id, 'up')}
+            disabled={idx === 0}
+          >
+            <ChevronUp className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => moveField(field.id, 'down')}
+            disabled={idx === sortedCustomFields.length - 1}
+          >
+            <ChevronDown className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => setEditingField(field)}
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+            onClick={() => removeField(field.id)}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+
+        {/* Actions - Desktop: hidden until hover (display:none to not occupy space) */}
+        <div className="hidden items-center gap-0.5 sm:group-hover:flex">
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
