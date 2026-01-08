@@ -211,7 +211,7 @@ export default function Landing() {
                 </div>
                 <h3 className="text-xl font-semibold text-white mb-3">Receção & Análise</h3>
                 <p className="text-slate-400 text-sm leading-relaxed">
-                  O lead preenche o formulário. O nosso sistema lê as respostas e coloca uma <strong className="text-primary">"Etiqueta de Temperatura"</strong> (Hot, Warm, Cold).
+                  O lead preenche o formulário. O nosso sistema lê as respostas e coloca uma <strong className="text-primary">"Etiqueta de Temperatura"</strong> (Quente, Morno, Frio).
                 </p>
               </div>
               {/* Connector Line - Hidden on mobile */}
