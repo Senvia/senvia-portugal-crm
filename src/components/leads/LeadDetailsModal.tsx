@@ -157,14 +157,21 @@ export function LeadDetailsModal({
   // Sync state when lead changes (but not while editing)
   useEffect(() => {
     if (lead) {
+      // Only sync value if not editing AND the database value actually changed
       if (!isEditingValue) {
-        setEditValue(lead.value ? formatNumberWithSpaces(lead.value) : "");
+        const currentNumValue = parseFormattedNumber(editValue);
+        const leadNumValue = lead.value ? Number(lead.value) : null;
+        
+        // Only update if values are different (avoids resetting during mutation)
+        if (currentNumValue !== leadNumValue) {
+          setEditValue(lead.value ? formatNumberWithSpaces(lead.value) : "");
+        }
       }
       if (!isEditingNotes) {
         setEditNotes(lead.notes || "");
       }
     }
-  }, [lead, isEditingValue, isEditingNotes]);
+  }, [lead, isEditingValue, isEditingNotes, editValue]);
 
   if (!lead) return null;
 
@@ -180,9 +187,13 @@ export function LeadDetailsModal({
 
   const handleValueBlur = () => {
     const numValue = parseFormattedNumber(editValue);
-    if (numValue !== lead.value) {
+    // Compare with type conversion to ensure consistent comparison
+    const currentValue = lead.value ? Number(lead.value) : null;
+    
+    if (numValue !== currentValue) {
       handleFieldSave("value", numValue);
     }
+    setIsEditingValue(false);
   };
 
   const handleNotesBlur = () => {
