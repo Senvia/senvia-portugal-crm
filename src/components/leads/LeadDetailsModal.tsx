@@ -287,10 +287,7 @@ export function LeadDetailsModal({
                 value={editValue}
                 onChange={handleValueChange}
                 onFocus={() => setIsEditingValue(true)}
-                onBlur={() => {
-                  handleValueBlur();
-                  setIsEditingValue(false);
-                }}
+                onBlur={handleValueBlur}
                 className="pl-8"
               />
             </div>
