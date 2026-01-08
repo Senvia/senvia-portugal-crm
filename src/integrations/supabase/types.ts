@@ -27,6 +27,7 @@ export type Database = {
           phone: string
           source: string | null
           status: string | null
+          temperature: string | null
           updated_at: string | null
           value: number | null
         }
@@ -42,6 +43,7 @@ export type Database = {
           phone: string
           source?: string | null
           status?: string | null
+          temperature?: string | null
           updated_at?: string | null
           value?: number | null
         }
@@ -57,6 +59,7 @@ export type Database = {
           phone?: string
           source?: string | null
           status?: string | null
+          temperature?: string | null
           updated_at?: string | null
           value?: number | null
         }

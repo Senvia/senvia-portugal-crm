@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { Lead, LeadStatus, STATUS_LABELS, KANBAN_COLUMNS } from "@/types";
+import { Lead, LeadStatus, LeadTemperature, STATUS_LABELS, KANBAN_COLUMNS } from "@/types";
 import { LeadCard } from "./LeadCard";
 import { cn } from "@/lib/utils";
 
 interface KanbanBoardProps {
   leads: Lead[];
   onStatusChange: (leadId: string, newStatus: LeadStatus) => void;
+  onTemperatureChange: (leadId: string, temperature: LeadTemperature) => void;
   onViewDetails: (lead: Lead) => void;
   onDelete: (leadId: string) => void;
 }
@@ -26,7 +27,7 @@ const columnBadgeColors: Record<LeadStatus, string> = {
   lost: "bg-muted text-muted-foreground",
 };
 
-export function KanbanBoard({ leads, onStatusChange, onViewDetails, onDelete }: KanbanBoardProps) {
+export function KanbanBoard({ leads, onStatusChange, onTemperatureChange, onViewDetails, onDelete }: KanbanBoardProps) {
   const [draggedLead, setDraggedLead] = useState<string | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<LeadStatus | null>(null);
 
@@ -101,6 +102,7 @@ export function KanbanBoard({ leads, onStatusChange, onViewDetails, onDelete }: 
                   <LeadCard
                     lead={lead}
                     onStatusChange={onStatusChange}
+                    onTemperatureChange={onTemperatureChange}
                     onViewDetails={onViewDetails}
                     onDelete={onDelete}
                     isDragging={draggedLead === lead.id}

@@ -14,7 +14,7 @@ import { format, endOfDay } from "date-fns";
 import { pt } from "date-fns/locale";
 import { normalizeString, cn } from "@/lib/utils";
 import type { Lead } from "@/types";
-import { LeadStatus, KANBAN_COLUMNS, STATUS_LABELS } from "@/types";
+import { LeadStatus, LeadTemperature, KANBAN_COLUMNS, STATUS_LABELS } from "@/types";
 
 export default function Leads() {
   const { profile, organization } = useAuth();
@@ -78,6 +78,10 @@ export default function Leads() {
 
   const handleStatusChange = (leadId: string, newStatus: LeadStatus) => {
     updateStatus.mutate({ leadId, status: newStatus });
+  };
+
+  const handleTemperatureChange = (leadId: string, temperature: LeadTemperature) => {
+    updateLead.mutate({ leadId, updates: { temperature } });
   };
 
   const handleViewDetails = (lead: Lead) => {
@@ -186,7 +190,7 @@ export default function Leads() {
               <p className="text-lg font-medium">Sem leads por agora</p>
             </div>
           ) : (
-            <KanbanBoard leads={filteredLeads} onStatusChange={handleStatusChange} onViewDetails={handleViewDetails} onDelete={handleDelete} />
+            <KanbanBoard leads={filteredLeads} onStatusChange={handleStatusChange} onTemperatureChange={handleTemperatureChange} onViewDetails={handleViewDetails} onDelete={handleDelete} />
           )}
         </div>
 
