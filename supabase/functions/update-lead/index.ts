@@ -67,6 +67,9 @@ Deno.serve(async (req) => {
       updates: Object.keys(body.updates || {})
     }));
 
+    // UUID validation regex
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
     // Validate required fields
     if (!body.lead_id) {
       return new Response(
@@ -75,9 +78,31 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Validate lead_id is a valid UUID
+    if (!UUID_REGEX.test(body.lead_id)) {
+      return new Response(
+        JSON.stringify({ 
+          error: 'Invalid lead_id format',
+          details: 'lead_id must be a valid UUID (e.g., 550e8400-e29b-41d4-a716-446655440000)'
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     if (!body.organization_id) {
       return new Response(
         JSON.stringify({ error: 'organization_id is required' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Validate organization_id is a valid UUID
+    if (!UUID_REGEX.test(body.organization_id)) {
+      return new Response(
+        JSON.stringify({ 
+          error: 'Invalid organization_id format',
+          details: 'organization_id must be a valid UUID'
+        }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
