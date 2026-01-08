@@ -81,10 +81,7 @@ export function useTestWebhook() {
 
       // Gerar custom_data dinâmico baseado nos campos personalizados
       const generateTestCustomData = (formSettings: any) => {
-        const customData: Record<string, any> = {
-          utm_source: 'facebook',
-          utm_campaign: 'campanha_teste',
-        };
+        const customData: Record<string, any> = {};
         
         const customFields = formSettings?.custom_fields || [];
         customFields.forEach((field: any) => {
@@ -141,6 +138,13 @@ export function useTestWebhook() {
           custom_data: generateTestCustomData(orgData?.form_settings),
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
+        },
+        utm: {
+          source: 'facebook',
+          campaign: 'campanha_teste',
+          medium: 'cpc',
+          term: null,
+          content: null,
         },
       };
 
