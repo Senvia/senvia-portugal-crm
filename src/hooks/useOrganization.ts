@@ -14,6 +14,9 @@ interface UpdateOrganizationData {
   whatsapp_api_key?: string | null;
   ai_qualification_rules?: string | null;
   form_settings?: Json;
+  msg_template_hot?: string | null;
+  msg_template_warm?: string | null;
+  msg_template_cold?: string | null;
 }
 
 export function useUpdateOrganization() {
