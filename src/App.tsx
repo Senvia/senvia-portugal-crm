@@ -15,6 +15,7 @@ import Dashboard from "./pages/Dashboard";
 import Leads from "./pages/Leads";
 import Settings from "./pages/Settings";
 import PublicLeadForm from "./pages/PublicLeadForm";
+import ConversationalLeadForm from "./pages/ConversationalLeadForm";
 import InviteRegister from "./pages/InviteRegister";
 import ResetPassword from "./pages/ResetPassword";
 import Privacy from "./pages/Privacy";
@@ -43,6 +44,7 @@ const App = () => (
             <Route path="/login" element={<Login />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/p/:public_key" element={<PublicLeadForm />} />
+            <Route path="/c/:public_key" element={<ConversationalLeadForm />} />
             <Route path="/invite/:token" element={<InviteRegister />} />
             <Route path="/privacy" element={<Privacy />} />
             <Route path="/terms" element={<Terms />} />
