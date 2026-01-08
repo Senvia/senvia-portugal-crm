@@ -1,349 +1,506 @@
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { 
-  Users, 
-  MessageSquare, 
-  BarChart3, 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { 
   CheckCircle, 
-  ArrowRight,
-  Sparkles,
-  Shield,
-  Clock
+  Clock,
+  Trash2,
+  Frown,
+  Zap,
+  Brain,
+  Crown,
+  Stethoscope,
+  HardHat,
+  Home,
+  ArrowDown
 } from 'lucide-react';
+import { useState } from 'react';
 import senviaLogo from "@/assets/senvia-logo.png";
 
 export default function Landing() {
+  const [formData, setFormData] = useState({
+    empresa: '',
+    responsavel: '',
+    telemovel: '',
+    email: '',
+    tipoNegocio: ''
+  });
+
+  const scrollToContacto = () => {
+    const element = document.getElementById('contacto');
+    element?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    // TODO: Integrar com sistema de leads
+    console.log('Form submitted:', formData);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
-      {/* Header */}
+      {/* Header - Simple & Clean */}
       <header className="border-b border-slate-800/50 backdrop-blur-lg sticky top-0 z-50 bg-slate-950/80">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2">
-            <img src={senviaLogo} alt="SENVIA" className="w-8 h-8 object-contain rounded-lg" />
-            <span className="text-xl font-bold text-white tracking-tight">SENVIA</span>
+            <img src={senviaLogo} alt="SENVIA OS" className="w-8 h-8 object-contain rounded-lg" />
+            <span className="text-xl font-bold text-white tracking-tight">SENVIA OS</span>
           </Link>
           
-          <nav className="hidden md:flex items-center gap-8">
-            <a href="#funcionalidades" className="text-sm text-slate-400 hover:text-white transition-colors">
-              Funcionalidades
-            </a>
-            <a href="#precos" className="text-sm text-slate-400 hover:text-white transition-colors">
-              Preços
-            </a>
-          </nav>
-          
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" className="text-slate-300 hover:text-white hover:bg-slate-800" asChild>
-              <Link to="/login">Entrar</Link>
-            </Button>
-            <Button className="bg-primary hover:bg-primary/90" asChild>
-              <Link to="/login">Agendar Demo</Link>
-            </Button>
-          </div>
+          <Button variant="outline" className="border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white" asChild>
+            <Link to="/login">Área do Cliente</Link>
+          </Button>
         </div>
       </header>
 
-      {/* Hero Section */}
-      <section className="py-24 md:py-32 relative overflow-hidden">
+      {/* Hero Section - A Promessa Única */}
+      <section className="py-16 md:py-24 lg:py-32 relative overflow-hidden">
         {/* Background glow */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[600px] bg-primary/20 rounded-full blur-[150px] pointer-events-none" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] bg-primary/15 rounded-full blur-[120px] pointer-events-none" />
         
         <div className="container mx-auto px-4 relative">
-          <div className="max-w-4xl mx-auto text-center">
-            <Badge className="mb-6 bg-primary/10 text-primary border-primary/20 hover:bg-primary/20">
-              <Sparkles className="w-3 h-3 mr-1" />
-              Mais de 50 empresas portuguesas confiam em nós
-            </Badge>
-            
-            <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold text-white mb-6 leading-tight">
-              O Sistema Operativo das{' '}
+          <div className="grid lg:grid-cols-2 gap-12 items-center">
+            {/* Left - Copy */}
+            <div className="text-center lg:text-left">
+              <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight">
+                Pare de Perder Dinheiro com Leads que{' '}
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-blue-400">
+                  Ninguém Responde.
+                </span>
+              </h1>
+              
+              <p className="text-base sm:text-lg md:text-xl text-slate-400 mb-8 leading-relaxed">
+                O Senvia OS atende os seus clientes no WhatsApp em <strong className="text-white">10 segundos</strong>, separa os Curiosos dos Compradores e entrega leads prontos para fechar à sua equipa.
+              </p>
+              
+              <Button 
+                size="lg" 
+                className="bg-primary hover:bg-primary/90 text-base px-6 sm:px-8 py-6 h-auto text-sm sm:text-base"
+                onClick={scrollToContacto}
+              >
+                QUERO AUTOMATIZAR O MEU ATENDIMENTO
+                <ArrowDown className="ml-2 w-4 h-4" />
+              </Button>
+            </div>
+
+            {/* Right - Phone Mockup */}
+            <div className="flex justify-center lg:justify-end">
+              <div className="relative w-[280px] sm:w-[320px]">
+                {/* Phone Frame */}
+                <div className="bg-slate-800 rounded-[2.5rem] p-3 shadow-2xl border border-slate-700">
+                  {/* Phone Screen */}
+                  <div className="bg-slate-900 rounded-[2rem] overflow-hidden">
+                    {/* Status Bar */}
+                    <div className="bg-slate-800 px-6 py-2 flex justify-between items-center">
+                      <span className="text-white text-xs">9:41</span>
+                      <div className="flex gap-1">
+                        <div className="w-4 h-2 bg-white/50 rounded-sm"></div>
+                        <div className="w-4 h-2 bg-white rounded-sm"></div>
+                      </div>
+                    </div>
+                    
+                    {/* WhatsApp Header */}
+                    <div className="bg-[#075E54] px-4 py-3 flex items-center gap-3">
+                      <div className="w-10 h-10 bg-slate-300 rounded-full flex items-center justify-center">
+                        <Stethoscope className="w-5 h-5 text-slate-600" />
+                      </div>
+                      <div>
+                        <p className="text-white font-medium text-sm">Clínica Dr. João</p>
+                        <p className="text-green-200 text-xs">online</p>
+                      </div>
+                    </div>
+                    
+                    {/* Chat Messages */}
+                    <div className="bg-[#0B141A] p-4 min-h-[280px] space-y-3">
+                      {/* Incoming Message */}
+                      <div className="bg-[#202C33] rounded-lg rounded-tl-none p-3 max-w-[85%] animate-fade-in">
+                        <p className="text-white text-sm">
+                          Olá <strong>Carlos</strong>! 👋
+                        </p>
+                        <p className="text-white text-sm mt-1">
+                          O Dr. João viu a sua mensagem e vai contactá-lo em breve.
+                        </p>
+                        <p className="text-white text-sm mt-2">
+                          Enquanto isso, pode confirmar o seu interesse em <strong>Implantes Dentários</strong>?
+                        </p>
+                        <p className="text-slate-400 text-[10px] text-right mt-1">09:41</p>
+                      </div>
+                      
+                      {/* Outgoing Message */}
+                      <div className="bg-[#005C4B] rounded-lg rounded-tr-none p-3 max-w-[75%] ml-auto">
+                        <p className="text-white text-sm">Sim, quero agendar consulta! 🦷</p>
+                        <p className="text-slate-300 text-[10px] text-right mt-1">09:41 ✓✓</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Glow effect behind phone */}
+                <div className="absolute -z-10 inset-0 bg-gradient-to-br from-primary/30 to-green-500/20 blur-3xl scale-110"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* O Problema - Agitação */}
+      <section className="py-16 md:py-24 bg-slate-900/50 border-y border-slate-800/50">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-12 md:mb-16">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-4">
+              A sua equipa é humana.{' '}
+              <span className="text-slate-400">Eles não conseguem estar em todo o lado.</span>
+            </h2>
+          </div>
+
+          <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-6 md:gap-8 max-w-5xl mx-auto">
+            {/* O Vácuo */}
+            <Card className="bg-slate-800/50 border-slate-700 hover:border-red-500/50 transition-colors group">
+              <CardContent className="pt-6 text-center">
+                <div className="w-16 h-16 bg-red-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:bg-red-500/20 transition-colors">
+                  <Clock className="w-8 h-8 text-red-400" />
+                </div>
+                <h3 className="text-xl font-semibold text-white mb-3">O Vácuo</h3>
+                <p className="text-slate-400 text-sm leading-relaxed">
+                  O cliente chama às 19h, ninguém responde, ele fecha com o concorrente às <strong className="text-red-400">19h10</strong>.
+                </p>
+              </CardContent>
+            </Card>
+
+            {/* O Lixo */}
+            <Card className="bg-slate-800/50 border-slate-700 hover:border-orange-500/50 transition-colors group">
+              <CardContent className="pt-6 text-center">
+                <div className="w-16 h-16 bg-orange-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:bg-orange-500/20 transition-colors">
+                  <Trash2 className="w-8 h-8 text-orange-400" />
+                </div>
+                <h3 className="text-xl font-semibold text-white mb-3">O Lixo</h3>
+                <p className="text-slate-400 text-sm leading-relaxed">
+                  A sua rececionista perde <strong className="text-orange-400">3 horas por dia</strong> a falar com curiosos que não têm dinheiro.
+                </p>
+              </CardContent>
+            </Card>
+
+            {/* A Demora */}
+            <Card className="bg-slate-800/50 border-slate-700 hover:border-yellow-500/50 transition-colors group sm:col-span-2 md:col-span-1 sm:max-w-md sm:mx-auto md:max-w-none">
+              <CardContent className="pt-6 text-center">
+                <div className="w-16 h-16 bg-yellow-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:bg-yellow-500/20 transition-colors">
+                  <Frown className="w-8 h-8 text-yellow-400" />
+                </div>
+                <h3 className="text-xl font-semibold text-white mb-3">A Demora</h3>
+                <p className="text-slate-400 text-sm leading-relaxed">
+                  Demorar <strong className="text-yellow-400">4 horas</strong> a responder esfria o interesse de qualquer comprador.
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </section>
+
+      {/* A Solução - Como Funciona */}
+      <section className="py-16 md:py-24">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-12 md:mb-16">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-4">
+              Transforme o seu WhatsApp numa{' '}
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-blue-400">
-                Empresas de Serviços
+                Máquina de Vendas 24/7.
               </span>
-            </h1>
-            
-            <p className="text-lg md:text-xl text-slate-400 mb-10 max-w-2xl mx-auto leading-relaxed">
-              CRM inteligente com automação WhatsApp e relatórios em tempo real. 
-              Ideal para Clínicas, Imobiliárias e Consultórios em Portugal.
-            </p>
-            
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Button size="lg" className="bg-primary hover:bg-primary/90 text-base px-8" asChild>
-                <Link to="/login?tab=signup">
-                  Começar Gratuitamente
-                  <ArrowRight className="ml-2 w-4 h-4" />
-                </Link>
+            </h2>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-6 md:gap-8 max-w-5xl mx-auto">
+            {/* Passo 1 */}
+            <div className="relative">
+              <div className="text-center">
+                <div className="w-12 h-12 bg-primary text-white rounded-full flex items-center justify-center mx-auto mb-4 text-xl font-bold">
+                  1
+                </div>
+                <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                  <Zap className="w-8 h-8 text-primary" />
+                </div>
+                <h3 className="text-xl font-semibold text-white mb-3">Receção Imediata</h3>
+                <p className="text-slate-400 text-sm leading-relaxed">
+                  O lead preenche o formulário e recebe um WhatsApp personalizado em <strong className="text-primary">segundos</strong>. O concorrente nem teve tempo de abrir o email.
+                </p>
+              </div>
+              {/* Connector Line - Hidden on mobile */}
+              <div className="hidden md:block absolute top-10 left-full w-full h-[2px] bg-gradient-to-r from-primary/50 to-transparent -translate-x-1/2"></div>
+            </div>
+
+            {/* Passo 2 */}
+            <div className="relative">
+              <div className="text-center">
+                <div className="w-12 h-12 bg-primary text-white rounded-full flex items-center justify-center mx-auto mb-4 text-xl font-bold">
+                  2
+                </div>
+                <div className="w-16 h-16 bg-purple-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                  <Brain className="w-8 h-8 text-purple-400" />
+                </div>
+                <h3 className="text-xl font-semibold text-white mb-3">Inteligência Artificial</h3>
+                <p className="text-slate-400 text-sm leading-relaxed">
+                  O nosso "<strong className="text-purple-400">Cérebro Digital</strong>" conversa com o cliente e classifica: É Urgente (Hot)? É Curioso (Cold)?
+                </p>
+              </div>
+              {/* Connector Line - Hidden on mobile */}
+              <div className="hidden md:block absolute top-10 left-full w-full h-[2px] bg-gradient-to-r from-purple-500/50 to-transparent -translate-x-1/2"></div>
+            </div>
+
+            {/* Passo 3 */}
+            <div className="text-center">
+              <div className="w-12 h-12 bg-primary text-white rounded-full flex items-center justify-center mx-auto mb-4 text-xl font-bold">
+                3
+              </div>
+              <div className="w-16 h-16 bg-green-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <Crown className="w-8 h-8 text-green-400" />
+              </div>
+              <h3 className="text-xl font-semibold text-white mb-3">Entrega VIP</h3>
+              <p className="text-slate-400 text-sm leading-relaxed">
+                A sua equipa só recebe notificação para falar com quem <strong className="text-green-400">realmente quer comprar</strong>. O resto fica no piloto automático.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Para Quem É - Segmentação */}
+      <section className="py-16 md:py-24 bg-slate-900/50 border-y border-slate-800/50">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-12 md:mb-16">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-4">
+              Desenhado para{' '}
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-blue-400">
+                Negócios de Serviço.
+              </span>
+            </h2>
+          </div>
+
+          <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-6 md:gap-8 max-w-5xl mx-auto">
+            {/* Clínicas & Saúde */}
+            <Card className="bg-slate-800/50 border-slate-700 hover:border-primary/50 transition-all hover:shadow-lg hover:shadow-primary/10">
+              <CardContent className="pt-6">
+                <div className="w-14 h-14 bg-primary/10 rounded-xl flex items-center justify-center mb-4">
+                  <Stethoscope className="w-7 h-7 text-primary" />
+                </div>
+                <h3 className="text-lg font-semibold text-white mb-2">Clínicas & Saúde</h3>
+                <p className="text-slate-500 text-xs mb-2">Dentistas, Estética, Capilar</p>
+                <p className="text-slate-400 text-sm">
+                  Não perca pacientes de implantes de <strong className="text-white">alto valor</strong>.
+                </p>
+              </CardContent>
+            </Card>
+
+            {/* Construção & Reformas */}
+            <Card className="bg-slate-800/50 border-slate-700 hover:border-orange-500/50 transition-all hover:shadow-lg hover:shadow-orange-500/10">
+              <CardContent className="pt-6">
+                <div className="w-14 h-14 bg-orange-500/10 rounded-xl flex items-center justify-center mb-4">
+                  <HardHat className="w-7 h-7 text-orange-400" />
+                </div>
+                <h3 className="text-lg font-semibold text-white mb-2">Construção & Reformas</h3>
+                <p className="text-slate-500 text-xs mb-2">Obras, Remodelações, Energias</p>
+                <p className="text-slate-400 text-sm">
+                  Filtre quem quer <strong className="text-white">orçamento real</strong> de quem só está a sonhar.
+                </p>
+              </CardContent>
+            </Card>
+
+            {/* Imobiliária */}
+            <Card className="bg-slate-800/50 border-slate-700 hover:border-green-500/50 transition-all hover:shadow-lg hover:shadow-green-500/10 sm:col-span-2 md:col-span-1 sm:max-w-md sm:mx-auto md:max-w-none">
+              <CardContent className="pt-6">
+                <div className="w-14 h-14 bg-green-500/10 rounded-xl flex items-center justify-center mb-4">
+                  <Home className="w-7 h-7 text-green-400" />
+                </div>
+                <h3 className="text-lg font-semibold text-white mb-2">Imobiliária</h3>
+                <p className="text-slate-500 text-xs mb-2">Agentes, Mediação, Consultores</p>
+                <p className="text-slate-400 text-sm">
+                  Atenda quem quer <strong className="text-white">visitar casas agora</strong>.
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </section>
+
+      {/* A Oferta - Ancoragem de Valor */}
+      <section className="py-16 md:py-24">
+        <div className="container mx-auto px-4">
+          <div className="max-w-3xl mx-auto">
+            <div className="text-center mb-12">
+              <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-4">
+                O que está incluído na{' '}
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-blue-400">
+                  Implementação Senvia OS?
+                </span>
+              </h2>
+            </div>
+
+            <div className="bg-slate-800/30 border border-slate-700 rounded-2xl p-6 sm:p-8 md:p-10">
+              <ul className="space-y-4 sm:space-y-5">
+                <li className="flex items-start gap-4">
+                  <div className="w-6 h-6 bg-green-500/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <CheckCircle className="w-4 h-4 text-green-400" />
+                  </div>
+                  <div>
+                    <span className="text-white font-medium">Configuração completa do Servidor de WhatsApp</span>
+                    <span className="text-slate-500 text-sm ml-2">(Sem risco de bloqueio)</span>
+                  </div>
+                </li>
+                <li className="flex items-start gap-4">
+                  <div className="w-6 h-6 bg-green-500/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <CheckCircle className="w-4 h-4 text-green-400" />
+                  </div>
+                  <div>
+                    <span className="text-white font-medium">Treino da IA com as regras do SEU negócio</span>
+                    <span className="text-slate-500 text-sm ml-2">(Personalizado)</span>
+                  </div>
+                </li>
+                <li className="flex items-start gap-4">
+                  <div className="w-6 h-6 bg-green-500/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <CheckCircle className="w-4 h-4 text-green-400" />
+                  </div>
+                  <div>
+                    <span className="text-white font-medium">Criação dos Scripts de Venda</span>
+                    <span className="text-slate-500 text-sm ml-2">(Copywriting profissional)</span>
+                  </div>
+                </li>
+                <li className="flex items-start gap-4">
+                  <div className="w-6 h-6 bg-green-500/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <CheckCircle className="w-4 h-4 text-green-400" />
+                  </div>
+                  <div>
+                    <span className="text-white font-medium">Integração com o seu CRM atual</span>
+                    <span className="text-slate-500 text-sm ml-2">(Se aplicável)</span>
+                  </div>
+                </li>
+                <li className="flex items-start gap-4">
+                  <div className="w-6 h-6 bg-green-500/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <CheckCircle className="w-4 h-4 text-green-400" />
+                  </div>
+                  <div>
+                    <span className="text-white font-medium">Relatório de Leads</span>
+                    <span className="text-slate-500 text-sm ml-2">(Quem é Hot vs. Cold)</span>
+                  </div>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Formulário de Contacto - CTA Final */}
+      <section id="contacto" className="py-16 md:py-24 bg-gradient-to-b from-slate-900/50 to-slate-950 border-t border-slate-800/50">
+        <div className="container mx-auto px-4">
+          <div className="max-w-xl mx-auto">
+            <div className="text-center mb-10">
+              <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-4">
+                Pronto para parar de{' '}
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-orange-400">
+                  perder leads?
+                </span>
+              </h2>
+              <p className="text-slate-400">
+                Preencha o formulário e entramos em contacto em menos de 24h.
+              </p>
+            </div>
+
+            <form onSubmit={handleSubmit} className="bg-slate-800/30 border border-slate-700 rounded-2xl p-6 sm:p-8 space-y-5">
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="empresa" className="text-slate-300">Nome da Empresa</Label>
+                  <Input
+                    id="empresa"
+                    placeholder="Clínica Exemplo, Lda"
+                    className="bg-slate-900/50 border-slate-700 text-white placeholder:text-slate-500 focus:border-primary"
+                    value={formData.empresa}
+                    onChange={(e) => setFormData({ ...formData, empresa: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="responsavel" className="text-slate-300">Nome do Responsável</Label>
+                  <Input
+                    id="responsavel"
+                    placeholder="João Silva"
+                    className="bg-slate-900/50 border-slate-700 text-white placeholder:text-slate-500 focus:border-primary"
+                    value={formData.responsavel}
+                    onChange={(e) => setFormData({ ...formData, responsavel: e.target.value })}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="telemovel" className="text-slate-300">Telemóvel (WhatsApp)</Label>
+                  <Input
+                    id="telemovel"
+                    type="tel"
+                    placeholder="+351 912 345 678"
+                    className="bg-slate-900/50 border-slate-700 text-white placeholder:text-slate-500 focus:border-primary"
+                    value={formData.telemovel}
+                    onChange={(e) => setFormData({ ...formData, telemovel: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="email" className="text-slate-300">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="joao@clinica.pt"
+                    className="bg-slate-900/50 border-slate-700 text-white placeholder:text-slate-500 focus:border-primary"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="tipoNegocio" className="text-slate-300">Tipo de Negócio</Label>
+                <Select 
+                  value={formData.tipoNegocio} 
+                  onValueChange={(value) => setFormData({ ...formData, tipoNegocio: value })}
+                >
+                  <SelectTrigger className="bg-slate-900/50 border-slate-700 text-white focus:ring-primary">
+                    <SelectValue placeholder="Selecione o seu setor" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-800 border-slate-700">
+                    <SelectItem value="clinica" className="text-white hover:bg-slate-700">Clínica / Saúde</SelectItem>
+                    <SelectItem value="imobiliaria" className="text-white hover:bg-slate-700">Imobiliária</SelectItem>
+                    <SelectItem value="construcao" className="text-white hover:bg-slate-700">Construção / Reformas</SelectItem>
+                    <SelectItem value="energia" className="text-white hover:bg-slate-700">Energias Renováveis</SelectItem>
+                    <SelectItem value="outro" className="text-white hover:bg-slate-700">Outro</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <Button 
+                type="submit" 
+                size="lg" 
+                className="w-full bg-primary hover:bg-primary/90 text-base py-6 h-auto"
+              >
+                QUERO SER CONTACTADO
               </Button>
-              <Button size="lg" variant="outline" className="border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white text-base px-8" asChild>
-                <Link to="/login">Ver Demonstração</Link>
-              </Button>
-            </div>
-          </div>
-        </div>
-      </section>
 
-      {/* Features Section */}
-      <section id="funcionalidades" className="py-24 border-t border-slate-800/50">
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-16">
-            <Badge className="mb-4 bg-slate-800 text-slate-300 border-slate-700">
-              Funcionalidades
-            </Badge>
-            <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
-              Tudo o que precisa num só lugar
-            </h2>
-            <p className="text-slate-400 max-w-2xl mx-auto">
-              Ferramentas poderosas para gerir leads, automatizar comunicação e analisar resultados.
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
-            <Card className="bg-slate-900/50 border-slate-800 hover:border-slate-700 transition-colors group">
-              <CardHeader>
-                <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center mb-4 group-hover:bg-primary/20 transition-colors">
-                  <Users className="w-6 h-6 text-primary" />
-                </div>
-                <CardTitle className="text-white">CRM Centralizado</CardTitle>
-                <CardDescription className="text-slate-400">
-                  Gerencie todos os contactos num só lugar com vista Kanban intuitiva.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ul className="space-y-2">
-                  <li className="flex items-center gap-2 text-sm text-slate-400">
-                    <CheckCircle className="w-4 h-4 text-primary" />
-                    Vista Kanban drag & drop
-                  </li>
-                  <li className="flex items-center gap-2 text-sm text-slate-400">
-                    <CheckCircle className="w-4 h-4 text-primary" />
-                    Histórico completo
-                  </li>
-                  <li className="flex items-center gap-2 text-sm text-slate-400">
-                    <CheckCircle className="w-4 h-4 text-primary" />
-                    Notas e tarefas
-                  </li>
-                </ul>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-slate-900/50 border-slate-800 hover:border-slate-700 transition-colors group">
-              <CardHeader>
-                <div className="w-12 h-12 bg-green-500/10 rounded-xl flex items-center justify-center mb-4 group-hover:bg-green-500/20 transition-colors">
-                  <MessageSquare className="w-6 h-6 text-green-500" />
-                </div>
-                <CardTitle className="text-white">Integração WhatsApp</CardTitle>
-                <CardDescription className="text-slate-400">
-                  Comunique instantaneamente com clientes através do WhatsApp.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ul className="space-y-2">
-                  <li className="flex items-center gap-2 text-sm text-slate-400">
-                    <CheckCircle className="w-4 h-4 text-green-500" />
-                    Um clique para contactar
-                  </li>
-                  <li className="flex items-center gap-2 text-sm text-slate-400">
-                    <CheckCircle className="w-4 h-4 text-green-500" />
-                    Modelos de mensagem
-                  </li>
-                  <li className="flex items-center gap-2 text-sm text-slate-400">
-                    <CheckCircle className="w-4 h-4 text-green-500" />
-                    Histórico de conversas
-                  </li>
-                </ul>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-slate-900/50 border-slate-800 hover:border-slate-700 transition-colors group">
-              <CardHeader>
-                <div className="w-12 h-12 bg-purple-500/10 rounded-xl flex items-center justify-center mb-4 group-hover:bg-purple-500/20 transition-colors">
-                  <BarChart3 className="w-6 h-6 text-purple-500" />
-                </div>
-                <CardTitle className="text-white">Relatórios em Tempo Real</CardTitle>
-                <CardDescription className="text-slate-400">
-                  Métricas e análises detalhadas para decisões informadas.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ul className="space-y-2">
-                  <li className="flex items-center gap-2 text-sm text-slate-400">
-                    <CheckCircle className="w-4 h-4 text-purple-500" />
-                    Dashboard interativo
-                  </li>
-                  <li className="flex items-center gap-2 text-sm text-slate-400">
-                    <CheckCircle className="w-4 h-4 text-purple-500" />
-                    Taxas de conversão
-                  </li>
-                  <li className="flex items-center gap-2 text-sm text-slate-400">
-                    <CheckCircle className="w-4 h-4 text-purple-500" />
-                    Exportação de dados
-                  </li>
-                </ul>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      </section>
-
-      {/* Benefits Section */}
-      <section className="py-24 border-t border-slate-800/50">
-        <div className="container mx-auto px-4">
-          <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
-            <div className="text-center">
-              <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <Clock className="w-8 h-8 text-primary" />
-              </div>
-              <h3 className="text-xl font-semibold text-white mb-2">Poupe Tempo</h3>
-              <p className="text-slate-400 text-sm">
-                Automatize tarefas repetitivas e foque no que importa.
+              <p className="text-center text-slate-500 text-xs">
+                Os seus dados estão seguros. Respeitamos a sua privacidade.
               </p>
-            </div>
-            <div className="text-center">
-              <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <Shield className="w-8 h-8 text-primary" />
-              </div>
-              <h3 className="text-xl font-semibold text-white mb-2">100% Seguro</h3>
-              <p className="text-slate-400 text-sm">
-                Dados encriptados e conformidade com RGPD.
-              </p>
-            </div>
-            <div className="text-center">
-              <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <Sparkles className="w-8 h-8 text-primary" />
-              </div>
-              <h3 className="text-xl font-semibold text-white mb-2">Fácil de Usar</h3>
-              <p className="text-slate-400 text-sm">
-                Interface intuitiva sem necessidade de formação.
-              </p>
-            </div>
+            </form>
           </div>
         </div>
       </section>
 
-      {/* Pricing Section */}
-      <section id="precos" className="py-24 border-t border-slate-800/50">
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-16">
-            <Badge className="mb-4 bg-slate-800 text-slate-300 border-slate-700">
-              Preços
-            </Badge>
-            <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
-              Planos simples e transparentes
-            </h2>
-            <p className="text-slate-400 max-w-2xl mx-auto">
-              Escolha o plano ideal para o seu negócio. Sem custos ocultos.
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-2 gap-8 max-w-3xl mx-auto">
-            {/* Basic Plan */}
-            <Card className="bg-slate-900/50 border-slate-800">
-              <CardHeader>
-                <CardTitle className="text-white">Básico</CardTitle>
-                <CardDescription className="text-slate-400">
-                  Ideal para pequenos negócios
-                </CardDescription>
-                <div className="pt-4">
-                  <span className="text-4xl font-bold text-white">€49</span>
-                  <span className="text-slate-400">/mês</span>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <ul className="space-y-3 mb-6">
-                  <li className="flex items-center gap-2 text-sm text-slate-300">
-                    <CheckCircle className="w-4 h-4 text-primary" />
-                    Até 500 leads
-                  </li>
-                  <li className="flex items-center gap-2 text-sm text-slate-300">
-                    <CheckCircle className="w-4 h-4 text-primary" />
-                    1 utilizador
-                  </li>
-                  <li className="flex items-center gap-2 text-sm text-slate-300">
-                    <CheckCircle className="w-4 h-4 text-primary" />
-                    Formulário público
-                  </li>
-                  <li className="flex items-center gap-2 text-sm text-slate-300">
-                    <CheckCircle className="w-4 h-4 text-primary" />
-                    Integração WhatsApp
-                  </li>
-                </ul>
-                <Button variant="outline" className="w-full border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white" asChild>
-                  <Link to="/login?tab=signup">Começar</Link>
-                </Button>
-              </CardContent>
-            </Card>
-
-            {/* Pro Plan */}
-            <Card className="bg-gradient-to-br from-primary/20 to-blue-600/20 border-primary/30 relative overflow-hidden">
-              <div className="absolute top-4 right-4">
-                <Badge className="bg-primary text-white">Popular</Badge>
-              </div>
-              <CardHeader>
-                <CardTitle className="text-white">Profissional</CardTitle>
-                <CardDescription className="text-slate-300">
-                  Para equipas em crescimento
-                </CardDescription>
-                <div className="pt-4">
-                  <span className="text-4xl font-bold text-white">€99</span>
-                  <span className="text-slate-300">/mês</span>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <ul className="space-y-3 mb-6">
-                  <li className="flex items-center gap-2 text-sm text-slate-200">
-                    <CheckCircle className="w-4 h-4 text-primary" />
-                    Leads ilimitados
-                  </li>
-                  <li className="flex items-center gap-2 text-sm text-slate-200">
-                    <CheckCircle className="w-4 h-4 text-primary" />
-                    5 utilizadores
-                  </li>
-                  <li className="flex items-center gap-2 text-sm text-slate-200">
-                    <CheckCircle className="w-4 h-4 text-primary" />
-                    Relatórios avançados
-                  </li>
-                  <li className="flex items-center gap-2 text-sm text-slate-200">
-                    <CheckCircle className="w-4 h-4 text-primary" />
-                    API de integração
-                  </li>
-                  <li className="flex items-center gap-2 text-sm text-slate-200">
-                    <CheckCircle className="w-4 h-4 text-primary" />
-                    Suporte prioritário
-                  </li>
-                </ul>
-                <Button className="w-full bg-primary hover:bg-primary/90" asChild>
-                  <Link to="/login?tab=signup">Começar</Link>
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      </section>
-
-      {/* CTA Section */}
-      <section className="py-24 border-t border-slate-800/50">
-        <div className="container mx-auto px-4">
-          <div className="max-w-3xl mx-auto text-center">
-            <h2 className="text-3xl md:text-4xl font-bold text-white mb-6">
-              Pronto para transformar o seu negócio?
-            </h2>
-            <p className="text-slate-400 mb-8 text-lg">
-              Junte-se a dezenas de empresas portuguesas que já usam o Senvia para crescer.
-            </p>
-            <Button size="lg" className="bg-primary hover:bg-primary/90 text-base px-8" asChild>
-              <Link to="/login?tab=signup">
-                Começar Agora
-                <ArrowRight className="ml-2 w-4 h-4" />
-              </Link>
-            </Button>
-          </div>
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer className="border-t border-slate-800/50 py-12">
+      {/* Footer - Minimalista */}
+      <footer className="border-t border-slate-800/50 py-8 md:py-12">
         <div className="container mx-auto px-4">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-2">
