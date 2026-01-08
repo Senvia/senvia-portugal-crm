@@ -173,7 +173,7 @@ const ConversationalLeadForm = () => {
       email: data.email || `lead.${Date.now()}@conversational.form`,
       phone: data.phone || "",
       source: "conversational_form",
-      organization_id: organization.id,
+      public_key: public_key,
       custom_data: customData,
       gdpr_consent: true,
       automation_enabled: true,
@@ -293,9 +293,12 @@ const ConversationalLeadForm = () => {
 
           {/* Content */}
           <div className="p-6 md:p-8">
-            {/* AI Avatar */}
+            {/* AI Avatar / Logo */}
             <div className="flex justify-center mb-8">
-              <AIAvatar primaryColor={primaryColor} />
+              <AIAvatar 
+                primaryColor={primaryColor} 
+                logoUrl={organization?.form_settings?.logo_url}
+              />
             </div>
 
             {/* Step Content */}
