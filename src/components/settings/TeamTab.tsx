@@ -411,7 +411,7 @@ export function TeamTab() {
               </TableHeader>
               <TableBody>
                 {members?.map((member) => (
-                  <TableRow key={member.id}>
+                  <TableRow key={member.id} className={member.is_banned ? 'opacity-50' : ''}>
                     <TableCell className="font-medium">
                       {member.full_name}
                       {isCurrentUser(member) && (
@@ -424,9 +424,15 @@ export function TeamTab() {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline" className="text-success border-success">
-                        Ativo
-                      </Badge>
+                      {member.is_banned ? (
+                        <Badge variant="outline" className="text-destructive border-destructive">
+                          Inativo
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-success border-success">
+                          Ativo
+                        </Badge>
+                      )}
                     </TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu>
@@ -449,11 +455,20 @@ export function TeamTab() {
                               <DropdownMenuSeparator />
                               <DropdownMenuItem 
                                 onClick={() => handleToggleStatus(member)}
-                                className="text-destructive focus:text-destructive"
+                                className={member.is_banned ? '' : 'text-destructive focus:text-destructive'}
                                 disabled={manageTeamMember.isPending}
                               >
-                                <Ban className="mr-2 h-4 w-4" />
-                                Desativar Acesso
+                                {member.is_banned ? (
+                                  <>
+                                    <CheckCircle className="mr-2 h-4 w-4" />
+                                    Reativar Acesso
+                                  </>
+                                ) : (
+                                  <>
+                                    <Ban className="mr-2 h-4 w-4" />
+                                    Desativar Acesso
+                                  </>
+                                )}
                               </DropdownMenuItem>
                             </>
                           )}
