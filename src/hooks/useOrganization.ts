@@ -72,7 +72,17 @@ export function useTestWebhook() {
           phone: '+351912345678',
           source: 'Teste de Webhook',
           status: 'new',
+          temperature: 'warm',
+          value: 1500,
+          notes: 'Mensagem de exemplo do lead',
+          gdpr_consent: true,
+          custom_data: {
+            campo_exemplo: 'Valor de exemplo',
+            utm_source: 'facebook',
+            utm_campaign: 'campanha_teste',
+          },
           created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         },
       };
 
