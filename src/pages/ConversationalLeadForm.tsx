@@ -204,7 +204,7 @@ const ConversationalLeadForm = () => {
     if (isComplete && organization) {
       return (
         <SuccessScreen
-          userName={formData.welcome || formData.name}
+          userName={getFirstName(formData.welcome || formData.name)}
           title={organization.form_settings.success_message.title}
           description={organization.form_settings.success_message.description}
         />
@@ -242,7 +242,7 @@ const ConversationalLeadForm = () => {
           options: step.options,
           placeholder: step.placeholder,
         }}
-        userName={formData.welcome || formData.name}
+        userName={getFirstName(formData.welcome || formData.name)}
         onNext={(value) => handleStepComplete(step.key, value)}
         isSubmitting={isSubmitting}
         submitButtonText={settings.submit_button_text}
@@ -252,6 +252,12 @@ const ConversationalLeadForm = () => {
   };
 
   const primaryColor = organization?.form_settings?.primary_color;
+
+  // Helper to extract first name
+  const getFirstName = (fullName?: string) => {
+    if (!fullName) return '';
+    return fullName.trim().split(' ')[0];
+  };
 
   if (isLoading) {
     return (
