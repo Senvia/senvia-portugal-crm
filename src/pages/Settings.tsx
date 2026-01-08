@@ -486,45 +486,6 @@ export default function Settings() {
                             </Button>
                           </div>
 
-                          <div className="rounded-md bg-muted p-3">
-                            <p className="text-xs font-medium mb-2">Exemplo de payload:</p>
-                            <pre className="text-xs text-muted-foreground overflow-x-auto whitespace-pre-wrap">
-{`{
-  "event": "lead.created",
-  "timestamp": "2026-01-07T16:45:00.000Z",
-  "organization": {
-    "id": "uuid",
-    "name": "${organization?.name || 'Nome da Empresa'}"
-  },
-  "whatsapp": {
-    "instance": "minha-instancia",
-    "number": "+351912345678",
-    "api_key": "xxx-api-key-xxx"
-  },
-  "config": {
-    "ai_qualification_rules": "Classifica como HOT se..."
-  },
-  "lead": {
-    "id": "uuid",
-    "name": "João Silva",
-    "email": "joao@email.com",
-    "phone": "+351912345678",
-    "source": "Formulário Público",
-    "status": "new",
-    "temperature": "warm",
-    "value": 1500,
-    "notes": "Mensagem do cliente",
-    "gdpr_consent": true,
-    "custom_data": {
-      "servico_interesse": "Implantes",
-      "utm_source": "facebook"
-    },
-    "created_at": "...",
-    "updated_at": "..."
-  }
-}`}
-                            </pre>
-                          </div>
                         </>
                       )}
                     </div>
