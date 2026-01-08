@@ -127,6 +127,9 @@ export type Database = {
           public_key: string
           slug: string
           webhook_url: string | null
+          whatsapp_api_key: string | null
+          whatsapp_instance: string | null
+          whatsapp_number: string | null
         }
         Insert: {
           created_at?: string | null
@@ -137,6 +140,9 @@ export type Database = {
           public_key?: string
           slug: string
           webhook_url?: string | null
+          whatsapp_api_key?: string | null
+          whatsapp_instance?: string | null
+          whatsapp_number?: string | null
         }
         Update: {
           created_at?: string | null
@@ -147,6 +153,9 @@ export type Database = {
           public_key?: string
           slug?: string
           webhook_url?: string | null
+          whatsapp_api_key?: string | null
+          whatsapp_instance?: string | null
+          whatsapp_number?: string | null
         }
         Relationships: []
       }

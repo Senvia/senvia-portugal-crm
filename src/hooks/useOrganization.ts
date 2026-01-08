@@ -9,6 +9,9 @@ import { Json } from '@/integrations/supabase/types';
 interface UpdateOrganizationData {
   name?: string;
   webhook_url?: string | null;
+  whatsapp_instance?: string | null;
+  whatsapp_number?: string | null;
+  whatsapp_api_key?: string | null;
   form_settings?: Json;
 }
 
@@ -64,6 +67,11 @@ export function useTestWebhook() {
         organization: {
           id: organization?.id,
           name: organization?.name,
+        },
+        whatsapp: {
+          instance: 'instancia-teste',
+          number: '+351912345678',
+          api_key: 'xxx-api-key-exemplo-xxx',
         },
         lead: {
           id: 'test-lead-id',
