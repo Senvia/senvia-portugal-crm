@@ -3,7 +3,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { 
-  Zap, 
   Users, 
   MessageSquare, 
   BarChart3, 
@@ -13,6 +12,7 @@ import {
   Shield,
   Clock
 } from 'lucide-react';
+import senviaLogo from "@/assets/senvia-logo.png";
 
 export default function Landing() {
   return (
@@ -21,9 +21,7 @@ export default function Landing() {
       <header className="border-b border-slate-800/50 backdrop-blur-lg sticky top-0 z-50 bg-slate-950/80">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-primary to-blue-600 rounded-lg flex items-center justify-center">
-              <Zap className="w-5 h-5 text-white" />
-            </div>
+            <img src={senviaLogo} alt="SENVIA" className="w-8 h-8 object-contain rounded-lg" />
             <span className="text-xl font-bold text-white tracking-tight">SENVIA</span>
           </Link>
           
@@ -349,9 +347,7 @@ export default function Landing() {
         <div className="container mx-auto px-4">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-gradient-to-br from-primary to-blue-600 rounded-lg flex items-center justify-center">
-                <Zap className="w-5 h-5 text-white" />
-              </div>
+              <img src={senviaLogo} alt="SENVIA" className="w-8 h-8 object-contain rounded-lg" />
               <span className="text-lg font-bold text-white tracking-tight">SENVIA</span>
             </div>
             
