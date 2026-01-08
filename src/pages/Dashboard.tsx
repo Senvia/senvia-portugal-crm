@@ -4,10 +4,11 @@ import { MetricCard } from "@/components/dashboard/MetricCard";
 import { KanbanBoard } from "@/components/leads/KanbanBoard";
 import { LeadDetailsModal } from "@/components/leads/LeadDetailsModal";
 import { useAuth } from "@/contexts/AuthContext";
-import { useLeads, useLeadStats, useUpdateLeadStatus, useDeleteLead } from "@/hooks/useLeads";
+import { useLeads, useLeadStats, useUpdateLeadStatus, useDeleteLead, useUpdateLead } from "@/hooks/useLeads";
 import { Users, TrendingUp, Euro, UserPlus, Loader2 } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
-import type { Lead, LeadStatus } from "@/types";
+import type { Lead } from "@/types";
+import { LeadStatus, LeadTemperature } from "@/types";
 
 export default function Dashboard() {
   const { profile, organization } = useAuth();
@@ -15,12 +16,17 @@ export default function Dashboard() {
   const stats = useLeadStats();
   const updateStatus = useUpdateLeadStatus();
   const deleteLead = useDeleteLead();
+  const updateLead = useUpdateLead();
   
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const handleStatusChange = (leadId: string, newStatus: LeadStatus) => {
     updateStatus.mutate({ leadId, status: newStatus });
+  };
+
+  const handleTemperatureChange = (leadId: string, temperature: LeadTemperature) => {
+    updateLead.mutate({ leadId, updates: { temperature } });
   };
 
   const handleViewDetails = (lead: Lead) => {
@@ -67,7 +73,7 @@ export default function Dashboard() {
               <p className="text-sm">Os novos leads aparecerão aqui automaticamente.</p>
             </div>
           ) : (
-            <KanbanBoard leads={leads} onStatusChange={handleStatusChange} onViewDetails={handleViewDetails} onDelete={handleDelete} />
+            <KanbanBoard leads={leads} onStatusChange={handleStatusChange} onTemperatureChange={handleTemperatureChange} onViewDetails={handleViewDetails} onDelete={handleDelete} />
           )}
         </div>
 

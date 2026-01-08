@@ -1,4 +1,4 @@
-import { Lead, STATUS_LABELS, LeadStatus } from "@/types";
+import { Lead, STATUS_LABELS, LeadStatus, LeadTemperature, TEMPERATURE_LABELS, TEMPERATURE_STYLES } from "@/types";
 import { formatDate, formatDateTime, getWhatsAppUrl } from "@/lib/format";
 import { usePermissions } from "@/hooks/usePermissions";
 
@@ -54,9 +54,11 @@ import {
   Trash2,
   ExternalLink,
   Euro,
-  FileText
+  FileText,
+  Thermometer
 } from "lucide-react";
 import { useState, useEffect } from "react";
+import { cn } from "@/lib/utils";
 
 interface LeadDetailsModalProps {
   lead: Lead | null;
@@ -168,6 +170,30 @@ export function LeadDetailsModal({
                 {Object.entries(STATUS_LABELS).map(([value, label]) => (
                   <SelectItem key={value} value={value}>
                     {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Temperature */}
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-muted-foreground">Temperatura</span>
+            <Select
+              value={lead.temperature || 'cold'}
+              onValueChange={(value) => onUpdate?.(lead.id, { temperature: value as LeadTemperature })}
+            >
+              <SelectTrigger className="w-48">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {(Object.keys(TEMPERATURE_LABELS) as LeadTemperature[]).map((temp) => (
+                  <SelectItem key={temp} value={temp}>
+                    <div className="flex items-center gap-2">
+                      <Thermometer className={cn("h-4 w-4", TEMPERATURE_STYLES[temp].color)} />
+                      <span>{TEMPERATURE_STYLES[temp].emoji}</span>
+                      {TEMPERATURE_LABELS[temp]}
+                    </div>
                   </SelectItem>
                 ))}
               </SelectContent>

@@ -2,6 +2,7 @@
 
 export type AppRole = 'super_admin' | 'admin' | 'viewer';
 export type LeadStatus = 'new' | 'contacted' | 'scheduled' | 'won' | 'lost';
+export type LeadTemperature = 'cold' | 'warm' | 'hot';
 export type OrganizationPlan = 'basic' | 'pro';
 
 export interface Organization {
@@ -34,6 +35,7 @@ export interface Lead {
   phone: string;
   email: string;
   status: LeadStatus;
+  temperature?: LeadTemperature;
   notes?: string;
   source?: string;
   value?: number;
@@ -67,6 +69,20 @@ export const PLAN_LABELS: Record<OrganizationPlan, string> = {
 
 // Kanban column order
 export const KANBAN_COLUMNS: LeadStatus[] = ['new', 'contacted', 'scheduled', 'won', 'lost'];
+
+// PT-PT Temperature Labels
+export const TEMPERATURE_LABELS: Record<LeadTemperature, string> = {
+  cold: 'Frio',
+  warm: 'Morno',
+  hot: 'Quente',
+};
+
+// Temperature Styles
+export const TEMPERATURE_STYLES: Record<LeadTemperature, { color: string; emoji: string }> = {
+  cold: { color: 'text-blue-500', emoji: '🥶' },
+  warm: { color: 'text-amber-500', emoji: '😐' },
+  hot: { color: 'text-red-500', emoji: '🔥' },
+};
 
 // Custom Field Types
 export type FieldType = 'text' | 'number' | 'select' | 'checkbox' | 'textarea';

@@ -1,8 +1,8 @@
-import { Lead, STATUS_LABELS, LeadStatus } from "@/types";
+import { Lead, STATUS_LABELS, LeadStatus, LeadTemperature, TEMPERATURE_LABELS, TEMPERATURE_STYLES } from "@/types";
 import { formatRelativeTime, getWhatsAppUrl, formatCurrency } from "@/lib/format";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Button } from "@/components/ui/button";
-import { MessageCircle, Phone, Mail, MoreVertical, GripVertical } from "lucide-react";
+import { MessageCircle, Phone, Mail, MoreVertical, GripVertical, Thermometer } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
@@ -15,6 +15,7 @@ import {
 interface LeadCardProps {
   lead: Lead;
   onStatusChange?: (leadId: string, newStatus: LeadStatus) => void;
+  onTemperatureChange?: (leadId: string, temperature: LeadTemperature) => void;
   onViewDetails?: (lead: Lead) => void;
   onDelete?: (leadId: string) => void;
   isDragging?: boolean;
@@ -31,11 +32,14 @@ const statusStyles: Record<LeadStatus, string> = {
 export function LeadCard({ 
   lead, 
   onStatusChange, 
+  onTemperatureChange,
   onViewDetails, 
   onDelete,
   isDragging 
 }: LeadCardProps) {
   const { canDeleteLeads } = usePermissions();
+  const temperature = lead.temperature || 'cold';
+  const tempStyle = TEMPERATURE_STYLES[temperature];
   
   return (
     <div 
@@ -53,6 +57,29 @@ export function LeadCard({
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
             {lead.name.charAt(0).toUpperCase()}
           </div>
+          {/* Temperature Dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+              <Button variant="ghost" size="icon-sm" className="h-7 w-7">
+                <Thermometer className={cn("h-4 w-4", tempStyle.color)} />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-32">
+              {(Object.keys(TEMPERATURE_LABELS) as LeadTemperature[]).map((temp) => (
+                <DropdownMenuItem 
+                  key={temp}
+                  onClick={(e) => { 
+                    e.stopPropagation(); 
+                    onTemperatureChange?.(lead.id, temp); 
+                  }}
+                  disabled={temperature === temp}
+                >
+                  <span className="mr-2">{TEMPERATURE_STYLES[temp].emoji}</span>
+                  {TEMPERATURE_LABELS[temp]}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
