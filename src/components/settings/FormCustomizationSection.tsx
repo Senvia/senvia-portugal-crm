@@ -55,7 +55,11 @@ const PRESET_COLORS = [
   '#0EA5E9', // Sky
 ];
 
-export function FormCustomizationSection() {
+interface FormCustomizationSectionProps {
+  onSettingsSaved?: () => void;
+}
+
+export function FormCustomizationSection({ onSettingsSaved }: FormCustomizationSectionProps) {
   const { organization } = useAuth();
   const { toast } = useToast();
   const updateOrganization = useUpdateOrganization();
@@ -97,6 +101,7 @@ export function FormCustomizationSection() {
             title: "Alterações guardadas",
             description: "O formulário foi atualizado com sucesso.",
           });
+          onSettingsSaved?.();
         }
       }
     );

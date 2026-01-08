@@ -65,6 +65,7 @@ export default function Settings() {
 
   // Form mode state (for dynamic URL)
   const [formMode, setFormMode] = useState<'traditional' | 'conversational'>('traditional');
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   // Organization edit state
   const [orgName, setOrgName] = useState('');
@@ -124,7 +125,7 @@ export default function Settings() {
     }
 
     fetchIntegrations();
-  }, [organization?.id]);
+  }, [organization?.id, refreshTrigger]);
 
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
@@ -896,7 +897,7 @@ export default function Settings() {
               </div>
               {mobileSection === "general" && <GeneralContent />}
               {mobileSection === "team" && canManageTeam && <TeamTab />}
-              {mobileSection === "form" && canManageIntegrations && <FormCustomizationSection />}
+              {mobileSection === "form" && canManageIntegrations && <FormCustomizationSection onSettingsSaved={() => setRefreshTrigger(prev => prev + 1)} />}
               {mobileSection === "integrations" && canManageIntegrations && <IntegrationsContent />}
             </>
           )
@@ -946,7 +947,7 @@ export default function Settings() {
 
               {canManageIntegrations && (
                 <TabsContent value="form" className="w-full max-w-none">
-                  <FormCustomizationSection />
+                  <FormCustomizationSection onSettingsSaved={() => setRefreshTrigger(prev => prev + 1)} />
                 </TabsContent>
               )}
 
