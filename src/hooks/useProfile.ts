@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import type { TeamMember } from '@/hooks/useTeam';
 
 export function useUpdateProfile() {
   const { user } = useAuth();
@@ -75,6 +76,7 @@ interface ManageTeamMemberParams {
 }
 
 export function useManageTeamMember() {
+  const { organization } = useAuth();
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -94,8 +96,52 @@ export function useManageTeamMember() {
 
       return data;
     },
+    onMutate: async (variables) => {
+      // Cancelar queries em progresso
+      await queryClient.cancelQueries({ queryKey: ['team-members', organization?.id] });
+      
+      // Guardar estado anterior para rollback
+      const previousMembers = queryClient.getQueryData<TeamMember[]>(['team-members', organization?.id]);
+      
+      // Atualizar cache otimisticamente
+      if (variables.action === 'toggle_status') {
+        queryClient.setQueryData<TeamMember[]>(['team-members', organization?.id], (old) => {
+          if (!old) return old;
+          return old.map(member => 
+            member.user_id === variables.user_id 
+              ? { ...member, is_banned: !member.is_banned }
+              : member
+          );
+        });
+      }
+      
+      if (variables.action === 'change_role' && variables.new_role) {
+        queryClient.setQueryData<TeamMember[]>(['team-members', organization?.id], (old) => {
+          if (!old) return old;
+          return old.map(member => 
+            member.user_id === variables.user_id 
+              ? { ...member, role: variables.new_role! }
+              : member
+          );
+        });
+      }
+      
+      return { previousMembers };
+    },
+    onError: (error: Error, _variables, context) => {
+      // Reverter para estado anterior se falhar
+      if (context?.previousMembers) {
+        queryClient.setQueryData(['team-members', organization?.id], context.previousMembers);
+      }
+      toast({
+        title: 'Erro',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['team-members'] });
+      // Revalidar para garantir sincronização
+      queryClient.invalidateQueries({ queryKey: ['team-members', organization?.id] });
       
       const messages = {
         change_password: { title: 'Password redefinida', description: 'A password do membro foi alterada com sucesso.' },
@@ -105,13 +151,6 @@ export function useManageTeamMember() {
 
       const msg = messages[variables.action];
       toast({ title: msg.title, description: msg.description });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: 'Erro',
-        description: error.message,
-        variant: 'destructive',
-      });
     },
   });
 }
