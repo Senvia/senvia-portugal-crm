@@ -50,7 +50,7 @@ export function MobileMenu({ isOpen, onClose, userName = "Utilizador", organizat
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-40 bg-background/98 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-40 bg-background animate-in slide-in-from-left duration-200">
       {/* Close button area - tap anywhere at top */}
       <div className="h-14 flex items-center justify-end px-4">
         <Button variant="ghost" size="icon" onClick={onClose}>
