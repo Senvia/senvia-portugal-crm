@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Loader2 } from "lucide-react";
@@ -7,43 +7,36 @@ import { ProgressBar } from "@/components/conversational/ProgressBar";
 import { AIAvatar } from "@/components/conversational/AIAvatar";
 import { StepContainer } from "@/components/conversational/StepContainer";
 import { WelcomeStep } from "@/components/conversational/steps/WelcomeStep";
-import { NicheStep } from "@/components/conversational/steps/NicheStep";
-import { VolumeStep } from "@/components/conversational/steps/VolumeStep";
-import { ContactStep } from "@/components/conversational/steps/ContactStep";
+import { DynamicStep } from "@/components/conversational/steps/DynamicStep";
 import { SuccessScreen } from "@/components/conversational/SuccessScreen";
-
-interface FormData {
-  name: string;
-  niche: string;
-  volume: string;
-  phone: string;
-}
+import { FormSettings, migrateFormSettings, CustomField } from "@/types";
 
 interface OrganizationData {
   id: string;
   name: string;
-  form_settings?: {
-    primary_color?: string;
-  } | null;
+  form_settings: FormSettings;
 }
 
-const TOTAL_STEPS = 4;
+interface StepConfig {
+  type: 'welcome' | 'field';
+  key: string;
+  label: string;
+  required: boolean;
+  fieldType?: 'name' | 'email' | 'phone' | 'message' | 'custom';
+  customFieldType?: CustomField['type'];
+  options?: string[];
+  placeholder?: string;
+}
 
 const ConversationalLeadForm = () => {
   const { public_key } = useParams<{ public_key: string }>();
-  const [currentStep, setCurrentStep] = useState(1);
+  const [currentStep, setCurrentStep] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [organization, setOrganization] = useState<OrganizationData | null>(null);
   const [error, setError] = useState<string | null>(null);
-  
-  const [formData, setFormData] = useState<FormData>({
-    name: "",
-    niche: "",
-    volume: "",
-    phone: "",
-  });
+  const [formData, setFormData] = useState<Record<string, string>>({});
 
   useEffect(() => {
     const fetchOrganization = async () => {
@@ -63,10 +56,12 @@ const ConversationalLeadForm = () => {
           return;
         }
 
+        const migratedSettings = migrateFormSettings(data[0].form_settings as Partial<FormSettings>);
+
         setOrganization({
           id: data[0].id,
           name: data[0].name,
-          form_settings: data[0].form_settings as OrganizationData['form_settings'],
+          form_settings: migratedSettings,
         });
       } catch (err) {
         setError("Erro ao carregar formulário.");
@@ -78,52 +73,118 @@ const ConversationalLeadForm = () => {
     fetchOrganization();
   }, [public_key]);
 
-  const handleNameSubmit = (name: string) => {
-    setFormData((prev) => ({ ...prev, name }));
-    setCurrentStep(2);
+  // Generate steps from form settings
+  const steps = useMemo<StepConfig[]>(() => {
+    if (!organization?.form_settings) return [];
+
+    const settings = organization.form_settings;
+    const stepList: StepConfig[] = [];
+
+    // Step 1: Welcome (always first, includes name if visible)
+    const nameVisible = settings.fields.name.visible;
+    stepList.push({
+      type: 'welcome',
+      key: 'welcome',
+      label: nameVisible ? settings.fields.name.label : '',
+      required: nameVisible ? settings.fields.name.required : false,
+    });
+
+    // Add visible fixed fields (except name which is in welcome)
+    if (settings.fields.email.visible) {
+      stepList.push({
+        type: 'field',
+        key: 'email',
+        label: settings.fields.email.label,
+        required: settings.fields.email.required,
+        fieldType: 'email',
+      });
+    }
+
+    if (settings.fields.phone.visible) {
+      stepList.push({
+        type: 'field',
+        key: 'phone',
+        label: settings.fields.phone.label,
+        required: settings.fields.phone.required,
+        fieldType: 'phone',
+      });
+    }
+
+    if (settings.fields.message.visible) {
+      stepList.push({
+        type: 'field',
+        key: 'message',
+        label: settings.fields.message.label,
+        required: settings.fields.message.required,
+        fieldType: 'message',
+      });
+    }
+
+    // Add custom fields
+    settings.custom_fields.forEach((field) => {
+      stepList.push({
+        type: 'field',
+        key: field.id,
+        label: field.label,
+        required: field.required,
+        fieldType: 'custom',
+        customFieldType: field.type,
+        options: field.options,
+        placeholder: field.placeholder,
+      });
+    });
+
+    return stepList;
+  }, [organization?.form_settings]);
+
+  const totalSteps = steps.length;
+
+  const handleStepComplete = async (key: string, value: string) => {
+    const newFormData = { ...formData, [key]: value };
+    setFormData(newFormData);
+
+    const isLastStep = currentStep === totalSteps - 1;
+
+    if (isLastStep) {
+      // Submit the form
+      await submitForm(newFormData);
+    } else {
+      setCurrentStep((prev) => prev + 1);
+    }
   };
 
-  const handleNicheSubmit = (niche: string) => {
-    setFormData((prev) => ({ ...prev, niche }));
-    setCurrentStep(3);
-  };
+  const submitForm = async (data: Record<string, string>) => {
+    if (!organization) return;
 
-  const handleVolumeSubmit = (volume: string) => {
-    setFormData((prev) => ({ ...prev, volume }));
-    setCurrentStep(4);
-  };
-
-  const handleContactSubmit = async (phone: string) => {
-    setFormData((prev) => ({ ...prev, phone }));
     setIsSubmitting(true);
 
+    const settings = organization.form_settings;
+
+    // Build custom_data from custom fields
+    const customData: Record<string, string> = {};
+    settings.custom_fields.forEach((field) => {
+      if (data[field.id]) {
+        customData[field.label] = data[field.id];
+      }
+    });
+
     const leadData = {
-      ...formData,
-      phone,
+      name: data.welcome || data.name || "Lead Conversacional",
+      email: data.email || `lead.${Date.now()}@conversational.form`,
+      phone: data.phone || "",
       source: "conversational_form",
-      organization_id: organization?.id,
-      timestamp: new Date().toISOString(),
+      organization_id: organization.id,
+      custom_data: customData,
+      gdpr_consent: true,
+      automation_enabled: true,
     };
 
     // Log for n8n webhook integration
     console.log("Lead Conversacional:", leadData);
 
     try {
-      // Submit to edge function
       const { error } = await supabase.functions.invoke("submit-lead", {
-        body: {
-          name: formData.name,
-          email: `${formData.name.toLowerCase().replace(/\s+/g, ".")}@lead.conversational`,
-          phone,
-          source: "conversational_form",
-          organization_id: organization?.id,
-          custom_data: {
-            niche: formData.niche,
-            volume: formData.volume,
-          },
-          gdpr_consent: true,
-          automation_enabled: true,
-        },
+        body: leadData,
       });
 
       if (error) {
@@ -140,27 +201,54 @@ const ConversationalLeadForm = () => {
   };
 
   const renderStep = () => {
-    if (isComplete) {
-      return <SuccessScreen userName={formData.name} />;
+    if (isComplete && organization) {
+      return (
+        <SuccessScreen
+          userName={formData.welcome || formData.name}
+          title={organization.form_settings.success_message.title}
+          description={organization.form_settings.success_message.description}
+        />
+      );
     }
 
-    switch (currentStep) {
-      case 1:
-        return (
-          <WelcomeStep 
-            onNext={handleNameSubmit} 
-            organizationName={organization?.name}
-          />
-        );
-      case 2:
-        return <NicheStep userName={formData.name} onNext={handleNicheSubmit} />;
-      case 3:
-        return <VolumeStep onNext={handleVolumeSubmit} />;
-      case 4:
-        return <ContactStep onNext={handleContactSubmit} isSubmitting={isSubmitting} />;
-      default:
-        return null;
+    const step = steps[currentStep];
+    if (!step || !organization) return null;
+
+    const settings = organization.form_settings;
+
+    if (step.type === 'welcome') {
+      return (
+        <WelcomeStep
+          onNext={(name) => handleStepComplete('welcome', name)}
+          title={settings.title}
+          subtitle={settings.subtitle}
+          nameLabel={settings.fields.name.label}
+          showNameField={settings.fields.name.visible}
+        />
+      );
     }
+
+    // Dynamic field step
+    const isLastStep = currentStep === totalSteps - 1;
+
+    return (
+      <DynamicStep
+        field={{
+          type: step.fieldType === 'custom' ? 'custom' : step.fieldType!,
+          key: step.key,
+          label: step.label,
+          required: step.required,
+          fieldType: step.customFieldType,
+          options: step.options,
+          placeholder: step.placeholder,
+        }}
+        userName={formData.welcome || formData.name}
+        onNext={(value) => handleStepComplete(step.key, value)}
+        isSubmitting={isSubmitting}
+        submitButtonText={settings.submit_button_text}
+        isLastStep={isLastStep}
+      />
+    );
   };
 
   const primaryColor = organization?.form_settings?.primary_color;
@@ -197,9 +285,9 @@ const ConversationalLeadForm = () => {
         {/* Card Container */}
         <div className="bg-card/80 backdrop-blur-sm rounded-2xl shadow-xl border border-border/50 overflow-hidden">
           {/* Progress Bar */}
-          {!isComplete && (
+          {!isComplete && totalSteps > 0 && (
             <div className="px-6 pt-6">
-              <ProgressBar currentStep={currentStep} totalSteps={TOTAL_STEPS} />
+              <ProgressBar currentStep={currentStep + 1} totalSteps={totalSteps} />
             </div>
           )}
 
@@ -218,7 +306,7 @@ const ConversationalLeadForm = () => {
         </div>
 
         {/* Branding */}
-        <motion.p 
+        <motion.p
           className="text-center text-xs text-muted-foreground mt-4"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}

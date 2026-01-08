@@ -1,76 +1,115 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 interface WelcomeStepProps {
   onNext: (name: string) => void;
-  organizationName?: string;
+  title: string;
+  subtitle: string;
+  nameLabel?: string;
+  namePlaceholder?: string;
+  showNameField?: boolean;
 }
 
-export const WelcomeStep = ({ onNext, organizationName }: WelcomeStepProps) => {
+export const WelcomeStep = ({ 
+  onNext, 
+  title, 
+  subtitle,
+  nameLabel = "Como te chamas?",
+  namePlaceholder = "O teu nome",
+  showNameField = true
+}: WelcomeStepProps) => {
   const [name, setName] = useState("");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (name.trim()) {
+    if (showNameField && name.trim()) {
       onNext(name.trim());
+    } else if (!showNameField) {
+      onNext("");
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-8">
-      <div className="space-y-4">
-        <motion.h1 
-          className="text-2xl md:text-3xl font-semibold text-foreground leading-relaxed"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.2 }}
-        >
-          Olá! Sou a IA {organizationName ? `da ${organizationName}` : "do Senvia OS"}.
-        </motion.h1>
-        <motion.p 
-          className="text-lg text-muted-foreground"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.4 }}
-        >
-          Vamos ver quantos leads está a perder hoje. Como se chama?
-        </motion.p>
-      </div>
-
-      <motion.div 
-        className="space-y-4"
+    <form onSubmit={handleSubmit} className="space-y-6">
+      {/* Title */}
+      <motion.h1
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.6 }}
+        className="text-xl font-semibold text-foreground text-center"
       >
-        <Input
-          type="text"
-          placeholder="O seu nome..."
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          className="h-14 text-lg px-4 bg-background border-border"
-          autoFocus
-        />
-        
+        {title}
+      </motion.h1>
+
+      {/* Subtitle */}
+      <motion.p
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+        className="text-muted-foreground text-center"
+      >
+        {subtitle}
+      </motion.p>
+
+      {/* Name Input - only if showNameField is true */}
+      {showNameField && (
+        <>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="space-y-2"
+          >
+            <label className="text-sm text-muted-foreground text-center block">
+              {nameLabel}
+            </label>
+            <Input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder={namePlaceholder}
+              className="text-base h-12 text-center"
+              autoFocus
+            />
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: name.trim() ? 1 : 0.5 }}
+            transition={{ delay: 0.4 }}
+          >
+            <Button
+              type="submit"
+              disabled={!name.trim()}
+              className="w-full gap-2"
+              size="lg"
+            >
+              Começar
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+          </motion.div>
+        </>
+      )}
+
+      {/* If no name field, just show continue button */}
+      {!showNameField && (
         <motion.div
           initial={{ opacity: 0 }}
-          animate={{ opacity: name.trim() ? 1 : 0 }}
-          transition={{ duration: 0.2 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.3 }}
         >
           <Button
             type="submit"
-            disabled={!name.trim()}
-            className="w-full h-12 text-base gap-2"
-            variant="senvia"
+            className="w-full gap-2"
+            size="lg"
           >
-            Continuar
+            Começar
             <ArrowRight className="h-4 w-4" />
           </Button>
         </motion.div>
-      </motion.div>
+      )}
     </form>
   );
 };

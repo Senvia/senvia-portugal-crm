@@ -493,6 +493,19 @@ export function FormCustomizationSection() {
                       </p>
                     </div>
 
+                    {/* Submit Button Text */}
+                    <div className="space-y-2">
+                      <Label htmlFor="submit-button" className="text-sm">Texto do Botão de Envio</Label>
+                      <Input
+                        id="submit-button"
+                        value={settings.submit_button_text}
+                        onChange={(e) => updateSetting('submit_button_text', e.target.value)}
+                        maxLength={50}
+                        placeholder="Enviar"
+                        className="h-11"
+                      />
+                    </div>
+
                     {/* Error Message */}
                     <div className="space-y-2">
                       <Label htmlFor="error-message" className="text-sm">Mensagem de Erro</Label>
@@ -548,7 +561,7 @@ export function FormCustomizationSection() {
               <div className="mx-auto w-full max-w-lg xl:max-w-xl">
                 {settings.mode === 'conversational' ? (
                   <ConversationalFormPreview 
-                    primaryColor={settings.primary_color}
+                    settings={settings}
                     organizationName={organization?.name}
                   />
                 ) : (
