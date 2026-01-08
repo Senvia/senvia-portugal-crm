@@ -192,14 +192,6 @@ export function CustomFieldsEditor({ settings, onUpdateSettings }: CustomFieldsE
           {FIXED_FIELD_TYPES[fieldKey]}
         </Badge>
         
-        {/* Status Badge */}
-        <Badge 
-          variant={field.required ? "default" : "outline"}
-          className="shrink-0 hidden sm:inline-flex"
-        >
-          {field.required ? 'Obrigatório' : 'Opcional'}
-        </Badge>
-
         {/* Remove Button */}
         <Tooltip>
           <TooltipTrigger asChild>
@@ -269,14 +261,6 @@ export function CustomFieldsEditor({ settings, onUpdateSettings }: CustomFieldsE
           {field.type === 'select' && field.options && ` (${field.options.length})`}
         </Badge>
         
-        {/* Status Badge */}
-        <Badge 
-          variant={field.required ? "default" : "outline"}
-          className="shrink-0 hidden sm:inline-flex"
-        >
-          {field.required ? 'Obrigatório' : 'Opcional'}
-        </Badge>
-
         {/* Actions - Mobile: always visible */}
         <div className="flex items-center gap-0.5 sm:hidden">
           <Button
