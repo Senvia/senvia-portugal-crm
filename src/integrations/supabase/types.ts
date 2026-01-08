@@ -123,6 +123,9 @@ export type Database = {
           created_at: string | null
           form_settings: Json | null
           id: string
+          msg_template_cold: string | null
+          msg_template_hot: string | null
+          msg_template_warm: string | null
           name: string
           plan: string | null
           public_key: string
@@ -137,6 +140,9 @@ export type Database = {
           created_at?: string | null
           form_settings?: Json | null
           id?: string
+          msg_template_cold?: string | null
+          msg_template_hot?: string | null
+          msg_template_warm?: string | null
           name: string
           plan?: string | null
           public_key?: string
@@ -151,6 +157,9 @@ export type Database = {
           created_at?: string | null
           form_settings?: Json | null
           id?: string
+          msg_template_cold?: string | null
+          msg_template_hot?: string | null
+          msg_template_warm?: string | null
           name?: string
           plan?: string | null
           public_key?: string

@@ -12,7 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Copy, ExternalLink, Code, Shield, User, Building, Webhook, Send, Loader2, Link2, Check, Users, Palette, Eye, EyeOff, Save, Key, MessageCircle, Brain } from "lucide-react";
+import { Copy, ExternalLink, Code, Shield, User, Building, Webhook, Send, Loader2, Link2, Check, Users, Palette, Eye, EyeOff, Save, Key, MessageCircle, Brain, MessageSquareText } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Accordion,
@@ -47,6 +47,11 @@ export default function Settings() {
   
   // AI Qualification Rules state
   const [aiQualificationRules, setAiQualificationRules] = useState('');
+  
+  // Message Templates state
+  const [msgTemplateHot, setMsgTemplateHot] = useState('');
+  const [msgTemplateWarm, setMsgTemplateWarm] = useState('');
+  const [msgTemplateCold, setMsgTemplateCold] = useState('');
 
   // Organization edit state
   const [orgName, setOrgName] = useState('');
@@ -79,7 +84,7 @@ export default function Settings() {
       setIsLoadingIntegrations(true);
       const { data, error } = await supabase
         .from('organizations')
-        .select('webhook_url, whatsapp_instance, whatsapp_number, whatsapp_api_key, ai_qualification_rules')
+        .select('webhook_url, whatsapp_instance, whatsapp_number, whatsapp_api_key, ai_qualification_rules, msg_template_hot, msg_template_warm, msg_template_cold')
         .eq('id', organization.id)
         .single();
       
@@ -89,6 +94,9 @@ export default function Settings() {
         setWhatsappNumber(data.whatsapp_number || '');
         setWhatsappApiKey(data.whatsapp_api_key || '');
         setAiQualificationRules(data.ai_qualification_rules || '');
+        setMsgTemplateHot(data.msg_template_hot || '');
+        setMsgTemplateWarm(data.msg_template_warm || '');
+        setMsgTemplateCold(data.msg_template_cold || '');
       }
       setIsLoadingIntegrations(false);
     }
@@ -119,6 +127,14 @@ export default function Settings() {
   const handleSaveAiRules = () => {
     updateOrganization.mutate({
       ai_qualification_rules: aiQualificationRules.trim() || null,
+    });
+  };
+
+  const handleSaveMessageTemplates = () => {
+    updateOrganization.mutate({
+      msg_template_hot: msgTemplateHot.trim() || null,
+      msg_template_warm: msgTemplateWarm.trim() || null,
+      msg_template_cold: msgTemplateCold.trim() || null,
     });
   };
 
@@ -572,6 +588,90 @@ export default function Settings() {
                           >
                             {updateOrganization.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                             Guardar
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+
+                {/* Modelos de Mensagem */}
+                <AccordionItem value="message-templates">
+                  <AccordionTrigger className="hover:no-underline">
+                    <div className="flex flex-col items-start gap-1">
+                      <div className="flex items-center gap-2">
+                        <MessageSquareText className="h-5 w-5" />
+                        <span className="font-medium">Modelos de Mensagem</span>
+                      </div>
+                      <span className="text-xs text-muted-foreground font-normal">
+                        Configure mensagens automáticas por temperatura do lead.
+                      </span>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="space-y-6 pt-4">
+                      {isLoadingIntegrations ? (
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <span className="text-sm">A carregar...</span>
+                        </div>
+                      ) : (
+                        <>
+                          {/* Nota informativa */}
+                          <div className="rounded-lg bg-primary/10 border border-primary/20 p-3">
+                            <p className="text-sm text-primary">
+                              <strong>Dica:</strong> Use {'{nome}'} para inserir automaticamente o nome do lead na mensagem.
+                            </p>
+                          </div>
+
+                          {/* Template HOT */}
+                          <div className="space-y-2">
+                            <Label className="flex items-center gap-2">
+                              <span className="h-2 w-2 rounded-full bg-red-500" />
+                              Mensagem para Leads HOT (Urgente)
+                            </Label>
+                            <Textarea
+                              placeholder="Olá {nome}! 🔥 Que bom que nos contactou! Estamos prontos para ajudar..."
+                              value={msgTemplateHot}
+                              onChange={(e) => setMsgTemplateHot(e.target.value)}
+                              className="min-h-[100px]"
+                            />
+                          </div>
+
+                          {/* Template WARM */}
+                          <div className="space-y-2">
+                            <Label className="flex items-center gap-2">
+                              <span className="h-2 w-2 rounded-full bg-amber-500" />
+                              Mensagem para Leads WARM (Interessados)
+                            </Label>
+                            <Textarea
+                              placeholder="Olá {nome}! Obrigado pelo seu interesse. Gostaríamos de saber mais..."
+                              value={msgTemplateWarm}
+                              onChange={(e) => setMsgTemplateWarm(e.target.value)}
+                              className="min-h-[100px]"
+                            />
+                          </div>
+
+                          {/* Template COLD */}
+                          <div className="space-y-2">
+                            <Label className="flex items-center gap-2">
+                              <span className="h-2 w-2 rounded-full bg-blue-500" />
+                              Mensagem para Leads COLD (Curiosos)
+                            </Label>
+                            <Textarea
+                              placeholder="Olá {nome}! Obrigado por nos contactar. Temos várias soluções..."
+                              value={msgTemplateCold}
+                              onChange={(e) => setMsgTemplateCold(e.target.value)}
+                              className="min-h-[100px]"
+                            />
+                          </div>
+
+                          <Button
+                            onClick={handleSaveMessageTemplates}
+                            disabled={updateOrganization.isPending}
+                          >
+                            {updateOrganization.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Guardar Modelos
                           </Button>
                         </>
                       )}
