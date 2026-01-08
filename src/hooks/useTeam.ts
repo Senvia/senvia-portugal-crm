@@ -17,6 +17,7 @@ export interface TeamMember {
   organization_id: string | null;
   role: 'admin' | 'viewer' | 'super_admin';
   user_id: string;
+  is_banned: boolean;
 }
 
 export interface PendingInvite {
@@ -37,33 +38,10 @@ export function useTeamMembers() {
     queryFn: async (): Promise<TeamMember[]> => {
       if (!organization?.id) return [];
 
-      // Get profiles for this organization
-      const { data: profiles, error: profilesError } = await supabase
-        .from('profiles')
-        .select('id, full_name, avatar_url, organization_id')
-        .eq('organization_id', organization.id);
+      const { data, error } = await supabase.functions.invoke('get-team-members');
 
-      if (profilesError) throw profilesError;
-      if (!profiles || profiles.length === 0) return [];
-
-      // Get roles for these users
-      const userIds = profiles.map(p => p.id);
-      const { data: roles, error: rolesError } = await supabase
-        .from('user_roles')
-        .select('user_id, role')
-        .in('user_id', userIds);
-
-      if (rolesError) throw rolesError;
-
-      // Merge profiles with roles
-      return profiles.map(profile => {
-        const userRole = roles?.find(r => r.user_id === profile.id);
-        return {
-          ...profile,
-          user_id: profile.id,
-          role: (userRole?.role as 'admin' | 'viewer' | 'super_admin') || 'viewer',
-        };
-      });
+      if (error) throw error;
+      return (data || []) as TeamMember[];
     },
     enabled: !!organization?.id,
   });
