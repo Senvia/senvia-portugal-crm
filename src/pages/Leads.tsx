@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search, Users, Loader2, CalendarIcon, X, Plus } from "lucide-react";
 import { format, endOfDay } from "date-fns";
 import { pt } from "date-fns/locale";
@@ -160,19 +161,45 @@ export default function Leads() {
               </PopoverContent>
             </Popover>
 
-            <div className="h-4 w-px bg-border shrink-0 hidden sm:block" />
+            <div className="h-4 w-px bg-border shrink-0 hidden md:block" />
 
-            {/* Status Filter Badges */}
-            {KANBAN_COLUMNS.map((status) => (
-              <Badge
-                key={status}
-                variant={statusFilter.includes(status) ? "default" : "outline"}
-                className="cursor-pointer transition-colors hover:bg-primary/10 shrink-0 text-xs"
-                onClick={() => toggleStatus(status)}
-              >
-                {STATUS_LABELS[status]}
-              </Badge>
-            ))}
+            {/* Mobile: Select dropdown for status filter */}
+            <Select
+              value={statusFilter.length === 1 ? statusFilter[0] : "all"}
+              onValueChange={(value) => {
+                if (value === "all") {
+                  setStatusFilter([]);
+                } else {
+                  setStatusFilter([value as LeadStatus]);
+                }
+              }}
+            >
+              <SelectTrigger className="w-full h-8 md:hidden shrink-0">
+                <SelectValue placeholder="Filtrar status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os status</SelectItem>
+                {KANBAN_COLUMNS.map((status) => (
+                  <SelectItem key={status} value={status}>
+                    {STATUS_LABELS[status]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {/* Desktop: Status Filter Badges */}
+            <div className="hidden md:flex items-center gap-2">
+              {KANBAN_COLUMNS.map((status) => (
+                <Badge
+                  key={status}
+                  variant={statusFilter.includes(status) ? "default" : "outline"}
+                  className="cursor-pointer transition-colors hover:bg-primary/10 shrink-0 text-xs"
+                  onClick={() => toggleStatus(status)}
+                >
+                  {STATUS_LABELS[status]}
+                </Badge>
+              ))}
+            </div>
 
             {/* Clear Filters */}
             {hasActiveFilters && (
