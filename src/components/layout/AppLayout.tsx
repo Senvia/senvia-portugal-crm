@@ -30,7 +30,7 @@ export function AppLayout({ children, userName, organizationName }: AppLayoutPro
           userName={userName}
           organizationName={organizationName}
         />
-        <main className="pt-14 pb-20">
+        <main className="pb-20" style={{ paddingTop: 'calc(3.5rem + env(safe-area-inset-top))' }}>
           <div className="min-h-[calc(100vh-8.5rem)]">
             {children}
           </div>

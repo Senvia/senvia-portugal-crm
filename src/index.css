@@ -151,6 +151,15 @@
     padding-top: max(1rem, env(safe-area-inset-top));
   }
 
+  /* PWA header/nav safe area utilities */
+  .pt-header-safe {
+    padding-top: calc(3.5rem + env(safe-area-inset-top));
+  }
+
+  .pb-nav-safe {
+    padding-bottom: calc(4rem + env(safe-area-inset-bottom));
+  }
+
   /* Scrollbar Styling */
   ::-webkit-scrollbar {
     width: 6px;
