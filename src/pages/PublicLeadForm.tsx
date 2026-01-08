@@ -9,6 +9,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { PhoneInput } from '@/components/ui/phone-input';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, CheckCircle, AlertCircle, Zap } from 'lucide-react';
 import { FormSettings, DEFAULT_FORM_SETTINGS, CustomField, migrateFormSettings } from '@/types';
@@ -343,12 +344,10 @@ export default function PublicLeadForm() {
                 <Label htmlFor="phone">
                   {settings.fields.phone.label} {settings.fields.phone.required && '*'}
                 </Label>
-                <Input 
-                  id="phone" 
-                  type="tel" 
-                  placeholder="912 345 678" 
-                  value={phone} 
-                  onChange={(e) => setPhone(e.target.value)} 
+                <PhoneInput
+                  value={phone}
+                  onChange={setPhone}
+                  placeholder="912 345 678"
                 />
               </div>
             )}
