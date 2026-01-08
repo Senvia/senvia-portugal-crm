@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       leads: {
         Row: {
+          automation_enabled: boolean
           created_at: string | null
           custom_data: Json | null
           email: string
@@ -32,6 +33,7 @@ export type Database = {
           value: number | null
         }
         Insert: {
+          automation_enabled?: boolean
           created_at?: string | null
           custom_data?: Json | null
           email: string
@@ -48,6 +50,7 @@ export type Database = {
           value?: number | null
         }
         Update: {
+          automation_enabled?: boolean
           created_at?: string | null
           custom_data?: Json | null
           email?: string

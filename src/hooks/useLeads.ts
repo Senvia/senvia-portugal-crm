@@ -136,6 +136,7 @@ export function useCreateLead() {
       value?: number;
       notes?: string;
       gdpr_consent: boolean;
+      automation_enabled?: boolean;
     }) => {
       if (!organization?.id) throw new Error('Sem organização');
       
