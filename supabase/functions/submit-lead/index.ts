@@ -168,7 +168,13 @@ Deno.serve(async (req) => {
           phone: lead.phone,
           source: lead.source,
           status: lead.status,
+          temperature: lead.temperature,
+          value: lead.value,
+          notes: lead.notes,
+          gdpr_consent: lead.gdpr_consent,
+          custom_data: lead.custom_data,
           created_at: lead.created_at,
+          updated_at: lead.updated_at,
         },
       };
 
