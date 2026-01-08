@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { KanbanBoard } from "@/components/leads/KanbanBoard";
@@ -21,6 +21,16 @@ export default function Dashboard() {
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
+  // Sync selectedLead with leads data after updates
+  useEffect(() => {
+    if (selectedLead && leads) {
+      const updatedLead = leads.find(l => l.id === selectedLead.id);
+      if (updatedLead) {
+        setSelectedLead(updatedLead);
+      }
+    }
+  }, [leads]);
+
   const handleStatusChange = (leadId: string, newStatus: LeadStatus) => {
     updateStatus.mutate({ leadId, status: newStatus });
   };
@@ -36,6 +46,10 @@ export default function Dashboard() {
 
   const handleDelete = (leadId: string) => {
     deleteLead.mutate(leadId);
+  };
+
+  const handleUpdate = (leadId: string, updates: Partial<Lead>) => {
+    updateLead.mutate({ leadId, updates });
   };
 
   const greeting = profile?.full_name 
@@ -77,7 +91,7 @@ export default function Dashboard() {
           )}
         </div>
 
-        <LeadDetailsModal lead={selectedLead} open={isModalOpen} onOpenChange={setIsModalOpen} onStatusChange={handleStatusChange} onDelete={handleDelete} />
+        <LeadDetailsModal lead={selectedLead} open={isModalOpen} onOpenChange={setIsModalOpen} onStatusChange={handleStatusChange} onDelete={handleDelete} onUpdate={handleUpdate} />
       </div>
     </AppLayout>
   );
