@@ -245,6 +245,34 @@ Deno.serve(async (req) => {
         });
     }
 
+    // Send push notification to organization members (non-blocking)
+    try {
+      const pushPayload = {
+        organization_id: org.id,
+        title: '🚀 Novo Lead!',
+        body: `${lead.name} - ${lead.source || 'Formulário Público'}`,
+        url: '/leads',
+        tag: `lead-${lead.id}`,
+      };
+
+      fetch(`${supabaseUrl}/functions/v1/send-push-notification`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${serviceRoleKey}`,
+        },
+        body: JSON.stringify(pushPayload),
+      })
+        .then((res) => {
+          console.info(`Push notification dispatched, status: ${res.status}`);
+        })
+        .catch((err) => {
+          console.error('Push notification failed:', err.message);
+        });
+    } catch (pushError) {
+      console.error('Error preparing push notification:', pushError);
+    }
+
     return new Response(
       JSON.stringify({ 
         success: true, 

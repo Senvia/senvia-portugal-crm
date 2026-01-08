@@ -12,7 +12,8 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Copy, ExternalLink, Code, Shield, User, Building, Webhook, Send, Loader2, Link2, Check, Users, Palette, Eye, EyeOff, Save, Key, MessageCircle, Brain, MessageSquareText, Target, Plus, Trash2, ToggleLeft, ToggleRight, ArrowLeft } from "lucide-react";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
+import { Copy, ExternalLink, Code, Shield, User, Building, Webhook, Send, Loader2, Link2, Check, Users, Palette, Eye, EyeOff, Save, Key, MessageCircle, Brain, MessageSquareText, Target, Plus, Trash2, ToggleLeft, ToggleRight, ArrowLeft, Bell, BellOff } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Accordion,
@@ -38,6 +39,7 @@ export default function Settings() {
   const changePassword = useChangePassword();
   const { canManageTeam, canManageIntegrations, isAdmin } = usePermissions();
   const isMobile = useIsMobile();
+  const pushNotifications = usePushNotifications();
 
   // Mobile navigation state
   const [mobileSection, setMobileSection] = useState<SettingsSection | null>(null);
@@ -384,6 +386,69 @@ export default function Settings() {
               Alterar Password
             </Button>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Bell className="h-5 w-5" />
+            Notificações Push
+          </CardTitle>
+          <CardDescription>
+            Receba alertas instantâneos quando chegarem novos leads.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {!pushNotifications.isSupported ? (
+            <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-4">
+              <p className="text-sm text-amber-600 dark:text-amber-400">
+                O seu browser não suporta notificações push. Tente usar Chrome, Safari ou Firefox.
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">
+                    {pushNotifications.isSubscribed ? 'Notificações ativas' : 'Notificações desativadas'}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {pushNotifications.isSubscribed 
+                      ? 'Vai receber alertas para novos leads.' 
+                      : 'Ative para receber alertas instantâneos.'}
+                  </p>
+                </div>
+                <Button
+                  variant={pushNotifications.isSubscribed ? 'outline' : 'default'}
+                  size="sm"
+                  onClick={pushNotifications.toggle}
+                  disabled={pushNotifications.isLoading}
+                >
+                  {pushNotifications.isLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : pushNotifications.isSubscribed ? (
+                    <>
+                      <BellOff className="mr-2 h-4 w-4" />
+                      Desativar
+                    </>
+                  ) : (
+                    <>
+                      <Bell className="mr-2 h-4 w-4" />
+                      Ativar
+                    </>
+                  )}
+                </Button>
+              </div>
+              {pushNotifications.permission === 'denied' && (
+                <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-3">
+                  <p className="text-xs text-destructive">
+                    Notificações bloqueadas. Vá às definições do browser para permitir notificações deste site.
+                  </p>
+                </div>
+              )}
+            </>
+          )}
         </CardContent>
       </Card>
 

@@ -14,3 +14,6 @@ verify_jwt = false
 
 [functions.update-lead]
 verify_jwt = false
+
+[functions.send-push-notification]
+verify_jwt = false
