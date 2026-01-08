@@ -28,7 +28,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { PhoneInput } from "@/components/ui/phone-input";
-import { Loader2 } from "lucide-react";
+import { Loader2, Zap } from "lucide-react";
 import { useCreateLead } from "@/hooks/useLeads";
 import type { LeadTemperature } from "@/types";
 
@@ -62,6 +62,7 @@ const addLeadSchema = z.object({
   gdpr_consent: z.literal(true, {
     errorMap: () => ({ message: "Consentimento RGPD é obrigatório" }),
   }),
+  automation_enabled: z.boolean().default(true),
 });
 
 type AddLeadFormData = z.infer<typeof addLeadSchema>;
@@ -85,6 +86,7 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
       value: "",
       notes: "",
       gdpr_consent: undefined,
+      automation_enabled: true,
     },
   });
 
@@ -98,6 +100,7 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
       value: data.value ? Number(data.value) : undefined,
       notes: data.notes,
       gdpr_consent: data.gdpr_consent,
+      automation_enabled: data.automation_enabled,
     });
     
     form.reset();
@@ -265,6 +268,30 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
                     </p>
                   </div>
                   <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="automation_enabled"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border border-primary/20 bg-primary/5 p-4">
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                  <div className="space-y-1 leading-none">
+                    <FormLabel className="flex items-center gap-2">
+                      <Zap className="h-4 w-4 text-primary" />
+                      Activar automação
+                    </FormLabel>
+                    <p className="text-sm text-muted-foreground">
+                      Enviar mensagem automática de WhatsApp e notificar equipa.
+                    </p>
+                  </div>
                 </FormItem>
               )}
             />

@@ -55,6 +55,7 @@ export interface Lead {
   source?: string;
   value?: number;
   gdpr_consent: boolean;
+  automation_enabled: boolean;
   custom_data?: Record<string, string | number | boolean | string[] | null>;
   created_at: string;
   updated_at?: string;
