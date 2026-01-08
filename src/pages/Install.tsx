@@ -1,56 +1,15 @@
-import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Download, Smartphone, Check, Share, MoreVertical, PlusSquare } from "lucide-react";
 import senviaLogo from "@/assets/senvia-logo.png";
 import { Link } from "react-router-dom";
-
-interface BeforeInstallPromptEvent extends Event {
-  prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
-}
+import { usePWAInstall } from "@/hooks/usePWAInstall";
 
 export default function Install() {
-  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [isInstalled, setIsInstalled] = useState(false);
-  const [isIOS, setIsIOS] = useState(false);
-  const [isAndroid, setIsAndroid] = useState(false);
-
-  useEffect(() => {
-    // Check if already installed
-    if (window.matchMedia("(display-mode: standalone)").matches) {
-      setIsInstalled(true);
-    }
-
-    // Detect platform
-    const ua = navigator.userAgent;
-    setIsIOS(/iPad|iPhone|iPod/.test(ua));
-    setIsAndroid(/Android/.test(ua));
-
-    // Listen for install prompt
-    const handleBeforeInstall = (e: Event) => {
-      e.preventDefault();
-      setDeferredPrompt(e as BeforeInstallPromptEvent);
-    };
-
-    window.addEventListener("beforeinstallprompt", handleBeforeInstall);
-
-    return () => {
-      window.removeEventListener("beforeinstallprompt", handleBeforeInstall);
-    };
-  }, []);
+  const { isInstalled, isIOS, isAndroid, hasNativePrompt, promptInstall } = usePWAInstall();
 
   const handleInstallClick = async () => {
-    if (!deferredPrompt) return;
-
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-
-    if (outcome === "accepted") {
-      setIsInstalled(true);
-    }
-
-    setDeferredPrompt(null);
+    await promptInstall();
   };
 
   return (
@@ -82,7 +41,7 @@ export default function Install() {
         ) : (
           <>
             {/* Android / Chrome Install Button */}
-            {deferredPrompt && (
+            {hasNativePrompt && (
               <Button onClick={handleInstallClick} size="lg" className="w-full h-14 text-base">
                 <Download className="mr-2 h-5 w-5" />
                 Instalar Aplicação
@@ -90,7 +49,7 @@ export default function Install() {
             )}
 
             {/* iOS Instructions */}
-            {isIOS && !deferredPrompt && (
+            {isIOS && !hasNativePrompt && (
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -140,7 +99,7 @@ export default function Install() {
             )}
 
             {/* Android Instructions (fallback) */}
-            {isAndroid && !deferredPrompt && (
+            {isAndroid && !hasNativePrompt && (
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -187,7 +146,7 @@ export default function Install() {
             )}
 
             {/* Desktop fallback */}
-            {!isIOS && !isAndroid && !deferredPrompt && (
+            {!isIOS && !isAndroid && !hasNativePrompt && (
               <Card>
                 <CardContent className="pt-6">
                   <p className="text-center text-muted-foreground">

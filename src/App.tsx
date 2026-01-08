@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { SuperAdminRoute } from "@/components/auth/SuperAdminRoute";
+import { PWAInstallButton } from "@/components/pwa/PWAInstallButton";
 
 // Pages
 import Landing from "./pages/Landing";
@@ -35,6 +36,7 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
+          <PWAInstallButton />
           <Routes>
             {/* Public Routes */}
             <Route path="/" element={<Landing />} />
