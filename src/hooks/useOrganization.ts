@@ -80,6 +80,31 @@ export function useTestWebhook() {
         console.error('Error fetching org data for webhook test:', orgError);
       }
 
+      // Create a real test lead in the database so n8n can update it
+      const testLeadData = {
+        organization_id: organization.id,
+        name: 'Lead de Teste',
+        email: 'teste@exemplo.com',
+        phone: '+351912345678',
+        source: 'Teste de Webhook',
+        status: 'new' as const,
+        temperature: 'warm' as const,
+        value: 1500,
+        notes: 'Mensagem de exemplo do lead - criado por teste de webhook',
+        gdpr_consent: true,
+      };
+
+      const { data: createdLead, error: createError } = await supabase
+        .from('leads')
+        .insert(testLeadData)
+        .select('id, created_at, updated_at')
+        .single();
+
+      if (createError) {
+        console.error('Error creating test lead:', createError);
+        throw new Error('Não foi possível criar lead de teste');
+      }
+
       // Gerar custom_data dinâmico baseado nos campos personalizados
       const generateTestCustomData = (formSettings: any) => {
         const customData: Record<string, any> = {};
@@ -113,6 +138,9 @@ export function useTestWebhook() {
       const testPayload = {
         event: 'lead.created',
         timestamp: new Date().toISOString(),
+        meta: {
+          is_test: true,
+        },
         organization: {
           id: organization.id,
           name: organization.name,
@@ -127,19 +155,19 @@ export function useTestWebhook() {
           msg_template_cold: orgData?.msg_template_cold || null,
         },
         lead: {
-          id: 'test-lead-id',
-          name: 'Lead de Teste',
-          email: 'teste@exemplo.com',
-          phone: '+351912345678',
-          source: 'Teste de Webhook',
-          status: 'new',
-          temperature: 'warm',
-          value: 1500,
-          notes: 'Mensagem de exemplo do lead',
-          gdpr_consent: true,
+          id: createdLead.id,
+          name: testLeadData.name,
+          email: testLeadData.email,
+          phone: testLeadData.phone,
+          source: testLeadData.source,
+          status: testLeadData.status,
+          temperature: testLeadData.temperature,
+          value: testLeadData.value,
+          notes: testLeadData.notes,
+          gdpr_consent: testLeadData.gdpr_consent,
           custom_data: generateTestCustomData(orgData?.form_settings),
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
+          created_at: createdLead.created_at,
+          updated_at: createdLead.updated_at,
         },
         utm: {
           source: 'facebook',
@@ -169,7 +197,7 @@ export function useTestWebhook() {
     onSuccess: () => {
       toast({
         title: 'Webhook testado',
-        description: 'O webhook respondeu com sucesso!',
+        description: 'O webhook respondeu com sucesso! Um lead de teste foi criado no Kanban.',
       });
     },
     onError: (error: Error) => {
