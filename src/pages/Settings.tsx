@@ -63,6 +63,9 @@ export default function Settings() {
   // Meta Ads Pixels state
   const [metaPixels, setMetaPixels] = useState<MetaPixel[]>([]);
 
+  // Form mode state (for dynamic URL)
+  const [formMode, setFormMode] = useState<'traditional' | 'conversational'>('traditional');
+
   // Organization edit state
   const [orgName, setOrgName] = useState('');
   
@@ -74,7 +77,9 @@ export default function Settings() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  const publicFormUrl = organization?.public_key ? `${PRODUCTION_URL}/p/${organization.public_key}` : '';
+  // Dynamic form URL based on mode
+  const formPrefix = formMode === 'conversational' ? '/c/' : '/p/';
+  const publicFormUrl = organization?.public_key ? `${PRODUCTION_URL}${formPrefix}${organization.public_key}` : '';
   const iframeCode = organization?.public_key ? `<iframe src="${publicFormUrl}" width="100%" height="500" frameborder="0"></iframe>` : '';
 
   // Initialize editable fields
@@ -94,7 +99,7 @@ export default function Settings() {
       setIsLoadingIntegrations(true);
       const { data, error } = await supabase
         .from('organizations')
-        .select('webhook_url, whatsapp_base_url, whatsapp_instance, whatsapp_api_key, ai_qualification_rules, msg_template_hot, msg_template_warm, msg_template_cold, meta_pixels')
+        .select('webhook_url, whatsapp_base_url, whatsapp_instance, whatsapp_api_key, ai_qualification_rules, msg_template_hot, msg_template_warm, msg_template_cold, meta_pixels, form_settings')
         .eq('id', organization.id)
         .single();
       
@@ -108,6 +113,12 @@ export default function Settings() {
         setMsgTemplateWarm(data.msg_template_warm || '');
         setMsgTemplateCold(data.msg_template_cold || '');
         setMetaPixels(Array.isArray(data.meta_pixels) ? data.meta_pixels as unknown as MetaPixel[] : []);
+        
+        // Set form mode from settings
+        if (data.form_settings) {
+          const settings = data.form_settings as { mode?: 'traditional' | 'conversational' };
+          setFormMode(settings.mode || 'traditional');
+        }
       }
       setIsLoadingIntegrations(false);
     }
