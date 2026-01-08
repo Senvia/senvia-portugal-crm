@@ -85,10 +85,10 @@ Deno.serve(async (req) => {
     
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    // Validate public_key and get organization_id (including webhook_url, whatsapp config, AI rules and templates)
+    // Validate public_key and get organization_id (including webhook_url, whatsapp config, AI rules, templates and form_settings)
     const { data: org, error: orgError } = await supabase
       .from('organizations')
-      .select('id, name, webhook_url, whatsapp_instance, whatsapp_api_key, whatsapp_base_url, ai_qualification_rules, msg_template_hot, msg_template_warm, msg_template_cold')
+      .select('id, name, webhook_url, whatsapp_instance, whatsapp_api_key, whatsapp_base_url, ai_qualification_rules, msg_template_hot, msg_template_warm, msg_template_cold, form_settings')
       .eq('public_key', body.public_key)
       .maybeSingle();
 
@@ -150,6 +150,32 @@ Deno.serve(async (req) => {
 
     console.log('Lead created successfully:', lead.id);
 
+    // Function to map custom_data IDs to human-readable labels
+    const mapCustomDataToLabels = (
+      customData: Record<string, unknown> | null,
+      formSettings: { custom_fields?: Array<{ id: string; label: string }> } | null
+    ): Record<string, unknown> => {
+      if (!customData) return {};
+      if (!formSettings?.custom_fields) return customData;
+      
+      const result: Record<string, unknown> = {};
+      
+      for (const [fieldId, value] of Object.entries(customData)) {
+        // Find field by ID
+        const field = formSettings.custom_fields.find(f => f.id === fieldId);
+        
+        if (field) {
+          // Use label as key
+          result[field.label] = value;
+        } else {
+          // Keep ID if no match (UTM params or other fields)
+          result[fieldId] = value;
+        }
+      }
+      
+      return result;
+    };
+
     // Dispatch webhook if configured (non-blocking)
     if (org.webhook_url) {
       console.info(`Dispatching webhook to: ${org.webhook_url}`);
@@ -165,6 +191,12 @@ Deno.serve(async (req) => {
         console.info(`WhatsApp API key set: ${org.whatsapp_api_key ? 'yes' : 'no'}`);
       }
       console.info(`Message templates set: hot=${!!org.msg_template_hot}, warm=${!!org.msg_template_warm}, cold=${!!org.msg_template_cold}`);
+      
+      // Transform custom_data from IDs to labels for webhook
+      const transformedCustomData = mapCustomDataToLabels(
+        lead.custom_data as Record<string, unknown>,
+        org.form_settings as { custom_fields?: Array<{ id: string; label: string }> }
+      );
       
       const webhookPayload = {
         event: 'lead.created',
@@ -193,7 +225,7 @@ Deno.serve(async (req) => {
           value: lead.value,
           notes: lead.notes,
           gdpr_consent: lead.gdpr_consent,
-          custom_data: lead.custom_data,
+          custom_data: transformedCustomData,
           created_at: lead.created_at,
           updated_at: lead.updated_at,
         },
