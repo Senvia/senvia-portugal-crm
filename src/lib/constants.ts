@@ -1,3 +1,6 @@
+// Versão actual do Senvia OS
+export const APP_VERSION = '1.0.0';
+
 // URL base da aplicação em produção
 // IMPORTANTE: Actualizar para o domínio personalizado quando configurado
 export const PRODUCTION_URL = 'https://senvia-portugal-crm.lovable.app';
