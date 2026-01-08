@@ -5,7 +5,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { TeamMember } from '@/hooks/useTeam';
 
 export function useUpdateProfile() {
-  const { user } = useAuth();
+  const { user, refetchUserData } = useAuth();
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -24,6 +24,7 @@ export function useUpdateProfile() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['profile'] });
+      refetchUserData();
       toast({
         title: 'Perfil atualizado',
         description: 'O seu nome foi atualizado com sucesso.',

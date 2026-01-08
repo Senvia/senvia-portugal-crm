@@ -32,6 +32,7 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
+  refetchUserData: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -170,6 +171,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setRoles([]);
   };
 
+  const refetchUserData = async () => {
+    if (!user?.id) return;
+
+    try {
+      // Re-fetch profile
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      setProfile(profileData);
+
+      // Re-fetch organization
+      if (profileData?.organization_id) {
+        const { data: orgData } = await supabase
+          .from('organizations')
+          .select('*')
+          .eq('id', profileData.organization_id)
+          .maybeSingle();
+
+        setOrganization(orgData);
+      }
+    } catch (error) {
+      console.error('Error refetching user data:', error);
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -183,6 +212,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signIn,
         signUp,
         signOut,
+        refetchUserData,
       }}
     >
       {children}

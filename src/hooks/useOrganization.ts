@@ -21,7 +21,7 @@ interface UpdateOrganizationData {
 }
 
 export function useUpdateOrganization() {
-  const { organization } = useAuth();
+  const { organization, refetchUserData } = useAuth();
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -40,6 +40,7 @@ export function useUpdateOrganization() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['organization'] });
+      refetchUserData();
       toast({
         title: 'Guardado',
         description: 'Definições atualizadas com sucesso.',
