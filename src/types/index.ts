@@ -100,6 +100,8 @@ export const TEMPERATURE_STYLES: Record<LeadTemperature, { color: string; emoji:
   hot: { color: 'text-red-500', emoji: '🔥' },
 };
 
+export type FormMode = 'traditional' | 'conversational';
+
 // Custom Field Types
 export type FieldType = 'text' | 'number' | 'select' | 'checkbox' | 'textarea';
 
@@ -138,6 +140,7 @@ export interface FixedFieldConfig {
 
 // Form Settings Interface
 export interface FormSettings {
+  mode: FormMode;
   title: string;
   subtitle: string;
   logo_url: string | null;
@@ -158,6 +161,7 @@ export interface FormSettings {
 
 // Default Form Settings - TODOS os campos começam invisíveis
 export const DEFAULT_FORM_SETTINGS: FormSettings = {
+  mode: 'traditional',
   title: 'Deixe o seu Contacto',
   subtitle: 'Preencha os dados abaixo e entraremos em contacto consigo.',
   logo_url: null,
@@ -193,6 +197,7 @@ export function migrateFormSettings(settings: any): FormSettings {
   // If already in new format, return with sanitized custom_fields
   if (settings?.fields?.name?.visible !== undefined) {
     return {
+      mode: settings.mode || 'traditional',
       ...settings,
       custom_fields: sanitizeCustomFields(settings.custom_fields),
     } as FormSettings;
@@ -203,6 +208,7 @@ export function migrateFormSettings(settings: any): FormSettings {
   const showMessage = settings?.show_message_field ?? false;
   
   return {
+    mode: 'traditional',
     title: settings?.title || DEFAULT_FORM_SETTINGS.title,
     subtitle: settings?.subtitle || DEFAULT_FORM_SETTINGS.subtitle,
     logo_url: settings?.logo_url || null,
