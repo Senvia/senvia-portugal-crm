@@ -12,14 +12,8 @@ export function MobileHeader({ onMenuToggle, isMenuOpen, organizationName = "Sen
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-background border-b border-border safe-top">
       <div className="h-14 flex items-center justify-between px-4">
-        <div className="flex items-center gap-3">
-          <img src={senviaLogo} alt="Senvia OS" className="h-8 w-8 object-contain rounded-lg" />
-          <div className="flex flex-col">
-            <span className="text-sm font-semibold text-foreground leading-tight">Senvia OS</span>
-            <span className="text-[10px] text-muted-foreground leading-tight truncate max-w-[150px]">
-              {organizationName}
-            </span>
-          </div>
+        <div className="flex items-center gap-2">
+          <img src={senviaLogo} alt="SENVIA" className="h-8 w-32 object-contain" />
         </div>
         
         <Button
