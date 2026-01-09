@@ -4,7 +4,7 @@ import { precacheAndRoute } from 'workbox-precaching';
 declare let self: ServiceWorkerGlobalScope;
 
 // Service Worker Version (increment to force update)
-const SW_VERSION = '1.1.0';
+const SW_VERSION = '1.2.0';
 console.log(`[SW] Senvia OS Service Worker v${SW_VERSION} loaded`);
 
 // Precache assets from Vite build
