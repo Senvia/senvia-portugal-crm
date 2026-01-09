@@ -45,9 +45,8 @@ export default function Landing() {
       {/* Header - Simple & Clean */}
       <header className="border-b border-slate-800/50 backdrop-blur-lg sticky top-0 z-50 bg-slate-950/80">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2">
-            <img src={senviaLogo} alt="SENVIA OS" className="w-8 h-8 object-contain rounded-lg" />
-            <span className="text-xl font-bold text-white tracking-tight">SENVIA OS</span>
+          <Link to="/">
+            <img src={senviaLogo} alt="SENVIA" className="h-10 w-40 object-contain" />
           </Link>
           
           <Button variant="outline" className="border-primary/50 bg-primary/10 text-white hover:bg-primary/20 hover:border-primary" asChild>

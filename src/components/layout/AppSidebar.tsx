@@ -44,9 +44,8 @@ export function AppSidebar({ userName = "Utilizador", organizationName = "A Minh
     <aside className="fixed left-0 top-0 z-40 h-screen w-64 gradient-sidebar border-r border-sidebar-border">
       <div className="flex h-full flex-col">
         {/* Logo */}
-        <div className="flex h-16 items-center gap-2 border-b border-sidebar-border px-6">
-          <img src={senviaLogo} alt="SENVIA OS" className="h-8 w-8 object-contain rounded-lg" />
-          <span className="text-lg font-bold text-sidebar-foreground">Senvia OS</span>
+        <div className="flex h-16 items-center border-b border-sidebar-border px-4">
+          <img src={senviaLogo} alt="SENVIA" className="h-10 w-40 object-contain" />
         </div>
 
         {/* Organization Info */}

@@ -276,9 +276,8 @@ export default function Login() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <Link to="/" className="inline-flex items-center gap-2">
-            <img src={senviaLogo} alt="SENVIA" className="w-10 h-10 object-contain rounded-xl" />
-            <span className="text-2xl font-bold text-white tracking-tight">SENVIA</span>
+          <Link to="/">
+            <img src={senviaLogo} alt="SENVIA" className="h-12 w-48 object-contain mx-auto" />
           </Link>
         </div>
 
