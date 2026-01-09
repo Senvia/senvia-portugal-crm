@@ -2,97 +2,65 @@ import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { SEO } from '@/components/SEO';
-import { 
-  CheckCircle, 
-  Clock,
-  MessageSquare,
-  HelpCircle,
-  Zap,
-  Users,
-  Stethoscope,
-  HardHat,
-  Home,
-  ArrowDown,
-  ExternalLink,
-  ChevronDown
-} from 'lucide-react';
+import { CheckCircle, Clock, MessageSquare, HelpCircle, Zap, Users, Stethoscope, HardHat, Home, ArrowDown, ExternalLink, ChevronDown } from 'lucide-react';
 import { useState } from 'react';
-import senviaLogo from "@/assets/senvia-logo-mobile.png";
+import senviaLogo from "@/assets/senvia-logo.png";
 
 // FAQ Data for SEO
-const faqData = [
-  {
-    question: "O que é o Senvia OS?",
-    answer: "O Senvia OS é um sistema CRM com automação WhatsApp e Inteligência Artificial, desenhado especificamente para empresas de serviços high-ticket em Portugal, como clínicas, imobiliárias e empresas de construção."
-  },
-  {
-    question: "Como funciona a automação de WhatsApp?",
-    answer: "Quando um lead preenche o seu formulário, o sistema analisa automaticamente as respostas com IA, classifica o potencial do cliente (Quente/Morno/Frio) e envia uma mensagem personalizada de WhatsApp em segundos, garantindo que nenhum lead fica sem resposta."
-  },
-  {
-    question: "Quanto custa o Senvia OS?",
-    answer: "O Senvia OS tem uma taxa de implementação única de 1.200€ que inclui landing page, configuração completa e formação. Depois, paga apenas 150€/mês que inclui hospedagem, custos de API e suporte contínuo."
-  },
-  {
-    question: "Para que tipo de empresas é indicado?",
-    answer: "O Senvia OS é ideal para empresas de serviços com ticket médio superior a 1.000€, como clínicas (dentárias, estética, capilar), imobiliárias, empresas de construção, remodelações e energias renováveis."
-  }
-];
-
-function FAQItem({ question, answer }: { question: string; answer: string }) {
+const faqData = [{
+  question: "O que é o Senvia OS?",
+  answer: "O Senvia OS é um sistema CRM com automação WhatsApp e Inteligência Artificial, desenhado especificamente para empresas de serviços high-ticket em Portugal, como clínicas, imobiliárias e empresas de construção."
+}, {
+  question: "Como funciona a automação de WhatsApp?",
+  answer: "Quando um lead preenche o seu formulário, o sistema analisa automaticamente as respostas com IA, classifica o potencial do cliente (Quente/Morno/Frio) e envia uma mensagem personalizada de WhatsApp em segundos, garantindo que nenhum lead fica sem resposta."
+}, {
+  question: "Quanto custa o Senvia OS?",
+  answer: "O Senvia OS tem uma taxa de implementação única de 1.200€ que inclui landing page, configuração completa e formação. Depois, paga apenas 150€/mês que inclui hospedagem, custos de API e suporte contínuo."
+}, {
+  question: "Para que tipo de empresas é indicado?",
+  answer: "O Senvia OS é ideal para empresas de serviços com ticket médio superior a 1.000€, como clínicas (dentárias, estética, capilar), imobiliárias, empresas de construção, remodelações e energias renováveis."
+}];
+function FAQItem({
+  question,
+  answer
+}: {
+  question: string;
+  answer: string;
+}) {
   const [isOpen, setIsOpen] = useState(false);
-  
-  return (
-    <div className="border-b border-slate-700 last:border-0">
-      <button
-        className="w-full py-5 flex items-center justify-between text-left"
-        onClick={() => setIsOpen(!isOpen)}
-        aria-expanded={isOpen}
-      >
+  return <div className="border-b border-slate-700 last:border-0">
+      <button className="w-full py-5 flex items-center justify-between text-left" onClick={() => setIsOpen(!isOpen)} aria-expanded={isOpen}>
         <span className="text-white font-medium pr-4">{question}</span>
         <ChevronDown className={`w-5 h-5 text-primary transition-transform flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`} />
       </button>
       <div className={`overflow-hidden transition-all duration-300 ${isOpen ? 'max-h-96 pb-5' : 'max-h-0'}`}>
         <p className="text-slate-400 leading-relaxed">{answer}</p>
       </div>
-    </div>
-  );
+    </div>;
 }
-
 const CONVERSATIONAL_FORM_URL = "https://senvia-portugal-crm.lovable.app/c/c2f636c7-a29a-46ec-9563-db2b14ac5c6e";
-
 function ConversationalFormButton() {
-  return (
-    <Button 
-      size="lg" 
-      className="bg-[#25D366] hover:bg-[#22c55e] text-white text-base px-8 py-6 h-auto shadow-lg hover:shadow-xl transition-all"
-      asChild
-    >
+  return <Button size="lg" className="bg-[#25D366] hover:bg-[#22c55e] text-white text-base px-8 py-6 h-auto shadow-lg hover:shadow-xl transition-all" asChild>
       <a href={CONVERSATIONAL_FORM_URL} target="_blank" rel="noopener noreferrer">
         <MessageSquare className="mr-2 w-5 h-5" />
         RECEBER MENSAGEM DE TESTE
         <ExternalLink className="ml-2 w-4 h-4" />
       </a>
-    </Button>
-  );
+    </Button>;
 }
-
 export default function Landing() {
   const scrollToContacto = () => {
     const element = document.getElementById('contacto');
-    element?.scrollIntoView({ behavior: 'smooth' });
+    element?.scrollIntoView({
+      behavior: 'smooth'
+    });
   };
-
-  return (
-    <>
-      <SEO 
-        canonical="/"
-        title="CRM com Automação WhatsApp e IA para Empresas em Portugal"
-        description="Senvia OS - Sistema de gestão de leads com automação WhatsApp e IA. Ideal para clínicas, imobiliárias e construção. Resposta automática em segundos."
-      />
+  return <>
+      <SEO canonical="/" title="CRM com Automação WhatsApp e IA para Empresas em Portugal" description="Senvia OS - Sistema de gestão de leads com automação WhatsApp e IA. Ideal para clínicas, imobiliárias e construção. Resposta automática em segundos." />
       
       {/* FAQ Structured Data */}
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify({
+      <script type="application/ld+json" dangerouslySetInnerHTML={{
+      __html: JSON.stringify({
         "@context": "https://schema.org",
         "@type": "FAQPage",
         "mainEntity": faqData.map(item => ({
@@ -103,14 +71,15 @@ export default function Landing() {
             "text": item.answer
           }
         }))
-      })}} />
+      })
+    }} />
       
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
       {/* Header - Simple & Clean */}
       <header className="border-b border-slate-800/50 backdrop-blur-lg sticky top-0 z-50 bg-slate-950/80">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <Link to="/">
-            <img src={senviaLogo} alt="SENVIA" className="h-10 w-40 object-contain" />
+            <img alt="SENVIA" className="h-10 w-40 object-contain" src="/lovable-uploads/a8233653-01d3-4e25-b107-7d7bd8806e79.png" />
           </Link>
           
           <Button variant="outline" className="border-primary/50 bg-primary/10 text-white hover:bg-primary/20 hover:border-primary" asChild>
@@ -143,11 +112,7 @@ export default function Landing() {
                 <strong className="text-primary">O Resultado:</strong> O cliente sente-se atendido na hora, e a sua equipa já recebe o lead organizado no nosso CRM para continuar a conversa.
               </p>
               
-              <Button 
-                size="lg" 
-                className="bg-primary hover:bg-primary/90 text-base px-6 sm:px-8 py-6 h-auto text-sm sm:text-base"
-                onClick={scrollToContacto}
-              >
+              <Button size="lg" className="bg-primary hover:bg-primary/90 text-base px-6 sm:px-8 py-6 h-auto text-sm sm:text-base" onClick={scrollToContacto}>
                 QUERO ORGANIZAR O MEU ATENDIMENTO
                 <ArrowDown className="ml-2 w-4 h-4" />
               </Button>
@@ -466,9 +431,7 @@ export default function Landing() {
             </div>
 
             <div className="bg-slate-800/30 border border-slate-700 rounded-2xl px-6 sm:px-8">
-              {faqData.map((item, index) => (
-                <FAQItem key={index} question={item.question} answer={item.answer} />
-              ))}
+              {faqData.map((item, index) => <FAQItem key={index} question={item.question} answer={item.answer} />)}
             </div>
           </div>
         </div>
@@ -522,6 +485,5 @@ export default function Landing() {
         </div>
       </footer>
       </div>
-    </>
-  );
+    </>;
 }
