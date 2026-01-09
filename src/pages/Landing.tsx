@@ -17,7 +17,7 @@ import {
   ChevronDown
 } from 'lucide-react';
 import { useState } from 'react';
-import senviaLogo from "@/assets/senvia-logo.png";
+import senviaLogo from "@/assets/senvia-logo-mobile.png";
 
 // FAQ Data for SEO
 const faqData = [
