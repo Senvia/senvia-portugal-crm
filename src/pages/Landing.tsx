@@ -38,7 +38,7 @@ function FAQItem({
       </div>
     </div>;
 }
-const CONVERSATIONAL_FORM_URL = "https://senvia-portugal-crm.lovable.app/c/c2f636c7-a29a-46ec-9563-db2b14ac5c6e";
+const CONVERSATIONAL_FORM_URL = "https://app.senvia.pt/c/empresa-teste";
 function ConversationalFormButton() {
   return <Button size="lg" className="bg-[#25D366] hover:bg-[#22c55e] text-white text-base px-8 py-6 h-auto shadow-lg hover:shadow-xl transition-all" asChild>
       <a href={CONVERSATIONAL_FORM_URL} target="_blank" rel="noopener noreferrer">

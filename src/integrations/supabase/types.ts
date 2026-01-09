@@ -291,6 +291,17 @@ export type Database = {
           name: string
         }[]
       }
+      get_public_form_by_slug: {
+        Args: { _slug: string }
+        Returns: {
+          form_settings: Json
+          id: string
+          meta_pixels: Json
+          name: string
+          public_key: string
+        }[]
+      }
+      get_slug_by_public_key: { Args: { _public_key: string }; Returns: string }
       get_user_org_id: { Args: { _user_id: string }; Returns: string }
       has_role: {
         Args: {
