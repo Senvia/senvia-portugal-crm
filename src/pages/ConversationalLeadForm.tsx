@@ -28,9 +28,40 @@ interface StepConfig {
   placeholder?: string;
 }
 
+// UTM source mapping
+const mapSourceToLabel = (source: string | null): string => {
+  if (!source) return 'Direto';
+  
+  const mapping: Record<string, string> = {
+    'facebook': 'Facebook',
+    'fb': 'Facebook',
+    'instagram': 'Instagram',
+    'ig': 'Instagram',
+    'google': 'Google',
+    'youtube': 'Youtube',
+    'linkedin': 'LinkedIn',
+    'tiktok': 'TikTok',
+    'twitter': 'Twitter',
+    'x': 'Twitter',
+    'email': 'Email Marketing',
+    'newsletter': 'Newsletter',
+    'whatsapp': 'WhatsApp',
+    'sms': 'SMS',
+  };
+  
+  return mapping[source.toLowerCase()] || source;
+};
+
 const ConversationalLeadForm = () => {
   const { public_key } = useParams<{ public_key: string }>();
   const [currentStep, setCurrentStep] = useState(0);
+
+  // UTM parameters detection
+  const urlParams = new URLSearchParams(window.location.search);
+  const utmSource = urlParams.get('utm_source');
+  const utmMedium = urlParams.get('utm_medium');
+  const utmCampaign = urlParams.get('utm_campaign');
+  const detectedSource = mapSourceToLabel(utmSource);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -172,9 +203,15 @@ const ConversationalLeadForm = () => {
       name: data.welcome || data.name || "Lead Conversacional",
       email: data.email || `lead.${Date.now()}@conversational.form`,
       phone: data.phone || "",
-      source: "conversational_form",
+      source: detectedSource,
       public_key: public_key,
-      custom_data: customData,
+      custom_data: {
+        ...customData,
+        ...(utmSource && { utm_source: utmSource }),
+        ...(utmMedium && { utm_medium: utmMedium }),
+        ...(utmCampaign && { utm_campaign: utmCampaign }),
+        form_type: 'conversational',
+      },
       gdpr_consent: true,
       automation_enabled: true,
     };
