@@ -1,51 +1,53 @@
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { 
-  LayoutDashboard, 
-  Users, 
-  Settings, 
-  LogOut,
-  Shield
-} from "lucide-react";
+import { LayoutDashboard, Users, Settings, LogOut, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { APP_VERSION } from "@/lib/constants";
 import type { AppRole } from "@/types";
 import senviaLogo from "@/assets/senvia-logo.png";
-
-const navItems = [
-  { to: "/dashboard", icon: LayoutDashboard, label: "Painel" },
-  { to: "/leads", icon: Users, label: "Leads" },
-  { to: "/settings", icon: Settings, label: "Configurações" },
-];
-
+const navItems = [{
+  to: "/dashboard",
+  icon: LayoutDashboard,
+  label: "Painel"
+}, {
+  to: "/leads",
+  icon: Users,
+  label: "Leads"
+}, {
+  to: "/settings",
+  icon: Settings,
+  label: "Configurações"
+}];
 const getRoleLabel = (roles: AppRole[]): string => {
   if (roles.includes('super_admin')) return 'Super Admin';
   if (roles.includes('admin')) return 'Administrador';
   if (roles.includes('viewer')) return 'Visualizador';
   return 'Membro';
 };
-
 interface AppSidebarProps {
   userName?: string;
   organizationName?: string;
 }
-
-export function AppSidebar({ userName = "Utilizador", organizationName = "A Minha Empresa" }: AppSidebarProps) {
+export function AppSidebar({
+  userName = "Utilizador",
+  organizationName = "A Minha Empresa"
+}: AppSidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { signOut, roles, isSuperAdmin } = useAuth();
-
+  const {
+    signOut,
+    roles,
+    isSuperAdmin
+  } = useAuth();
   const handleLogout = async () => {
     await signOut();
     navigate('/login');
   };
-
-  return (
-    <aside className="fixed left-0 top-0 z-40 h-screen w-64 gradient-sidebar border-r border-sidebar-border">
+  return <aside className="fixed left-0 top-0 z-40 h-screen w-64 gradient-sidebar border-r border-sidebar-border">
       <div className="flex h-full flex-col">
         {/* Logo */}
         <div className="flex h-16 items-center border-b border-sidebar-border px-4">
-          <img src={senviaLogo} alt="SENVIA" className="h-10 w-40 object-contain" />
+          <img alt="SENVIA" className="h-10 w-40 object-contain" src="/lovable-uploads/a73ec7d1-f1a3-458c-8d12-82bca71d2d34.png" />
         </div>
 
         {/* Organization Info */}
@@ -60,42 +62,19 @@ export function AppSidebar({ userName = "Utilizador", organizationName = "A Minh
 
         {/* Navigation */}
         <nav className="flex-1 space-y-1 px-3 py-4">
-          {navItems.map((item) => {
-            const isActive = location.pathname === item.to || 
-              (item.to !== "/dashboard" && location.pathname.startsWith(item.to));
-            
-            return (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
-                  isActive
-                    ? "bg-sidebar-accent text-sidebar-foreground"
-                    : "text-sidebar-muted hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-                )}
-              >
+          {navItems.map(item => {
+          const isActive = location.pathname === item.to || item.to !== "/dashboard" && location.pathname.startsWith(item.to);
+          return <NavLink key={item.to} to={item.to} className={cn("flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200", isActive ? "bg-sidebar-accent text-sidebar-foreground" : "text-sidebar-muted hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
                 <item.icon className="h-5 w-5" />
                 {item.label}
-              </NavLink>
-            );
-          })}
+              </NavLink>;
+        })}
           
           {/* Super Admin Link */}
-          {isSuperAdmin && (
-            <NavLink
-              to="/system-admin"
-              className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
-                location.pathname.startsWith("/system-admin")
-                  ? "bg-sidebar-accent text-sidebar-foreground"
-                  : "text-sidebar-muted hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-              )}
-            >
+          {isSuperAdmin && <NavLink to="/system-admin" className={cn("flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200", location.pathname.startsWith("/system-admin") ? "bg-sidebar-accent text-sidebar-foreground" : "text-sidebar-muted hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
               <Shield className="h-5 w-5" />
               System Admin
-            </NavLink>
-          )}
+            </NavLink>}
         </nav>
 
         {/* User Section */}
@@ -110,11 +89,7 @@ export function AppSidebar({ userName = "Utilizador", organizationName = "A Minh
               </p>
               <p className="text-xs text-sidebar-muted">{getRoleLabel(roles)}</p>
             </div>
-            <button 
-              onClick={handleLogout}
-              className="rounded-lg p-2 text-sidebar-muted transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
-              title="Terminar sessão"
-            >
+            <button onClick={handleLogout} className="rounded-lg p-2 text-sidebar-muted transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground" title="Terminar sessão">
               <LogOut className="h-4 w-4" />
             </button>
           </div>
@@ -127,6 +102,5 @@ export function AppSidebar({ userName = "Utilizador", organizationName = "A Minh
           </span>
         </div>
       </div>
-    </aside>
-  );
+    </aside>;
 }
