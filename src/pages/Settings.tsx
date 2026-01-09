@@ -419,26 +419,54 @@ export default function Settings() {
                       : 'Ative para receber alertas instantâneos.'}
                   </p>
                 </div>
-                <Button
-                  variant={pushNotifications.isSubscribed ? 'outline' : 'default'}
-                  size="sm"
-                  onClick={pushNotifications.toggle}
-                  disabled={pushNotifications.isLoading}
-                >
-                  {pushNotifications.isLoading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : pushNotifications.isSubscribed ? (
-                    <>
-                      <BellOff className="mr-2 h-4 w-4" />
-                      Desativar
-                    </>
-                  ) : (
-                    <>
-                      <Bell className="mr-2 h-4 w-4" />
-                      Ativar
-                    </>
+                <div className="flex gap-2">
+                  {pushNotifications.isSubscribed && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => {
+                        if (!organization?.id) return;
+                        try {
+                          const { error } = await supabase.functions.invoke('send-push-notification', {
+                            body: {
+                              organization_id: organization.id,
+                              title: '🔔 Teste de Notificação',
+                              body: 'Se vês isto, as notificações estão a funcionar!',
+                              url: '/settings',
+                              tag: 'test-notification',
+                            },
+                          });
+                          if (error) throw error;
+                          toast({ title: 'Teste enviado!', description: 'Aguarda a notificação no dispositivo.' });
+                        } catch (err) {
+                          toast({ title: 'Erro', description: 'Falha ao enviar teste.', variant: 'destructive' });
+                        }
+                      }}
+                    >
+                      Testar
+                    </Button>
                   )}
-                </Button>
+                  <Button
+                    variant={pushNotifications.isSubscribed ? 'outline' : 'default'}
+                    size="sm"
+                    onClick={pushNotifications.toggle}
+                    disabled={pushNotifications.isLoading}
+                  >
+                    {pushNotifications.isLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : pushNotifications.isSubscribed ? (
+                      <>
+                        <BellOff className="mr-2 h-4 w-4" />
+                        Desativar
+                      </>
+                    ) : (
+                      <>
+                        <Bell className="mr-2 h-4 w-4" />
+                        Ativar
+                      </>
+                    )}
+                  </Button>
+                </div>
               </div>
               {pushNotifications.permission === 'denied' && (
                 <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-3">
