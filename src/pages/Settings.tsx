@@ -26,6 +26,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Json } from '@/integrations/supabase/types';
 import { TeamTab } from '@/components/settings/TeamTab';
 import { FormCustomizationSection } from '@/components/settings/FormCustomizationSection';
+import { PushDiagnostics } from '@/components/settings/PushDiagnostics';
 import { PRODUCTION_URL } from '@/lib/constants';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { MobileSettingsNav, SettingsSection } from '@/components/settings/MobileSettingsNav';
@@ -479,6 +480,8 @@ export default function Settings() {
           )}
         </CardContent>
       </Card>
+
+      <PushDiagnostics />
 
       <Card>
         <CardHeader>
