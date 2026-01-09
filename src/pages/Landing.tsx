@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { SEO } from '@/components/SEO';
 import { 
   CheckCircle, 
   Clock,
@@ -12,9 +13,51 @@ import {
   HardHat,
   Home,
   ArrowDown,
-  ExternalLink
+  ExternalLink,
+  ChevronDown
 } from 'lucide-react';
+import { useState } from 'react';
 import senviaLogo from "@/assets/senvia-logo.png";
+
+// FAQ Data for SEO
+const faqData = [
+  {
+    question: "O que é o Senvia OS?",
+    answer: "O Senvia OS é um sistema CRM com automação WhatsApp e Inteligência Artificial, desenhado especificamente para empresas de serviços high-ticket em Portugal, como clínicas, imobiliárias e empresas de construção."
+  },
+  {
+    question: "Como funciona a automação de WhatsApp?",
+    answer: "Quando um lead preenche o seu formulário, o sistema analisa automaticamente as respostas com IA, classifica o potencial do cliente (Quente/Morno/Frio) e envia uma mensagem personalizada de WhatsApp em segundos, garantindo que nenhum lead fica sem resposta."
+  },
+  {
+    question: "Quanto custa o Senvia OS?",
+    answer: "O Senvia OS tem uma taxa de implementação única de 1.200€ que inclui landing page, configuração completa e formação. Depois, paga apenas 150€/mês que inclui hospedagem, custos de API e suporte contínuo."
+  },
+  {
+    question: "Para que tipo de empresas é indicado?",
+    answer: "O Senvia OS é ideal para empresas de serviços com ticket médio superior a 1.000€, como clínicas (dentárias, estética, capilar), imobiliárias, empresas de construção, remodelações e energias renováveis."
+  }
+];
+
+function FAQItem({ question, answer }: { question: string; answer: string }) {
+  const [isOpen, setIsOpen] = useState(false);
+  
+  return (
+    <div className="border-b border-slate-700 last:border-0">
+      <button
+        className="w-full py-5 flex items-center justify-between text-left"
+        onClick={() => setIsOpen(!isOpen)}
+        aria-expanded={isOpen}
+      >
+        <span className="text-white font-medium pr-4">{question}</span>
+        <ChevronDown className={`w-5 h-5 text-primary transition-transform flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+      <div className={`overflow-hidden transition-all duration-300 ${isOpen ? 'max-h-96 pb-5' : 'max-h-0'}`}>
+        <p className="text-slate-400 leading-relaxed">{answer}</p>
+      </div>
+    </div>
+  );
+}
 
 const CONVERSATIONAL_FORM_URL = "https://senvia-portugal-crm.lovable.app/c/c2f636c7-a29a-46ec-9563-db2b14ac5c6e";
 
@@ -41,7 +84,28 @@ export default function Landing() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+    <>
+      <SEO 
+        canonical="/"
+        title="CRM com Automação WhatsApp e IA para Empresas em Portugal"
+        description="Senvia OS - Sistema de gestão de leads com automação WhatsApp e IA. Ideal para clínicas, imobiliárias e construção. Resposta automática em segundos."
+      />
+      
+      {/* FAQ Structured Data */}
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify({
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": faqData.map(item => ({
+          "@type": "Question",
+          "name": item.question,
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": item.answer
+          }
+        }))
+      })}} />
+      
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
       {/* Header - Simple & Clean */}
       <header className="border-b border-slate-800/50 backdrop-blur-lg sticky top-0 z-50 bg-slate-950/80">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
@@ -385,6 +449,31 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* FAQ Section */}
+      <section className="py-16 md:py-24 bg-slate-900/50 border-y border-slate-800/50">
+        <div className="container mx-auto px-4">
+          <div className="max-w-3xl mx-auto">
+            <div className="text-center mb-12">
+              <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-4">
+                Perguntas{' '}
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-blue-400">
+                  Frequentes
+                </span>
+              </h2>
+              <p className="text-slate-400">
+                Tudo o que precisa saber sobre o Senvia OS
+              </p>
+            </div>
+
+            <div className="bg-slate-800/30 border border-slate-700 rounded-2xl px-6 sm:px-8">
+              {faqData.map((item, index) => (
+                <FAQItem key={index} question={item.question} answer={item.answer} />
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* CTA Final - Botão com Popup */}
       <section id="contacto" className="py-16 md:py-24 bg-gradient-to-b from-slate-900/50 to-slate-950 border-t border-slate-800/50">
         <div className="container mx-auto px-4">
@@ -432,6 +521,7 @@ export default function Landing() {
           </div>
         </div>
       </footer>
-    </div>
+      </div>
+    </>
   );
 }

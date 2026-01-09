@@ -1,3 +1,5 @@
+# Senvia OS - Robots.txt
+
 User-agent: Googlebot
 Allow: /
 
@@ -12,3 +14,14 @@ Allow: /
 
 User-agent: *
 Allow: /
+
+# Protected routes - do not index
+Disallow: /dashboard
+Disallow: /leads
+Disallow: /settings
+Disallow: /system-admin
+Disallow: /invite/
+Disallow: /reset-password
+
+# Sitemap
+Sitemap: https://senvia.pt/sitemap.xml
