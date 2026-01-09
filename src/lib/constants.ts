@@ -2,8 +2,7 @@
 export const APP_VERSION = '1.0.0';
 
 // URL base da aplicação em produção
-// IMPORTANTE: Actualizar para o domínio personalizado quando configurado
-export const PRODUCTION_URL = 'https://senvia-portugal-crm.lovable.app';
+export const PRODUCTION_URL = 'https://app.senvia.pt';
 
 // Detecta o ambiente e retorna a URL base correcta
 export const getBaseUrl = () => {

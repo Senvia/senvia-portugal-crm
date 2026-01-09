@@ -43,8 +43,8 @@ const App = () => (
             <Route path="/" element={<Landing />} />
             <Route path="/login" element={<Login />} />
             <Route path="/reset-password" element={<ResetPassword />} />
-            <Route path="/p/:public_key" element={<PublicLeadForm />} />
-            <Route path="/c/:public_key" element={<ConversationalLeadForm />} />
+            <Route path="/f/:slug" element={<PublicLeadForm />} />
+            <Route path="/c/:slug" element={<ConversationalLeadForm />} />
             <Route path="/invite/:token" element={<InviteRegister />} />
             <Route path="/privacy" element={<Privacy />} />
             <Route path="/terms" element={<Terms />} />

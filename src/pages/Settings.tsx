@@ -70,10 +70,10 @@ export default function Settings() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  // Dynamic form URL based on mode
-  const formPrefix = formMode === 'conversational' ? '/c/' : '/p/';
-  const publicFormUrl = organization?.public_key ? `${PRODUCTION_URL}${formPrefix}${organization.public_key}` : '';
-  const iframeCode = organization?.public_key ? `<iframe src="${publicFormUrl}" width="100%" height="500" frameborder="0"></iframe>` : '';
+  // Dynamic form URL based on mode - using slug for friendly URLs
+  const formPrefix = formMode === 'conversational' ? '/c/' : '/f/';
+  const publicFormUrl = organization?.slug ? `${PRODUCTION_URL}${formPrefix}${organization.slug}` : '';
+  const iframeCode = organization?.slug ? `<iframe src="${publicFormUrl}" width="100%" height="500" frameborder="0"></iframe>` : '';
 
   // Initialize editable fields
   useEffect(() => {

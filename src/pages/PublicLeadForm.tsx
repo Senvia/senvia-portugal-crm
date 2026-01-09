@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { PRODUCTION_URL } from '@/lib/constants';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,10 +26,11 @@ interface Organization {
   name: string;
   form_settings: FormSettings | null;
   meta_pixels?: MetaPixel[];
+  public_key: string; // Needed for submit-lead
 }
 
 export default function PublicLeadForm() {
-  const { public_key } = useParams<{ public_key: string }>();
+  const { slug } = useParams<{ slug: string }>();
   const { toast } = useToast();
   
   const [organization, setOrganization] = useState<Organization | null>(null);
@@ -80,50 +80,32 @@ export default function PublicLeadForm() {
   const utmTerm = urlParams.get('utm_term');
   const detectedSource = mapSourceToLabel(utmSource);
 
-  // Validate public_key on mount
+  // Validate slug on mount and fetch organization
   useEffect(() => {
-    async function validatePublicKey() {
-      if (!public_key) {
+    async function fetchOrganization() {
+      if (!slug) {
         setIsValidating(false);
         setIsValid(false);
         return;
       }
 
       try {
-        // Fetch organization with meta_pixels
-        const { data: orgData, error: orgError } = await supabase
-          .from('organizations')
-          .select('id, name, form_settings, meta_pixels')
-          .eq('public_key', public_key)
-          .single();
+        // Fetch organization by slug using new RPC function
+        const { data, error } = await supabase
+          .rpc('get_public_form_by_slug', { _slug: slug });
 
-        if (orgError || !orgData) {
-          // Fallback to RPC if direct query fails
-          const { data, error } = await supabase
-            .rpc('get_public_form_by_key', { _public_key: public_key });
-
-          if (error || !data || data.length === 0) {
-            setIsValid(false);
-          } else {
-            const org = data[0];
-            const migratedSettings = migrateFormSettings(org.form_settings || {});
-            
-            setOrganization({
-              id: org.id,
-              name: org.name,
-              form_settings: migratedSettings,
-            });
-            setSettings(migratedSettings);
-            setIsValid(true);
-          }
+        if (error || !data || data.length === 0) {
+          setIsValid(false);
         } else {
-          const migratedSettings = migrateFormSettings(orgData.form_settings || {});
+          const org = data[0];
+          const migratedSettings = migrateFormSettings(org.form_settings || {});
           
           setOrganization({
-            id: orgData.id,
-            name: orgData.name,
+            id: org.id,
+            name: org.name,
             form_settings: migratedSettings,
-            meta_pixels: Array.isArray(orgData.meta_pixels) ? orgData.meta_pixels as unknown as MetaPixel[] : [],
+            meta_pixels: Array.isArray(org.meta_pixels) ? org.meta_pixels as unknown as MetaPixel[] : [],
+            public_key: org.public_key,
           });
           setSettings(migratedSettings);
           setIsValid(true);
@@ -135,8 +117,8 @@ export default function PublicLeadForm() {
       }
     }
 
-    validatePublicKey();
-  }, [public_key]);
+    fetchOrganization();
+  }, [slug]);
 
   // Inject Meta Pixels
   useEffect(() => {
@@ -190,7 +172,7 @@ export default function PublicLeadForm() {
     if (!organization?.meta_pixels) return;
     
     const activePixels = organization.meta_pixels.filter(p => p.enabled && p.pixel_id);
-    activePixels.forEach(pixel => {
+    activePixels.forEach(() => {
       if (window.fbq) {
         window.fbq('track', 'Lead', {
           content_name: organization.name,
@@ -256,7 +238,7 @@ export default function PublicLeadForm() {
         email: email.trim() || null,
         phone: cleanPhone || null,
         gdpr_consent: true,
-        public_key,
+        public_key: organization?.public_key, // Use public_key from organization data
         source: detectedSource,
         custom_data: {
           ...customData,
@@ -480,18 +462,26 @@ export default function PublicLeadForm() {
             
             <div className="flex items-start space-x-2 pt-2">
               <Checkbox id="gdpr" checked={gdprConsent} onCheckedChange={(checked) => setGdprConsent(checked === true)} />
-              <Label htmlFor="gdpr" className="text-sm text-slate-600 leading-tight cursor-pointer">
-                Li e aceito a <a href={`${PRODUCTION_URL}/privacy`} target="_blank" rel="noopener noreferrer" className="hover:underline" style={{ color: settings.primary_color }}>Política de Privacidade</a> *
+              <Label htmlFor="gdpr" className="text-xs text-slate-500 leading-tight cursor-pointer">
+                Li e aceito a <a href="/privacy" target="_blank" className="underline hover:text-slate-700">Política de Privacidade</a> *
               </Label>
             </div>
             
-            <Button type="submit" className="w-full" style={{ backgroundColor: settings.primary_color }} disabled={isSubmitting || !gdprConsent}>
-              {isSubmitting ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" />A enviar...</>) : 'Enviar'}
+            <Button 
+              type="submit" 
+              className="w-full" 
+              disabled={isSubmitting}
+              style={{ backgroundColor: settings.primary_color }}
+            >
+              {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : settings.submit_button_text}
             </Button>
           </form>
         </CardContent>
       </Card>
-      <p className="text-xs text-slate-400 mt-6">Powered by <span className="font-medium">Senvia</span></p>
+      
+      <p className="text-xs text-slate-400 mt-4">
+        Powered by Senvia OS
+      </p>
     </div>
   );
 }

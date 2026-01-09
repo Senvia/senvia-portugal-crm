@@ -15,6 +15,7 @@ interface OrganizationData {
   id: string;
   name: string;
   form_settings: FormSettings;
+  public_key: string; // Needed for submit-lead
 }
 
 interface StepConfig {
@@ -53,7 +54,7 @@ const mapSourceToLabel = (source: string | null): string => {
 };
 
 const ConversationalLeadForm = () => {
-  const { public_key } = useParams<{ public_key: string }>();
+  const { slug } = useParams<{ slug: string }>();
   const [currentStep, setCurrentStep] = useState(0);
 
   // UTM parameters detection
@@ -71,15 +72,16 @@ const ConversationalLeadForm = () => {
 
   useEffect(() => {
     const fetchOrganization = async () => {
-      if (!public_key) {
+      if (!slug) {
         setError("Formulário não encontrado.");
         setIsLoading(false);
         return;
       }
 
       try {
+        // Fetch organization by slug using new RPC function
         const { data, error } = await supabase
-          .rpc("get_public_form_by_key", { _public_key: public_key });
+          .rpc("get_public_form_by_slug", { _slug: slug });
 
         if (error || !data || data.length === 0) {
           setError("Formulário não encontrado.");
@@ -93,6 +95,7 @@ const ConversationalLeadForm = () => {
           id: data[0].id,
           name: data[0].name,
           form_settings: migratedSettings,
+          public_key: data[0].public_key,
         });
       } catch (err) {
         setError("Erro ao carregar formulário.");
@@ -102,7 +105,7 @@ const ConversationalLeadForm = () => {
     };
 
     fetchOrganization();
-  }, [public_key]);
+  }, [slug]);
 
   // Generate steps from form settings
   const steps = useMemo<StepConfig[]>(() => {
@@ -204,7 +207,7 @@ const ConversationalLeadForm = () => {
       email: data.email || `lead.${Date.now()}@conversational.form`,
       phone: data.phone || "",
       source: detectedSource,
-      public_key: public_key,
+      public_key: organization.public_key, // Use public_key from organization data
       custom_data: {
         ...customData,
         ...(utmSource && { utm_source: utmSource }),
