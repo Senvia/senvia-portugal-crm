@@ -16,33 +16,45 @@ export type Database = {
     Tables: {
       forms: {
         Row: {
+          ai_qualification_rules: string | null
           created_at: string | null
           form_settings: Json | null
           id: string
           is_active: boolean | null
           is_default: boolean | null
+          msg_template_cold: string | null
+          msg_template_hot: string | null
+          msg_template_warm: string | null
           name: string
           organization_id: string
           slug: string
           updated_at: string | null
         }
         Insert: {
+          ai_qualification_rules?: string | null
           created_at?: string | null
           form_settings?: Json | null
           id?: string
           is_active?: boolean | null
           is_default?: boolean | null
+          msg_template_cold?: string | null
+          msg_template_hot?: string | null
+          msg_template_warm?: string | null
           name: string
           organization_id: string
           slug: string
           updated_at?: string | null
         }
         Update: {
+          ai_qualification_rules?: string | null
           created_at?: string | null
           form_settings?: Json | null
           id?: string
           is_active?: boolean | null
           is_default?: boolean | null
+          msg_template_cold?: string | null
+          msg_template_hot?: string | null
+          msg_template_warm?: string | null
           name?: string
           organization_id?: string
           slug?: string

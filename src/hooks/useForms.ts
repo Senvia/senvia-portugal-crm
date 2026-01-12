@@ -15,6 +15,10 @@ function transformForm(row: any): Form {
     form_settings: migrateFormSettings(row.form_settings || {}),
     is_default: row.is_default,
     is_active: row.is_active,
+    msg_template_hot: row.msg_template_hot,
+    msg_template_warm: row.msg_template_warm,
+    msg_template_cold: row.msg_template_cold,
+    ai_qualification_rules: row.ai_qualification_rules,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -132,6 +136,10 @@ interface UpdateFormData {
   form_settings?: FormSettings;
   is_default?: boolean;
   is_active?: boolean;
+  msg_template_hot?: string | null;
+  msg_template_warm?: string | null;
+  msg_template_cold?: string | null;
+  ai_qualification_rules?: string | null;
 }
 
 export function useUpdateForm() {
@@ -158,6 +166,10 @@ export function useUpdateForm() {
       if (data.form_settings !== undefined) updateData.form_settings = data.form_settings as unknown as Json;
       if (data.is_default !== undefined) updateData.is_default = data.is_default;
       if (data.is_active !== undefined) updateData.is_active = data.is_active;
+      if (data.msg_template_hot !== undefined) updateData.msg_template_hot = data.msg_template_hot;
+      if (data.msg_template_warm !== undefined) updateData.msg_template_warm = data.msg_template_warm;
+      if (data.msg_template_cold !== undefined) updateData.msg_template_cold = data.msg_template_cold;
+      if (data.ai_qualification_rules !== undefined) updateData.ai_qualification_rules = data.ai_qualification_rules;
 
       const { data: updatedForm, error } = await supabase
         .from('forms')
