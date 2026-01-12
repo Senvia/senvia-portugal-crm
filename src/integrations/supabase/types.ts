@@ -22,6 +22,7 @@ export type Database = {
           id: string
           is_active: boolean | null
           is_default: boolean | null
+          meta_pixels: Json | null
           msg_template_cold: string | null
           msg_template_hot: string | null
           msg_template_warm: string | null
@@ -37,6 +38,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           is_default?: boolean | null
+          meta_pixels?: Json | null
           msg_template_cold?: string | null
           msg_template_hot?: string | null
           msg_template_warm?: string | null
@@ -52,6 +54,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           is_default?: boolean | null
+          meta_pixels?: Json | null
           msg_template_cold?: string | null
           msg_template_hot?: string | null
           msg_template_warm?: string | null

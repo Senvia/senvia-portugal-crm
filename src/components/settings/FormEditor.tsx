@@ -31,11 +31,16 @@ import {
   Settings,
   Bot,
   Zap,
-  Thermometer
+  Thermometer,
+  Target,
+  Plus,
+  Trash2,
+  ToggleLeft,
+  ToggleRight
 } from "lucide-react";
 import { useUpdateForm } from '@/hooks/useForms';
 import { useAuth } from '@/contexts/AuthContext';
-import { Form, FormSettings, FormMode, migrateFormSettings } from '@/types';
+import { Form, FormSettings, FormMode, MetaPixel, migrateFormSettings } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { FormPreview } from './FormPreview';
 import { ConversationalFormPreview } from './ConversationalFormPreview';
@@ -72,6 +77,9 @@ export function FormEditor({ form, onBack }: FormEditorProps) {
   const [msgTemplateWarm, setMsgTemplateWarm] = useState(form.msg_template_warm || '');
   const [msgTemplateCold, setMsgTemplateCold] = useState(form.msg_template_cold || '');
   const [aiQualificationRules, setAiQualificationRules] = useState(form.ai_qualification_rules || '');
+  
+  // Meta Pixels
+  const [metaPixels, setMetaPixels] = useState<MetaPixel[]>(form.meta_pixels || []);
 
   const getFormUrl = () => {
     if (!organization?.slug) return '';
@@ -93,6 +101,7 @@ export function FormEditor({ form, onBack }: FormEditorProps) {
         msg_template_warm: msgTemplateWarm || null,
         msg_template_cold: msgTemplateCold || null,
         ai_qualification_rules: aiQualificationRules || null,
+        meta_pixels: metaPixels,
       },
       {
         onSuccess: () => {
@@ -104,6 +113,29 @@ export function FormEditor({ form, onBack }: FormEditorProps) {
       }
     );
   };
+
+  // Meta Pixels handlers
+  const handleAddPixel = () => {
+    const newPixel: MetaPixel = {
+      id: crypto.randomUUID(),
+      name: '',
+      pixel_id: '',
+      enabled: true,
+    };
+    setMetaPixels(prev => [...prev, newPixel]);
+  };
+
+  const handleRemovePixel = (id: string) => {
+    setMetaPixels(prev => prev.filter(p => p.id !== id));
+  };
+
+  const handleUpdatePixel = (id: string, field: keyof MetaPixel, value: string | boolean) => {
+    setMetaPixels(prev => prev.map(p => 
+      p.id === id ? { ...p, [field]: value } : p
+    ));
+  };
+
+  const isValidPixelId = (pixelId: string) => /^\d{15,16}$/.test(pixelId);
 
   const handlePreview = () => {
     window.open(getFormUrl(), '_blank', 'noopener,noreferrer');
@@ -584,6 +616,88 @@ Considerar também:
                 className="text-sm font-mono"
               />
             </div>
+          </AccordionContent>
+        </AccordionItem>
+
+        {/* Meta Pixels Section */}
+        <AccordionItem value="meta-pixels" className="border rounded-xl px-4">
+          <AccordionTrigger className="hover:no-underline py-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/10">
+                <Target className="h-5 w-5 text-blue-600" />
+              </div>
+              <div className="text-left">
+                <span className="font-medium">Meta Pixels</span>
+                <p className="text-xs text-muted-foreground font-normal">
+                  Rastreamento de conversões Facebook/Meta
+                </p>
+              </div>
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="pb-4 pt-2 space-y-4">
+            <p className="text-xs text-muted-foreground bg-blue-500/10 text-blue-700 dark:text-blue-400 p-3 rounded-lg">
+              Os pixels disparam eventos <strong>PageView</strong> e <strong>Lead</strong> automaticamente quando o formulário é visualizado e submetido.
+            </p>
+
+            {metaPixels.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4 text-center">
+                Nenhum pixel configurado para este formulário.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {metaPixels.map((pixel, index) => (
+                  <div key={pixel.id} className="flex flex-col gap-3 p-3 rounded-lg border bg-card">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground font-medium">#{index + 1}</span>
+                      <Input
+                        placeholder="Nome do pixel (ex: Pixel Principal)"
+                        value={pixel.name}
+                        onChange={(e) => handleUpdatePixel(pixel.id, 'name', e.target.value)}
+                        className="flex-1"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleUpdatePixel(pixel.id, 'enabled', !pixel.enabled)}
+                        className={pixel.enabled ? 'text-green-500' : 'text-muted-foreground'}
+                        title={pixel.enabled ? 'Ativo' : 'Inativo'}
+                      >
+                        {pixel.enabled ? <ToggleRight className="h-5 w-5" /> : <ToggleLeft className="h-5 w-5" />}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleRemovePixel(pixel.id)}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <Input
+                      placeholder="Pixel ID (15-16 dígitos)"
+                      value={pixel.pixel_id}
+                      onChange={(e) => handleUpdatePixel(pixel.id, 'pixel_id', e.target.value.replace(/\D/g, '').slice(0, 16))}
+                      className={pixel.pixel_id && !isValidPixelId(pixel.pixel_id) ? 'border-destructive' : ''}
+                    />
+                    {pixel.pixel_id && !isValidPixelId(pixel.pixel_id) && (
+                      <p className="text-xs text-destructive">Pixel ID deve ter 15-16 dígitos</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleAddPixel}
+              className="w-full"
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Adicionar Pixel
+            </Button>
           </AccordionContent>
         </AccordionItem>
       </Accordion>
