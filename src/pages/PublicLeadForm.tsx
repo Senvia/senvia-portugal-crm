@@ -105,12 +105,6 @@ export default function PublicLeadForm() {
         } else {
           const formResult = data[0];
           const migratedSettings = migrateFormSettings(formResult.form_settings || {});
-          
-          // Get public_key from organization for submission
-          const { data: orgData } = await supabase
-            .rpc("get_public_form_by_slug", { _slug: slug });
-          
-          const publicKey = orgData?.[0]?.public_key;
 
           setFormData({
             form_id: formResult.form_id,
@@ -120,7 +114,7 @@ export default function PublicLeadForm() {
             org_name: formResult.org_name,
             org_slug: formResult.org_slug,
             meta_pixels: Array.isArray(formResult.meta_pixels) ? formResult.meta_pixels as unknown as MetaPixel[] : [],
-            public_key: publicKey,
+            public_key: formResult.public_key,
           });
           setSettings(migratedSettings);
           setIsValid(true);
