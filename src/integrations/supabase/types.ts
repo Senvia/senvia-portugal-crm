@@ -357,6 +357,7 @@ export type Database = {
           org_id: string
           org_name: string
           org_slug: string
+          public_key: string
         }[]
       }
       get_org_by_public_key: { Args: { _public_key: string }; Returns: string }
