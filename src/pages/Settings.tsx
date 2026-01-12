@@ -13,7 +13,7 @@ import { MetaPixel } from "@/types";
 import { supabase } from '@/integrations/supabase/client';
 import { Json } from '@/integrations/supabase/types';
 import { TeamTab } from '@/components/settings/TeamTab';
-import { FormCustomizationSection } from '@/components/settings/FormCustomizationSection';
+import { FormsManager } from '@/components/settings/FormsManager';
 import { GeneralContent } from '@/components/settings/GeneralContent';
 import { IntegrationsContent } from '@/components/settings/IntegrationsContent';
 import { PRODUCTION_URL } from '@/lib/constants';
@@ -323,7 +323,7 @@ export default function Settings() {
                 />
               )}
               {mobileSection === "team" && canManageTeam && <TeamTab />}
-              {mobileSection === "form" && canManageIntegrations && <FormCustomizationSection onSettingsSaved={() => setRefreshTrigger(prev => prev + 1)} />}
+              {mobileSection === "form" && canManageIntegrations && <FormsManager />}
               {mobileSection === "integrations" && canManageIntegrations && (
                 <IntegrationsContent
                   organization={organization}
@@ -435,7 +435,7 @@ export default function Settings() {
 
               {canManageIntegrations && (
                 <TabsContent value="form" className="w-full max-w-none">
-                  <FormCustomizationSection onSettingsSaved={() => setRefreshTrigger(prev => prev + 1)} />
+                  <FormsManager />
                 </TabsContent>
               )}
 
