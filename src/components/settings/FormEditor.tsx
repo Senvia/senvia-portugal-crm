@@ -513,7 +513,7 @@ export function FormEditor({ form, onBack }: FormEditorProps) {
                 <Label className="font-medium">Modelos de Mensagem por Temperatura</Label>
               </div>
               <p className="text-xs text-muted-foreground">
-                Use <code className="bg-muted px-1 rounded">{'{nome}'}</code> para personalizar com o nome do lead.
+                Use <code className="bg-muted px-1 rounded">{"{{ $('Dados').item.json.Nome }}"}</code> para personalizar com o nome do lead.
               </p>
 
               <div className="space-y-4">
@@ -524,7 +524,7 @@ export function FormEditor({ form, onBack }: FormEditorProps) {
                   <Textarea
                     value={msgTemplateHot}
                     onChange={(e) => setMsgTemplateHot(e.target.value)}
-                    placeholder="Olá {nome}! Vimos que tem interesse urgente. Podemos ajudar agora mesmo?"
+                    placeholder="Olá {{ $('Dados').item.json.Nome }}! Vimos que tem interesse urgente. Podemos ajudar agora mesmo?"
                     rows={3}
                     className="text-sm"
                   />
@@ -537,7 +537,7 @@ export function FormEditor({ form, onBack }: FormEditorProps) {
                   <Textarea
                     value={msgTemplateWarm}
                     onChange={(e) => setMsgTemplateWarm(e.target.value)}
-                    placeholder="Olá {nome}! Obrigado pelo seu contacto. Gostaria de saber mais sobre os nossos serviços?"
+                    placeholder="Olá {{ $('Dados').item.json.Nome }}! Obrigado pelo seu contacto. Gostaria de saber mais sobre os nossos serviços?"
                     rows={3}
                     className="text-sm"
                   />
@@ -550,7 +550,7 @@ export function FormEditor({ form, onBack }: FormEditorProps) {
                   <Textarea
                     value={msgTemplateCold}
                     onChange={(e) => setMsgTemplateCold(e.target.value)}
-                    placeholder="Olá {nome}! Recebemos o seu contacto. Estamos disponíveis para esclarecer qualquer dúvida."
+                    placeholder="Olá {{ $('Dados').item.json.Nome }}! Recebemos o seu contacto. Estamos disponíveis para esclarecer qualquer dúvida."
                     rows={3}
                     className="text-sm"
                   />
