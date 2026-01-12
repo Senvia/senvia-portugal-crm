@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { X, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { usePWAInstall } from "@/hooks/usePWAInstall";
@@ -6,15 +6,21 @@ import { useIsMobile } from "@/hooks/use-mobile";
 
 export function PWAInstallButton() {
   const navigate = useNavigate();
+  const location = useLocation();
   const isMobile = useIsMobile();
   const { isInstalled, isIOS, canInstall, promptInstall, hasNativePrompt, wasDismissed, dismiss } = usePWAInstall();
+
+  // Rotas públicas onde o botão NÃO deve aparecer
+  const publicRoutes = ['/f/', '/c/', '/invite/', '/login', '/reset-password', '/privacy', '/terms', '/install'];
+  const isPublicPage = publicRoutes.some(route => location.pathname.startsWith(route)) || location.pathname === '/';
 
   // Não mostrar se:
   // - Não é mobile
   // - Já está instalado
   // - Utilizador dispensou
   // - Não pode instalar
-  if (!isMobile || isInstalled || wasDismissed || !canInstall) {
+  // - Está numa página pública
+  if (!isMobile || isInstalled || wasDismissed || !canInstall || isPublicPage) {
     return null;
   }
 
