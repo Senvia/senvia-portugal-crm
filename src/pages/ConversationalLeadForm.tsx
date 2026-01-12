@@ -9,13 +9,17 @@ import { StepContainer } from "@/components/conversational/StepContainer";
 import { WelcomeStep } from "@/components/conversational/steps/WelcomeStep";
 import { DynamicStep } from "@/components/conversational/steps/DynamicStep";
 import { SuccessScreen } from "@/components/conversational/SuccessScreen";
-import { FormSettings, migrateFormSettings, CustomField } from "@/types";
+import { FormSettings, migrateFormSettings, CustomField, MetaPixel } from "@/types";
 
-interface OrganizationData {
-  id: string;
-  name: string;
+interface FormData {
+  form_id: string;
+  form_name: string;
   form_settings: FormSettings;
-  public_key: string; // Needed for submit-lead
+  org_id: string;
+  org_name: string;
+  org_slug: string;
+  meta_pixels: MetaPixel[];
+  public_key?: string;
 }
 
 interface StepConfig {
@@ -54,7 +58,7 @@ const mapSourceToLabel = (source: string | null): string => {
 };
 
 const ConversationalLeadForm = () => {
-  const { slug } = useParams<{ slug: string }>();
+  const { slug, formSlug } = useParams<{ slug: string; formSlug?: string }>();
   const [currentStep, setCurrentStep] = useState(0);
 
   // UTM parameters detection
@@ -66,12 +70,12 @@ const ConversationalLeadForm = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [organization, setOrganization] = useState<OrganizationData | null>(null);
+  const [formData, setFormData] = useState<FormData | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [formData, setFormData] = useState<Record<string, string>>({});
+  const [stepData, setStepData] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    const fetchOrganization = async () => {
+    const fetchForm = async () => {
       if (!slug) {
         setError("Formulário não encontrado.");
         setIsLoading(false);
@@ -79,9 +83,12 @@ const ConversationalLeadForm = () => {
       }
 
       try {
-        // Fetch organization by slug using new RPC function
+        // Fetch form by slugs using new RPC function
         const { data, error } = await supabase
-          .rpc("get_public_form_by_slug", { _slug: slug });
+          .rpc("get_form_by_slugs", { 
+            _org_slug: slug,
+            _form_slug: formSlug || null  // null = default form
+          });
 
         if (error || !data || data.length === 0) {
           setError("Formulário não encontrado.");
@@ -89,13 +96,24 @@ const ConversationalLeadForm = () => {
           return;
         }
 
-        const migratedSettings = migrateFormSettings(data[0].form_settings as Partial<FormSettings>);
+        const formResult = data[0];
+        const migratedSettings = migrateFormSettings(formResult.form_settings as Partial<FormSettings>);
 
-        setOrganization({
-          id: data[0].id,
-          name: data[0].name,
+        // Get public_key from organization for submission
+        const { data: orgData } = await supabase
+          .rpc("get_public_form_by_slug", { _slug: slug });
+        
+        const publicKey = orgData?.[0]?.public_key;
+
+        setFormData({
+          form_id: formResult.form_id,
+          form_name: formResult.form_name,
           form_settings: migratedSettings,
-          public_key: data[0].public_key,
+          org_id: formResult.org_id,
+          org_name: formResult.org_name,
+          org_slug: formResult.org_slug,
+          meta_pixels: Array.isArray(formResult.meta_pixels) ? formResult.meta_pixels as unknown as MetaPixel[] : [],
+          public_key: publicKey,
         });
       } catch (err) {
         setError("Erro ao carregar formulário.");
@@ -104,14 +122,14 @@ const ConversationalLeadForm = () => {
       }
     };
 
-    fetchOrganization();
-  }, [slug]);
+    fetchForm();
+  }, [slug, formSlug]);
 
   // Generate steps from form settings
   const steps = useMemo<StepConfig[]>(() => {
-    if (!organization?.form_settings) return [];
+    if (!formData?.form_settings) return [];
 
-    const settings = organization.form_settings;
+    const settings = formData.form_settings;
     const stepList: StepConfig[] = [];
 
     // Step 1: Welcome (always first, includes name if visible)
@@ -169,30 +187,30 @@ const ConversationalLeadForm = () => {
     });
 
     return stepList;
-  }, [organization?.form_settings]);
+  }, [formData?.form_settings]);
 
   const totalSteps = steps.length;
 
   const handleStepComplete = async (key: string, value: string) => {
-    const newFormData = { ...formData, [key]: value };
-    setFormData(newFormData);
+    const newStepData = { ...stepData, [key]: value };
+    setStepData(newStepData);
 
     const isLastStep = currentStep === totalSteps - 1;
 
     if (isLastStep) {
       // Submit the form
-      await submitForm(newFormData);
+      await submitForm(newStepData);
     } else {
       setCurrentStep((prev) => prev + 1);
     }
   };
 
   const submitForm = async (data: Record<string, string>) => {
-    if (!organization) return;
+    if (!formData) return;
 
     setIsSubmitting(true);
 
-    const settings = organization.form_settings;
+    const settings = formData.form_settings;
 
     // Build custom_data from custom fields
     const customData: Record<string, string> = {};
@@ -207,7 +225,8 @@ const ConversationalLeadForm = () => {
       email: data.email || `lead.${Date.now()}@conversational.form`,
       phone: data.phone || "",
       source: detectedSource,
-      public_key: organization.public_key, // Use public_key from organization data
+      public_key: formData.public_key,
+      form_id: formData.form_id,  // Include form_id for form-specific settings
       custom_data: {
         ...customData,
         ...(utmSource && { utm_source: utmSource }),
@@ -241,20 +260,20 @@ const ConversationalLeadForm = () => {
   };
 
   const renderStep = () => {
-    if (isComplete && organization) {
+    if (isComplete && formData) {
       return (
         <SuccessScreen
-          userName={getFirstName(formData.welcome || formData.name)}
-          title={organization.form_settings.success_message.title}
-          description={organization.form_settings.success_message.description}
+          userName={getFirstName(stepData.welcome || stepData.name)}
+          title={formData.form_settings.success_message.title}
+          description={formData.form_settings.success_message.description}
         />
       );
     }
 
     const step = steps[currentStep];
-    if (!step || !organization) return null;
+    if (!step || !formData) return null;
 
-    const settings = organization.form_settings;
+    const settings = formData.form_settings;
 
     if (step.type === 'welcome') {
       return (
@@ -285,7 +304,7 @@ const ConversationalLeadForm = () => {
           options: step.options,
           placeholder: step.placeholder,
         }}
-        userName={getFirstName(formData.welcome || formData.name)}
+        userName={getFirstName(stepData.welcome || stepData.name)}
         showUserName={isFirstStepAfterWelcome}
         onNext={(value) => handleStepComplete(step.key, value)}
         isSubmitting={isSubmitting}
@@ -295,7 +314,7 @@ const ConversationalLeadForm = () => {
     );
   };
 
-  const primaryColor = organization?.form_settings?.primary_color;
+  const primaryColor = formData?.form_settings?.primary_color;
 
   // Helper to extract first name
   const getFirstName = (fullName?: string) => {
@@ -347,7 +366,7 @@ const ConversationalLeadForm = () => {
             <div className="flex justify-center mb-8">
               <AIAvatar 
                 primaryColor={primaryColor} 
-                logoUrl={organization?.form_settings?.logo_url}
+                logoUrl={formData?.form_settings?.logo_url}
               />
             </div>
 

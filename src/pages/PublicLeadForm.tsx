@@ -21,19 +21,22 @@ declare global {
   }
 }
 
-interface Organization {
-  id: string;
-  name: string;
-  form_settings: FormSettings | null;
-  meta_pixels?: MetaPixel[];
-  public_key: string; // Needed for submit-lead
+interface FormDataResult {
+  form_id: string;
+  form_name: string;
+  form_settings: FormSettings;
+  org_id: string;
+  org_name: string;
+  org_slug: string;
+  meta_pixels: MetaPixel[];
+  public_key?: string;
 }
 
 export default function PublicLeadForm() {
-  const { slug } = useParams<{ slug: string }>();
+  const { slug, formSlug } = useParams<{ slug: string; formSlug?: string }>();
   const { toast } = useToast();
   
-  const [organization, setOrganization] = useState<Organization | null>(null);
+  const [formData, setFormData] = useState<FormDataResult | null>(null);
   const [settings, setSettings] = useState<FormSettings>(DEFAULT_FORM_SETTINGS);
   const [isValidating, setIsValidating] = useState(true);
   const [isValid, setIsValid] = useState(false);
@@ -80,9 +83,9 @@ export default function PublicLeadForm() {
   const utmTerm = urlParams.get('utm_term');
   const detectedSource = mapSourceToLabel(utmSource);
 
-  // Validate slug on mount and fetch organization
+  // Validate slug on mount and fetch form
   useEffect(() => {
-    async function fetchOrganization() {
+    async function fetchForm() {
       if (!slug) {
         setIsValidating(false);
         setIsValid(false);
@@ -90,22 +93,34 @@ export default function PublicLeadForm() {
       }
 
       try {
-        // Fetch organization by slug using new RPC function
+        // Fetch form by slugs using new RPC function
         const { data, error } = await supabase
-          .rpc('get_public_form_by_slug', { _slug: slug });
+          .rpc('get_form_by_slugs', { 
+            _org_slug: slug,
+            _form_slug: formSlug || null  // null = default form
+          });
 
         if (error || !data || data.length === 0) {
           setIsValid(false);
         } else {
-          const org = data[0];
-          const migratedSettings = migrateFormSettings(org.form_settings || {});
+          const formResult = data[0];
+          const migratedSettings = migrateFormSettings(formResult.form_settings || {});
           
-          setOrganization({
-            id: org.id,
-            name: org.name,
+          // Get public_key from organization for submission
+          const { data: orgData } = await supabase
+            .rpc("get_public_form_by_slug", { _slug: slug });
+          
+          const publicKey = orgData?.[0]?.public_key;
+
+          setFormData({
+            form_id: formResult.form_id,
+            form_name: formResult.form_name,
             form_settings: migratedSettings,
-            meta_pixels: Array.isArray(org.meta_pixels) ? org.meta_pixels as unknown as MetaPixel[] : [],
-            public_key: org.public_key,
+            org_id: formResult.org_id,
+            org_name: formResult.org_name,
+            org_slug: formResult.org_slug,
+            meta_pixels: Array.isArray(formResult.meta_pixels) ? formResult.meta_pixels as unknown as MetaPixel[] : [],
+            public_key: publicKey,
           });
           setSettings(migratedSettings);
           setIsValid(true);
@@ -117,14 +132,14 @@ export default function PublicLeadForm() {
       }
     }
 
-    fetchOrganization();
-  }, [slug]);
+    fetchForm();
+  }, [slug, formSlug]);
 
   // Inject Meta Pixels
   useEffect(() => {
-    if (!organization?.meta_pixels) return;
+    if (!formData?.meta_pixels) return;
     
-    const activePixels = organization.meta_pixels.filter(p => p.enabled && p.pixel_id);
+    const activePixels = formData.meta_pixels.filter(p => p.enabled && p.pixel_id);
     if (activePixels.length === 0) return;
 
     // Inject the base Facebook Pixel code (only once)
@@ -165,17 +180,17 @@ export default function PublicLeadForm() {
     return () => {
       // We don't remove the scripts as it could cause issues with async loading
     };
-  }, [organization?.meta_pixels]);
+  }, [formData?.meta_pixels]);
 
   // Function to track Lead event
   const trackLeadEvent = () => {
-    if (!organization?.meta_pixels) return;
+    if (!formData?.meta_pixels) return;
     
-    const activePixels = organization.meta_pixels.filter(p => p.enabled && p.pixel_id);
+    const activePixels = formData.meta_pixels.filter(p => p.enabled && p.pixel_id);
     activePixels.forEach(() => {
       if (window.fbq) {
         window.fbq('track', 'Lead', {
-          content_name: organization.name,
+          content_name: formData.org_name,
           content_category: 'form_submission',
         });
       }
@@ -238,7 +253,8 @@ export default function PublicLeadForm() {
         email: email.trim() || null,
         phone: cleanPhone || null,
         gdpr_consent: true,
-        public_key: organization?.public_key, // Use public_key from organization data
+        public_key: formData?.public_key,
+        form_id: formData?.form_id,  // Include form_id for form-specific settings
         source: detectedSource,
         custom_data: {
           ...customData,
@@ -388,7 +404,7 @@ export default function PublicLeadForm() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           {settings.logo_url ? (
-            <img src={settings.logo_url} alt={organization?.name || 'Logo'} className="h-12 w-auto object-contain mx-auto mb-4" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+            <img src={settings.logo_url} alt={formData?.org_name || 'Logo'} className="h-12 w-auto object-contain mx-auto mb-4" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
           ) : (
             <div className="w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-4" style={{ background: `linear-gradient(135deg, ${settings.primary_color}, ${settings.primary_color}dd)` }}>
               <Zap className="w-6 h-6 text-white" />
