@@ -46,6 +46,7 @@ export interface UserRole {
 export interface Lead {
   id: string;
   organization_id: string;
+  form_id?: string | null;
   name: string;
   phone: string;
   email: string;
@@ -59,6 +60,19 @@ export interface Lead {
   custom_data?: Record<string, string | number | boolean | string[] | null>;
   created_at: string;
   updated_at?: string;
+}
+
+// Form entity (multiple per organization)
+export interface Form {
+  id: string;
+  organization_id: string;
+  name: string;
+  slug: string;
+  form_settings: FormSettings;
+  is_default: boolean;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 // PT-PT Status Labels

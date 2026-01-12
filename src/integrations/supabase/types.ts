@@ -14,12 +14,57 @@ export type Database = {
   }
   public: {
     Tables: {
+      forms: {
+        Row: {
+          created_at: string | null
+          form_settings: Json | null
+          id: string
+          is_active: boolean | null
+          is_default: boolean | null
+          name: string
+          organization_id: string
+          slug: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          form_settings?: Json | null
+          id?: string
+          is_active?: boolean | null
+          is_default?: boolean | null
+          name: string
+          organization_id: string
+          slug: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          form_settings?: Json | null
+          id?: string
+          is_active?: boolean | null
+          is_default?: boolean | null
+          name?: string
+          organization_id?: string
+          slug?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "forms_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       leads: {
         Row: {
           automation_enabled: boolean
           created_at: string | null
           custom_data: Json | null
           email: string
+          form_id: string | null
           gdpr_consent: boolean
           id: string
           name: string
@@ -37,6 +82,7 @@ export type Database = {
           created_at?: string | null
           custom_data?: Json | null
           email: string
+          form_id?: string | null
           gdpr_consent?: boolean
           id?: string
           name: string
@@ -54,6 +100,7 @@ export type Database = {
           created_at?: string | null
           custom_data?: Json | null
           email?: string
+          form_id?: string | null
           gdpr_consent?: boolean
           id?: string
           name?: string
@@ -67,6 +114,13 @@ export type Database = {
           value?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "leads_form_id_fkey"
+            columns: ["form_id"]
+            isOneToOne: false
+            referencedRelation: "forms"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "leads_organization_id_fkey"
             columns: ["organization_id"]
@@ -277,6 +331,18 @@ export type Database = {
       create_organization_for_current_user: {
         Args: { _name: string; _slug: string }
         Returns: string
+      }
+      get_form_by_slugs: {
+        Args: { _form_slug?: string; _org_slug: string }
+        Returns: {
+          form_id: string
+          form_name: string
+          form_settings: Json
+          meta_pixels: Json
+          org_id: string
+          org_name: string
+          org_slug: string
+        }[]
       }
       get_org_by_public_key: { Args: { _public_key: string }; Returns: string }
       get_org_name_by_invite_token: {
