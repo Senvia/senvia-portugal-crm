@@ -44,7 +44,9 @@ const App = () => (
             <Route path="/login" element={<Login />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/f/:slug" element={<PublicLeadForm />} />
+            <Route path="/f/:slug/:formSlug" element={<PublicLeadForm />} />
             <Route path="/c/:slug" element={<ConversationalLeadForm />} />
+            <Route path="/c/:slug/:formSlug" element={<ConversationalLeadForm />} />
             <Route path="/invite/:token" element={<InviteRegister />} />
             <Route path="/privacy" element={<Privacy />} />
             <Route path="/terms" element={<Terms />} />
