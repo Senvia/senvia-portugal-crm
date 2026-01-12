@@ -75,7 +75,6 @@ export const DynamicStep = ({
           {field.options.map((option, index) => (
             <OptionCard
               key={index}
-              icon={<div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary">{index + 1}</div>}
               label={option}
               onClick={() => handleOptionSelect(option)}
               selected={value === option}

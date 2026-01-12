@@ -2,7 +2,7 @@ import { motion } from "framer-motion";
 import { ReactNode } from "react";
 
 interface OptionCardProps {
-  icon: ReactNode;
+  icon?: ReactNode;
   label: string;
   onClick: () => void;
   selected?: boolean;
@@ -18,17 +18,19 @@ export const OptionCard = ({ icon, label, onClick, selected }: OptionCardProps) 
       className={`
         flex flex-col items-center justify-center gap-3 p-4 rounded-xl
         border-2 transition-colors cursor-pointer
-        w-full h-[100px] min-w-[100px]
+        w-full h-[80px] min-w-[100px]
         ${selected 
           ? "border-primary bg-primary/10" 
           : "border-border bg-card hover:border-primary/50 hover:bg-accent/50"
         }
       `}
     >
-      <div className={`${selected ? "text-primary" : "text-muted-foreground"}`}>
-        {icon}
-      </div>
-      <span className={`font-medium text-xs text-center leading-tight ${selected ? "text-primary" : "text-foreground"}`}>
+      {icon && (
+        <div className={`${selected ? "text-primary" : "text-muted-foreground"}`}>
+          {icon}
+        </div>
+      )}
+      <span className={`font-medium text-sm text-center leading-tight ${selected ? "text-primary" : "text-foreground"}`}>
         {label}
       </span>
     </motion.button>
