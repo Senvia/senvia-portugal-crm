@@ -9,9 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { Building, Users, Palette, Link2, ArrowLeft } from "lucide-react";
-import { MetaPixel } from "@/types";
 import { supabase } from '@/integrations/supabase/client';
-import { Json } from '@/integrations/supabase/types';
 import { TeamTab } from '@/components/settings/TeamTab';
 import { FormsManager } from '@/components/settings/FormsManager';
 import { GeneralContent } from '@/components/settings/GeneralContent';
@@ -44,16 +42,6 @@ export default function Settings() {
   const [whatsappApiKey, setWhatsappApiKey] = useState('');
   const [showWhatsappApiKey, setShowWhatsappApiKey] = useState(false);
   
-  // AI Qualification Rules state
-  const [aiQualificationRules, setAiQualificationRules] = useState('');
-  
-  // Message Templates state
-  const [msgTemplateHot, setMsgTemplateHot] = useState('');
-  const [msgTemplateWarm, setMsgTemplateWarm] = useState('');
-  const [msgTemplateCold, setMsgTemplateCold] = useState('');
-
-  // Meta Ads Pixels state
-  const [metaPixels, setMetaPixels] = useState<MetaPixel[]>([]);
 
   // Form mode state (for dynamic URL)
   const [formMode, setFormMode] = useState<'traditional' | 'conversational'>('traditional');
@@ -92,7 +80,7 @@ export default function Settings() {
       setIsLoadingIntegrations(true);
       const { data, error } = await supabase
         .from('organizations')
-        .select('webhook_url, whatsapp_base_url, whatsapp_instance, whatsapp_api_key, ai_qualification_rules, msg_template_hot, msg_template_warm, msg_template_cold, meta_pixels, form_settings')
+        .select('webhook_url, whatsapp_base_url, whatsapp_instance, whatsapp_api_key, form_settings')
         .eq('id', organization.id)
         .single();
       
@@ -101,11 +89,6 @@ export default function Settings() {
         setWhatsappBaseUrl(data.whatsapp_base_url || '');
         setWhatsappInstance(data.whatsapp_instance || '');
         setWhatsappApiKey(data.whatsapp_api_key || '');
-        setAiQualificationRules(data.ai_qualification_rules || '');
-        setMsgTemplateHot(data.msg_template_hot || '');
-        setMsgTemplateWarm(data.msg_template_warm || '');
-        setMsgTemplateCold(data.msg_template_cold || '');
-        setMetaPixels(Array.isArray(data.meta_pixels) ? data.meta_pixels as unknown as MetaPixel[] : []);
         
         // Set form mode from settings
         if (data.form_settings) {
@@ -137,66 +120,6 @@ export default function Settings() {
       whatsapp_instance: whatsappInstance.trim() || null,
       whatsapp_api_key: whatsappApiKey.trim() || null,
     });
-  };
-
-  const handleSaveAiRules = () => {
-    updateOrganization.mutate({
-      ai_qualification_rules: aiQualificationRules.trim() || null,
-    });
-  };
-
-  const handleSaveMessageTemplates = () => {
-    updateOrganization.mutate({
-      msg_template_hot: msgTemplateHot.trim() || null,
-      msg_template_warm: msgTemplateWarm.trim() || null,
-      msg_template_cold: msgTemplateCold.trim() || null,
-    });
-  };
-
-  const handleAddPixel = () => {
-    const newPixel: MetaPixel = {
-      id: crypto.randomUUID(),
-      name: '',
-      pixel_id: '',
-      enabled: true,
-    };
-    setMetaPixels([...metaPixels, newPixel]);
-  };
-
-  const handleRemovePixel = (id: string) => {
-    setMetaPixels(metaPixels.filter(p => p.id !== id));
-  };
-
-  const handleUpdatePixel = (id: string, field: keyof MetaPixel, value: string | boolean) => {
-    setMetaPixels(metaPixels.map(p => 
-      p.id === id ? { ...p, [field]: value } : p
-    ));
-  };
-
-  const isValidPixelId = (pixelId: string) => {
-    return /^\d{15,16}$/.test(pixelId);
-  };
-
-  const handleSaveMetaPixels = () => {
-    for (const pixel of metaPixels) {
-      if (!pixel.name.trim()) {
-        toast({ title: 'Erro', description: 'Todos os pixels devem ter um nome.', variant: 'destructive' });
-        return;
-      }
-      if (pixel.pixel_id && !isValidPixelId(pixel.pixel_id)) {
-        toast({ title: 'Erro', description: `Pixel ID "${pixel.pixel_id}" inválido. Deve ter 15-16 dígitos.`, variant: 'destructive' });
-        return;
-      }
-    }
-
-    const pixelIds = metaPixels.filter(p => p.pixel_id).map(p => p.pixel_id);
-    const uniqueIds = new Set(pixelIds);
-    if (pixelIds.length !== uniqueIds.size) {
-      toast({ title: 'Erro', description: 'Existem Pixel IDs duplicados.', variant: 'destructive' });
-      return;
-    }
-
-    updateOrganization.mutate({ meta_pixels: metaPixels as unknown as Json });
   };
 
   const handleTestWebhook = () => {
@@ -348,22 +271,6 @@ export default function Settings() {
                   showWhatsappApiKey={showWhatsappApiKey}
                   setShowWhatsappApiKey={setShowWhatsappApiKey}
                   handleSaveWhatsApp={handleSaveWhatsApp}
-                  msgTemplateHot={msgTemplateHot}
-                  setMsgTemplateHot={setMsgTemplateHot}
-                  msgTemplateWarm={msgTemplateWarm}
-                  setMsgTemplateWarm={setMsgTemplateWarm}
-                  msgTemplateCold={msgTemplateCold}
-                  setMsgTemplateCold={setMsgTemplateCold}
-                  handleSaveMessageTemplates={handleSaveMessageTemplates}
-                  aiQualificationRules={aiQualificationRules}
-                  setAiQualificationRules={setAiQualificationRules}
-                  handleSaveAiRules={handleSaveAiRules}
-                  metaPixels={metaPixels}
-                  handleAddPixel={handleAddPixel}
-                  handleRemovePixel={handleRemovePixel}
-                  handleUpdatePixel={handleUpdatePixel}
-                  isValidPixelId={isValidPixelId}
-                  handleSaveMetaPixels={handleSaveMetaPixels}
                 />
               )}
             </>
@@ -464,22 +371,6 @@ export default function Settings() {
                     showWhatsappApiKey={showWhatsappApiKey}
                     setShowWhatsappApiKey={setShowWhatsappApiKey}
                     handleSaveWhatsApp={handleSaveWhatsApp}
-                    msgTemplateHot={msgTemplateHot}
-                    setMsgTemplateHot={setMsgTemplateHot}
-                    msgTemplateWarm={msgTemplateWarm}
-                    setMsgTemplateWarm={setMsgTemplateWarm}
-                    msgTemplateCold={msgTemplateCold}
-                    setMsgTemplateCold={setMsgTemplateCold}
-                    handleSaveMessageTemplates={handleSaveMessageTemplates}
-                    aiQualificationRules={aiQualificationRules}
-                    setAiQualificationRules={setAiQualificationRules}
-                    handleSaveAiRules={handleSaveAiRules}
-                    metaPixels={metaPixels}
-                    handleAddPixel={handleAddPixel}
-                    handleRemovePixel={handleRemovePixel}
-                    handleUpdatePixel={handleUpdatePixel}
-                    isValidPixelId={isValidPixelId}
-                    handleSaveMetaPixels={handleSaveMetaPixels}
                   />
                 </TabsContent>
               )}

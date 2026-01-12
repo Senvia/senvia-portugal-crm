@@ -76,6 +76,8 @@ export interface Form {
   msg_template_warm?: string | null;
   msg_template_cold?: string | null;
   ai_qualification_rules?: string | null;
+  // Meta Pixels (per-form)
+  meta_pixels?: MetaPixel[];
   created_at: string;
   updated_at: string;
 }
