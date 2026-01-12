@@ -11,6 +11,14 @@ import { DynamicStep } from "@/components/conversational/steps/DynamicStep";
 import { SuccessScreen } from "@/components/conversational/SuccessScreen";
 import { FormSettings, migrateFormSettings, CustomField, MetaPixel } from "@/types";
 
+// Declare fbq for TypeScript
+declare global {
+  interface Window {
+    fbq: (...args: unknown[]) => void;
+    _fbq: unknown;
+  }
+}
+
 interface FormData {
   form_id: string;
   form_name: string;
@@ -118,6 +126,63 @@ const ConversationalLeadForm = () => {
 
     fetchForm();
   }, [slug, formSlug]);
+
+  // Inject Meta Pixels
+  useEffect(() => {
+    if (!formData?.meta_pixels) return;
+    
+    const activePixels = formData.meta_pixels.filter(p => p.enabled && p.pixel_id);
+    if (activePixels.length === 0) return;
+
+    // Inject the base Facebook Pixel code (only once)
+    const baseScript = document.createElement('script');
+    baseScript.innerHTML = `
+      !function(f,b,e,v,n,t,s)
+      {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+      n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+      if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+      n.queue=[];t=b.createElement(e);t.async=!0;
+      t.src=v;s=b.getElementsByTagName(e)[0];
+      s.parentNode.insertBefore(t,s)}(window, document,'script',
+      'https://connect.facebook.net/en_US/fbevents.js');
+    `;
+    document.head.appendChild(baseScript);
+
+    // Initialize each pixel and track PageView
+    activePixels.forEach(pixel => {
+      if (window.fbq) {
+        window.fbq('init', pixel.pixel_id);
+        window.fbq('track', 'PageView');
+      }
+    });
+
+    // Add noscript fallback
+    activePixels.forEach(pixel => {
+      const noscript = document.createElement('noscript');
+      const img = document.createElement('img');
+      img.height = 1;
+      img.width = 1;
+      img.style.display = 'none';
+      img.src = `https://www.facebook.com/tr?id=${pixel.pixel_id}&ev=PageView&noscript=1`;
+      noscript.appendChild(img);
+      document.body.appendChild(noscript);
+    });
+  }, [formData?.meta_pixels]);
+
+  // Function to track Lead event
+  const trackLeadEvent = () => {
+    if (!formData?.meta_pixels) return;
+    
+    const activePixels = formData.meta_pixels.filter(p => p.enabled && p.pixel_id);
+    activePixels.forEach(() => {
+      if (window.fbq) {
+        window.fbq('track', 'Lead', {
+          content_name: formData.org_name,
+          content_category: 'conversational_form_submission',
+        });
+      }
+    });
+  };
 
   // Generate steps from form settings
   const steps = useMemo<StepConfig[]>(() => {
@@ -244,6 +309,7 @@ const ConversationalLeadForm = () => {
         console.error("Error submitting lead:", error);
       }
 
+      trackLeadEvent();
       setIsComplete(true);
     } catch (err) {
       console.error("Error:", err);
