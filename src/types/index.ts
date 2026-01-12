@@ -71,6 +71,11 @@ export interface Form {
   form_settings: FormSettings;
   is_default: boolean;
   is_active: boolean;
+  // Automation fields (per-form)
+  msg_template_hot?: string | null;
+  msg_template_warm?: string | null;
+  msg_template_cold?: string | null;
+  ai_qualification_rules?: string | null;
   created_at: string;
   updated_at: string;
 }

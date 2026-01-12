@@ -11,6 +11,7 @@ interface LeadSubmission {
   phone?: string | null;
   gdpr_consent: boolean;
   public_key: string;
+  form_id?: string | null;
   source?: string;
   notes?: string | null;
   custom_data?: Record<string, unknown>;
@@ -85,10 +86,10 @@ Deno.serve(async (req) => {
     
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    // Validate public_key and get organization_id (including webhook_url, whatsapp config, AI rules, templates and form_settings)
+    // Validate public_key and get organization_id (including webhook_url and whatsapp config)
     const { data: org, error: orgError } = await supabase
       .from('organizations')
-      .select('id, name, webhook_url, whatsapp_instance, whatsapp_api_key, whatsapp_base_url, ai_qualification_rules, msg_template_hot, msg_template_warm, msg_template_cold, form_settings')
+      .select('id, name, webhook_url, whatsapp_instance, whatsapp_api_key, whatsapp_base_url')
       .eq('public_key', body.public_key)
       .maybeSingle();
 
@@ -110,6 +111,37 @@ Deno.serve(async (req) => {
 
     console.log('Organization found:', org.name);
 
+    // Get form-specific automation settings if form_id is provided
+    let formSettings = {
+      ai_qualification_rules: null as string | null,
+      msg_template_hot: null as string | null,
+      msg_template_warm: null as string | null,
+      msg_template_cold: null as string | null,
+      form_settings: null as any,
+      form_name: null as string | null,
+    };
+
+    if (body.form_id) {
+      const { data: form, error: formError } = await supabase
+        .from('forms')
+        .select('id, name, form_settings, ai_qualification_rules, msg_template_hot, msg_template_warm, msg_template_cold')
+        .eq('id', body.form_id)
+        .eq('organization_id', org.id)
+        .maybeSingle();
+
+      if (!formError && form) {
+        formSettings = {
+          ai_qualification_rules: form.ai_qualification_rules,
+          msg_template_hot: form.msg_template_hot,
+          msg_template_warm: form.msg_template_warm,
+          msg_template_cold: form.msg_template_cold,
+          form_settings: form.form_settings,
+          form_name: form.name,
+        };
+        console.log('Form-specific settings loaded for:', form.name);
+      }
+    }
+
     // At least one contact method should be provided
     const hasName = body.name && body.name.trim().length > 0;
     const hasEmail = body.email && body.email.trim().length > 0;
@@ -128,11 +160,12 @@ Deno.serve(async (req) => {
       .from('leads')
       .insert({
         organization_id: org.id,
+        form_id: body.form_id || null,
         name: body.name?.trim() || 'Anónimo',
         email: body.email?.trim()?.toLowerCase() || 'nao-fornecido@placeholder.local',
         phone: cleanPhone || '000000000',
         gdpr_consent: true,
-        source: body.source || 'Formulário Público',
+        source: body.source || formSettings.form_name || 'Formulário Público',
         status: 'new',
         notes: body.notes || null,
         custom_data: body.custom_data || {},
@@ -153,16 +186,16 @@ Deno.serve(async (req) => {
     // Function to map custom_data IDs to human-readable labels
     const mapCustomDataToLabels = (
       customData: Record<string, unknown> | null,
-      formSettings: { custom_fields?: Array<{ id: string; label: string }> } | null
+      formSettingsData: { custom_fields?: Array<{ id: string; label: string }> } | null
     ): Record<string, unknown> => {
       if (!customData) return {};
-      if (!formSettings?.custom_fields) return customData;
+      if (!formSettingsData?.custom_fields) return customData;
       
       const result: Record<string, unknown> = {};
       
       for (const [fieldId, value] of Object.entries(customData)) {
         // Find field by ID
-        const field = formSettings.custom_fields.find(f => f.id === fieldId);
+        const field = formSettingsData.custom_fields.find(f => f.id === fieldId);
         
         if (field) {
           // Use label as key
@@ -190,12 +223,12 @@ Deno.serve(async (req) => {
         console.info(`WhatsApp base URL: ${org.whatsapp_base_url || 'not set'}`);
         console.info(`WhatsApp API key set: ${org.whatsapp_api_key ? 'yes' : 'no'}`);
       }
-      console.info(`Message templates set: hot=${!!org.msg_template_hot}, warm=${!!org.msg_template_warm}, cold=${!!org.msg_template_cold}`);
+      console.info(`Message templates set (form-specific): hot=${!!formSettings.msg_template_hot}, warm=${!!formSettings.msg_template_warm}, cold=${!!formSettings.msg_template_cold}`);
       
       // Transform custom_data from IDs to labels for webhook
       const transformedCustomData = mapCustomDataToLabels(
         lead.custom_data as Record<string, unknown>,
-        org.form_settings as { custom_fields?: Array<{ id: string; label: string }> }
+        formSettings.form_settings as { custom_fields?: Array<{ id: string; label: string }> }
       );
       
       const webhookPayload = {
@@ -205,14 +238,19 @@ Deno.serve(async (req) => {
           id: org.id,
           name: org.name,
         },
+        form: {
+          id: body.form_id || null,
+          name: formSettings.form_name || null,
+        },
         config: {
           whatsapp_instance: org.whatsapp_instance || null,
           whatsapp_api_key: org.whatsapp_api_key || null,
           whatsapp_base_url: org.whatsapp_base_url || null,
-          ai_qualification_rules: org.ai_qualification_rules || null,
-          msg_template_hot: org.msg_template_hot || null,
-          msg_template_warm: org.msg_template_warm || null,
-          msg_template_cold: org.msg_template_cold || null,
+          // Form-specific automation settings
+          ai_qualification_rules: formSettings.ai_qualification_rules || null,
+          msg_template_hot: formSettings.msg_template_hot || null,
+          msg_template_warm: formSettings.msg_template_warm || null,
+          msg_template_cold: formSettings.msg_template_cold || null,
         },
         lead: {
           id: lead.id,

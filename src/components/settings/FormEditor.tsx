@@ -28,7 +28,10 @@ import {
   MessagesSquare,
   Copy,
   Check,
-  Settings
+  Settings,
+  Bot,
+  Zap,
+  Thermometer
 } from "lucide-react";
 import { useUpdateForm } from '@/hooks/useForms';
 import { useAuth } from '@/contexts/AuthContext';
@@ -63,6 +66,12 @@ export function FormEditor({ form, onBack }: FormEditorProps) {
   const [settings, setSettings] = useState<FormSettings>(migrateFormSettings(form.form_settings));
   const [showSuccessPreview, setShowSuccessPreview] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+  
+  // Automation fields
+  const [msgTemplateHot, setMsgTemplateHot] = useState(form.msg_template_hot || '');
+  const [msgTemplateWarm, setMsgTemplateWarm] = useState(form.msg_template_warm || '');
+  const [msgTemplateCold, setMsgTemplateCold] = useState(form.msg_template_cold || '');
+  const [aiQualificationRules, setAiQualificationRules] = useState(form.ai_qualification_rules || '');
 
   const getFormUrl = () => {
     if (!organization?.slug) return '';
@@ -75,7 +84,16 @@ export function FormEditor({ form, onBack }: FormEditorProps) {
 
   const handleSave = () => {
     updateForm.mutate(
-      { id: form.id, name, slug, form_settings: settings },
+      { 
+        id: form.id, 
+        name, 
+        slug, 
+        form_settings: settings,
+        msg_template_hot: msgTemplateHot || null,
+        msg_template_warm: msgTemplateWarm || null,
+        msg_template_cold: msgTemplateCold || null,
+        ai_qualification_rules: aiQualificationRules || null,
+      },
       {
         onSuccess: () => {
           toast({
@@ -129,7 +147,7 @@ export function FormEditor({ form, onBack }: FormEditorProps) {
   // Editor content (shared between mobile and desktop)
   const editorContent = (
     <div className="flex-1 overflow-y-auto p-4 sm:p-6">
-      <Accordion type="multiple" defaultValue={["details", "mode", "appearance", "fields", "messages"]} className="space-y-3">
+      <Accordion type="multiple" defaultValue={["details", "mode", "appearance", "fields", "messages", "automation"]} className="space-y-3">
         
         {/* Form Details */}
         <AccordionItem value="details" className="border rounded-xl px-4">
@@ -467,6 +485,103 @@ export function FormEditor({ form, onBack }: FormEditorProps) {
                 maxLength={200}
                 placeholder="Não foi possível enviar..."
                 rows={2}
+              />
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+
+        {/* Automation Section */}
+        <AccordionItem value="automation" className="border rounded-xl px-4">
+          <AccordionTrigger className="hover:no-underline py-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-orange-500/10">
+                <Zap className="h-5 w-5 text-orange-600" />
+              </div>
+              <div className="text-left">
+                <span className="font-medium">Automação</span>
+                <p className="text-xs text-muted-foreground font-normal">
+                  Mensagens automáticas e regras de IA
+                </p>
+              </div>
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="pb-4 pt-2 space-y-6">
+            {/* Message Templates */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <Thermometer className="h-4 w-4 text-muted-foreground" />
+                <Label className="font-medium">Modelos de Mensagem por Temperatura</Label>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Use <code className="bg-muted px-1 rounded">{'{nome}'}</code> para personalizar com o nome do lead.
+              </p>
+
+              <div className="space-y-4">
+                <div className="space-y-2 p-3 rounded-lg border border-red-200 dark:border-red-900 bg-red-50/50 dark:bg-red-950/20">
+                  <Label className="flex items-center gap-2 text-red-600 dark:text-red-400">
+                    🔥 Lead Quente (Hot)
+                  </Label>
+                  <Textarea
+                    value={msgTemplateHot}
+                    onChange={(e) => setMsgTemplateHot(e.target.value)}
+                    placeholder="Olá {nome}! Vimos que tem interesse urgente. Podemos ajudar agora mesmo?"
+                    rows={3}
+                    className="text-sm"
+                  />
+                </div>
+
+                <div className="space-y-2 p-3 rounded-lg border border-amber-200 dark:border-amber-900 bg-amber-50/50 dark:bg-amber-950/20">
+                  <Label className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+                    😐 Lead Morno (Warm)
+                  </Label>
+                  <Textarea
+                    value={msgTemplateWarm}
+                    onChange={(e) => setMsgTemplateWarm(e.target.value)}
+                    placeholder="Olá {nome}! Obrigado pelo seu contacto. Gostaria de saber mais sobre os nossos serviços?"
+                    rows={3}
+                    className="text-sm"
+                  />
+                </div>
+
+                <div className="space-y-2 p-3 rounded-lg border border-blue-200 dark:border-blue-900 bg-blue-50/50 dark:bg-blue-950/20">
+                  <Label className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
+                    🥶 Lead Frio (Cold)
+                  </Label>
+                  <Textarea
+                    value={msgTemplateCold}
+                    onChange={(e) => setMsgTemplateCold(e.target.value)}
+                    placeholder="Olá {nome}! Recebemos o seu contacto. Estamos disponíveis para esclarecer qualquer dúvida."
+                    rows={3}
+                    className="text-sm"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* AI Qualification Rules */}
+            <div className="space-y-3 pt-4 border-t">
+              <div className="flex items-center gap-2">
+                <Bot className="h-4 w-4 text-muted-foreground" />
+                <Label className="font-medium">Regras de Qualificação por IA</Label>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Defina critérios para a IA classificar automaticamente a temperatura dos leads.
+              </p>
+              <Textarea
+                value={aiQualificationRules}
+                onChange={(e) => setAiQualificationRules(e.target.value)}
+                placeholder={`Exemplo de regras:
+
+- HOT: Lead que menciona urgência, preço ou quer agendar
+- WARM: Lead com interesse demonstrado mas sem urgência
+- COLD: Lead que apenas pede informações gerais
+
+Considerar também:
+- Palavras como "orçamento", "já" → HOT
+- Perguntas sobre funcionamento → WARM
+- Campos opcionais vazios → COLD`}
+                rows={8}
+                className="text-sm font-mono"
               />
             </div>
           </AccordionContent>
