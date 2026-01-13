@@ -155,6 +155,35 @@ Deno.serve(async (req) => {
       );
     }
 
+    // ===== DEDUPLICATION CHECK =====
+    // Prevent duplicate leads with same phone within 60 seconds
+    if (cleanPhone && cleanPhone !== '000000000') {
+      const sixtySecondsAgo = new Date(Date.now() - 60000).toISOString();
+      
+      const { data: existingLead } = await supabase
+        .from('leads')
+        .select('id, created_at')
+        .eq('phone', cleanPhone)
+        .eq('organization_id', org.id)
+        .gte('created_at', sixtySecondsAgo)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (existingLead) {
+        console.log('Duplicate lead detected (same phone within 60s), returning existing:', existingLead.id);
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            message: 'Lead já registado',
+            lead_id: existingLead.id,
+            duplicate: true 
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
     // Insert lead with custom data - use defaults for required DB fields
     const { data: lead, error: leadError } = await supabase
       .from('leads')
