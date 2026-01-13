@@ -9,7 +9,6 @@ import { SuperAdminRoute } from "@/components/auth/SuperAdminRoute";
 import { PWAInstallButton } from "@/components/pwa/PWAInstallButton";
 
 // Pages
-import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Leads from "./pages/Leads";
@@ -40,8 +39,7 @@ const App = () => (
           <PWAInstallButton />
           <Routes>
             {/* Public Routes */}
-            <Route path="/" element={<Landing />} />
-            <Route path="/login" element={<Login />} />
+            <Route path="/" element={<Login />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/f/:slug" element={<PublicLeadForm />} />
             <Route path="/f/:slug/:formSlug" element={<PublicLeadForm />} />
