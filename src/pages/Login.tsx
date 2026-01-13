@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, Link, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -276,9 +276,7 @@ export default function Login() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <Link to="/">
-            <img src={senviaLogo} alt="SENVIA" className="h-12 w-48 object-contain mx-auto" />
-          </Link>
+          <img src={senviaLogo} alt="SENVIA" className="h-12 w-48 object-contain mx-auto" />
         </div>
 
         <Card className="border-slate-800 bg-slate-900/50 backdrop-blur">
@@ -518,11 +516,6 @@ export default function Login() {
           </CardContent>
         </Card>
 
-        <p className="text-center text-sm text-slate-500 mt-6">
-          <Link to="/" className="hover:text-slate-300 transition-colors">
-            ← Voltar ao início
-          </Link>
-        </p>
       </div>
     </div>
   );
