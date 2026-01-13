@@ -36,17 +36,22 @@ export const DynamicStep = ({
   isLastStep 
 }: DynamicStepProps) => {
   const [value, setValue] = useState("");
+  const [hasAdvanced, setHasAdvanced] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (hasAdvanced) return;
     if (value.trim() || !field.required) {
+      setHasAdvanced(true);
       onNext(value.trim());
     }
   };
 
   const handleOptionSelect = (option: string) => {
+    if (hasAdvanced) return; // Block if already advanced
+    
+    setHasAdvanced(true); // Mark immediately to prevent duplicate clicks
     setValue(option);
-    // Auto-advance after selection
     setTimeout(() => onNext(option), 300);
   };
 
@@ -78,6 +83,7 @@ export const DynamicStep = ({
               label={option}
               onClick={() => handleOptionSelect(option)}
               selected={value === option}
+              disabled={hasAdvanced}
             />
           ))}
         </motion.div>
