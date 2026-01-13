@@ -134,29 +134,46 @@ export default function PublicLeadForm() {
     if (!formData?.meta_pixels) return;
     
     const activePixels = formData.meta_pixels.filter(p => p.enabled && p.pixel_id);
-    if (activePixels.length === 0) return;
+    if (activePixels.length === 0) {
+      console.log('[Meta Pixel] No active pixels configured');
+      return;
+    }
+
+    console.log('[Meta Pixel] Initializing pixels:', activePixels.map(p => p.pixel_id));
 
     // Inject the base Facebook Pixel code (only once)
-    const baseScript = document.createElement('script');
-    baseScript.innerHTML = `
-      !function(f,b,e,v,n,t,s)
-      {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-      n.callMethod.apply(n,arguments):n.queue.push(arguments)};
-      if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
-      n.queue=[];t=b.createElement(e);t.async=!0;
-      t.src=v;s=b.getElementsByTagName(e)[0];
-      s.parentNode.insertBefore(t,s)}(window, document,'script',
-      'https://connect.facebook.net/en_US/fbevents.js');
-    `;
-    document.head.appendChild(baseScript);
+    if (!window.fbq) {
+      const baseScript = document.createElement('script');
+      baseScript.innerHTML = `
+        !function(f,b,e,v,n,t,s)
+        {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+        n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+        if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+        n.queue=[];t=b.createElement(e);t.async=!0;
+        t.src=v;s=b.getElementsByTagName(e)[0];
+        s.parentNode.insertBefore(t,s)}(window, document,'script',
+        'https://connect.facebook.net/en_US/fbevents.js');
+      `;
+      document.head.appendChild(baseScript);
+    }
 
-    // Initialize each pixel and track PageView
-    activePixels.forEach(pixel => {
-      if (window.fbq) {
-        window.fbq('init', pixel.pixel_id);
-        window.fbq('track', 'PageView');
-      }
-    });
+    // Wait for fbq to be available, then initialize
+    const initPixels = () => {
+      activePixels.forEach(pixel => {
+        if (typeof window.fbq === 'function') {
+          window.fbq('init', pixel.pixel_id);
+          window.fbq('trackSingle', pixel.pixel_id, 'PageView');
+          console.log('[Meta Pixel] PageView tracked for:', pixel.pixel_id);
+        }
+      });
+    };
+
+    // Try immediately, then with delay if not ready
+    if (typeof window.fbq === 'function') {
+      initPixels();
+    } else {
+      setTimeout(initPixels, 500);
+    }
 
     // Add noscript fallback
     activePixels.forEach(pixel => {
@@ -176,18 +193,26 @@ export default function PublicLeadForm() {
     };
   }, [formData?.meta_pixels]);
 
-  // Function to track Lead event
+  // Function to track Lead event - ONLY call after confirmed success
   const trackLeadEvent = () => {
-    if (!formData?.meta_pixels) return;
+    if (!formData?.meta_pixels) {
+      console.log('[Meta Pixel] No pixels to track Lead event');
+      return;
+    }
     
     const activePixels = formData.meta_pixels.filter(p => p.enabled && p.pixel_id);
-    activePixels.forEach(() => {
-      if (window.fbq) {
-        window.fbq('track', 'Lead', {
-          content_name: formData.org_name,
-          content_category: 'form_submission',
-        });
-      }
+    
+    if (typeof window.fbq !== 'function') {
+      console.warn('[Meta Pixel] fbq not loaded, cannot track Lead event');
+      return;
+    }
+    
+    activePixels.forEach((pixel) => {
+      window.fbq('trackSingle', pixel.pixel_id, 'Lead', {
+        content_name: formData.org_name,
+        content_category: 'form_submission',
+      });
+      console.log('[Meta Pixel] Lead event tracked for:', pixel.pixel_id);
     });
   };
 
@@ -270,12 +295,14 @@ export default function PublicLeadForm() {
         throw new Error(response.error.message || 'Erro ao enviar');
       }
 
-      // Track Lead event on Meta Pixels
+      // Only track Lead event AFTER confirmed success
+      console.log('[Meta Pixel] Lead submitted successfully, tracking event...');
       trackLeadEvent();
 
       setIsSuccess(true);
     } catch (error) {
       console.error('Error submitting lead:', error);
+      // Do NOT track pixel on error
       toast({
         title: 'Erro',
         description: settings.error_message,
