@@ -76,6 +76,7 @@ const ConversationalLeadForm = () => {
   const utmCampaign = urlParams.get('utm_campaign');
   const detectedSource = mapSourceToLabel(utmSource);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [hasSubmitted, setHasSubmitted] = useState(false); // Prevent duplicate submissions
   const [isComplete, setIsComplete] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [formData, setFormData] = useState<FormData | null>(null);
@@ -290,8 +291,14 @@ const ConversationalLeadForm = () => {
   };
 
   const submitForm = async (data: Record<string, string>) => {
+    // Prevent duplicate submissions
+    if (hasSubmitted || isSubmitting) {
+      console.log('[Submit] Already submitted or submitting, ignoring duplicate call');
+      return;
+    }
     if (!formData) return;
 
+    setHasSubmitted(true); // Mark as submitted IMMEDIATELY to prevent duplicates
     setIsSubmitting(true);
 
     const settings = formData.form_settings;
