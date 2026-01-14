@@ -91,7 +91,8 @@ export function useCreateEvent() {
         throw new Error('User or organization not found');
       }
 
-      const { data, error } = await supabase
+      // 1. Criar o evento
+      const { data: eventData, error: eventError } = await supabase
         .from('calendar_events')
         .insert({
           ...params,
@@ -101,11 +102,25 @@ export function useCreateEvent() {
         .select()
         .single();
 
-      if (error) throw error;
-      return data;
+      if (eventError) throw eventError;
+
+      // 2. Se evento tem lead associado, atualizar status para "scheduled"
+      if (params.lead_id) {
+        const { error: leadError } = await supabase
+          .from('leads')
+          .update({ status: 'scheduled' })
+          .eq('id', params.lead_id);
+
+        if (leadError) {
+          console.error('Error updating lead status:', leadError);
+        }
+      }
+
+      return eventData;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['calendar-events'] });
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
       toast.success('Evento criado com sucesso');
     },
     onError: (error) => {
