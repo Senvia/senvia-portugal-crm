@@ -11,9 +11,10 @@ import { useCreateProposal } from '@/hooks/useProposals';
 import type { Lead } from '@/types';
 
 interface CreateProposalModalProps {
-  lead: Lead;
+  lead: Lead | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onSuccess?: () => void;
 }
 
 interface SelectedProduct {
@@ -23,7 +24,7 @@ interface SelectedProduct {
   unit_price: number;
 }
 
-export function CreateProposalModal({ lead, open, onOpenChange }: CreateProposalModalProps) {
+export function CreateProposalModal({ lead, open, onOpenChange, onSuccess }: CreateProposalModalProps) {
   const { data: products = [] } = useActiveProducts();
   const createProposal = useCreateProposal();
   
@@ -87,6 +88,7 @@ export function CreateProposalModal({ lead, open, onOpenChange }: CreateProposal
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!lead) return;
 
     createProposal.mutate({
       lead_id: lead.id,
@@ -105,6 +107,7 @@ export function CreateProposalModal({ lead, open, onOpenChange }: CreateProposal
         setNotes('');
         setProposalDate(new Date().toISOString().split('T')[0]);
         onOpenChange(false);
+        onSuccess?.();
       },
     });
   };
@@ -123,7 +126,7 @@ export function CreateProposalModal({ lead, open, onOpenChange }: CreateProposal
         <DialogHeader>
           <DialogTitle>Nova Proposta</DialogTitle>
           <p className="text-sm text-muted-foreground">
-            Lead: <strong>{lead.name}</strong>
+            Lead: <strong>{lead?.name}</strong>
           </p>
         </DialogHeader>
 

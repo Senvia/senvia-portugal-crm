@@ -24,9 +24,11 @@ interface CreateEventModalProps {
   onOpenChange: (open: boolean) => void;
   selectedDate?: Date;
   event?: CalendarEvent | null;
+  preselectedLeadId?: string;
+  onSuccess?: () => void;
 }
 
-export function CreateEventModal({ open, onOpenChange, selectedDate, event }: CreateEventModalProps) {
+export function CreateEventModal({ open, onOpenChange, selectedDate, event, preselectedLeadId, onSuccess }: CreateEventModalProps) {
   const { data: leads = [] } = useLeads();
   const createEvent = useCreateEvent();
   const updateEvent = useUpdateEvent();
@@ -62,7 +64,13 @@ export function CreateEventModal({ open, onOpenChange, selectedDate, event }: Cr
       setStartDate(format(selectedDate, 'yyyy-MM-dd'));
       setEndDate(format(selectedDate, 'yyyy-MM-dd'));
     }
-  }, [event, selectedDate, open]);
+    
+    // Pre-select lead if provided (from Kanban drop)
+    if (preselectedLeadId && open && !event) {
+      setLeadId(preselectedLeadId);
+      setEventType('meeting'); // Default to meeting for scheduled leads
+    }
+  }, [event, selectedDate, open, preselectedLeadId]);
 
   const resetForm = () => {
     setTitle('');
@@ -109,6 +117,7 @@ export function CreateEventModal({ open, onOpenChange, selectedDate, event }: Cr
 
     resetForm();
     onOpenChange(false);
+    onSuccess?.();
   };
 
   const isPending = createEvent.isPending || updateEvent.isPending;
