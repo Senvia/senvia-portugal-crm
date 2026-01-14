@@ -2,7 +2,8 @@ import { Lead, STATUS_LABELS, LeadStatus, LeadTemperature, TEMPERATURE_LABELS, T
 import { formatRelativeTime, getWhatsAppUrl, formatCurrency } from "@/lib/format";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Button } from "@/components/ui/button";
-import { MessageCircle, Phone, Mail, MoreVertical, GripVertical, Thermometer } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { MessageCircle, Phone, Mail, MoreVertical, GripVertical, Thermometer, CalendarClock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
@@ -11,9 +12,18 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+
+interface UpcomingEvent {
+  id: string;
+  title: string;
+  start_time: string;
+  event_type: string;
+}
 
 interface LeadCardProps {
   lead: Lead;
+  upcomingEvent?: UpcomingEvent | null;
   onStatusChange?: (leadId: string, newStatus: LeadStatus) => void;
   onTemperatureChange?: (leadId: string, temperature: LeadTemperature) => void;
   onViewDetails?: (lead: Lead) => void;
@@ -31,6 +41,7 @@ const statusStyles: Record<LeadStatus, string> = {
 
 export function LeadCard({ 
   lead, 
+  upcomingEvent,
   onStatusChange, 
   onTemperatureChange,
   onViewDetails, 
@@ -40,6 +51,22 @@ export function LeadCard({
   const { canDeleteLeads } = usePermissions();
   const temperature = lead.temperature || 'cold';
   const tempStyle = TEMPERATURE_STYLES[temperature];
+  
+  const formatEventTime = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const isToday = date.toDateString() === today.toDateString();
+    const isTomorrow = date.toDateString() === tomorrow.toDateString();
+
+    const time = date.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
+    
+    if (isToday) return `Hoje às ${time}`;
+    if (isTomorrow) return `Amanhã às ${time}`;
+    return date.toLocaleDateString('pt-PT', { day: '2-digit', month: 'short' }) + ` às ${time}`;
+  };
   
   return (
     <div 
@@ -123,6 +150,29 @@ export function LeadCard({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      {/* Upcoming Event Badge */}
+      {upcomingEvent && (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Badge 
+                variant="secondary" 
+                className="mt-3 w-full justify-start gap-1.5 bg-primary/10 text-primary hover:bg-primary/20"
+              >
+                <CalendarClock className="h-3.5 w-3.5" />
+                <span className="truncate text-xs">
+                  {formatEventTime(upcomingEvent.start_time)}
+                </span>
+              </Badge>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p className="font-medium">{upcomingEvent.title}</p>
+              <p className="text-xs text-muted-foreground">{formatEventTime(upcomingEvent.start_time)}</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
 
       {/* Content */}
       <div className="mt-3">
