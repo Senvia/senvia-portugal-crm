@@ -14,6 +14,68 @@ export type Database = {
   }
   public: {
     Tables: {
+      calendar_events: {
+        Row: {
+          all_day: boolean | null
+          created_at: string | null
+          description: string | null
+          end_time: string | null
+          event_type: string
+          id: string
+          lead_id: string | null
+          organization_id: string
+          reminder_minutes: number | null
+          reminder_sent: boolean | null
+          start_time: string
+          status: string | null
+          title: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          all_day?: boolean | null
+          created_at?: string | null
+          description?: string | null
+          end_time?: string | null
+          event_type?: string
+          id?: string
+          lead_id?: string | null
+          organization_id: string
+          reminder_minutes?: number | null
+          reminder_sent?: boolean | null
+          start_time: string
+          status?: string | null
+          title: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          all_day?: boolean | null
+          created_at?: string | null
+          description?: string | null
+          end_time?: string | null
+          event_type?: string
+          id?: string
+          lead_id?: string | null
+          organization_id?: string
+          reminder_minutes?: number | null
+          reminder_sent?: boolean | null
+          start_time?: string
+          status?: string | null
+          title?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "calendar_events_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       forms: {
         Row: {
           ai_qualification_rules: string | null

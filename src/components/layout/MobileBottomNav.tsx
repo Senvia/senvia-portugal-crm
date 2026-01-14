@@ -1,11 +1,12 @@
 import { NavLink, useLocation } from "react-router-dom";
-import { LayoutDashboard, Users, Settings, Shield } from "lucide-react";
+import { LayoutDashboard, Users, Settings, Shield, Calendar } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 
 const navItems = [
   { to: "/dashboard", icon: LayoutDashboard, label: "Painel" },
   { to: "/leads", icon: Users, label: "Leads" },
+  { to: "/calendar", icon: Calendar, label: "Agenda" },
   { to: "/settings", icon: Settings, label: "Config" },
 ];
 
