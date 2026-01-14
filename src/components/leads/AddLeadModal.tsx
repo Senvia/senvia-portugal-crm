@@ -28,9 +28,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { PhoneInput } from "@/components/ui/phone-input";
-import { Loader2, Zap } from "lucide-react";
+import { Loader2, Zap, UserCircle } from "lucide-react";
 import { useCreateLead } from "@/hooks/useLeads";
-import type { LeadTemperature } from "@/types";
+import { useTeamMembers } from "@/hooks/useTeam";
+import { usePermissions } from "@/hooks/usePermissions";
+import type { LeadTemperature, ROLE_LABELS } from "@/types";
+import { ROLE_LABELS as RoleLabels } from "@/types";
 
 const SOURCES = [
   "Entrada Manual",
@@ -63,6 +66,7 @@ const addLeadSchema = z.object({
     errorMap: () => ({ message: "Consentimento RGPD é obrigatório" }),
   }),
   automation_enabled: z.boolean().default(true),
+  assigned_to: z.string().optional(),
 });
 
 type AddLeadFormData = z.infer<typeof addLeadSchema>;
@@ -74,6 +78,8 @@ interface AddLeadModalProps {
 
 export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
   const createLead = useCreateLead();
+  const { data: teamMembers } = useTeamMembers();
+  const { canManageTeam } = usePermissions();
   
   const form = useForm<AddLeadFormData>({
     resolver: zodResolver(addLeadSchema),
@@ -87,6 +93,7 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
       notes: "",
       gdpr_consent: undefined,
       automation_enabled: true,
+      assigned_to: "",
     },
   });
 
@@ -101,6 +108,7 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
       notes: data.notes,
       gdpr_consent: data.gdpr_consent,
       automation_enabled: data.automation_enabled,
+      assigned_to: data.assigned_to && data.assigned_to !== 'unassigned' ? data.assigned_to : undefined,
     });
     
     form.reset();
@@ -230,6 +238,40 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
                 </FormItem>
               )}
             />
+
+            {/* Assigned To - Only visible to admins */}
+            {canManageTeam && teamMembers && teamMembers.length > 0 && (
+              <FormField
+                control={form.control}
+                name="assigned_to"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center gap-2">
+                      <UserCircle className="h-4 w-4" />
+                      Atribuir a
+                    </FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Não atribuído" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="unassigned">Não atribuído</SelectItem>
+                        {teamMembers
+                          .filter(m => !m.is_banned && (m.role === 'salesperson' || m.role === 'admin' || m.role === 'viewer'))
+                          .map((member) => (
+                            <SelectItem key={member.user_id} value={member.user_id}>
+                              {member.full_name} ({RoleLabels[member.role] || member.role})
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             <FormField
               control={form.control}

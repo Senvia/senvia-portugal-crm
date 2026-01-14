@@ -1,6 +1,6 @@
 // Senvia OS Type Definitions
 
-export type AppRole = 'super_admin' | 'admin' | 'viewer';
+export type AppRole = 'super_admin' | 'admin' | 'viewer' | 'salesperson';
 export type LeadStatus = 'new' | 'contacted' | 'scheduled' | 'won' | 'lost';
 export type LeadTemperature = 'cold' | 'warm' | 'hot';
 export type OrganizationPlan = 'basic' | 'pro';
@@ -58,6 +58,7 @@ export interface Lead {
   gdpr_consent: boolean;
   automation_enabled: boolean;
   custom_data?: Record<string, string | number | boolean | string[] | null>;
+  assigned_to?: string | null;
   created_at: string;
   updated_at?: string;
 }
@@ -96,6 +97,7 @@ export const ROLE_LABELS: Record<AppRole, string> = {
   super_admin: 'Super Administrador',
   admin: 'Administrador',
   viewer: 'Visualizador',
+  salesperson: 'Vendedor',
 };
 
 // PT-PT Plan Labels

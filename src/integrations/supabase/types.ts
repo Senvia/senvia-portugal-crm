@@ -75,6 +75,7 @@ export type Database = {
       }
       leads: {
         Row: {
+          assigned_to: string | null
           automation_enabled: boolean
           created_at: string | null
           custom_data: Json | null
@@ -93,6 +94,7 @@ export type Database = {
           value: number | null
         }
         Insert: {
+          assigned_to?: string | null
           automation_enabled?: boolean
           created_at?: string | null
           custom_data?: Json | null
@@ -111,6 +113,7 @@ export type Database = {
           value?: number | null
         }
         Update: {
+          assigned_to?: string | null
           automation_enabled?: boolean
           created_at?: string | null
           custom_data?: Json | null
@@ -395,7 +398,7 @@ export type Database = {
       is_slug_available: { Args: { _slug: string }; Returns: boolean }
     }
     Enums: {
-      app_role: "super_admin" | "admin" | "viewer"
+      app_role: "super_admin" | "admin" | "viewer" | "salesperson"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -523,7 +526,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["super_admin", "admin", "viewer"],
+      app_role: ["super_admin", "admin", "viewer", "salesperson"],
     },
   },
 } as const
