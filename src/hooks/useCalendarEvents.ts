@@ -120,6 +120,7 @@ export function useCreateEvent() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['calendar-events'] });
+      queryClient.invalidateQueries({ queryKey: ['lead-events'] });
       queryClient.invalidateQueries({ queryKey: ['leads'] });
       toast.success('Evento criado com sucesso');
     },
@@ -147,6 +148,7 @@ export function useUpdateEvent() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['calendar-events'] });
+      queryClient.invalidateQueries({ queryKey: ['lead-events'] });
       toast.success('Evento atualizado com sucesso');
     },
     onError: (error) => {
@@ -170,6 +172,7 @@ export function useDeleteEvent() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['calendar-events'] });
+      queryClient.invalidateQueries({ queryKey: ['lead-events'] });
       toast.success('Evento eliminado com sucesso');
     },
     onError: (error) => {
