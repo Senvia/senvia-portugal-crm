@@ -14,31 +14,36 @@ const EVENT_TYPE_ICONS: Record<EventType, React.ElementType> = {
 interface EventCardProps {
   event: CalendarEvent;
   compact?: boolean;
-  onClick?: () => void;
+  onClick?: (e: React.MouseEvent) => void;
 }
 
 export function EventCard({ event, compact = false, onClick }: EventCardProps) {
   const Icon = EVENT_TYPE_ICONS[event.event_type];
   const colorClass = EVENT_TYPE_COLORS[event.event_type];
 
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onClick?.(e);
+  };
+
   if (compact) {
     return (
       <button
-        onClick={onClick}
+        onClick={handleClick}
         className={cn(
           'w-full text-left px-2 py-1 rounded text-xs font-medium truncate',
           colorClass,
           'text-white hover:opacity-90 transition-opacity'
         )}
       >
-        {event.title}
+        {event.lead ? `${event.title} - ${event.lead.name}` : event.title}
       </button>
     );
   }
 
   return (
     <button
-      onClick={onClick}
+      onClick={handleClick}
       className={cn(
         'w-full text-left p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors',
         'flex items-start gap-3'
