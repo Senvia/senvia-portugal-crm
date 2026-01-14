@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Loader2 } from "lucide-react";
@@ -128,9 +128,14 @@ const ConversationalLeadForm = () => {
     fetchForm();
   }, [slug, formSlug]);
 
+  // Refs to prevent duplicate pixel operations
+  const pixelInitialized = useRef(false);
+  const hasTrackedLead = useRef(false);
+
   // Inject Meta Pixels
   useEffect(() => {
     if (!formData?.meta_pixels) return;
+    if (pixelInitialized.current) return; // Already initialized
     
     const activePixels = formData.meta_pixels.filter(p => p.enabled && p.pixel_id);
     if (activePixels.length === 0) {
@@ -138,6 +143,7 @@ const ConversationalLeadForm = () => {
       return;
     }
 
+    pixelInitialized.current = true; // Mark as initialized
     console.log('[Meta Pixel] Initializing pixels:', activePixels.map(p => p.pixel_id));
 
     // Inject the base Facebook Pixel code (only once)
@@ -174,21 +180,31 @@ const ConversationalLeadForm = () => {
       setTimeout(initPixels, 500);
     }
 
-    // Add noscript fallback
+    // Add noscript fallback - check if already exists
     activePixels.forEach(pixel => {
-      const noscript = document.createElement('noscript');
-      const img = document.createElement('img');
-      img.height = 1;
-      img.width = 1;
-      img.style.display = 'none';
-      img.src = `https://www.facebook.com/tr?id=${pixel.pixel_id}&ev=PageView&noscript=1`;
-      noscript.appendChild(img);
-      document.body.appendChild(noscript);
+      const existingNoscript = document.querySelector(`noscript[data-pixel-id="${pixel.pixel_id}"]`);
+      if (!existingNoscript) {
+        const noscript = document.createElement('noscript');
+        noscript.setAttribute('data-pixel-id', pixel.pixel_id);
+        const img = document.createElement('img');
+        img.height = 1;
+        img.width = 1;
+        img.style.display = 'none';
+        img.src = `https://www.facebook.com/tr?id=${pixel.pixel_id}&ev=PageView&noscript=1`;
+        noscript.appendChild(img);
+        document.body.appendChild(noscript);
+      }
     });
   }, [formData?.meta_pixels]);
 
   // Function to track Lead event - ONLY call after confirmed success
   const trackLeadEvent = () => {
+    // Prevent duplicate Lead events
+    if (hasTrackedLead.current) {
+      console.log('[Meta Pixel] Lead event already tracked, skipping');
+      return;
+    }
+
     if (!formData?.meta_pixels) {
       console.log('[Meta Pixel] No pixels to track Lead event');
       return;
@@ -200,6 +216,9 @@ const ConversationalLeadForm = () => {
       console.warn('[Meta Pixel] fbq not loaded, cannot track Lead event');
       return;
     }
+
+    // Mark as tracked BEFORE sending to prevent race conditions
+    hasTrackedLead.current = true;
     
     activePixels.forEach((pixel) => {
       window.fbq('trackSingle', pixel.pixel_id, 'Lead', {
