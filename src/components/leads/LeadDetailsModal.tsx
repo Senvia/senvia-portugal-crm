@@ -78,6 +78,7 @@ const statusStyles: Record<LeadStatus, string> = {
   new: "bg-primary/10 text-primary border-primary/20",
   contacted: "bg-[hsl(280,84%,60%)]/10 text-[hsl(280,84%,50%)] border-[hsl(280,84%,60%)]/20",
   scheduled: "bg-warning/10 text-warning border-warning/20",
+  proposal: "bg-cyan-500/10 text-cyan-500 border-cyan-500/20",
   won: "bg-success/10 text-success border-success/20",
   lost: "bg-muted text-muted-foreground border-muted",
 };

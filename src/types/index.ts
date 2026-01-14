@@ -1,7 +1,7 @@
 // Senvia OS Type Definitions
 
 export type AppRole = 'super_admin' | 'admin' | 'viewer' | 'salesperson';
-export type LeadStatus = 'new' | 'contacted' | 'scheduled' | 'won' | 'lost';
+export type LeadStatus = 'new' | 'contacted' | 'scheduled' | 'proposal' | 'won' | 'lost';
 export type LeadTemperature = 'cold' | 'warm' | 'hot';
 export type OrganizationPlan = 'basic' | 'pro';
 
@@ -88,6 +88,7 @@ export const STATUS_LABELS: Record<LeadStatus, string> = {
   new: 'Novo',
   contacted: 'Contactado',
   scheduled: 'Agendado',
+  proposal: 'Proposta',
   won: 'Ganho',
   lost: 'Perdido',
 };
@@ -107,7 +108,7 @@ export const PLAN_LABELS: Record<OrganizationPlan, string> = {
 };
 
 // Kanban column order
-export const KANBAN_COLUMNS: LeadStatus[] = ['new', 'contacted', 'scheduled', 'won', 'lost'];
+export const KANBAN_COLUMNS: LeadStatus[] = ['new', 'contacted', 'scheduled', 'proposal', 'won', 'lost'];
 
 // PT-PT Temperature Labels
 export const TEMPERATURE_LABELS: Record<LeadTemperature, string> = {
