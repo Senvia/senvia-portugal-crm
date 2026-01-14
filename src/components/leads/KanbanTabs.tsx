@@ -11,8 +11,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+interface LeadEvent {
+  id: string;
+  title: string;
+  start_time: string;
+  event_type: string;
+}
+
 interface KanbanTabsProps {
   leads: Lead[];
+  leadEvents?: Record<string, LeadEvent>;
   onStatusChange: (leadId: string, newStatus: LeadStatus) => void;
   onTemperatureChange: (leadId: string, newTemperature: LeadTemperature) => void;
   onViewDetails: (lead: Lead) => void;
@@ -37,6 +45,7 @@ const statusDotColors: Record<LeadStatus, string> = {
 
 export function KanbanTabs({
   leads,
+  leadEvents = {},
   onStatusChange,
   onTemperatureChange,
   onViewDetails,
@@ -92,9 +101,11 @@ export function KanbanTabs({
             <LeadCard
               key={lead.id}
               lead={lead}
-              onTemperatureChange={(temp: LeadTemperature) => onTemperatureChange(lead.id, temp)}
-              onViewDetails={() => onViewDetails(lead)}
-              onDelete={() => onDelete(lead.id)}
+              upcomingEvent={leadEvents[lead.id]}
+              onStatusChange={onStatusChange}
+              onTemperatureChange={onTemperatureChange}
+              onViewDetails={onViewDetails}
+              onDelete={onDelete}
             />
           ))
         )}
