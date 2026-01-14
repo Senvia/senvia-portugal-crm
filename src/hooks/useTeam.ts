@@ -7,7 +7,7 @@ interface CreateTeamMemberParams {
   email: string;
   password: string;
   fullName: string;
-  role: 'admin' | 'viewer';
+  role: 'admin' | 'viewer' | 'salesperson';
 }
 
 export interface TeamMember {
@@ -15,7 +15,7 @@ export interface TeamMember {
   full_name: string;
   avatar_url: string | null;
   organization_id: string | null;
-  role: 'admin' | 'viewer' | 'super_admin';
+  role: 'admin' | 'viewer' | 'salesperson' | 'super_admin';
   user_id: string;
   is_banned: boolean;
 }
@@ -23,7 +23,7 @@ export interface TeamMember {
 export interface PendingInvite {
   id: string;
   email: string;
-  role: 'admin' | 'viewer';
+  role: 'admin' | 'viewer' | 'salesperson';
   token: string;
   created_at: string;
   expires_at: string;
@@ -76,7 +76,7 @@ export function useCreateInvite() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async ({ email, role }: { email: string; role: 'admin' | 'viewer' }) => {
+    mutationFn: async ({ email, role }: { email: string; role: 'admin' | 'viewer' | 'salesperson' }) => {
       if (!organization?.id || !user?.id) {
         throw new Error('Organização não encontrada');
       }

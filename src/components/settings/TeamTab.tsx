@@ -21,12 +21,14 @@ import { getBaseUrl } from '@/lib/constants';
 const ROLE_LABELS: Record<string, string> = {
   admin: 'Administrador',
   viewer: 'Visualizador',
+  salesperson: 'Vendedor',
   super_admin: 'Super Admin',
 };
 
 const ROLE_VARIANTS: Record<string, 'default' | 'secondary' | 'outline'> = {
   admin: 'default',
   viewer: 'secondary',
+  salesperson: 'secondary',
   super_admin: 'default',
 };
 
@@ -46,7 +48,7 @@ export function TeamTab() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [role, setRole] = useState<'admin' | 'viewer'>('viewer');
+  const [role, setRole] = useState<'admin' | 'viewer' | 'salesperson'>('salesperson');
   const [showPassword, setShowPassword] = useState(false);
   
   // Success state
@@ -65,7 +67,7 @@ export function TeamTab() {
 
   // Change role modal state
   const [changeRoleOpen, setChangeRoleOpen] = useState(false);
-  const [newRole, setNewRole] = useState<'admin' | 'viewer'>('viewer');
+  const [newRole, setNewRole] = useState<'admin' | 'viewer' | 'salesperson'>('salesperson');
 
   const handleCreateMember = async () => {
     if (!fullName.trim() || !email.trim() || !password || !confirmPassword) {
@@ -118,7 +120,7 @@ export function TeamTab() {
     setEmail('');
     setPassword('');
     setConfirmPassword('');
-    setRole('viewer');
+    setRole('salesperson');
     setShowPassword(false);
     setCreatedMember(null);
     setCopiedField(null);
@@ -139,7 +141,15 @@ export function TeamTab() {
 
   const openChangeRoleModal = (member: TeamMember) => {
     setSelectedMember(member);
-    setNewRole(member.role === 'admin' ? 'viewer' : 'admin');
+    // Set to a different role than current
+    const currentRole = member.role;
+    if (currentRole === 'admin') {
+      setNewRole('salesperson');
+    } else if (currentRole === 'salesperson') {
+      setNewRole('viewer');
+    } else {
+      setNewRole('admin');
+    }
     setChangeRoleOpen(true);
   };
 
@@ -279,15 +289,15 @@ export function TeamTab() {
                     </div>
                     <div className="space-y-3">
                       <Label>Perfil</Label>
-                      <RadioGroup value={role} onValueChange={(v) => setRole(v as 'admin' | 'viewer')}>
+                      <RadioGroup value={role} onValueChange={(v) => setRole(v as 'admin' | 'viewer' | 'salesperson')}>
                         <div className="flex items-start space-x-3 rounded-lg border p-3">
-                          <RadioGroupItem value="admin" id="role-admin" className="mt-1" />
+                          <RadioGroupItem value="salesperson" id="role-salesperson" className="mt-1" />
                           <div className="flex-1">
-                            <Label htmlFor="role-admin" className="font-medium cursor-pointer">
-                              Administrador
+                            <Label htmlFor="role-salesperson" className="font-medium cursor-pointer">
+                              Vendedor
                             </Label>
                             <p className="text-sm text-muted-foreground">
-                              Pode editar tudo: leads, definições e equipa.
+                              Vê apenas os leads atribuídos a si. Ideal para comerciais.
                             </p>
                           </div>
                         </div>
@@ -298,7 +308,18 @@ export function TeamTab() {
                               Visualizador
                             </Label>
                             <p className="text-sm text-muted-foreground">
-                              Só pode ver leads e mudar estados. Não pode eliminar nem aceder a definições.
+                              Vê todos os leads da organização. Não pode eliminar nem aceder a definições.
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-start space-x-3 rounded-lg border p-3">
+                          <RadioGroupItem value="admin" id="role-admin" className="mt-1" />
+                          <div className="flex-1">
+                            <Label htmlFor="role-admin" className="font-medium cursor-pointer">
+                              Administrador
+                            </Label>
+                            <p className="text-sm text-muted-foreground">
+                              Pode editar tudo: leads, definições e equipa.
                             </p>
                           </div>
                         </div>

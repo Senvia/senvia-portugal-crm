@@ -1,7 +1,8 @@
-import { Lead, STATUS_LABELS, LeadStatus, LeadTemperature, TEMPERATURE_LABELS, TEMPERATURE_STYLES, FormSettings, CustomField } from "@/types";
+import { Lead, STATUS_LABELS, LeadStatus, LeadTemperature, TEMPERATURE_LABELS, TEMPERATURE_STYLES, FormSettings, CustomField, ROLE_LABELS } from "@/types";
 import { formatDate, formatDateTime, getWhatsAppUrl } from "@/lib/format";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTeamMembers } from "@/hooks/useTeam";
 
 // Formata número com espaços nos milhares (estilo PT)
 const formatNumberWithSpaces = (value: string | number): string => {
@@ -58,7 +59,8 @@ import {
   FileText,
   Thermometer,
   ClipboardList,
-  Target
+  Target,
+  UserCircle
 } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { cn } from "@/lib/utils";
@@ -89,8 +91,9 @@ export function LeadDetailsModal({
   onUpdate
 }: LeadDetailsModalProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const { canDeleteLeads } = usePermissions();
+  const { canDeleteLeads, canManageTeam } = usePermissions();
   const { organization } = useAuth();
+  const { data: teamMembers } = useTeamMembers();
   
   // Editable fields state
   const [editValue, setEditValue] = useState<string>("");
@@ -271,7 +274,36 @@ export function LeadDetailsModal({
             </Select>
           </div>
 
-          {/* Editable Value */}
+          {/* Assigned To - Only visible to admins */}
+          {canManageTeam && teamMembers && teamMembers.length > 0 && (
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                <UserCircle className="h-4 w-4" />
+                Atribuído a
+              </span>
+              <Select
+                value={lead.assigned_to || 'unassigned'}
+                onValueChange={(value) => onUpdate?.(lead.id, { assigned_to: value === 'unassigned' ? null : value })}
+              >
+                <SelectTrigger className="w-48">
+                  <SelectValue placeholder="Não atribuído" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="unassigned">
+                    <span className="text-muted-foreground">Não atribuído</span>
+                  </SelectItem>
+                  {teamMembers
+                    .filter(m => !m.is_banned && (m.role === 'salesperson' || m.role === 'admin' || m.role === 'viewer'))
+                    .map((member) => (
+                      <SelectItem key={member.user_id} value={member.user_id}>
+                        {member.full_name} ({ROLE_LABELS[member.role] || member.role})
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           <div className="space-y-2">
             <Label htmlFor="lead-value" className="flex items-center gap-2 text-sm font-medium">
               <Euro className="h-4 w-4 text-muted-foreground" />

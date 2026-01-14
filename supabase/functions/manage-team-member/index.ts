@@ -9,7 +9,7 @@ interface ManageMemberRequest {
   action: 'change_password' | 'change_role' | 'toggle_status';
   user_id: string;
   new_password?: string;
-  new_role?: 'admin' | 'viewer';
+  new_role?: 'admin' | 'viewer' | 'salesperson';
 }
 
 Deno.serve(async (req) => {

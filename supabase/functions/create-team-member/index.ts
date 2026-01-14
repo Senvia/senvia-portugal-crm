@@ -10,7 +10,7 @@ interface CreateMemberRequest {
   email: string;
   password: string;
   full_name: string;
-  role: 'admin' | 'viewer';
+  role: 'admin' | 'viewer' | 'salesperson';
 }
 
 serve(async (req) => {
@@ -102,7 +102,7 @@ serve(async (req) => {
       );
     }
 
-    if (!['admin', 'viewer'].includes(role)) {
+    if (!['admin', 'viewer', 'salesperson'].includes(role)) {
       return new Response(
         JSON.stringify({ error: 'Perfil inválido' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
