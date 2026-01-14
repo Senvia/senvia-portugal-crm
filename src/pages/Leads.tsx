@@ -3,6 +3,8 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { ResponsiveKanban } from "@/components/leads/ResponsiveKanban";
 import { LeadDetailsModal } from "@/components/leads/LeadDetailsModal";
 import { AddLeadModal } from "@/components/leads/AddLeadModal";
+import { CreateEventModal } from "@/components/calendar/CreateEventModal";
+import { CreateProposalModal } from "@/components/proposals/CreateProposalModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLeads, useUpdateLeadStatus, useDeleteLead, useUpdateLead } from "@/hooks/useLeads";
 import { Input } from "@/components/ui/input";
@@ -28,6 +30,9 @@ export default function Leads() {
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isCreateEventModalOpen, setIsCreateEventModalOpen] = useState(false);
+  const [isCreateProposalModalOpen, setIsCreateProposalModalOpen] = useState(false);
+  const [pendingLead, setPendingLead] = useState<Lead | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<LeadStatus[]>([]);
   const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({ from: undefined, to: undefined });
@@ -80,7 +85,40 @@ export default function Leads() {
   });
 
   const handleStatusChange = (leadId: string, newStatus: LeadStatus) => {
+    const lead = leads.find(l => l.id === leadId);
+    
+    // Intercept drops on 'scheduled' -> open event modal
+    if (newStatus === 'scheduled') {
+      setPendingLead(lead || null);
+      setIsCreateEventModalOpen(true);
+      return;
+    }
+    
+    // Intercept drops on 'proposal' -> open proposal modal
+    if (newStatus === 'proposal') {
+      setPendingLead(lead || null);
+      setIsCreateProposalModalOpen(true);
+      return;
+    }
+    
+    // For other statuses, update normally
     updateStatus.mutate({ leadId, status: newStatus });
+  };
+
+  const handleEventCreated = () => {
+    if (pendingLead) {
+      updateStatus.mutate({ leadId: pendingLead.id, status: 'scheduled' });
+    }
+    setPendingLead(null);
+    setIsCreateEventModalOpen(false);
+  };
+
+  const handleProposalCreated = () => {
+    if (pendingLead) {
+      updateStatus.mutate({ leadId: pendingLead.id, status: 'proposal' });
+    }
+    setPendingLead(null);
+    setIsCreateProposalModalOpen(false);
   };
 
   const handleTemperatureChange = (leadId: string, temperature: LeadTemperature) => {
@@ -231,6 +269,29 @@ export default function Leads() {
 
         <LeadDetailsModal lead={selectedLead} open={isModalOpen} onOpenChange={setIsModalOpen} onStatusChange={handleStatusChange} onDelete={handleDelete} onUpdate={handleUpdate} />
         <AddLeadModal open={isAddModalOpen} onOpenChange={setIsAddModalOpen} />
+        
+        {/* Modal for creating event when dropping on 'scheduled' */}
+        <CreateEventModal
+          open={isCreateEventModalOpen}
+          onOpenChange={(open) => {
+            setIsCreateEventModalOpen(open);
+            if (!open) setPendingLead(null);
+          }}
+          selectedDate={new Date()}
+          preselectedLeadId={pendingLead?.id}
+          onSuccess={handleEventCreated}
+        />
+        
+        {/* Modal for creating proposal when dropping on 'proposal' */}
+        <CreateProposalModal
+          lead={pendingLead}
+          open={isCreateProposalModalOpen && !!pendingLead}
+          onOpenChange={(open) => {
+            setIsCreateProposalModalOpen(open);
+            if (!open) setPendingLead(null);
+          }}
+          onSuccess={handleProposalCreated}
+        />
       </div>
     </AppLayout>
   );
