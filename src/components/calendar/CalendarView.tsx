@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { addMonths, subMonths, addWeeks, subWeeks, addDays, subDays, startOfMonth, endOfMonth, startOfWeek, endOfWeek } from 'date-fns';
 import { useCalendarEvents } from '@/hooks/useCalendarEvents';
 import { useTeamMembers } from '@/hooks/useTeam';
@@ -50,6 +50,16 @@ export function CalendarView() {
   }, [currentDate, view]);
 
   const { data: events = [], isLoading } = useCalendarEvents(dateRange.start, dateRange.end);
+
+  // Sync selectedEvent with updated data from events list
+  useEffect(() => {
+    if (selectedEvent && events.length > 0) {
+      const updatedEvent = events.find((e) => e.id === selectedEvent.id);
+      if (updatedEvent) {
+        setSelectedEvent(updatedEvent);
+      }
+    }
+  }, [events]);
 
   // Filter events by user if admin filter is active
   const filteredEvents = useMemo(() => {
