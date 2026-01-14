@@ -201,12 +201,12 @@ export function CreateEventModal({ open, onOpenChange, selectedDate, event }: Cr
 
           <div className="space-y-2">
             <Label>Lead Associado</Label>
-            <Select value={leadId} onValueChange={setLeadId}>
+            <Select value={leadId || "none"} onValueChange={(v) => setLeadId(v === "none" ? "" : v)}>
               <SelectTrigger>
                 <SelectValue placeholder="Nenhum" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Nenhum</SelectItem>
+                <SelectItem value="none">Nenhum</SelectItem>
                 {leads.map((lead) => (
                   <SelectItem key={lead.id} value={lead.id}>
                     {lead.name}
@@ -218,13 +218,13 @@ export function CreateEventModal({ open, onOpenChange, selectedDate, event }: Cr
 
           <div className="space-y-2">
             <Label>Lembrete</Label>
-            <Select value={reminderMinutes} onValueChange={setReminderMinutes}>
+            <Select value={reminderMinutes || "none"} onValueChange={(v) => setReminderMinutes(v === "none" ? "" : v)}>
               <SelectTrigger>
                 <SelectValue placeholder="Sem lembrete" />
               </SelectTrigger>
               <SelectContent>
                 {REMINDER_OPTIONS.map((option) => (
-                  <SelectItem key={option.value ?? 'null'} value={option.value?.toString() ?? ''}>
+                  <SelectItem key={option.value ?? 'none'} value={option.value?.toString() ?? 'none'}>
                     {option.label}
                   </SelectItem>
                 ))}
