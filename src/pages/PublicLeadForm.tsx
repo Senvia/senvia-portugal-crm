@@ -129,14 +129,9 @@ export default function PublicLeadForm() {
     fetchForm();
   }, [slug, formSlug]);
 
-  // Refs to prevent duplicate pixel operations
-  const pixelInitialized = useRef(false);
-  const hasTrackedLead = useRef(false);
-
-  // Inject Meta Pixels
+  // Inject Meta Pixels - using sessionStorage to persist across React remounts
   useEffect(() => {
-    if (!formData?.meta_pixels) return;
-    if (pixelInitialized.current) return; // Already initialized
+    if (!formData?.meta_pixels || !formData?.form_id) return;
     
     const activePixels = formData.meta_pixels.filter(p => p.enabled && p.pixel_id);
     if (activePixels.length === 0) {
@@ -144,7 +139,14 @@ export default function PublicLeadForm() {
       return;
     }
 
-    pixelInitialized.current = true; // Mark as initialized
+    // Use sessionStorage to prevent duplicate initialization (persists across React StrictMode remounts)
+    const pixelStorageKey = `pixel_init_${formData.form_id}`;
+    if (sessionStorage.getItem(pixelStorageKey)) {
+      console.log('[Meta Pixel] Already initialized in this session, skipping');
+      return;
+    }
+    sessionStorage.setItem(pixelStorageKey, 'true');
+    
     console.log('[Meta Pixel] Initializing pixels:', activePixels.map(p => p.pixel_id));
 
     // Inject the base Facebook Pixel code (only once)
@@ -180,34 +182,20 @@ export default function PublicLeadForm() {
     } else {
       setTimeout(initPixels, 500);
     }
+    // Removed noscript fallback - unnecessary for SPAs and can cause duplicate events
+  }, [formData?.meta_pixels, formData?.form_id]);
 
-    // Add noscript fallback - check if already exists
-    activePixels.forEach(pixel => {
-      const existingNoscript = document.querySelector(`noscript[data-pixel-id="${pixel.pixel_id}"]`);
-      if (!existingNoscript) {
-        const noscript = document.createElement('noscript');
-        noscript.setAttribute('data-pixel-id', pixel.pixel_id);
-        const img = document.createElement('img');
-        img.height = 1;
-        img.width = 1;
-        img.style.display = 'none';
-        img.src = `https://www.facebook.com/tr?id=${pixel.pixel_id}&ev=PageView&noscript=1`;
-        noscript.appendChild(img);
-        document.body.appendChild(noscript);
-      }
-    });
-  }, [formData?.meta_pixels]);
-
-  // Function to track Lead event - ONLY call after confirmed success
-  const trackLeadEvent = () => {
-    // Prevent duplicate Lead events
-    if (hasTrackedLead.current) {
-      console.log('[Meta Pixel] Lead event already tracked, skipping');
+  // Function to track Lead event - ONLY call after confirmed success with lead_id
+  const trackLeadEvent = (leadId: string) => {
+    if (!formData?.meta_pixels || !formData?.form_id) {
+      console.log('[Meta Pixel] No pixels or form_id to track Lead event');
       return;
     }
 
-    if (!formData?.meta_pixels) {
-      console.log('[Meta Pixel] No pixels to track Lead event');
+    // Use sessionStorage to prevent duplicate Lead events (persists across React remounts)
+    const leadStorageKey = `pixel_lead_${formData.form_id}`;
+    if (sessionStorage.getItem(leadStorageKey)) {
+      console.log('[Meta Pixel] Lead event already tracked in this session, skipping');
       return;
     }
     
@@ -219,14 +207,15 @@ export default function PublicLeadForm() {
     }
 
     // Mark as tracked BEFORE sending to prevent race conditions
-    hasTrackedLead.current = true;
+    sessionStorage.setItem(leadStorageKey, 'true');
     
     activePixels.forEach((pixel) => {
+      // Use lead_id as eventID for Facebook's automatic deduplication
       window.fbq('trackSingle', pixel.pixel_id, 'Lead', {
         content_name: formData.org_name,
         content_category: 'form_submission',
-      });
-      console.log('[Meta Pixel] Lead event tracked for:', pixel.pixel_id);
+      }, { eventID: leadId });
+      console.log('[Meta Pixel] Lead event tracked for:', pixel.pixel_id, 'with eventID:', leadId);
     });
   };
 
@@ -309,9 +298,20 @@ export default function PublicLeadForm() {
         throw new Error(response.error.message || 'Erro ao enviar');
       }
 
-      // Only track Lead event AFTER confirmed success
-      console.log('[Meta Pixel] Lead submitted successfully, tracking event...');
-      trackLeadEvent();
+      // Check if backend marked this as a duplicate - do NOT track pixel for duplicates
+      if (response.data?.duplicate === true) {
+        console.log('[Meta Pixel] Backend marked as duplicate, NOT tracking Lead event');
+        setIsSuccess(true);
+        return;
+      }
+
+      // Only track Lead event AFTER confirmed success AND if we have a lead_id
+      if (response.data?.lead_id) {
+        console.log('[Meta Pixel] Lead submitted successfully, tracking event with lead_id:', response.data.lead_id);
+        trackLeadEvent(response.data.lead_id);
+      } else {
+        console.warn('[Meta Pixel] No lead_id returned, cannot track with eventID');
+      }
 
       setIsSuccess(true);
     } catch (error) {
