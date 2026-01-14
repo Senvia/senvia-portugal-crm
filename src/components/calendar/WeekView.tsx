@@ -22,7 +22,11 @@ export function WeekView({ currentDate, events, onDayClick, onEventClick }: Week
   }, [currentDate]);
 
   const getEventsForDay = (day: Date) => {
-    return events.filter((event) => isSameDay(new Date(event.start_time), day));
+    return events.filter((event) => isSameDay(new Date(event.start_time), day) && !event.all_day);
+  };
+
+  const getAllDayEventsForDay = (day: Date) => {
+    return events.filter((event) => isSameDay(new Date(event.start_time), day) && event.all_day);
   };
 
   const getEventPosition = (event: CalendarEvent) => {
@@ -72,6 +76,46 @@ export function WeekView({ currentDate, events, onDayClick, onEventClick }: Week
         ))}
       </div>
 
+      {/* All-day events row */}
+      {days.some((day) => getAllDayEventsForDay(day).length > 0) && (
+        <div className="grid grid-cols-8 border-b">
+          <div className="py-2 px-2 text-xs text-muted-foreground flex items-center justify-end">
+            Dia inteiro
+          </div>
+          {days.map((day) => {
+            const allDayEvents = getAllDayEventsForDay(day);
+            return (
+              <div
+                key={`allday-${day.toISOString()}`}
+                className={cn(
+                  'border-l p-1 min-h-[40px]',
+                  isToday(day) && 'bg-primary/5'
+                )}
+              >
+                {allDayEvents.map((event) => {
+                  const colorClass = EVENT_TYPE_COLORS[event.event_type];
+                  return (
+                    <button
+                      key={event.id}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onEventClick(event);
+                      }}
+                      className={cn(
+                        'w-full text-left rounded px-1 py-0.5 text-[10px] text-white font-medium truncate hover:opacity-90',
+                        colorClass
+                      )}
+                    >
+                      {event.title}
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {/* Time Grid */}
       <div className="grid grid-cols-8 max-h-[600px] overflow-y-auto">
         {/* Hours column */}
@@ -88,7 +132,7 @@ export function WeekView({ currentDate, events, onDayClick, onEventClick }: Week
 
         {/* Days columns */}
         {days.map((day) => {
-          const dayEvents = getEventsForDay(day).filter((e) => !e.all_day);
+          const dayEvents = getEventsForDay(day);
           
           return (
             <div
