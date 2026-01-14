@@ -1,7 +1,7 @@
-import { ChevronRight, Building, Users, Palette, Link2 } from "lucide-react";
+import { ChevronRight, Building, Users, Palette, Link2, Package } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type SettingsSection = "general" | "team" | "form" | "integrations";
+export type SettingsSection = "general" | "team" | "form" | "products" | "integrations";
 
 interface MobileSettingsNavProps {
   activeSection: SettingsSection | null;
@@ -14,6 +14,7 @@ const sections = [
   { id: "general" as const, label: "Geral", icon: Building, description: "Organização e conta" },
   { id: "team" as const, label: "Equipa", icon: Users, description: "Gerir membros", requiresTeam: true },
   { id: "form" as const, label: "Formulário", icon: Palette, description: "Personalizar aparência", requiresIntegrations: true },
+  { id: "products" as const, label: "Produtos", icon: Package, description: "Catálogo para propostas", requiresIntegrations: true },
   { id: "integrations" as const, label: "Integrações", icon: Link2, description: "Webhook, WhatsApp, IA", requiresIntegrations: true },
 ];
 
