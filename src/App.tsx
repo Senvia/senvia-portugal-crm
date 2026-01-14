@@ -12,6 +12,7 @@ import { PWAInstallButton } from "@/components/pwa/PWAInstallButton";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Leads from "./pages/Leads";
+import Calendar from "./pages/Calendar";
 import Settings from "./pages/Settings";
 import PublicLeadForm from "./pages/PublicLeadForm";
 import ConversationalLeadForm from "./pages/ConversationalLeadForm";
@@ -59,6 +60,11 @@ const App = () => (
             <Route path="/leads" element={
               <ProtectedRoute>
                 <Leads />
+              </ProtectedRoute>
+            } />
+            <Route path="/calendar" element={
+              <ProtectedRoute>
+                <Calendar />
               </ProtectedRoute>
             } />
             <Route path="/settings" element={
