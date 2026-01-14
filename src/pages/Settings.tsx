@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
-import { Building, Users, Palette, Link2, ArrowLeft } from "lucide-react";
+import { Building, Users, Palette, Link2, ArrowLeft, Package } from "lucide-react";
+import { ProductsTab } from '@/components/settings/ProductsTab';
 import { supabase } from '@/integrations/supabase/client';
 import { TeamTab } from '@/components/settings/TeamTab';
 import { FormsManager } from '@/components/settings/FormsManager';
@@ -187,6 +188,7 @@ export default function Settings() {
     general: "Geral",
     team: "Equipa",
     form: "Formulário",
+    products: "Produtos",
     integrations: "Integrações",
   };
 
@@ -247,6 +249,7 @@ export default function Settings() {
               )}
               {mobileSection === "team" && canManageTeam && <TeamTab />}
               {mobileSection === "form" && canManageIntegrations && <FormsManager />}
+              {mobileSection === "products" && canManageIntegrations && <ProductsTab />}
               {mobileSection === "integrations" && canManageIntegrations && (
                 <IntegrationsContent
                   organization={organization}
@@ -302,6 +305,12 @@ export default function Settings() {
                   </TabsTrigger>
                 )}
                 {canManageIntegrations && (
+                  <TabsTrigger value="products" className="gap-2">
+                    <Package className="h-4 w-4" />
+                    Produtos
+                  </TabsTrigger>
+                )}
+                {canManageIntegrations && (
                   <TabsTrigger value="integrations" className="gap-2">
                     <Link2 className="h-4 w-4" />
                     Integrações
@@ -343,6 +352,12 @@ export default function Settings() {
               {canManageIntegrations && (
                 <TabsContent value="form" className="w-full max-w-none">
                   <FormsManager />
+                </TabsContent>
+              )}
+
+              {canManageIntegrations && (
+                <TabsContent value="products" className="max-w-4xl">
+                  <ProductsTab />
                 </TabsContent>
               )}
 
