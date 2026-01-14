@@ -35,6 +35,7 @@ const statusStyles: Record<LeadStatus, string> = {
   new: "status-new",
   contacted: "status-contacted",
   scheduled: "status-scheduled",
+  proposal: "status-proposal",
   won: "status-won",
   lost: "status-lost",
 };

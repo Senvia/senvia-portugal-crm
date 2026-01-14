@@ -31,6 +31,7 @@ const badgeColors: Record<LeadStatus, string> = {
   new: "bg-blue-500/20 text-blue-400",
   contacted: "bg-yellow-500/20 text-yellow-400",
   scheduled: "bg-purple-500/20 text-purple-400",
+  proposal: "bg-cyan-500/20 text-cyan-400",
   won: "bg-green-500/20 text-green-400",
   lost: "bg-red-500/20 text-red-400",
 };
@@ -39,6 +40,7 @@ const statusDotColors: Record<LeadStatus, string> = {
   new: "bg-blue-500",
   contacted: "bg-yellow-500",
   scheduled: "bg-purple-500",
+  proposal: "bg-cyan-500",
   won: "bg-green-500",
   lost: "bg-red-500",
 };

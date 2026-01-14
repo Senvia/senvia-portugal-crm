@@ -4,8 +4,9 @@ import { MetricCard } from "@/components/dashboard/MetricCard";
 import { ResponsiveKanban } from "@/components/leads/ResponsiveKanban";
 import { LeadDetailsModal } from "@/components/leads/LeadDetailsModal";
 import { useAuth } from "@/contexts/AuthContext";
-import { useLeads, useLeadStats, useUpdateLeadStatus, useDeleteLead, useUpdateLead } from "@/hooks/useLeads";
-import { Users, TrendingUp, Euro, UserPlus, Loader2 } from "lucide-react";
+import { useLeads, useUpdateLeadStatus, useDeleteLead, useUpdateLead } from "@/hooks/useLeads";
+import { useDashboardStats } from "@/hooks/useDashboardStats";
+import { Users, TrendingUp, FileText, UserPlus, Loader2 } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
 import type { Lead } from "@/types";
 import { LeadStatus, LeadTemperature } from "@/types";
@@ -13,7 +14,7 @@ import { LeadStatus, LeadTemperature } from "@/types";
 export default function Dashboard() {
   const { profile, organization } = useAuth();
   const { data: leads = [], isLoading } = useLeads();
-  const stats = useLeadStats();
+  const stats = useDashboardStats();
   const updateStatus = useUpdateLeadStatus();
   const deleteLead = useDeleteLead();
   const updateLead = useUpdateLead();
@@ -70,10 +71,15 @@ export default function Dashboard() {
         </div>
 
         <div className="mb-8 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <MetricCard title="Leads Totais" value={stats.total.toString()} icon={<Users className="h-6 w-6 text-primary" />} trend={{ value: 12, isPositive: true }} />
-          <MetricCard title="Novos Leads" value={stats.new.toString()} icon={<UserPlus className="h-6 w-6 text-primary" />} />
-          <MetricCard title="Taxa de Conversão" value={`${stats.conversionRate}%`} icon={<TrendingUp className="h-6 w-6 text-success" />} trend={{ value: 5, isPositive: true }} />
-          <MetricCard title="Valor em Pipeline" value={formatCurrency(stats.pipelineValue)} icon={<Euro className="h-6 w-6 text-warning" />} />
+          <MetricCard title="Leads Totais" value={stats.totalLeads.toString()} icon={<Users className="h-6 w-6 text-primary" />} />
+          <MetricCard title="Novos Leads" value={stats.newLeads.toString()} icon={<UserPlus className="h-6 w-6 text-primary" />} />
+          <MetricCard title="Taxa de Conversão" value={`${stats.conversionRate}%`} icon={<TrendingUp className="h-6 w-6 text-success" />} />
+          <MetricCard 
+            title="Propostas em Aberto" 
+            value={formatCurrency(stats.openProposalsValue)} 
+            subtitle={`${stats.openProposalsCount} proposta(s)`}
+            icon={<FileText className="h-6 w-6 text-warning" />} 
+          />
         </div>
 
         <div className="rounded-xl border bg-card p-4">

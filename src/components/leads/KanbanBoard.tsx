@@ -23,6 +23,7 @@ const columnColors: Record<LeadStatus, string> = {
   new: "border-t-primary",
   contacted: "border-t-[hsl(280,84%,60%)]",
   scheduled: "border-t-warning",
+  proposal: "border-t-cyan-500",
   won: "border-t-success",
   lost: "border-t-muted-foreground",
 };
@@ -31,6 +32,7 @@ const columnBadgeColors: Record<LeadStatus, string> = {
   new: "bg-primary/10 text-primary",
   contacted: "bg-[hsl(280,84%,60%)]/10 text-[hsl(280,84%,50%)]",
   scheduled: "bg-warning/10 text-warning",
+  proposal: "bg-cyan-500/10 text-cyan-500",
   won: "bg-success/10 text-success",
   lost: "bg-muted text-muted-foreground",
 };
