@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { addMonths, subMonths, addWeeks, subWeeks, addDays, subDays, startOfMonth, endOfMonth, startOfWeek, endOfWeek } from 'date-fns';
+import { addMonths, subMonths, addWeeks, subWeeks, addDays, subDays, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay } from 'date-fns';
 import { useCalendarEvents } from '@/hooks/useCalendarEvents';
 import { useTeamMembers } from '@/hooks/useTeam';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -43,8 +43,8 @@ export function CalendarView() {
       }
       case 'day':
         return {
-          start: currentDate,
-          end: currentDate,
+          start: startOfDay(currentDate),
+          end: endOfDay(currentDate),
         };
     }
   }, [currentDate, view]);
