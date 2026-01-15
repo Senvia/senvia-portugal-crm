@@ -17,6 +17,7 @@ import type { Proposal } from "@/types/proposals";
 import type { CalendarEvent } from "@/types/calendar";
 import { useLeads, useUpdateLeadStatus, useDeleteLead, useUpdateLead } from "@/hooks/useLeads";
 import { useClients } from "@/hooks/useClients";
+import { useLeadsRealtime, useProposalsRealtime } from "@/hooks/useRealtimeSubscription";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -30,6 +31,9 @@ import { normalizeString, cn } from "@/lib/utils";
 import type { Lead, LeadTemperature } from "@/types";
 
 export default function Leads() {
+  // Subscribe to realtime updates
+  useLeadsRealtime();
+  useProposalsRealtime();
   const { profile, organization } = useAuth();
   const { data: leads = [], isLoading } = useLeads();
   const { data: proposals = [] } = useProposals();

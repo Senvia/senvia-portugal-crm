@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProposals, useUpdateProposal } from '@/hooks/useProposals';
+import { useProposalsRealtime } from '@/hooks/useRealtimeSubscription';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -21,6 +22,8 @@ import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 
 export default function Proposals() {
+  // Subscribe to realtime updates
+  useProposalsRealtime();
   const { profile, organization } = useAuth();
   const { data: proposals = [], isLoading } = useProposals();
   
