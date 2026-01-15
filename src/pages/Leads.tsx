@@ -468,7 +468,7 @@ export default function Leads() {
             email: pendingLead.email,
             phone: pendingLead.phone,
             notes: pendingLead.notes || undefined,
-            source: pendingLead.source || undefined,
+            source: "lead",
             leadId: pendingLead.id,
           } : undefined}
         />
