@@ -5,8 +5,11 @@ import { useEcommerceStats } from "@/hooks/ecommerce";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency } from "@/lib/format";
 import { SEO } from "@/components/SEO";
+import { AppLayout } from "@/components/layout/AppLayout";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function Ecommerce() {
+  const { profile, organization } = useAuth();
   const { data: stats, isLoading } = useEcommerceStats();
 
   const modules = [
@@ -67,13 +70,13 @@ export default function Ecommerce() {
   ];
 
   return (
-    <>
+    <AppLayout userName={profile?.full_name} organizationName={organization?.name}>
       <SEO 
         title="E-commerce | Senvia OS"
         description="Gestão completa da sua loja online"
       />
       
-      <div className="space-y-6">
+      <div className="space-y-6 p-4 md:p-6 pb-24 md:pb-6">
         {/* Header */}
         <div>
           <h1 className="text-2xl font-bold tracking-tight">E-commerce</h1>
@@ -87,39 +90,39 @@ export default function Ecommerce() {
           <Card>
             <CardHeader className="pb-2">
               <CardDescription>Receita Total</CardDescription>
-              <CardTitle className="text-2xl">
-                {isLoading ? (
-                  <Skeleton className="h-8 w-24" />
-                ) : (
-                  formatCurrency(stats?.total_revenue || 0)
-                )}
-              </CardTitle>
+              {isLoading ? (
+                <Skeleton className="h-8 w-24" />
+              ) : (
+                <CardTitle className="text-2xl">
+                  {formatCurrency(stats?.total_revenue || 0)}
+                </CardTitle>
+              )}
             </CardHeader>
           </Card>
           
           <Card>
             <CardHeader className="pb-2">
               <CardDescription>Pedidos Hoje</CardDescription>
-              <CardTitle className="text-2xl">
-                {isLoading ? (
-                  <Skeleton className="h-8 w-12" />
-                ) : (
-                  stats?.orders_today || 0
-                )}
-              </CardTitle>
+              {isLoading ? (
+                <Skeleton className="h-8 w-12" />
+              ) : (
+                <CardTitle className="text-2xl">
+                  {stats?.orders_today || 0}
+                </CardTitle>
+              )}
             </CardHeader>
           </Card>
           
           <Card>
             <CardHeader className="pb-2">
               <CardDescription>Pedidos Pendentes</CardDescription>
-              <CardTitle className="text-2xl">
-                {isLoading ? (
-                  <Skeleton className="h-8 w-12" />
-                ) : (
-                  stats?.pending_orders || 0
-                )}
-              </CardTitle>
+              {isLoading ? (
+                <Skeleton className="h-8 w-12" />
+              ) : (
+                <CardTitle className="text-2xl">
+                  {stats?.pending_orders || 0}
+                </CardTitle>
+              )}
             </CardHeader>
           </Card>
           
@@ -129,15 +132,15 @@ export default function Ecommerce() {
                 <AlertTriangle className="h-3 w-3 text-amber-500" />
                 Stock Baixo
               </CardDescription>
-              <CardTitle className="text-2xl">
-                {isLoading ? (
-                  <Skeleton className="h-8 w-12" />
-                ) : (
+              {isLoading ? (
+                <Skeleton className="h-8 w-12" />
+              ) : (
+                <CardTitle className="text-2xl">
                   <span className={stats?.low_stock_products ? "text-amber-500" : ""}>
                     {stats?.low_stock_products || 0}
                   </span>
-                )}
-              </CardTitle>
+                </CardTitle>
+              )}
             </CardHeader>
           </Card>
         </div>
@@ -207,6 +210,6 @@ export default function Ecommerce() {
           </CardContent>
         </Card>
       </div>
-    </>
+    </AppLayout>
   );
 }
