@@ -1,5 +1,5 @@
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { LayoutDashboard, Users, Settings, LogOut, Shield, Calendar, FileText, ShoppingBag } from "lucide-react";
+import { LayoutDashboard, Users, Settings, LogOut, Shield, Calendar, FileText, ShoppingBag, Store } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useModules, EnabledModules } from "@/hooks/useModules";
@@ -20,6 +20,7 @@ const allNavItems: NavItem[] = [
   { to: "/proposals", icon: FileText, label: "Propostas", moduleKey: 'proposals' },
   { to: "/sales", icon: ShoppingBag, label: "Vendas", moduleKey: 'sales' },
   { to: "/calendar", icon: Calendar, label: "Agenda", moduleKey: 'calendar' },
+  { to: "/ecommerce", icon: Store, label: "E-commerce", moduleKey: 'ecommerce' },
   { to: "/settings", icon: Settings, label: "Configurações" },
 ];
 const getRoleLabel = (roles: AppRole[]): string => {

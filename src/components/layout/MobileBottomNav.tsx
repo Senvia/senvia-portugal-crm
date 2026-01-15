@@ -1,5 +1,5 @@
 import { NavLink, useLocation } from "react-router-dom";
-import { LayoutDashboard, Users, Settings, Shield, Calendar, FileText, ShoppingBag } from "lucide-react";
+import { LayoutDashboard, Users, Settings, Shield, Calendar, FileText, ShoppingBag, Store } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useModules, EnabledModules } from "@/hooks/useModules";
@@ -16,6 +16,7 @@ const allNavItems: NavItem[] = [
   { to: "/leads", icon: Users, label: "Leads" },
   { to: "/proposals", icon: FileText, label: "Propostas", moduleKey: 'proposals' },
   { to: "/sales", icon: ShoppingBag, label: "Vendas", moduleKey: 'sales' },
+  { to: "/ecommerce", icon: Store, label: "Loja", moduleKey: 'ecommerce' },
   { to: "/settings", icon: Settings, label: "Config" },
 ];
 
