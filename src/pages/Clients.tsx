@@ -6,11 +6,12 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, Search, Users, Crown, UserMinus, Euro } from "lucide-react";
-import { useClients, useClientStats, useDeleteClient, useUpdateClient } from "@/hooks/useClients";
+import { useClients, useClientStats, useDeleteClient } from "@/hooks/useClients";
+import { useClientLabels } from "@/hooks/useClientLabels";
 import { ClientsTable } from "@/components/clients/ClientsTable";
 import { CreateClientModal } from "@/components/clients/CreateClientModal";
 import { EditClientModal } from "@/components/clients/EditClientModal";
-import { ClientDetailsModal } from "@/components/clients/ClientDetailsModal";
+import { ClientDetailsDrawer } from "@/components/clients/ClientDetailsDrawer";
 import type { CrmClient } from "@/types/clients";
 import { formatCurrency } from "@/lib/format";
 
@@ -19,12 +20,12 @@ export default function Clients() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedClient, setSelectedClient] = useState<CrmClient | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [showDetailsDrawer, setShowDetailsDrawer] = useState(false);
 
   const { data: clients, isLoading } = useClients();
   const { stats } = useClientStats();
   const deleteClient = useDeleteClient();
-  const updateClient = useUpdateClient();
+  const labels = useClientLabels();
 
   const filteredClients = useMemo(() => {
     if (!clients) return [];
@@ -43,12 +44,13 @@ export default function Clients() {
 
   const handleEdit = (client: CrmClient) => {
     setSelectedClient(client);
+    setShowDetailsDrawer(false);
     setShowEditModal(true);
   };
 
   const handleView = (client: CrmClient) => {
     setSelectedClient(client);
-    setShowDetailsModal(true);
+    setShowDetailsDrawer(true);
   };
 
   const handleDelete = (clientId: string) => {
@@ -58,22 +60,22 @@ export default function Clients() {
   return (
     <AppLayout>
       <SEO 
-        title="Clientes | Senvia OS" 
-        description="Gestão de clientes CRM"
+        title={`${labels.plural} | Senvia OS`}
+        description={`Gestão de ${labels.plural.toLowerCase()} CRM`}
       />
       
       <div className="p-4 sm:p-6 lg:p-8 space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Clientes</h1>
+            <h1 className="text-2xl font-bold text-foreground">{labels.plural}</h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Gestão de clientes e relacionamento comercial
+              Gestão de {labels.plural.toLowerCase()} e relacionamento comercial
             </p>
           </div>
           <Button onClick={() => setShowCreateModal(true)}>
             <Plus className="h-4 w-4 mr-2" />
-            Novo Cliente
+            {labels.new}
           </Button>
         </div>
 
@@ -87,7 +89,7 @@ export default function Clients() {
                 </div>
                 <div>
                   <p className="text-2xl font-bold">{stats.total}</p>
-                  <p className="text-xs text-muted-foreground">Total Clientes</p>
+                  <p className="text-xs text-muted-foreground">{labels.total}</p>
                 </div>
               </div>
             </CardContent>
@@ -101,7 +103,7 @@ export default function Clients() {
                 </div>
                 <div>
                   <p className="text-2xl font-bold">{stats.vip}</p>
-                  <p className="text-xs text-muted-foreground">Clientes VIP</p>
+                  <p className="text-xs text-muted-foreground">{labels.vip}</p>
                 </div>
               </div>
             </CardContent>
@@ -115,7 +117,7 @@ export default function Clients() {
                 </div>
                 <div>
                   <p className="text-2xl font-bold">{stats.inactive}</p>
-                  <p className="text-xs text-muted-foreground">Inativos</p>
+                  <p className="text-xs text-muted-foreground">{labels.inactive}</p>
                 </div>
               </div>
             </CardContent>
@@ -140,7 +142,7 @@ export default function Clients() {
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Pesquisar por nome, email, telefone, empresa ou NIF..."
+            placeholder={`Pesquisar por nome, email, telefone, empresa ou NIF...`}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
@@ -176,10 +178,10 @@ export default function Clients() {
         onOpenChange={setShowEditModal}
       />
 
-      <ClientDetailsModal
+      <ClientDetailsDrawer
         client={selectedClient}
-        open={showDetailsModal}
-        onOpenChange={setShowDetailsModal}
+        open={showDetailsDrawer}
+        onOpenChange={setShowDetailsDrawer}
         onEdit={handleEdit}
       />
     </AppLayout>

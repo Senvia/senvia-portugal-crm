@@ -19,7 +19,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useUpdateClient } from "@/hooks/useClients";
+import { useClientLabels } from "@/hooks/useClientLabels";
 import { CrmClient, CLIENT_STATUS_LABELS, CLIENT_SOURCE_LABELS, ClientStatus } from "@/types/clients";
+import { COUNTRIES } from "@/lib/countries";
 
 interface EditClientModalProps {
   client: CrmClient | null;
@@ -28,6 +30,8 @@ interface EditClientModalProps {
 }
 
 export function EditClientModal({ client, open, onOpenChange }: EditClientModalProps) {
+  const labels = useClientLabels();
+  
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -36,6 +40,13 @@ export function EditClientModal({ client, open, onOpenChange }: EditClientModalP
   const [status, setStatus] = useState<ClientStatus>("active");
   const [source, setSource] = useState("");
   const [notes, setNotes] = useState("");
+  
+  // Address fields
+  const [addressLine1, setAddressLine1] = useState("");
+  const [addressLine2, setAddressLine2] = useState("");
+  const [city, setCity] = useState("");
+  const [postalCode, setPostalCode] = useState("");
+  const [country, setCountry] = useState("PT");
 
   const updateClient = useUpdateClient();
 
@@ -49,6 +60,11 @@ export function EditClientModal({ client, open, onOpenChange }: EditClientModalP
       setStatus(client.status);
       setSource(client.source || "");
       setNotes(client.notes || "");
+      setAddressLine1(client.address_line1 || "");
+      setAddressLine2(client.address_line2 || "");
+      setCity(client.city || "");
+      setPostalCode(client.postal_code || "");
+      setCountry(client.country || "PT");
     }
   }, [client]);
 
@@ -68,6 +84,11 @@ export function EditClientModal({ client, open, onOpenChange }: EditClientModalP
         status,
         source: source || null,
         notes: notes.trim() || null,
+        address_line1: addressLine1.trim() || null,
+        address_line2: addressLine2.trim() || null,
+        city: city.trim() || null,
+        postal_code: postalCode.trim() || null,
+        country: country || null,
       },
       {
         onSuccess: () => {
@@ -83,9 +104,9 @@ export function EditClientModal({ client, open, onOpenChange }: EditClientModalP
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Editar Cliente</DialogTitle>
+          <DialogTitle>Editar {labels.singular}</DialogTitle>
           <DialogDescription>
-            Atualize as informações do cliente.
+            Atualize as informações do {labels.singular.toLowerCase()}.
           </DialogDescription>
         </DialogHeader>
 
@@ -97,7 +118,7 @@ export function EditClientModal({ client, open, onOpenChange }: EditClientModalP
                 id="edit-name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Nome do cliente"
+                placeholder={`Nome do ${labels.singular.toLowerCase()}`}
                 required
               />
             </div>
@@ -177,13 +198,62 @@ export function EditClientModal({ client, open, onOpenChange }: EditClientModalP
             </div>
           </div>
 
+          {/* Address Section */}
+          <div className="space-y-3 pt-2">
+            <Label className="text-sm font-medium">Morada</Label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2 sm:col-span-2">
+                <Input
+                  value={addressLine1}
+                  onChange={(e) => setAddressLine1(e.target.value)}
+                  placeholder="Rua, número"
+                />
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Input
+                  value={addressLine2}
+                  onChange={(e) => setAddressLine2(e.target.value)}
+                  placeholder="Apartamento, andar (opcional)"
+                />
+              </div>
+              <div className="space-y-2">
+                <Input
+                  value={postalCode}
+                  onChange={(e) => setPostalCode(e.target.value)}
+                  placeholder="Código Postal"
+                />
+              </div>
+              <div className="space-y-2">
+                <Input
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                  placeholder="Cidade"
+                />
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Select value={country} onValueChange={setCountry}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="País" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {COUNTRIES.map((c) => (
+                      <SelectItem key={c.code} value={c.code}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="edit-notes">Notas</Label>
             <Textarea
               id="edit-notes"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Notas sobre o cliente..."
+              placeholder={`Notas sobre o ${labels.singular.toLowerCase()}...`}
               rows={3}
             />
           </div>
