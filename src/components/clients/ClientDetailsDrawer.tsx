@@ -1,9 +1,11 @@
+import { useState, useEffect } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
 import {
   User,
   Mail,
@@ -12,30 +14,68 @@ import {
   MapPin,
   FileText,
   ShoppingCart,
-  Calendar,
-  Clock,
   Edit,
   MessageSquare,
+  Plus,
+  Calendar as CalendarIcon,
+  Save,
+  X,
 } from "lucide-react";
 import { formatDate, formatCurrency, getWhatsAppUrl } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useClientLabels } from "@/hooks/useClientLabels";
 import { useClientHistory } from "@/hooks/useClientHistory";
+import { useUpdateClient } from "@/hooks/useClients";
 import { ClientTimeline } from "./ClientTimeline";
-import type { CrmClient, CLIENT_STATUS_LABELS, CLIENT_STATUS_STYLES, CLIENT_SOURCE_LABELS } from "@/types/clients";
+import type { CrmClient } from "@/types/clients";
 
 interface ClientDetailsDrawerProps {
   client: CrmClient | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onEdit: (client: CrmClient) => void;
+  onNewProposal?: (client: CrmClient) => void;
+  onNewSale?: (client: CrmClient) => void;
+  onScheduleMeeting?: (client: CrmClient) => void;
 }
 
-export function ClientDetailsDrawer({ client, open, onOpenChange, onEdit }: ClientDetailsDrawerProps) {
+export function ClientDetailsDrawer({ 
+  client, 
+  open, 
+  onOpenChange, 
+  onEdit,
+  onNewProposal,
+  onNewSale,
+  onScheduleMeeting
+}: ClientDetailsDrawerProps) {
   const labels = useClientLabels();
   const { timeline, proposals, sales, events, isLoading: loadingHistory } = useClientHistory(client?.id || null);
+  const updateClient = useUpdateClient();
+
+  // Notes editing state
+  const [isEditingNotes, setIsEditingNotes] = useState(false);
+  const [editedNotes, setEditedNotes] = useState("");
+
+  // Sync notes when client changes
+  useEffect(() => {
+    if (client && !isEditingNotes) {
+      setEditedNotes(client.notes || "");
+    }
+  }, [client, isEditingNotes]);
 
   if (!client) return null;
+
+  const handleSaveNotes = () => {
+    if (editedNotes !== (client.notes || "")) {
+      updateClient.mutate({ id: client.id, notes: editedNotes || null });
+    }
+    setIsEditingNotes(false);
+  };
+
+  const handleCancelNotes = () => {
+    setEditedNotes(client.notes || "");
+    setIsEditingNotes(false);
+  };
 
   const statusStyle = {
     active: { bg: 'bg-success/10', text: 'text-success', border: 'border-success/20' },
@@ -85,11 +125,58 @@ export function ClientDetailsDrawer({ client, open, onOpenChange, onEdit }: Clie
               Editar
             </Button>
           </div>
+
+          {/* Quick Actions */}
+          <div className="flex flex-wrap gap-2 mt-4">
+            {client.phone && (
+              <>
+                <Button variant="outline" size="sm" asChild>
+                  <a href={`tel:${client.phone}`}>
+                    <Phone className="h-4 w-4 mr-1" />
+                    Ligar
+                  </a>
+                </Button>
+                <Button variant="outline" size="sm" className="text-success border-success/20 hover:bg-success/10" asChild>
+                  <a href={getWhatsAppUrl(client.phone)} target="_blank" rel="noopener noreferrer">
+                    <MessageSquare className="h-4 w-4 mr-1" />
+                    WhatsApp
+                  </a>
+                </Button>
+              </>
+            )}
+            {client.email && (
+              <Button variant="outline" size="sm" asChild>
+                <a href={`mailto:${client.email}`}>
+                  <Mail className="h-4 w-4 mr-1" />
+                  Email
+                </a>
+              </Button>
+            )}
+            {onNewProposal && (
+              <Button variant="outline" size="sm" onClick={() => onNewProposal(client)}>
+                <FileText className="h-4 w-4 mr-1" />
+                Nova Proposta
+              </Button>
+            )}
+            {onNewSale && (
+              <Button variant="outline" size="sm" onClick={() => onNewSale(client)}>
+                <ShoppingCart className="h-4 w-4 mr-1" />
+                Nova Venda
+              </Button>
+            )}
+            {onScheduleMeeting && (
+              <Button variant="outline" size="sm" onClick={() => onScheduleMeeting(client)}>
+                <CalendarIcon className="h-4 w-4 mr-1" />
+                Agendar
+              </Button>
+            )}
+          </div>
         </SheetHeader>
 
         <Tabs defaultValue="resumo" className="w-full mt-4">
           <TabsList className="w-full justify-start px-6 h-auto flex-wrap">
             <TabsTrigger value="resumo" className="text-xs">Resumo</TabsTrigger>
+            <TabsTrigger value="notas" className="text-xs">Notas</TabsTrigger>
             <TabsTrigger value="historico" className="text-xs">Histórico</TabsTrigger>
             <TabsTrigger value="propostas" className="text-xs">
               Propostas ({proposals.length})
@@ -99,7 +186,7 @@ export function ClientDetailsDrawer({ client, open, onOpenChange, onEdit }: Clie
             </TabsTrigger>
           </TabsList>
 
-          <ScrollArea className="h-[calc(100vh-180px)]">
+          <ScrollArea className="h-[calc(100vh-260px)]">
             {/* Resumo Tab */}
             <TabsContent value="resumo" className="p-6 pt-4 space-y-6 mt-0">
               {/* Métricas */}
@@ -207,19 +294,62 @@ export function ClientDetailsDrawer({ client, open, onOpenChange, onEdit }: Clie
                   </div>
                 </>
               )}
+            </TabsContent>
 
-              {/* Notas */}
-              {client.notes && (
-                <>
-                  <Separator />
-                  <div className="space-y-3">
-                    <h3 className="text-sm font-medium">Notas</h3>
-                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                      {client.notes}
-                    </p>
+            {/* Notas Tab */}
+            <TabsContent value="notas" className="p-6 pt-4 mt-0">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-medium">Notas</h3>
+                  {!isEditingNotes ? (
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => setIsEditingNotes(true)}
+                    >
+                      <Edit className="h-4 w-4 mr-1" />
+                      Editar
+                    </Button>
+                  ) : (
+                    <div className="flex gap-2">
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={handleCancelNotes}
+                      >
+                        <X className="h-4 w-4 mr-1" />
+                        Cancelar
+                      </Button>
+                      <Button 
+                        variant="default" 
+                        size="sm"
+                        onClick={handleSaveNotes}
+                        disabled={updateClient.isPending}
+                      >
+                        <Save className="h-4 w-4 mr-1" />
+                        Guardar
+                      </Button>
+                    </div>
+                  )}
+                </div>
+                
+                {isEditingNotes ? (
+                  <Textarea
+                    value={editedNotes}
+                    onChange={(e) => setEditedNotes(e.target.value)}
+                    placeholder="Adicionar notas sobre este cliente..."
+                    className="min-h-[200px]"
+                    autoFocus
+                  />
+                ) : (
+                  <div 
+                    className="text-sm text-muted-foreground whitespace-pre-wrap min-h-[200px] p-3 bg-muted/30 rounded-lg cursor-pointer hover:bg-muted/50 transition-colors"
+                    onClick={() => setIsEditingNotes(true)}
+                  >
+                    {client.notes || "Clique para adicionar notas..."}
                   </div>
-                </>
-              )}
+                )}
+              </div>
             </TabsContent>
 
             {/* Histórico Tab */}
@@ -233,6 +363,17 @@ export function ClientDetailsDrawer({ client, open, onOpenChange, onEdit }: Clie
                 <div className="text-center py-8 text-muted-foreground">
                   <FileText className="h-12 w-12 mx-auto mb-3 opacity-50" />
                   <p>Sem propostas registadas</p>
+                  {onNewProposal && (
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="mt-4"
+                      onClick={() => onNewProposal(client)}
+                    >
+                      <Plus className="h-4 w-4 mr-1" />
+                      Nova Proposta
+                    </Button>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -269,6 +410,17 @@ export function ClientDetailsDrawer({ client, open, onOpenChange, onEdit }: Clie
                 <div className="text-center py-8 text-muted-foreground">
                   <ShoppingCart className="h-12 w-12 mx-auto mb-3 opacity-50" />
                   <p>Sem vendas registadas</p>
+                  {onNewSale && (
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="mt-4"
+                      onClick={() => onNewSale(client)}
+                    >
+                      <Plus className="h-4 w-4 mr-1" />
+                      Nova Venda
+                    </Button>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-3">

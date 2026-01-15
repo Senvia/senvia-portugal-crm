@@ -12,8 +12,10 @@ import { ClientsTable } from "@/components/clients/ClientsTable";
 import { CreateClientModal } from "@/components/clients/CreateClientModal";
 import { EditClientModal } from "@/components/clients/EditClientModal";
 import { ClientDetailsDrawer } from "@/components/clients/ClientDetailsDrawer";
+import { ClientFilters, defaultFilters, type ClientFiltersState } from "@/components/clients/ClientFilters";
 import type { CrmClient } from "@/types/clients";
 import { formatCurrency } from "@/lib/format";
+import { isWithinInterval, startOfDay, endOfDay, parseISO } from "date-fns";
 
 export default function Clients() {
   const [search, setSearch] = useState("");
@@ -21,6 +23,7 @@ export default function Clients() {
   const [selectedClient, setSelectedClient] = useState<CrmClient | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDetailsDrawer, setShowDetailsDrawer] = useState(false);
+  const [filters, setFilters] = useState<ClientFiltersState>(defaultFilters);
 
   const { data: clients, isLoading } = useClients();
   const { stats } = useClientStats();
@@ -29,18 +32,45 @@ export default function Clients() {
 
   const filteredClients = useMemo(() => {
     if (!clients) return [];
-    if (!search.trim()) return clients;
+    
+    return clients.filter((client) => {
+      // Text search
+      if (search.trim()) {
+        const searchLower = search.toLowerCase();
+        const matchesSearch = 
+          client.name.toLowerCase().includes(searchLower) ||
+          client.email?.toLowerCase().includes(searchLower) ||
+          client.phone?.includes(search) ||
+          client.company?.toLowerCase().includes(searchLower) ||
+          client.nif?.includes(search);
+        
+        if (!matchesSearch) return false;
+      }
 
-    const searchLower = search.toLowerCase();
-    return clients.filter(
-      (client) =>
-        client.name.toLowerCase().includes(searchLower) ||
-        client.email?.toLowerCase().includes(searchLower) ||
-        client.phone?.includes(search) ||
-        client.company?.toLowerCase().includes(searchLower) ||
-        client.nif?.includes(search)
-    );
-  }, [clients, search]);
+      // Status filter
+      if (filters.status !== 'all' && client.status !== filters.status) {
+        return false;
+      }
+
+      // Source filter
+      if (filters.source !== 'all' && client.source !== filters.source) {
+        return false;
+      }
+
+      // Date range filter
+      if (filters.dateFrom || filters.dateTo) {
+        const clientDate = parseISO(client.created_at);
+        const from = filters.dateFrom ? startOfDay(filters.dateFrom) : new Date(0);
+        const to = filters.dateTo ? endOfDay(filters.dateTo) : new Date(2100, 11, 31);
+        
+        if (!isWithinInterval(clientDate, { start: from, end: to })) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [clients, search, filters]);
 
   const handleEdit = (client: CrmClient) => {
     setSelectedClient(client);
@@ -55,6 +85,10 @@ export default function Clients() {
 
   const handleDelete = (clientId: string) => {
     deleteClient.mutate(clientId);
+  };
+
+  const handleClearFilters = () => {
+    setFilters(defaultFilters);
   };
 
   return (
@@ -138,14 +172,22 @@ export default function Clients() {
           </Card>
         </div>
 
-        {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder={`Pesquisar por nome, email, telefone, empresa ou NIF...`}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
+        {/* Search & Filters */}
+        <div className="space-y-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder={`Pesquisar por nome, email, telefone, empresa ou NIF...`}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+          
+          <ClientFilters 
+            filters={filters}
+            onFiltersChange={setFilters}
+            onClearFilters={handleClearFilters}
           />
         </div>
 
