@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
-import type { Sale, SaleStatus, SaleWithDetails } from "@/types/sales";
+import type { SaleStatus, SaleWithDetails } from "@/types/sales";
 
 export function useSales() {
   const { organization } = useAuth();
@@ -69,6 +69,54 @@ export function useCreateSale() {
   });
 }
 
+export function useCreateSaleFromProposal() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation({
+    mutationFn: async (proposal: {
+      id: string;
+      organization_id: string;
+      lead_id: string;
+      total_value: number;
+    }) => {
+      // Check if sale already exists for this proposal
+      const { data: existingSale } = await supabase
+        .from("sales")
+        .select("id")
+        .eq("proposal_id", proposal.id)
+        .single();
+
+      if (existingSale) {
+        return existingSale; // Sale already exists, don't create duplicate
+      }
+
+      const { data: sale, error } = await supabase
+        .from("sales")
+        .insert({
+          organization_id: proposal.organization_id,
+          proposal_id: proposal.id,
+          lead_id: proposal.lead_id,
+          total_value: proposal.total_value,
+          created_by: user?.id || null,
+          status: "pending",
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return sale;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sales"] });
+      toast.success("Venda criada automaticamente!");
+    },
+    onError: () => {
+      toast.error("Erro ao criar venda");
+    },
+  });
+}
+
 export function useUpdateSaleStatus() {
   const queryClient = useQueryClient();
 
@@ -87,6 +135,33 @@ export function useUpdateSaleStatus() {
     },
     onError: () => {
       toast.error("Erro ao atualizar estado");
+    },
+  });
+}
+
+export function useUpdateSale() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ 
+      saleId, 
+      updates 
+    }: { 
+      saleId: string; 
+      updates: { status?: SaleStatus; notes?: string; total_value?: number } 
+    }) => {
+      const { error } = await supabase
+        .from("sales")
+        .update(updates)
+        .eq("id", saleId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sales"] });
+    },
+    onError: () => {
+      toast.error("Erro ao atualizar venda");
     },
   });
 }

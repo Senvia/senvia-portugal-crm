@@ -14,6 +14,7 @@ export interface PipelineStageTemplate {
 export interface DefaultModules {
   proposals: boolean;
   calendar: boolean;
+  sales: boolean;
 }
 
 export interface NicheTemplate {
@@ -31,7 +32,7 @@ export const NICHE_TEMPLATES: NicheTemplate[] = [
     name: 'Genérico',
     description: 'Pipeline padrão para qualquer tipo de negócio',
     icon: 'Building2',
-    defaultModules: { proposals: true, calendar: true },
+    defaultModules: { proposals: true, calendar: true, sales: true },
     stages: [
       { name: 'Novo', key: 'new', color: '#3B82F6', position: 1, is_final_positive: false, is_final_negative: false },
       { name: 'Contactado', key: 'contacted', color: '#A855F7', position: 2, is_final_positive: false, is_final_negative: false },
@@ -46,7 +47,7 @@ export const NICHE_TEMPLATES: NicheTemplate[] = [
     name: 'Clínica / Saúde',
     description: 'Para clínicas dentárias, estéticas, médicas',
     icon: 'Heart',
-    defaultModules: { proposals: true, calendar: true },
+    defaultModules: { proposals: true, calendar: true, sales: true },
     stages: [
       { name: 'Novo Lead', key: 'new', color: '#3B82F6', position: 1, is_final_positive: false, is_final_negative: false },
       { name: 'Triagem', key: 'triage', color: '#A855F7', position: 2, is_final_positive: false, is_final_negative: false },
@@ -61,7 +62,7 @@ export const NICHE_TEMPLATES: NicheTemplate[] = [
     name: 'Construção / Obras',
     description: 'Para construtoras, remodelações, obras',
     icon: 'Hammer',
-    defaultModules: { proposals: true, calendar: true },
+    defaultModules: { proposals: true, calendar: true, sales: true },
     stages: [
       { name: 'Lead', key: 'new', color: '#3B82F6', position: 1, is_final_positive: false, is_final_negative: false },
       { name: 'Visita Marcada', key: 'visit', color: '#A855F7', position: 2, is_final_positive: false, is_final_negative: false },
@@ -77,7 +78,7 @@ export const NICHE_TEMPLATES: NicheTemplate[] = [
     name: 'Telecomunicações',
     description: 'Para operadoras, instalações, energia',
     icon: 'Wifi',
-    defaultModules: { proposals: true, calendar: true },
+    defaultModules: { proposals: true, calendar: true, sales: true },
     stages: [
       { name: 'Lead', key: 'new', color: '#3B82F6', position: 1, is_final_positive: false, is_final_negative: false },
       { name: 'Qualificação', key: 'qualification', color: '#A855F7', position: 2, is_final_positive: false, is_final_negative: false },
@@ -92,7 +93,7 @@ export const NICHE_TEMPLATES: NicheTemplate[] = [
     name: 'E-commerce',
     description: 'Para lojas online, dropshipping',
     icon: 'ShoppingCart',
-    defaultModules: { proposals: false, calendar: false },
+    defaultModules: { proposals: false, calendar: false, sales: true },
     stages: [
       { name: 'Carrinho', key: 'cart', color: '#3B82F6', position: 1, is_final_positive: false, is_final_negative: false },
       { name: 'Checkout', key: 'checkout', color: '#A855F7', position: 2, is_final_positive: false, is_final_negative: false },
@@ -108,7 +109,7 @@ export const NICHE_TEMPLATES: NicheTemplate[] = [
     name: 'Imobiliário',
     description: 'Para imobiliárias, mediação',
     icon: 'Home',
-    defaultModules: { proposals: true, calendar: true },
+    defaultModules: { proposals: true, calendar: true, sales: true },
     stages: [
       { name: 'Lead', key: 'new', color: '#3B82F6', position: 1, is_final_positive: false, is_final_negative: false },
       { name: 'Contactado', key: 'contacted', color: '#A855F7', position: 2, is_final_positive: false, is_final_negative: false },

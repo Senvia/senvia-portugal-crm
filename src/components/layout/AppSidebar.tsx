@@ -1,8 +1,8 @@
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { LayoutDashboard, Users, Settings, LogOut, Shield, Calendar, FileText } from "lucide-react";
+import { LayoutDashboard, Users, Settings, LogOut, Shield, Calendar, FileText, ShoppingBag } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
-import { useModules } from "@/hooks/useModules";
+import { useModules, EnabledModules } from "@/hooks/useModules";
 import { APP_VERSION } from "@/lib/constants";
 import type { AppRole } from "@/types";
 import senviaLogo from "@/assets/senvia-logo.png";
@@ -11,13 +11,14 @@ interface NavItem {
   to: string;
   icon: React.ElementType;
   label: string;
-  moduleKey?: 'proposals' | 'calendar';
+  moduleKey?: keyof EnabledModules;
 }
 
 const allNavItems: NavItem[] = [
   { to: "/dashboard", icon: LayoutDashboard, label: "Painel" },
   { to: "/leads", icon: Users, label: "Leads" },
   { to: "/proposals", icon: FileText, label: "Propostas", moduleKey: 'proposals' },
+  { to: "/sales", icon: ShoppingBag, label: "Vendas", moduleKey: 'sales' },
   { to: "/calendar", icon: Calendar, label: "Agenda", moduleKey: 'calendar' },
   { to: "/settings", icon: Settings, label: "Configurações" },
 ];

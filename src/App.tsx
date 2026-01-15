@@ -15,6 +15,7 @@ import Leads from "./pages/Leads";
 import Calendar from "./pages/Calendar";
 import Settings from "./pages/Settings";
 import Proposals from "./pages/Proposals";
+import Sales from "./pages/Sales";
 import PublicLeadForm from "./pages/PublicLeadForm";
 import ConversationalLeadForm from "./pages/ConversationalLeadForm";
 import InviteRegister from "./pages/InviteRegister";
@@ -71,6 +72,11 @@ const App = () => (
             <Route path="/proposals" element={
               <ProtectedRoute>
                 <Proposals />
+              </ProtectedRoute>
+            } />
+            <Route path="/sales" element={
+              <ProtectedRoute>
+                <Sales />
               </ProtectedRoute>
             } />
             <Route path="/settings" element={
