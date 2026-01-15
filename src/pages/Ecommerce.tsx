@@ -1,4 +1,5 @@
-import { Package, ShoppingCart, Users, Truck, Tag, BarChart3, AlertTriangle } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Package, ShoppingCart, Users, Truck, Tag, BarChart3, AlertTriangle, ChevronRight } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useEcommerceStats } from "@/hooks/ecommerce";
@@ -19,8 +20,7 @@ export default function Ecommerce() {
       icon: Package,
       href: "/ecommerce/products",
       color: "bg-blue-500/10 text-blue-500",
-      stat: null,
-      coming: true,
+      stat: stats?.total_products,
     },
     {
       title: "Pedidos",
@@ -29,7 +29,6 @@ export default function Ecommerce() {
       href: "/ecommerce/orders",
       color: "bg-green-500/10 text-green-500",
       stat: stats?.total_orders,
-      coming: true,
     },
     {
       title: "Clientes",
@@ -38,16 +37,15 @@ export default function Ecommerce() {
       href: "/ecommerce/customers",
       color: "bg-purple-500/10 text-purple-500",
       stat: stats?.total_customers,
-      coming: true,
     },
     {
-      title: "Envios",
-      description: "Gestão de expedições e tracking",
+      title: "Inventário",
+      description: "Gestão de stock e movimentos",
       icon: Truck,
-      href: "/ecommerce/shipments",
+      href: "/ecommerce/inventory",
       color: "bg-orange-500/10 text-orange-500",
-      stat: null,
-      coming: true,
+      stat: stats?.low_stock_products,
+      statLabel: "Stock baixo",
     },
     {
       title: "Descontos",
@@ -56,7 +54,6 @@ export default function Ecommerce() {
       href: "/ecommerce/discounts",
       color: "bg-pink-500/10 text-pink-500",
       stat: null,
-      coming: true,
     },
     {
       title: "Relatórios",
@@ -65,7 +62,6 @@ export default function Ecommerce() {
       href: "/ecommerce/reports",
       color: "bg-cyan-500/10 text-cyan-500",
       stat: null,
-      coming: true,
     },
   ];
 
@@ -148,50 +144,41 @@ export default function Ecommerce() {
         {/* Module Cards */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {modules.map((module) => (
-            <Card 
-              key={module.title}
-              className="relative overflow-hidden transition-all hover:shadow-md"
-            >
-              {module.coming && (
-                <div className="absolute right-2 top-2">
-                  <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                    Em breve
-                  </span>
-                </div>
-              )}
-              
-              <CardHeader>
-                <div className="flex items-center gap-3">
-                  <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${module.color}`}>
-                    <module.icon className="h-5 w-5" />
+            <Link to={module.href} key={module.title}>
+              <Card className="relative overflow-hidden transition-all hover:shadow-md hover:border-primary/50 h-full">
+                <CardHeader>
+                  <div className="flex items-center gap-3">
+                    <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${module.color}`}>
+                      <module.icon className="h-5 w-5" />
+                    </div>
+                    <div className="flex-1">
+                      <CardTitle className="text-base">{module.title}</CardTitle>
+                      <CardDescription className="text-sm">
+                        {module.description}
+                      </CardDescription>
+                    </div>
+                    <ChevronRight className="h-5 w-5 text-muted-foreground" />
                   </div>
-                  <div>
-                    <CardTitle className="text-base">{module.title}</CardTitle>
-                    <CardDescription className="text-sm">
-                      {module.description}
-                    </CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-              
-              <CardContent>
-                <div className="flex items-center justify-between">
+                </CardHeader>
+                
+                <CardContent>
                   {module.stat !== null && (
-                    <span className="text-2xl font-bold">
-                      {isLoading ? <Skeleton className="h-8 w-12" /> : module.stat}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      {isLoading ? (
+                        <Skeleton className="h-8 w-12" />
+                      ) : (
+                        <>
+                          <span className="text-2xl font-bold">{module.stat}</span>
+                          {module.statLabel && (
+                            <span className="text-sm text-muted-foreground">{module.statLabel}</span>
+                          )}
+                        </>
+                      )}
+                    </div>
                   )}
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    disabled={module.coming}
-                    className="ml-auto"
-                  >
-                    Abrir
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </Link>
           ))}
         </div>
 
@@ -204,7 +191,7 @@ export default function Ecommerce() {
             <div className="flex-1">
               <h3 className="font-semibold">Módulo E-commerce Ativo</h3>
               <p className="text-sm text-muted-foreground">
-                O módulo foi ativado com sucesso. As funcionalidades estão a ser desenvolvidas e serão lançadas em breve.
+                Gerencie produtos, pedidos e clientes numa plataforma integrada.
               </p>
             </div>
           </CardContent>
