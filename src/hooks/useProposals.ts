@@ -1,16 +1,18 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTeamFilter } from '@/hooks/useTeamFilter';
 import { useToast } from '@/hooks/use-toast';
 import type { Proposal, ProposalProduct, ProposalStatus } from '@/types/proposals';
 
 export function useProposals() {
   const { organization } = useAuth();
+  const { effectiveUserId } = useTeamFilter();
 
   return useQuery({
-    queryKey: ['proposals', organization?.id],
+    queryKey: ['proposals', organization?.id, effectiveUserId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('proposals')
         .select(`
           *,
@@ -20,6 +22,12 @@ export function useProposals() {
         .eq('organization_id', organization!.id)
         .order('created_at', { ascending: false });
       
+      // Se há filtro de utilizador, filtrar por created_by
+      if (effectiveUserId) {
+        query = query.eq('created_by', effectiveUserId);
+      }
+      
+      const { data, error } = await query;
       if (error) throw error;
       return data as Proposal[];
     },

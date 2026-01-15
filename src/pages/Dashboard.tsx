@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useDashboardWidgets } from "@/hooks/useDashboardWidgets";
 import { DynamicWidget } from "@/components/dashboard/DynamicWidget";
 import { WidgetSelector } from "@/components/dashboard/WidgetSelector";
+import { TeamMemberFilter } from "@/components/dashboard/TeamMemberFilter";
 import { Button } from "@/components/ui/button";
 import { Loader2, Settings2 } from "lucide-react";
 import { WidgetType, NicheType } from "@/lib/dashboard-templates";
@@ -55,15 +56,17 @@ export default function Dashboard() {
             </p>
           </div>
           
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={() => setIsCustomizing(true)}
-            className="self-start sm:self-auto"
-          >
-            <Settings2 className="h-4 w-4 mr-2" />
-            Personalizar
-          </Button>
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            <TeamMemberFilter className="w-[160px] sm:w-[180px]" />
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => setIsCustomizing(true)}
+            >
+              <Settings2 className="h-4 w-4 mr-2" />
+              <span className="hidden sm:inline">Personalizar</span>
+            </Button>
+          </div>
         </div>
 
         {isLoading ? (

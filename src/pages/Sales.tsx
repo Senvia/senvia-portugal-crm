@@ -10,6 +10,7 @@ import { useSales } from "@/hooks/useSales";
 import { useSalesRealtime } from "@/hooks/useRealtimeSubscription";
 import { SaleDetailsModal } from "@/components/sales/SaleDetailsModal";
 import { CreateSaleModal } from "@/components/sales/CreateSaleModal";
+import { TeamMemberFilter } from "@/components/dashboard/TeamMemberFilter";
 import { formatCurrency } from "@/lib/format";
 import { format } from "date-fns";
 import { pt } from "date-fns/locale";
@@ -149,6 +150,7 @@ export default function Sales() {
             className="pl-9 bg-card/50 border-border/50"
           />
         </div>
+        <TeamMemberFilter className="w-full sm:w-[180px]" />
         <Select value={statusFilter} onValueChange={(val) => setStatusFilter(val as SaleStatus | "all")}>
           <SelectTrigger className="w-full sm:w-[180px] bg-card/50 border-border/50">
             <SelectValue placeholder="Filtrar por estado" />

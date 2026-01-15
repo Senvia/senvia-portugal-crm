@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTeamFilter } from '@/hooks/useTeamFilter';
 import { toast } from 'sonner';
 import type { CalendarEvent, EventType, EventStatus } from '@/types/calendar';
 
@@ -30,9 +31,10 @@ interface UpdateEventParams {
 
 export function useCalendarEvents(startDate?: Date, endDate?: Date) {
   const { user, organization } = useAuth();
+  const { effectiveUserId } = useTeamFilter();
 
   return useQuery({
-    queryKey: ['calendar-events', organization?.id, startDate?.toISOString(), endDate?.toISOString()],
+    queryKey: ['calendar-events', organization?.id, effectiveUserId, startDate?.toISOString(), endDate?.toISOString()],
     queryFn: async () => {
       if (!organization?.id) return [];
 
@@ -44,6 +46,11 @@ export function useCalendarEvents(startDate?: Date, endDate?: Date) {
         `)
         .eq('organization_id', organization.id)
         .order('start_time', { ascending: true });
+
+      // Se há filtro de utilizador, filtrar por user_id
+      if (effectiveUserId) {
+        query = query.eq('user_id', effectiveUserId);
+      }
 
       if (startDate) {
         query = query.gte('start_time', startDate.toISOString());

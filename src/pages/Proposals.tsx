@@ -3,6 +3,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProposals, useUpdateProposal } from '@/hooks/useProposals';
 import { useProposalsRealtime } from '@/hooks/useRealtimeSubscription';
+import { TeamMemberFilter } from '@/components/dashboard/TeamMemberFilter';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -113,6 +114,7 @@ export default function Proposals() {
               className="pl-9"
             />
           </div>
+          <TeamMemberFilter className="w-full sm:w-[180px]" />
           <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as ProposalStatus | 'all')}>
             <SelectTrigger className="w-full sm:w-48">
               <Filter className="h-4 w-4 mr-2" />
@@ -128,6 +130,7 @@ export default function Proposals() {
             </SelectContent>
           </Select>
         </div>
+
 
         {/* Proposals List */}
         {isLoading ? (

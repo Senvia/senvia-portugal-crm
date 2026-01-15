@@ -1,24 +1,33 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTeamFilter } from '@/hooks/useTeamFilter';
 import type { Lead, LeadStatus, LeadTemperature } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { Json } from '@/integrations/supabase/types';
 
 export function useLeads() {
   const { organization } = useAuth();
+  const { effectiveUserId } = useTeamFilter();
   
   return useQuery({
-    queryKey: ['leads', organization?.id],
+    queryKey: ['leads', organization?.id, effectiveUserId],
     queryFn: async () => {
       if (!organization?.id) return [];
       
-      const { data, error } = await supabase
+      let query = supabase
         .from('leads')
         .select('*')
         .eq('organization_id', organization.id)
         .order('created_at', { ascending: false });
       
+      // Se há filtro de utilizador (não-admin ou admin com filtro específico)
+      if (effectiveUserId) {
+        // Filtrar por leads atribuídos ao user OU leads sem atribuição
+        query = query.or(`assigned_to.eq.${effectiveUserId},assigned_to.is.null`);
+      }
+      
+      const { data, error } = await query;
       if (error) throw error;
       return data as Lead[];
     },
