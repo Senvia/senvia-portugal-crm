@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
-import { NicheType, getNicheTemplate } from "@/lib/pipeline-templates";
+import { NicheType, getNicheTemplate, PipelineStageTemplate } from "@/lib/pipeline-templates";
 
 export interface PipelineStage {
   id: string;
@@ -142,14 +142,17 @@ export function useApplyNicheTemplate() {
     mutationFn: async ({ 
       organizationId, 
       niche, 
-      migrateLeads = true 
+      migrateLeads = true,
+      customStages,
     }: { 
       organizationId: string; 
       niche: NicheType;
       migrateLeads?: boolean;
+      customStages?: PipelineStageTemplate[];
     }) => {
-      const template = getNicheTemplate(niche);
-      const firstStageKey = template.stages[0]?.key;
+      // Use custom stages if provided, otherwise get from template
+      const stagesToApply = customStages || getNicheTemplate(niche).stages;
+      const firstStageKey = stagesToApply[0]?.key;
 
       // If migrateLeads is true, move all leads to the first stage of the new template
       if (migrateLeads && firstStageKey) {
@@ -172,9 +175,14 @@ export function useApplyNicheTemplate() {
 
       if (deleteError) throw deleteError;
 
-      // Insert new stages from template
-      const stages = template.stages.map(stage => ({
-        ...stage,
+      // Insert new stages
+      const stages = stagesToApply.map(stage => ({
+        name: stage.name,
+        key: stage.key,
+        color: stage.color,
+        position: stage.position,
+        is_final_positive: stage.is_final_positive,
+        is_final_negative: stage.is_final_negative,
         organization_id: organizationId,
       }));
 
