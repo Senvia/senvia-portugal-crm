@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect } from "react";
-import { Lead, LeadStatus, LeadTemperature, STATUS_LABELS, KANBAN_COLUMNS } from "@/types";
+import { Lead, LeadTemperature } from "@/types";
 import { LeadCard } from "./LeadCard";
 import { cn } from "@/lib/utils";
+import { usePipelineStages, PipelineStage } from "@/hooks/usePipelineStages";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface LeadEvent {
   id: string;
@@ -13,33 +15,16 @@ interface LeadEvent {
 interface KanbanBoardProps {
   leads: Lead[];
   leadEvents?: Record<string, LeadEvent>;
-  onStatusChange: (leadId: string, newStatus: LeadStatus) => void;
+  onStatusChange: (leadId: string, newStatus: string) => void;
   onTemperatureChange: (leadId: string, temperature: LeadTemperature) => void;
   onViewDetails: (lead: Lead) => void;
   onDelete: (leadId: string) => void;
 }
 
-const columnColors: Record<LeadStatus, string> = {
-  new: "border-t-primary",
-  contacted: "border-t-[hsl(280,84%,60%)]",
-  scheduled: "border-t-warning",
-  proposal: "border-t-cyan-500",
-  won: "border-t-success",
-  lost: "border-t-muted-foreground",
-};
-
-const columnBadgeColors: Record<LeadStatus, string> = {
-  new: "bg-primary/10 text-primary",
-  contacted: "bg-[hsl(280,84%,60%)]/10 text-[hsl(280,84%,50%)]",
-  scheduled: "bg-warning/10 text-warning",
-  proposal: "bg-cyan-500/10 text-cyan-500",
-  won: "bg-success/10 text-success",
-  lost: "bg-muted text-muted-foreground",
-};
-
 export function KanbanBoard({ leads, leadEvents = {}, onStatusChange, onTemperatureChange, onViewDetails, onDelete }: KanbanBoardProps) {
+  const { data: stages, isLoading: stagesLoading } = usePipelineStages();
   const [draggedLead, setDraggedLead] = useState<string | null>(null);
-  const [dragOverColumn, setDragOverColumn] = useState<LeadStatus | null>(null);
+  const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
   
   const topScrollRef = useRef<HTMLDivElement>(null);
   const bottomScrollRef = useRef<HTMLDivElement>(null);
@@ -49,7 +34,7 @@ export function KanbanBoard({ leads, leadEvents = {}, onStatusChange, onTemperat
     if (bottomScrollRef.current) {
       setScrollWidth(bottomScrollRef.current.scrollWidth);
     }
-  }, [leads]);
+  }, [leads, stages]);
 
   const handleTopScroll = () => {
     if (topScrollRef.current && bottomScrollRef.current) {
@@ -63,31 +48,66 @@ export function KanbanBoard({ leads, leadEvents = {}, onStatusChange, onTemperat
     }
   };
 
-  const getLeadsByStatus = (status: LeadStatus) => 
-    leads.filter(lead => lead.status === status);
+  const getLeadsByStatus = (statusKey: string) => 
+    leads.filter(lead => lead.status === statusKey);
 
   const handleDragStart = (e: React.DragEvent, leadId: string) => {
     setDraggedLead(leadId);
     e.dataTransfer.effectAllowed = 'move';
   };
 
-  const handleDragOver = (e: React.DragEvent, status: LeadStatus) => {
+  const handleDragOver = (e: React.DragEvent, statusKey: string) => {
     e.preventDefault();
-    setDragOverColumn(status);
+    setDragOverColumn(statusKey);
   };
 
   const handleDragLeave = () => {
     setDragOverColumn(null);
   };
 
-  const handleDrop = (e: React.DragEvent, status: LeadStatus) => {
+  const handleDrop = (e: React.DragEvent, statusKey: string) => {
     e.preventDefault();
     if (draggedLead) {
-      onStatusChange(draggedLead, status);
+      onStatusChange(draggedLead, statusKey);
     }
     setDraggedLead(null);
     setDragOverColumn(null);
   };
+
+  // Generate dynamic styles based on stage color
+  const getColumnBorderStyle = (stage: PipelineStage) => ({
+    borderTopColor: stage.color,
+  });
+
+  const getColumnBadgeStyle = (stage: PipelineStage) => ({
+    backgroundColor: `${stage.color}15`,
+    color: stage.color,
+  });
+
+  if (stagesLoading) {
+    return (
+      <div className="flex gap-4 overflow-x-auto pb-4">
+        {[1, 2, 3, 4, 5, 6].map((i) => (
+          <div key={i} className="w-80 min-w-[320px]">
+            <Skeleton className="h-12 w-full mb-2" />
+            <Skeleton className="h-32 w-full" />
+            <Skeleton className="h-32 w-full mt-2" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (!stages || stages.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-64 text-muted-foreground">
+        <div className="text-center">
+          <p className="text-lg font-medium">Pipeline não configurado</p>
+          <p className="text-sm">Vá às Definições → Pipeline para configurar as etapas.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col">
@@ -106,32 +126,32 @@ export function KanbanBoard({ leads, leadEvents = {}, onStatusChange, onTemperat
         onScroll={handleBottomScroll}
         className="flex gap-4 overflow-x-auto pb-4"
       >
-      {KANBAN_COLUMNS.map((status) => {
-        const columnLeads = getLeadsByStatus(status);
-        const isOver = dragOverColumn === status;
+      {stages.map((stage) => {
+        const columnLeads = getLeadsByStatus(stage.key);
+        const isOver = dragOverColumn === stage.key;
 
         return (
           <div
-            key={status}
+            key={stage.id}
             className={cn(
               "flex w-80 min-w-[320px] flex-col rounded-xl border-t-4 bg-muted/30",
-              columnColors[status],
               isOver && "bg-primary/5"
             )}
-            onDragOver={(e) => handleDragOver(e, status)}
+            style={getColumnBorderStyle(stage)}
+            onDragOver={(e) => handleDragOver(e, stage.key)}
             onDragLeave={handleDragLeave}
-            onDrop={(e) => handleDrop(e, status)}
+            onDrop={(e) => handleDrop(e, stage.key)}
           >
             {/* Column Header */}
             <div className="flex items-center justify-between p-4">
               <div className="flex items-center gap-2">
                 <h3 className="font-semibold text-foreground">
-                  {STATUS_LABELS[status]}
+                  {stage.name}
                 </h3>
-                <span className={cn(
-                  "flex h-6 min-w-6 items-center justify-center rounded-full px-2 text-xs font-medium",
-                  columnBadgeColors[status]
-                )}>
+                <span 
+                  className="flex h-6 min-w-6 items-center justify-center rounded-full px-2 text-xs font-medium"
+                  style={getColumnBadgeStyle(stage)}
+                >
                   {columnLeads.length}
                 </span>
               </div>
@@ -154,6 +174,7 @@ export function KanbanBoard({ leads, leadEvents = {}, onStatusChange, onTemperat
                     onViewDetails={onViewDetails}
                     onDelete={onDelete}
                     isDragging={draggedLead === lead.id}
+                    pipelineStages={stages}
                   />
                 </div>
               ))}

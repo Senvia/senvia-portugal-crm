@@ -1,4 +1,4 @@
-import { Lead, STATUS_LABELS, LeadStatus, LeadTemperature, TEMPERATURE_LABELS, TEMPERATURE_STYLES } from "@/types";
+import { Lead, LeadTemperature, TEMPERATURE_LABELS, TEMPERATURE_STYLES } from "@/types";
 import { formatRelativeTime, getWhatsAppUrl, formatCurrency } from "@/lib/format";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { PipelineStage } from "@/hooks/usePipelineStages";
 
 interface UpcomingEvent {
   id: string;
@@ -24,21 +25,13 @@ interface UpcomingEvent {
 interface LeadCardProps {
   lead: Lead;
   upcomingEvent?: UpcomingEvent | null;
-  onStatusChange?: (leadId: string, newStatus: LeadStatus) => void;
+  onStatusChange?: (leadId: string, newStatus: string) => void;
   onTemperatureChange?: (leadId: string, temperature: LeadTemperature) => void;
   onViewDetails?: (lead: Lead) => void;
   onDelete?: (leadId: string) => void;
   isDragging?: boolean;
+  pipelineStages?: PipelineStage[];
 }
-
-const statusStyles: Record<LeadStatus, string> = {
-  new: "status-new",
-  contacted: "status-contacted",
-  scheduled: "status-scheduled",
-  proposal: "status-proposal",
-  won: "status-won",
-  lost: "status-lost",
-};
 
 export function LeadCard({ 
   lead, 
@@ -47,7 +40,8 @@ export function LeadCard({
   onTemperatureChange,
   onViewDetails, 
   onDelete,
-  isDragging 
+  isDragging,
+  pipelineStages = []
 }: LeadCardProps) {
   const { canDeleteLeads } = usePermissions();
   const temperature = lead.temperature || 'cold';
@@ -133,16 +127,20 @@ export function LeadCard({
               Ver detalhes
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            {Object.entries(STATUS_LABELS).map(([status, label]) => (
+            {pipelineStages.map((stage) => (
               <DropdownMenuItem 
-                key={status}
+                key={stage.key}
                 onClick={(e) => { 
                   e.stopPropagation(); 
-                  onStatusChange?.(lead.id, status as LeadStatus); 
+                  onStatusChange?.(lead.id, stage.key); 
                 }}
-                disabled={lead.status === status}
+                disabled={lead.status === stage.key}
               >
-                Mover para {label}
+                <span 
+                  className="w-2 h-2 rounded-full mr-2"
+                  style={{ backgroundColor: stage.color }}
+                />
+                Mover para {stage.name}
               </DropdownMenuItem>
             ))}
             {canDeleteLeads && (

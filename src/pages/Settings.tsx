@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
-import { Building, Users, Palette, Link2, ArrowLeft, Package } from "lucide-react";
+import { Building, Users, Palette, Link2, ArrowLeft, Package, GitBranch } from "lucide-react";
+import { PipelineEditor } from '@/components/settings/PipelineEditor';
 import { ProductsTab } from '@/components/settings/ProductsTab';
 import { supabase } from '@/integrations/supabase/client';
 import { TeamTab } from '@/components/settings/TeamTab';
@@ -187,6 +188,7 @@ export default function Settings() {
   const sectionTitles: Record<SettingsSection, string> = {
     general: "Geral",
     team: "Equipa",
+    pipeline: "Pipeline",
     form: "Formulário",
     products: "Produtos",
     integrations: "Integrações",
@@ -248,6 +250,7 @@ export default function Settings() {
                 />
               )}
               {mobileSection === "team" && canManageTeam && <TeamTab />}
+              {mobileSection === "pipeline" && canManageIntegrations && <PipelineEditor />}
               {mobileSection === "form" && canManageIntegrations && <FormsManager />}
               {mobileSection === "products" && canManageIntegrations && <ProductsTab />}
               {mobileSection === "integrations" && canManageIntegrations && (
@@ -299,6 +302,12 @@ export default function Settings() {
                   </TabsTrigger>
                 )}
                 {canManageIntegrations && (
+                  <TabsTrigger value="pipeline" className="gap-2">
+                    <GitBranch className="h-4 w-4" />
+                    Pipeline
+                  </TabsTrigger>
+                )}
+                {canManageIntegrations && (
                   <TabsTrigger value="form" className="gap-2">
                     <Palette className="h-4 w-4" />
                     Formulário
@@ -346,6 +355,12 @@ export default function Settings() {
               {canManageTeam && (
                 <TabsContent value="team" className="max-w-4xl">
                   <TeamTab />
+                </TabsContent>
+              )}
+
+              {canManageIntegrations && (
+                <TabsContent value="pipeline" className="max-w-4xl">
+                  <PipelineEditor />
                 </TabsContent>
               )}
 
