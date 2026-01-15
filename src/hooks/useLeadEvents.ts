@@ -18,7 +18,9 @@ export function useLeadEvents() {
     queryFn: async () => {
       if (!organization?.id) return {};
 
-      const now = new Date().toISOString();
+      // Include events from the start of today (even if time has passed)
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
 
       const { data, error } = await supabase
         .from('calendar_events')
@@ -26,7 +28,8 @@ export function useLeadEvents() {
         .eq('organization_id', organization.id)
         .not('lead_id', 'is', null)
         .neq('status', 'cancelled')
-        .gte('start_time', now)
+        .neq('status', 'completed')
+        .gte('start_time', startOfToday.toISOString())
         .order('start_time', { ascending: true });
 
       if (error) {
