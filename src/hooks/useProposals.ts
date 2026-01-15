@@ -66,6 +66,7 @@ interface CreateProposalData {
   client_id?: string;
   lead_id?: string; // Mantido para retrocompatibilidade
   total_value: number;
+  status?: ProposalStatus;
   notes?: string;
   proposal_date?: string;
   products: { product_id: string; quantity: number; unit_price: number; total: number }[];
@@ -86,6 +87,7 @@ export function useCreateProposal() {
           client_id: data.client_id || null,
           lead_id: data.lead_id || null,
           total_value: data.total_value,
+          status: data.status || 'draft',
           notes: data.notes || null,
           proposal_date: data.proposal_date || new Date().toISOString().split('T')[0],
           created_by: user?.id,
