@@ -19,6 +19,8 @@ interface Organization {
   plan: string;
   created_at: string;
   form_settings?: unknown;
+  niche?: string;
+  enabled_modules?: unknown;
 }
 
 interface AuthContextType {
