@@ -32,12 +32,21 @@ export default function Sales() {
     if (!sales) return [];
     
     return sales.filter((sale) => {
-      const matchesSearch = 
-        sale.lead?.name?.toLowerCase().includes(search.toLowerCase()) ||
-        sale.lead?.email?.toLowerCase().includes(search.toLowerCase()) ||
-        sale.notes?.toLowerCase().includes(search.toLowerCase());
-      
       const matchesStatus = statusFilter === "all" || sale.status === statusFilter;
+      
+      // Se não há termo de pesquisa, inclui todas as vendas que correspondem ao status
+      if (!search.trim()) {
+        return matchesStatus;
+      }
+      
+      const searchLower = search.toLowerCase();
+      const matchesSearch = 
+        sale.lead?.name?.toLowerCase().includes(searchLower) ||
+        sale.lead?.email?.toLowerCase().includes(searchLower) ||
+        sale.client?.name?.toLowerCase().includes(searchLower) ||
+        sale.client?.code?.toLowerCase().includes(searchLower) ||
+        sale.code?.toLowerCase().includes(searchLower) ||
+        sale.notes?.toLowerCase().includes(searchLower);
       
       return matchesSearch && matchesStatus;
     });
@@ -190,12 +199,15 @@ export default function Sales() {
                       >
                         {SALE_STATUS_LABELS[sale.status]}
                       </Badge>
+                      {sale.code && (
+                        <span className="text-xs font-medium text-primary">{sale.code}</span>
+                      )}
                       <span className="text-xs text-muted-foreground">
                         {format(new Date(sale.created_at), "d MMM yyyy", { locale: pt })}
                       </span>
                     </div>
                     <p className="font-medium truncate">
-                      {sale.lead?.name || "Lead não identificado"}
+                      {sale.client?.name || sale.lead?.name || "Sem identificação"}
                     </p>
                     {sale.notes && (
                       <p className="text-sm text-muted-foreground truncate mt-1">
