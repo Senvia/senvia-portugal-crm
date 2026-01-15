@@ -80,7 +80,6 @@ export interface EcommerceProduct {
   low_stock_threshold: number;
   tags: string[];
   is_active: boolean;
-  is_ecommerce: boolean;
   created_at: string;
   updated_at: string;
   // Relations
@@ -292,7 +291,6 @@ export interface CreateProductInput {
   low_stock_threshold?: number;
   tags?: string[];
   is_active?: boolean;
-  is_ecommerce?: boolean;
 }
 
 export interface UpdateProductInput extends Partial<CreateProductInput> {

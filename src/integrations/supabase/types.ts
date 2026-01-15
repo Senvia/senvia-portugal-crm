@@ -232,6 +232,90 @@ export type Database = {
           },
         ]
       }
+      ecommerce_products: {
+        Row: {
+          category_id: string | null
+          compare_at_price: number | null
+          created_at: string | null
+          description: string | null
+          id: string
+          is_active: boolean | null
+          is_digital: boolean | null
+          low_stock_threshold: number | null
+          name: string
+          organization_id: string
+          price: number | null
+          requires_shipping: boolean | null
+          short_description: string | null
+          sku: string | null
+          slug: string | null
+          stock_quantity: number | null
+          tags: string[] | null
+          track_inventory: boolean | null
+          updated_at: string | null
+          weight_grams: number | null
+        }
+        Insert: {
+          category_id?: string | null
+          compare_at_price?: number | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          is_digital?: boolean | null
+          low_stock_threshold?: number | null
+          name: string
+          organization_id: string
+          price?: number | null
+          requires_shipping?: boolean | null
+          short_description?: string | null
+          sku?: string | null
+          slug?: string | null
+          stock_quantity?: number | null
+          tags?: string[] | null
+          track_inventory?: boolean | null
+          updated_at?: string | null
+          weight_grams?: number | null
+        }
+        Update: {
+          category_id?: string | null
+          compare_at_price?: number | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          is_digital?: boolean | null
+          low_stock_threshold?: number | null
+          name?: string
+          organization_id?: string
+          price?: number | null
+          requires_shipping?: boolean | null
+          short_description?: string | null
+          sku?: string | null
+          slug?: string | null
+          stock_quantity?: number | null
+          tags?: string[] | null
+          track_inventory?: boolean | null
+          updated_at?: string | null
+          weight_grams?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ecommerce_products_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "product_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ecommerce_products_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       forms: {
         Row: {
           ai_qualification_rules: string | null
@@ -347,7 +431,7 @@ export type Database = {
             foreignKeyName: "inventory_movements_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: false
-            referencedRelation: "products"
+            referencedRelation: "ecommerce_products"
             referencedColumns: ["id"]
           },
           {
@@ -486,7 +570,7 @@ export type Database = {
             foreignKeyName: "order_items_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: false
-            referencedRelation: "products"
+            referencedRelation: "ecommerce_products"
             referencedColumns: ["id"]
           },
           {
@@ -839,7 +923,7 @@ export type Database = {
             foreignKeyName: "product_images_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: false
-            referencedRelation: "products"
+            referencedRelation: "ecommerce_products"
             referencedColumns: ["id"]
           },
         ]
@@ -895,7 +979,7 @@ export type Database = {
             foreignKeyName: "product_variants_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: false
-            referencedRelation: "products"
+            referencedRelation: "ecommerce_products"
             referencedColumns: ["id"]
           },
         ]

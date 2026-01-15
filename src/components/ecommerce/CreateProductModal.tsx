@@ -95,7 +95,6 @@ export function CreateProductModal({ open, onOpenChange }: CreateProductModalPro
         is_digital: data.is_digital,
         requires_shipping: data.requires_shipping,
         is_active: data.is_active,
-        is_ecommerce: true,
       },
       {
         onSuccess: () => {
