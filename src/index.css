@@ -151,6 +151,23 @@
     padding-top: max(1rem, env(safe-area-inset-top));
   }
 
+  /* Safe area positioning helpers (for absolute buttons) */
+  .top-safe {
+    top: max(1rem, env(safe-area-inset-top));
+  }
+
+  .bottom-safe {
+    bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+
+  .right-safe {
+    right: max(1rem, env(safe-area-inset-right));
+  }
+
+  .left-safe {
+    left: max(1rem, env(safe-area-inset-left));
+  }
+
   /* PWA header/nav safe area utilities */
   .pt-header-safe {
     padding-top: calc(3.5rem + env(safe-area-inset-top));
