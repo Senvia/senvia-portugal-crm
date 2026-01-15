@@ -111,36 +111,87 @@ serve(async (req) => {
 
     console.log(`Creating user: ${email} with role: ${role} for org: ${organizationId}`);
 
-    // Create the user with admin API (auto-confirms email)
-    const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
-      email: email.toLowerCase().trim(),
-      password,
-      email_confirm: true,
-      user_metadata: { full_name }
-    });
+    const normalizedEmail = email.toLowerCase().trim();
 
-    if (createError) {
-      console.error('Error creating user:', createError);
-      if (createError.message.includes('already been registered')) {
-        return new Response(
-          JSON.stringify({ error: 'Este email já está registado' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
+    // Check if user already exists
+    const { data: existingUsers, error: listError } = await supabaseAdmin.auth.admin.listUsers();
+    
+    if (listError) {
+      console.error('Error listing users:', listError);
       return new Response(
-        JSON.stringify({ error: 'Erro ao criar utilizador: ' + createError.message }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    if (!newUser.user) {
-      return new Response(
-        JSON.stringify({ error: 'Erro ao criar utilizador' }),
+        JSON.stringify({ error: 'Erro ao verificar utilizadores existentes' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log(`User created: ${newUser.user.id}`);
+    const existingUser = existingUsers.users.find(u => u.email?.toLowerCase() === normalizedEmail);
+    
+    let userId: string;
+
+    if (existingUser) {
+      console.log(`User already exists: ${existingUser.id}, checking organization...`);
+      
+      // Check if user already belongs to an organization
+      const { data: existingProfile, error: existingProfileError } = await supabaseAdmin
+        .from('profiles')
+        .select('organization_id, full_name')
+        .eq('id', existingUser.id)
+        .single();
+
+      if (existingProfileError) {
+        console.error('Error checking existing profile:', existingProfileError);
+        return new Response(
+          JSON.stringify({ error: 'Erro ao verificar perfil do utilizador' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      if (existingProfile?.organization_id) {
+        if (existingProfile.organization_id === organizationId) {
+          return new Response(
+            JSON.stringify({ error: 'Este utilizador já pertence à sua organização' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        } else {
+          return new Response(
+            JSON.stringify({ error: 'Este email já está associado a outra organização' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      }
+
+      // User exists but has no organization - add to this org
+      userId = existingUser.id;
+      console.log(`Adding existing user ${userId} to organization ${organizationId}`);
+    } else {
+      // Create new user
+      const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
+        email: normalizedEmail,
+        password,
+        email_confirm: true,
+        user_metadata: { full_name }
+      });
+
+      if (createError) {
+        console.error('Error creating user:', createError);
+        return new Response(
+          JSON.stringify({ error: 'Erro ao criar utilizador: ' + createError.message }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      if (!newUser.user) {
+        return new Response(
+          JSON.stringify({ error: 'Erro ao criar utilizador' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      userId = newUser.user.id;
+      console.log(`New user created: ${userId}`);
+    }
+
+    console.log(`Processing user: ${userId}`);
 
     // Update profile with organization_id and full_name
     const { error: updateProfileError } = await supabaseAdmin
@@ -149,33 +200,33 @@ serve(async (req) => {
         organization_id: organizationId,
         full_name: full_name.trim()
       })
-      .eq('id', newUser.user.id);
+      .eq('id', userId);
 
     if (updateProfileError) {
       console.error('Error updating profile:', updateProfileError);
       // Don't fail completely, the user was created
     }
 
-    // Add role to user_roles table
+    // Add role to user_roles table (upsert to handle existing roles)
     const { error: roleInsertError } = await supabaseAdmin
       .from('user_roles')
-      .insert({
-        user_id: newUser.user.id,
+      .upsert({
+        user_id: userId,
         role: role
-      });
+      }, { onConflict: 'user_id,role' });
 
     if (roleInsertError) {
       console.error('Error inserting role:', roleInsertError);
       // Don't fail completely, the user was created
     }
 
-    console.log(`Successfully created team member: ${email}`);
+    console.log(`Successfully added team member: ${email}`);
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        user_id: newUser.user.id,
-        email: newUser.user.email
+        user_id: userId,
+        email: normalizedEmail
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
