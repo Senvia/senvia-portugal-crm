@@ -488,10 +488,12 @@ export default function Leads() {
             if (!open) {
               setPendingLead(null);
               setNewlyCreatedClientId(null);
+              setIsChainedFlow(false);
             }
           }}
           onSuccess={handleProposalCreated}
           preselectedClientId={newlyCreatedClientId}
+          leadId={pendingLead?.id}
         />
         
         {/* Modal for editing existing proposal */}
