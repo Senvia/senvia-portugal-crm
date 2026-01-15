@@ -16,6 +16,7 @@ import { usePipelineStages } from "@/hooks/usePipelineStages";
 import type { Proposal } from "@/types/proposals";
 import type { CalendarEvent } from "@/types/calendar";
 import { useLeads, useUpdateLeadStatus, useDeleteLead, useUpdateLead } from "@/hooks/useLeads";
+import { useClients } from "@/hooks/useClients";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -32,6 +33,7 @@ export default function Leads() {
   const { profile, organization } = useAuth();
   const { data: leads = [], isLoading } = useLeads();
   const { data: proposals = [] } = useProposals();
+  const { data: clients = [] } = useClients();
   const { data: calendarEvents = [] } = useCalendarEvents();
   const { data: stages = [] } = usePipelineStages();
   const updateStatus = useUpdateLeadStatus();
@@ -158,18 +160,42 @@ export default function Leads() {
     
     // Intercept drops on proposal stages -> open client modal first (then proposal)
     if (isProposalStage(newStatus)) {
-      // Check if lead already has a proposal
+      // Check if lead already has a proposal (by lead_id)
       const existingProposal = proposals.find(p => p.lead_id === leadId);
       
       if (existingProposal) {
         // Open edit modal
         setSelectedProposal(existingProposal);
         setIsProposalDetailsModalOpen(true);
-      } else {
-        // NEW FLOW: Open create client modal first (pre-filled with lead data)
-        setPendingLead(lead || null);
-        setIsCreateClientModalOpen(true);
+        // Also update status
+        updateStatus.mutate({ leadId, status: newStatus });
+        return;
       }
+      
+      // Check if lead already has a client
+      const existingClient = clients.find(c => c.lead_id === leadId);
+      
+      if (existingClient) {
+        // Check for proposals linked to this client (fallback)
+        const clientProposal = proposals.find(p => p.client_id === existingClient.id);
+        
+        if (clientProposal) {
+          // Open existing proposal details
+          setSelectedProposal(clientProposal);
+          setIsProposalDetailsModalOpen(true);
+          updateStatus.mutate({ leadId, status: newStatus });
+        } else {
+          // Client exists but no proposal - go directly to create proposal
+          setPendingLead(lead || null);
+          setNewlyCreatedClientId(existingClient.id);
+          setIsCreateProposalModalOpen(true);
+        }
+        return;
+      }
+      
+      // No client exists - open create client modal first
+      setPendingLead(lead || null);
+      setIsCreateClientModalOpen(true);
       return;
     }
     
