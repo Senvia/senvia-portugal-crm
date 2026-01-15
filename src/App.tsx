@@ -17,6 +17,12 @@ import Settings from "./pages/Settings";
 import Proposals from "./pages/Proposals";
 import Sales from "./pages/Sales";
 import Ecommerce from "./pages/Ecommerce";
+import EcommerceProducts from "./pages/ecommerce/Products";
+import EcommerceOrders from "./pages/ecommerce/Orders";
+import EcommerceCustomers from "./pages/ecommerce/Customers";
+import EcommerceInventory from "./pages/ecommerce/Inventory";
+import EcommerceDiscounts from "./pages/ecommerce/Discounts";
+import EcommerceReports from "./pages/ecommerce/Reports";
 import PublicLeadForm from "./pages/PublicLeadForm";
 import ConversationalLeadForm from "./pages/ConversationalLeadForm";
 import InviteRegister from "./pages/InviteRegister";
@@ -83,6 +89,36 @@ const App = () => (
             <Route path="/ecommerce" element={
               <ProtectedRoute>
                 <Ecommerce />
+              </ProtectedRoute>
+            } />
+            <Route path="/ecommerce/products" element={
+              <ProtectedRoute>
+                <EcommerceProducts />
+              </ProtectedRoute>
+            } />
+            <Route path="/ecommerce/orders" element={
+              <ProtectedRoute>
+                <EcommerceOrders />
+              </ProtectedRoute>
+            } />
+            <Route path="/ecommerce/customers" element={
+              <ProtectedRoute>
+                <EcommerceCustomers />
+              </ProtectedRoute>
+            } />
+            <Route path="/ecommerce/inventory" element={
+              <ProtectedRoute>
+                <EcommerceInventory />
+              </ProtectedRoute>
+            } />
+            <Route path="/ecommerce/discounts" element={
+              <ProtectedRoute>
+                <EcommerceDiscounts />
+              </ProtectedRoute>
+            } />
+            <Route path="/ecommerce/reports" element={
+              <ProtectedRoute>
+                <EcommerceReports />
               </ProtectedRoute>
             } />
             <Route path="/settings" element={

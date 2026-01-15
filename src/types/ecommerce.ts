@@ -398,6 +398,7 @@ export interface EcommerceStats {
   pending_orders: number;
   shipped_orders: number;
   total_customers: number;
+  total_products: number;
   low_stock_products: number;
   orders_today: number;
   revenue_today: number;
