@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Trash2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -37,6 +38,14 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
   const [status, setStatus] = useState<ProposalStatus>(proposal.status);
   const [notes, setNotes] = useState(proposal.notes || '');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [editValue, setEditValue] = useState<string>(proposal.total_value.toString());
+
+  // Sincronizar estado quando proposal muda
+  useEffect(() => {
+    setEditValue(proposal.total_value.toString());
+    setStatus(proposal.status);
+    setNotes(proposal.notes || '');
+  }, [proposal]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(value);
@@ -50,6 +59,13 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
   const handleNotesBlur = () => {
     if (notes !== proposal.notes) {
       updateProposal.mutate({ id: proposal.id, notes: notes.trim() || undefined });
+    }
+  };
+
+  const handleValueBlur = () => {
+    const newValue = parseFloat(editValue) || 0;
+    if (newValue !== proposal.total_value) {
+      updateProposal.mutate({ id: proposal.id, total_value: newValue });
     }
   };
 
@@ -77,9 +93,20 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
 
           <div className="space-y-4">
             <div className="flex items-center justify-between p-4 rounded-lg bg-primary/10 border border-primary/20">
-              <div>
-                <p className="text-sm text-muted-foreground">Valor Total</p>
-                <p className="text-2xl font-bold text-primary">{formatCurrency(proposal.total_value)}</p>
+              <div className="flex-1">
+                <p className="text-sm text-muted-foreground mb-1">Valor Total</p>
+                <div className="flex items-center gap-1">
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    onBlur={handleValueBlur}
+                    className="text-2xl font-bold text-primary border-none p-0 h-auto bg-transparent focus-visible:ring-1 focus-visible:ring-primary/50 max-w-[180px]"
+                  />
+                  <span className="text-lg text-primary font-medium">€</span>
+                </div>
               </div>
               <div className="text-right">
                 <p className="text-sm text-muted-foreground">Data</p>
