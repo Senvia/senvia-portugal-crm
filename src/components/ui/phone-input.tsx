@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { ChevronDown, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -25,6 +25,39 @@ interface PhoneInputProps {
   placeholder?: string;
   className?: string;
   disabled?: boolean;
+}
+
+// Normalize pasted phone number: clean and detect country
+function normalizePastedPhone(raw: string): { country: Country; localNumber: string } {
+  // Remove all non-digit characters except +
+  let cleaned = raw.replace(/[^\d+]/g, '');
+  
+  // Convert 00 prefix to +
+  if (cleaned.startsWith('00')) {
+    cleaned = '+' + cleaned.slice(2);
+  }
+  
+  // If starts with +, try to detect country
+  if (cleaned.startsWith('+')) {
+    // Try to find matching country by dial code
+    for (const country of COUNTRIES) {
+      const dialDigits = country.dialCode.replace('+', '');
+      if (cleaned.startsWith('+' + dialDigits)) {
+        const localNumber = cleaned.slice(1 + dialDigits.length);
+        return { country, localNumber };
+      }
+    }
+    // If no country found, use default and strip +
+    return { country: DEFAULT_COUNTRY, localNumber: cleaned.replace('+', '') };
+  }
+  
+  // For Portugal: if starts with 351 and has enough digits, assume it's +351
+  if (cleaned.startsWith('351') && cleaned.length >= 12) {
+    return { country: DEFAULT_COUNTRY, localNumber: cleaned.slice(3) };
+  }
+  
+  // Otherwise treat as local number for default country
+  return { country: DEFAULT_COUNTRY, localNumber: cleaned };
 }
 
 export function PhoneInput({ 
@@ -75,6 +108,20 @@ export function PhoneInput({
     setLocalNumber(cleaned);
   };
 
+  // Handle paste with intelligent normalization
+  const handlePaste = useCallback((e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    const pastedText = e.clipboardData.getData('text');
+    if (!pastedText) return;
+    
+    // Limit to reasonable phone number length
+    const trimmed = pastedText.slice(0, 20);
+    const { country, localNumber: normalized } = normalizePastedPhone(trimmed);
+    
+    setSelectedCountry(country);
+    setLocalNumber(normalized);
+  }, []);
+
   return (
     <div className={cn("flex", className)}>
       <Popover open={open} onOpenChange={setOpen}>
@@ -124,6 +171,7 @@ export function PhoneInput({
         type="tel"
         value={localNumber}
         onChange={handleLocalNumberChange}
+        onPaste={handlePaste}
         placeholder={placeholder}
         className="rounded-l-none flex-1"
         disabled={disabled}
