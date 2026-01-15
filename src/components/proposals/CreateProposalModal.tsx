@@ -12,7 +12,7 @@ import { useCreateProposal } from '@/hooks/useProposals';
 import { useClients } from '@/hooks/useClients';
 import { CreateClientModal } from '@/components/clients/CreateClientModal';
 import type { CrmClient } from '@/types/clients';
-
+import { PROPOSAL_STATUS_LABELS, PROPOSAL_STATUSES, type ProposalStatus } from '@/types/proposals';
 interface CreateProposalModalProps {
   client?: CrmClient | null;
   open: boolean;
@@ -40,6 +40,7 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
   const [manualValue, setManualValue] = useState<string>('');
   const [additionalValue, setAdditionalValue] = useState<string>('');
   const [discount, setDiscount] = useState<string>('');
+  const [status, setStatus] = useState<ProposalStatus>('draft');
   
   // Modal para criar novo cliente
   const [isCreateClientOpen, setIsCreateClientOpen] = useState(false);
@@ -129,6 +130,7 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
     createProposal.mutate({
       client_id: selectedClientId || undefined,
       total_value: totalValue,
+      status: status,
       notes: notes.trim() || undefined,
       proposal_date: proposalDate,
       products: selectedProducts.map(p => ({
@@ -146,8 +148,10 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
         setManualValue('');
         setAdditionalValue('');
         setDiscount('');
-        onOpenChange(false);
+        setStatus('draft');
+        // IMPORTANTE: Chamar onSuccess ANTES de fechar o modal
         onSuccess?.();
+        onOpenChange(false);
       },
     });
   };
@@ -204,14 +208,31 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="proposal-date">Data da Proposta</Label>
-              <Input
-                id="proposal-date"
-                type="date"
-                value={proposalDate}
-                onChange={(e) => setProposalDate(e.target.value)}
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="proposal-date">Data da Proposta</Label>
+                <Input
+                  id="proposal-date"
+                  type="date"
+                  value={proposalDate}
+                  onChange={(e) => setProposalDate(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="status">Estado</Label>
+                <Select value={status} onValueChange={(v) => setStatus(v as ProposalStatus)}>
+                  <SelectTrigger id="status">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PROPOSAL_STATUSES.map((s) => (
+                      <SelectItem key={s} value={s}>
+                        {PROPOSAL_STATUS_LABELS[s]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             {/* Valor Manual */}
