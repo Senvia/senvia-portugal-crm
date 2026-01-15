@@ -71,6 +71,7 @@ export interface SaleWithDetails extends Sale {
     name: string;
     email: string;
     phone: string;
+    assigned_to?: string | null;
   } | null;
   proposal?: {
     id: string;

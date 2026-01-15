@@ -21,10 +21,10 @@ export function useLeads() {
         .eq('organization_id', organization.id)
         .order('created_at', { ascending: false });
       
-      // Se há filtro de utilizador (não-admin ou admin com filtro específico)
+      // Se há filtro de utilizador específico (admin com filtro selecionado)
       if (effectiveUserId) {
-        // Filtrar por leads atribuídos ao user OU leads sem atribuição
-        query = query.or(`assigned_to.eq.${effectiveUserId},assigned_to.is.null`);
+        // Filtrar apenas por leads atribuídos a este user
+        query = query.eq('assigned_to', effectiveUserId);
       }
       
       const { data, error } = await query;

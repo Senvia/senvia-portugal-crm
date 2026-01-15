@@ -14,7 +14,7 @@ export function useSales() {
     queryFn: async (): Promise<SaleWithDetails[]> => {
       if (!organization?.id) return [];
 
-      let query = supabase
+      const { data, error } = await supabase
         .from("sales")
         .select(`
           *,
@@ -25,14 +25,19 @@ export function useSales() {
         .eq("organization_id", organization.id)
         .order("created_at", { ascending: false });
 
-      // Se há filtro de utilizador, filtrar por created_by
-      if (effectiveUserId) {
-        query = query.eq("created_by", effectiveUserId);
-      }
-
-      const { data, error } = await query;
       if (error) throw error;
-      return (data as unknown as SaleWithDetails[]) || [];
+      
+      let result = (data as unknown as SaleWithDetails[]) || [];
+      
+      // Se há filtro de utilizador, filtrar por created_by OU lead atribuído
+      if (effectiveUserId) {
+        result = result.filter(sale => 
+          sale.created_by === effectiveUserId || 
+          sale.lead?.assigned_to === effectiveUserId
+        );
+      }
+      
+      return result;
     },
     enabled: !!organization?.id,
   });
