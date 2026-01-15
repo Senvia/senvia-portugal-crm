@@ -1,12 +1,14 @@
 import { useState, useMemo } from "react";
-import { ShoppingBag, Search, TrendingUp, Package, CheckCircle, Clock } from "lucide-react";
+import { ShoppingBag, Search, TrendingUp, Package, CheckCircle, Clock, Plus } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useSales } from "@/hooks/useSales";
 import { SaleDetailsModal } from "@/components/sales/SaleDetailsModal";
+import { CreateSaleModal } from "@/components/sales/CreateSaleModal";
 import { formatCurrency } from "@/lib/format";
 import { format } from "date-fns";
 import { pt } from "date-fns/locale";
@@ -21,6 +23,7 @@ export default function Sales() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<SaleStatus | "all">("all");
   const [selectedSale, setSelectedSale] = useState<SaleWithDetails | null>(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   const filteredSales = useMemo(() => {
     if (!sales) return [];
@@ -60,14 +63,21 @@ export default function Sales() {
       <div className="flex flex-col min-h-screen bg-background">
         {/* Header */}
       <div className="p-4 md:p-6 border-b border-border/50">
-        <div className="flex items-center gap-3 mb-2">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-            <ShoppingBag className="h-5 w-5 text-primary" />
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+              <ShoppingBag className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-xl font-semibold">Vendas</h1>
+              <p className="text-sm text-muted-foreground hidden sm:block">Gestão de vendas e entregas.</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-xl font-semibold">Vendas</h1>
-            <p className="text-sm text-muted-foreground">Gestão de vendas e entregas.</p>
-          </div>
+          <Button onClick={() => setShowCreateModal(true)} size="sm">
+            <Plus className="h-4 w-4 mr-1" />
+            <span className="hidden sm:inline">Nova Venda</span>
+            <span className="sm:hidden">Nova</span>
+          </Button>
         </div>
       </div>
 
@@ -157,7 +167,7 @@ export default function Sales() {
             <p className="text-sm text-muted-foreground mt-1">
               {search || statusFilter !== "all" 
                 ? "Tente ajustar os filtros de pesquisa."
-                : "As vendas são criadas automaticamente quando uma proposta é aceite."}
+                : "Crie a sua primeira venda ou aceite uma proposta."}
             </p>
           </div>
         ) : (
@@ -208,6 +218,12 @@ export default function Sales() {
           sale={selectedSale}
           open={!!selectedSale}
           onOpenChange={(open) => !open && setSelectedSale(null)}
+        />
+
+        {/* Create Sale Modal */}
+        <CreateSaleModal
+          open={showCreateModal}
+          onOpenChange={setShowCreateModal}
         />
       </div>
     </AppLayout>
