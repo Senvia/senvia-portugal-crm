@@ -5,7 +5,10 @@ import { LeadDetailsModal } from "@/components/leads/LeadDetailsModal";
 import { AddLeadModal } from "@/components/leads/AddLeadModal";
 import { CreateEventModal } from "@/components/calendar/CreateEventModal";
 import { CreateProposalModal } from "@/components/proposals/CreateProposalModal";
+import { ProposalDetailsModal } from "@/components/proposals/ProposalDetailsModal";
 import { useAuth } from "@/contexts/AuthContext";
+import { useProposals } from "@/hooks/useProposals";
+import type { Proposal } from "@/types/proposals";
 import { useLeads, useUpdateLeadStatus, useDeleteLead, useUpdateLead } from "@/hooks/useLeads";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -23,6 +26,7 @@ import { LeadStatus, LeadTemperature, KANBAN_COLUMNS, STATUS_LABELS } from "@/ty
 export default function Leads() {
   const { profile, organization } = useAuth();
   const { data: leads = [], isLoading } = useLeads();
+  const { data: proposals = [] } = useProposals();
   const updateStatus = useUpdateLeadStatus();
   const deleteLead = useDeleteLead();
   const updateLead = useUpdateLead();
@@ -32,6 +36,8 @@ export default function Leads() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isCreateEventModalOpen, setIsCreateEventModalOpen] = useState(false);
   const [isCreateProposalModalOpen, setIsCreateProposalModalOpen] = useState(false);
+  const [isProposalDetailsModalOpen, setIsProposalDetailsModalOpen] = useState(false);
+  const [selectedProposal, setSelectedProposal] = useState<Proposal | null>(null);
   const [pendingLead, setPendingLead] = useState<Lead | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<LeadStatus[]>([]);
@@ -94,10 +100,20 @@ export default function Leads() {
       return;
     }
     
-    // Intercept drops on 'proposal' -> open proposal modal
+    // Intercept drops on 'proposal' -> open proposal modal (create or edit)
     if (newStatus === 'proposal') {
-      setPendingLead(lead || null);
-      setIsCreateProposalModalOpen(true);
+      // Check if lead already has a proposal
+      const existingProposal = proposals.find(p => p.lead_id === leadId);
+      
+      if (existingProposal) {
+        // Open edit modal
+        setSelectedProposal(existingProposal);
+        setIsProposalDetailsModalOpen(true);
+      } else {
+        // Open create modal
+        setPendingLead(lead || null);
+        setIsCreateProposalModalOpen(true);
+      }
       return;
     }
     
@@ -291,6 +307,16 @@ export default function Leads() {
             if (!open) setPendingLead(null);
           }}
           onSuccess={handleProposalCreated}
+        />
+        
+        {/* Modal for editing existing proposal */}
+        <ProposalDetailsModal
+          proposal={selectedProposal}
+          open={isProposalDetailsModalOpen && !!selectedProposal}
+          onOpenChange={(open) => {
+            setIsProposalDetailsModalOpen(open);
+            if (!open) setSelectedProposal(null);
+          }}
         />
       </div>
     </AppLayout>
