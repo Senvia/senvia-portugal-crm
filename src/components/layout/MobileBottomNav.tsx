@@ -2,17 +2,32 @@ import { NavLink, useLocation } from "react-router-dom";
 import { LayoutDashboard, Users, Settings, Shield, Calendar, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
+import { useModules } from "@/hooks/useModules";
 
-const navItems = [
+interface NavItem {
+  to: string;
+  icon: React.ElementType;
+  label: string;
+  moduleKey?: 'proposals' | 'calendar';
+}
+
+const allNavItems: NavItem[] = [
   { to: "/dashboard", icon: LayoutDashboard, label: "Painel" },
   { to: "/leads", icon: Users, label: "Leads" },
-  { to: "/proposals", icon: FileText, label: "Propostas" },
+  { to: "/proposals", icon: FileText, label: "Propostas", moduleKey: 'proposals' },
   { to: "/settings", icon: Settings, label: "Config" },
 ];
 
 export function MobileBottomNav() {
   const location = useLocation();
   const { isSuperAdmin } = useAuth();
+  const { modules } = useModules();
+
+  // Filter nav items based on enabled modules
+  const navItems = allNavItems.filter(item => {
+    if (!item.moduleKey) return true;
+    return modules[item.moduleKey];
+  });
 
   const allItems = isSuperAdmin 
     ? [...navItems, { to: "/system-admin", icon: Shield, label: "Admin" }]

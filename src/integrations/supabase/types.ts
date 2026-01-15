@@ -258,6 +258,7 @@ export type Database = {
         Row: {
           ai_qualification_rules: string | null
           created_at: string | null
+          enabled_modules: Json | null
           form_settings: Json | null
           id: string
           meta_pixels: Json | null
@@ -277,6 +278,7 @@ export type Database = {
         Insert: {
           ai_qualification_rules?: string | null
           created_at?: string | null
+          enabled_modules?: Json | null
           form_settings?: Json | null
           id?: string
           meta_pixels?: Json | null
@@ -296,6 +298,7 @@ export type Database = {
         Update: {
           ai_qualification_rules?: string | null
           created_at?: string | null
+          enabled_modules?: Json | null
           form_settings?: Json | null
           id?: string
           meta_pixels?: Json | null
