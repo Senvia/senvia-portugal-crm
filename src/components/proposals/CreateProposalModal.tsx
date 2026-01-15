@@ -19,6 +19,7 @@ interface CreateProposalModalProps {
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
   preselectedClientId?: string | null;
+  leadId?: string | null;
 }
 
 interface SelectedProduct {
@@ -28,7 +29,7 @@ interface SelectedProduct {
   unit_price: number;
 }
 
-export function CreateProposalModal({ client, open, onOpenChange, onSuccess, preselectedClientId }: CreateProposalModalProps) {
+export function CreateProposalModal({ client, open, onOpenChange, onSuccess, preselectedClientId, leadId }: CreateProposalModalProps) {
   const { data: products = [] } = useActiveProducts();
   const { data: clients = [] } = useClients();
   const createProposal = useCreateProposal();
@@ -125,6 +126,7 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
 
     createProposal.mutate({
       client_id: selectedClientId || undefined,
+      lead_id: leadId || undefined,
       total_value: totalValue,
       status: status,
       notes: notes.trim() || undefined,
