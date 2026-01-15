@@ -19,6 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SearchableCombobox, type ComboboxOption } from "@/components/ui/searchable-combobox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 // Lead removido - vendas são apenas para clientes
@@ -303,39 +304,37 @@ export function CreateSaleModal({
                 {/* Client Select */}
                 <div className="space-y-2">
                   <Label>Cliente</Label>
-                  <Select value={clientId || "none"} onValueChange={handleClientSelect}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecionar cliente..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Sem cliente</SelectItem>
-                      {clients?.map((client) => (
-                        <SelectItem key={client.id} value={client.id}>
-                          {client.code && <span className="font-mono text-xs mr-2">{client.code}</span>}
-                          {client.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SearchableCombobox
+                    options={(clients || []).map((client): ComboboxOption => ({
+                      value: client.id,
+                      label: client.name,
+                      sublabel: client.code || client.email || undefined,
+                    }))}
+                    value={clientId || null}
+                    onValueChange={(v) => handleClientSelect(v || "none")}
+                    placeholder="Selecionar cliente..."
+                    searchPlaceholder="Pesquisar cliente..."
+                    emptyLabel="Sem cliente"
+                    emptyText="Nenhum cliente encontrado."
+                  />
                 </div>
 
                 {/* Proposal Select */}
                 <div className="space-y-2">
                   <Label>Proposta</Label>
-                  <Select value={proposalId || "none"} onValueChange={handleProposalSelect}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecionar proposta..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Venda direta</SelectItem>
-                      {filteredProposals.map((proposal) => (
-                        <SelectItem key={proposal.id} value={proposal.id}>
-                          {proposal.code && <span className="font-mono text-xs mr-2">{proposal.code}</span>}
-                          {proposal.lead?.name || "Proposta"} - {formatCurrency(proposal.total_value)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SearchableCombobox
+                    options={filteredProposals.map((proposal): ComboboxOption => ({
+                      value: proposal.id,
+                      label: `${proposal.client?.name || proposal.lead?.name || "Proposta"} - ${formatCurrency(proposal.total_value)}`,
+                      sublabel: proposal.code || undefined,
+                    }))}
+                    value={proposalId || null}
+                    onValueChange={(v) => handleProposalSelect(v || "none")}
+                    placeholder="Selecionar proposta..."
+                    searchPlaceholder="Pesquisar proposta..."
+                    emptyLabel="Venda direta"
+                    emptyText="Nenhuma proposta encontrada."
+                  />
                 </div>
 
                 {/* Sale Date */}
