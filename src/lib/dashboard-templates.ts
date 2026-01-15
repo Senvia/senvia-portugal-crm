@@ -23,6 +23,8 @@ export type WidgetType =
   | 'leads_total'
   | 'leads_trend'
   | 'leads_by_source'
+  | 'leads_social'
+  | 'leads_direct'
   | 'conversion_rate'
   | 'sales_delivered'
   | 'sales_active'
@@ -108,6 +110,22 @@ export const WIDGET_DEFINITIONS: Record<WidgetType, WidgetTemplate> = {
     defaultVisible: false,
     chartType: 'donut',
     description: 'Distribuição por origem',
+  },
+  leads_social: {
+    type: 'leads_social',
+    title: 'Leads Redes Sociais',
+    icon: TrendingUp,
+    defaultVisible: true,
+    chartType: 'donut',
+    description: 'Leads vindos de Instagram, Facebook, LinkedIn, TikTok',
+  },
+  leads_direct: {
+    type: 'leads_direct',
+    title: 'Leads Diretos',
+    icon: Phone,
+    defaultVisible: true,
+    chartType: 'donut',
+    description: 'Leads vindos de Website, Telefone, Email, Referência',
   },
   conversion_rate: {
     type: 'conversion_rate',
@@ -317,13 +335,14 @@ export const WIDGET_DEFINITIONS: Record<WidgetType, WidgetTemplate> = {
 export const NICHE_DEFAULT_WIDGETS: Record<NicheType, WidgetType[]> = {
   generic: [
     'leads_total',
+    'leads_social',
+    'leads_direct',
     'leads_trend',
     'conversion_rate',
     'sales_delivered',
     'sales_active',
     'proposals_open',
     'proposals_accepted',
-    'leads_by_source',
   ],
   clinic: [
     'appointments_today',
