@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableCombobox, type ComboboxOption } from '@/components/ui/searchable-combobox';
 import { useActiveProducts } from '@/hooks/useProducts';
 import { useCreateProposal } from '@/hooks/useProposals';
 import { useClients } from '@/hooks/useClients';
@@ -172,23 +173,20 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess }: C
             <div className="space-y-2">
               <Label>Cliente</Label>
               <div className="flex gap-2">
-                <Select 
-                  value={selectedClientId || 'none'} 
-                  onValueChange={(v) => setSelectedClientId(v === 'none' ? null : v)}
-                >
-                  <SelectTrigger className="flex-1">
-                    <SelectValue placeholder="Selecionar cliente..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Sem cliente associado</SelectItem>
-                    {clients.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.code && <span className="font-mono text-xs mr-2">{c.code}</span>}
-                        {c.name} {c.email && `- ${c.email}`}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchableCombobox
+                  options={clients.map((c): ComboboxOption => ({
+                    value: c.id,
+                    label: c.name,
+                    sublabel: c.code || c.email || undefined,
+                  }))}
+                  value={selectedClientId}
+                  onValueChange={setSelectedClientId}
+                  placeholder="Selecionar cliente..."
+                  searchPlaceholder="Pesquisar cliente..."
+                  emptyLabel="Sem cliente associado"
+                  emptyText="Nenhum cliente encontrado."
+                  className="flex-1"
+                />
                 <Button
                   type="button"
                   variant="outline"

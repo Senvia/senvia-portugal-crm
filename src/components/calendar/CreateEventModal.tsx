@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableCombobox, type ComboboxOption } from '@/components/ui/searchable-combobox';
 import { Switch } from '@/components/ui/switch';
 import { useCreateEvent, useUpdateEvent } from '@/hooks/useCalendarEvents';
 import { useLeads } from '@/hooks/useLeads';
@@ -234,19 +235,19 @@ export function CreateEventModal({ open, onOpenChange, selectedDate, event, pres
 
           <div className="space-y-2">
             <Label>Lead Associado</Label>
-            <Select value={leadId || "none"} onValueChange={(v) => setLeadId(v === "none" ? "" : v)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Nenhum" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Nenhum</SelectItem>
-                {leads.map((lead) => (
-                  <SelectItem key={lead.id} value={lead.id}>
-                    {lead.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SearchableCombobox
+              options={leads.map((lead): ComboboxOption => ({
+                value: lead.id,
+                label: lead.name,
+                sublabel: lead.email || lead.phone || undefined,
+              }))}
+              value={leadId || null}
+              onValueChange={(v) => setLeadId(v || "")}
+              placeholder="Selecionar lead..."
+              searchPlaceholder="Pesquisar lead..."
+              emptyLabel="Nenhum"
+              emptyText="Nenhum lead encontrado."
+            />
           </div>
 
           <div className="space-y-2">
