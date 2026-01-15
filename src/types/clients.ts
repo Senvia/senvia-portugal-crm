@@ -1,6 +1,7 @@
 import { Lead } from "@/types";
 
 export type ClientStatus = 'active' | 'inactive' | 'vip';
+export type ClientSource = 'lead' | 'referral' | 'direct' | 'website' | 'other';
 
 export interface CrmClient {
   id: string;
