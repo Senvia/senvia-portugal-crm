@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ResponsiveKanban } from "@/components/leads/ResponsiveKanban";
+import { LeadsTableView } from "@/components/leads/LeadsTableView";
 import { LeadDetailsModal } from "@/components/leads/LeadDetailsModal";
 import { AddLeadModal } from "@/components/leads/AddLeadModal";
 import { CreateEventModal } from "@/components/calendar/CreateEventModal";
@@ -19,13 +20,12 @@ import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Users, Loader2, CalendarIcon, X, Plus } from "lucide-react";
+import { Search, Users, Loader2, CalendarIcon, X, Plus, LayoutGrid, List } from "lucide-react";
 import { format, endOfDay } from "date-fns";
 import { pt } from "date-fns/locale";
 import { normalizeString, cn } from "@/lib/utils";
 import type { Lead } from "@/types";
 import { LeadStatus, LeadTemperature, KANBAN_COLUMNS, STATUS_LABELS } from "@/types";
-
 export default function Leads() {
   const { profile, organization } = useAuth();
   const { data: leads = [], isLoading } = useLeads();
@@ -48,6 +48,7 @@ export default function Leads() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<LeadStatus[]>([]);
   const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({ from: undefined, to: undefined });
+  const [viewMode, setViewMode] = useState<'kanban' | 'table'>('kanban');
 
   // Keep selectedLead synchronized with updated data from query
   useEffect(() => {
@@ -194,6 +195,27 @@ export default function Leads() {
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input placeholder="Pesquisar..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9 h-9 lg:h-10" />
               </div>
+              
+              {/* View Mode Toggle */}
+              <div className="hidden sm:flex items-center border border-border rounded-lg p-1 bg-background">
+                <Button 
+                  variant={viewMode === 'kanban' ? 'secondary' : 'ghost'} 
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => setViewMode('kanban')}
+                >
+                  <LayoutGrid className="h-4 w-4" />
+                </Button>
+                <Button 
+                  variant={viewMode === 'table' ? 'secondary' : 'ghost'} 
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => setViewMode('table')}
+                >
+                  <List className="h-4 w-4" />
+                </Button>
+              </div>
+              
               <Button onClick={() => setIsAddModalOpen(true)} className="shrink-0 h-9 lg:h-10">
                 <Plus className="h-4 w-4 sm:mr-2" />
                 <span className="hidden sm:inline">Adicionar</span>
@@ -243,6 +265,26 @@ export default function Leads() {
             <div className="h-4 w-px bg-border shrink-0 hidden md:block" />
 
             {/* Mobile: Select dropdown for status filter */}
+            {/* Mobile View Mode Toggle */}
+            <div className="flex sm:hidden items-center border border-border rounded-lg p-1 bg-background shrink-0">
+              <Button 
+                variant={viewMode === 'kanban' ? 'secondary' : 'ghost'} 
+                size="icon"
+                className="h-6 w-6"
+                onClick={() => setViewMode('kanban')}
+              >
+                <LayoutGrid className="h-3.5 w-3.5" />
+              </Button>
+              <Button 
+                variant={viewMode === 'table' ? 'secondary' : 'ghost'} 
+                size="icon"
+                className="h-6 w-6"
+                onClick={() => setViewMode('table')}
+              >
+                <List className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+
             <Select
               value={statusFilter.length === 1 ? statusFilter[0] : "all"}
               onValueChange={(value) => {
@@ -303,8 +345,16 @@ export default function Leads() {
               <Users className="h-12 w-12 mb-4 opacity-50" />
               <p className="text-lg font-medium">Sem leads por agora</p>
             </div>
-          ) : (
+          ) : viewMode === 'kanban' ? (
             <ResponsiveKanban leads={filteredLeads} onStatusChange={handleStatusChange} onTemperatureChange={handleTemperatureChange} onViewDetails={handleViewDetails} onDelete={handleDelete} />
+          ) : (
+            <LeadsTableView 
+              leads={filteredLeads} 
+              onStatusChange={handleStatusChange} 
+              onTemperatureChange={handleTemperatureChange} 
+              onViewDetails={handleViewDetails} 
+              onDelete={handleDelete} 
+            />
           )}
         </div>
 
