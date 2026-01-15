@@ -31,7 +31,7 @@ export function useUpdateLeadStatus() {
   const { toast } = useToast();
   
   return useMutation({
-    mutationFn: async ({ leadId, status }: { leadId: string; status: LeadStatus }) => {
+    mutationFn: async ({ leadId, status }: { leadId: string; status: string }) => {
       const { data, error } = await supabase
         .from('leads')
         .update({ status })

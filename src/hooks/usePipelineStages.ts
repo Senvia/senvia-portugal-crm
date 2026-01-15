@@ -88,11 +88,11 @@ export function useDeletePipelineStage() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id: string) => {
+    mutationFn: async (stageId: string) => {
       const { error } = await supabase
         .from("pipeline_stages")
         .delete()
-        .eq("id", id);
+        .eq("id", stageId);
 
       if (error) throw error;
     },
@@ -139,8 +139,30 @@ export function useApplyNicheTemplate() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ organizationId, niche }: { organizationId: string; niche: NicheType }) => {
+    mutationFn: async ({ 
+      organizationId, 
+      niche, 
+      migrateLeads = true 
+    }: { 
+      organizationId: string; 
+      niche: NicheType;
+      migrateLeads?: boolean;
+    }) => {
       const template = getNicheTemplate(niche);
+      const firstStageKey = template.stages[0]?.key;
+
+      // If migrateLeads is true, move all leads to the first stage of the new template
+      if (migrateLeads && firstStageKey) {
+        const { error: migrateError } = await supabase
+          .from("leads")
+          .update({ status: firstStageKey })
+          .eq("organization_id", organizationId);
+
+        if (migrateError) {
+          console.error("Error migrating leads:", migrateError);
+          // Don't throw - we still want to apply the template
+        }
+      }
 
       // Delete existing stages
       const { error: deleteError } = await supabase
@@ -173,7 +195,8 @@ export function useApplyNicheTemplate() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["pipeline-stages"] });
       queryClient.invalidateQueries({ queryKey: ["organization"] });
-      toast.success("Template aplicado com sucesso");
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
+      toast.success("Template aplicado e leads migrados com sucesso");
     },
     onError: (error: Error) => {
       toast.error(`Erro ao aplicar template: ${error.message}`);

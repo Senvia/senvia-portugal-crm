@@ -4,6 +4,7 @@ import { LeadCard } from "./LeadCard";
 import { cn } from "@/lib/utils";
 import { usePipelineStages, PipelineStage } from "@/hooks/usePipelineStages";
 import { Skeleton } from "@/components/ui/skeleton";
+import { AlertCircle } from "lucide-react";
 
 interface LeadEvent {
   id: string;
@@ -51,6 +52,13 @@ export function KanbanBoard({ leads, leadEvents = {}, onStatusChange, onTemperat
   const getLeadsByStatus = (statusKey: string) => 
     leads.filter(lead => lead.status === statusKey);
 
+  // Get orphan leads (leads with status not matching any pipeline stage)
+  const getOrphanLeads = () => {
+    if (!stages) return [];
+    const stageKeys = stages.map(s => s.key);
+    return leads.filter(lead => !stageKeys.includes(lead.status || ''));
+  };
+
   const handleDragStart = (e: React.DragEvent, leadId: string) => {
     setDraggedLead(leadId);
     e.dataTransfer.effectAllowed = 'move';
@@ -83,6 +91,8 @@ export function KanbanBoard({ leads, leadEvents = {}, onStatusChange, onTemperat
     backgroundColor: `${stage.color}15`,
     color: stage.color,
   });
+
+  const orphanLeads = getOrphanLeads();
 
   if (stagesLoading) {
     return (
@@ -126,40 +136,35 @@ export function KanbanBoard({ leads, leadEvents = {}, onStatusChange, onTemperat
         onScroll={handleBottomScroll}
         className="flex gap-4 overflow-x-auto pb-4"
       >
-      {stages.map((stage) => {
-        const columnLeads = getLeadsByStatus(stage.key);
-        const isOver = dragOverColumn === stage.key;
-
-        return (
+        {/* Orphan Leads Column - Only show if there are orphans */}
+        {orphanLeads.length > 0 && (
           <div
-            key={stage.id}
             className={cn(
               "flex w-80 min-w-[320px] flex-col rounded-xl border-t-4 bg-muted/30",
-              isOver && "bg-primary/5"
+              "border-t-orange-500",
+              dragOverColumn === '__orphan__' && "bg-primary/5"
             )}
-            style={getColumnBorderStyle(stage)}
-            onDragOver={(e) => handleDragOver(e, stage.key)}
+            onDragOver={(e) => handleDragOver(e, '__orphan__')}
             onDragLeave={handleDragLeave}
-            onDrop={(e) => handleDrop(e, stage.key)}
           >
             {/* Column Header */}
             <div className="flex items-center justify-between p-4">
               <div className="flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 text-orange-500" />
                 <h3 className="font-semibold text-foreground">
-                  {stage.name}
+                  Sem Etapa
                 </h3>
                 <span 
-                  className="flex h-6 min-w-6 items-center justify-center rounded-full px-2 text-xs font-medium"
-                  style={getColumnBadgeStyle(stage)}
+                  className="flex h-6 min-w-6 items-center justify-center rounded-full px-2 text-xs font-medium bg-orange-500/15 text-orange-500"
                 >
-                  {columnLeads.length}
+                  {orphanLeads.length}
                 </span>
               </div>
             </div>
 
             {/* Cards Container */}
             <div className="flex-1 space-y-3 px-3 pb-3">
-              {columnLeads.map((lead) => (
+              {orphanLeads.map((lead) => (
                 <div
                   key={lead.id}
                   draggable
@@ -178,19 +183,76 @@ export function KanbanBoard({ leads, leadEvents = {}, onStatusChange, onTemperat
                   />
                 </div>
               ))}
-
-              {columnLeads.length === 0 && (
-                <div className={cn(
-                  "flex h-32 items-center justify-center rounded-lg border-2 border-dashed text-sm text-muted-foreground",
-                  isOver && "border-primary bg-primary/5"
-                )}>
-                  {isOver ? "Largar aqui" : "Sem leads"}
-                </div>
-              )}
             </div>
           </div>
-        );
-      })}
+        )}
+
+        {/* Regular Pipeline Columns */}
+        {stages.map((stage) => {
+          const columnLeads = getLeadsByStatus(stage.key);
+          const isOver = dragOverColumn === stage.key;
+
+          return (
+            <div
+              key={stage.id}
+              className={cn(
+                "flex w-80 min-w-[320px] flex-col rounded-xl border-t-4 bg-muted/30",
+                isOver && "bg-primary/5"
+              )}
+              style={getColumnBorderStyle(stage)}
+              onDragOver={(e) => handleDragOver(e, stage.key)}
+              onDragLeave={handleDragLeave}
+              onDrop={(e) => handleDrop(e, stage.key)}
+            >
+              {/* Column Header */}
+              <div className="flex items-center justify-between p-4">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-semibold text-foreground">
+                    {stage.name}
+                  </h3>
+                  <span 
+                    className="flex h-6 min-w-6 items-center justify-center rounded-full px-2 text-xs font-medium"
+                    style={getColumnBadgeStyle(stage)}
+                  >
+                    {columnLeads.length}
+                  </span>
+                </div>
+              </div>
+
+              {/* Cards Container */}
+              <div className="flex-1 space-y-3 px-3 pb-3">
+                {columnLeads.map((lead) => (
+                  <div
+                    key={lead.id}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, lead.id)}
+                    className="animate-fade-in"
+                  >
+                    <LeadCard
+                      lead={lead}
+                      upcomingEvent={leadEvents[lead.id]}
+                      onStatusChange={onStatusChange}
+                      onTemperatureChange={onTemperatureChange}
+                      onViewDetails={onViewDetails}
+                      onDelete={onDelete}
+                      isDragging={draggedLead === lead.id}
+                      pipelineStages={stages}
+                    />
+                  </div>
+                ))}
+
+                {columnLeads.length === 0 && (
+                  <div className={cn(
+                    "flex h-32 items-center justify-center rounded-lg border-2 border-dashed text-sm text-muted-foreground",
+                    isOver && "border-primary bg-primary/5"
+                  )}>
+                    {isOver ? "Largar aqui" : "Sem leads"}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
