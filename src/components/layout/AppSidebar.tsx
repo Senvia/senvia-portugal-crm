@@ -2,30 +2,25 @@ import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { LayoutDashboard, Users, Settings, LogOut, Shield, Calendar, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
+import { useModules } from "@/hooks/useModules";
 import { APP_VERSION } from "@/lib/constants";
 import type { AppRole } from "@/types";
 import senviaLogo from "@/assets/senvia-logo.png";
-const navItems = [{
-  to: "/dashboard",
-  icon: LayoutDashboard,
-  label: "Painel"
-}, {
-  to: "/leads",
-  icon: Users,
-  label: "Leads"
-}, {
-  to: "/proposals",
-  icon: FileText,
-  label: "Propostas"
-}, {
-  to: "/calendar",
-  icon: Calendar,
-  label: "Agenda"
-}, {
-  to: "/settings",
-  icon: Settings,
-  label: "Configurações"
-}];
+
+interface NavItem {
+  to: string;
+  icon: React.ElementType;
+  label: string;
+  moduleKey?: 'proposals' | 'calendar';
+}
+
+const allNavItems: NavItem[] = [
+  { to: "/dashboard", icon: LayoutDashboard, label: "Painel" },
+  { to: "/leads", icon: Users, label: "Leads" },
+  { to: "/proposals", icon: FileText, label: "Propostas", moduleKey: 'proposals' },
+  { to: "/calendar", icon: Calendar, label: "Agenda", moduleKey: 'calendar' },
+  { to: "/settings", icon: Settings, label: "Configurações" },
+];
 const getRoleLabel = (roles: AppRole[]): string => {
   if (roles.includes('super_admin')) return 'Super Admin';
   if (roles.includes('admin')) return 'Administrador';
@@ -42,11 +37,15 @@ export function AppSidebar({
 }: AppSidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const {
-    signOut,
-    roles,
-    isSuperAdmin
-  } = useAuth();
+  const { signOut, roles, isSuperAdmin } = useAuth();
+  const { modules } = useModules();
+
+  // Filter nav items based on enabled modules
+  const navItems = allNavItems.filter(item => {
+    if (!item.moduleKey) return true;
+    return modules[item.moduleKey];
+  });
+
   const handleLogout = async () => {
     await signOut();
     navigate('/login');
