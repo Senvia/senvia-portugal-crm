@@ -441,7 +441,6 @@ export default function Leads() {
         
         {/* Modal for creating proposal when dropping on 'proposal' */}
         <CreateProposalModal
-          lead={pendingLead}
           open={isCreateProposalModalOpen && !!pendingLead}
           onOpenChange={(open) => {
             setIsCreateProposalModalOpen(open);

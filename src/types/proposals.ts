@@ -17,7 +17,8 @@ export interface Proposal {
   id: string;
   organization_id: string;
   code?: string | null;
-  lead_id: string;
+  client_id?: string | null;
+  lead_id?: string | null; // Mantido para retrocompatibilidade
   total_value: number;
   status: ProposalStatus;
   notes?: string | null;
@@ -26,6 +27,12 @@ export interface Proposal {
   created_at: string;
   updated_at: string;
   products?: ProposalProduct[];
+  client?: {
+    id: string;
+    name: string;
+    email?: string | null;
+    phone?: string | null;
+  };
   lead?: {
     id: string;
     name: string;

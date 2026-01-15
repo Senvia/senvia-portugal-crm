@@ -95,9 +95,10 @@ export function useCreateClient() {
       if (error) throw error;
       return client;
     },
-    onSuccess: () => {
+    onSuccess: (client) => {
       queryClient.invalidateQueries({ queryKey: ['crm-clients'] });
       toast.success('Cliente criado com sucesso');
+      return client;
     },
     onError: (error) => {
       console.error('Error creating client:', error);

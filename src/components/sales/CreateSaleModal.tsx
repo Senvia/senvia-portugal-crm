@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { useLeads } from "@/hooks/useLeads";
+// Lead removido - vendas são apenas para clientes
 import { useProposals, useProposalProducts } from "@/hooks/useProposals";
 import { useClients } from "@/hooks/useClients";
 import { useProducts } from "@/hooks/useProducts";
@@ -74,7 +74,7 @@ export function CreateSaleModal({
   prefillProposal,
   prefillClientId 
 }: CreateSaleModalProps) {
-  const { data: leads } = useLeads();
+  // Lead removido - vendas são apenas para clientes
   const { data: proposals } = useProposals();
   const { data: clients } = useClients();
   const { data: products } = useProducts();
@@ -86,7 +86,6 @@ export function CreateSaleModal({
 
   // Form state
   const [clientId, setClientId] = useState<string>("");
-  const [leadId, setLeadId] = useState<string>("");
   const [proposalId, setProposalId] = useState<string>("");
   const [saleDate, setSaleDate] = useState<Date>(new Date());
   const [items, setItems] = useState<SaleItemDraft[]>([]);
@@ -103,22 +102,20 @@ export function CreateSaleModal({
       // If prefillProposal is provided, pre-populate fields
       if (prefillProposal) {
         setProposalId(prefillProposal.id);
-        setLeadId(prefillProposal.lead_id || "");
         
-        // Find client by lead_id
-        const client = clients?.find(c => c.lead_id === prefillProposal.lead_id);
-        if (client) {
-          setClientId(client.id);
+        // Find client by client_id or lead_id (retrocompatibilidade)
+        if (prefillProposal.client_id) {
+          setClientId(prefillProposal.client_id);
+        } else if (prefillProposal.lead_id) {
+          const client = clients?.find(c => c.lead_id === prefillProposal.lead_id);
+          if (client) {
+            setClientId(client.id);
+          }
         }
       } else if (prefillClientId) {
         setClientId(prefillClientId);
-        const client = clients?.find(c => c.id === prefillClientId);
-        if (client?.lead_id) {
-          setLeadId(client.lead_id);
-        }
       } else {
         setClientId("");
-        setLeadId("");
         setProposalId("");
       }
       
@@ -147,20 +144,19 @@ export function CreateSaleModal({
     }
   }, [proposalProducts, items.length]);
 
-  // Filter proposals based on selected client/lead
+  // Filter proposals based on selected client
   const filteredProposals = useMemo(() => {
     if (!proposals) return [];
     if (clientId) {
+      // Filtrar por client_id ou pelo lead associado ao cliente (retrocompatibilidade)
       const client = clients?.find(c => c.id === clientId);
-      if (client?.lead_id) {
-        return proposals.filter(p => p.lead_id === client.lead_id && p.status === 'accepted');
-      }
-    }
-    if (leadId) {
-      return proposals.filter(p => p.lead_id === leadId && p.status === 'accepted');
+      return proposals.filter(p => 
+        (p.client_id === clientId || (client?.lead_id && p.lead_id === client.lead_id)) && 
+        p.status === 'accepted'
+      );
     }
     return proposals.filter(p => p.status === 'accepted');
-  }, [proposals, clients, clientId, leadId]);
+  }, [proposals, clients, clientId]);
 
   // Calculate totals
   const subtotal = useMemo(() => {
@@ -177,30 +173,12 @@ export function CreateSaleModal({
       return;
     }
     setClientId(value);
-    const client = clients?.find(c => c.id === value);
-    if (client?.lead_id) {
-      setLeadId(client.lead_id);
-    }
-    // Clear proposal if it doesn't match
+    // Clear proposal if it doesn't match the new client
     if (proposalId) {
       const proposal = proposals?.find(p => p.id === proposalId);
-      if (proposal && proposal.lead_id !== client?.lead_id) {
-        setProposalId("");
-      }
-    }
-  };
-
-  const handleLeadSelect = (value: string) => {
-    if (value === "none") {
-      setLeadId("");
-      setProposalId("");
-      return;
-    }
-    setLeadId(value);
-    // Clear proposal if it doesn't match
-    if (proposalId) {
-      const proposal = proposals?.find(p => p.id === proposalId);
-      if (proposal && proposal.lead_id !== value) {
+      const client = clients?.find(c => c.id === value);
+      // Verifica se a proposta pertence ao cliente (por client_id ou lead_id)
+      if (proposal && proposal.client_id !== value && proposal.lead_id !== client?.lead_id) {
         setProposalId("");
       }
     }
@@ -212,10 +190,6 @@ export function CreateSaleModal({
       return;
     }
     setProposalId(value);
-    const proposal = proposals?.find(p => p.id === value);
-    if (proposal?.lead_id && !leadId) {
-      setLeadId(proposal.lead_id);
-    }
   };
 
   const handleAddProduct = (productId: string) => {
@@ -272,7 +246,6 @@ export function CreateSaleModal({
     try {
       const sale = await createSale.mutateAsync({
         client_id: clientId || undefined,
-        lead_id: leadId || undefined,
         proposal_id: proposalId || undefined,
         total_value: total,
         subtotal: subtotal,
@@ -340,24 +313,6 @@ export function CreateSaleModal({
                         <SelectItem key={client.id} value={client.id}>
                           {client.code && <span className="font-mono text-xs mr-2">{client.code}</span>}
                           {client.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Lead Select */}
-                <div className="space-y-2">
-                  <Label>Lead</Label>
-                  <Select value={leadId || "none"} onValueChange={handleLeadSelect}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecionar lead..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Sem lead</SelectItem>
-                      {leads?.map((lead) => (
-                        <SelectItem key={lead.id} value={lead.id}>
-                          {lead.name}
                         </SelectItem>
                       ))}
                     </SelectContent>

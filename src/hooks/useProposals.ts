@@ -14,7 +14,8 @@ export function useProposals() {
         .from('proposals')
         .select(`
           *,
-          lead:leads(id, name, email, phone)
+          lead:leads(id, name, email, phone),
+          client:crm_clients(id, name, email, phone)
         `)
         .eq('organization_id', organization!.id)
         .order('created_at', { ascending: false });
@@ -62,7 +63,8 @@ export function useProposalProducts(proposalId: string | undefined) {
 }
 
 interface CreateProposalData {
-  lead_id?: string;
+  client_id?: string;
+  lead_id?: string; // Mantido para retrocompatibilidade
   total_value: number;
   notes?: string;
   proposal_date?: string;
@@ -81,6 +83,7 @@ export function useCreateProposal() {
         .from('proposals')
         .insert({
           organization_id: organization!.id,
+          client_id: data.client_id || null,
           lead_id: data.lead_id || null,
           total_value: data.total_value,
           notes: data.notes || null,
