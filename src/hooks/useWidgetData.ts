@@ -112,6 +112,59 @@ export function useWidgetData(widgetType: WidgetType): WidgetData {
         };
       }
 
+      case 'leads_social': {
+        const SOCIAL_SOURCES = ['instagram', 'facebook', 'linkedin', 'tiktok', 'twitter', 'youtube', 'social'];
+        const socialLeads = leads.filter(l => {
+          const source = (l.source || '').toLowerCase();
+          return SOCIAL_SOURCES.some(s => source.includes(s));
+        });
+
+        const sourceGroups = socialLeads.reduce((acc, lead) => {
+          const source = lead.source || 'Redes Sociais';
+          acc[source] = (acc[source] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>);
+
+        const chartData = Object.entries(sourceGroups).map(([name, value]) => ({
+          name,
+          value,
+        }));
+
+        return {
+          value: socialLeads.length.toString(),
+          subtitle: 'via redes sociais',
+          chartData,
+          isLoading: leadsLoading,
+        };
+      }
+
+      case 'leads_direct': {
+        const SOCIAL_SOURCES = ['instagram', 'facebook', 'linkedin', 'tiktok', 'twitter', 'youtube', 'social'];
+        const directLeads = leads.filter(l => {
+          const source = (l.source || '').toLowerCase();
+          // Direto = sem fonte OU não é rede social
+          return !source || !SOCIAL_SOURCES.some(s => source.includes(s));
+        });
+
+        const sourceGroups = directLeads.reduce((acc, lead) => {
+          const source = lead.source || 'Directo';
+          acc[source] = (acc[source] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>);
+
+        const chartData = Object.entries(sourceGroups).map(([name, value]) => ({
+          name,
+          value,
+        }));
+
+        return {
+          value: directLeads.length.toString(),
+          subtitle: 'canais diretos',
+          chartData,
+          isLoading: leadsLoading,
+        };
+      }
+
       case 'conversion_rate': {
         // Check for final positive stages or common "won" status patterns
         const convertedLeads = leads.filter(l => {
