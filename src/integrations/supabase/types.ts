@@ -17,6 +17,7 @@ export type Database = {
       calendar_events: {
         Row: {
           all_day: boolean | null
+          client_id: string | null
           created_at: string | null
           description: string | null
           end_time: string | null
@@ -34,6 +35,7 @@ export type Database = {
         }
         Insert: {
           all_day?: boolean | null
+          client_id?: string | null
           created_at?: string | null
           description?: string | null
           end_time?: string | null
@@ -51,6 +53,7 @@ export type Database = {
         }
         Update: {
           all_day?: boolean | null
+          client_id?: string | null
           created_at?: string | null
           description?: string | null
           end_time?: string | null
@@ -68,6 +71,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "calendar_events_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "crm_clients"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "calendar_events_lead_id_fkey"
             columns: ["lead_id"]
             isOneToOne: false
@@ -78,7 +88,11 @@ export type Database = {
       }
       crm_clients: {
         Row: {
+          address_line1: string | null
+          address_line2: string | null
+          city: string | null
           company: string | null
+          country: string | null
           created_at: string | null
           email: string | null
           id: string
@@ -88,6 +102,7 @@ export type Database = {
           notes: string | null
           organization_id: string
           phone: string | null
+          postal_code: string | null
           source: string | null
           status: string | null
           total_proposals: number | null
@@ -96,7 +111,11 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          address_line1?: string | null
+          address_line2?: string | null
+          city?: string | null
           company?: string | null
+          country?: string | null
           created_at?: string | null
           email?: string | null
           id?: string
@@ -106,6 +125,7 @@ export type Database = {
           notes?: string | null
           organization_id: string
           phone?: string | null
+          postal_code?: string | null
           source?: string | null
           status?: string | null
           total_proposals?: number | null
@@ -114,7 +134,11 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          address_line1?: string | null
+          address_line2?: string | null
+          city?: string | null
           company?: string | null
+          country?: string | null
           created_at?: string | null
           email?: string | null
           id?: string
@@ -124,6 +148,7 @@ export type Database = {
           notes?: string | null
           organization_id?: string
           phone?: string | null
+          postal_code?: string | null
           source?: string | null
           status?: string | null
           total_proposals?: number | null

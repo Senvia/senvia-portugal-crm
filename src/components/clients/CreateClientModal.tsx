@@ -19,7 +19,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useCreateClient } from "@/hooks/useClients";
+import { useClientLabels } from "@/hooks/useClientLabels";
 import { CLIENT_STATUS_LABELS, CLIENT_SOURCE_LABELS, ClientStatus } from "@/types/clients";
+import { COUNTRIES } from "@/lib/countries";
 
 interface CreateClientModalProps {
   open: boolean;
@@ -27,6 +29,8 @@ interface CreateClientModalProps {
 }
 
 export function CreateClientModal({ open, onOpenChange }: CreateClientModalProps) {
+  const labels = useClientLabels();
+  
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -35,6 +39,13 @@ export function CreateClientModal({ open, onOpenChange }: CreateClientModalProps
   const [status, setStatus] = useState<ClientStatus>("active");
   const [source, setSource] = useState("");
   const [notes, setNotes] = useState("");
+  
+  // Address fields
+  const [addressLine1, setAddressLine1] = useState("");
+  const [addressLine2, setAddressLine2] = useState("");
+  const [city, setCity] = useState("");
+  const [postalCode, setPostalCode] = useState("");
+  const [country, setCountry] = useState("PT");
 
   const createClient = useCreateClient();
 
@@ -53,6 +64,11 @@ export function CreateClientModal({ open, onOpenChange }: CreateClientModalProps
         status,
         source: source || undefined,
         notes: notes.trim() || undefined,
+        address_line1: addressLine1.trim() || undefined,
+        address_line2: addressLine2.trim() || undefined,
+        city: city.trim() || undefined,
+        postal_code: postalCode.trim() || undefined,
+        country: country || undefined,
       },
       {
         onSuccess: () => {
@@ -72,15 +88,20 @@ export function CreateClientModal({ open, onOpenChange }: CreateClientModalProps
     setStatus("active");
     setSource("");
     setNotes("");
+    setAddressLine1("");
+    setAddressLine2("");
+    setCity("");
+    setPostalCode("");
+    setCountry("PT");
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Novo Cliente</DialogTitle>
+          <DialogTitle>{labels.new}</DialogTitle>
           <DialogDescription>
-            Adicione um novo cliente ao seu CRM.
+            Adicione um novo {labels.singular.toLowerCase()} ao seu CRM.
           </DialogDescription>
         </DialogHeader>
 
@@ -92,7 +113,7 @@ export function CreateClientModal({ open, onOpenChange }: CreateClientModalProps
                 id="name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Nome do cliente"
+                placeholder={`Nome do ${labels.singular.toLowerCase()}`}
                 required
               />
             </div>
@@ -172,13 +193,62 @@ export function CreateClientModal({ open, onOpenChange }: CreateClientModalProps
             </div>
           </div>
 
+          {/* Address Section */}
+          <div className="space-y-3 pt-2">
+            <Label className="text-sm font-medium">Morada</Label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2 sm:col-span-2">
+                <Input
+                  value={addressLine1}
+                  onChange={(e) => setAddressLine1(e.target.value)}
+                  placeholder="Rua, número"
+                />
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Input
+                  value={addressLine2}
+                  onChange={(e) => setAddressLine2(e.target.value)}
+                  placeholder="Apartamento, andar (opcional)"
+                />
+              </div>
+              <div className="space-y-2">
+                <Input
+                  value={postalCode}
+                  onChange={(e) => setPostalCode(e.target.value)}
+                  placeholder="Código Postal"
+                />
+              </div>
+              <div className="space-y-2">
+                <Input
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                  placeholder="Cidade"
+                />
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Select value={country} onValueChange={setCountry}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="País" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {COUNTRIES.map((c) => (
+                      <SelectItem key={c.code} value={c.code}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="notes">Notas</Label>
             <Textarea
               id="notes"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Notas sobre o cliente..."
+              placeholder={`Notas sobre o ${labels.singular.toLowerCase()}...`}
               rows={3}
             />
           </div>
@@ -188,7 +258,7 @@ export function CreateClientModal({ open, onOpenChange }: CreateClientModalProps
               Cancelar
             </Button>
             <Button type="submit" disabled={!name.trim() || createClient.isPending}>
-              {createClient.isPending ? "A criar..." : "Criar Cliente"}
+              {createClient.isPending ? "A criar..." : `Criar ${labels.singular}`}
             </Button>
           </DialogFooter>
         </form>

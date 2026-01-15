@@ -66,6 +66,11 @@ interface CreateClientData {
   source?: string;
   notes?: string;
   lead_id?: string;
+  address_line1?: string;
+  address_line2?: string;
+  city?: string;
+  postal_code?: string;
+  country?: string;
 }
 
 export function useCreateClient() {

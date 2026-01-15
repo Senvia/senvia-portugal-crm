@@ -7,11 +7,19 @@ export interface CrmClient {
   organization_id: string;
   lead_id?: string | null;
   
+  // Basic info
   name: string;
   email?: string | null;
   phone?: string | null;
   company?: string | null;
   nif?: string | null;
+  
+  // Address
+  address_line1?: string | null;
+  address_line2?: string | null;
+  city?: string | null;
+  postal_code?: string | null;
+  country?: string | null;
   
   status: ClientStatus;
   source?: string | null;
