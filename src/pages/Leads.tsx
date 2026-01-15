@@ -166,13 +166,8 @@ export default function Leads() {
   };
 
   const handleEventCreated = () => {
-    if (pendingLead) {
-      // Find the scheduled stage key
-      const scheduledStage = stages.find(s => isScheduledStage(s.key));
-      if (scheduledStage) {
-        updateStatus.mutate({ leadId: pendingLead.id, status: scheduledStage.key });
-      }
-    }
+    // Status já é atualizado automaticamente pelo useCreateEvent hook
+    // Apenas limpar os estados locais
     setPendingLead(null);
     setSelectedEvent(null);
     setIsCreateEventModalOpen(false);
