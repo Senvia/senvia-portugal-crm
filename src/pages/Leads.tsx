@@ -131,8 +131,14 @@ export default function Leads() {
       const existingEvent = calendarEvents.find(
         e => e.lead_id === leadId && e.status !== 'cancelled' && e.status !== 'completed'
       );
-      
+
       if (existingEvent) {
+        // If the lead already has an event, we still want the drop action
+        // to actually move the lead to the chosen stage.
+        if (!lead || lead.status !== newStatus) {
+          updateStatus.mutate({ leadId, status: newStatus });
+        }
+
         // Open event details modal
         setSelectedEvent(existingEvent);
         setIsEventDetailsModalOpen(true);
