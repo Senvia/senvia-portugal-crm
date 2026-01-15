@@ -140,8 +140,8 @@ export function CreateEventModal({ open, onOpenChange, selectedDate, event, pres
     }
 
     resetForm();
-    onOpenChange(false);
     onSuccess?.();
+    onOpenChange(false);
   };
 
   const isPending = createEvent.isPending || updateEvent.isPending;
