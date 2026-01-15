@@ -52,6 +52,7 @@ export default function Leads() {
   // New states for the chained client -> proposal flow
   const [isCreateClientModalOpen, setIsCreateClientModalOpen] = useState(false);
   const [newlyCreatedClientId, setNewlyCreatedClientId] = useState<string | null>(null);
+  const [isChainedFlow, setIsChainedFlow] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({ from: undefined, to: undefined });
@@ -200,11 +201,14 @@ export default function Leads() {
     }
     setPendingLead(null);
     setNewlyCreatedClientId(null);
+    setIsChainedFlow(false);
     setIsCreateProposalModalOpen(false);
   };
 
   // Handler for when client is created in the chained flow (Lead -> Client -> Proposal)
   const handleClientCreatedForProposal = (clientId: string) => {
+    // Mark that we're in a chained flow (preserve pendingLead)
+    setIsChainedFlow(true);
     // Close client modal
     setIsCreateClientModalOpen(false);
     // Store the new client ID
@@ -460,7 +464,10 @@ export default function Leads() {
           open={isCreateClientModalOpen}
           onOpenChange={(open) => {
             setIsCreateClientModalOpen(open);
-            if (!open) setPendingLead(null);
+            // Only clear pendingLead if NOT in chained flow
+            if (!open && !isChainedFlow) {
+              setPendingLead(null);
+            }
           }}
           onCreated={handleClientCreatedForProposal}
           initialData={pendingLead ? {
