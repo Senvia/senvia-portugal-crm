@@ -11,6 +11,7 @@ import { ProposalDetailsModal } from "@/components/proposals/ProposalDetailsModa
 import { useAuth } from "@/contexts/AuthContext";
 import { useProposals } from "@/hooks/useProposals";
 import { useCalendarEvents } from "@/hooks/useCalendarEvents";
+import { usePipelineStages } from "@/hooks/usePipelineStages";
 import type { Proposal } from "@/types/proposals";
 import type { CalendarEvent } from "@/types/calendar";
 import { useLeads, useUpdateLeadStatus, useDeleteLead, useUpdateLead } from "@/hooks/useLeads";
@@ -24,13 +25,14 @@ import { Search, Users, Loader2, CalendarIcon, X, Plus, LayoutGrid, List } from 
 import { format, endOfDay } from "date-fns";
 import { pt } from "date-fns/locale";
 import { normalizeString, cn } from "@/lib/utils";
-import type { Lead } from "@/types";
-import { LeadStatus, LeadTemperature, KANBAN_COLUMNS, STATUS_LABELS } from "@/types";
+import type { Lead, LeadTemperature } from "@/types";
+
 export default function Leads() {
   const { profile, organization } = useAuth();
   const { data: leads = [], isLoading } = useLeads();
   const { data: proposals = [] } = useProposals();
   const { data: calendarEvents = [] } = useCalendarEvents();
+  const { data: stages = [] } = usePipelineStages();
   const updateStatus = useUpdateLeadStatus();
   const deleteLead = useDeleteLead();
   const updateLead = useUpdateLead();
@@ -46,7 +48,7 @@ export default function Leads() {
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [pendingLead, setPendingLead] = useState<Lead | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<LeadStatus[]>([]);
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({ from: undefined, to: undefined });
   const [viewMode, setViewMode] = useState<'kanban' | 'table'>(() => {
     const saved = localStorage.getItem('leads-view-mode');
@@ -68,7 +70,7 @@ export default function Leads() {
     }
   }, [leads]);
 
-  const toggleStatus = (status: LeadStatus) => {
+  const toggleStatus = (status: string) => {
     setStatusFilter(prev => 
       prev.includes(status) 
         ? prev.filter(s => s !== status) 
@@ -94,7 +96,7 @@ export default function Leads() {
     
     // 2. Filtro de status
     const matchesStatus = statusFilter.length === 0 || 
-      statusFilter.includes(lead.status);
+      statusFilter.includes(lead.status || '');
     
     // 3. Filtro de data
     const leadDate = lead.created_at ? new Date(lead.created_at) : null;
@@ -105,11 +107,26 @@ export default function Leads() {
     return matchesSearch && matchesStatus && matchesDate;
   });
 
-  const handleStatusChange = (leadId: string, newStatus: LeadStatus) => {
+  // Check if a stage is of a special type (scheduled or proposal-like)
+  const isScheduledStage = (stageKey: string) => {
+    const stage = stages.find(s => s.key === stageKey);
+    // Check if the stage name contains keywords that indicate it's a scheduling stage
+    const scheduledKeywords = ['agendado', 'scheduled', 'reunião', 'meeting', 'consulta'];
+    return stage && scheduledKeywords.some(kw => stage.name.toLowerCase().includes(kw));
+  };
+
+  const isProposalStage = (stageKey: string) => {
+    const stage = stages.find(s => s.key === stageKey);
+    // Check if the stage name contains keywords that indicate it's a proposal stage
+    const proposalKeywords = ['proposta', 'proposal', 'orçamento', 'quote'];
+    return stage && proposalKeywords.some(kw => stage.name.toLowerCase().includes(kw));
+  };
+
+  const handleStatusChange = (leadId: string, newStatus: string) => {
     const lead = leads.find(l => l.id === leadId);
     
-    // Intercept drops on 'scheduled' -> open event modal (create or view existing)
-    if (newStatus === 'scheduled') {
+    // Intercept drops on scheduling stages -> open event modal (create or view existing)
+    if (isScheduledStage(newStatus)) {
       // Check if lead already has a pending/active event
       const existingEvent = calendarEvents.find(
         e => e.lead_id === leadId && e.status !== 'cancelled' && e.status !== 'completed'
@@ -127,8 +144,8 @@ export default function Leads() {
       return;
     }
     
-    // Intercept drops on 'proposal' -> open proposal modal (create or edit)
-    if (newStatus === 'proposal') {
+    // Intercept drops on proposal stages -> open proposal modal (create or edit)
+    if (isProposalStage(newStatus)) {
       // Check if lead already has a proposal
       const existingProposal = proposals.find(p => p.lead_id === leadId);
       
@@ -150,7 +167,11 @@ export default function Leads() {
 
   const handleEventCreated = () => {
     if (pendingLead) {
-      updateStatus.mutate({ leadId: pendingLead.id, status: 'scheduled' });
+      // Find the scheduled stage key
+      const scheduledStage = stages.find(s => isScheduledStage(s.key));
+      if (scheduledStage) {
+        updateStatus.mutate({ leadId: pendingLead.id, status: scheduledStage.key });
+      }
     }
     setPendingLead(null);
     setSelectedEvent(null);
@@ -165,7 +186,11 @@ export default function Leads() {
 
   const handleProposalCreated = () => {
     if (pendingLead) {
-      updateStatus.mutate({ leadId: pendingLead.id, status: 'proposal' });
+      // Find the proposal stage key
+      const proposalStage = stages.find(s => isProposalStage(s.key));
+      if (proposalStage) {
+        updateStatus.mutate({ leadId: pendingLead.id, status: proposalStage.key });
+      }
     }
     setPendingLead(null);
     setIsCreateProposalModalOpen(false);
@@ -186,6 +211,22 @@ export default function Leads() {
 
   const handleUpdate = (leadId: string, updates: Partial<Lead>) => {
     updateLead.mutate({ leadId, updates });
+  };
+
+  // Helper to get badge style from stage color
+  const getBadgeStyle = (hexColor: string, isActive: boolean) => {
+    if (isActive) {
+      return {
+        backgroundColor: hexColor,
+        color: '#fff',
+        borderColor: hexColor,
+      };
+    }
+    return {
+      backgroundColor: 'transparent',
+      color: hexColor,
+      borderColor: `${hexColor}50`,
+    };
   };
 
   return (
@@ -272,7 +313,6 @@ export default function Leads() {
 
             <div className="h-4 w-px bg-border shrink-0 hidden md:block" />
 
-            {/* Mobile: Select dropdown for status filter */}
             {/* Mobile View Mode Toggle */}
             <div className="flex sm:hidden items-center border border-border rounded-lg p-1 bg-background shrink-0">
               <Button 
@@ -293,13 +333,14 @@ export default function Leads() {
               </Button>
             </div>
 
+            {/* Mobile: Select dropdown for status filter */}
             <Select
               value={statusFilter.length === 1 ? statusFilter[0] : "all"}
               onValueChange={(value) => {
                 if (value === "all") {
                   setStatusFilter([]);
                 } else {
-                  setStatusFilter([value as LeadStatus]);
+                  setStatusFilter([value]);
                 }
               }}
             >
@@ -308,9 +349,9 @@ export default function Leads() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos os status</SelectItem>
-                {KANBAN_COLUMNS.map((status) => (
-                  <SelectItem key={status} value={status}>
-                    {STATUS_LABELS[status]}
+                {stages.map((stage) => (
+                  <SelectItem key={stage.id} value={stage.key}>
+                    {stage.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -318,14 +359,15 @@ export default function Leads() {
 
             {/* Desktop: Status Filter Badges */}
             <div className="hidden md:flex items-center gap-2">
-              {KANBAN_COLUMNS.map((status) => (
+              {stages.map((stage) => (
                 <Badge
-                  key={status}
-                  variant={statusFilter.includes(status) ? "default" : "outline"}
-                  className="cursor-pointer transition-colors hover:bg-primary/10 shrink-0 text-xs"
-                  onClick={() => toggleStatus(status)}
+                  key={stage.id}
+                  variant="outline"
+                  className="cursor-pointer transition-colors hover:opacity-80 shrink-0 text-xs"
+                  style={getBadgeStyle(stage.color, statusFilter.includes(stage.key))}
+                  onClick={() => toggleStatus(stage.key)}
                 >
-                  {STATUS_LABELS[status]}
+                  {stage.name}
                 </Badge>
               ))}
             </div>

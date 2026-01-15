@@ -1,7 +1,6 @@
-import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { LeadCard } from "./LeadCard";
-import { Lead, LeadStatus, LeadTemperature, KANBAN_COLUMNS, STATUS_LABELS } from "@/types";
+import { Lead, LeadTemperature } from "@/types";
 import { cn } from "@/lib/utils";
 import {
   Select,
@@ -10,6 +9,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { usePipelineStages, PipelineStage } from "@/hooks/usePipelineStages";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useState, useEffect } from "react";
 
 interface LeadEvent {
   id: string;
@@ -21,29 +23,24 @@ interface LeadEvent {
 interface KanbanTabsProps {
   leads: Lead[];
   leadEvents?: Record<string, LeadEvent>;
-  onStatusChange: (leadId: string, newStatus: LeadStatus) => void;
+  onStatusChange: (leadId: string, newStatus: string) => void;
   onTemperatureChange: (leadId: string, newTemperature: LeadTemperature) => void;
   onViewDetails: (lead: Lead) => void;
   onDelete: (leadId: string) => void;
 }
 
-const badgeColors: Record<LeadStatus, string> = {
-  new: "bg-blue-500/20 text-blue-400",
-  contacted: "bg-yellow-500/20 text-yellow-400",
-  scheduled: "bg-purple-500/20 text-purple-400",
-  proposal: "bg-cyan-500/20 text-cyan-400",
-  won: "bg-green-500/20 text-green-400",
-  lost: "bg-red-500/20 text-red-400",
+// Helper to generate badge style from hex color
+const getBadgeStyle = (hexColor: string) => {
+  return {
+    backgroundColor: `${hexColor}20`,
+    color: hexColor,
+  };
 };
 
-const statusDotColors: Record<LeadStatus, string> = {
-  new: "bg-blue-500",
-  contacted: "bg-yellow-500",
-  scheduled: "bg-purple-500",
-  proposal: "bg-cyan-500",
-  won: "bg-green-500",
-  lost: "bg-red-500",
-};
+// Helper to generate dot color class from hex
+const getDotStyle = (hexColor: string) => ({
+  backgroundColor: hexColor,
+});
 
 export function KanbanTabs({
   leads,
@@ -53,42 +50,120 @@ export function KanbanTabs({
   onViewDetails,
   onDelete,
 }: KanbanTabsProps) {
-  const [activeStatus, setActiveStatus] = useState<LeadStatus>("new");
+  const { data: stages = [], isLoading } = usePipelineStages();
+  const [activeStatus, setActiveStatus] = useState<string>("");
 
-  const getLeadsByStatus = (status: LeadStatus) => {
-    return leads.filter((lead) => lead.status === status);
+  // Set initial active status when stages load
+  useEffect(() => {
+    if (stages.length > 0 && !activeStatus) {
+      setActiveStatus(stages[0].key);
+    }
+  }, [stages, activeStatus]);
+
+  const getLeadsByStatus = (statusKey: string) => {
+    return leads.filter((lead) => lead.status === statusKey);
   };
 
-  const filteredLeads = getLeadsByStatus(activeStatus);
+  // Get orphan leads (leads with status not in current pipeline)
+  const getOrphanLeads = () => {
+    const stageKeys = stages.map(s => s.key);
+    return leads.filter((lead) => !stageKeys.includes(lead.status || ''));
+  };
+
+  const orphanLeads = getOrphanLeads();
+  const filteredLeads = activeStatus === '__orphan__' 
+    ? orphanLeads 
+    : getLeadsByStatus(activeStatus);
+
+  const activeStage = stages.find(s => s.key === activeStatus);
+
+  if (isLoading) {
+    return (
+      <div className="w-full space-y-4">
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-32 w-full" />
+        <Skeleton className="h-32 w-full" />
+      </div>
+    );
+  }
+
+  if (stages.length === 0) {
+    return (
+      <div className="text-center py-12 text-muted-foreground">
+        <p className="text-sm">Pipeline não configurado</p>
+        <p className="text-xs mt-1">Configure o pipeline nas Definições</p>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full space-y-4">
       {/* Status Selector */}
-      <Select value={activeStatus} onValueChange={(v) => setActiveStatus(v as LeadStatus)}>
+      <Select value={activeStatus} onValueChange={setActiveStatus}>
         <SelectTrigger className="w-full">
           <div className="flex items-center gap-2">
-            <span className={cn("h-2 w-2 rounded-full", statusDotColors[activeStatus])} />
-            <SelectValue />
-            <Badge variant="secondary" className={cn("ml-auto", badgeColors[activeStatus])}>
-              {getLeadsByStatus(activeStatus).length}
-            </Badge>
+            {activeStatus === '__orphan__' ? (
+              <>
+                <span className="h-2 w-2 rounded-full bg-muted-foreground" />
+                <span>Sem Etapa</span>
+                <Badge variant="secondary" className="ml-auto bg-muted text-muted-foreground">
+                  {orphanLeads.length}
+                </Badge>
+              </>
+            ) : activeStage ? (
+              <>
+                <span 
+                  className="h-2 w-2 rounded-full" 
+                  style={getDotStyle(activeStage.color)} 
+                />
+                <span>{activeStage.name}</span>
+                <Badge 
+                  variant="secondary" 
+                  className="ml-auto"
+                  style={getBadgeStyle(activeStage.color)}
+                >
+                  {getLeadsByStatus(activeStatus).length}
+                </Badge>
+              </>
+            ) : (
+              <SelectValue placeholder="Selecionar etapa" />
+            )}
           </div>
         </SelectTrigger>
         <SelectContent>
-          {KANBAN_COLUMNS.map((status) => {
-            const count = getLeadsByStatus(status).length;
+          {stages.map((stage) => {
+            const count = getLeadsByStatus(stage.key).length;
             return (
-              <SelectItem key={status} value={status}>
+              <SelectItem key={stage.id} value={stage.key}>
                 <div className="flex items-center gap-2">
-                  <span className={cn("h-2 w-2 rounded-full", statusDotColors[status])} />
-                  <span>{STATUS_LABELS[status]}</span>
-                  <Badge variant="secondary" className={cn("ml-2", badgeColors[status])}>
+                  <span 
+                    className="h-2 w-2 rounded-full" 
+                    style={getDotStyle(stage.color)} 
+                  />
+                  <span>{stage.name}</span>
+                  <Badge 
+                    variant="secondary" 
+                    className="ml-2"
+                    style={getBadgeStyle(stage.color)}
+                  >
                     {count}
                   </Badge>
                 </div>
               </SelectItem>
             );
           })}
+          {/* Orphan leads option */}
+          {orphanLeads.length > 0 && (
+            <SelectItem value="__orphan__">
+              <div className="flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-muted-foreground" />
+                <span>Sem Etapa</span>
+                <Badge variant="secondary" className="ml-2 bg-muted text-muted-foreground">
+                  {orphanLeads.length}
+                </Badge>
+              </div>
+            </SelectItem>
+          )}
         </SelectContent>
       </Select>
 
@@ -108,6 +183,7 @@ export function KanbanTabs({
               onTemperatureChange={onTemperatureChange}
               onViewDetails={onViewDetails}
               onDelete={onDelete}
+              pipelineStages={stages}
             />
           ))
         )}

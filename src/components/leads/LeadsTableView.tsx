@@ -31,13 +31,15 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Lead, LeadStatus, LeadTemperature, STATUS_LABELS, TEMPERATURE_STYLES, KANBAN_COLUMNS } from '@/types';
+import { Lead, LeadTemperature, TEMPERATURE_STYLES } from '@/types';
 import { formatCurrency, formatPhoneForWhatsApp } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { usePipelineStages, PipelineStage } from '@/hooks/usePipelineStages';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface LeadsTableViewProps {
   leads: Lead[];
-  onStatusChange: (leadId: string, status: LeadStatus) => void;
+  onStatusChange: (leadId: string, status: string) => void;
   onTemperatureChange: (leadId: string, temperature: LeadTemperature) => void;
   onViewDetails: (lead: Lead) => void;
   onDelete: (leadId: string) => void;
@@ -46,14 +48,12 @@ interface LeadsTableViewProps {
 type SortField = 'name' | 'email' | 'status' | 'temperature' | 'value' | 'source' | 'created_at';
 type SortDirection = 'asc' | 'desc';
 
-const statusColors: Record<LeadStatus, string> = {
-  new: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-  contacted: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
-  scheduled: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
-  proposal: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
-  won: 'bg-green-500/20 text-green-400 border-green-500/30',
-  lost: 'bg-red-500/20 text-red-400 border-red-500/30',
-};
+// Helper to generate badge style from hex color
+const getStatusBadgeStyle = (hexColor: string) => ({
+  backgroundColor: `${hexColor}20`,
+  color: hexColor,
+  borderColor: `${hexColor}30`,
+});
 
 export function LeadsTableView({
   leads,
@@ -62,6 +62,7 @@ export function LeadsTableView({
   onViewDetails,
   onDelete,
 }: LeadsTableViewProps) {
+  const { data: stages = [], isLoading: stagesLoading } = usePipelineStages();
   const [sortField, setSortField] = useState<SortField>('created_at');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
@@ -119,6 +120,16 @@ export function LeadsTableView({
     window.open(`https://wa.me/${formattedPhone}?text=${message}`, '_blank');
   };
 
+  // Find stage by key for dynamic labels and colors
+  const getStageByKey = (key: string): PipelineStage | undefined => {
+    return stages.find(s => s.key === key);
+  };
+
+  const getStatusLabel = (statusKey: string): string => {
+    const stage = getStageByKey(statusKey);
+    return stage?.name || statusKey || 'Desconhecido';
+  };
+
   const SortIcon = ({ field }: { field: SortField }) => {
     if (sortField !== field) {
       return <ArrowUpDown className="ml-1 h-3 w-3 text-muted-foreground" />;
@@ -139,6 +150,17 @@ export function LeadsTableView({
       <SortIcon field={field} />
     </Button>
   );
+
+  if (stagesLoading) {
+    return (
+      <div className="rounded-lg border border-border bg-card overflow-hidden p-4">
+        <Skeleton className="h-10 w-full mb-2" />
+        <Skeleton className="h-16 w-full mb-2" />
+        <Skeleton className="h-16 w-full mb-2" />
+        <Skeleton className="h-16 w-full" />
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-lg border border-border bg-card overflow-hidden">
@@ -179,146 +201,151 @@ export function LeadsTableView({
                 </TableCell>
               </TableRow>
             ) : (
-              sortedLeads.map((lead) => (
-                <TableRow 
-                  key={lead.id} 
-                  className="cursor-pointer hover:bg-muted/50"
-                  onClick={() => onViewDetails(lead)}
-                >
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      <Avatar className="h-8 w-8">
-                        <AvatarFallback className="bg-primary/10 text-primary text-xs">
-                          {getInitials(lead.name)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span className="font-medium truncate max-w-[120px]">{lead.name}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="hidden md:table-cell">
-                    <span className="text-muted-foreground truncate max-w-[180px] block">
-                      {lead.email}
-                    </span>
-                  </TableCell>
-                  <TableCell onClick={(e) => e.stopPropagation()}>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 gap-2 text-green-500 hover:text-green-400 hover:bg-green-500/10"
-                      onClick={() => handleWhatsAppClick(lead.phone, lead.name)}
-                    >
-                      <MessageCircle className="h-4 w-4" />
-                      <span className="hidden sm:inline truncate max-w-[100px]">{lead.phone}</span>
-                    </Button>
-                  </TableCell>
-                  <TableCell onClick={(e) => e.stopPropagation()}>
-                    <Select
-                      value={lead.status || 'new'}
-                      onValueChange={(value) => onStatusChange(lead.id, value as LeadStatus)}
-                    >
-                      <SelectTrigger className="w-[130px] h-8 border-0 bg-transparent p-0">
-                        <Badge 
-                          variant="outline" 
-                          className={cn("text-xs", statusColors[lead.status as LeadStatus || 'new'])}
-                        >
-                          {STATUS_LABELS[lead.status as LeadStatus || 'new']}
-                        </Badge>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {KANBAN_COLUMNS.map((status) => (
-                          <SelectItem key={status} value={status}>
-                            <Badge 
-                              variant="outline" 
-                              className={cn("text-xs", statusColors[status])}
-                            >
-                              {STATUS_LABELS[status]}
-                            </Badge>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </TableCell>
-                  <TableCell className="hidden sm:table-cell" onClick={(e) => e.stopPropagation()}>
-                    <Select
-                      value={lead.temperature || 'warm'}
-                      onValueChange={(value) => onTemperatureChange(lead.id, value as LeadTemperature)}
-                    >
-                      <SelectTrigger className="w-[90px] h-8 border-0 bg-transparent p-0">
-                        <span className="text-lg">
-                          {TEMPERATURE_STYLES[lead.temperature as LeadTemperature || 'warm'].emoji}
-                        </span>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(['cold', 'warm', 'hot'] as LeadTemperature[]).map((temp) => (
-                          <SelectItem key={temp} value={temp}>
-                            <div className="flex items-center gap-2">
-                              <span>{TEMPERATURE_STYLES[temp].emoji}</span>
-                              <span className="capitalize">{temp}</span>
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </TableCell>
-                  <TableCell className="hidden lg:table-cell">
-                    <span className="font-medium text-primary">
-                      {lead.value ? formatCurrency(lead.value) : '-'}
-                    </span>
-                  </TableCell>
-                  <TableCell className="hidden xl:table-cell">
-                    <span className="text-muted-foreground text-sm">
-                      {lead.source || '-'}
-                    </span>
-                  </TableCell>
-                  <TableCell className="hidden lg:table-cell">
-                    <span className="text-muted-foreground text-sm">
-                      {lead.created_at 
-                        ? format(new Date(lead.created_at), 'dd MMM yyyy', { locale: pt })
-                        : '-'}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                    <div className="flex items-center justify-end gap-1">
+              sortedLeads.map((lead) => {
+                const currentStage = getStageByKey(lead.status || '');
+                return (
+                  <TableRow 
+                    key={lead.id} 
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => onViewDetails(lead)}
+                  >
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <Avatar className="h-8 w-8">
+                          <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                            {getInitials(lead.name)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="font-medium truncate max-w-[120px]">{lead.name}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="hidden md:table-cell">
+                      <span className="text-muted-foreground truncate max-w-[180px] block">
+                        {lead.email}
+                      </span>
+                    </TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
                       <Button
                         variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => onViewDetails(lead)}
+                        size="sm"
+                        className="h-8 gap-2 text-green-500 hover:text-green-400 hover:bg-green-500/10"
+                        onClick={() => handleWhatsAppClick(lead.phone, lead.name)}
                       >
-                        <Eye className="h-4 w-4" />
+                        <MessageCircle className="h-4 w-4" />
+                        <span className="hidden sm:inline truncate max-w-[100px]">{lead.phone}</span>
                       </Button>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-destructive hover:text-destructive"
+                    </TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <Select
+                        value={lead.status || ''}
+                        onValueChange={(value) => onStatusChange(lead.id, value)}
+                      >
+                        <SelectTrigger className="w-[130px] h-8 border-0 bg-transparent p-0">
+                          <Badge 
+                            variant="outline" 
+                            className="text-xs"
+                            style={currentStage ? getStatusBadgeStyle(currentStage.color) : undefined}
                           >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Eliminar Lead</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Tens a certeza que queres eliminar {lead.name}? Esta ação não pode ser revertida.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => onDelete(lead.id)}
-                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            {getStatusLabel(lead.status || '')}
+                          </Badge>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {stages.map((stage) => (
+                            <SelectItem key={stage.id} value={stage.key}>
+                              <Badge 
+                                variant="outline" 
+                                className="text-xs"
+                                style={getStatusBadgeStyle(stage.color)}
+                              >
+                                {stage.name}
+                              </Badge>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
+                    <TableCell className="hidden sm:table-cell" onClick={(e) => e.stopPropagation()}>
+                      <Select
+                        value={lead.temperature || 'warm'}
+                        onValueChange={(value) => onTemperatureChange(lead.id, value as LeadTemperature)}
+                      >
+                        <SelectTrigger className="w-[90px] h-8 border-0 bg-transparent p-0">
+                          <span className="text-lg">
+                            {TEMPERATURE_STYLES[lead.temperature as LeadTemperature || 'warm'].emoji}
+                          </span>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(['cold', 'warm', 'hot'] as LeadTemperature[]).map((temp) => (
+                            <SelectItem key={temp} value={temp}>
+                              <div className="flex items-center gap-2">
+                                <span>{TEMPERATURE_STYLES[temp].emoji}</span>
+                                <span className="capitalize">{temp}</span>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
+                    <TableCell className="hidden lg:table-cell">
+                      <span className="font-medium text-primary">
+                        {lead.value ? formatCurrency(lead.value) : '-'}
+                      </span>
+                    </TableCell>
+                    <TableCell className="hidden xl:table-cell">
+                      <span className="text-muted-foreground text-sm">
+                        {lead.source || '-'}
+                      </span>
+                    </TableCell>
+                    <TableCell className="hidden lg:table-cell">
+                      <span className="text-muted-foreground text-sm">
+                        {lead.created_at 
+                          ? format(new Date(lead.created_at), 'dd MMM yyyy', { locale: pt })
+                          : '-'}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => onViewDetails(lead)}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-destructive hover:text-destructive"
                             >
-                              Eliminar
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Eliminar Lead</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Tens a certeza que queres eliminar {lead.name}? Esta ação não pode ser revertida.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => onDelete(lead.id)}
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              >
+                                Eliminar
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
             )}
           </TableBody>
         </Table>
