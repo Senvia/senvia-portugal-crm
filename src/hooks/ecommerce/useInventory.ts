@@ -21,7 +21,7 @@ export function useInventoryMovements(options?: {
         .from('inventory_movements')
         .select(`
           *,
-          product:products(id, name),
+          product:ecommerce_products(id, name),
           variant:product_variants(id, name, sku),
           creator:profiles(full_name)
         `)
@@ -107,14 +107,14 @@ export function useCreateInventoryMovement() {
       } else if (productId) {
         // Get current product stock
         const { data: product } = await supabase
-          .from('products')
+          .from('ecommerce_products')
           .select('stock_quantity')
           .eq('id', productId)
           .single();
 
         if (product) {
           await supabase
-            .from('products')
+            .from('ecommerce_products')
             .update({ stock_quantity: (product.stock_quantity || 0) + quantity })
             .eq('id', productId);
         }
@@ -164,7 +164,7 @@ export function useAdjustStock() {
         currentQuantity = variant?.stock_quantity || 0;
       } else if (productId) {
         const { data: product } = await supabase
-          .from('products')
+          .from('ecommerce_products')
           .select('stock_quantity')
           .eq('id', productId)
           .single();
@@ -198,7 +198,7 @@ export function useAdjustStock() {
           .eq('id', variantId);
       } else if (productId) {
         await supabase
-          .from('products')
+          .from('ecommerce_products')
           .update({ stock_quantity: newQuantity })
           .eq('id', productId);
       }

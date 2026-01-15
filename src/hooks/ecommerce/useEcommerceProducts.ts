@@ -14,13 +14,12 @@ export function useEcommerceProducts() {
       if (!organizationId) return [];
 
       const { data, error } = await supabase
-        .from('products')
+        .from('ecommerce_products')
         .select(`
           *,
           category:product_categories(id, name, slug)
         `)
         .eq('organization_id', organizationId)
-        .eq('is_ecommerce', true)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -40,13 +39,12 @@ export function useActiveEcommerceProducts() {
       if (!organizationId) return [];
 
       const { data, error } = await supabase
-        .from('products')
+        .from('ecommerce_products')
         .select(`
           *,
           category:product_categories(id, name, slug)
         `)
         .eq('organization_id', organizationId)
-        .eq('is_ecommerce', true)
         .eq('is_active', true)
         .order('name', { ascending: true });
 
@@ -67,7 +65,7 @@ export function useEcommerceProduct(productId: string | undefined) {
       if (!organizationId || !productId) return null;
 
       const { data, error } = await supabase
-        .from('products')
+        .from('ecommerce_products')
         .select(`
           *,
           category:product_categories(id, name, slug)
@@ -94,12 +92,10 @@ export function useLowStockProducts() {
 
       // Get products where stock_quantity <= low_stock_threshold
       const { data, error } = await supabase
-        .from('products')
+        .from('ecommerce_products')
         .select('*')
         .eq('organization_id', organizationId)
-        .eq('is_ecommerce', true)
         .eq('track_inventory', true)
-        .filter('stock_quantity', 'lte', supabase.rpc as any) // Workaround for column comparison
         .order('stock_quantity', { ascending: true });
 
       if (error) throw error;
@@ -121,13 +117,15 @@ export function useCreateEcommerceProduct() {
     mutationFn: async (input: CreateProductInput) => {
       if (!organization?.id) throw new Error('No organization');
 
+      // Remove is_ecommerce from input since it's no longer needed
+      const { is_ecommerce, ...productData } = input as CreateProductInput & { is_ecommerce?: boolean };
+
       const { data, error } = await supabase
-        .from('products')
+        .from('ecommerce_products')
         .insert({
-          ...input,
+          ...productData,
           organization_id: organization.id,
-          is_ecommerce: true,
-          tags: input.tags || [],
+          tags: productData.tags || [],
         })
         .select()
         .single();
@@ -152,7 +150,7 @@ export function useUpdateEcommerceProduct() {
   return useMutation({
     mutationFn: async ({ id, ...input }: UpdateProductInput) => {
       const { data, error } = await supabase
-        .from('products')
+        .from('ecommerce_products')
         .update(input)
         .eq('id', id)
         .select()
@@ -178,7 +176,7 @@ export function useDeleteEcommerceProduct() {
   return useMutation({
     mutationFn: async (productId: string) => {
       const { error } = await supabase
-        .from('products')
+        .from('ecommerce_products')
         .delete()
         .eq('id', productId);
 

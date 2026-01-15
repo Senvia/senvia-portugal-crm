@@ -50,7 +50,7 @@ async function handleGetProducts(supabase: any, orgId: string, params: URLSearch
   const search = params.get('search');
 
   let query = supabase
-    .from('products')
+    .from('ecommerce_products')
     .select(`
       id, name, slug, short_description, description, price, compare_at_price,
       sku, tags, is_digital, requires_shipping,
@@ -61,7 +61,6 @@ async function handleGetProducts(supabase: any, orgId: string, params: URLSearch
     `)
     .eq('organization_id', orgId)
     .eq('is_active', true)
-    .eq('is_ecommerce', true)
     .order('name')
     .range(offset, offset + limit - 1);
 
@@ -123,7 +122,7 @@ async function handleGetProduct(supabase: any, orgId: string, params: URLSearchP
   }
 
   let query = supabase
-    .from('products')
+    .from('ecommerce_products')
     .select(`
       id, name, slug, short_description, description, price, compare_at_price,
       sku, tags, is_digital, requires_shipping, weight_grams,
@@ -133,8 +132,7 @@ async function handleGetProduct(supabase: any, orgId: string, params: URLSearchP
       product_images(id, url, alt_text, position, is_primary)
     `)
     .eq('organization_id', orgId)
-    .eq('is_active', true)
-    .eq('is_ecommerce', true);
+    .eq('is_active', true);
 
   if (slug) {
     query = query.eq('slug', slug);
@@ -240,13 +238,13 @@ async function handleValidateCart(supabase: any, orgId: string, body: any) {
 
     // Get product
     const { data: product, error: prodError } = await supabase
-      .from('products')
-      .select('id, name, slug, price, is_active, is_ecommerce, track_inventory, stock_quantity')
+      .from('ecommerce_products')
+      .select('id, name, slug, price, is_active, track_inventory, stock_quantity')
       .eq('id', product_id)
       .eq('organization_id', orgId)
       .single();
 
-    if (prodError || !product || !product.is_active || !product.is_ecommerce) {
+    if (prodError || !product || !product.is_active) {
       throw new Error(`Product ${product_id} not available`);
     }
 
@@ -449,7 +447,7 @@ async function handleCheckout(supabase: any, orgId: string, body: any) {
         .eq('id', item.variant_id);
     } else {
       await supabase
-        .from('products')
+        .from('ecommerce_products')
         .update({ stock_quantity: supabase.raw(`stock_quantity - ${item.quantity}`) })
         .eq('id', item.product_id);
     }
