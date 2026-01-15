@@ -18,10 +18,8 @@ export function useLeadEvents() {
     queryFn: async () => {
       if (!organization?.id) return {};
 
-      // Include events from the start of today (even if time has passed)
-      const startOfToday = new Date();
-      startOfToday.setHours(0, 0, 0, 0);
-
+      // Get all non-cancelled/completed events for leads (past and future)
+      // We'll pick the most relevant one per lead
       const { data, error } = await supabase
         .from('calendar_events')
         .select('id, title, start_time, event_type, lead_id')
@@ -29,7 +27,6 @@ export function useLeadEvents() {
         .not('lead_id', 'is', null)
         .neq('status', 'cancelled')
         .neq('status', 'completed')
-        .gte('start_time', startOfToday.toISOString())
         .order('start_time', { ascending: true });
 
       if (error) {
@@ -37,12 +34,34 @@ export function useLeadEvents() {
         throw error;
       }
 
-      // Group events by lead_id, keeping only the first (earliest) event per lead
+      const now = new Date();
       const eventsByLead: Record<string, LeadEvent> = {};
+      const pastEventsByLead: Record<string, LeadEvent> = {};
       
+      // First pass: separate future and past events
       for (const event of data || []) {
-        if (event.lead_id && !eventsByLead[event.lead_id]) {
-          eventsByLead[event.lead_id] = event as LeadEvent;
+        if (!event.lead_id) continue;
+        
+        const eventDate = new Date(event.start_time);
+        
+        if (eventDate >= now) {
+          // Future event - keep the earliest one
+          if (!eventsByLead[event.lead_id]) {
+            eventsByLead[event.lead_id] = event as LeadEvent;
+          }
+        } else {
+          // Past event - keep the most recent one
+          if (!pastEventsByLead[event.lead_id] || 
+              new Date(pastEventsByLead[event.lead_id].start_time) < eventDate) {
+            pastEventsByLead[event.lead_id] = event as LeadEvent;
+          }
+        }
+      }
+
+      // Second pass: for leads without future events, use their most recent past event
+      for (const [leadId, event] of Object.entries(pastEventsByLead)) {
+        if (!eventsByLead[leadId]) {
+          eventsByLead[leadId] = event;
         }
       }
 

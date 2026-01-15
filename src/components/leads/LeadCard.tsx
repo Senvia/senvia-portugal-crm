@@ -56,15 +56,19 @@ export function LeadCard({
   const formatEventTime = (dateStr: string) => {
     const date = new Date(dateStr);
     const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
     const isToday = date.toDateString() === today.toDateString();
+    const isYesterday = date.toDateString() === yesterday.toDateString();
     const isTomorrow = date.toDateString() === tomorrow.toDateString();
 
     const time = date.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
     
     if (isToday) return `Hoje às ${time}`;
+    if (isYesterday) return `Ontem às ${time}`;
     if (isTomorrow) return `Amanhã às ${time}`;
     return date.toLocaleDateString('pt-PT', { day: '2-digit', month: 'short' }) + ` às ${time}`;
   };
