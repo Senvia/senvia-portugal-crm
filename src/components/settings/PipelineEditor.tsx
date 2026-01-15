@@ -1,4 +1,20 @@
 import { useState } from "react";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import { 
   usePipelineStages, 
   useCreatePipelineStage, 
@@ -18,13 +34,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { SortableStageItem } from "./SortableStageItem";
+import { SortablePreviewStageItem, type PreviewStage } from "./SortablePreviewStageItem";
 import { 
-  GripVertical, 
   Plus, 
-  Trash2, 
-  Edit2, 
-  Check, 
-  X, 
   Building2, 
   Heart, 
   Hammer, 
@@ -33,8 +46,6 @@ import {
   Home,
   AlertTriangle,
   Eye,
-  ArrowUp,
-  ArrowDown
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -56,9 +67,6 @@ interface EditingStage {
   is_final_negative: boolean;
 }
 
-interface PreviewStage extends PipelineStageTemplate {
-  tempId: string;
-}
 
 const DEFAULT_NEW_STAGE: EditingStage = {
   name: "",
@@ -77,6 +85,16 @@ export function PipelineEditor() {
   const reorderStages = useReorderPipelineStages();
   const applyTemplate = useApplyNicheTemplate();
 
+  // DnD sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 8 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
   // Current stages editing
   const [editingStage, setEditingStage] = useState<EditingStage | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -89,6 +107,38 @@ export function PipelineEditor() {
   const [showApplyConfirm, setShowApplyConfirm] = useState(false);
 
   const generateTempId = () => Math.random().toString(36).substring(2, 9);
+
+  // Handle drag end for current stages
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id || !stages) return;
+
+    const oldIndex = stages.findIndex(s => s.id === active.id);
+    const newIndex = stages.findIndex(s => s.id === over.id);
+
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const newOrder = arrayMove(stages, oldIndex, newIndex);
+    const updates = newOrder.map((stage, index) => ({
+      id: stage.id,
+      position: index + 1,
+    }));
+
+    await reorderStages.mutateAsync(updates);
+  };
+
+  // Handle drag end for preview stages
+  const handlePreviewDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id || !previewStages) return;
+
+    const oldIndex = previewStages.findIndex(s => s.tempId === active.id);
+    const newIndex = previewStages.findIndex(s => s.tempId === over.id);
+
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    setPreviewStages(arrayMove(previewStages, oldIndex, newIndex));
+  };
 
   // Handle selecting a template - shows preview instead of applying immediately
   const handleSelectTemplate = (niche: NicheType) => {
@@ -345,100 +395,31 @@ export function PipelineEditor() {
             </Button>
           </CardHeader>
           <CardContent className="space-y-2">
-            {previewStages.map((stage, index) => (
-              <div
-                key={stage.tempId}
-                className={cn(
-                  "flex items-center gap-3 p-3 rounded-lg border bg-card transition-colors",
-                  editingPreviewIndex === index ? "ring-2 ring-primary" : "hover:bg-accent/50"
-                )}
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handlePreviewDragEnd}
+              modifiers={[restrictToVerticalAxis]}
+            >
+              <SortableContext
+                items={previewStages.map(s => s.tempId)}
+                strategy={verticalListSortingStrategy}
               >
-                {/* Reorder buttons */}
-                <div className="flex flex-col gap-1">
-                  <button
-                    onClick={() => handleMovePreviewStage(index, 'up')}
-                    disabled={index === 0}
-                    className="p-0.5 hover:bg-muted rounded disabled:opacity-30"
-                  >
-                    <ArrowUp className="h-3 w-3" />
-                  </button>
-                  <button
-                    onClick={() => handleMovePreviewStage(index, 'down')}
-                    disabled={index === previewStages.length - 1}
-                    className="p-0.5 hover:bg-muted rounded disabled:opacity-30"
-                  >
-                    <ArrowDown className="h-3 w-3" />
-                  </button>
-                </div>
-
-                {/* Color picker */}
-                <input
-                  type="color"
-                  value={stage.color}
-                  onChange={(e) => handleEditPreviewStage(index, 'color', e.target.value)}
-                  className="w-6 h-6 rounded border cursor-pointer flex-shrink-0"
-                />
-
-                {/* Name - editable inline */}
-                {editingPreviewIndex === index ? (
-                  <Input
-                    value={stage.name}
-                    onChange={(e) => handleEditPreviewStage(index, 'name', e.target.value)}
-                    onBlur={() => setEditingPreviewIndex(null)}
-                    onKeyDown={(e) => e.key === 'Enter' && setEditingPreviewIndex(null)}
-                    autoFocus
-                    className="flex-1 h-8"
+                {previewStages.map((stage, index) => (
+                  <SortablePreviewStageItem
+                    key={stage.tempId}
+                    stage={stage}
+                    index={index}
+                    isEditing={editingPreviewIndex === index}
+                    totalStages={previewStages.length}
+                    onEdit={() => setEditingPreviewIndex(index)}
+                    onStopEditing={() => setEditingPreviewIndex(null)}
+                    onFieldChange={(field, value) => handleEditPreviewStage(index, field, value)}
+                    onRemove={() => handleRemovePreviewStage(index)}
                   />
-                ) : (
-                  <div 
-                    className="flex-1 min-w-0 cursor-pointer"
-                    onClick={() => setEditingPreviewIndex(index)}
-                  >
-                    <p className="font-medium text-sm truncate">{stage.name}</p>
-                    <p className="text-xs text-muted-foreground">key: {stage.key}</p>
-                  </div>
-                )}
-
-                {/* Status badges */}
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => handleEditPreviewStage(index, 'is_final_positive', !stage.is_final_positive)}
-                    className={cn(
-                      "text-xs flex items-center gap-1 px-2 py-1 rounded-full border transition-colors",
-                      stage.is_final_positive 
-                        ? "bg-success/20 text-success border-success/30" 
-                        : "text-muted-foreground border-transparent hover:bg-muted"
-                    )}
-                  >
-                    <Check className="h-3 w-3" />
-                    <span className="hidden sm:inline">Ganho</span>
-                  </button>
-                  <button
-                    onClick={() => handleEditPreviewStage(index, 'is_final_negative', !stage.is_final_negative)}
-                    className={cn(
-                      "text-xs flex items-center gap-1 px-2 py-1 rounded-full border transition-colors",
-                      stage.is_final_negative 
-                        ? "bg-muted text-muted-foreground border-muted-foreground/30" 
-                        : "text-muted-foreground border-transparent hover:bg-muted"
-                    )}
-                  >
-                    <X className="h-3 w-3" />
-                    <span className="hidden sm:inline">Perdido</span>
-                  </button>
-                </div>
-
-                {/* Delete button */}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-destructive hover:text-destructive flex-shrink-0"
-                  onClick={() => handleRemovePreviewStage(index)}
-                  disabled={previewStages.length <= 1}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            ))}
+                ))}
+              </SortableContext>
+            </DndContext>
 
             {/* Warning message */}
             <div className="flex items-start gap-2 p-3 rounded-lg bg-warning/10 border border-warning/30 mt-4">
@@ -480,71 +461,26 @@ export function PipelineEditor() {
             </Button>
           </CardHeader>
           <CardContent className="space-y-2">
-            {stages?.map((stage, index) => (
-              <div
-                key={stage.id}
-                className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+              modifiers={[restrictToVerticalAxis]}
+            >
+              <SortableContext
+                items={stages?.map(s => s.id) || []}
+                strategy={verticalListSortingStrategy}
               >
-                <div className="flex flex-col gap-1">
-                  <button
-                    onClick={() => handleMoveStage(stage.id, 'up')}
-                    disabled={index === 0}
-                    className="p-0.5 hover:bg-muted rounded disabled:opacity-30"
-                  >
-                    <ArrowUp className="h-3 w-3" />
-                  </button>
-                  <button
-                    onClick={() => handleMoveStage(stage.id, 'down')}
-                    disabled={index === stages.length - 1}
-                    className="p-0.5 hover:bg-muted rounded disabled:opacity-30"
-                  >
-                    <ArrowDown className="h-3 w-3" />
-                  </button>
-                </div>
-
-                <div
-                  className="w-4 h-4 rounded-full flex-shrink-0"
-                  style={{ backgroundColor: stage.color }}
-                />
-
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm truncate">{stage.name}</p>
-                  <p className="text-xs text-muted-foreground">key: {stage.key}</p>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  {stage.is_final_positive && (
-                    <span className="text-success text-xs flex items-center gap-1">
-                      <Check className="h-3 w-3" /> Ganho
-                    </span>
-                  )}
-                  {stage.is_final_negative && (
-                    <span className="text-muted-foreground text-xs flex items-center gap-1">
-                      <X className="h-3 w-3" /> Perdido
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-1">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => handleEditStage(stage)}
-                  >
-                    <Edit2 className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-destructive hover:text-destructive"
-                    onClick={() => setStageToDelete(stage)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            ))}
+                {stages?.map((stage) => (
+                  <SortableStageItem
+                    key={stage.id}
+                    stage={stage}
+                    onEdit={() => handleEditStage(stage)}
+                    onDelete={() => setStageToDelete(stage)}
+                  />
+                ))}
+              </SortableContext>
+            </DndContext>
 
             {(!stages || stages.length === 0) && (
               <div className="text-center py-8 text-muted-foreground">
