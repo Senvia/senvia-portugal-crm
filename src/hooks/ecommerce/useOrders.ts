@@ -2,7 +2,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
-import type { Order, OrderItem, CreateOrderInput, UpdateOrderInput, OrderStatus, PaymentStatus, FulfillmentStatus, AddressData } from '@/types/ecommerce';
+import type { Order, CreateOrderInput, UpdateOrderInput, OrderStatus, PaymentStatus, FulfillmentStatus, AddressData } from '@/types/ecommerce';
+import type { Json } from '@/integrations/supabase/types';
 
 export function useOrders(options?: {
   status?: OrderStatus;
@@ -129,8 +130,8 @@ export function useCreateOrder() {
           subtotal,
           shipping_total: shippingTotal,
           total,
-          shipping_address: input.shipping_address as unknown as Record<string, unknown>,
-          billing_address: input.billing_address as unknown as Record<string, unknown>,
+          shipping_address: input.shipping_address ? (input.shipping_address as unknown as Json) : null,
+          billing_address: input.billing_address ? (input.billing_address as unknown as Json) : null,
           discount_code: input.discount_code,
           notes: input.notes,
         }])
