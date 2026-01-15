@@ -31,6 +31,7 @@ export default function Proposals() {
 
   const filteredProposals = proposals.filter((proposal) => {
     const matchesSearch = !search || 
+      proposal.client?.name?.toLowerCase().includes(search.toLowerCase()) ||
       proposal.lead?.name?.toLowerCase().includes(search.toLowerCase()) ||
       proposal.notes?.toLowerCase().includes(search.toLowerCase());
     const matchesStatus = statusFilter === 'all' || proposal.status === statusFilter;
@@ -103,7 +104,7 @@ export default function Proposals() {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Pesquisar por lead..."
+              placeholder="Pesquisar por cliente ou lead..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9"
@@ -159,7 +160,7 @@ export default function Proposals() {
                         {format(new Date(proposal.proposal_date), "d MMM yyyy", { locale: pt })}
                       </span>
                     </div>
-                    <p className="font-medium truncate">{proposal.lead?.name || 'Proposta Avulsa'}</p>
+                    <p className="font-medium truncate">{proposal.client?.name || proposal.lead?.name || 'Proposta Avulsa'}</p>
                     {proposal.notes && (
                       <p className="text-sm text-muted-foreground truncate">{proposal.notes}</p>
                     )}
