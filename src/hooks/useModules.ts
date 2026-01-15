@@ -7,11 +7,13 @@ import type { Json } from '@/integrations/supabase/types';
 export interface EnabledModules {
   proposals: boolean;
   calendar: boolean;
+  sales: boolean;
 }
 
 export const DEFAULT_MODULES: EnabledModules = {
   proposals: true,
   calendar: true,
+  sales: true,
 };
 
 export function useModules() {

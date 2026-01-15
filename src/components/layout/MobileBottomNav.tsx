@@ -1,20 +1,21 @@
 import { NavLink, useLocation } from "react-router-dom";
-import { LayoutDashboard, Users, Settings, Shield, Calendar, FileText } from "lucide-react";
+import { LayoutDashboard, Users, Settings, Shield, Calendar, FileText, ShoppingBag } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
-import { useModules } from "@/hooks/useModules";
+import { useModules, EnabledModules } from "@/hooks/useModules";
 
 interface NavItem {
   to: string;
   icon: React.ElementType;
   label: string;
-  moduleKey?: 'proposals' | 'calendar';
+  moduleKey?: keyof EnabledModules;
 }
 
 const allNavItems: NavItem[] = [
   { to: "/dashboard", icon: LayoutDashboard, label: "Painel" },
   { to: "/leads", icon: Users, label: "Leads" },
   { to: "/proposals", icon: FileText, label: "Propostas", moduleKey: 'proposals' },
+  { to: "/sales", icon: ShoppingBag, label: "Vendas", moduleKey: 'sales' },
   { to: "/settings", icon: Settings, label: "Config" },
 ];
 
