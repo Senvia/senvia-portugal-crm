@@ -31,10 +31,23 @@ export function CreateProposalModal({ lead, open, onOpenChange, onSuccess }: Cre
   const [selectedProducts, setSelectedProducts] = useState<SelectedProduct[]>([]);
   const [notes, setNotes] = useState('');
   const [proposalDate, setProposalDate] = useState(new Date().toISOString().split('T')[0]);
+  const [manualValue, setManualValue] = useState<string>('');
+  const [additionalValue, setAdditionalValue] = useState<string>('');
+  const [discount, setDiscount] = useState<string>('');
 
-  const totalValue = useMemo(() => {
+  const productsSubtotal = useMemo(() => {
     return selectedProducts.reduce((sum, p) => sum + (p.quantity * p.unit_price), 0);
   }, [selectedProducts]);
+
+  const totalValue = useMemo(() => {
+    const manual = parseFloat(manualValue) || 0;
+    const additional = parseFloat(additionalValue) || 0;
+    const disc = parseFloat(discount) || 0;
+    
+    // Se tem valor manual, usa ele; senão, calcula pelos produtos
+    const baseValue = manual > 0 ? manual : productsSubtotal;
+    return Math.max(0, baseValue + additional - disc);
+  }, [productsSubtotal, manualValue, additionalValue, discount]);
 
   const handleAddProduct = (productId: string) => {
     const product = products.find(p => p.id === productId);
@@ -106,6 +119,9 @@ export function CreateProposalModal({ lead, open, onOpenChange, onSuccess }: Cre
         setSelectedProducts([]);
         setNotes('');
         setProposalDate(new Date().toISOString().split('T')[0]);
+        setManualValue('');
+        setAdditionalValue('');
+        setDiscount('');
         onOpenChange(false);
         onSuccess?.();
       },
@@ -119,6 +135,11 @@ export function CreateProposalModal({ lead, open, onOpenChange, onSuccess }: Cre
   const availableProducts = products.filter(
     p => !selectedProducts.find(sp => sp.product_id === p.id)
   );
+
+  const hasManualValue = parseFloat(manualValue) > 0;
+  const hasAdditional = parseFloat(additionalValue) > 0;
+  const hasDiscount = parseFloat(discount) > 0;
+  const showBreakdown = hasManualValue || selectedProducts.length > 0 || hasAdditional || hasDiscount;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -139,6 +160,23 @@ export function CreateProposalModal({ lead, open, onOpenChange, onSuccess }: Cre
               value={proposalDate}
               onChange={(e) => setProposalDate(e.target.value)}
             />
+          </div>
+
+          {/* Valor Manual */}
+          <div className="space-y-2">
+            <Label htmlFor="manual-value">Valor Manual (opcional)</Label>
+            <Input
+              id="manual-value"
+              type="number"
+              step="0.01"
+              min="0"
+              value={manualValue}
+              onChange={(e) => setManualValue(e.target.value)}
+              placeholder="Definir valor diretamente..."
+            />
+            <p className="text-xs text-muted-foreground">
+              Se preenchido, substitui o total calculado pelos produtos.
+            </p>
           </div>
 
           <div className="space-y-2">
@@ -225,9 +263,67 @@ export function CreateProposalModal({ lead, open, onOpenChange, onSuccess }: Cre
             )}
           </div>
 
-          <div className="flex items-center justify-between p-3 rounded-lg bg-primary/10 border border-primary/20">
-            <span className="font-medium">Total da Proposta</span>
-            <span className="text-xl font-bold text-primary">{formatCurrency(totalValue)}</span>
+          {/* Valor Adicional e Desconto */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="additional-value">Valor Adicional</Label>
+              <Input
+                id="additional-value"
+                type="number"
+                step="0.01"
+                min="0"
+                value={additionalValue}
+                onChange={(e) => setAdditionalValue(e.target.value)}
+                placeholder="0.00"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="discount">Desconto</Label>
+              <Input
+                id="discount"
+                type="number"
+                step="0.01"
+                min="0"
+                value={discount}
+                onChange={(e) => setDiscount(e.target.value)}
+                placeholder="0.00"
+              />
+            </div>
+          </div>
+
+          {/* Total com breakdown */}
+          <div className="p-4 rounded-lg bg-primary/10 border border-primary/20 space-y-2">
+            {showBreakdown && (
+              <div className="text-sm text-muted-foreground space-y-1">
+                {hasManualValue ? (
+                  <div className="flex justify-between">
+                    <span>Valor Manual</span>
+                    <span>{formatCurrency(parseFloat(manualValue))}</span>
+                  </div>
+                ) : selectedProducts.length > 0 && (
+                  <div className="flex justify-between">
+                    <span>Subtotal Produtos</span>
+                    <span>{formatCurrency(productsSubtotal)}</span>
+                  </div>
+                )}
+                {hasAdditional && (
+                  <div className="flex justify-between text-green-600">
+                    <span>+ Valor Adicional</span>
+                    <span>{formatCurrency(parseFloat(additionalValue))}</span>
+                  </div>
+                )}
+                {hasDiscount && (
+                  <div className="flex justify-between text-red-500">
+                    <span>- Desconto</span>
+                    <span>-{formatCurrency(parseFloat(discount))}</span>
+                  </div>
+                )}
+              </div>
+            )}
+            <div className={`flex items-center justify-between ${showBreakdown ? 'pt-2 border-t border-primary/20' : ''}`}>
+              <span className="font-medium">Total da Proposta</span>
+              <span className="text-xl font-bold text-primary">{formatCurrency(totalValue)}</span>
+            </div>
           </div>
 
           <div className="space-y-2">
