@@ -25,27 +25,34 @@ import {
 } from "@/components/ui/alert-dialog";
 
 interface ProposalDetailsModalProps {
-  proposal: Proposal;
+  proposal: Proposal | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
 export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalDetailsModalProps) {
-  const { data: proposalProducts = [] } = useProposalProducts(proposal.id);
+  const { data: proposalProducts = [] } = useProposalProducts(proposal?.id);
   const updateProposal = useUpdateProposal();
   const deleteProposal = useDeleteProposal();
   
-  const [status, setStatus] = useState<ProposalStatus>(proposal.status);
-  const [notes, setNotes] = useState(proposal.notes || '');
+  const [status, setStatus] = useState<ProposalStatus>('draft');
+  const [notes, setNotes] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [editValue, setEditValue] = useState<string>(proposal.total_value.toString());
+  const [editValue, setEditValue] = useState<string>('0');
 
   // Sincronizar estado quando proposal muda
   useEffect(() => {
-    setEditValue(proposal.total_value.toString());
-    setStatus(proposal.status);
-    setNotes(proposal.notes || '');
+    if (proposal) {
+      setEditValue(proposal.total_value.toString());
+      setStatus(proposal.status);
+      setNotes(proposal.notes || '');
+    }
   }, [proposal]);
+
+  // Early return if no proposal
+  if (!proposal) {
+    return null;
+  }
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(value);
