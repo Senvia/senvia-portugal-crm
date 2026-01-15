@@ -6,6 +6,7 @@ export type ClientSource = 'lead' | 'referral' | 'direct' | 'website' | 'other';
 export interface CrmClient {
   id: string;
   organization_id: string;
+  code?: string | null;
   lead_id?: string | null;
   
   // Basic info

@@ -16,6 +16,7 @@ export interface Product {
 export interface Proposal {
   id: string;
   organization_id: string;
+  code?: string | null;
   lead_id: string;
   total_value: number;
   status: ProposalStatus;

@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
-import type { SaleStatus, SaleWithDetails } from "@/types/sales";
+import type { SaleStatus, SaleWithDetails, PaymentMethod, PaymentStatus } from "@/types/sales";
 
 export function useSales() {
   const { organization } = useAuth();
@@ -17,7 +17,8 @@ export function useSales() {
         .select(`
           *,
           lead:leads(name, email, phone),
-          proposal:proposals(id, proposal_date)
+          proposal:proposals(id, code, proposal_date),
+          client:crm_clients(id, name, code)
         `)
         .eq("organization_id", organization.id)
         .order("created_at", { ascending: false });
@@ -37,7 +38,15 @@ export function useCreateSale() {
     mutationFn: async (data: {
       proposal_id?: string;
       lead_id?: string;
+      client_id?: string;
       total_value: number;
+      subtotal?: number;
+      discount?: number;
+      payment_method?: PaymentMethod;
+      payment_status?: PaymentStatus;
+      due_date?: string;
+      invoice_reference?: string;
+      sale_date?: string;
       notes?: string;
     }) => {
       if (!organization?.id) throw new Error("No organization");
@@ -48,7 +57,15 @@ export function useCreateSale() {
           organization_id: organization.id,
           proposal_id: data.proposal_id || null,
           lead_id: data.lead_id || null,
+          client_id: data.client_id || null,
           total_value: data.total_value,
+          subtotal: data.subtotal || data.total_value,
+          discount: data.discount || 0,
+          payment_method: data.payment_method || null,
+          payment_status: data.payment_status || "pending",
+          due_date: data.due_date || null,
+          invoice_reference: data.invoice_reference || null,
+          sale_date: data.sale_date || new Date().toISOString().split('T')[0],
           notes: data.notes || null,
           created_by: user?.id || null,
           status: "pending",
@@ -61,6 +78,7 @@ export function useCreateSale() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sales"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
       toast.success("Venda criada com sucesso!");
     },
     onError: () => {
@@ -79,6 +97,7 @@ export function useCreateSaleFromProposal() {
       organization_id: string;
       lead_id: string;
       total_value: number;
+      client_id?: string;
     }) => {
       // Check if sale already exists for this proposal
       const { data: existingSale } = await supabase
@@ -97,7 +116,9 @@ export function useCreateSaleFromProposal() {
           organization_id: proposal.organization_id,
           proposal_id: proposal.id,
           lead_id: proposal.lead_id,
+          client_id: proposal.client_id || null,
           total_value: proposal.total_value,
+          subtotal: proposal.total_value,
           created_by: user?.id || null,
           status: "pending",
         })
@@ -109,6 +130,7 @@ export function useCreateSaleFromProposal() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sales"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
       toast.success("Venda criada automaticamente!");
     },
     onError: () => {
@@ -131,6 +153,7 @@ export function useUpdateSaleStatus() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sales"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
       toast.success("Estado atualizado!");
     },
     onError: () => {
@@ -148,7 +171,18 @@ export function useUpdateSale() {
       updates 
     }: { 
       saleId: string; 
-      updates: { status?: SaleStatus; notes?: string; total_value?: number } 
+      updates: { 
+        status?: SaleStatus; 
+        notes?: string; 
+        total_value?: number;
+        payment_method?: PaymentMethod | null;
+        payment_status?: PaymentStatus;
+        due_date?: string | null;
+        paid_date?: string | null;
+        invoice_reference?: string | null;
+        discount?: number;
+        subtotal?: number;
+      } 
     }) => {
       const { error } = await supabase
         .from("sales")
@@ -159,6 +193,7 @@ export function useUpdateSale() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sales"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
     },
     onError: () => {
       toast.error("Erro ao atualizar venda");
@@ -176,6 +211,7 @@ export function useDeleteSale() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sales"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
       toast.success("Venda eliminada!");
     },
     onError: () => {
