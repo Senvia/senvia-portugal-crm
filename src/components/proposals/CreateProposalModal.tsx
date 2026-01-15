@@ -18,6 +18,7 @@ interface CreateProposalModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
+  preselectedClientId?: string | null;
 }
 
 interface SelectedProduct {
@@ -27,7 +28,7 @@ interface SelectedProduct {
   unit_price: number;
 }
 
-export function CreateProposalModal({ client, open, onOpenChange, onSuccess }: CreateProposalModalProps) {
+export function CreateProposalModal({ client, open, onOpenChange, onSuccess, preselectedClientId }: CreateProposalModalProps) {
   const { data: products = [] } = useActiveProducts();
   const { data: clients = [] } = useClients();
   const createProposal = useCreateProposal();
@@ -43,12 +44,16 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess }: C
   // Modal para criar novo cliente
   const [isCreateClientOpen, setIsCreateClientOpen] = useState(false);
 
-  // Update selectedClientId when client prop changes
+  // Update selectedClientId when client prop or preselectedClientId changes
   useEffect(() => {
-    if (client?.id) {
-      setSelectedClientId(client.id);
+    if (open) {
+      if (preselectedClientId) {
+        setSelectedClientId(preselectedClientId);
+      } else if (client?.id) {
+        setSelectedClientId(client.id);
+      }
     }
-  }, [client?.id]);
+  }, [open, client?.id, preselectedClientId]);
 
   const productsSubtotal = useMemo(() => {
     return selectedProducts.reduce((sum, p) => sum + (p.quantity * p.unit_price), 0);
