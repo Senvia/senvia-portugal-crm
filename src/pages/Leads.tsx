@@ -48,7 +48,15 @@ export default function Leads() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<LeadStatus[]>([]);
   const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({ from: undefined, to: undefined });
-  const [viewMode, setViewMode] = useState<'kanban' | 'table'>('kanban');
+  const [viewMode, setViewMode] = useState<'kanban' | 'table'>(() => {
+    const saved = localStorage.getItem('leads-view-mode');
+    return (saved === 'table' || saved === 'kanban') ? saved : 'kanban';
+  });
+
+  // Persist view mode preference
+  useEffect(() => {
+    localStorage.setItem('leads-view-mode', viewMode);
+  }, [viewMode]);
 
   // Keep selectedLead synchronized with updated data from query
   useEffect(() => {
