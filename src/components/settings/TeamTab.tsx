@@ -590,7 +590,7 @@ export function TeamTab() {
                 {selectedMember ? ROLE_LABELS[selectedMember.role] : ''}
               </Badge>
             </div>
-            <RadioGroup value={newRole} onValueChange={(v) => setNewRole(v as 'admin' | 'viewer')}>
+            <RadioGroup value={newRole} onValueChange={(v) => setNewRole(v as 'admin' | 'viewer' | 'salesperson')}>
               <div className="flex items-start space-x-3 rounded-lg border p-3">
                 <RadioGroupItem value="admin" id="new-role-admin" className="mt-1" />
                 <div className="flex-1">
@@ -599,6 +599,17 @@ export function TeamTab() {
                   </Label>
                   <p className="text-sm text-muted-foreground">
                     Pode editar tudo: leads, definições e equipa.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start space-x-3 rounded-lg border p-3">
+                <RadioGroupItem value="salesperson" id="new-role-salesperson" className="mt-1" />
+                <div className="flex-1">
+                  <Label htmlFor="new-role-salesperson" className="font-medium cursor-pointer">
+                    Vendedor
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    Vê apenas os leads atribuídos a si. Ideal para comerciais.
                   </p>
                 </div>
               </div>
