@@ -202,7 +202,7 @@ export function TeamTab() {
     manageTeamMember.mutate({ action: 'toggle_status', user_id: member.user_id });
   };
 
-  const loginUrl = `${getBaseUrl()}/login`;
+  const loginUrl = `${getBaseUrl()}/`;
 
   // Check if member is current user
   const isCurrentUser = (member: TeamMember) => member.user_id === user?.id;

@@ -18,7 +18,7 @@ export function SuperAdminRoute({ children }: SuperAdminRouteProps) {
   }
 
   if (!user) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/" replace />;
   }
 
   if (!isSuperAdmin) {

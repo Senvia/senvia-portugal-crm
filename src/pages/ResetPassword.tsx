@@ -101,7 +101,7 @@ export default function ResetPassword() {
 
       // Redirect to login after success
       setTimeout(() => {
-        navigate('/login');
+        navigate('/');
       }, 2000);
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : 'Ocorreu um erro ao alterar a password.';
@@ -137,7 +137,7 @@ export default function ResetPassword() {
             <CardDescription>{error}</CardDescription>
           </CardHeader>
           <CardContent className="text-center">
-            <Button onClick={() => navigate('/login')}>
+            <Button onClick={() => navigate('/')}>
               Voltar ao Login
             </Button>
           </CardContent>

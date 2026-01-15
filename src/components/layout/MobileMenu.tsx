@@ -39,7 +39,7 @@ export function MobileMenu({ isOpen, onClose, userName = "Utilizador", organizat
 
   const handleLogout = async () => {
     await signOut();
-    navigate('/login');
+    navigate('/');
     onClose();
   };
 
