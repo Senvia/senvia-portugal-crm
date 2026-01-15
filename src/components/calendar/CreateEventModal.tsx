@@ -43,8 +43,29 @@ export function CreateEventModal({ open, onOpenChange, selectedDate, event, pres
   const [allDay, setAllDay] = useState(false);
   const [leadId, setLeadId] = useState<string>('');
   const [reminderMinutes, setReminderMinutes] = useState<string>('');
+  const [endTimeManuallySet, setEndTimeManuallySet] = useState(false);
 
   const isEditing = !!event;
+
+  // Calculate end time +1 hour from start time
+  const calculateAutoEndTime = (time: string): string => {
+    const [hours, minutes] = time.split(':').map(Number);
+    const endHour = (hours + 1) % 24;
+    return `${endHour.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+  };
+
+  const handleStartTimeChange = (newStartTime: string) => {
+    setStartTime(newStartTime);
+    // Auto-calculate end time if not manually set
+    if (!endTimeManuallySet) {
+      setEndTime(calculateAutoEndTime(newStartTime));
+    }
+  };
+
+  const handleEndTimeChange = (newEndTime: string) => {
+    setEndTimeManuallySet(true);
+    setEndTime(newEndTime);
+  };
 
   useEffect(() => {
     if (event) {
@@ -60,9 +81,11 @@ export function CreateEventModal({ open, onOpenChange, selectedDate, event, pres
       setAllDay(event.all_day);
       setLeadId(event.lead_id || '');
       setReminderMinutes(event.reminder_minutes?.toString() || '');
+      setEndTimeManuallySet(true); // Preserve existing end time when editing
     } else if (selectedDate) {
       setStartDate(format(selectedDate, 'yyyy-MM-dd'));
       setEndDate(format(selectedDate, 'yyyy-MM-dd'));
+      setEndTimeManuallySet(false); // Reset for new events
     }
     
     // Pre-select lead if provided (from Kanban drop)
@@ -83,6 +106,7 @@ export function CreateEventModal({ open, onOpenChange, selectedDate, event, pres
     setAllDay(false);
     setLeadId('');
     setReminderMinutes('');
+    setEndTimeManuallySet(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -181,7 +205,7 @@ export function CreateEventModal({ open, onOpenChange, selectedDate, event, pres
                 <Input
                   type="time"
                   value={startTime}
-                  onChange={(e) => setStartTime(e.target.value)}
+                  onChange={(e) => handleStartTimeChange(e.target.value)}
                 />
               </div>
             )}
@@ -202,7 +226,7 @@ export function CreateEventModal({ open, onOpenChange, selectedDate, event, pres
                 <Input
                   type="time"
                   value={endTime}
-                  onChange={(e) => setEndTime(e.target.value)}
+                  onChange={(e) => handleEndTimeChange(e.target.value)}
                 />
               </div>
             )}
