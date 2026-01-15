@@ -37,7 +37,7 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
   const [selectedProducts, setSelectedProducts] = useState<SelectedProduct[]>([]);
   const [notes, setNotes] = useState('');
   const [proposalDate, setProposalDate] = useState(new Date().toISOString().split('T')[0]);
-  const [manualValue, setManualValue] = useState<string>('');
+  
   const [additionalValue, setAdditionalValue] = useState<string>('');
   const [discount, setDiscount] = useState<string>('');
   const [status, setStatus] = useState<ProposalStatus>('draft');
@@ -61,14 +61,10 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
   }, [selectedProducts]);
 
   const totalValue = useMemo(() => {
-    const manual = parseFloat(manualValue) || 0;
     const additional = parseFloat(additionalValue) || 0;
     const disc = parseFloat(discount) || 0;
-    
-    // Se tem valor manual, usa ele; senão, calcula pelos produtos
-    const baseValue = manual > 0 ? manual : productsSubtotal;
-    return Math.max(0, baseValue + additional - disc);
-  }, [productsSubtotal, manualValue, additionalValue, discount]);
+    return Math.max(0, productsSubtotal + additional - disc);
+  }, [productsSubtotal, additionalValue, discount]);
 
   const handleAddProduct = (productId: string) => {
     const product = products.find(p => p.id === productId);
@@ -145,7 +141,7 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
         setSelectedProducts([]);
         setNotes('');
         setProposalDate(new Date().toISOString().split('T')[0]);
-        setManualValue('');
+        
         setAdditionalValue('');
         setDiscount('');
         setStatus('draft');
@@ -164,10 +160,9 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
     p => !selectedProducts.find(sp => sp.product_id === p.id)
   );
 
-  const hasManualValue = parseFloat(manualValue) > 0;
   const hasAdditional = parseFloat(additionalValue) > 0;
   const hasDiscount = parseFloat(discount) > 0;
-  const showBreakdown = hasManualValue || selectedProducts.length > 0 || hasAdditional || hasDiscount;
+  const showBreakdown = selectedProducts.length > 0 || hasAdditional || hasDiscount;
 
   return (
     <>
@@ -235,22 +230,6 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
               </div>
             </div>
 
-            {/* Valor Manual */}
-            <div className="space-y-2">
-              <Label htmlFor="manual-value">Valor Manual (opcional)</Label>
-              <Input
-                id="manual-value"
-                type="number"
-                step="0.01"
-                min="0"
-                value={manualValue}
-                onChange={(e) => setManualValue(e.target.value)}
-                placeholder="Definir valor diretamente..."
-              />
-              <p className="text-xs text-muted-foreground">
-                Se preenchido, substitui o total calculado pelos produtos.
-              </p>
-            </div>
 
             <div className="space-y-2">
               <Label>Produtos/Serviços</Label>
@@ -368,12 +347,7 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
             <div className="p-4 rounded-lg bg-primary/10 border border-primary/20 space-y-2">
               {showBreakdown && (
                 <div className="text-sm text-muted-foreground space-y-1">
-                  {hasManualValue ? (
-                    <div className="flex justify-between">
-                      <span>Valor Manual</span>
-                      <span>{formatCurrency(parseFloat(manualValue))}</span>
-                    </div>
-                  ) : selectedProducts.length > 0 && (
+                  {selectedProducts.length > 0 && (
                     <div className="flex justify-between">
                       <span>Subtotal Produtos</span>
                       <span>{formatCurrency(productsSubtotal)}</span>
