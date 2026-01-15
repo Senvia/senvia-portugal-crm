@@ -9,6 +9,7 @@ import { EventDetailsModal } from "@/components/calendar/EventDetailsModal";
 import { CreateProposalModal } from "@/components/proposals/CreateProposalModal";
 import { ProposalDetailsModal } from "@/components/proposals/ProposalDetailsModal";
 import { CreateClientModal } from "@/components/clients/CreateClientModal";
+import { TeamMemberFilter } from "@/components/dashboard/TeamMemberFilter";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProposals } from "@/hooks/useProposals";
 import { useCalendarEvents } from "@/hooks/useCalendarEvents";
@@ -323,8 +324,11 @@ export default function Leads() {
             </div>
           </div>
 
-          {/* Linha 2: Filtros de Data + Status + Limpar - scrollable on mobile */}
+          {/* Linha 2: Filtros de Data + Status + Filtro de Equipa + Limpar - scrollable on mobile */}
           <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+            {/* Team Member Filter (Admin Only) */}
+            <TeamMemberFilter className="w-[160px] shrink-0" />
+            
             {/* Date Range Picker */}
             <Popover>
               <PopoverTrigger asChild>

@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { addMonths, subMonths, addWeeks, subWeeks, addDays, subDays, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay } from 'date-fns';
 import { useCalendarEvents } from '@/hooks/useCalendarEvents';
 import { useTeamMembers } from '@/hooks/useTeam';
-import { usePermissions } from '@/hooks/usePermissions';
+import { useTeamFilter } from '@/hooks/useTeamFilter';
 import { CalendarHeader, type ViewType } from './CalendarHeader';
 import { MonthView } from './MonthView';
 import { WeekView } from './WeekView';
@@ -19,9 +19,8 @@ export function CalendarView() {
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
-  const [filterUserId, setFilterUserId] = useState<string>('all');
 
-  const { canManageTeam: isAdmin } = usePermissions();
+  const { canFilterByTeam, selectedMemberId, setSelectedMemberId } = useTeamFilter();
   const { data: teamMembers = [] } = useTeamMembers();
 
   // Calculate date range based on view
@@ -49,6 +48,7 @@ export function CalendarView() {
     }
   }, [currentDate, view]);
 
+  // useCalendarEvents já filtra baseado no effectiveUserId do useTeamFilter
   const { data: events = [], isLoading } = useCalendarEvents(dateRange.start, dateRange.end);
 
   // Sync selectedEvent with updated data from events list
@@ -60,14 +60,6 @@ export function CalendarView() {
       }
     }
   }, [events]);
-
-  // Filter events by user if admin filter is active
-  const filteredEvents = useMemo(() => {
-    if (!isAdmin || filterUserId === 'all') {
-      return events;
-    }
-    return events.filter((event) => event.user_id === filterUserId);
-  }, [events, filterUserId, isAdmin]);
 
   const handlePrevious = () => {
     switch (view) {
@@ -141,16 +133,16 @@ export function CalendarView() {
         onNext={handleNext}
         onToday={handleToday}
         onCreateEvent={handleCreateEvent}
-        filterUserId={filterUserId}
-        onFilterChange={setFilterUserId}
-        teamMembers={teamMembers.map((m) => ({ id: m.id, full_name: m.full_name }))}
-        isAdmin={isAdmin}
+        filterUserId={selectedMemberId || 'all'}
+        onFilterChange={(id) => setSelectedMemberId(id === 'all' ? null : id)}
+        teamMembers={teamMembers.map((m) => ({ id: m.user_id, full_name: m.full_name }))}
+        isAdmin={canFilterByTeam}
       />
 
       {view === 'month' && (
         <MonthView
           currentDate={currentDate}
-          events={filteredEvents}
+          events={events}
           onDayClick={handleDayClick}
           onEventClick={handleEventClick}
         />
@@ -159,7 +151,7 @@ export function CalendarView() {
       {view === 'week' && (
         <WeekView
           currentDate={currentDate}
-          events={filteredEvents}
+          events={events}
           onDayClick={handleDayClick}
           onEventClick={handleEventClick}
         />
@@ -168,7 +160,7 @@ export function CalendarView() {
       {view === 'day' && (
         <DayView
           currentDate={currentDate}
-          events={filteredEvents}
+          events={events}
           onEventClick={handleEventClick}
         />
       )}

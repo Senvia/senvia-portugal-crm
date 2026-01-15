@@ -1,28 +1,36 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTeamFilter } from "@/hooks/useTeamFilter";
 import { toast } from "sonner";
 import type { SaleStatus, SaleWithDetails, PaymentMethod, PaymentStatus } from "@/types/sales";
 
 export function useSales() {
   const { organization } = useAuth();
+  const { effectiveUserId } = useTeamFilter();
 
   return useQuery({
-    queryKey: ["sales", organization?.id],
+    queryKey: ["sales", organization?.id, effectiveUserId],
     queryFn: async (): Promise<SaleWithDetails[]> => {
       if (!organization?.id) return [];
 
-      const { data, error } = await supabase
+      let query = supabase
         .from("sales")
         .select(`
           *,
-          lead:leads(name, email, phone),
+          lead:leads(name, email, phone, assigned_to),
           proposal:proposals(id, code, proposal_date),
           client:crm_clients(id, name, code)
         `)
         .eq("organization_id", organization.id)
         .order("created_at", { ascending: false });
 
+      // Se há filtro de utilizador, filtrar por created_by
+      if (effectiveUserId) {
+        query = query.eq("created_by", effectiveUserId);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
       return (data as unknown as SaleWithDetails[]) || [];
     },
