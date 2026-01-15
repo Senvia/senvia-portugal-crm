@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Plus, Minus, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -8,10 +8,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useActiveProducts } from '@/hooks/useProducts';
 import { useCreateProposal } from '@/hooks/useProposals';
+import { useLeads } from '@/hooks/useLeads';
 import type { Lead } from '@/types';
 
 interface CreateProposalModalProps {
-  lead: Lead | null;
+  lead?: Lead | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
@@ -26,14 +27,23 @@ interface SelectedProduct {
 
 export function CreateProposalModal({ lead, open, onOpenChange, onSuccess }: CreateProposalModalProps) {
   const { data: products = [] } = useActiveProducts();
+  const { data: leads = [] } = useLeads();
   const createProposal = useCreateProposal();
   
+  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(lead?.id || null);
   const [selectedProducts, setSelectedProducts] = useState<SelectedProduct[]>([]);
   const [notes, setNotes] = useState('');
   const [proposalDate, setProposalDate] = useState(new Date().toISOString().split('T')[0]);
   const [manualValue, setManualValue] = useState<string>('');
   const [additionalValue, setAdditionalValue] = useState<string>('');
   const [discount, setDiscount] = useState<string>('');
+
+  // Update selectedLeadId when lead prop changes
+  useEffect(() => {
+    if (lead?.id) {
+      setSelectedLeadId(lead.id);
+    }
+  }, [lead?.id]);
 
   const productsSubtotal = useMemo(() => {
     return selectedProducts.reduce((sum, p) => sum + (p.quantity * p.unit_price), 0);
@@ -101,10 +111,9 @@ export function CreateProposalModal({ lead, open, onOpenChange, onSuccess }: Cre
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!lead) return;
 
     createProposal.mutate({
-      lead_id: lead.id,
+      lead_id: selectedLeadId || undefined,
       total_value: totalValue,
       notes: notes.trim() || undefined,
       proposal_date: proposalDate,
@@ -116,6 +125,7 @@ export function CreateProposalModal({ lead, open, onOpenChange, onSuccess }: Cre
       })),
     }, {
       onSuccess: () => {
+        setSelectedLeadId(null);
         setSelectedProducts([]);
         setNotes('');
         setProposalDate(new Date().toISOString().split('T')[0]);
@@ -146,12 +156,30 @@ export function CreateProposalModal({ lead, open, onOpenChange, onSuccess }: Cre
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Nova Proposta</DialogTitle>
-          <p className="text-sm text-muted-foreground">
-            Lead: <strong>{lead?.name}</strong>
-          </p>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Lead Selector */}
+          <div className="space-y-2">
+            <Label>Lead (opcional)</Label>
+            <Select 
+              value={selectedLeadId || 'none'} 
+              onValueChange={(v) => setSelectedLeadId(v === 'none' ? null : v)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecionar lead..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Sem lead associado</SelectItem>
+                {leads.map((l) => (
+                  <SelectItem key={l.id} value={l.id}>
+                    {l.name} {l.email && `- ${l.email}`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="proposal-date">Data da Proposta</Label>
             <Input
