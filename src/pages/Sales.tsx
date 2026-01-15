@@ -12,8 +12,11 @@ import { format } from "date-fns";
 import { pt } from "date-fns/locale";
 import type { SaleWithDetails, SaleStatus } from "@/types/sales";
 import { SALE_STATUS_LABELS, SALE_STATUS_COLORS, SALE_STATUSES } from "@/types/sales";
+import { AppLayout } from "@/components/layout/AppLayout";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function Sales() {
+  const { profile, organization } = useAuth();
   const { data: sales, isLoading } = useSales();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<SaleStatus | "all">("all");
@@ -53,8 +56,9 @@ export default function Sales() {
   }, [sales]);
 
   return (
-    <div className="flex flex-col min-h-screen bg-background">
-      {/* Header */}
+    <AppLayout userName={profile?.full_name} organizationName={organization?.name}>
+      <div className="flex flex-col min-h-screen bg-background">
+        {/* Header */}
       <div className="p-4 md:p-6 border-b border-border/50">
         <div className="flex items-center gap-3 mb-2">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
@@ -199,12 +203,13 @@ export default function Sales() {
         )}
       </div>
 
-      {/* Sale Details Modal */}
-      <SaleDetailsModal
-        sale={selectedSale}
-        open={!!selectedSale}
-        onOpenChange={(open) => !open && setSelectedSale(null)}
-      />
-    </div>
+        {/* Sale Details Modal */}
+        <SaleDetailsModal
+          sale={selectedSale}
+          open={!!selectedSale}
+          onOpenChange={(open) => !open && setSelectedSale(null)}
+        />
+      </div>
+    </AppLayout>
   );
 }
