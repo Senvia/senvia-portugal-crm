@@ -1,4 +1,4 @@
-import { FileText, Calendar, ShoppingBag, Store } from "lucide-react";
+import { FileText, Calendar, ShoppingBag, Store, UserCheck } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,6 +13,12 @@ interface ModuleConfig {
 }
 
 const MODULES: ModuleConfig[] = [
+  {
+    key: 'clients',
+    label: 'Clientes',
+    description: 'Gestão de clientes e relacionamento comercial',
+    icon: UserCheck,
+  },
   {
     key: 'proposals',
     label: 'Propostas',
