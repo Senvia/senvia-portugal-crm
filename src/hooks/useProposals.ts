@@ -62,7 +62,7 @@ export function useProposalProducts(proposalId: string | undefined) {
 }
 
 interface CreateProposalData {
-  lead_id: string;
+  lead_id?: string;
   total_value: number;
   notes?: string;
   proposal_date?: string;
@@ -81,7 +81,7 @@ export function useCreateProposal() {
         .from('proposals')
         .insert({
           organization_id: organization!.id,
-          lead_id: data.lead_id,
+          lead_id: data.lead_id || null,
           total_value: data.total_value,
           notes: data.notes || null,
           proposal_date: data.proposal_date || new Date().toISOString().split('T')[0],

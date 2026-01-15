@@ -7,8 +7,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { FileText, Search, Filter } from 'lucide-react';
+import { FileText, Search, Filter, Plus } from 'lucide-react';
 import { ProposalDetailsModal } from '@/components/proposals/ProposalDetailsModal';
+import { CreateProposalModal } from '@/components/proposals/CreateProposalModal';
 import { 
   PROPOSAL_STATUS_LABELS, 
   PROPOSAL_STATUS_COLORS, 
@@ -26,9 +27,12 @@ export default function Proposals() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<ProposalStatus | 'all'>('all');
   const [selectedProposal, setSelectedProposal] = useState<Proposal | null>(null);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
 
   const filteredProposals = proposals.filter((proposal) => {
-    const matchesSearch = proposal.lead?.name?.toLowerCase().includes(search.toLowerCase());
+    const matchesSearch = !search || 
+      proposal.lead?.name?.toLowerCase().includes(search.toLowerCase()) ||
+      proposal.notes?.toLowerCase().includes(search.toLowerCase());
     const matchesStatus = statusFilter === 'all' || proposal.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -52,12 +56,18 @@ export default function Proposals() {
     <AppLayout userName={profile?.full_name} organizationName={organization?.name}>
       <div className="p-4 sm:p-6 lg:p-8 space-y-6">
         {/* Header */}
-        <div>
-          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-            <FileText className="h-6 w-6" />
-            Propostas
-          </h1>
-          <p className="text-muted-foreground">Gestão de propostas comerciais.</p>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+              <FileText className="h-6 w-6" />
+              Propostas
+            </h1>
+            <p className="text-muted-foreground">Gestão de propostas comerciais.</p>
+          </div>
+          <Button onClick={() => setCreateModalOpen(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Nova Proposta
+          </Button>
         </div>
 
         {/* Summary Cards */}
@@ -149,7 +159,7 @@ export default function Proposals() {
                         {format(new Date(proposal.proposal_date), "d MMM yyyy", { locale: pt })}
                       </span>
                     </div>
-                    <p className="font-medium truncate">{proposal.lead?.name || 'Lead'}</p>
+                    <p className="font-medium truncate">{proposal.lead?.name || 'Proposta Avulsa'}</p>
                     {proposal.notes && (
                       <p className="text-sm text-muted-foreground truncate">{proposal.notes}</p>
                     )}
@@ -165,6 +175,11 @@ export default function Proposals() {
           </div>
         )}
       </div>
+
+      <CreateProposalModal
+        open={createModalOpen}
+        onOpenChange={setCreateModalOpen}
+      />
 
       {selectedProposal && (
         <ProposalDetailsModal

@@ -1139,7 +1139,7 @@ export type Database = {
           created_at: string | null
           created_by: string | null
           id: string
-          lead_id: string
+          lead_id: string | null
           notes: string | null
           organization_id: string
           proposal_date: string | null
@@ -1151,7 +1151,7 @@ export type Database = {
           created_at?: string | null
           created_by?: string | null
           id?: string
-          lead_id: string
+          lead_id?: string | null
           notes?: string | null
           organization_id: string
           proposal_date?: string | null
@@ -1163,7 +1163,7 @@ export type Database = {
           created_at?: string | null
           created_by?: string | null
           id?: string
-          lead_id?: string
+          lead_id?: string | null
           notes?: string | null
           organization_id?: string
           proposal_date?: string | null
