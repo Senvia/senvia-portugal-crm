@@ -79,13 +79,29 @@ export function useCreateProposal() {
 
   return useMutation({
     mutationFn: async (data: CreateProposalData) => {
+      // Auto-infer lead_id from client if not provided
+      let leadId = data.lead_id || null;
+      
+      if (!leadId && data.client_id) {
+        // Lookup client to get its lead_id
+        const { data: client } = await supabase
+          .from('crm_clients')
+          .select('lead_id')
+          .eq('id', data.client_id)
+          .single();
+        
+        if (client?.lead_id) {
+          leadId = client.lead_id;
+        }
+      }
+      
       // Create proposal
       const { data: proposal, error: proposalError } = await supabase
         .from('proposals')
         .insert({
           organization_id: organization!.id,
           client_id: data.client_id || null,
-          lead_id: data.lead_id || null,
+          lead_id: leadId,
           total_value: data.total_value,
           status: data.status || 'draft',
           notes: data.notes || null,
