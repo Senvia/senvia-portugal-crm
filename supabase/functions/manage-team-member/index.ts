@@ -150,7 +150,7 @@ Deno.serve(async (req) => {
       }
 
       case 'change_role': {
-        if (!new_role || !['admin', 'viewer'].includes(new_role)) {
+        if (!new_role || !['admin', 'viewer', 'salesperson'].includes(new_role)) {
           return new Response(
             JSON.stringify({ error: 'Perfil inválido' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
