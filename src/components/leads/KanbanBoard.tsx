@@ -3,6 +3,7 @@ import { Lead, LeadTemperature } from "@/types";
 import { LeadCard } from "./LeadCard";
 import { cn } from "@/lib/utils";
 import { usePipelineStages, PipelineStage } from "@/hooks/usePipelineStages";
+import { useLeadProposalValues } from "@/hooks/useLeadProposalValues";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertCircle } from "lucide-react";
 
@@ -24,6 +25,7 @@ interface KanbanBoardProps {
 
 export function KanbanBoard({ leads, leadEvents = {}, onStatusChange, onTemperatureChange, onViewDetails, onDelete }: KanbanBoardProps) {
   const { data: stages, isLoading: stagesLoading } = usePipelineStages();
+  const { data: proposalValues } = useLeadProposalValues();
   const [draggedLead, setDraggedLead] = useState<string | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
   
@@ -173,6 +175,7 @@ export function KanbanBoard({ leads, leadEvents = {}, onStatusChange, onTemperat
                 >
                   <LeadCard
                     lead={lead}
+                    proposalValue={proposalValues?.get(lead.id)}
                     upcomingEvent={leadEvents[lead.id]}
                     onStatusChange={onStatusChange}
                     onTemperatureChange={onTemperatureChange}
@@ -230,6 +233,7 @@ export function KanbanBoard({ leads, leadEvents = {}, onStatusChange, onTemperat
                   >
                     <LeadCard
                       lead={lead}
+                      proposalValue={proposalValues?.get(lead.id)}
                       upcomingEvent={leadEvents[lead.id]}
                       onStatusChange={onStatusChange}
                       onTemperatureChange={onTemperatureChange}

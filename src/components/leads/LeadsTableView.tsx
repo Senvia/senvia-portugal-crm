@@ -35,6 +35,7 @@ import { Lead, LeadTemperature, TEMPERATURE_STYLES } from '@/types';
 import { formatCurrency, formatPhoneForWhatsApp } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { usePipelineStages, PipelineStage } from '@/hooks/usePipelineStages';
+import { useLeadProposalValues } from '@/hooks/useLeadProposalValues';
 import { Skeleton } from '@/components/ui/skeleton';
 
 interface LeadsTableViewProps {
@@ -63,6 +64,7 @@ export function LeadsTableView({
   onDelete,
 }: LeadsTableViewProps) {
   const { data: stages = [], isLoading: stagesLoading } = usePipelineStages();
+  const { data: proposalValues } = useLeadProposalValues();
   const [sortField, setSortField] = useState<SortField>('created_at');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
@@ -287,9 +289,19 @@ export function LeadsTableView({
                       </Select>
                     </TableCell>
                     <TableCell className="hidden lg:table-cell">
-                      <span className="font-medium text-primary">
-                        {lead.value ? formatCurrency(lead.value) : '-'}
-                      </span>
+                      {(() => {
+                        const pValue = proposalValues?.get(lead.id);
+                        const displayValue = pValue || lead.value;
+                        if (!displayValue) return <span className="text-muted-foreground">-</span>;
+                        return (
+                          <span className="font-medium text-primary">
+                            {formatCurrency(displayValue)}
+                            {pValue && (
+                              <span className="text-xs font-normal text-muted-foreground ml-1">(propostas)</span>
+                            )}
+                          </span>
+                        );
+                      })()}
                     </TableCell>
                     <TableCell className="hidden xl:table-cell">
                       <span className="text-muted-foreground text-sm">

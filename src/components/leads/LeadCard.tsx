@@ -24,6 +24,7 @@ interface UpcomingEvent {
 
 interface LeadCardProps {
   lead: Lead;
+  proposalValue?: number;
   upcomingEvent?: UpcomingEvent | null;
   onStatusChange?: (leadId: string, newStatus: string) => void;
   onTemperatureChange?: (leadId: string, temperature: LeadTemperature) => void;
@@ -35,6 +36,7 @@ interface LeadCardProps {
 
 export function LeadCard({ 
   lead, 
+  proposalValue,
   upcomingEvent,
   onStatusChange, 
   onTemperatureChange,
@@ -193,11 +195,14 @@ export function LeadCard({
       {/* Content */}
       <div className="mt-3">
         <h4 className="font-semibold text-card-foreground">{lead.name}</h4>
-        {lead.value && (
+        {(proposalValue || lead.value) ? (
           <p className="mt-1 text-lg font-bold text-primary">
-            {formatCurrency(lead.value)}
+            {formatCurrency(proposalValue || lead.value || 0)}
+            {proposalValue ? (
+              <span className="text-xs font-normal text-muted-foreground ml-1">(propostas)</span>
+            ) : null}
           </p>
-        )}
+        ) : null}
         <p className="mt-2 text-xs text-muted-foreground">
           {formatRelativeTime(lead.created_at)}
         </p>
