@@ -499,6 +499,67 @@ export type Database = {
           },
         ]
       }
+      sales: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          id: string
+          lead_id: string | null
+          notes: string | null
+          organization_id: string
+          proposal_id: string | null
+          status: string
+          total_value: number
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          lead_id?: string | null
+          notes?: string | null
+          organization_id: string
+          proposal_id?: string | null
+          status?: string
+          total_value?: number
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          lead_id?: string | null
+          notes?: string | null
+          organization_id?: string
+          proposal_id?: string | null
+          status?: string
+          total_value?: number
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           id: string
