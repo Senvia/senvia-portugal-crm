@@ -99,8 +99,14 @@ export function LeadDetailsModal({
   // Editable fields state
   const [editValue, setEditValue] = useState<string>("");
   const [editNotes, setEditNotes] = useState<string>("");
+  const [editName, setEditName] = useState<string>("");
+  const [editEmail, setEditEmail] = useState<string>("");
+  const [editPhone, setEditPhone] = useState<string>("");
   const [isEditingValue, setIsEditingValue] = useState(false);
   const [isEditingNotes, setIsEditingNotes] = useState(false);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [isEditingEmail, setIsEditingEmail] = useState(false);
+  const [isEditingPhone, setIsEditingPhone] = useState(false);
 
   // Get form settings for custom field labels
   const formSettings = organization?.form_settings as FormSettings | undefined;
@@ -174,8 +180,17 @@ export function LeadDetailsModal({
       if (!isEditingNotes) {
         setEditNotes(lead.notes || "");
       }
+      if (!isEditingName) {
+        setEditName(lead.name || "");
+      }
+      if (!isEditingEmail) {
+        setEditEmail(lead.email || "");
+      }
+      if (!isEditingPhone) {
+        setEditPhone(lead.phone || "");
+      }
     }
-  }, [lead, isEditingValue, isEditingNotes, editValue]);
+  }, [lead, isEditingValue, isEditingNotes, isEditingName, isEditingEmail, isEditingPhone, editValue]);
 
   if (!lead) return null;
 
@@ -219,10 +234,26 @@ export function LeadDetailsModal({
         <DialogHeader>
           <div className="flex items-start gap-4">
             <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-xl font-bold text-primary">
-              {lead.name.charAt(0).toUpperCase()}
+              {(editName || lead.name).charAt(0).toUpperCase()}
             </div>
             <div className="flex-1">
-              <DialogTitle className="text-xl">{lead.name}</DialogTitle>
+              <DialogTitle asChild>
+                <Input
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  onFocus={() => setIsEditingName(true)}
+                  onBlur={() => {
+                    if (editName.trim() && editName !== lead.name) {
+                      handleFieldSave("name", editName.trim());
+                    } else if (!editName.trim()) {
+                      setEditName(lead.name);
+                    }
+                    setIsEditingName(false);
+                  }}
+                  className="text-xl font-semibold border-transparent bg-transparent px-0 h-auto focus-visible:ring-1 focus-visible:ring-primary hover:border-muted-foreground/30 transition-colors"
+                  placeholder="Nome do lead"
+                />
+              </DialogTitle>
               <DialogDescription className="mt-1">
                 Lead criada em {formatDate(lead.created_at)}
               </DialogDescription>
@@ -333,20 +364,46 @@ export function LeadDetailsModal({
             <h4 className="text-sm font-semibold text-foreground">Informações de Contacto</h4>
             
             <div className="flex items-center gap-3 text-sm">
-              <Phone className="h-4 w-4 text-muted-foreground" />
-              <span>{lead.phone}</span>
+              <Phone className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+              <Input
+                type="tel"
+                value={editPhone}
+                onChange={(e) => setEditPhone(e.target.value)}
+                onFocus={() => setIsEditingPhone(true)}
+                onBlur={() => {
+                  if (editPhone !== lead.phone) {
+                    handleFieldSave("phone", editPhone);
+                  }
+                  setIsEditingPhone(false);
+                }}
+                className="h-8 text-sm border-transparent bg-transparent px-2 focus-visible:ring-1 focus-visible:ring-primary hover:border-muted-foreground/30 transition-colors"
+                placeholder="Telefone"
+              />
             </div>
             
             <div className="flex items-center gap-3 text-sm">
-              <Mail className="h-4 w-4 text-muted-foreground" />
-              <span>{lead.email}</span>
+              <Mail className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+              <Input
+                type="email"
+                value={editEmail}
+                onChange={(e) => setEditEmail(e.target.value)}
+                onFocus={() => setIsEditingEmail(true)}
+                onBlur={() => {
+                  if (editEmail !== lead.email) {
+                    handleFieldSave("email", editEmail);
+                  }
+                  setIsEditingEmail(false);
+                }}
+                className="h-8 text-sm border-transparent bg-transparent px-2 focus-visible:ring-1 focus-visible:ring-primary hover:border-muted-foreground/30 transition-colors"
+                placeholder="Email"
+              />
             </div>
 
-          <div className="flex items-center gap-3 text-sm">
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-            <span>Criada: {formatDateTime(lead.created_at)}</span>
+            <div className="flex items-center gap-3 text-sm">
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+              <span>Criada: {formatDateTime(lead.created_at)}</span>
+            </div>
           </div>
-        </div>
 
         {/* Form Responses Section */}
         {formResponses.length > 0 && (
