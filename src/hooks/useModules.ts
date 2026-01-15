@@ -9,6 +9,7 @@ export interface EnabledModules {
   calendar: boolean;
   sales: boolean;
   ecommerce: boolean;
+  clients: boolean;
 }
 
 export const DEFAULT_MODULES: EnabledModules = {
@@ -16,6 +17,7 @@ export const DEFAULT_MODULES: EnabledModules = {
   calendar: true,
   sales: true,
   ecommerce: false,
+  clients: true,
 };
 
 export function useModules() {

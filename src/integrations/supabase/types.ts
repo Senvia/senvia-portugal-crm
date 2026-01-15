@@ -76,6 +76,78 @@ export type Database = {
           },
         ]
       }
+      crm_clients: {
+        Row: {
+          company: string | null
+          created_at: string | null
+          email: string | null
+          id: string
+          lead_id: string | null
+          name: string
+          nif: string | null
+          notes: string | null
+          organization_id: string
+          phone: string | null
+          source: string | null
+          status: string | null
+          total_proposals: number | null
+          total_sales: number | null
+          total_value: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          company?: string | null
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          lead_id?: string | null
+          name: string
+          nif?: string | null
+          notes?: string | null
+          organization_id: string
+          phone?: string | null
+          source?: string | null
+          status?: string | null
+          total_proposals?: number | null
+          total_sales?: number | null
+          total_value?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          company?: string | null
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          lead_id?: string | null
+          name?: string
+          nif?: string | null
+          notes?: string | null
+          organization_id?: string
+          phone?: string | null
+          source?: string | null
+          status?: string | null
+          total_proposals?: number | null
+          total_sales?: number | null
+          total_value?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_clients_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_clients_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       customer_addresses: {
         Row: {
           address_line1: string
@@ -1136,6 +1208,7 @@ export type Database = {
       }
       proposals: {
         Row: {
+          client_id: string | null
           created_at: string | null
           created_by: string | null
           id: string
@@ -1148,6 +1221,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          client_id?: string | null
           created_at?: string | null
           created_by?: string | null
           id?: string
@@ -1160,6 +1234,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          client_id?: string | null
           created_at?: string | null
           created_by?: string | null
           id?: string
@@ -1172,6 +1247,13 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "proposals_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "crm_clients"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "proposals_lead_id_fkey"
             columns: ["lead_id"]
@@ -1221,6 +1303,7 @@ export type Database = {
       }
       sales: {
         Row: {
+          client_id: string | null
           created_at: string | null
           created_by: string | null
           id: string
@@ -1233,6 +1316,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          client_id?: string | null
           created_at?: string | null
           created_by?: string | null
           id?: string
@@ -1245,6 +1329,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          client_id?: string | null
           created_at?: string | null
           created_by?: string | null
           id?: string
@@ -1257,6 +1342,13 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "sales_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "crm_clients"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "sales_lead_id_fkey"
             columns: ["lead_id"]
