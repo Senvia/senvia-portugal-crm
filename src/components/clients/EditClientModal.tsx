@@ -18,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { useUpdateClient } from "@/hooks/useClients";
 import { useClientLabels } from "@/hooks/useClientLabels";
 import { CrmClient, CLIENT_STATUS_LABELS, CLIENT_SOURCE_LABELS, ClientStatus } from "@/types/clients";
@@ -136,12 +137,10 @@ export function EditClientModal({ client, open, onOpenChange }: EditClientModalP
 
             <div className="space-y-2">
               <Label htmlFor="edit-phone">Telefone</Label>
-              <Input
-                id="edit-phone"
-                type="tel"
+              <PhoneInput
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="+351 912 345 678"
+                onChange={setPhone}
+                placeholder="912 345 678"
               />
             </div>
 
