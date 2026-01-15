@@ -12,24 +12,29 @@ export function useProposals() {
   return useQuery({
     queryKey: ['proposals', organization?.id, effectiveUserId],
     queryFn: async () => {
-      let query = supabase
+      const { data, error } = await supabase
         .from('proposals')
         .select(`
           *,
-          lead:leads(id, name, email, phone),
+          lead:leads(id, name, email, phone, assigned_to),
           client:crm_clients(id, name, email, phone)
         `)
         .eq('organization_id', organization!.id)
         .order('created_at', { ascending: false });
       
-      // Se há filtro de utilizador, filtrar por created_by
+      if (error) throw error;
+      
+      let result = data as (Proposal & { lead?: { assigned_to?: string } })[];
+      
+      // Se há filtro de utilizador, filtrar por created_by OU lead atribuído
       if (effectiveUserId) {
-        query = query.eq('created_by', effectiveUserId);
+        result = result.filter(proposal => 
+          proposal.created_by === effectiveUserId || 
+          proposal.lead?.assigned_to === effectiveUserId
+        );
       }
       
-      const { data, error } = await query;
-      if (error) throw error;
-      return data as Proposal[];
+      return result as Proposal[];
     },
     enabled: !!organization?.id,
   });
