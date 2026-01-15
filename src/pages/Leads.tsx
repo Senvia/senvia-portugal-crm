@@ -4,11 +4,14 @@ import { ResponsiveKanban } from "@/components/leads/ResponsiveKanban";
 import { LeadDetailsModal } from "@/components/leads/LeadDetailsModal";
 import { AddLeadModal } from "@/components/leads/AddLeadModal";
 import { CreateEventModal } from "@/components/calendar/CreateEventModal";
+import { EventDetailsModal } from "@/components/calendar/EventDetailsModal";
 import { CreateProposalModal } from "@/components/proposals/CreateProposalModal";
 import { ProposalDetailsModal } from "@/components/proposals/ProposalDetailsModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProposals } from "@/hooks/useProposals";
+import { useCalendarEvents } from "@/hooks/useCalendarEvents";
 import type { Proposal } from "@/types/proposals";
+import type { CalendarEvent } from "@/types/calendar";
 import { useLeads, useUpdateLeadStatus, useDeleteLead, useUpdateLead } from "@/hooks/useLeads";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -27,6 +30,7 @@ export default function Leads() {
   const { profile, organization } = useAuth();
   const { data: leads = [], isLoading } = useLeads();
   const { data: proposals = [] } = useProposals();
+  const { data: calendarEvents = [] } = useCalendarEvents();
   const updateStatus = useUpdateLeadStatus();
   const deleteLead = useDeleteLead();
   const updateLead = useUpdateLead();
@@ -38,6 +42,8 @@ export default function Leads() {
   const [isCreateProposalModalOpen, setIsCreateProposalModalOpen] = useState(false);
   const [isProposalDetailsModalOpen, setIsProposalDetailsModalOpen] = useState(false);
   const [selectedProposal, setSelectedProposal] = useState<Proposal | null>(null);
+  const [isEventDetailsModalOpen, setIsEventDetailsModalOpen] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [pendingLead, setPendingLead] = useState<Lead | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<LeadStatus[]>([]);
@@ -93,10 +99,22 @@ export default function Leads() {
   const handleStatusChange = (leadId: string, newStatus: LeadStatus) => {
     const lead = leads.find(l => l.id === leadId);
     
-    // Intercept drops on 'scheduled' -> open event modal
+    // Intercept drops on 'scheduled' -> open event modal (create or view existing)
     if (newStatus === 'scheduled') {
-      setPendingLead(lead || null);
-      setIsCreateEventModalOpen(true);
+      // Check if lead already has a pending/active event
+      const existingEvent = calendarEvents.find(
+        e => e.lead_id === leadId && e.status !== 'cancelled' && e.status !== 'completed'
+      );
+      
+      if (existingEvent) {
+        // Open event details modal
+        setSelectedEvent(existingEvent);
+        setIsEventDetailsModalOpen(true);
+      } else {
+        // Open create event modal
+        setPendingLead(lead || null);
+        setIsCreateEventModalOpen(true);
+      }
       return;
     }
     
@@ -126,7 +144,14 @@ export default function Leads() {
       updateStatus.mutate({ leadId: pendingLead.id, status: 'scheduled' });
     }
     setPendingLead(null);
+    setSelectedEvent(null);
     setIsCreateEventModalOpen(false);
+  };
+
+  const handleEditEvent = () => {
+    // Close details modal and open create/edit modal
+    setIsEventDetailsModalOpen(false);
+    setIsCreateEventModalOpen(true);
   };
 
   const handleProposalCreated = () => {
@@ -286,15 +311,30 @@ export default function Leads() {
         <LeadDetailsModal lead={selectedLead} open={isModalOpen} onOpenChange={setIsModalOpen} onStatusChange={handleStatusChange} onDelete={handleDelete} onUpdate={handleUpdate} />
         <AddLeadModal open={isAddModalOpen} onOpenChange={setIsAddModalOpen} />
         
+        {/* Modal for viewing/editing existing event */}
+        <EventDetailsModal
+          open={isEventDetailsModalOpen}
+          onOpenChange={(open) => {
+            setIsEventDetailsModalOpen(open);
+            if (!open) setSelectedEvent(null);
+          }}
+          event={selectedEvent}
+          onEdit={handleEditEvent}
+        />
+        
         {/* Modal for creating event when dropping on 'scheduled' */}
         <CreateEventModal
           open={isCreateEventModalOpen}
           onOpenChange={(open) => {
             setIsCreateEventModalOpen(open);
-            if (!open) setPendingLead(null);
+            if (!open) {
+              setPendingLead(null);
+              setSelectedEvent(null);
+            }
           }}
           selectedDate={new Date()}
-          preselectedLeadId={pendingLead?.id}
+          preselectedLeadId={pendingLead?.id || selectedEvent?.lead_id}
+          event={selectedEvent}
           onSuccess={handleEventCreated}
         />
         
