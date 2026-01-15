@@ -121,11 +121,11 @@ export const WIDGET_DEFINITIONS: Record<WidgetType, WidgetTemplate> = {
   },
   leads_direct: {
     type: 'leads_direct',
-    title: 'Leads Diretos',
+    title: 'Leads do Site',
     icon: Phone,
     defaultVisible: true,
     chartType: 'donut',
-    description: 'Leads vindos de Website, Telefone, Email, Referência',
+    description: 'Leads vindos do website e outras fontes directas',
   },
   conversion_rate: {
     type: 'conversion_rate',
