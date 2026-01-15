@@ -1,17 +1,38 @@
+import { useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { SalesSection } from "@/components/dashboard/SalesSection";
-import { LeadsSection } from "@/components/dashboard/LeadsSection";
 import { useAuth } from "@/contexts/AuthContext";
-import { useDashboardStats } from "@/hooks/useDashboardStats";
-import { Loader2 } from "lucide-react";
+import { useDashboardWidgets } from "@/hooks/useDashboardWidgets";
+import { DynamicWidget } from "@/components/dashboard/DynamicWidget";
+import { WidgetSelector } from "@/components/dashboard/WidgetSelector";
+import { Button } from "@/components/ui/button";
+import { Loader2, Settings2 } from "lucide-react";
+import { WidgetType, NicheType } from "@/lib/dashboard-templates";
 
 export default function Dashboard() {
   const { profile, organization } = useAuth();
-  const stats = useDashboardStats();
+  const { 
+    visibleWidgets, 
+    widgets,
+    isLoading, 
+    niche, 
+    enabledModules,
+    saveWidgets,
+    resetToDefaults,
+  } = useDashboardWidgets();
+  
+  const [isCustomizing, setIsCustomizing] = useState(false);
 
   const greeting = profile?.full_name 
     ? `Olá, ${profile.full_name.split(' ')[0]}` 
     : 'Olá';
+
+  const handleSaveWidgets = (widgetsToSave: { type: WidgetType; position: number; is_visible: boolean }[]) => {
+    saveWidgets.mutate(widgetsToSave);
+  };
+
+  const handleResetWidgets = () => {
+    resetToDefaults.mutate();
+  };
 
   return (
     <AppLayout 
@@ -19,35 +40,63 @@ export default function Dashboard() {
       organizationName={organization?.name}
     >
       <div className="p-4 md:p-6 lg:p-8">
-        <div className="mb-6 md:mb-8">
-          <h1 className="text-xl md:text-2xl font-bold text-foreground">{greeting}</h1>
-          <p className="text-sm md:text-base text-muted-foreground">
-            Bem-vindo ao painel de controlo da {organization?.name || 'sua organização'}.
-          </p>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 md:mb-8">
+          <div>
+            <h1 className="text-xl md:text-2xl font-bold text-foreground">{greeting}</h1>
+            <p className="text-sm md:text-base text-muted-foreground">
+              Bem-vindo ao painel de controlo da {organization?.name || 'sua organização'}.
+            </p>
+          </div>
+          
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => setIsCustomizing(true)}
+            className="self-start sm:self-auto"
+          >
+            <Settings2 className="h-4 w-4 mr-2" />
+            Personalizar
+          </Button>
         </div>
 
-        {stats.isLoading ? (
+        {isLoading ? (
           <div className="flex h-64 items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
         ) : (
-          <>
-            <SalesSection
-              deliveredSales={stats.deliveredSales}
-              activeSales={stats.activeSales}
-              conversionRate={stats.conversionRate}
-              openProposals={stats.openProposals}
-              acceptedProposals={stats.acceptedProposals}
-            />
+          <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {visibleWidgets.map((widget) => (
+              <DynamicWidget
+                key={widget.id || widget.widget_type}
+                widgetType={widget.widget_type as WidgetType}
+                niche={niche as NicheType}
+              />
+            ))}
+          </div>
+        )}
 
-            <LeadsSection
-              totalLeads={stats.totalLeads}
-              websiteLeads={stats.websiteLeads}
-              socialLeads={stats.socialLeads}
-            />
-          </>
+        {visibleWidgets.length === 0 && !isLoading && (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <p className="text-muted-foreground mb-4">
+              Nenhum widget visível. Personalize o seu dashboard.
+            </p>
+            <Button onClick={() => setIsCustomizing(true)}>
+              <Settings2 className="h-4 w-4 mr-2" />
+              Personalizar Dashboard
+            </Button>
+          </div>
         )}
       </div>
+
+      <WidgetSelector
+        open={isCustomizing}
+        onOpenChange={setIsCustomizing}
+        widgets={widgets}
+        niche={niche as NicheType}
+        enabledModules={enabledModules}
+        onSave={handleSaveWidgets}
+        onReset={handleResetWidgets}
+      />
     </AppLayout>
   );
 }
