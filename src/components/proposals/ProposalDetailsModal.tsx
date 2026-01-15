@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useUpdateProposal, useDeleteProposal, useProposalProducts } from '@/hooks/useProposals';
+import { useUpdateLeadStatus, useUpdateLead } from '@/hooks/useLeads';
 import { PROPOSAL_STATUS_LABELS, PROPOSAL_STATUS_COLORS, PROPOSAL_STATUSES } from '@/types/proposals';
 import type { Proposal, ProposalStatus } from '@/types/proposals';
 import { cn } from '@/lib/utils';
@@ -34,6 +35,8 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
   const { data: proposalProducts = [] } = useProposalProducts(proposal?.id);
   const updateProposal = useUpdateProposal();
   const deleteProposal = useDeleteProposal();
+  const updateLeadStatus = useUpdateLeadStatus();
+  const updateLead = useUpdateLead();
   
   const [status, setStatus] = useState<ProposalStatus>('draft');
   const [notes, setNotes] = useState('');
@@ -61,6 +64,12 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
   const handleStatusChange = (newStatus: ProposalStatus) => {
     setStatus(newStatus);
     updateProposal.mutate({ id: proposal.id, status: newStatus });
+    
+    // When proposal is accepted, automatically update lead to 'won' and set value
+    if (newStatus === 'accepted' && proposal.lead_id) {
+      updateLeadStatus.mutate({ leadId: proposal.lead_id, status: 'won' });
+      updateLead.mutate({ leadId: proposal.lead_id, updates: { value: proposal.total_value } });
+    }
   };
 
   const handleNotesBlur = () => {
