@@ -68,6 +68,10 @@ export function LeadCard({
     if (isTomorrow) return `Amanhã às ${time}`;
     return date.toLocaleDateString('pt-PT', { day: '2-digit', month: 'short' }) + ` às ${time}`;
   };
+
+  const isEventPast = (dateStr: string) => {
+    return new Date(dateStr) < new Date();
+  };
   
   return (
     <div 
@@ -159,17 +163,26 @@ export function LeadCard({
             <TooltipTrigger asChild>
               <Badge 
                 variant="secondary" 
-                className="mt-3 w-full justify-start gap-1.5 bg-primary/10 text-primary hover:bg-primary/20"
+                className={cn(
+                  "mt-3 w-full justify-start gap-1.5",
+                  isEventPast(upcomingEvent.start_time)
+                    ? "bg-muted text-muted-foreground"
+                    : "bg-primary/10 text-primary hover:bg-primary/20"
+                )}
               >
                 <CalendarClock className="h-3.5 w-3.5" />
                 <span className="truncate text-xs">
                   {formatEventTime(upcomingEvent.start_time)}
+                  {isEventPast(upcomingEvent.start_time) && " (passou)"}
                 </span>
               </Badge>
             </TooltipTrigger>
             <TooltipContent>
               <p className="font-medium">{upcomingEvent.title}</p>
-              <p className="text-xs text-muted-foreground">{formatEventTime(upcomingEvent.start_time)}</p>
+              <p className="text-xs text-muted-foreground">
+                {formatEventTime(upcomingEvent.start_time)}
+                {isEventPast(upcomingEvent.start_time) && " - Evento passado"}
+              </p>
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
