@@ -26,9 +26,10 @@ import { COUNTRIES } from "@/lib/countries";
 interface CreateClientModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onCreated?: (clientId: string) => void;
 }
 
-export function CreateClientModal({ open, onOpenChange }: CreateClientModalProps) {
+export function CreateClientModal({ open, onOpenChange, onCreated }: CreateClientModalProps) {
   const labels = useClientLabels();
   
   const [name, setName] = useState("");
@@ -71,9 +72,10 @@ export function CreateClientModal({ open, onOpenChange }: CreateClientModalProps
         country: country || undefined,
       },
       {
-        onSuccess: () => {
+        onSuccess: (createdClient) => {
           resetForm();
           onOpenChange(false);
+          onCreated?.(createdClient.id);
         },
       }
     );

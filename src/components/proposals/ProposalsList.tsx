@@ -79,7 +79,6 @@ export function ProposalsList({ lead }: ProposalsListProps) {
       )}
 
       <CreateProposalModal
-        lead={lead}
         open={createModalOpen}
         onOpenChange={setCreateModalOpen}
       />
