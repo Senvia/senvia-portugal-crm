@@ -7,8 +7,15 @@ import { WidgetSelector } from "@/components/dashboard/WidgetSelector";
 import { Button } from "@/components/ui/button";
 import { Loader2, Settings2 } from "lucide-react";
 import { WidgetType, NicheType } from "@/lib/dashboard-templates";
+import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription";
 
 export default function Dashboard() {
+  // Subscribe to realtime updates for dashboard data
+  useRealtimeSubscription([
+    { table: 'leads', queryKeys: [['leads'], ['dashboard-stats']] },
+    { table: 'proposals', queryKeys: [['proposals'], ['dashboard-stats']] },
+    { table: 'sales', queryKeys: [['sales'], ['dashboard-stats']] },
+  ]);
   const { profile, organization } = useAuth();
   const { 
     visibleWidgets, 

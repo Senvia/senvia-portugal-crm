@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useSales } from "@/hooks/useSales";
+import { useSalesRealtime } from "@/hooks/useRealtimeSubscription";
 import { SaleDetailsModal } from "@/components/sales/SaleDetailsModal";
 import { CreateSaleModal } from "@/components/sales/CreateSaleModal";
 import { formatCurrency } from "@/lib/format";
@@ -18,6 +19,8 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { useAuth } from "@/contexts/AuthContext";
 
 export default function Sales() {
+  // Subscribe to realtime updates
+  useSalesRealtime();
   const { profile, organization } = useAuth();
   const { data: sales, isLoading } = useSales();
   const [search, setSearch] = useState("");
