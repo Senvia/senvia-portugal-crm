@@ -8,6 +8,7 @@ import { CreateEventModal } from "@/components/calendar/CreateEventModal";
 import { EventDetailsModal } from "@/components/calendar/EventDetailsModal";
 import { CreateProposalModal } from "@/components/proposals/CreateProposalModal";
 import { ProposalDetailsModal } from "@/components/proposals/ProposalDetailsModal";
+import { CreateClientModal } from "@/components/clients/CreateClientModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProposals } from "@/hooks/useProposals";
 import { useCalendarEvents } from "@/hooks/useCalendarEvents";
@@ -47,6 +48,10 @@ export default function Leads() {
   const [isEventDetailsModalOpen, setIsEventDetailsModalOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [pendingLead, setPendingLead] = useState<Lead | null>(null);
+  
+  // New states for the chained client -> proposal flow
+  const [isCreateClientModalOpen, setIsCreateClientModalOpen] = useState(false);
+  const [newlyCreatedClientId, setNewlyCreatedClientId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({ from: undefined, to: undefined });
@@ -150,7 +155,7 @@ export default function Leads() {
       return;
     }
     
-    // Intercept drops on proposal stages -> open proposal modal (create or edit)
+    // Intercept drops on proposal stages -> open client modal first (then proposal)
     if (isProposalStage(newStatus)) {
       // Check if lead already has a proposal
       const existingProposal = proposals.find(p => p.lead_id === leadId);
@@ -160,9 +165,9 @@ export default function Leads() {
         setSelectedProposal(existingProposal);
         setIsProposalDetailsModalOpen(true);
       } else {
-        // Open create modal
+        // NEW FLOW: Open create client modal first (pre-filled with lead data)
         setPendingLead(lead || null);
-        setIsCreateProposalModalOpen(true);
+        setIsCreateClientModalOpen(true);
       }
       return;
     }
@@ -194,7 +199,18 @@ export default function Leads() {
       }
     }
     setPendingLead(null);
+    setNewlyCreatedClientId(null);
     setIsCreateProposalModalOpen(false);
+  };
+
+  // Handler for when client is created in the chained flow (Lead -> Client -> Proposal)
+  const handleClientCreatedForProposal = (clientId: string) => {
+    // Close client modal
+    setIsCreateClientModalOpen(false);
+    // Store the new client ID
+    setNewlyCreatedClientId(clientId);
+    // Open proposal modal
+    setIsCreateProposalModalOpen(true);
   };
 
   const handleTemperatureChange = (leadId: string, temperature: LeadTemperature) => {
@@ -439,14 +455,36 @@ export default function Leads() {
           onSuccess={handleEventCreated}
         />
         
-        {/* Modal for creating proposal when dropping on 'proposal' */}
-        <CreateProposalModal
-          open={isCreateProposalModalOpen && !!pendingLead}
+        {/* Modal for creating client when dropping on 'proposal' (first step) */}
+        <CreateClientModal
+          open={isCreateClientModalOpen}
           onOpenChange={(open) => {
-            setIsCreateProposalModalOpen(open);
+            setIsCreateClientModalOpen(open);
             if (!open) setPendingLead(null);
           }}
+          onCreated={handleClientCreatedForProposal}
+          initialData={pendingLead ? {
+            name: pendingLead.name,
+            email: pendingLead.email,
+            phone: pendingLead.phone,
+            notes: pendingLead.notes || undefined,
+            source: pendingLead.source || undefined,
+            leadId: pendingLead.id,
+          } : undefined}
+        />
+        
+        {/* Modal for creating proposal when dropping on 'proposal' (second step) */}
+        <CreateProposalModal
+          open={isCreateProposalModalOpen}
+          onOpenChange={(open) => {
+            setIsCreateProposalModalOpen(open);
+            if (!open) {
+              setPendingLead(null);
+              setNewlyCreatedClientId(null);
+            }
+          }}
           onSuccess={handleProposalCreated}
+          preselectedClientId={newlyCreatedClientId}
         />
         
         {/* Modal for editing existing proposal */}

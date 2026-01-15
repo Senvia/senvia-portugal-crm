@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -27,9 +27,17 @@ interface CreateClientModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onCreated?: (clientId: string) => void;
+  initialData?: {
+    name?: string;
+    email?: string;
+    phone?: string;
+    notes?: string;
+    source?: string;
+    leadId?: string;
+  };
 }
 
-export function CreateClientModal({ open, onOpenChange, onCreated }: CreateClientModalProps) {
+export function CreateClientModal({ open, onOpenChange, onCreated, initialData }: CreateClientModalProps) {
   const labels = useClientLabels();
   
   const [name, setName] = useState("");
@@ -49,6 +57,17 @@ export function CreateClientModal({ open, onOpenChange, onCreated }: CreateClien
   const [country, setCountry] = useState("PT");
 
   const createClient = useCreateClient();
+
+  // Pre-fill form when initialData is provided
+  useEffect(() => {
+    if (open && initialData) {
+      setName(initialData.name || "");
+      setEmail(initialData.email || "");
+      setPhone(initialData.phone || "");
+      setNotes(initialData.notes || "");
+      setSource(initialData.source || "");
+    }
+  }, [open, initialData]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,6 +89,7 @@ export function CreateClientModal({ open, onOpenChange, onCreated }: CreateClien
         city: city.trim() || undefined,
         postal_code: postalCode.trim() || undefined,
         country: country || undefined,
+        lead_id: initialData?.leadId || undefined,
       },
       {
         onSuccess: (createdClient) => {
