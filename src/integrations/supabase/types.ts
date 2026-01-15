@@ -265,6 +265,7 @@ export type Database = {
           msg_template_hot: string | null
           msg_template_warm: string | null
           name: string
+          niche: string | null
           plan: string | null
           public_key: string
           slug: string
@@ -283,6 +284,7 @@ export type Database = {
           msg_template_hot?: string | null
           msg_template_warm?: string | null
           name: string
+          niche?: string | null
           plan?: string | null
           public_key?: string
           slug: string
@@ -301,6 +303,7 @@ export type Database = {
           msg_template_hot?: string | null
           msg_template_warm?: string | null
           name?: string
+          niche?: string | null
           plan?: string | null
           public_key?: string
           slug?: string
@@ -310,6 +313,53 @@ export type Database = {
           whatsapp_instance?: string | null
         }
         Relationships: []
+      }
+      pipeline_stages: {
+        Row: {
+          color: string
+          created_at: string | null
+          id: string
+          is_final_negative: boolean | null
+          is_final_positive: boolean | null
+          key: string
+          name: string
+          organization_id: string
+          position: number
+          updated_at: string | null
+        }
+        Insert: {
+          color?: string
+          created_at?: string | null
+          id?: string
+          is_final_negative?: boolean | null
+          is_final_positive?: boolean | null
+          key: string
+          name: string
+          organization_id: string
+          position?: number
+          updated_at?: string | null
+        }
+        Update: {
+          color?: string
+          created_at?: string | null
+          id?: string
+          is_final_negative?: boolean | null
+          is_final_positive?: boolean | null
+          key?: string
+          name?: string
+          organization_id?: string
+          position?: number
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pipeline_stages_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       products: {
         Row: {

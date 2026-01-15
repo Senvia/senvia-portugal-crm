@@ -1,10 +1,32 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 
 import { FormSettings } from '@/types';
 import { Json } from '@/integrations/supabase/types';
+
+// Hook to get current organization data
+export function useOrganization() {
+  const { organization } = useAuth();
+
+  return useQuery({
+    queryKey: ['organization', organization?.id],
+    queryFn: async () => {
+      if (!organization?.id) return null;
+
+      const { data, error } = await supabase
+        .from('organizations')
+        .select('*')
+        .eq('id', organization.id)
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!organization?.id,
+  });
+}
 
 interface UpdateOrganizationData {
   name?: string;
