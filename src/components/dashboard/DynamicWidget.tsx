@@ -14,6 +14,7 @@ import {
   Cell,
   PieChart,
   Pie,
+  Tooltip,
 } from "recharts";
 
 interface DynamicWidgetProps {
@@ -86,26 +87,59 @@ export function DynamicWidget({ widgetType, niche = 'generic', className }: Dyna
       case 'donut':
       case 'pie':
         return (
-          <ResponsiveContainer width="100%" height={80}>
-            <PieChart>
-              <Pie
-                data={data.chartData}
-                cx="50%"
-                cy="50%"
-                innerRadius={definition.chartType === 'donut' ? 20 : 0}
-                outerRadius={35}
-                paddingAngle={2}
-                dataKey="value"
-              >
-                {data.chartData.map((_, index) => (
-                  <Cell 
-                    key={`cell-${index}`} 
-                    fill={CHART_COLORS[index % CHART_COLORS.length]} 
+          <div className="flex items-center gap-3">
+            <ResponsiveContainer width={70} height={70} className="flex-shrink-0">
+              <PieChart>
+                <Pie
+                  data={data.chartData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={definition.chartType === 'donut' ? 18 : 0}
+                  outerRadius={30}
+                  paddingAngle={2}
+                  dataKey="value"
+                >
+                  {data.chartData.map((_, index) => (
+                    <Cell 
+                      key={`cell-${index}`} 
+                      fill={CHART_COLORS[index % CHART_COLORS.length]} 
+                    />
+                  ))}
+                </Pie>
+                <Tooltip 
+                  formatter={(value: number, name: string) => [`${value} leads`, name]}
+                  contentStyle={{ 
+                    backgroundColor: 'hsl(var(--card))', 
+                    border: '1px solid hsl(var(--border))',
+                    borderRadius: '8px',
+                    fontSize: '12px',
+                  }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+            
+            <div className="flex flex-col gap-1 text-xs min-w-0 flex-1">
+              {data.chartData.slice(0, 4).map((item, index) => (
+                <div key={item.name} className="flex items-center gap-1.5">
+                  <div 
+                    className="w-2 h-2 rounded-full flex-shrink-0"
+                    style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }}
                   />
-                ))}
-              </Pie>
-            </PieChart>
-          </ResponsiveContainer>
+                  <span className="text-muted-foreground truncate flex-1">
+                    {item.name}
+                  </span>
+                  <span className="font-medium text-foreground flex-shrink-0">
+                    {item.value}
+                  </span>
+                </div>
+              ))}
+              {data.chartData.length > 4 && (
+                <span className="text-muted-foreground text-[10px]">
+                  +{data.chartData.length - 4} mais
+                </span>
+              )}
+            </div>
+          </div>
         );
 
       case 'progress':
