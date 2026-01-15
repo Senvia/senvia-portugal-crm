@@ -91,6 +91,7 @@ export type Database = {
           address_line1: string | null
           address_line2: string | null
           city: string | null
+          code: string | null
           company: string | null
           country: string | null
           created_at: string | null
@@ -114,6 +115,7 @@ export type Database = {
           address_line1?: string | null
           address_line2?: string | null
           city?: string | null
+          code?: string | null
           company?: string | null
           country?: string | null
           created_at?: string | null
@@ -137,6 +139,7 @@ export type Database = {
           address_line1?: string | null
           address_line2?: string | null
           city?: string | null
+          code?: string | null
           company?: string | null
           country?: string | null
           created_at?: string | null
@@ -1234,6 +1237,7 @@ export type Database = {
       proposals: {
         Row: {
           client_id: string | null
+          code: string | null
           created_at: string | null
           created_by: string | null
           id: string
@@ -1247,6 +1251,7 @@ export type Database = {
         }
         Insert: {
           client_id?: string | null
+          code?: string | null
           created_at?: string | null
           created_by?: string | null
           id?: string
@@ -1260,6 +1265,7 @@ export type Database = {
         }
         Update: {
           client_id?: string | null
+          code?: string | null
           created_at?: string | null
           created_by?: string | null
           id?: string
@@ -1326,43 +1332,118 @@ export type Database = {
           },
         ]
       }
+      sale_items: {
+        Row: {
+          created_at: string | null
+          id: string
+          name: string
+          product_id: string | null
+          quantity: number
+          sale_id: string
+          total: number
+          unit_price: number
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          name: string
+          product_id?: string | null
+          quantity?: number
+          sale_id: string
+          total: number
+          unit_price: number
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          name?: string
+          product_id?: string | null
+          quantity?: number
+          sale_id?: string
+          total?: number
+          unit_price?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sale_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sale_items_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sales: {
         Row: {
           client_id: string | null
+          code: string | null
           created_at: string | null
           created_by: string | null
+          discount: number | null
+          due_date: string | null
           id: string
+          invoice_reference: string | null
           lead_id: string | null
           notes: string | null
           organization_id: string
+          paid_date: string | null
+          payment_method: string | null
+          payment_status: string | null
           proposal_id: string | null
+          sale_date: string | null
           status: string
+          subtotal: number | null
           total_value: number
           updated_at: string | null
         }
         Insert: {
           client_id?: string | null
+          code?: string | null
           created_at?: string | null
           created_by?: string | null
+          discount?: number | null
+          due_date?: string | null
           id?: string
+          invoice_reference?: string | null
           lead_id?: string | null
           notes?: string | null
           organization_id: string
+          paid_date?: string | null
+          payment_method?: string | null
+          payment_status?: string | null
           proposal_id?: string | null
+          sale_date?: string | null
           status?: string
+          subtotal?: number | null
           total_value?: number
           updated_at?: string | null
         }
         Update: {
           client_id?: string | null
+          code?: string | null
           created_at?: string | null
           created_by?: string | null
+          discount?: number | null
+          due_date?: string | null
           id?: string
+          invoice_reference?: string | null
           lead_id?: string | null
           notes?: string | null
           organization_id?: string
+          paid_date?: string | null
+          payment_method?: string | null
+          payment_status?: string | null
           proposal_id?: string | null
+          sale_date?: string | null
           status?: string
+          subtotal?: number | null
           total_value?: number
           updated_at?: string | null
         }
@@ -1488,7 +1569,10 @@ export type Database = {
         Args: { _name: string; _slug: string }
         Returns: string
       }
+      generate_client_code: { Args: { _org_id: string }; Returns: string }
       generate_order_number: { Args: { _org_id: string }; Returns: string }
+      generate_proposal_code: { Args: { _org_id: string }; Returns: string }
+      generate_sale_code: { Args: { _org_id: string }; Returns: string }
       get_form_by_slugs: {
         Args: { _form_slug?: string; _org_slug: string }
         Returns: {
