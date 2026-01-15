@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Lead, LeadStatus, LeadTemperature, STATUS_LABELS, KANBAN_COLUMNS } from "@/types";
 import { LeadCard } from "./LeadCard";
 import { cn } from "@/lib/utils";
@@ -40,6 +40,28 @@ const columnBadgeColors: Record<LeadStatus, string> = {
 export function KanbanBoard({ leads, leadEvents = {}, onStatusChange, onTemperatureChange, onViewDetails, onDelete }: KanbanBoardProps) {
   const [draggedLead, setDraggedLead] = useState<string | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<LeadStatus | null>(null);
+  
+  const topScrollRef = useRef<HTMLDivElement>(null);
+  const bottomScrollRef = useRef<HTMLDivElement>(null);
+  const [scrollWidth, setScrollWidth] = useState(0);
+
+  useEffect(() => {
+    if (bottomScrollRef.current) {
+      setScrollWidth(bottomScrollRef.current.scrollWidth);
+    }
+  }, [leads]);
+
+  const handleTopScroll = () => {
+    if (topScrollRef.current && bottomScrollRef.current) {
+      bottomScrollRef.current.scrollLeft = topScrollRef.current.scrollLeft;
+    }
+  };
+
+  const handleBottomScroll = () => {
+    if (topScrollRef.current && bottomScrollRef.current) {
+      topScrollRef.current.scrollLeft = bottomScrollRef.current.scrollLeft;
+    }
+  };
 
   const getLeadsByStatus = (status: LeadStatus) => 
     leads.filter(lead => lead.status === status);
@@ -68,7 +90,22 @@ export function KanbanBoard({ leads, leadEvents = {}, onStatusChange, onTemperat
   };
 
   return (
-    <div className="flex gap-4 overflow-x-auto pb-4">
+    <div className="flex flex-col">
+      {/* Top scroll bar */}
+      <div
+        ref={topScrollRef}
+        onScroll={handleTopScroll}
+        className="overflow-x-auto overflow-y-hidden h-3 mb-2"
+      >
+        <div style={{ width: scrollWidth, height: 1 }} />
+      </div>
+
+      {/* Kanban container */}
+      <div
+        ref={bottomScrollRef}
+        onScroll={handleBottomScroll}
+        className="flex gap-4 overflow-x-auto pb-4"
+      >
       {KANBAN_COLUMNS.map((status) => {
         const columnLeads = getLeadsByStatus(status);
         const isOver = dragOverColumn === status;
@@ -133,6 +170,7 @@ export function KanbanBoard({ leads, leadEvents = {}, onStatusChange, onTemperat
           </div>
         );
       })}
+      </div>
     </div>
   );
 }
