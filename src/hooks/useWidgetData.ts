@@ -119,6 +119,22 @@ export function useWidgetData(widgetType: WidgetType): WidgetData {
           return SOCIAL_SOURCES.some(s => source.includes(s));
         });
 
+        // Calculate trend for social leads
+        const last7Days = socialLeads.filter(l => 
+          new Date(l.created_at || '') >= subDays(today, 7)
+        ).length;
+        const prev7Days = socialLeads.filter(l => {
+          const date = new Date(l.created_at || '');
+          return date >= subDays(today, 14) && date < subDays(today, 7);
+        }).length;
+        
+        const socialTrend = prev7Days === 0 
+          ? { value: 0, isPositive: true }
+          : { 
+              value: Math.abs(Math.round(((last7Days - prev7Days) / prev7Days) * 100)),
+              isPositive: (last7Days - prev7Days) >= 0 
+            };
+
         const sourceGroups = socialLeads.reduce((acc, lead) => {
           const source = lead.source || 'Redes Sociais';
           acc[source] = (acc[source] || 0) + 1;
@@ -133,6 +149,7 @@ export function useWidgetData(widgetType: WidgetType): WidgetData {
         return {
           value: socialLeads.length.toString(),
           subtitle: 'via redes sociais',
+          trend: socialTrend,
           chartData,
           isLoading: leadsLoading,
         };
@@ -145,6 +162,22 @@ export function useWidgetData(widgetType: WidgetType): WidgetData {
           // Direto = sem fonte OU não é rede social
           return !source || !SOCIAL_SOURCES.some(s => source.includes(s));
         });
+
+        // Calculate trend for direct leads
+        const directLast7Days = directLeads.filter(l => 
+          new Date(l.created_at || '') >= subDays(today, 7)
+        ).length;
+        const directPrev7Days = directLeads.filter(l => {
+          const date = new Date(l.created_at || '');
+          return date >= subDays(today, 14) && date < subDays(today, 7);
+        }).length;
+        
+        const directTrend = directPrev7Days === 0 
+          ? { value: 0, isPositive: true }
+          : { 
+              value: Math.abs(Math.round(((directLast7Days - directPrev7Days) / directPrev7Days) * 100)),
+              isPositive: (directLast7Days - directPrev7Days) >= 0 
+            };
 
         const sourceGroups = directLeads.reduce((acc, lead) => {
           const source = lead.source || 'Directo';
@@ -160,6 +193,7 @@ export function useWidgetData(widgetType: WidgetType): WidgetData {
         return {
           value: directLeads.length.toString(),
           subtitle: 'canais diretos',
+          trend: directTrend,
           chartData,
           isLoading: leadsLoading,
         };
