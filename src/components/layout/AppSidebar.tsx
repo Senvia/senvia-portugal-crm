@@ -5,7 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useModules, EnabledModules } from "@/hooks/useModules";
 import { APP_VERSION } from "@/lib/constants";
 import type { AppRole } from "@/types";
-import senviaLogo from "@/assets/senvia-logo.png";
+import { OrganizationSwitcher } from "./OrganizationSwitcher";
 
 interface NavItem {
   to: string;
@@ -60,14 +60,9 @@ export function AppSidebar({
           <img alt="SENVIA" className="h-10 w-40 object-contain" src="/lovable-uploads/a73ec7d1-f1a3-458c-8d12-82bca71d2d34.png" />
         </div>
 
-        {/* Organization Info */}
-        <div className="border-b border-sidebar-border px-6 py-4">
-          <p className="text-xs font-medium uppercase tracking-wider text-sidebar-muted">
-            Organização
-          </p>
-          <p className="mt-1 truncate font-semibold text-sidebar-foreground">
-            {organizationName}
-          </p>
+        {/* Organization Switcher */}
+        <div className="border-b border-sidebar-border px-3 py-3">
+          <OrganizationSwitcher />
         </div>
 
         {/* Navigation */}

@@ -864,9 +864,45 @@ export type Database = {
           },
         ]
       }
+      organization_members: {
+        Row: {
+          id: string
+          is_active: boolean
+          joined_at: string | null
+          organization_id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          is_active?: boolean
+          joined_at?: string | null
+          organization_id: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          is_active?: boolean
+          joined_at?: string | null
+          organization_id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_members_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organizations: {
         Row: {
           ai_qualification_rules: string | null
+          code: string | null
           created_at: string | null
           enabled_modules: Json | null
           form_settings: Json | null
@@ -887,6 +923,7 @@ export type Database = {
         }
         Insert: {
           ai_qualification_rules?: string | null
+          code?: string | null
           created_at?: string | null
           enabled_modules?: Json | null
           form_settings?: Json | null
@@ -907,6 +944,7 @@ export type Database = {
         }
         Update: {
           ai_qualification_rules?: string | null
+          code?: string | null
           created_at?: string | null
           enabled_modules?: Json | null
           form_settings?: Json | null
@@ -1652,6 +1690,17 @@ export type Database = {
       }
       get_slug_by_public_key: { Args: { _public_key: string }; Returns: string }
       get_user_org_id: { Args: { _user_id: string }; Returns: string }
+      get_user_organizations: {
+        Args: { _user_id: string }
+        Returns: {
+          is_active: boolean
+          member_role: Database["public"]["Enums"]["app_role"]
+          organization_code: string
+          organization_id: string
+          organization_name: string
+          organization_slug: string
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
