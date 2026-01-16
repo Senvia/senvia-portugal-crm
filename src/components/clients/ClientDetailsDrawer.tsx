@@ -101,8 +101,8 @@ export function ClientDetailsDrawer({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-xl p-0 pt-safe">
-        <SheetHeader className="p-4 sm:p-6 pb-0 pt-4">
+      <SheetContent className="w-full sm:max-w-xl p-0">
+        <SheetHeader className="px-4 sm:px-6 pb-0 pt-safe">
           <div className="flex items-start justify-between">
             <div className="flex items-center gap-3">
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
