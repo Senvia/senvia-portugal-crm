@@ -4,16 +4,18 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Label } from "@/components/ui/label";
-import { User, Building, Loader2, Eye, EyeOff, Save, Key, Bell, BellOff } from "lucide-react";
+import { User, Building, Loader2, Eye, EyeOff, Save, Key, Bell, BellOff, Copy, Check } from "lucide-react";
 import { PLAN_LABELS, OrganizationPlan } from "@/types";
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from "@/hooks/use-toast";
+import { useState } from "react";
 
 interface GeneralContentProps {
   organization: {
     id: string;
     name: string;
     plan: string | null;
+    slug?: string;
   } | null;
   profile: {
     full_name: string;
@@ -67,6 +69,19 @@ export const GeneralContent = ({
   pushNotifications,
 }: GeneralContentProps) => {
   const { toast } = useToast();
+  const [copiedSlug, setCopiedSlug] = useState(false);
+
+  const handleCopySlug = async () => {
+    if (!organization?.slug) return;
+    try {
+      await navigator.clipboard.writeText(organization.slug);
+      setCopiedSlug(true);
+      toast({ title: 'Copiado!', description: 'Código da empresa copiado para a área de transferência.' });
+      setTimeout(() => setCopiedSlug(false), 2000);
+    } catch (err) {
+      toast({ title: 'Erro', description: 'Não foi possível copiar.', variant: 'destructive' });
+    }
+  };
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -107,6 +122,31 @@ export const GeneralContent = ({
                 </Badge>
               </div>
             </div>
+          </div>
+          
+          <Separator />
+          
+          <div className="space-y-2">
+            <Label htmlFor="org-slug">Código da Empresa</Label>
+            <div className="flex gap-2">
+              <Input
+                id="org-slug"
+                value={organization?.slug || ''}
+                readOnly
+                className="bg-muted font-mono"
+              />
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={handleCopySlug}
+                disabled={!organization?.slug}
+              >
+                {copiedSlug ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Partilhe este código para convidar membros para a sua empresa.
+            </p>
           </div>
         </CardContent>
       </Card>
