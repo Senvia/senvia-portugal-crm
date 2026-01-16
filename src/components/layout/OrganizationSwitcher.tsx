@@ -18,9 +18,16 @@ export function OrganizationSwitcher() {
   const { data: organizations = [], isLoading } = useUserOrganizations();
   const [open, setOpen] = useState(false);
 
-  // Don't show if only one organization
+  // Se só tem 1 organização, mostrar apenas o nome (sem dropdown)
   if (organizations.length <= 1 && !isLoading) {
-    return null;
+    return (
+      <div className="flex items-center gap-2 px-2 py-1.5">
+        <Building2 className="h-4 w-4 shrink-0 text-sidebar-foreground" />
+        <span className="truncate text-sm font-medium text-sidebar-foreground">
+          {organization?.name || 'A Minha Empresa'}
+        </span>
+      </div>
+    );
   }
 
   const handleSwitch = async (orgId: string) => {
