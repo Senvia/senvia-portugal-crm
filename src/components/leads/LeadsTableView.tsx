@@ -30,7 +30,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+
 import { Lead, LeadTemperature, TEMPERATURE_STYLES } from '@/types';
 import { formatCurrency, formatPhoneForWhatsApp } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -107,14 +107,6 @@ export function LeadsTableView({
     return sortDirection === 'asc' ? comparison : -comparison;
   });
 
-  const getInitials = (name: string) => {
-    return name
-      .split(' ')
-      .map((n) => n[0])
-      .join('')
-      .toUpperCase()
-      .slice(0, 2);
-  };
 
   const handleWhatsAppClick = (phone: string, name: string) => {
     const formattedPhone = formatPhoneForWhatsApp(phone);
@@ -212,14 +204,7 @@ export function LeadsTableView({
                     onClick={() => onViewDetails(lead)}
                   >
                     <TableCell>
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-8 w-8">
-                          <AvatarFallback className="bg-primary/10 text-primary text-xs">
-                            {getInitials(lead.name)}
-                          </AvatarFallback>
-                        </Avatar>
-                        <span className="font-medium truncate max-w-[120px]">{lead.name}</span>
-                      </div>
+                      <span className="font-medium truncate max-w-[150px]">{lead.name}</span>
                     </TableCell>
                     <TableCell className="hidden md:table-cell">
                       <span className="text-muted-foreground truncate max-w-[180px] block">

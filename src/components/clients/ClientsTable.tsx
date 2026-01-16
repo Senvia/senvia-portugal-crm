@@ -82,16 +82,11 @@ export function ClientsTable({ clients, onEdit, onView, onDelete }: ClientsTable
             {clients.map((client) => (
               <TableRow key={client.id} className="cursor-pointer" onClick={() => onView(client)}>
                 <TableCell>
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
-                      {client.name.charAt(0).toUpperCase()}
-                    </div>
-                    <div>
-                      <p className="font-medium">{client.name}</p>
-                      {client.nif && (
-                        <p className="text-xs text-muted-foreground">NIF: {client.nif}</p>
-                      )}
-                    </div>
+                  <div>
+                    <p className="font-medium">{client.name}</p>
+                    {client.nif && (
+                      <p className="text-xs text-muted-foreground">NIF: {client.nif}</p>
+                    )}
                   </div>
                 </TableCell>
                 <TableCell className="hidden md:table-cell">
