@@ -40,7 +40,7 @@ export function OrganizationSwitcher() {
         >
           <div className="flex items-center gap-2 truncate">
             <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
-            <span className="truncate text-sm font-medium">
+            <span className="truncate text-sm font-medium text-sidebar-foreground">
               {organization?.name || 'Selecionar empresa'}
             </span>
           </div>
