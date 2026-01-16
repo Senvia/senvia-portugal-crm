@@ -36,43 +36,107 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Get user's organization
-    const { data: profile, error: profileError } = await userClient
-      .from('profiles')
-      .select('organization_id')
-      .eq('id', user.id)
-      .single()
+    // Admin client for accessing auth.users and bypassing RLS
+    const adminClient = createClient(supabaseUrl, supabaseServiceKey)
 
-    if (profileError || !profile?.organization_id) {
+    // Check if user is super_admin
+    const { data: userRoles } = await adminClient
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', user.id)
+    
+    const isSuperAdmin = userRoles?.some(r => r.role === 'super_admin') ?? false
+
+    // Get organization_id from query params or body
+    const url = new URL(req.url)
+    let organizationId = url.searchParams.get('organization_id')
+    
+    // If not in query params, try body
+    if (!organizationId && req.method === 'POST') {
+      try {
+        const body = await req.json()
+        organizationId = body.organization_id
+      } catch {
+        // Body parsing failed, continue
+      }
+    }
+
+    // If no org ID provided, try to get from profile
+    if (!organizationId) {
+      const { data: profile } = await adminClient
+        .from('profiles')
+        .select('organization_id')
+        .eq('id', user.id)
+        .single()
+      
+      organizationId = profile?.organization_id
+    }
+
+    if (!organizationId) {
       return new Response(
-        JSON.stringify({ error: 'Organization not found' }),
+        JSON.stringify({ error: 'Organization not found. Please provide organization_id.' }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    // Admin client for accessing auth.users
-    const adminClient = createClient(supabaseUrl, supabaseServiceKey)
+    // Verify user has access to this organization (unless super_admin)
+    if (!isSuperAdmin) {
+      const { data: membership } = await adminClient
+        .from('organization_members')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('organization_id', organizationId)
+        .eq('is_active', true)
+        .maybeSingle()
 
-    // Get all profiles in the organization
-    const { data: profiles, error: profilesError } = await adminClient
-      .from('profiles')
-      .select('id, full_name, avatar_url, organization_id')
-      .eq('organization_id', profile.organization_id)
+      // Also check if user's profile org matches
+      const { data: profile } = await adminClient
+        .from('profiles')
+        .select('organization_id')
+        .eq('id', user.id)
+        .single()
 
-    if (profilesError) {
-      console.error('Error fetching profiles:', profilesError)
-      throw profilesError
+      if (!membership && profile?.organization_id !== organizationId) {
+        return new Response(
+          JSON.stringify({ error: 'Access denied to this organization' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
     }
 
-    if (!profiles || profiles.length === 0) {
+    // Get all organization members
+    const { data: members, error: membersError } = await adminClient
+      .from('organization_members')
+      .select('user_id, role, is_active')
+      .eq('organization_id', organizationId)
+      .eq('is_active', true)
+
+    if (membersError) {
+      console.error('Error fetching members:', membersError)
+      throw membersError
+    }
+
+    if (!members || members.length === 0) {
+      console.log(`No members found for org ${organizationId}`)
       return new Response(
         JSON.stringify([]),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
+    // Get profiles for these users
+    const userIds = members.map(m => m.user_id)
+    const { data: profiles, error: profilesError } = await adminClient
+      .from('profiles')
+      .select('id, full_name, avatar_url')
+      .in('id', userIds)
+
+    if (profilesError) {
+      console.error('Error fetching profiles:', profilesError)
+      throw profilesError
+    }
+
     // Get roles for these users
-    const userIds = profiles.map(p => p.id)
     const { data: roles, error: rolesError } = await adminClient
       .from('user_roles')
       .select('user_id, role')
@@ -85,14 +149,15 @@ Deno.serve(async (req) => {
 
     // Get banned status from auth.users
     const teamMembers = await Promise.all(
-      profiles.map(async (profileItem) => {
-        const userRole = roles?.find(r => r.user_id === profileItem.id)
+      members.map(async (member) => {
+        const profileItem = profiles?.find(p => p.id === member.user_id)
+        const userRole = roles?.find(r => r.user_id === member.user_id)
         
         // Get user from auth.users to check banned status
-        const { data: authUser, error: authError } = await adminClient.auth.admin.getUserById(profileItem.id)
+        const { data: authUser, error: authError } = await adminClient.auth.admin.getUserById(member.user_id)
         
         if (authError) {
-          console.error(`Error fetching auth user ${profileItem.id}:`, authError)
+          console.error(`Error fetching auth user ${member.user_id}:`, authError)
         }
 
         const isBanned = authUser?.user?.banned_until 
@@ -100,18 +165,18 @@ Deno.serve(async (req) => {
           : false
 
         return {
-          id: profileItem.id,
-          full_name: profileItem.full_name,
-          avatar_url: profileItem.avatar_url,
-          organization_id: profileItem.organization_id,
-          user_id: profileItem.id,
-          role: userRole?.role || 'viewer',
+          id: member.user_id,
+          full_name: profileItem?.full_name || 'Unknown',
+          avatar_url: profileItem?.avatar_url,
+          organization_id: organizationId,
+          user_id: member.user_id,
+          role: userRole?.role || member.role || 'viewer',
           is_banned: isBanned,
         }
       })
     )
 
-    console.log(`Returning ${teamMembers.length} team members for org ${profile.organization_id}`)
+    console.log(`Returning ${teamMembers.length} team members for org ${organizationId}`)
 
     return new Response(
       JSON.stringify(teamMembers),

@@ -38,7 +38,9 @@ export function useTeamMembers() {
     queryFn: async (): Promise<TeamMember[]> => {
       if (!organization?.id) return [];
 
-      const { data, error } = await supabase.functions.invoke('get-team-members');
+      const { data, error } = await supabase.functions.invoke('get-team-members', {
+        body: { organization_id: organization.id }
+      });
 
       if (error) throw error;
       return (data || []) as TeamMember[];
