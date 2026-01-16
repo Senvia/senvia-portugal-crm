@@ -14,7 +14,10 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
-    // Create client with user's auth token
+    // Admin client for DB access + validating the caller JWT (verify_jwt=false)
+    const adminClient = createClient(supabaseUrl, supabaseServiceKey)
+
+    // Validate caller
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
       return new Response(
@@ -23,21 +26,23 @@ Deno.serve(async (req) => {
       )
     }
 
-    const userClient = createClient(supabaseUrl, supabaseServiceKey, {
-      global: { headers: { Authorization: authHeader } }
-    })
+    const jwt = authHeader.replace(/^Bearer\s+/i, '').trim()
+    if (!jwt) {
+      return new Response(
+        JSON.stringify({ error: 'Authorization token required' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
 
-    // Get current user
-    const { data: { user }, error: userError } = await userClient.auth.getUser()
+    const { data: { user }, error: userError } = await adminClient.auth.getUser(jwt)
     if (userError || !user) {
+      console.error('auth.getUser failed:', userError)
       return new Response(
         JSON.stringify({ error: 'Unauthorized' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    // Admin client for accessing auth.users and bypassing RLS
-    const adminClient = createClient(supabaseUrl, supabaseServiceKey)
 
     // Check if user is super_admin
     const { data: userRoles } = await adminClient
