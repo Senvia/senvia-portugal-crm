@@ -13,11 +13,9 @@ Deno.serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!
 
-    // Admin client for DB access + validating the caller JWT
-    const adminClient = createClient(supabaseUrl, supabaseServiceKey)
-
-    // Validate caller via Authorization header
+    // --- Auth (verify_jwt=false): validate JWT via signing keys
     const authHeader = req.headers.get('Authorization')
     if (!authHeader?.startsWith('Bearer ')) {
       return new Response(
@@ -27,19 +25,27 @@ Deno.serve(async (req) => {
     }
 
     const token = authHeader.replace(/^Bearer\s+/i, '').trim()
-    
-    // Use service role to validate the JWT
-    const { data: { user }, error: userError } = await adminClient.auth.getUser(token)
-    
-    if (userError || !user) {
-      console.error('JWT validation failed:', userError)
+
+    const authClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+      auth: { persistSession: false },
+    })
+
+    const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(token)
+    const userId = claimsData?.claims?.sub
+
+    if (claimsError || !userId) {
+      console.error('auth.getClaims failed:', claimsError)
       return new Response(
         JSON.stringify({ error: 'Unauthorized' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    const userId = user.id
+    // Admin client for accessing DB + auth admin APIs (service role)
+    const adminClient = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { persistSession: false },
+    })
 
     // Check if user is super_admin
     const { data: userRoles } = await adminClient
@@ -47,7 +53,7 @@ Deno.serve(async (req) => {
       .select('role')
       .eq('user_id', userId)
 
-    const isSuperAdmin = userRoles?.some(r => r.role === 'super_admin') ?? false
+    const isSuperAdmin = userRoles?.some((r) => r.role === 'super_admin') ?? false
 
     // Get organization_id from query params or body
     const url = new URL(req.url)
@@ -59,7 +65,7 @@ Deno.serve(async (req) => {
         const body = await req.json()
         organizationId = body.organization_id
       } catch {
-        // Body parsing failed, continue
+        // ignore
       }
     }
 
@@ -119,15 +125,14 @@ Deno.serve(async (req) => {
     }
 
     if (!members || members.length === 0) {
-      console.log(`No members found for org ${organizationId}`)
-      return new Response(
-        JSON.stringify([]),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return new Response(JSON.stringify([]), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
     }
 
     // Get profiles for these users
-    const userIds = members.map(m => m.user_id)
+    const userIds = members.map((m) => m.user_id)
+
     const { data: profiles, error: profilesError } = await adminClient
       .from('profiles')
       .select('id, full_name, avatar_url')
@@ -149,20 +154,20 @@ Deno.serve(async (req) => {
       throw rolesError
     }
 
-    // Get banned status from auth.users
     const teamMembers = await Promise.all(
       members.map(async (member) => {
-        const profileItem = profiles?.find(p => p.id === member.user_id)
-        const userRole = roles?.find(r => r.user_id === member.user_id)
-        
-        // Get user from auth.users to check banned status
-        const { data: authUser, error: authError } = await adminClient.auth.admin.getUserById(member.user_id)
-        
+        const profileItem = profiles?.find((p) => p.id === member.user_id)
+        const userRole = roles?.find((r) => r.user_id === member.user_id)
+
+        const { data: authUser, error: authError } = await adminClient.auth.admin.getUserById(
+          member.user_id
+        )
+
         if (authError) {
           console.error(`Error fetching auth user ${member.user_id}:`, authError)
         }
 
-        const isBanned = authUser?.user?.banned_until 
+        const isBanned = authUser?.user?.banned_until
           ? new Date(authUser.user.banned_until) > new Date()
           : false
 
@@ -178,19 +183,15 @@ Deno.serve(async (req) => {
       })
     )
 
-    console.log(`Returning ${teamMembers.length} team members for org ${organizationId}`)
-
-    return new Response(
-      JSON.stringify(teamMembers),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
-
+    return new Response(JSON.stringify(teamMembers), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
   } catch (error) {
     console.error('Error in get-team-members:', error)
     const message = error instanceof Error ? error.message : 'Unknown error'
-    return new Response(
-      JSON.stringify({ error: message }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+    return new Response(JSON.stringify({ error: message }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
   }
 })
