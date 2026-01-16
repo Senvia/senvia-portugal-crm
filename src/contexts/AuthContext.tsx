@@ -118,14 +118,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .rpc('get_user_organizations', { _user_id: userId });
         
         if (cancelled) return;
-        const userOrgs = (orgsData || []) as UserOrganizationMembership[];
+        let userOrgs = (orgsData || []) as UserOrganizationMembership[];
+        
+        // Check if user is super admin
+        const isSuperAdminUser = rolesData?.some(r => r.role === 'super_admin') ?? false;
+
+        // If super admin has no memberships, fetch ALL organizations
+        if (isSuperAdminUser && userOrgs.length === 0) {
+          const { data: allOrgsData } = await supabase.rpc('get_all_organizations');
+          
+          if (cancelled) return;
+          if (allOrgsData && allOrgsData.length > 0) {
+            // Convert to UserOrganizationMembership format
+            userOrgs = allOrgsData.map((org: { organization_id: string; organization_name: string; organization_slug: string; organization_code: string | null; }) => ({
+              organization_id: org.organization_id,
+              organization_name: org.organization_name,
+              organization_code: org.organization_code || org.organization_slug,
+              organization_slug: org.organization_slug,
+              member_role: 'super_admin' as AppRole,
+              is_active: true,
+            }));
+          }
+        }
+        
         setOrganizations(userOrgs);
 
         // Determine which organization to load
         const storedOrgId = localStorage.getItem(ACTIVE_ORG_KEY);
         
         if (userOrgs.length === 0) {
-          // No organizations - might be new user or super admin without memberships
+          // No organizations - might be new user
           if (profileData?.organization_id) {
             await loadOrganization(profileData.organization_id);
           } else {

@@ -1652,6 +1652,16 @@ export type Database = {
       generate_order_number: { Args: { _org_id: string }; Returns: string }
       generate_proposal_code: { Args: { _org_id: string }; Returns: string }
       generate_sale_code: { Args: { _org_id: string }; Returns: string }
+      get_all_organizations: {
+        Args: never
+        Returns: {
+          member_count: number
+          organization_code: string
+          organization_id: string
+          organization_name: string
+          organization_slug: string
+        }[]
+      }
       get_form_by_slugs: {
         Args: { _form_slug?: string; _org_slug: string }
         Returns: {
