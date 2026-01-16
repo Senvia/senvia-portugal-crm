@@ -15,6 +15,7 @@ import senviaLogo from "@/assets/senvia-logo.png";
 const loginSchema = z.object({
   email: z.string().email('Email inválido'),
   password: z.string().min(6, 'A palavra-passe deve ter pelo menos 6 caracteres'),
+  companyCode: z.string().min(2, 'O código da empresa é obrigatório'),
 });
 
 const signupSchema = z.object({
@@ -61,6 +62,7 @@ export default function Login() {
   // Login form state
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+  const [loginCompanyCode, setLoginCompanyCode] = useState('');
   
   // Signup form state
   const [signupFullName, setSignupFullName] = useState('');
@@ -127,7 +129,13 @@ export default function Login() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    const result = loginSchema.safeParse({ email: loginEmail, password: loginPassword });
+    const companyCode = loginCompanyCode.toLowerCase().trim();
+    
+    const result = loginSchema.safeParse({ 
+      email: loginEmail, 
+      password: loginPassword,
+      companyCode 
+    });
     if (!result.success) {
       toast({
         title: 'Erro de validação',
@@ -138,25 +146,93 @@ export default function Login() {
     }
 
     setIsLoading(true);
-    const { error } = await signIn(loginEmail, loginPassword);
-    setIsLoading(false);
 
-    if (error) {
+    try {
+      // 1. Verify organization exists
+      const { data: orgData, error: orgError } = await supabase
+        .from('organizations')
+        .select('id, slug')
+        .eq('slug', companyCode)
+        .maybeSingle();
+      
+      if (orgError || !orgData) {
+        toast({
+          title: 'Código inválido',
+          description: 'O código da empresa não existe. Verifique com o administrador.',
+          variant: 'destructive',
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      // 2. Authenticate user
+      const { error: authError } = await signIn(loginEmail, loginPassword);
+
+      if (authError) {
+        toast({
+          title: 'Erro ao iniciar sessão',
+          description: authError.message === 'Invalid login credentials' 
+            ? 'Email ou palavra-passe incorretos' 
+            : authError.message,
+          variant: 'destructive',
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      // 3. Get current user and verify membership
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      
+      if (!currentUser) {
+        toast({
+          title: 'Erro',
+          description: 'Não foi possível obter os dados do utilizador.',
+          variant: 'destructive',
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      // 4. Check if user is member of this organization
+      const { data: membership, error: memberError } = await supabase
+        .from('organization_members')
+        .select('*')
+        .eq('user_id', currentUser.id)
+        .eq('organization_id', orgData.id)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (memberError || !membership) {
+        // User is not a member - sign out and show error
+        await supabase.auth.signOut();
+        toast({
+          title: 'Acesso negado',
+          description: 'Não tem acesso a esta empresa. Verifique o código ou contacte o administrador.',
+          variant: 'destructive',
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      // 5. Set active organization and redirect
+      localStorage.setItem('senvia_active_organization_id', orgData.id);
+
       toast({
-        title: 'Erro ao iniciar sessão',
-        description: error.message === 'Invalid login credentials' 
-          ? 'Email ou palavra-passe incorretos' 
-          : error.message,
+        title: 'Bem-vindo!',
+        description: 'Sessão iniciada com sucesso.',
+      });
+      
+      // Force reload to ensure AuthContext picks up the active org
+      window.location.href = '/dashboard';
+      
+    } catch (error: any) {
+      toast({
+        title: 'Erro',
+        description: error.message || 'Ocorreu um erro inesperado.',
         variant: 'destructive',
       });
-      return;
+      setIsLoading(false);
     }
-
-    toast({
-      title: 'Bem-vindo!',
-      description: 'Sessão iniciada com sucesso.',
-    });
-    navigate('/dashboard');
   };
 
   const handleSignup = async (e: React.FormEvent) => {
@@ -300,6 +376,21 @@ export default function Login() {
               {/* Login Tab */}
               <TabsContent value="login">
                 <form onSubmit={handleLogin} className="space-y-4 mt-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="login-company-code" className="text-slate-300">Código da Empresa</Label>
+                    <Input
+                      id="login-company-code"
+                      type="text"
+                      placeholder="minha-empresa"
+                      value={loginCompanyCode}
+                      onChange={(e) => setLoginCompanyCode(e.target.value.toLowerCase())}
+                      className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 font-mono"
+                      required
+                    />
+                    <p className="text-xs text-slate-500">
+                      Código fornecido pelo administrador da empresa
+                    </p>
+                  </div>
                   <div className="space-y-2">
                     <Label htmlFor="login-email" className="text-slate-300">Email</Label>
                     <Input
@@ -475,6 +566,22 @@ export default function Login() {
                       {isSlugAvailable === false && (
                         <p className="text-xs text-red-400">Este slug já está em uso</p>
                       )}
+                    </div>
+                    
+                    <div className="space-y-2 mt-3">
+                      <Label htmlFor="company-code-display" className="text-slate-300">
+                        Código da Empresa
+                      </Label>
+                      <Input
+                        id="company-code-display"
+                        type="text"
+                        value={organizationSlug || ''}
+                        readOnly
+                        className="bg-slate-800/50 border-slate-700 text-slate-300 font-mono cursor-not-allowed"
+                      />
+                      <p className="text-xs text-amber-400">
+                        ⚠️ Anote este código — será necessário para fazer login
+                      </p>
                     </div>
                     
                     <div className="space-y-2 mt-3">
