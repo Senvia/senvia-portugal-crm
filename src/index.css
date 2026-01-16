@@ -171,8 +171,8 @@
 
   /* Safe area positioning helpers (for absolute buttons) */
   .top-safe {
-    /* Guarantee minimum 20px for close buttons */
-    top: calc(clamp(20px, var(--safe-area-top), 50px) + 0.5rem);
+    /* Guarantee minimum 16px for close buttons */
+    top: calc(clamp(12px, var(--safe-area-top), 50px) + 0.25rem);
   }
 
   .bottom-safe {
