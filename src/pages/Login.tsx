@@ -130,6 +130,7 @@ export default function Login() {
     e.preventDefault();
     
     const companyCode = loginCompanyCode.toLowerCase().trim();
+    const email = loginEmail.toLowerCase().trim();
     
     const result = loginSchema.safeParse({ 
       email: loginEmail, 
@@ -148,24 +149,49 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      // 1. Verify organization exists
-      const { data: orgData, error: orgError } = await supabase
-        .from('organizations')
-        .select('id, slug')
-        .eq('slug', companyCode)
-        .maybeSingle();
-      
-      if (orgError || !orgData) {
+      // 1. Verify organization and membership BEFORE login (avoids RLS race condition)
+      const { data: membershipCheck, error: checkError } = await supabase
+        .rpc('verify_user_org_membership', { 
+          p_email: email,
+          p_org_slug: companyCode 
+        });
+
+      if (checkError) {
+        console.error('Membership check error:', checkError);
         toast({
-          title: 'Código inválido',
-          description: 'O código da empresa não existe. Verifique com o administrador.',
+          title: 'Erro de verificação',
+          description: 'Não foi possível verificar o acesso. Tente novamente.',
           variant: 'destructive',
         });
         setIsLoading(false);
         return;
       }
 
-      // 2. Authenticate user
+      // No results = email or org doesn't exist
+      if (!membershipCheck || membershipCheck.length === 0) {
+        toast({
+          title: 'Dados inválidos',
+          description: 'O código da empresa ou email não existe.',
+          variant: 'destructive',
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      const membership = membershipCheck[0];
+      
+      // User exists but is not a member of this org
+      if (!membership.is_member) {
+        toast({
+          title: 'Acesso negado',
+          description: 'Não tem acesso a esta empresa. Verifique o código ou contacte o administrador.',
+          variant: 'destructive',
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      // 2. Now we can safely authenticate - membership is confirmed
       const { error: authError } = await signIn(loginEmail, loginPassword);
 
       if (authError) {
@@ -180,52 +206,19 @@ export default function Login() {
         return;
       }
 
-      // 3. Get current user and verify membership
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
-      
-      if (!currentUser) {
-        toast({
-          title: 'Erro',
-          description: 'Não foi possível obter os dados do utilizador.',
-          variant: 'destructive',
-        });
-        setIsLoading(false);
-        return;
-      }
-
-      // 4. Check if user is member of this organization
-      const { data: membership, error: memberError } = await supabase
-        .from('organization_members')
-        .select('*')
-        .eq('user_id', currentUser.id)
-        .eq('organization_id', orgData.id)
-        .eq('is_active', true)
-        .maybeSingle();
-
-      if (memberError || !membership) {
-        // User is not a member - sign out and show error
-        await supabase.auth.signOut();
-        toast({
-          title: 'Acesso negado',
-          description: 'Não tem acesso a esta empresa. Verifique o código ou contacte o administrador.',
-          variant: 'destructive',
-        });
-        setIsLoading(false);
-        return;
-      }
-
-      // 5. Set active organization and redirect
-      localStorage.setItem('senvia_active_organization_id', orgData.id);
+      // 3. Set active organization and redirect
+      localStorage.setItem('senvia_active_organization_id', membership.organization_id);
 
       toast({
         title: 'Bem-vindo!',
-        description: 'Sessão iniciada com sucesso.',
+        description: `Sessão iniciada em ${membership.organization_name}`,
       });
       
       // Force reload to ensure AuthContext picks up the active org
       window.location.href = '/dashboard';
       
     } catch (error: any) {
+      console.error('Login error:', error);
       toast({
         title: 'Erro',
         description: error.message || 'Ocorreu um erro inesperado.',
