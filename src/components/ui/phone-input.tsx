@@ -70,24 +70,33 @@ export function PhoneInput({
   const [open, setOpen] = useState(false);
   const [selectedCountry, setSelectedCountry] = useState<Country>(DEFAULT_COUNTRY);
   const [localNumber, setLocalNumber] = useState('');
-  const [isInitialized, setIsInitialized] = useState(false);
+  const [isUserTyping, setIsUserTyping] = useState(false);
 
-  // Parse initial value on mount
+  // Parse external value changes - reage quando o valor externo muda
   useEffect(() => {
-    if (value && !isInitialized) {
+    // Se não há valor externo, não fazer nada
+    if (!value) {
+      // Se o utilizador não está a digitar, limpar
+      if (!isUserTyping && localNumber) {
+        setLocalNumber('');
+      }
+      return;
+    }
+    
+    // Calcular o valor actual completo
+    const cleanNumber = localNumber.replace(/\s/g, '');
+    const currentFull = cleanNumber ? `${selectedCountry.dialCode}${cleanNumber}` : '';
+    
+    // Se o valor externo é diferente do actual, é um valor novo vindo de fora
+    if (value !== currentFull && !isUserTyping) {
       const { country, localNumber: parsed } = parsePhoneNumber(value);
       setSelectedCountry(country);
       setLocalNumber(parsed);
-      setIsInitialized(true);
-    } else if (!value && !isInitialized) {
-      setIsInitialized(true);
     }
-  }, [value, isInitialized]);
+  }, [value]);
 
   // Propagate changes to parent
   useEffect(() => {
-    if (!isInitialized) return;
-    
     const cleanNumber = localNumber.replace(/\s/g, '');
     const fullNumber = cleanNumber ? `${selectedCountry.dialCode}${cleanNumber}` : '';
     
@@ -95,7 +104,7 @@ export function PhoneInput({
     if (fullNumber !== value) {
       onChange(fullNumber);
     }
-  }, [selectedCountry, localNumber, isInitialized]);
+  }, [selectedCountry, localNumber]);
 
   const handleCountrySelect = (country: Country) => {
     setSelectedCountry(country);
@@ -105,7 +114,10 @@ export function PhoneInput({
   const handleLocalNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     // Only allow numbers and spaces
     const cleaned = e.target.value.replace(/[^\d\s]/g, '');
+    setIsUserTyping(true);
     setLocalNumber(cleaned);
+    // Reset typing flag after a short delay
+    setTimeout(() => setIsUserTyping(false), 100);
   };
 
   // Handle paste with intelligent normalization
