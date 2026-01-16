@@ -14,9 +14,10 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
-    // Auth: verify JWT with signing keys (verify_jwt=false)
-    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!
+    // Admin client for DB access + validating the caller JWT
+    const adminClient = createClient(supabaseUrl, supabaseServiceKey)
 
+    // Validate caller via Authorization header
     const authHeader = req.headers.get('Authorization')
     if (!authHeader?.startsWith('Bearer ')) {
       return new Response(
@@ -26,23 +27,19 @@ Deno.serve(async (req) => {
     }
 
     const token = authHeader.replace(/^Bearer\s+/i, '').trim()
-    const authClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-    })
-
-    const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(token)
-    const userId = claimsData?.claims?.sub
-
-    if (claimsError || !userId) {
-      console.error('auth.getClaims failed:', claimsError)
+    
+    // Use service role to validate the JWT
+    const { data: { user }, error: userError } = await adminClient.auth.getUser(token)
+    
+    if (userError || !user) {
+      console.error('JWT validation failed:', userError)
       return new Response(
         JSON.stringify({ error: 'Unauthorized' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    // Admin client for accessing DB + auth admin APIs (service role)
-    const adminClient = createClient(supabaseUrl, supabaseServiceKey)
+    const userId = user.id
 
     // Check if user is super_admin
     const { data: userRoles } = await adminClient
