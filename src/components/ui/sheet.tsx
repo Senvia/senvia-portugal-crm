@@ -31,18 +31,32 @@ const SheetContent = React.forwardRef<React.ElementRef<typeof SheetPrimitive.Con
   className,
   children,
   ...props
-}, ref) => <SheetPortal>
+}, ref) => {
+  const handleOpenAutoFocus = (e: Event) => {
+    // Prevent autofocus on mobile to avoid keyboard popup
+    if (window.matchMedia('(max-width: 768px)').matches) {
+      e.preventDefault();
+    }
+  };
+
+  return (
+    <SheetPortal>
       <SheetOverlay />
-      <SheetPrimitive.Content ref={ref} className={cn(sheetVariants({
-    side
-  }), className)} {...props}>
+      <SheetPrimitive.Content 
+        ref={ref} 
+        onOpenAutoFocus={handleOpenAutoFocus}
+        className={cn(sheetVariants({ side }), className)} 
+        {...props}
+      >
         {children}
         <SheetPrimitive.Close className="absolute right-safe top-safe translate-y-[25px] rounded-sm opacity-70 ring-offset-background transition-opacity data-[state=open]:bg-secondary hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none">
           <X className="w-[25px] h-[25px]" />
           <span className="sr-only">Close</span>
         </SheetPrimitive.Close>
       </SheetPrimitive.Content>
-    </SheetPortal>);
+    </SheetPortal>
+  );
+});
 SheetContent.displayName = SheetPrimitive.Content.displayName;
 const SheetHeader = ({
   className,

@@ -71,7 +71,6 @@ export const WelcomeStep = ({
               onChange={(e) => setName(e.target.value)}
               placeholder={namePlaceholder}
               className="text-base h-12 text-center"
-              autoFocus
             />
           </motion.div>
 

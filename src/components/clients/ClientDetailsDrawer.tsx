@@ -333,7 +333,6 @@ export function ClientDetailsDrawer({
                     onChange={(e) => setEditedNotes(e.target.value)}
                     placeholder="Adicionar notas sobre este cliente..."
                     className="min-h-[200px]"
-                    autoFocus
                   />
                 ) : (
                   <div 
