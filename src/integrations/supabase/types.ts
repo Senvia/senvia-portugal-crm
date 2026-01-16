@@ -1709,6 +1709,15 @@ export type Database = {
         Returns: boolean
       }
       is_slug_available: { Args: { _slug: string }; Returns: boolean }
+      verify_user_org_membership: {
+        Args: { p_email: string; p_org_slug: string }
+        Returns: {
+          is_member: boolean
+          organization_id: string
+          organization_name: string
+          user_id: string
+        }[]
+      }
     }
     Enums: {
       app_role: "super_admin" | "admin" | "viewer" | "salesperson"
