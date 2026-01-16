@@ -14,48 +14,48 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
-    // Admin client for DB access + validating the caller JWT (verify_jwt=false)
-    const adminClient = createClient(supabaseUrl, supabaseServiceKey)
+    // Auth: verify JWT with signing keys (verify_jwt=false)
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!
 
-    // Validate caller
     const authHeader = req.headers.get('Authorization')
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: 'Authorization header required' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-
-    const jwt = authHeader.replace(/^Bearer\s+/i, '').trim()
-    if (!jwt) {
-      return new Response(
-        JSON.stringify({ error: 'Authorization token required' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-
-    const { data: { user }, error: userError } = await adminClient.auth.getUser(jwt)
-    if (userError || !user) {
-      console.error('auth.getUser failed:', userError)
+    if (!authHeader?.startsWith('Bearer ')) {
       return new Response(
         JSON.stringify({ error: 'Unauthorized' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
+    const token = authHeader.replace(/^Bearer\s+/i, '').trim()
+    const authClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    })
+
+    const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(token)
+    const userId = claimsData?.claims?.sub
+
+    if (claimsError || !userId) {
+      console.error('auth.getClaims failed:', claimsError)
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // Admin client for accessing DB + auth admin APIs (service role)
+    const adminClient = createClient(supabaseUrl, supabaseServiceKey)
 
     // Check if user is super_admin
     const { data: userRoles } = await adminClient
       .from('user_roles')
       .select('role')
-      .eq('user_id', user.id)
-    
+      .eq('user_id', userId)
+
     const isSuperAdmin = userRoles?.some(r => r.role === 'super_admin') ?? false
 
     // Get organization_id from query params or body
     const url = new URL(req.url)
     let organizationId = url.searchParams.get('organization_id')
-    
+
     // If not in query params, try body
     if (!organizationId && req.method === 'POST') {
       try {
@@ -71,9 +71,9 @@ Deno.serve(async (req) => {
       const { data: profile } = await adminClient
         .from('profiles')
         .select('organization_id')
-        .eq('id', user.id)
+        .eq('id', userId)
         .single()
-      
+
       organizationId = profile?.organization_id
     }
 
@@ -89,7 +89,7 @@ Deno.serve(async (req) => {
       const { data: membership } = await adminClient
         .from('organization_members')
         .select('id')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .eq('organization_id', organizationId)
         .eq('is_active', true)
         .maybeSingle()
@@ -98,7 +98,7 @@ Deno.serve(async (req) => {
       const { data: profile } = await adminClient
         .from('profiles')
         .select('organization_id')
-        .eq('id', user.id)
+        .eq('id', userId)
         .single()
 
       if (!membership && profile?.organization_id !== organizationId) {
