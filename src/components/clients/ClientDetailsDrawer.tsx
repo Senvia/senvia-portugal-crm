@@ -101,7 +101,7 @@ export function ClientDetailsDrawer({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-xl px-0 pb-0 pt-safe flex flex-col h-full">
-        <SheetHeader className="px-4 sm:px-6 pb-0 pt-2 shrink-0">
+        <SheetHeader className="px-4 sm:px-6 pb-0 pt-14 shrink-0">
           <div className="flex items-start justify-between">
             <div>
               <SheetTitle className="text-left">{client.name}</SheetTitle>
