@@ -19,20 +19,23 @@ export interface PipelineStage {
 }
 
 export function usePipelineStages() {
-  const { session } = useAuth();
+  const { session, organization } = useAuth();
 
   return useQuery({
-    queryKey: ["pipeline-stages"],
+    queryKey: ["pipeline-stages", organization?.id],
     queryFn: async () => {
+      if (!organization?.id) return [];
+      
       const { data, error } = await supabase
         .from("pipeline_stages")
         .select("*")
+        .eq("organization_id", organization.id)
         .order("position", { ascending: true });
 
       if (error) throw error;
       return data as PipelineStage[];
     },
-    enabled: !!session,
+    enabled: !!session && !!organization?.id,
   });
 }
 
