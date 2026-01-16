@@ -101,8 +101,8 @@ export function ClientDetailsDrawer({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-xl px-0 pb-0 pt-safe">
-        <SheetHeader className="px-4 sm:px-6 pb-0 pt-0">
+      <SheetContent className="w-full sm:max-w-xl px-0 pb-0 pt-safe flex flex-col h-full">
+        <SheetHeader className="px-4 sm:px-6 pb-0 pt-2 shrink-0">
           <div className="flex items-start justify-between">
             <div className="flex items-center gap-3">
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
@@ -173,8 +173,8 @@ export function ClientDetailsDrawer({
           </div>
         </SheetHeader>
 
-        <Tabs defaultValue="resumo" className="w-full mt-4">
-          <TabsList className="w-full justify-start px-6 h-auto flex-wrap">
+        <Tabs defaultValue="resumo" className="w-full mt-4 flex-1 flex flex-col min-h-0">
+          <TabsList className="w-full justify-start px-6 h-auto flex-wrap shrink-0">
             <TabsTrigger value="resumo" className="text-xs">Resumo</TabsTrigger>
             <TabsTrigger value="notas" className="text-xs">Notas</TabsTrigger>
             <TabsTrigger value="historico" className="text-xs">Histórico</TabsTrigger>
@@ -186,7 +186,7 @@ export function ClientDetailsDrawer({
             </TabsTrigger>
           </TabsList>
 
-          <ScrollArea className="h-[calc(100vh-260px)]">
+          <ScrollArea className="flex-1 min-h-0">
             {/* Resumo Tab */}
             <TabsContent value="resumo" className="p-6 pt-4 space-y-6 mt-0">
               {/* Métricas */}
