@@ -223,13 +223,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
-    localStorage.removeItem(ACTIVE_ORG_KEY);
-    await supabase.auth.signOut();
+    // Limpar estados ANTES de chamar o Supabase para evitar race conditions
+    setUser(null);
+    setSession(null);
     setProfile(null);
     setOrganization(null);
     setOrganizations([]);
     setRoles([]);
     setNeedsOrgSelection(false);
+    
+    // Limpar localStorage
+    localStorage.removeItem(ACTIVE_ORG_KEY);
+    
+    // Agora sim, chamar o Supabase
+    await supabase.auth.signOut();
   };
 
   const refetchUserData = async () => {
