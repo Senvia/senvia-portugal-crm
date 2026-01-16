@@ -148,7 +148,6 @@ export const DynamicStep = ({
             onChange={(e) => setValue(e.target.value)}
             placeholder={field.placeholder || field.label}
             className="text-base h-12 text-center"
-            autoFocus
           />
         )}
       </motion.div>
