@@ -125,6 +125,23 @@
 }
 
 @layer base {
+  :root {
+    /* Safe area CSS variables with robust fallbacks */
+    --safe-area-top: env(safe-area-inset-top, 0px);
+    --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-area-left: env(safe-area-inset-left, 0px);
+    --safe-area-right: env(safe-area-inset-right, 0px);
+  }
+
+  @supports (padding-top: constant(safe-area-inset-top)) {
+    :root {
+      --safe-area-top: constant(safe-area-inset-top);
+      --safe-area-bottom: constant(safe-area-inset-bottom);
+      --safe-area-left: constant(safe-area-inset-left);
+      --safe-area-right: constant(safe-area-inset-right);
+    }
+  }
+
   * {
     @apply border-border;
   }
@@ -134,47 +151,47 @@
     font-family: 'Inter', system-ui, sans-serif;
   }
 
-  /* Safe areas for PWA */
+  /* Safe areas for PWA - using calc() instead of max() for better iOS support */
   .safe-top {
-    padding-top: env(safe-area-inset-top);
+    padding-top: var(--safe-area-top);
   }
 
   .safe-bottom {
-    padding-bottom: env(safe-area-inset-bottom);
+    padding-bottom: var(--safe-area-bottom);
   }
 
   .pb-safe {
-    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+    padding-bottom: calc(var(--safe-area-bottom) + 1rem);
   }
 
   .pt-safe {
-    padding-top: max(1rem, env(safe-area-inset-top));
+    padding-top: calc(var(--safe-area-top) + 0.75rem);
   }
 
   /* Safe area positioning helpers (for absolute buttons) */
   .top-safe {
-    top: max(1rem, env(safe-area-inset-top));
+    top: calc(var(--safe-area-top) + 0.75rem);
   }
 
   .bottom-safe {
-    bottom: max(1rem, env(safe-area-inset-bottom));
+    bottom: calc(var(--safe-area-bottom) + 1rem);
   }
 
   .right-safe {
-    right: max(1rem, env(safe-area-inset-right));
+    right: calc(var(--safe-area-right) + 1rem);
   }
 
   .left-safe {
-    left: max(1rem, env(safe-area-inset-left));
+    left: calc(var(--safe-area-left) + 1rem);
   }
 
   /* PWA header/nav safe area utilities */
   .pt-header-safe {
-    padding-top: calc(3.5rem + env(safe-area-inset-top));
+    padding-top: calc(3.5rem + var(--safe-area-top));
   }
 
   .pb-nav-safe {
-    padding-bottom: calc(4rem + env(safe-area-inset-bottom));
+    padding-bottom: calc(4rem + var(--safe-area-bottom));
   }
 
   /* Scrollbar Styling */
