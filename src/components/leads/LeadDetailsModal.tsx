@@ -231,7 +231,7 @@ export function LeadDetailsModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+        <DialogHeader className="pr-8">
           <DialogTitle asChild>
             <Input
               value={editName}
@@ -245,7 +245,7 @@ export function LeadDetailsModal({
                 }
                 setIsEditingName(false);
               }}
-              className="text-xl font-semibold border-transparent bg-transparent px-0 h-auto focus-visible:ring-1 focus-visible:ring-primary hover:border-muted-foreground/30 transition-colors"
+              className="text-xl font-semibold border-transparent bg-transparent px-0 h-auto w-full focus-visible:ring-1 focus-visible:ring-primary hover:border-muted-foreground/30 transition-colors"
               placeholder="Nome do lead"
             />
           </DialogTitle>
