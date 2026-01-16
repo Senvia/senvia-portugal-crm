@@ -142,14 +142,12 @@ export function PhoneInput({
             variant="outline"
             role="combobox"
             aria-expanded={open}
-            className="rounded-r-none border-r-0 px-3 h-10 min-w-[100px] justify-between"
+            className="rounded-r-none border-r-0 px-2 h-10 min-w-fit justify-between gap-1"
             disabled={disabled}
           >
-            <span className="flex items-center gap-1.5">
-              <span className="text-base leading-none">{selectedCountry.flag}</span>
-              <span className="text-sm text-muted-foreground">{selectedCountry.dialCode}</span>
-            </span>
-            <ChevronDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
+            <span className="text-base leading-none">{selectedCountry.flag}</span>
+            <span className="text-xs text-muted-foreground">{selectedCountry.dialCode}</span>
+            <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-[250px] p-0 z-50" align="start">
