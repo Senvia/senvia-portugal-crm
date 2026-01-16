@@ -51,7 +51,7 @@ const generateSlug = (name: string): string => {
 export default function Login() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { signIn, user, isLoading: authLoading } = useAuth();
+  const { signIn, user, session, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   
@@ -110,15 +110,15 @@ export default function Login() {
     return () => clearTimeout(timeoutId);
   }, [organizationSlug]);
 
-  // Redirect if already logged in (moved to useEffect)
+  // Redirect if already logged in - verificar user E session
   useEffect(() => {
-    if (user && !authLoading) {
+    if (user && session && !authLoading) {
       navigate('/dashboard', { replace: true });
     }
-  }, [user, authLoading, navigate]);
+  }, [user, session, authLoading, navigate]);
 
-  // Show loading while checking auth or redirecting
-  if (authLoading || user) {
+  // Show loading only during initial auth check
+  if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-950">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
