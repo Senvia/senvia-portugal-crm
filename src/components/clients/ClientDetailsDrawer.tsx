@@ -7,7 +7,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  User,
   Mail,
   Phone,
   Building2,
@@ -104,20 +103,15 @@ export function ClientDetailsDrawer({
       <SheetContent className="w-full sm:max-w-xl px-0 pb-0 pt-safe flex flex-col h-full">
         <SheetHeader className="px-4 sm:px-6 pb-0 pt-2 shrink-0">
           <div className="flex items-start justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-                <User className="h-6 w-6 text-primary" />
-              </div>
-              <div>
-                <SheetTitle className="text-left">{client.name}</SheetTitle>
-                <div className="flex items-center gap-2 mt-1">
-                  <Badge variant="outline" className={cn('text-xs', statusStyle.bg, statusStyle.text, statusStyle.border)}>
-                    {statusLabel}
-                  </Badge>
-                  <span className="text-xs text-muted-foreground">
-                    {labels.since} {formatDate(client.created_at)}
-                  </span>
-                </div>
+            <div>
+              <SheetTitle className="text-left">{client.name}</SheetTitle>
+              <div className="flex items-center gap-2 mt-1">
+                <Badge variant="outline" className={cn('text-xs', statusStyle.bg, statusStyle.text, statusStyle.border)}>
+                  {statusLabel}
+                </Badge>
+                <span className="text-xs text-muted-foreground">
+                  {labels.since} {formatDate(client.created_at)}
+                </span>
               </div>
             </div>
             <Button variant="outline" size="sm" onClick={() => onEdit(client)}>

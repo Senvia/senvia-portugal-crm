@@ -232,33 +232,26 @@ export function LeadDetailsModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <div className="flex items-start gap-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-xl font-bold text-primary">
-              {(editName || lead.name).charAt(0).toUpperCase()}
-            </div>
-            <div className="flex-1">
-              <DialogTitle asChild>
-                <Input
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  onFocus={() => setIsEditingName(true)}
-                  onBlur={() => {
-                    if (editName.trim() && editName !== lead.name) {
-                      handleFieldSave("name", editName.trim());
-                    } else if (!editName.trim()) {
-                      setEditName(lead.name);
-                    }
-                    setIsEditingName(false);
-                  }}
-                  className="text-xl font-semibold border-transparent bg-transparent px-0 h-auto focus-visible:ring-1 focus-visible:ring-primary hover:border-muted-foreground/30 transition-colors"
-                  placeholder="Nome do lead"
-                />
-              </DialogTitle>
-              <DialogDescription className="mt-1">
-                Lead criada em {formatDate(lead.created_at)}
-              </DialogDescription>
-            </div>
-          </div>
+          <DialogTitle asChild>
+            <Input
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              onFocus={() => setIsEditingName(true)}
+              onBlur={() => {
+                if (editName.trim() && editName !== lead.name) {
+                  handleFieldSave("name", editName.trim());
+                } else if (!editName.trim()) {
+                  setEditName(lead.name);
+                }
+                setIsEditingName(false);
+              }}
+              className="text-xl font-semibold border-transparent bg-transparent px-0 h-auto focus-visible:ring-1 focus-visible:ring-primary hover:border-muted-foreground/30 transition-colors"
+              placeholder="Nome do lead"
+            />
+          </DialogTitle>
+          <DialogDescription>
+            Lead criada em {formatDate(lead.created_at)}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6 py-4">
