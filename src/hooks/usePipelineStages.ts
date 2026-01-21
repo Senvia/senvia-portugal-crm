@@ -39,6 +39,23 @@ export function usePipelineStages() {
   });
 }
 
+// Hook para obter etapas finais dinamicamente (positiva e negativa)
+export function useFinalStages() {
+  const { data: stages, isLoading } = usePipelineStages();
+  
+  const finalPositiveStage = stages?.find(s => s.is_final_positive) || null;
+  const finalNegativeStage = stages?.find(s => s.is_final_negative) || null;
+  
+  return { 
+    finalPositiveStage, 
+    finalNegativeStage, 
+    isLoading,
+    // Helper para verificar se um status é final
+    isFinalStatus: (status: string) => 
+      status === finalPositiveStage?.key || status === finalNegativeStage?.key
+  };
+}
+
 export function useCreatePipelineStage() {
   const queryClient = useQueryClient();
 

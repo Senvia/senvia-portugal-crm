@@ -28,6 +28,8 @@ import { useClients } from "@/hooks/useClients";
 import { useProducts } from "@/hooks/useProducts";
 import { useCreateSale } from "@/hooks/useSales";
 import { useCreateSaleItems } from "@/hooks/useSaleItems";
+import { useFinalStages } from "@/hooks/usePipelineStages";
+import { useUpdateLeadStatus } from "@/hooks/useLeads";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -81,6 +83,8 @@ export function CreateSaleModal({
   const { data: products } = useProducts();
   const createSale = useCreateSale();
   const createSaleItems = useCreateSaleItems();
+  const { finalPositiveStage } = useFinalStages();
+  const updateLeadStatus = useUpdateLeadStatus();
   
   // Fetch proposal products when prefillProposal is provided
   const { data: proposalProducts } = useProposalProducts(prefillProposal?.id);
@@ -271,6 +275,14 @@ export function CreateSaleModal({
             total: item.quantity * item.unit_price,
           }))
         );
+      }
+
+      // Auto-update lead status when sale is created (if proposal has a lead)
+      if (prefillProposal?.lead_id && finalPositiveStage) {
+        updateLeadStatus.mutate({ 
+          leadId: prefillProposal.lead_id, 
+          status: finalPositiveStage.key 
+        });
       }
 
       onOpenChange(false);
