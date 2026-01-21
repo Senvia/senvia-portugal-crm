@@ -61,11 +61,40 @@ const STATUS_STYLES: Record<string, { bg: string; text: string }> = {
   draft: { bg: 'bg-muted', text: 'text-muted-foreground' },
   sent: { bg: 'bg-blue-500/10', text: 'text-blue-500' },
   approved: { bg: 'bg-success/10', text: 'text-success' },
+  accepted: { bg: 'bg-success/10', text: 'text-success' },
   rejected: { bg: 'bg-destructive/10', text: 'text-destructive' },
   pending: { bg: 'bg-warning/10', text: 'text-warning' },
+  in_progress: { bg: 'bg-blue-500/10', text: 'text-blue-500' },
+  negotiating: { bg: 'bg-warning/10', text: 'text-warning' },
   completed: { bg: 'bg-success/10', text: 'text-success' },
+  delivered: { bg: 'bg-success/10', text: 'text-success' },
+  scheduled: { bg: 'bg-blue-500/10', text: 'text-blue-500' },
   cancelled: { bg: 'bg-destructive/10', text: 'text-destructive' },
+  expired: { bg: 'bg-muted', text: 'text-muted-foreground' },
 };
+
+const STATUS_LABELS: Record<string, string> = {
+  // Proposals
+  draft: 'Rascunho',
+  sent: 'Enviada',
+  negotiating: 'Em Negociação',
+  accepted: 'Aceite',
+  rejected: 'Recusada',
+  expired: 'Expirada',
+  // Sales
+  pending: 'Pendente',
+  in_progress: 'Em Progresso',
+  delivered: 'Entregue',
+  cancelled: 'Cancelada',
+  completed: 'Concluída',
+  // Meetings/Events
+  scheduled: 'Agendado',
+  confirmed: 'Confirmado',
+};
+
+function getStatusLabel(status: string): string {
+  return STATUS_LABELS[status] || status;
+}
 
 function getCallIcon(direction?: 'inbound' | 'outbound' | null) {
   if (direction === 'inbound') return PhoneIncoming;
@@ -124,7 +153,7 @@ function TimelineItem({ event }: { event: ClientHistoryEvent }) {
             )}
             {statusStyle && event.status && (
               <Badge variant="outline" className={cn('text-xs', statusStyle.bg, statusStyle.text)}>
-                {event.status}
+                {getStatusLabel(event.status)}
               </Badge>
             )}
             {/* Direction badge for communications */}
