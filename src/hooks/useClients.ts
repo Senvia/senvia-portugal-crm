@@ -71,6 +71,7 @@ interface CreateClientData {
   city?: string;
   postal_code?: string;
   country?: string;
+  assigned_to?: string;
 }
 
 export function useCreateClient() {
@@ -174,6 +175,13 @@ export function useConvertLeadToClient() {
     }) => {
       if (!organizationId) throw new Error('No organization');
 
+      // First, fetch the lead to get the assigned_to value
+      const { data: lead } = await supabase
+        .from('leads')
+        .select('assigned_to')
+        .eq('id', leadData.lead_id)
+        .single();
+
       const { data, error } = await supabase
         .from('crm_clients')
         .insert({
@@ -187,6 +195,7 @@ export function useConvertLeadToClient() {
           notes: leadData.notes,
           source: 'lead',
           status: 'active',
+          assigned_to: lead?.assigned_to || null, // Inherit from lead
         })
         .select()
         .single();

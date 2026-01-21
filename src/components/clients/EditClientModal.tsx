@@ -21,6 +21,7 @@ import {
 import { PhoneInput } from "@/components/ui/phone-input";
 import { useUpdateClient } from "@/hooks/useClients";
 import { useClientLabels } from "@/hooks/useClientLabels";
+import { useTeamMembers } from "@/hooks/useTeam";
 import { CrmClient, CLIENT_STATUS_LABELS, CLIENT_SOURCE_LABELS, ClientStatus } from "@/types/clients";
 import { COUNTRIES } from "@/lib/countries";
 
@@ -32,6 +33,7 @@ interface EditClientModalProps {
 
 export function EditClientModal({ client, open, onOpenChange }: EditClientModalProps) {
   const labels = useClientLabels();
+  const { data: teamMembers = [] } = useTeamMembers();
   
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -41,6 +43,7 @@ export function EditClientModal({ client, open, onOpenChange }: EditClientModalP
   const [status, setStatus] = useState<ClientStatus>("active");
   const [source, setSource] = useState("");
   const [notes, setNotes] = useState("");
+  const [assignedTo, setAssignedTo] = useState("");
   
   // Address fields
   const [addressLine1, setAddressLine1] = useState("");
@@ -61,6 +64,7 @@ export function EditClientModal({ client, open, onOpenChange }: EditClientModalP
       setStatus(client.status);
       setSource(client.source || "");
       setNotes(client.notes || "");
+      setAssignedTo(client.assigned_to || "");
       setAddressLine1(client.address_line1 || "");
       setAddressLine2(client.address_line2 || "");
       setCity(client.city || "");
@@ -90,6 +94,7 @@ export function EditClientModal({ client, open, onOpenChange }: EditClientModalP
         city: city.trim() || null,
         postal_code: postalCode.trim() || null,
         country: country || null,
+        assigned_to: assignedTo || null,
       },
       {
         onSuccess: () => {
@@ -190,6 +195,23 @@ export function EditClientModal({ client, open, onOpenChange }: EditClientModalP
                   {Object.entries(CLIENT_SOURCE_LABELS).map(([value, label]) => (
                     <SelectItem key={value} value={value}>
                       {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2 sm:col-span-2">
+              <Label htmlFor="edit-assigned_to">Vendedor Responsável</Label>
+              <Select value={assignedTo} onValueChange={setAssignedTo}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Sem responsável atribuído" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Sem responsável</SelectItem>
+                  {teamMembers.map((member) => (
+                    <SelectItem key={member.user_id} value={member.user_id}>
+                      {member.full_name}
                     </SelectItem>
                   ))}
                 </SelectContent>
