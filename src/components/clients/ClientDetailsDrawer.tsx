@@ -19,12 +19,14 @@ import {
   Calendar as CalendarIcon,
   Save,
   X,
+  User,
 } from "lucide-react";
 import { formatDate, formatCurrency, getWhatsAppUrl } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useClientLabels } from "@/hooks/useClientLabels";
 import { useClientHistory } from "@/hooks/useClientHistory";
 import { useUpdateClient } from "@/hooks/useClients";
+import { useTeamMembers } from "@/hooks/useTeam";
 import { ClientTimeline } from "./ClientTimeline";
 import type { CrmClient } from "@/types/clients";
 
@@ -50,6 +52,14 @@ export function ClientDetailsDrawer({
   const labels = useClientLabels();
   const { timeline, proposals, sales, events, isLoading: loadingHistory } = useClientHistory(client?.id || null);
   const updateClient = useUpdateClient();
+  const { data: teamMembers = [] } = useTeamMembers();
+
+  // Get team member name by user_id
+  const getTeamMemberName = (userId: string | null | undefined) => {
+    if (!userId) return null;
+    const member = teamMembers.find(m => m.user_id === userId);
+    return member?.full_name || null;
+  };
 
   // Notes editing state
   const [isEditingNotes, setIsEditingNotes] = useState(false);
@@ -288,6 +298,20 @@ export function ClientDetailsDrawer({
                   </div>
                 </>
               )}
+
+              {/* Vendedor Responsável */}
+              <Separator />
+              <div className="space-y-3">
+                <h3 className="text-sm font-medium">Vendedor Responsável</h3>
+                {getTeamMemberName(client.assigned_to) ? (
+                  <div className="flex items-center gap-2 text-sm">
+                    <User className="h-4 w-4 text-muted-foreground" />
+                    <span>{getTeamMemberName(client.assigned_to)}</span>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Sem responsável atribuído</p>
+                )}
+              </div>
             </TabsContent>
 
             {/* Notas Tab */}

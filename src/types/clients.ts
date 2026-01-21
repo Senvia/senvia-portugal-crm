@@ -8,6 +8,7 @@ export interface CrmClient {
   organization_id: string;
   code?: string | null;
   lead_id?: string | null;
+  assigned_to?: string | null;
   
   // Basic info
   name: string;

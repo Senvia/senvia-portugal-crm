@@ -26,11 +26,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { MoreHorizontal, Eye, Pencil, Trash2, Phone, Mail, Building2, MessageCircle } from "lucide-react";
+import { MoreHorizontal, Eye, Pencil, Trash2, Phone, Mail, Building2, MessageCircle, User } from "lucide-react";
 import { CrmClient, CLIENT_STATUS_LABELS, CLIENT_STATUS_STYLES } from "@/types/clients";
 import { formatDate, getWhatsAppUrl } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useTeamMembers } from "@/hooks/useTeam";
 
 interface ClientsTableProps {
   clients: CrmClient[];
@@ -42,6 +43,13 @@ interface ClientsTableProps {
 export function ClientsTable({ clients, onEdit, onView, onDelete }: ClientsTableProps) {
   const [deleteClientId, setDeleteClientId] = useState<string | null>(null);
   const { canDeleteLeads } = usePermissions();
+  const { data: teamMembers = [] } = useTeamMembers();
+
+  const getTeamMemberName = (userId: string | null | undefined) => {
+    if (!userId) return null;
+    const member = teamMembers.find(m => m.user_id === userId);
+    return member?.full_name || null;
+  };
 
   const handleConfirmDelete = () => {
     if (deleteClientId) {
@@ -73,6 +81,7 @@ export function ClientsTable({ clients, onEdit, onView, onDelete }: ClientsTable
               <TableHead>Cliente</TableHead>
               <TableHead className="hidden md:table-cell">Contacto</TableHead>
               <TableHead className="hidden lg:table-cell">Empresa</TableHead>
+              <TableHead className="hidden xl:table-cell">Responsável</TableHead>
               <TableHead>Estado</TableHead>
               <TableHead className="hidden sm:table-cell">Data</TableHead>
               <TableHead className="w-[60px]"></TableHead>
@@ -111,6 +120,16 @@ export function ClientsTable({ clients, onEdit, onView, onDelete }: ClientsTable
                       <Building2 className="h-3 w-3 text-muted-foreground" />
                       <span className="truncate max-w-[150px]">{client.company}</span>
                     </div>
+                  )}
+                </TableCell>
+                <TableCell className="hidden xl:table-cell">
+                  {getTeamMemberName(client.assigned_to) ? (
+                    <div className="flex items-center gap-1 text-sm">
+                      <User className="h-3 w-3 text-muted-foreground" />
+                      <span className="truncate max-w-[120px]">{getTeamMemberName(client.assigned_to)}</span>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">—</span>
                   )}
                 </TableCell>
                 <TableCell>
