@@ -1,11 +1,28 @@
-import { useRef, useEffect } from "react";
+import { useEffect, useRef, useCallback } from "react";
+import { useEditor, EditorContent } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
+import Link from "@tiptap/extension-link";
+import Placeholder from "@tiptap/extension-placeholder";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Toggle } from "@/components/ui/toggle";
+import { Separator } from "@/components/ui/separator";
 import { TEMPLATE_VARIABLES } from "@/types/marketing";
 import { cn } from "@/lib/utils";
+import {
+  Bold,
+  Italic,
+  Link as LinkIcon,
+  List,
+  ListOrdered,
+  Heading1,
+  Heading2,
+  Undo,
+  Redo,
+  Unlink,
+} from "lucide-react";
 
 interface TemplateEditorProps {
   value: string;
@@ -13,9 +30,183 @@ interface TemplateEditorProps {
   className?: string;
 }
 
+function EditorToolbar({ editor }: { editor: ReturnType<typeof useEditor> }) {
+  if (!editor) return null;
+
+  const setLink = useCallback(() => {
+    const previousUrl = editor.getAttributes("link").href;
+    const url = window.prompt("URL do link:", previousUrl);
+
+    if (url === null) return;
+
+    if (url === "") {
+      editor.chain().focus().extendMarkRange("link").unsetLink().run();
+      return;
+    }
+
+    editor
+      .chain()
+      .focus()
+      .extendMarkRange("link")
+      .setLink({ href: url })
+      .run();
+  }, [editor]);
+
+  return (
+    <div className="flex flex-wrap items-center gap-1 p-2 border-b bg-muted/30">
+      <Toggle
+        size="sm"
+        pressed={editor.isActive("bold")}
+        onPressedChange={() => editor.chain().focus().toggleBold().run()}
+        aria-label="Negrito"
+      >
+        <Bold className="h-4 w-4" />
+      </Toggle>
+
+      <Toggle
+        size="sm"
+        pressed={editor.isActive("italic")}
+        onPressedChange={() => editor.chain().focus().toggleItalic().run()}
+        aria-label="Itálico"
+      >
+        <Italic className="h-4 w-4" />
+      </Toggle>
+
+      <Separator orientation="vertical" className="h-6 mx-1" />
+
+      <Toggle
+        size="sm"
+        pressed={editor.isActive("heading", { level: 1 })}
+        onPressedChange={() =>
+          editor.chain().focus().toggleHeading({ level: 1 }).run()
+        }
+        aria-label="Título 1"
+      >
+        <Heading1 className="h-4 w-4" />
+      </Toggle>
+
+      <Toggle
+        size="sm"
+        pressed={editor.isActive("heading", { level: 2 })}
+        onPressedChange={() =>
+          editor.chain().focus().toggleHeading({ level: 2 }).run()
+        }
+        aria-label="Título 2"
+      >
+        <Heading2 className="h-4 w-4" />
+      </Toggle>
+
+      <Separator orientation="vertical" className="h-6 mx-1" />
+
+      <Toggle
+        size="sm"
+        pressed={editor.isActive("bulletList")}
+        onPressedChange={() => editor.chain().focus().toggleBulletList().run()}
+        aria-label="Lista"
+      >
+        <List className="h-4 w-4" />
+      </Toggle>
+
+      <Toggle
+        size="sm"
+        pressed={editor.isActive("orderedList")}
+        onPressedChange={() => editor.chain().focus().toggleOrderedList().run()}
+        aria-label="Lista numerada"
+      >
+        <ListOrdered className="h-4 w-4" />
+      </Toggle>
+
+      <Separator orientation="vertical" className="h-6 mx-1" />
+
+      <Toggle
+        size="sm"
+        pressed={editor.isActive("link")}
+        onPressedChange={setLink}
+        aria-label="Inserir link"
+      >
+        <LinkIcon className="h-4 w-4" />
+      </Toggle>
+
+      {editor.isActive("link") && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-8 w-8 p-0"
+          onClick={() => editor.chain().focus().unsetLink().run()}
+          aria-label="Remover link"
+        >
+          <Unlink className="h-4 w-4" />
+        </Button>
+      )}
+
+      <Separator orientation="vertical" className="h-6 mx-1" />
+
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="h-8 w-8 p-0"
+        onClick={() => editor.chain().focus().undo().run()}
+        disabled={!editor.can().undo()}
+        aria-label="Desfazer"
+      >
+        <Undo className="h-4 w-4" />
+      </Button>
+
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="h-8 w-8 p-0"
+        onClick={() => editor.chain().focus().redo().run()}
+        disabled={!editor.can().redo()}
+        aria-label="Refazer"
+      >
+        <Redo className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+}
+
 export function TemplateEditor({ value, onChange, className }: TemplateEditorProps) {
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  const editor = useEditor({
+    extensions: [
+      StarterKit.configure({
+        heading: {
+          levels: [1, 2],
+        },
+      }),
+      Link.configure({
+        openOnClick: false,
+        HTMLAttributes: {
+          class: "text-primary underline",
+        },
+      }),
+      Placeholder.configure({
+        placeholder: "Escreva o conteúdo do seu email aqui...",
+      }),
+    ],
+    content: value,
+    onUpdate: ({ editor }) => {
+      onChange(editor.getHTML());
+    },
+    editorProps: {
+      attributes: {
+        class:
+          "prose prose-sm dark:prose-invert max-w-none min-h-[250px] p-4 focus:outline-none",
+      },
+    },
+  });
+
+  // Sync external value changes
+  useEffect(() => {
+    if (editor && value !== editor.getHTML()) {
+      editor.commands.setContent(value);
+    }
+  }, [value, editor]);
 
   // Update preview when value changes
   useEffect(() => {
@@ -41,6 +232,10 @@ export function TemplateEditor({ value, onChange, className }: TemplateEditorPro
                 }
                 a { color: #3B82F6; }
                 img { max-width: 100%; height: auto; }
+                h1 { font-size: 1.5em; margin: 0.5em 0; }
+                h2 { font-size: 1.25em; margin: 0.5em 0; }
+                p { margin: 0.5em 0; }
+                ul, ol { margin: 0.5em 0; padding-left: 1.5em; }
               </style>
             </head>
             <body>${value || '<p style="color: #999;">O preview aparecerá aqui...</p>'}</body>
@@ -52,21 +247,9 @@ export function TemplateEditor({ value, onChange, className }: TemplateEditorPro
   }, [value]);
 
   const insertVariable = (variable: string) => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const newValue = value.slice(0, start) + variable + value.slice(end);
-    
-    onChange(newValue);
-    
-    // Restore cursor position after variable
-    setTimeout(() => {
-      textarea.focus();
-      const newPos = start + variable.length;
-      textarea.setSelectionRange(newPos, newPos);
-    }, 0);
+    if (editor) {
+      editor.chain().focus().insertContent(variable).run();
+    }
   };
 
   return (
@@ -95,22 +278,17 @@ export function TemplateEditor({ value, onChange, className }: TemplateEditorPro
       {/* Editor and Preview */}
       <Tabs defaultValue="editor" className="w-full">
         <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="editor">Editor HTML</TabsTrigger>
+          <TabsTrigger value="editor">Editor</TabsTrigger>
           <TabsTrigger value="preview">Preview</TabsTrigger>
         </TabsList>
-        
+
         <TabsContent value="editor" className="mt-4">
-          <Textarea
-            ref={textareaRef}
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            placeholder="<p>Olá {{nome}},</p>
-<p>Obrigado pelo seu contacto!</p>
-<p>Cumprimentos,<br>{{organizacao}}</p>"
-            className="min-h-[300px] font-mono text-sm"
-          />
+          <div className="border rounded-md overflow-hidden bg-background">
+            <EditorToolbar editor={editor} />
+            <EditorContent editor={editor} />
+          </div>
         </TabsContent>
-        
+
         <TabsContent value="preview" className="mt-4">
           <div className="border rounded-md bg-white overflow-hidden">
             <iframe
@@ -123,11 +301,12 @@ export function TemplateEditor({ value, onChange, className }: TemplateEditorPro
         </TabsContent>
       </Tabs>
 
-      {/* Quick formatting tips */}
-      <div className="text-xs text-muted-foreground space-y-1">
-        <p><strong>Dica:</strong> Use HTML básico para formatar o email:</p>
-        <p className="font-mono bg-muted px-2 py-1 rounded inline-block">
-          {"<p>Parágrafo</p> <strong>Negrito</strong> <a href=\"...\">Link</a>"}
+      {/* Quick tips */}
+      <div className="text-xs text-muted-foreground">
+        <p>
+          <strong>Dica:</strong> Use a toolbar para formatar o texto. As variáveis como{" "}
+          <code className="bg-muted px-1 py-0.5 rounded">{"{{nome}}"}</code> serão
+          substituídas pelos dados reais ao enviar.
         </p>
       </div>
     </div>
