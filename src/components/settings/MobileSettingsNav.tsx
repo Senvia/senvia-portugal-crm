@@ -1,7 +1,7 @@
-import { ChevronRight, Building, Users, Palette, Link2, Package, GitBranch, LayoutGrid } from "lucide-react";
+import { ChevronRight, Building, Users, Palette, Link2, Package, GitBranch, LayoutGrid, UserCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type SettingsSection = "general" | "team" | "pipeline" | "modules" | "form" | "products" | "integrations";
+export type SettingsSection = "general" | "team" | "pipeline" | "modules" | "form" | "products" | "clients" | "integrations";
 
 interface MobileSettingsNavProps {
   activeSection: SettingsSection | null;
@@ -17,6 +17,7 @@ const sections = [
   { id: "modules" as const, label: "Módulos", icon: LayoutGrid, description: "Funcionalidades ativas", requiresIntegrations: true },
   { id: "form" as const, label: "Formulário", icon: Palette, description: "Personalizar aparência", requiresIntegrations: true },
   { id: "products" as const, label: "Produtos", icon: Package, description: "Catálogo para propostas", requiresIntegrations: true },
+  { id: "clients" as const, label: "Clientes", icon: UserCheck, description: "Campos do cadastro", requiresIntegrations: true },
   { id: "integrations" as const, label: "Integrações", icon: Link2, description: "Webhook, WhatsApp, IA", requiresIntegrations: true },
 ];
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -22,7 +22,8 @@ import { PhoneInput } from "@/components/ui/phone-input";
 import { useCreateClient } from "@/hooks/useClients";
 import { useClientLabels } from "@/hooks/useClientLabels";
 import { useTeamMembers } from "@/hooks/useTeam";
-import { CLIENT_STATUS_LABELS, CLIENT_SOURCE_LABELS, ClientStatus } from "@/types/clients";
+import { useClientFieldsSettings } from "@/hooks/useClientFieldsSettings";
+import { CLIENT_STATUS_LABELS, CLIENT_SOURCE_LABELS, ClientStatus, DEFAULT_CLIENT_FIELDS_SETTINGS } from "@/types/clients";
 import { COUNTRIES } from "@/lib/countries";
 
 interface CreateClientModalProps {
@@ -42,6 +43,10 @@ interface CreateClientModalProps {
 export function CreateClientModal({ open, onOpenChange, onCreated, initialData }: CreateClientModalProps) {
   const labels = useClientLabels();
   const { data: teamMembers = [] } = useTeamMembers();
+  const { data: fieldSettings } = useClientFieldsSettings();
+  
+  // Use default settings if not loaded yet
+  const settings = fieldSettings || DEFAULT_CLIENT_FIELDS_SETTINGS;
   
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -73,10 +78,26 @@ export function CreateClientModal({ open, onOpenChange, onCreated, initialData }
     }
   }, [open, initialData]);
 
+  // Validate required fields
+  const isValid = useMemo(() => {
+    // Name is always required
+    if (!name.trim()) return false;
+    
+    // Check other required fields
+    if (settings.email.visible && settings.email.required && !email.trim()) return false;
+    if (settings.phone.visible && settings.phone.required && !phone.trim()) return false;
+    if (settings.company.visible && settings.company.required && !company.trim()) return false;
+    if (settings.nif.visible && settings.nif.required && !nif.trim()) return false;
+    if (settings.address.visible && settings.address.required && !addressLine1.trim()) return false;
+    if (settings.notes.visible && settings.notes.required && !notes.trim()) return false;
+    
+    return true;
+  }, [name, email, phone, company, nif, addressLine1, notes, settings]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!name.trim()) return;
+    if (!isValid) return;
 
     createClient.mutate(
       {
@@ -135,8 +156,9 @@ export function CreateClientModal({ open, onOpenChange, onCreated, initialData }
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Name - Always visible */}
             <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="name">Nome *</Label>
+              <Label htmlFor="name">{settings.name.label} *</Label>
               <Input
                 id="name"
                 value={name}
@@ -146,45 +168,68 @@ export function CreateClientModal({ open, onOpenChange, onCreated, initialData }
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="email@exemplo.pt"
-              />
-            </div>
+            {/* Email */}
+            {settings.email.visible && (
+              <div className="space-y-2">
+                <Label htmlFor="email">
+                  {settings.email.label} {settings.email.required && '*'}
+                </Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="email@exemplo.pt"
+                  required={settings.email.required}
+                />
+              </div>
+            )}
 
-            <div className="space-y-2">
-              <Label htmlFor="phone">Telefone</Label>
-              <PhoneInput
-                value={phone}
-                onChange={setPhone}
-                placeholder="912 345 678"
-              />
-            </div>
+            {/* Phone */}
+            {settings.phone.visible && (
+              <div className="space-y-2">
+                <Label htmlFor="phone">
+                  {settings.phone.label} {settings.phone.required && '*'}
+                </Label>
+                <PhoneInput
+                  value={phone}
+                  onChange={setPhone}
+                  placeholder="912 345 678"
+                />
+              </div>
+            )}
 
-            <div className="space-y-2">
-              <Label htmlFor="company">Empresa</Label>
-              <Input
-                id="company"
-                value={company}
-                onChange={(e) => setCompany(e.target.value)}
-                placeholder="Nome da empresa"
-              />
-            </div>
+            {/* Company */}
+            {settings.company.visible && (
+              <div className="space-y-2">
+                <Label htmlFor="company">
+                  {settings.company.label} {settings.company.required && '*'}
+                </Label>
+                <Input
+                  id="company"
+                  value={company}
+                  onChange={(e) => setCompany(e.target.value)}
+                  placeholder="Nome da empresa"
+                  required={settings.company.required}
+                />
+              </div>
+            )}
 
-            <div className="space-y-2">
-              <Label htmlFor="nif">NIF</Label>
-              <Input
-                id="nif"
-                value={nif}
-                onChange={(e) => setNif(e.target.value)}
-                placeholder="123456789"
-              />
-            </div>
+            {/* NIF */}
+            {settings.nif.visible && (
+              <div className="space-y-2">
+                <Label htmlFor="nif">
+                  {settings.nif.label} {settings.nif.required && '*'}
+                </Label>
+                <Input
+                  id="nif"
+                  value={nif}
+                  onChange={(e) => setNif(e.target.value)}
+                  placeholder="123456789"
+                  required={settings.nif.required}
+                />
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label htmlFor="status">Estado</Label>
@@ -242,70 +287,81 @@ export function CreateClientModal({ open, onOpenChange, onCreated, initialData }
           </div>
 
           {/* Address Section */}
-          <div className="space-y-3 pt-2">
-            <Label className="text-sm font-medium">Morada</Label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2 sm:col-span-2">
-                <Input
-                  value={addressLine1}
-                  onChange={(e) => setAddressLine1(e.target.value)}
-                  placeholder="Rua, número"
-                />
-              </div>
-              <div className="space-y-2 sm:col-span-2">
-                <Input
-                  value={addressLine2}
-                  onChange={(e) => setAddressLine2(e.target.value)}
-                  placeholder="Apartamento, andar (opcional)"
-                />
-              </div>
-              <div className="space-y-2">
-                <Input
-                  value={postalCode}
-                  onChange={(e) => setPostalCode(e.target.value)}
-                  placeholder="Código Postal"
-                />
-              </div>
-              <div className="space-y-2">
-                <Input
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                  placeholder="Cidade"
-                />
-              </div>
-              <div className="space-y-2 sm:col-span-2">
-                <Select value={country} onValueChange={setCountry}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="País" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {COUNTRIES.map((c) => (
-                      <SelectItem key={c.code} value={c.code}>
-                        {c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+          {settings.address.visible && (
+            <div className="space-y-3 pt-2">
+              <Label className="text-sm font-medium">
+                {settings.address.label} {settings.address.required && '*'}
+              </Label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2 sm:col-span-2">
+                  <Input
+                    value={addressLine1}
+                    onChange={(e) => setAddressLine1(e.target.value)}
+                    placeholder="Rua, número"
+                    required={settings.address.required}
+                  />
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Input
+                    value={addressLine2}
+                    onChange={(e) => setAddressLine2(e.target.value)}
+                    placeholder="Apartamento, andar (opcional)"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Input
+                    value={postalCode}
+                    onChange={(e) => setPostalCode(e.target.value)}
+                    placeholder="Código Postal"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Input
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                    placeholder="Cidade"
+                  />
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Select value={country} onValueChange={setCountry}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="País" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {COUNTRIES.map((c) => (
+                        <SelectItem key={c.code} value={c.code}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
-          <div className="space-y-2">
-            <Label htmlFor="notes">Notas</Label>
-            <Textarea
-              id="notes"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder={`Notas sobre o ${labels.singular.toLowerCase()}...`}
-              rows={3}
-            />
-          </div>
+          {/* Notes */}
+          {settings.notes.visible && (
+            <div className="space-y-2">
+              <Label htmlFor="notes">
+                {settings.notes.label} {settings.notes.required && '*'}
+              </Label>
+              <Textarea
+                id="notes"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder={`Notas sobre o ${labels.singular.toLowerCase()}...`}
+                rows={3}
+                required={settings.notes.required}
+              />
+            </div>
+          )}
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={!name.trim() || createClient.isPending}>
+            <Button type="submit" disabled={!isValid || createClient.isPending}>
               {createClient.isPending ? "A criar..." : `Criar ${labels.singular}`}
             </Button>
           </DialogFooter>
