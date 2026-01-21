@@ -67,16 +67,20 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
     setStatus(newStatus);
     updateProposal.mutate({ id: proposal.id, status: newStatus });
     
-    // When proposal is accepted, automatically update lead to 'won', set value, and create sale
-    if (newStatus === 'accepted' && proposal.lead_id) {
-      updateLeadStatus.mutate({ leadId: proposal.lead_id, status: 'won' });
-      updateLead.mutate({ leadId: proposal.lead_id, updates: { value: proposal.total_value } });
+    // Create sale automatically when proposal is accepted (ALL proposal types)
+    if (newStatus === 'accepted') {
+      // If linked to a lead, update lead status to 'won'
+      if (proposal.lead_id) {
+        updateLeadStatus.mutate({ leadId: proposal.lead_id, status: 'won' });
+        updateLead.mutate({ leadId: proposal.lead_id, updates: { value: proposal.total_value } });
+      }
       
-      // Create sale automatically
+      // Create sale from proposal (works with lead, client, or standalone proposals)
       createSaleFromProposal.mutate({
         id: proposal.id,
         organization_id: proposal.organization_id,
-        lead_id: proposal.lead_id,
+        lead_id: proposal.lead_id || null,
+        client_id: proposal.client_id || null,
         total_value: proposal.total_value,
       });
     }
