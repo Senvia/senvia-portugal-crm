@@ -1,0 +1,63 @@
+import { useState } from "react";
+import { Plus, ArrowLeft } from "lucide-react";
+import { Link } from "react-router-dom";
+import { AppLayout } from "@/components/layout/AppLayout";
+import { Button } from "@/components/ui/button";
+import { TemplatesTable } from "@/components/marketing/TemplatesTable";
+import { CreateTemplateModal } from "@/components/marketing/CreateTemplateModal";
+import { EditTemplateModal } from "@/components/marketing/EditTemplateModal";
+import { useEmailTemplates } from "@/hooks/useEmailTemplates";
+import type { EmailTemplate } from "@/types/marketing";
+
+export default function Templates() {
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState<EmailTemplate | null>(null);
+  const { data: templates, isLoading } = useEmailTemplates();
+
+  return (
+    <AppLayout>
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <Link to="/marketing">
+              <Button variant="ghost" size="icon" className="h-8 w-8">
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+            </Link>
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight">Templates de Email</h1>
+              <p className="text-sm text-muted-foreground">
+                Crie templates reutilizáveis para as suas campanhas
+              </p>
+            </div>
+          </div>
+          <Button onClick={() => setCreateModalOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Novo Template
+          </Button>
+        </div>
+
+        {/* Table */}
+        <TemplatesTable
+          templates={templates || []}
+          isLoading={isLoading}
+          onEdit={setEditingTemplate}
+        />
+
+        {/* Create Modal */}
+        <CreateTemplateModal
+          open={createModalOpen}
+          onOpenChange={setCreateModalOpen}
+        />
+
+        {/* Edit Modal */}
+        <EditTemplateModal
+          template={editingTemplate}
+          open={!!editingTemplate}
+          onOpenChange={(open) => !open && setEditingTemplate(null)}
+        />
+      </div>
+    </AppLayout>
+  );
+}

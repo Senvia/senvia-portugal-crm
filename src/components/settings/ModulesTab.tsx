@@ -1,4 +1,4 @@
-import { FileText, Calendar, ShoppingBag, Store, UserCheck } from "lucide-react";
+import { FileText, Calendar, ShoppingBag, Store, UserCheck, Mail } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,6 +36,12 @@ const MODULES: ModuleConfig[] = [
     label: 'Agenda',
     description: 'Agendamento de eventos, reuniões e lembretes',
     icon: Calendar,
+  },
+  {
+    key: 'marketing',
+    label: 'Marketing',
+    description: 'Templates de email e campanhas de marketing',
+    icon: Mail,
   },
   {
     key: 'ecommerce',
