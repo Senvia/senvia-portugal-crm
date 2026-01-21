@@ -220,16 +220,22 @@ export function CreateClientModal({ open, onOpenChange, onCreated, initialData }
 
             <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="assigned_to">Vendedor Responsável</Label>
-              <Select value={assignedTo} onValueChange={setAssignedTo}>
+              <Select 
+                value={assignedTo || "none"} 
+                onValueChange={(v) => setAssignedTo(v === "none" ? "" : v)}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Sem responsável atribuído" />
                 </SelectTrigger>
                 <SelectContent>
-                  {teamMembers.map((member) => (
-                    <SelectItem key={member.user_id} value={member.user_id}>
-                      {member.full_name}
-                    </SelectItem>
-                  ))}
+                  <SelectItem value="none">Sem responsável</SelectItem>
+                  {teamMembers
+                    .filter((member) => member.user_id)
+                    .map((member) => (
+                      <SelectItem key={member.user_id} value={member.user_id}>
+                        {member.full_name}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>
