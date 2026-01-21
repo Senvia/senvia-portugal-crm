@@ -460,6 +460,7 @@ export type Database = {
       forms: {
         Row: {
           ai_qualification_rules: string | null
+          assigned_to: string | null
           created_at: string | null
           form_settings: Json | null
           id: string
@@ -476,6 +477,7 @@ export type Database = {
         }
         Insert: {
           ai_qualification_rules?: string | null
+          assigned_to?: string | null
           created_at?: string | null
           form_settings?: Json | null
           id?: string
@@ -492,6 +494,7 @@ export type Database = {
         }
         Update: {
           ai_qualification_rules?: string | null
+          assigned_to?: string | null
           created_at?: string | null
           form_settings?: Json | null
           id?: string

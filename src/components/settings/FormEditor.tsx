@@ -14,6 +14,13 @@ import {
   ResizablePanel, 
   ResizablePanelGroup 
 } from "@/components/ui/resizable";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { 
   ArrowLeft,
   Loader2, 
@@ -36,9 +43,11 @@ import {
   Plus,
   Trash2,
   ToggleLeft,
-  ToggleRight
+  ToggleRight,
+  UserPlus
 } from "lucide-react";
 import { useUpdateForm } from '@/hooks/useForms';
+import { useTeamMembers } from '@/hooks/useTeam';
 import { useAuth } from '@/contexts/AuthContext';
 import { Form, FormSettings, FormMode, MetaPixel, migrateFormSettings } from '@/types';
 import { useToast } from '@/hooks/use-toast';
@@ -66,6 +75,8 @@ export function FormEditor({ form, onBack }: FormEditorProps) {
   const updateForm = useUpdateForm();
   const isMobile = useIsMobile();
 
+  const { data: teamMembers } = useTeamMembers();
+  
   const [name, setName] = useState(form.name);
   const [slug, setSlug] = useState(form.slug);
   const [settings, setSettings] = useState<FormSettings>(migrateFormSettings(form.form_settings));
@@ -80,6 +91,9 @@ export function FormEditor({ form, onBack }: FormEditorProps) {
   
   // Meta Pixels
   const [metaPixels, setMetaPixels] = useState<MetaPixel[]>(form.meta_pixels || []);
+  
+  // Auto-assignment
+  const [assignedTo, setAssignedTo] = useState<string | null>(form.assigned_to || null);
 
   const getFormUrl = () => {
     if (!organization?.slug) return '';
@@ -102,6 +116,7 @@ export function FormEditor({ form, onBack }: FormEditorProps) {
         msg_template_cold: msgTemplateCold || null,
         ai_qualification_rules: aiQualificationRules || null,
         meta_pixels: metaPixels,
+        assigned_to: assignedTo,
       },
       {
         onSuccess: () => {
@@ -235,6 +250,47 @@ export function FormEditor({ form, onBack }: FormEditorProps) {
                   <Copy className="h-4 w-4" />
                 )}
               </Button>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+
+        {/* Auto-Assignment Section */}
+        <AccordionItem value="assignment" className="border rounded-xl px-4">
+          <AccordionTrigger className="hover:no-underline py-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/10">
+                <UserPlus className="h-5 w-5 text-blue-600" />
+              </div>
+              <div className="text-left">
+                <span className="font-medium">Atribuição Automática</span>
+                <p className="text-xs text-muted-foreground font-normal">
+                  Colaborador responsável pelos leads
+                </p>
+              </div>
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="pb-4 pt-2 space-y-4">
+            <div className="space-y-2">
+              <Label>Colaborador Responsável</Label>
+              <Select 
+                value={assignedTo || 'none'} 
+                onValueChange={(v) => setAssignedTo(v === 'none' ? null : v)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Nenhum (fica por atribuir)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Nenhum (fica por atribuir)</SelectItem>
+                  {teamMembers?.map(member => (
+                    <SelectItem key={member.user_id} value={member.user_id}>
+                      {member.full_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Todos os leads que chegarem por este formulário serão automaticamente atribuídos a este colaborador.
+              </p>
             </div>
           </AccordionContent>
         </AccordionItem>
