@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Trash2, Printer } from 'lucide-react';
+import { Trash2, Printer, Mail, Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { useSendProposalEmail } from '@/hooks/useSendProposalEmail';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -42,6 +43,7 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
   const updateLeadStatus = useUpdateLeadStatus();
   const updateLead = useUpdateLead();
   const { finalPositiveStage, finalNegativeStage } = useFinalStages();
+  const sendProposalEmail = useSendProposalEmail();
   
   // Obter logo e nome da organização
   const logoUrl = (orgData?.form_settings as any)?.logo_url || null;
@@ -436,6 +438,29 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
     });
   };
 
+  const handleSendEmail = () => {
+    if (!proposal.client?.email) return;
+    
+    sendProposalEmail.mutate({
+      to: proposal.client.email,
+      clientName: proposal.client.name || 'Cliente',
+      proposalCode: proposal.code || '',
+      proposalDate: format(new Date(proposal.proposal_date), "d 'de' MMMM 'de' yyyy", { locale: pt }),
+      totalValue: parseFloat(editValue) || proposal.total_value,
+      products: proposalProducts.map(item => ({
+        name: item.product?.name || 'Produto',
+        quantity: item.quantity,
+        unitPrice: item.unit_price,
+        total: item.total,
+      })),
+      notes: notes || undefined,
+      orgName: orgName,
+      logoUrl: logoUrl || undefined,
+    });
+  };
+
+  const canSendEmail = proposal.client?.email && !sendProposalEmail.isPending;
+
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -543,6 +568,20 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
               Eliminar
             </Button>
             <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleSendEmail}
+                disabled={!canSendEmail}
+                title={!proposal.client?.email ? 'Cliente sem email' : 'Enviar proposta por email'}
+              >
+                {sendProposalEmail.isPending ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Mail className="h-4 w-4 mr-2" />
+                )}
+                Email
+              </Button>
               <Button variant="outline" size="sm" onClick={handlePrint}>
                 <Printer className="h-4 w-4 mr-2" />
                 Imprimir
