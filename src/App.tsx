@@ -18,6 +18,8 @@ import Settings from "./pages/Settings";
 import Proposals from "./pages/Proposals";
 import Sales from "./pages/Sales";
 import Ecommerce from "./pages/Ecommerce";
+import Marketing from "./pages/Marketing";
+import MarketingTemplates from "./pages/marketing/Templates";
 import EcommerceProducts from "./pages/ecommerce/Products";
 import EcommerceOrders from "./pages/ecommerce/Orders";
 import EcommerceCustomers from "./pages/ecommerce/Customers";
@@ -130,6 +132,16 @@ const App = () => (
             <Route path="/settings" element={
               <ProtectedRoute>
                 <Settings />
+              </ProtectedRoute>
+            } />
+            <Route path="/marketing" element={
+              <ProtectedRoute>
+                <Marketing />
+              </ProtectedRoute>
+            } />
+            <Route path="/marketing/templates" element={
+              <ProtectedRoute>
+                <MarketingTemplates />
               </ProtectedRoute>
             } />
 
