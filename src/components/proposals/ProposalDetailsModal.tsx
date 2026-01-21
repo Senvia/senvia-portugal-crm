@@ -12,6 +12,7 @@ import { useUpdateProposal, useDeleteProposal, useProposalProducts } from '@/hoo
 import { useUpdateLeadStatus, useUpdateLead } from '@/hooks/useLeads';
 import { useFinalStages } from '@/hooks/usePipelineStages';
 import { useOrganization } from '@/hooks/useOrganization';
+import { useAuth } from '@/contexts/AuthContext';
 import { PROPOSAL_STATUS_LABELS, PROPOSAL_STATUS_COLORS, PROPOSAL_STATUSES } from '@/types/proposals';
 import type { Proposal, ProposalStatus } from '@/types/proposals';
 import { cn } from '@/lib/utils';
@@ -438,10 +439,13 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
     });
   };
 
+  const { organization } = useAuth();
+
   const handleSendEmail = () => {
-    if (!proposal.client?.email) return;
+    if (!proposal.client?.email || !organization?.id) return;
     
     sendProposalEmail.mutate({
+      organizationId: organization.id,
       to: proposal.client.email,
       clientName: proposal.client.name || 'Cliente',
       proposalCode: proposal.code || '',

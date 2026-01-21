@@ -1,9 +1,10 @@
-import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 interface ProductItem {
@@ -14,6 +15,7 @@ interface ProductItem {
 }
 
 interface ProposalEmailRequest {
+  organizationId: string;
   to: string;
   clientName: string;
   proposalCode: string;
@@ -23,17 +25,16 @@ interface ProposalEmailRequest {
   notes?: string;
   orgName: string;
   logoUrl?: string;
-  senderEmail?: string;
 }
 
 function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('pt-PT', {
-    style: 'currency',
-    currency: 'EUR',
+  return new Intl.NumberFormat("pt-PT", {
+    style: "currency",
+    currency: "EUR",
   }).format(value);
 }
 
-function generateEmailHtml(data: ProposalEmailRequest): string {
+function generateEmailHtml(data: ProposalEmailRequest, senderName: string): string {
   const productsRows = data.products.map(p => `
     <tr>
       <td style="padding: 12px 16px; border-bottom: 1px solid #e5e7eb; font-size: 14px;">${p.name}</td>
@@ -44,8 +45,8 @@ function generateEmailHtml(data: ProposalEmailRequest): string {
   `).join('');
 
   const logoSection = data.logoUrl 
-    ? `<img src="${data.logoUrl}" alt="${data.orgName}" style="max-height: 60px; max-width: 200px;" />`
-    : `<h1 style="margin: 0; font-size: 24px; font-weight: 700; color: #1f2937;">${data.orgName}</h1>`;
+    ? `<img src="${data.logoUrl}" alt="${senderName}" style="max-height: 60px; max-width: 200px;" />`
+    : `<h1 style="margin: 0; font-size: 24px; font-weight: 700; color: #1f2937;">${senderName}</h1>`;
 
   const notesSection = data.notes 
     ? `
@@ -126,14 +127,14 @@ function generateEmailHtml(data: ProposalEmailRequest): string {
           <!-- Footer -->
           <div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid #e5e7eb; text-align: center;">
             <p style="margin: 0; font-size: 12px; color: #9ca3af;">Esta proposta é válida por 30 dias a partir da data de emissão.</p>
-            <p style="margin: 8px 0 0 0; font-size: 12px; color: #9ca3af;">Documento gerado automaticamente por ${data.orgName}</p>
+            <p style="margin: 8px 0 0 0; font-size: 12px; color: #9ca3af;">Documento gerado automaticamente por ${senderName}</p>
           </div>
         </div>
 
         <!-- Email Footer -->
         <div style="text-align: center; padding: 24px;">
           <p style="margin: 0; font-size: 12px; color: #9ca3af;">
-            Este email foi enviado por ${data.orgName}. Se tiver dúvidas, responda diretamente a este email.
+            Este email foi enviado por ${senderName}. Se tiver dúvidas, responda diretamente a este email.
           </p>
         </div>
       </div>
@@ -142,33 +143,71 @@ function generateEmailHtml(data: ProposalEmailRequest): string {
   `;
 }
 
-serve(async (req: Request): Promise<Response> => {
-  // Handle CORS preflight
+Deno.serve(async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const BREVO_API_KEY = Deno.env.get("BREVO_API_KEY");
-    if (!BREVO_API_KEY) {
-      throw new Error("BREVO_API_KEY não está configurada");
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+    if (!supabaseUrl || !supabaseServiceKey) {
+      throw new Error("Missing Supabase configuration");
     }
+
+    const supabaseClient = createClient(supabaseUrl, supabaseServiceKey);
 
     const data: ProposalEmailRequest = await req.json();
 
-    // Validate required fields
-    if (!data.to || !data.clientName || !data.proposalCode || !data.orgName) {
-      throw new Error("Campos obrigatórios em falta: to, clientName, proposalCode, orgName");
+    if (!data.organizationId) {
+      throw new Error("Organization ID is required");
     }
 
-    // Generate HTML content
-    const htmlContent = generateEmailHtml(data);
+    if (!data.to || !data.clientName || !data.proposalCode) {
+      throw new Error("Missing required fields: to, clientName, proposalCode");
+    }
 
-    // Use a default sender email if not provided
-    // For production, this should be a verified email in Brevo
-    const senderEmail = data.senderEmail || "noreply@senvia.pt";
+    // Fetch organization's Brevo configuration
+    const { data: orgData, error: orgError } = await supabaseClient
+      .from("organizations")
+      .select("brevo_api_key, brevo_sender_email, name")
+      .eq("id", data.organizationId)
+      .single();
 
-    // Send email via Brevo API
+    if (orgError) {
+      console.error("Error fetching organization:", orgError);
+      throw new Error("Failed to fetch organization configuration");
+    }
+
+    // Use organization's API key or fallback to global secret
+    const BREVO_API_KEY = orgData?.brevo_api_key || Deno.env.get("BREVO_API_KEY");
+    
+    if (!BREVO_API_KEY) {
+      throw new Error("API Key do Brevo não configurada. Configure em Definições → Integrações → Email (Brevo)");
+    }
+
+    // Use organization's sender email or fallback
+    const senderEmail = orgData?.brevo_sender_email || "noreply@senvia.pt";
+    const senderName = orgData?.name || data.orgName || "Senvia";
+
+    const htmlContent = generateEmailHtml(data, senderName);
+
+    const brevoPayload = {
+      sender: {
+        name: senderName,
+        email: senderEmail,
+      },
+      to: [
+        {
+          email: data.to,
+          name: data.clientName,
+        },
+      ],
+      subject: `Proposta #${data.proposalCode} - ${senderName}`,
+      htmlContent: htmlContent,
+    };
+
     const brevoResponse = await fetch("https://api.brevo.com/v3/smtp/email", {
       method: "POST",
       headers: {
@@ -176,20 +215,7 @@ serve(async (req: Request): Promise<Response> => {
         "api-key": BREVO_API_KEY,
         "content-type": "application/json",
       },
-      body: JSON.stringify({
-        sender: {
-          name: data.orgName,
-          email: senderEmail,
-        },
-        to: [
-          {
-            email: data.to,
-            name: data.clientName,
-          },
-        ],
-        subject: `Proposta #${data.proposalCode} - ${data.orgName}`,
-        htmlContent: htmlContent,
-      }),
+      body: JSON.stringify(brevoPayload),
     });
 
     if (!brevoResponse.ok) {
@@ -211,7 +237,7 @@ serve(async (req: Request): Promise<Response> => {
   } catch (error: any) {
     console.error("Error in send-proposal-email:", error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ success: false, error: error.message }),
       {
         status: 500,
         headers: { "Content-Type": "application/json", ...corsHeaders },

@@ -46,6 +46,11 @@ export default function Settings() {
   const [whatsappApiKey, setWhatsappApiKey] = useState('');
   const [showWhatsappApiKey, setShowWhatsappApiKey] = useState(false);
   
+  // Brevo Email state
+  const [brevoApiKey, setBrevoApiKey] = useState('');
+  const [brevoSenderEmail, setBrevoSenderEmail] = useState('');
+  const [showBrevoApiKey, setShowBrevoApiKey] = useState(false);
+  
 
   // Form mode state (for dynamic URL)
   const [formMode, setFormMode] = useState<'traditional' | 'conversational'>('traditional');
@@ -84,7 +89,7 @@ export default function Settings() {
       setIsLoadingIntegrations(true);
       const { data, error } = await supabase
         .from('organizations')
-        .select('webhook_url, whatsapp_base_url, whatsapp_instance, whatsapp_api_key, form_settings')
+        .select('webhook_url, whatsapp_base_url, whatsapp_instance, whatsapp_api_key, form_settings, brevo_api_key, brevo_sender_email')
         .eq('id', organization.id)
         .single();
       
@@ -93,6 +98,8 @@ export default function Settings() {
         setWhatsappBaseUrl(data.whatsapp_base_url || '');
         setWhatsappInstance(data.whatsapp_instance || '');
         setWhatsappApiKey(data.whatsapp_api_key || '');
+        setBrevoApiKey(data.brevo_api_key || '');
+        setBrevoSenderEmail(data.brevo_sender_email || '');
         
         // Set form mode from settings
         if (data.form_settings) {
@@ -123,6 +130,13 @@ export default function Settings() {
       whatsapp_base_url: whatsappBaseUrl.trim() || null,
       whatsapp_instance: whatsappInstance.trim() || null,
       whatsapp_api_key: whatsappApiKey.trim() || null,
+    });
+  };
+
+  const handleSaveBrevo = () => {
+    updateOrganization.mutate({
+      brevo_api_key: brevoApiKey.trim() || null,
+      brevo_sender_email: brevoSenderEmail.trim() || null,
     });
   };
 
@@ -283,6 +297,13 @@ export default function Settings() {
                   showWhatsappApiKey={showWhatsappApiKey}
                   setShowWhatsappApiKey={setShowWhatsappApiKey}
                   handleSaveWhatsApp={handleSaveWhatsApp}
+                  brevoApiKey={brevoApiKey}
+                  setBrevoApiKey={setBrevoApiKey}
+                  brevoSenderEmail={brevoSenderEmail}
+                  setBrevoSenderEmail={setBrevoSenderEmail}
+                  showBrevoApiKey={showBrevoApiKey}
+                  setShowBrevoApiKey={setShowBrevoApiKey}
+                  handleSaveBrevo={handleSaveBrevo}
                 />
               )}
             </>
@@ -431,6 +452,13 @@ export default function Settings() {
                     showWhatsappApiKey={showWhatsappApiKey}
                     setShowWhatsappApiKey={setShowWhatsappApiKey}
                     handleSaveWhatsApp={handleSaveWhatsApp}
+                    brevoApiKey={brevoApiKey}
+                    setBrevoApiKey={setBrevoApiKey}
+                    brevoSenderEmail={brevoSenderEmail}
+                    setBrevoSenderEmail={setBrevoSenderEmail}
+                    showBrevoApiKey={showBrevoApiKey}
+                    setShowBrevoApiKey={setShowBrevoApiKey}
+                    handleSaveBrevo={handleSaveBrevo}
                   />
                 </TabsContent>
               )}

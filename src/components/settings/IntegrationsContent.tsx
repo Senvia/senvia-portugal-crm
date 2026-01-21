@@ -8,7 +8,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { Copy, ExternalLink, Code, Webhook, Send, Loader2, Check, Eye, EyeOff, MessageCircle } from "lucide-react";
+import { Copy, ExternalLink, Code, Webhook, Send, Loader2, Check, Eye, EyeOff, MessageCircle, Mail } from "lucide-react";
 
 interface IntegrationsContentProps {
   organization: {
@@ -35,6 +35,13 @@ interface IntegrationsContentProps {
   showWhatsappApiKey: boolean;
   setShowWhatsappApiKey: (value: boolean) => void;
   handleSaveWhatsApp: () => void;
+  brevoApiKey: string;
+  setBrevoApiKey: (value: string) => void;
+  brevoSenderEmail: string;
+  setBrevoSenderEmail: (value: string) => void;
+  showBrevoApiKey: boolean;
+  setShowBrevoApiKey: (value: boolean) => void;
+  handleSaveBrevo: () => void;
 }
 
 export const IntegrationsContent = ({
@@ -60,6 +67,13 @@ export const IntegrationsContent = ({
   showWhatsappApiKey,
   setShowWhatsappApiKey,
   handleSaveWhatsApp,
+  brevoApiKey,
+  setBrevoApiKey,
+  brevoSenderEmail,
+  setBrevoSenderEmail,
+  showBrevoApiKey,
+  setShowBrevoApiKey,
+  handleSaveBrevo,
 }: IntegrationsContentProps) => (
   <div className="max-w-4xl">
     <div className="mb-4 p-4 rounded-lg bg-muted/50 border">
@@ -271,6 +285,86 @@ export const IntegrationsContent = ({
 
                 <Button
                   onClick={handleSaveWhatsApp}
+                  disabled={updateOrganizationIsPending}
+                >
+                  {updateOrganizationIsPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Guardar
+                </Button>
+              </>
+            )}
+          </div>
+        </AccordionContent>
+      </AccordionItem>
+
+      {/* Email (Brevo) */}
+      <AccordionItem value="brevo">
+        <AccordionTrigger className="hover:no-underline">
+          <div className="flex flex-col items-start gap-1">
+            <div className="flex items-center gap-2">
+              <Mail className="h-5 w-5" />
+              <span className="font-medium">Email (Brevo)</span>
+            </div>
+            <span className="text-xs text-muted-foreground font-normal">
+              Configure o envio de emails com a sua conta Brevo.
+            </span>
+          </div>
+        </AccordionTrigger>
+        <AccordionContent>
+          <div className="space-y-4 pt-4">
+            {isLoadingIntegrations ? (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className="text-sm">A carregar...</span>
+              </div>
+            ) : (
+              <>
+                <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-3">
+                  <p className="text-sm text-amber-600 dark:text-amber-400">
+                    O email remetente deve estar verificado na sua conta Brevo para o envio funcionar.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="brevo-sender-email">Email Remetente</Label>
+                  <Input
+                    id="brevo-sender-email"
+                    type="email"
+                    placeholder="comercial@minhaempresa.pt"
+                    value={brevoSenderEmail}
+                    onChange={(e) => setBrevoSenderEmail(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Email verificado no Brevo que aparecerá como remetente.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="brevo-api-key">API Key do Brevo</Label>
+                  <div className="relative">
+                    <Input
+                      id="brevo-api-key"
+                      type={showBrevoApiKey ? 'text' : 'password'}
+                      placeholder="xkeysib-..."
+                      value={brevoApiKey}
+                      onChange={(e) => setBrevoApiKey(e.target.value)}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-0 top-0 h-full px-3"
+                      onClick={() => setShowBrevoApiKey(!showBrevoApiKey)}
+                    >
+                      {showBrevoApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Encontre a sua API Key em Brevo → Definições → API Keys.
+                  </p>
+                </div>
+
+                <Button
+                  onClick={handleSaveBrevo}
                   disabled={updateOrganizationIsPending}
                 >
                   {updateOrganizationIsPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
