@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
@@ -171,6 +171,7 @@ function EditorToolbar({ editor }: { editor: ReturnType<typeof useEditor> }) {
 
 export function TemplateEditor({ value, onChange, className }: TemplateEditorProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [activeTab, setActiveTab] = useState("editor");
 
   const editor = useEditor({
     extensions: [
@@ -208,8 +209,10 @@ export function TemplateEditor({ value, onChange, className }: TemplateEditorPro
     }
   }, [value, editor]);
 
-  // Update preview when value changes
+  // Update preview when value changes and preview tab is active
   useEffect(() => {
+    if (activeTab !== "preview") return;
+    
     if (iframeRef.current) {
       const doc = iframeRef.current.contentDocument;
       if (doc) {
@@ -244,7 +247,7 @@ export function TemplateEditor({ value, onChange, className }: TemplateEditorPro
         doc.close();
       }
     }
-  }, [value]);
+  }, [value, activeTab]);
 
   const insertVariable = (variable: string) => {
     if (editor) {
@@ -276,7 +279,7 @@ export function TemplateEditor({ value, onChange, className }: TemplateEditorPro
       </div>
 
       {/* Editor and Preview */}
-      <Tabs defaultValue="editor" className="w-full">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="editor">Editor Visual</TabsTrigger>
           <TabsTrigger value="html">HTML</TabsTrigger>
