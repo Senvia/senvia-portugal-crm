@@ -194,7 +194,7 @@ export default function Settings() {
     modules: "Módulos",
     form: "Formulário",
     products: "Produtos",
-    clients: "Clientes",
+    clients: "Campos",
     integrations: "Integrações",
   };
 
@@ -331,10 +331,10 @@ export default function Settings() {
                     Produtos
                   </TabsTrigger>
                 )}
-                {canManageIntegrations && (
+              {canManageIntegrations && (
                   <TabsTrigger value="clients" className="gap-2">
                     <UserCheck className="h-4 w-4" />
-                    Clientes
+                    Campos
                   </TabsTrigger>
                 )}
                 {canManageIntegrations && (
