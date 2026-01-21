@@ -209,10 +209,8 @@ export function TemplateEditor({ value, onChange, className }: TemplateEditorPro
     }
   }, [value, editor]);
 
-  // Update preview when value changes and preview tab is active
+  // Update preview when value changes (iframe is always mounted with forceMount)
   useEffect(() => {
-    if (activeTab !== "preview") return;
-    
     if (iframeRef.current) {
       const doc = iframeRef.current.contentDocument;
       if (doc) {
@@ -247,7 +245,7 @@ export function TemplateEditor({ value, onChange, className }: TemplateEditorPro
         doc.close();
       }
     }
-  }, [value, activeTab]);
+  }, [value]);
 
   const insertVariable = (variable: string) => {
     if (editor) {
@@ -302,8 +300,13 @@ export function TemplateEditor({ value, onChange, className }: TemplateEditorPro
           />
         </TabsContent>
 
-        <TabsContent value="preview" className="mt-4">
-          <div className="border rounded-md bg-white overflow-hidden">
+        <TabsContent value="preview" className="mt-4" forceMount>
+          <div 
+            className={cn(
+              "border rounded-md bg-white overflow-hidden",
+              activeTab !== "preview" && "hidden"
+            )}
+          >
             <iframe
               ref={iframeRef}
               title="Email Preview"
