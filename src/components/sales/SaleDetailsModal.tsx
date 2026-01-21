@@ -135,7 +135,7 @@ export function SaleDetailsModal({ sale, open, onOpenChange }: SaleDetailsModalP
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-lg max-h-[90vh] p-0 gap-0">
-          <DialogHeader className="px-6 py-4 border-b border-border/50">
+          <DialogHeader className="pl-6 pr-14 py-4 border-b border-border/50">
             <div className="flex items-center justify-between gap-2">
               <DialogTitle className="flex items-center gap-2">
                 {sale.code && (
