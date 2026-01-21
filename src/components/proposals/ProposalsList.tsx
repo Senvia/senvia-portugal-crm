@@ -60,10 +60,15 @@ export function ProposalsList({ lead }: ProposalsListProps) {
               className="w-full flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-muted/50 transition-colors text-left"
             >
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
                   <Badge className={cn('text-xs', PROPOSAL_STATUS_COLORS[proposal.status])}>
                     {PROPOSAL_STATUS_LABELS[proposal.status]}
                   </Badge>
+                  {proposal.code && (
+                    <span className="text-xs font-mono text-primary font-medium">
+                      {proposal.code}
+                    </span>
+                  )}
                   <span className="text-xs text-muted-foreground">
                     {format(new Date(proposal.proposal_date), "d MMM yyyy", { locale: pt })}
                   </span>

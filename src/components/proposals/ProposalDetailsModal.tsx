@@ -122,13 +122,15 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center justify-between">
-              <span>Detalhes da Proposta</span>
-              <Badge className={cn('ml-2', PROPOSAL_STATUS_COLORS[status])}>
+          <DialogHeader className="pr-10">
+            <div className="flex items-center gap-3">
+              <DialogTitle>
+                Proposta {proposal.code || ''}
+              </DialogTitle>
+              <Badge className={cn(PROPOSAL_STATUS_COLORS[status])}>
                 {PROPOSAL_STATUS_LABELS[status]}
               </Badge>
-            </DialogTitle>
+            </div>
           </DialogHeader>
 
           <div className="space-y-4">
