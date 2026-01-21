@@ -69,13 +69,15 @@ interface CreateSaleModalProps {
   onOpenChange: (open: boolean) => void;
   prefillProposal?: Proposal | null;
   prefillClientId?: string | null;
+  onSaleCreated?: () => void;
 }
 
 export function CreateSaleModal({ 
   open, 
   onOpenChange, 
   prefillProposal,
-  prefillClientId 
+  prefillClientId,
+  onSaleCreated
 }: CreateSaleModalProps) {
   // Lead removido - vendas são apenas para clientes
   const { data: proposals } = useProposals();
@@ -277,13 +279,8 @@ export function CreateSaleModal({
         );
       }
 
-      // Auto-update lead status when sale is created (if proposal has a lead)
-      if (prefillProposal?.lead_id && finalPositiveStage) {
-        updateLeadStatus.mutate({ 
-          leadId: prefillProposal.lead_id, 
-          status: finalPositiveStage.key 
-        });
-      }
+      // Notify parent that sale was created successfully
+      onSaleCreated?.();
 
       onOpenChange(false);
     } catch (error) {
