@@ -127,7 +127,14 @@ export function ClientDetailsDrawer({
         <SheetHeader className="px-4 sm:px-6 pb-0 pt-14 shrink-0">
           <div className="flex items-start justify-between">
             <div>
-              <SheetTitle className="text-left">{client.name}</SheetTitle>
+              <div className="flex items-center gap-2">
+                <SheetTitle className="text-left">{client.name}</SheetTitle>
+                {client.code && (
+                  <span className="text-xs font-mono text-primary bg-primary/10 px-2 py-0.5 rounded">
+                    #{client.code}
+                  </span>
+                )}
+              </div>
               <div className="flex items-center gap-2 mt-1">
                 <Badge variant="outline" className={cn('text-xs', statusStyle.bg, statusStyle.text, statusStyle.border)}>
                   {statusLabel}

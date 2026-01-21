@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Trash2, ShoppingCart } from 'lucide-react';
+import { Trash2, ShoppingCart, Printer } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -109,6 +109,81 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
     }
   };
 
+  const handlePrint = () => {
+    const printContent = `
+      <html>
+        <head>
+          <title>Proposta ${proposal.code || ''}</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 40px; color: #333; max-width: 800px; margin: 0 auto; }
+            .header { border-bottom: 2px solid #3B82F6; padding-bottom: 20px; margin-bottom: 20px; }
+            .header h1 { color: #3B82F6; margin: 0; font-size: 24px; }
+            .header .date { color: #666; margin-top: 8px; font-size: 14px; }
+            .total-box { background: #f0f9ff; border: 1px solid #3B82F6; padding: 20px; border-radius: 8px; margin: 20px 0; }
+            .total-box .label { font-size: 14px; color: #666; margin-bottom: 5px; }
+            .total-box .value { font-size: 28px; font-weight: bold; color: #3B82F6; }
+            .products { margin: 20px 0; }
+            .products h3 { border-bottom: 1px solid #ddd; padding-bottom: 10px; margin-bottom: 15px; font-size: 16px; }
+            .product-item { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #eee; }
+            .product-item:last-child { border-bottom: none; }
+            .product-name { font-weight: 500; }
+            .product-details { font-size: 12px; color: #666; margin-top: 4px; }
+            .product-total { font-weight: 600; text-align: right; }
+            .notes { margin-top: 20px; padding: 15px; background: #f9f9f9; border-radius: 8px; }
+            .notes h4 { margin: 0 0 10px 0; font-size: 14px; }
+            .notes p { margin: 0; font-size: 14px; color: #555; white-space: pre-wrap; }
+            .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 12px; text-align: center; }
+            @media print { body { padding: 20px; } }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>Proposta ${proposal.code || ''}</h1>
+            <div class="date">${format(new Date(proposal.proposal_date), "d 'de' MMMM 'de' yyyy", { locale: pt })}</div>
+          </div>
+          
+          <div class="total-box">
+            <div class="label">Valor Total</div>
+            <div class="value">${formatCurrency(parseFloat(editValue) || proposal.total_value)}</div>
+          </div>
+
+          ${proposalProducts.length > 0 ? `
+            <div class="products">
+              <h3>Produtos/Serviços</h3>
+              ${proposalProducts.map(item => `
+                <div class="product-item">
+                  <div>
+                    <div class="product-name">${item.product?.name || 'Produto'}</div>
+                    <div class="product-details">${item.quantity} × ${formatCurrency(item.unit_price)}</div>
+                  </div>
+                  <div class="product-total">${formatCurrency(item.total)}</div>
+                </div>
+              `).join('')}
+            </div>
+          ` : ''}
+
+          ${notes ? `
+            <div class="notes">
+              <h4>Observações</h4>
+              <p>${notes}</p>
+            </div>
+          ` : ''}
+
+          <div class="footer">
+            <p>Documento gerado em ${format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: pt })}</p>
+          </div>
+        </body>
+      </html>
+    `;
+
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(printContent);
+      printWindow.document.close();
+      printWindow.print();
+    }
+  };
+
   const handleDelete = () => {
     deleteProposal.mutate(proposal.id, {
       onSuccess: () => {
@@ -214,7 +289,7 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
             </div>
           </div>
 
-          <DialogFooter className="flex justify-between sm:justify-between">
+          <DialogFooter className="flex justify-between sm:justify-between gap-2">
             <Button
               type="button"
               variant="destructive"
@@ -224,9 +299,15 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
               <Trash2 className="h-4 w-4 mr-2" />
               Eliminar
             </Button>
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Fechar
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={handlePrint}>
+                <Printer className="h-4 w-4 mr-2" />
+                Imprimir
+              </Button>
+              <Button variant="outline" onClick={() => onOpenChange(false)}>
+                Fechar
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
