@@ -64,8 +64,11 @@ export function useCreateCommunication() {
       return result;
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['client-communications', variables.client_id] });
-      queryClient.invalidateQueries({ queryKey: ['client-history'] });
+      // Invalidar todas as queries de comunicações para garantir refresh do timeline
+      queryClient.invalidateQueries({ 
+        queryKey: ['client-communications'],
+        refetchType: 'active'
+      });
     },
   });
 }
