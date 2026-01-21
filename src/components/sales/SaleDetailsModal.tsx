@@ -136,22 +136,24 @@ export function SaleDetailsModal({ sale, open, onOpenChange }: SaleDetailsModalP
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-lg max-h-[90vh] p-0 gap-0">
           <DialogHeader className="px-6 py-4 border-b border-border/50">
-            <DialogTitle className="flex items-center gap-2">
-              {sale.code && (
-                <Badge variant="outline" className="font-mono text-xs">
-                  {sale.code}
+            <div className="flex items-center justify-between gap-2">
+              <DialogTitle className="flex items-center gap-2">
+                {sale.code && (
+                  <Badge variant="outline" className="font-mono text-xs">
+                    {sale.code}
+                  </Badge>
+                )}
+                <Badge 
+                  variant="outline" 
+                  className={`${SALE_STATUS_COLORS[status]}`}
+                >
+                  {SALE_STATUS_LABELS[status]}
                 </Badge>
-              )}
-              <Badge 
-                variant="outline" 
-                className={`${SALE_STATUS_COLORS[status]}`}
-              >
-                {SALE_STATUS_LABELS[status]}
-              </Badge>
-              <span className="text-muted-foreground font-normal text-sm ml-auto">
+              </DialogTitle>
+              <span className="text-muted-foreground font-normal text-sm">
                 {format(new Date(sale.created_at), "d MMM yyyy", { locale: pt })}
               </span>
-            </DialogTitle>
+            </div>
           </DialogHeader>
 
           <ScrollArea className="max-h-[calc(90vh-10rem)]">
