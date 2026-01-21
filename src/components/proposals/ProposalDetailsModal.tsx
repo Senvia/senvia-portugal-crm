@@ -9,7 +9,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useUpdateProposal, useDeleteProposal, useProposalProducts } from '@/hooks/useProposals';
 import { useUpdateLeadStatus, useUpdateLead } from '@/hooks/useLeads';
-import { useCreateSaleFromProposal } from '@/hooks/useSales';
 import { PROPOSAL_STATUS_LABELS, PROPOSAL_STATUS_COLORS, PROPOSAL_STATUSES } from '@/types/proposals';
 import type { Proposal, ProposalStatus } from '@/types/proposals';
 import { cn } from '@/lib/utils';
@@ -25,6 +24,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { CreateSaleModal } from "@/components/sales/CreateSaleModal";
 
 interface ProposalDetailsModalProps {
   proposal: Proposal | null;
@@ -38,12 +38,12 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
   const deleteProposal = useDeleteProposal();
   const updateLeadStatus = useUpdateLeadStatus();
   const updateLead = useUpdateLead();
-  const createSaleFromProposal = useCreateSaleFromProposal();
   
   const [status, setStatus] = useState<ProposalStatus>('draft');
   const [notes, setNotes] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [editValue, setEditValue] = useState<string>('0');
+  const [showSaleModal, setShowSaleModal] = useState(false);
 
   // Sincronizar estado quando proposal muda
   useEffect(() => {
@@ -67,7 +67,7 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
     setStatus(newStatus);
     updateProposal.mutate({ id: proposal.id, status: newStatus });
     
-    // Create sale automatically when proposal is accepted (ALL proposal types)
+    // When proposal is accepted, open sale modal for user to confirm details
     if (newStatus === 'accepted') {
       // If linked to a lead, update lead status to 'won'
       if (proposal.lead_id) {
@@ -75,14 +75,8 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
         updateLead.mutate({ leadId: proposal.lead_id, updates: { value: proposal.total_value } });
       }
       
-      // Create sale from proposal (works with lead, client, or standalone proposals)
-      createSaleFromProposal.mutate({
-        id: proposal.id,
-        organization_id: proposal.organization_id,
-        lead_id: proposal.lead_id || null,
-        client_id: proposal.client_id || null,
-        total_value: proposal.total_value,
-      });
+      // Open sale modal instead of auto-creating
+      setShowSaleModal(true);
     }
   };
 
@@ -230,6 +224,13 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <CreateSaleModal
+        open={showSaleModal}
+        onOpenChange={setShowSaleModal}
+        prefillProposal={proposal}
+        prefillClientId={proposal.client_id}
+      />
     </>
   );
 }
