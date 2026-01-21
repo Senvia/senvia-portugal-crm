@@ -1,12 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
-import { Loader2, User, Mail, Phone, Building, FileText, MapPin, MessageSquare, Save, Eye, EyeOff } from 'lucide-react';
+import { Loader2, User, Mail, Phone, Building, FileText, MapPin, MessageSquare, Save, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { useClientFieldsSettings, useUpdateClientFieldsSettings } from '@/hooks/useClientFieldsSettings';
 import { ClientFieldKey, ClientFieldsSettings, DEFAULT_CLIENT_FIELDS_SETTINGS } from '@/types/clients';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 const FIELD_ICONS: Record<ClientFieldKey, React.ReactNode> = {
   name: <User className="h-4 w-4" />,
@@ -25,6 +26,12 @@ export function ClientFieldsEditor() {
   const updateSettings = useUpdateClientFieldsSettings();
   const [settings, setSettings] = useState<ClientFieldsSettings>(DEFAULT_CLIENT_FIELDS_SETTINGS);
   const [hasChanges, setHasChanges] = useState(false);
+
+  // Validation: At least one of name or company must be visible AND required
+  const hasIdentificationField = useMemo(() => {
+    return (settings.name.visible && settings.name.required) || 
+           (settings.company.visible && settings.company.required);
+  }, [settings.name, settings.company]);
 
   // Initialize from saved settings
   useEffect(() => {
@@ -71,10 +78,10 @@ export function ClientFieldsEditor() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <User className="h-5 w-5" />
-          Campos do Cadastro de Clientes
+          Campos Obrigatórios
         </CardTitle>
         <CardDescription>
-          Configure quais campos são visíveis e obrigatórios ao criar ou editar clientes.
+          Configure quais campos são visíveis e obrigatórios ao criar ou editar registos.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -94,7 +101,6 @@ export function ClientFieldsEditor() {
         <div className="space-y-3">
           {FIELD_ORDER.map((fieldKey) => {
             const field = settings[fieldKey];
-            const isNameField = fieldKey === 'name';
             
             return (
               <div 
@@ -124,7 +130,6 @@ export function ClientFieldsEditor() {
                       id={`visible-${fieldKey}`}
                       checked={field.visible}
                       onCheckedChange={(checked) => updateField(fieldKey, { visible: checked })}
-                      disabled={isNameField} // Name is always visible
                     />
                     <Label 
                       htmlFor={`visible-${fieldKey}`} 
@@ -140,7 +145,7 @@ export function ClientFieldsEditor() {
                       id={`required-${fieldKey}`}
                       checked={field.required}
                       onCheckedChange={(checked) => updateField(fieldKey, { required: checked })}
-                      disabled={!field.visible || isNameField} // Name is always required
+                      disabled={!field.visible}
                     />
                     <Label 
                       htmlFor={`required-${fieldKey}`} 
@@ -155,16 +160,26 @@ export function ClientFieldsEditor() {
           })}
         </div>
 
-        {/* Info about Name field */}
+        {/* Validation Alert */}
+        {!hasIdentificationField && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              Pelo menos <strong>Nome</strong> ou <strong>Empresa</strong> deve ser visível e obrigatório para identificar o cliente.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Info */}
         <p className="text-xs text-muted-foreground">
-          O campo <strong>Nome</strong> é sempre visível e obrigatório.
+          Para criar clientes, é necessário ter pelo menos o campo <strong>Nome</strong> ou <strong>Empresa</strong> visível e obrigatório.
         </p>
 
         {/* Save Button */}
         <div className="flex justify-end pt-4">
           <Button 
             onClick={handleSave}
-            disabled={!hasChanges || updateSettings.isPending}
+            disabled={!hasChanges || updateSettings.isPending || !hasIdentificationField}
           >
             {updateSettings.isPending ? (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />

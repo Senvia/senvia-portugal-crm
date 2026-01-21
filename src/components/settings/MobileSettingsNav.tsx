@@ -17,7 +17,7 @@ const sections = [
   { id: "modules" as const, label: "Módulos", icon: LayoutGrid, description: "Funcionalidades ativas", requiresIntegrations: true },
   { id: "form" as const, label: "Formulário", icon: Palette, description: "Personalizar aparência", requiresIntegrations: true },
   { id: "products" as const, label: "Produtos", icon: Package, description: "Catálogo para propostas", requiresIntegrations: true },
-  { id: "clients" as const, label: "Clientes", icon: UserCheck, description: "Campos do cadastro", requiresIntegrations: true },
+  { id: "clients" as const, label: "Campos Obrigatórios", icon: UserCheck, description: "Visibilidade e obrigatoriedade", requiresIntegrations: true },
   { id: "integrations" as const, label: "Integrações", icon: Link2, description: "Webhook, WhatsApp, IA", requiresIntegrations: true },
 ];
 
