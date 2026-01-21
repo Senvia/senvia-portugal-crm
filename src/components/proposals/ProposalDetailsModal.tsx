@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
-import { Trash2, ShoppingCart, Printer } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Trash2, Printer } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useUpdateProposal, useDeleteProposal, useProposalProducts } from '@/hooks/useProposals';
 import { useUpdateLeadStatus, useUpdateLead } from '@/hooks/useLeads';
 import { useFinalStages } from '@/hooks/usePipelineStages';
+import { useOrganization } from '@/hooks/useOrganization';
 import { PROPOSAL_STATUS_LABELS, PROPOSAL_STATUS_COLORS, PROPOSAL_STATUSES } from '@/types/proposals';
 import type { Proposal, ProposalStatus } from '@/types/proposals';
 import { cn } from '@/lib/utils';
@@ -35,11 +36,16 @@ interface ProposalDetailsModalProps {
 
 export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalDetailsModalProps) {
   const { data: proposalProducts = [] } = useProposalProducts(proposal?.id);
+  const { data: orgData } = useOrganization();
   const updateProposal = useUpdateProposal();
   const deleteProposal = useDeleteProposal();
   const updateLeadStatus = useUpdateLeadStatus();
   const updateLead = useUpdateLead();
   const { finalPositiveStage, finalNegativeStage } = useFinalStages();
+  
+  // Obter logo e nome da organização
+  const logoUrl = (orgData?.form_settings as any)?.logo_url || null;
+  const orgName = orgData?.name || '';
   
   const [status, setStatus] = useState<ProposalStatus>('draft');
   const [notes, setNotes] = useState('');
@@ -110,67 +116,304 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
   };
 
   const handlePrint = () => {
+    // Dados do cliente
+    const client = proposal.client;
+    const clientName = client?.name || '';
+    const clientEmail = client?.email || '';
+    const clientPhone = client?.phone || '';
+    
+    // Tentar obter dados adicionais do cliente (company, nif, address)
+    const clientCompany = (client as any)?.company || '';
+    const clientNif = (client as any)?.nif || '';
+    const clientAddress = (client as any)?.address_line1 || '';
+    const clientCity = (client as any)?.city || '';
+    const clientPostalCode = (client as any)?.postal_code || '';
+    
+    const fullAddress = [clientAddress, clientPostalCode, clientCity].filter(Boolean).join(', ');
+
     const printContent = `
+      <!DOCTYPE html>
       <html>
         <head>
+          <meta charset="UTF-8">
           <title>Proposta ${proposal.code || ''}</title>
           <style>
-            body { font-family: Arial, sans-serif; padding: 40px; color: #333; max-width: 800px; margin: 0 auto; }
-            .header { border-bottom: 2px solid #3B82F6; padding-bottom: 20px; margin-bottom: 20px; }
-            .header h1 { color: #3B82F6; margin: 0; font-size: 24px; }
-            .header .date { color: #666; margin-top: 8px; font-size: 14px; }
-            .total-box { background: #f0f9ff; border: 1px solid #3B82F6; padding: 20px; border-radius: 8px; margin: 20px 0; }
-            .total-box .label { font-size: 14px; color: #666; margin-bottom: 5px; }
-            .total-box .value { font-size: 28px; font-weight: bold; color: #3B82F6; }
-            .products { margin: 20px 0; }
-            .products h3 { border-bottom: 1px solid #ddd; padding-bottom: 10px; margin-bottom: 15px; font-size: 16px; }
-            .product-item { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #eee; }
-            .product-item:last-child { border-bottom: none; }
-            .product-name { font-weight: 500; }
-            .product-details { font-size: 12px; color: #666; margin-top: 4px; }
-            .product-total { font-weight: 600; text-align: right; }
-            .notes { margin-top: 20px; padding: 15px; background: #f9f9f9; border-radius: 8px; }
-            .notes h4 { margin: 0 0 10px 0; font-size: 14px; }
-            .notes p { margin: 0; font-size: 14px; color: #555; white-space: pre-wrap; }
-            .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 12px; text-align: center; }
-            @media print { body { padding: 20px; } }
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { 
+              font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif; 
+              padding: 40px; 
+              color: #1a1a1a; 
+              max-width: 800px; 
+              margin: 0 auto; 
+              line-height: 1.6;
+              background: white;
+            }
+            
+            /* CABEÇALHO */
+            .header { 
+              display: flex; 
+              justify-content: space-between; 
+              align-items: flex-start;
+              border-bottom: 3px solid #3B82F6;
+              padding-bottom: 25px;
+              margin-bottom: 30px;
+            }
+            .header-left { 
+              display: flex; 
+              flex-direction: column; 
+              gap: 8px; 
+            }
+            .header-left img { 
+              max-height: 60px; 
+              max-width: 180px; 
+              object-fit: contain; 
+            }
+            .header-left .org-name { 
+              font-size: 14px; 
+              color: #64748b; 
+              font-weight: 500;
+              text-transform: uppercase;
+              letter-spacing: 0.5px;
+            }
+            .header-right { 
+              text-align: right; 
+            }
+            .header-right h1 { 
+              font-size: 22px; 
+              color: #3B82F6; 
+              font-weight: 700;
+              margin-bottom: 4px;
+            }
+            .header-right .date { 
+              color: #64748b; 
+              font-size: 14px; 
+            }
+            
+            /* DADOS DO CLIENTE */
+            .client-box { 
+              background: #f8fafc; 
+              border: 1px solid #e2e8f0;
+              border-radius: 10px;
+              padding: 20px;
+              margin-bottom: 25px;
+            }
+            .client-box h3 { 
+              margin: 0 0 12px; 
+              font-size: 11px; 
+              color: #64748b; 
+              text-transform: uppercase;
+              letter-spacing: 1px;
+              font-weight: 600;
+            }
+            .client-box .client-name {
+              font-size: 18px;
+              font-weight: 600;
+              color: #1a1a1a;
+              margin-bottom: 8px;
+            }
+            .client-box .client-details {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 8px 20px;
+            }
+            .client-box .client-detail {
+              font-size: 13px;
+              color: #475569;
+            }
+            .client-box .client-detail strong {
+              color: #64748b;
+              font-weight: 500;
+            }
+            
+            /* VALOR TOTAL */
+            .total-box { 
+              background: linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%);
+              color: white;
+              padding: 28px;
+              border-radius: 12px;
+              text-align: center;
+              margin: 25px 0;
+              box-shadow: 0 4px 20px rgba(59, 130, 246, 0.3);
+            }
+            .total-box .label { 
+              font-size: 11px; 
+              opacity: 0.9; 
+              letter-spacing: 2px;
+              text-transform: uppercase;
+              font-weight: 500;
+            }
+            .total-box .value { 
+              font-size: 42px; 
+              font-weight: 700; 
+              margin-top: 8px;
+              letter-spacing: -1px;
+            }
+            
+            /* TABELA DE PRODUTOS */
+            .products { margin: 30px 0; }
+            .products h3 { 
+              font-size: 11px; 
+              color: #64748b; 
+              text-transform: uppercase;
+              letter-spacing: 1px;
+              font-weight: 600;
+              margin-bottom: 12px;
+            }
+            .products-table { 
+              width: 100%; 
+              border-collapse: collapse; 
+            }
+            .products-table th { 
+              background: #f1f5f9; 
+              padding: 12px 14px; 
+              text-align: left; 
+              font-size: 11px;
+              text-transform: uppercase;
+              letter-spacing: 0.5px;
+              color: #64748b;
+              font-weight: 600;
+              border-bottom: 2px solid #e2e8f0;
+            }
+            .products-table th:last-child { text-align: right; }
+            .products-table td { 
+              padding: 14px; 
+              border-bottom: 1px solid #e2e8f0;
+              font-size: 14px;
+              color: #1a1a1a;
+            }
+            .products-table td:first-child { font-weight: 500; }
+            .products-table td:last-child { 
+              font-weight: 600; 
+              text-align: right; 
+              color: #3B82F6;
+            }
+            .products-table .qty-cell { text-align: center; color: #64748b; }
+            .products-table .price-cell { text-align: right; color: #64748b; }
+            
+            /* SUBTOTAL ROW */
+            .products-table tfoot td {
+              padding-top: 16px;
+              border-bottom: none;
+              font-weight: 600;
+            }
+            
+            /* OBSERVAÇÕES */
+            .notes-section { 
+              background: #fefce8; 
+              border-left: 4px solid #eab308;
+              padding: 16px 20px;
+              border-radius: 0 10px 10px 0;
+              margin: 25px 0;
+            }
+            .notes-section h4 { 
+              font-size: 11px; 
+              color: #a16207; 
+              text-transform: uppercase;
+              letter-spacing: 1px;
+              font-weight: 600;
+              margin-bottom: 8px;
+            }
+            .notes-section p { 
+              font-size: 14px; 
+              color: #713f12;
+              white-space: pre-wrap;
+              line-height: 1.5;
+            }
+            
+            /* RODAPÉ */
+            .footer { 
+              margin-top: 50px; 
+              padding-top: 20px;
+              border-top: 1px solid #e2e8f0;
+              text-align: center;
+              color: #94a3b8;
+              font-size: 11px;
+            }
+            .footer p { margin: 4px 0; }
+            .footer .validity {
+              color: #64748b;
+              font-weight: 500;
+            }
+            
+            @media print { 
+              body { padding: 20px; }
+              .total-box { box-shadow: none; }
+            }
           </style>
         </head>
         <body>
+          <!-- CABEÇALHO -->
           <div class="header">
-            <h1>Proposta ${proposal.code || ''}</h1>
-            <div class="date">${format(new Date(proposal.proposal_date), "d 'de' MMMM 'de' yyyy", { locale: pt })}</div>
+            <div class="header-left">
+              ${logoUrl ? `<img src="${logoUrl}" alt="Logo" />` : ''}
+              ${orgName ? `<span class="org-name">${orgName}</span>` : ''}
+            </div>
+            <div class="header-right">
+              <h1>PROPOSTA ${proposal.code || ''}</h1>
+              <div class="date">${format(new Date(proposal.proposal_date), "d 'de' MMMM 'de' yyyy", { locale: pt })}</div>
+            </div>
           </div>
           
+          <!-- DADOS DO CLIENTE -->
+          ${clientName ? `
+          <div class="client-box">
+            <h3>Cliente</h3>
+            <div class="client-name">${clientName}</div>
+            <div class="client-details">
+              ${clientCompany ? `<div class="client-detail"><strong>Empresa:</strong> ${clientCompany}</div>` : ''}
+              ${clientNif ? `<div class="client-detail"><strong>NIF:</strong> ${clientNif}</div>` : ''}
+              ${clientEmail ? `<div class="client-detail"><strong>Email:</strong> ${clientEmail}</div>` : ''}
+              ${clientPhone ? `<div class="client-detail"><strong>Telefone:</strong> ${clientPhone}</div>` : ''}
+              ${fullAddress ? `<div class="client-detail" style="grid-column: span 2;"><strong>Morada:</strong> ${fullAddress}</div>` : ''}
+            </div>
+          </div>
+          ` : ''}
+          
+          <!-- VALOR TOTAL -->
           <div class="total-box">
             <div class="label">Valor Total</div>
             <div class="value">${formatCurrency(parseFloat(editValue) || proposal.total_value)}</div>
           </div>
 
+          <!-- TABELA DE PRODUTOS -->
           ${proposalProducts.length > 0 ? `
             <div class="products">
-              <h3>Produtos/Serviços</h3>
-              ${proposalProducts.map(item => `
-                <div class="product-item">
-                  <div>
-                    <div class="product-name">${item.product?.name || 'Produto'}</div>
-                    <div class="product-details">${item.quantity} × ${formatCurrency(item.unit_price)}</div>
-                  </div>
-                  <div class="product-total">${formatCurrency(item.total)}</div>
-                </div>
-              `).join('')}
+              <h3>Produtos / Serviços</h3>
+              <table class="products-table">
+                <thead>
+                  <tr>
+                    <th>Descrição</th>
+                    <th style="text-align: center;">Qtd.</th>
+                    <th style="text-align: right;">Preço Unit.</th>
+                    <th>Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${proposalProducts.map(item => `
+                    <tr>
+                      <td>${item.product?.name || 'Produto'}</td>
+                      <td class="qty-cell">${item.quantity}</td>
+                      <td class="price-cell">${formatCurrency(item.unit_price)}</td>
+                      <td>${formatCurrency(item.total)}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
             </div>
           ` : ''}
 
+          <!-- OBSERVAÇÕES -->
           ${notes ? `
-            <div class="notes">
+            <div class="notes-section">
               <h4>Observações</h4>
               <p>${notes}</p>
             </div>
           ` : ''}
 
+          <!-- RODAPÉ -->
           <div class="footer">
-            <p>Documento gerado em ${format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: pt })}</p>
+            <p class="validity">Proposta válida por 30 dias a partir da data de emissão</p>
+            <p>Documento gerado em ${format(new Date(), "d 'de' MMMM 'de' yyyy 'às' HH:mm", { locale: pt })}</p>
           </div>
         </body>
       </html>
