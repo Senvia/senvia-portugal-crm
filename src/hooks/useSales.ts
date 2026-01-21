@@ -108,9 +108,9 @@ export function useCreateSaleFromProposal() {
     mutationFn: async (proposal: {
       id: string;
       organization_id: string;
-      lead_id: string;
+      lead_id: string | null;
+      client_id?: string | null;
       total_value: number;
-      client_id?: string;
     }) => {
       // Check if sale already exists for this proposal
       const { data: existingSale } = await supabase
@@ -120,7 +120,7 @@ export function useCreateSaleFromProposal() {
         .single();
 
       if (existingSale) {
-        return existingSale; // Sale already exists, don't create duplicate
+        return { ...existingSale, alreadyExists: true }; // Sale already exists, don't create duplicate
       }
 
       const { data: sale, error } = await supabase
@@ -128,7 +128,7 @@ export function useCreateSaleFromProposal() {
         .insert({
           organization_id: proposal.organization_id,
           proposal_id: proposal.id,
-          lead_id: proposal.lead_id,
+          lead_id: proposal.lead_id || null,
           client_id: proposal.client_id || null,
           total_value: proposal.total_value,
           subtotal: proposal.total_value,
@@ -141,10 +141,12 @@ export function useCreateSaleFromProposal() {
       if (error) throw error;
       return sale;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["sales"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
-      toast.success("Venda criada automaticamente!");
+      if (!(data as any).alreadyExists) {
+        toast.success("Proposta aceite! Venda criada automaticamente.");
+      }
     },
     onError: () => {
       toast.error("Erro ao criar venda");
