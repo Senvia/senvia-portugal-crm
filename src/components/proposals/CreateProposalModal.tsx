@@ -12,12 +12,13 @@ import { useCreateProposal } from '@/hooks/useProposals';
 import { useClients } from '@/hooks/useClients';
 import { CreateClientModal } from '@/components/clients/CreateClientModal';
 import type { CrmClient } from '@/types/clients';
-import { PROPOSAL_STATUS_LABELS, PROPOSAL_STATUSES, type ProposalStatus } from '@/types/proposals';
+import { PROPOSAL_STATUS_LABELS, PROPOSAL_STATUSES, type ProposalStatus, type Proposal } from '@/types/proposals';
+
 interface CreateProposalModalProps {
   client?: CrmClient | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSuccess?: () => void;
+  onSuccess?: (proposal: Proposal) => void;
   preselectedClientId?: string | null;
   leadId?: string | null;
 }
@@ -138,7 +139,7 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
         total: p.quantity * p.unit_price,
       })),
     }, {
-      onSuccess: () => {
+      onSuccess: (createdProposal) => {
         setSelectedClientId(null);
         setSelectedProducts([]);
         setNotes('');
@@ -147,9 +148,12 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
         setAdditionalValue('');
         setDiscount('');
         setStatus('draft');
-        // IMPORTANTE: Chamar onSuccess ANTES de fechar o modal
-        onSuccess?.();
+        
+        // Fechar modal de criação
         onOpenChange(false);
+        
+        // Passar a proposta criada para abrir detalhes automaticamente
+        onSuccess?.(createdProposal as Proposal);
       },
     });
   };

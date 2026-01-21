@@ -193,6 +193,7 @@ export default function Proposals() {
       <CreateProposalModal
         open={createModalOpen}
         onOpenChange={setCreateModalOpen}
+        onSuccess={(proposal) => setSelectedProposal(proposal)}
       />
 
       {selectedProposal && (
