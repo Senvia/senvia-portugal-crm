@@ -63,13 +63,31 @@ export function useProposalProducts(proposalId: string | undefined) {
   return useQuery({
     queryKey: ['proposal_products', proposalId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // Get proposal products
+      const { data: proposalProducts, error: ppError } = await supabase
         .from('proposal_products')
         .select('*')
         .eq('proposal_id', proposalId!);
       
-      if (error) throw error;
-      return data as ProposalProduct[];
+      if (ppError) throw ppError;
+      if (!proposalProducts || proposalProducts.length === 0) return [];
+      
+      // Get product details for each product_id
+      const productIds = proposalProducts.map(pp => pp.product_id);
+      const { data: products, error: pError } = await supabase
+        .from('products')
+        .select('id, name, price')
+        .in('id', productIds);
+      
+      if (pError) throw pError;
+      
+      // Merge products into proposal_products
+      const productsMap = new Map(products?.map(p => [p.id, p]) || []);
+      
+      return proposalProducts.map(pp => ({
+        ...pp,
+        product: productsMap.get(pp.product_id) || null,
+      })) as (ProposalProduct & { product?: { id: string; name: string; price: number } | null })[];
     },
     enabled: !!proposalId,
   });
