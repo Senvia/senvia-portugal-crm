@@ -86,6 +86,51 @@ export type Database = {
           },
         ]
       }
+      client_communications: {
+        Row: {
+          client_id: string
+          content: string | null
+          created_at: string | null
+          created_by: string | null
+          direction: string | null
+          duration_seconds: number | null
+          id: string
+          occurred_at: string
+          organization_id: string
+          subject: string | null
+          type: string
+          updated_at: string | null
+        }
+        Insert: {
+          client_id: string
+          content?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          direction?: string | null
+          duration_seconds?: number | null
+          id?: string
+          occurred_at?: string
+          organization_id: string
+          subject?: string | null
+          type: string
+          updated_at?: string | null
+        }
+        Update: {
+          client_id?: string
+          content?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          direction?: string | null
+          duration_seconds?: number | null
+          id?: string
+          occurred_at?: string
+          organization_id?: string
+          subject?: string | null
+          type?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       crm_clients: {
         Row: {
           address_line1: string | null

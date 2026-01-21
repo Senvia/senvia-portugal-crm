@@ -1,4 +1,14 @@
-import { FileText, ShoppingCart, Calendar, MessageSquare } from 'lucide-react';
+import { 
+  FileText, 
+  ShoppingCart, 
+  Calendar, 
+  MessageSquare,
+  Phone,
+  PhoneIncoming,
+  PhoneOutgoing,
+  Mail,
+  StickyNote,
+} from 'lucide-react';
 import { formatCurrency, formatDateTime } from '@/lib/format';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -26,9 +36,24 @@ const EVENT_CONFIG: Record<HistoryEventType, { icon: typeof FileText; color: str
     bgColor: 'bg-purple-500/10',
   },
   note: {
-    icon: MessageSquare,
+    icon: StickyNote,
     color: 'text-muted-foreground',
     bgColor: 'bg-muted',
+  },
+  call: {
+    icon: Phone,
+    color: 'text-green-500',
+    bgColor: 'bg-green-500/10',
+  },
+  whatsapp: {
+    icon: MessageSquare,
+    color: 'text-emerald-500',
+    bgColor: 'bg-emerald-500/10',
+  },
+  email: {
+    icon: Mail,
+    color: 'text-blue-500',
+    bgColor: 'bg-blue-500/10',
   },
 };
 
@@ -42,9 +67,26 @@ const STATUS_STYLES: Record<string, { bg: string; text: string }> = {
   cancelled: { bg: 'bg-destructive/10', text: 'text-destructive' },
 };
 
+function getCallIcon(direction?: 'inbound' | 'outbound' | null) {
+  if (direction === 'inbound') return PhoneIncoming;
+  if (direction === 'outbound') return PhoneOutgoing;
+  return Phone;
+}
+
+function formatDuration(seconds: number): string {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  if (mins === 0) return `${secs}s`;
+  if (secs === 0) return `${mins}min`;
+  return `${mins}min ${secs}s`;
+}
+
 function TimelineItem({ event }: { event: ClientHistoryEvent }) {
   const config = EVENT_CONFIG[event.type];
-  const Icon = config.icon;
+  
+  // For calls, use direction-specific icon
+  const Icon = event.type === 'call' ? getCallIcon(event.direction) : config.icon;
+  
   const statusStyle = event.status ? STATUS_STYLES[event.status] || STATUS_STYLES.pending : null;
 
   return (
@@ -60,15 +102,21 @@ function TimelineItem({ event }: { event: ClientHistoryEvent }) {
       {/* Content */}
       <div className="flex-1 pb-2">
         <div className="flex items-start justify-between gap-2">
-          <div>
+          <div className="flex-1 min-w-0">
             <p className="font-medium text-sm">{event.title}</p>
             {event.description && (
               <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
                 {event.description}
               </p>
             )}
+            {/* Duration for calls */}
+            {event.duration_seconds && event.duration_seconds > 0 && (
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Duração: {formatDuration(event.duration_seconds)}
+              </p>
+            )}
           </div>
-          <div className="flex flex-col items-end gap-1">
+          <div className="flex flex-col items-end gap-1 shrink-0">
             {event.value !== undefined && event.value > 0 && (
               <span className="text-sm font-semibold text-success">
                 {formatCurrency(event.value)}
@@ -77,6 +125,12 @@ function TimelineItem({ event }: { event: ClientHistoryEvent }) {
             {statusStyle && event.status && (
               <Badge variant="outline" className={cn('text-xs', statusStyle.bg, statusStyle.text)}>
                 {event.status}
+              </Badge>
+            )}
+            {/* Direction badge for communications */}
+            {event.direction && (
+              <Badge variant="outline" className="text-xs">
+                {event.direction === 'inbound' ? 'Recebida' : 'Enviada'}
               </Badge>
             )}
           </div>
@@ -111,7 +165,7 @@ export function ClientTimeline({ events, isLoading }: ClientTimelineProps) {
       <div className="text-center py-8 text-muted-foreground">
         <Calendar className="h-12 w-12 mx-auto mb-3 opacity-50" />
         <p>Sem histórico registado</p>
-        <p className="text-sm mt-1">Propostas, vendas e reuniões aparecerão aqui</p>
+        <p className="text-sm mt-1">Propostas, vendas, reuniões e comunicações aparecerão aqui</p>
       </div>
     );
   }
