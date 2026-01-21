@@ -34,10 +34,12 @@ export default function Proposals() {
   const [createModalOpen, setCreateModalOpen] = useState(false);
 
   const filteredProposals = proposals.filter((proposal) => {
+    const searchLower = search.toLowerCase();
     const matchesSearch = !search || 
-      proposal.client?.name?.toLowerCase().includes(search.toLowerCase()) ||
-      proposal.lead?.name?.toLowerCase().includes(search.toLowerCase()) ||
-      proposal.notes?.toLowerCase().includes(search.toLowerCase());
+      proposal.client?.name?.toLowerCase().includes(searchLower) ||
+      proposal.lead?.name?.toLowerCase().includes(searchLower) ||
+      proposal.code?.toLowerCase().includes(searchLower) ||
+      proposal.notes?.toLowerCase().includes(searchLower);
     const matchesStatus = statusFilter === 'all' || proposal.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -108,7 +110,7 @@ export default function Proposals() {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Pesquisar por cliente ou lead..."
+              placeholder="Pesquisar por cliente, empresa ou código..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9"

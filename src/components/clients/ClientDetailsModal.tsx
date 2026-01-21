@@ -43,7 +43,14 @@ export function ClientDetailsModal({ client, open, onOpenChange, onEdit }: Clien
               {client.name.charAt(0).toUpperCase()}
             </div>
             <div className="flex-1">
-              <DialogTitle className="text-xl">{client.name}</DialogTitle>
+              <div className="flex items-center gap-2">
+                <DialogTitle className="text-xl">{client.name}</DialogTitle>
+                {client.code && (
+                  <span className="text-sm font-mono text-primary bg-primary/10 px-2 py-0.5 rounded">
+                    #{client.code}
+                  </span>
+                )}
+              </div>
               <DialogDescription className="mt-1">
                 Cliente desde {formatDate(client.created_at)}
               </DialogDescription>

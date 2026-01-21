@@ -44,6 +44,7 @@ export default function Clients() {
           client.email?.toLowerCase().includes(searchLower) ||
           client.phone?.includes(search) ||
           client.company?.toLowerCase().includes(searchLower) ||
+          client.code?.toLowerCase().includes(searchLower) ||
           client.nif?.includes(search);
         
         if (!matchesSearch) return false;
