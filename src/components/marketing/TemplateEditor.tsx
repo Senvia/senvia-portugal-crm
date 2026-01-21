@@ -5,7 +5,7 @@ import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Toggle } from "@/components/ui/toggle";
 import { Separator } from "@/components/ui/separator";
@@ -277,8 +277,9 @@ export function TemplateEditor({ value, onChange, className }: TemplateEditorPro
 
       {/* Editor and Preview */}
       <Tabs defaultValue="editor" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="editor">Editor</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="editor">Editor Visual</TabsTrigger>
+          <TabsTrigger value="html">HTML</TabsTrigger>
           <TabsTrigger value="preview">Preview</TabsTrigger>
         </TabsList>
 
@@ -287,6 +288,15 @@ export function TemplateEditor({ value, onChange, className }: TemplateEditorPro
             <EditorToolbar editor={editor} />
             <EditorContent editor={editor} />
           </div>
+        </TabsContent>
+
+        <TabsContent value="html" className="mt-4">
+          <Textarea
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            className="min-h-[350px] font-mono text-sm"
+            placeholder="<p>Escreva o seu HTML aqui...</p>"
+          />
         </TabsContent>
 
         <TabsContent value="preview" className="mt-4">
