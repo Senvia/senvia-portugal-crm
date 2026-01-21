@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useUpdateProposal, useDeleteProposal, useProposalProducts } from '@/hooks/useProposals';
 import { useUpdateLeadStatus, useUpdateLead } from '@/hooks/useLeads';
+import { useFinalStages } from '@/hooks/usePipelineStages';
 import { PROPOSAL_STATUS_LABELS, PROPOSAL_STATUS_COLORS, PROPOSAL_STATUSES } from '@/types/proposals';
 import type { Proposal, ProposalStatus } from '@/types/proposals';
 import { cn } from '@/lib/utils';
@@ -38,6 +39,7 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
   const deleteProposal = useDeleteProposal();
   const updateLeadStatus = useUpdateLeadStatus();
   const updateLead = useUpdateLead();
+  const { finalPositiveStage, finalNegativeStage } = useFinalStages();
   
   const [status, setStatus] = useState<ProposalStatus>('draft');
   const [notes, setNotes] = useState('');
@@ -67,16 +69,22 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
     setStatus(newStatus);
     updateProposal.mutate({ id: proposal.id, status: newStatus });
     
-    // When proposal is accepted, open sale modal for user to confirm details
+    // When proposal is accepted, open sale modal and move lead to final positive stage
     if (newStatus === 'accepted') {
-      // If linked to a lead, update lead status to 'won'
-      if (proposal.lead_id) {
-        updateLeadStatus.mutate({ leadId: proposal.lead_id, status: 'won' });
+      if (proposal.lead_id && finalPositiveStage) {
+        // Use dynamic final positive stage (e.g., 'active' for Telecom, 'won' for Generic)
+        updateLeadStatus.mutate({ leadId: proposal.lead_id, status: finalPositiveStage.key });
         updateLead.mutate({ leadId: proposal.lead_id, updates: { value: proposal.total_value } });
       }
-      
-      // Open sale modal instead of auto-creating
       setShowSaleModal(true);
+    }
+    
+    // When proposal is rejected, move lead to final negative stage
+    if (newStatus === 'rejected') {
+      if (proposal.lead_id && finalNegativeStage) {
+        // Use dynamic final negative stage (e.g., 'churn' for Telecom, 'lost' for Generic)
+        updateLeadStatus.mutate({ leadId: proposal.lead_id, status: finalNegativeStage.key });
+      }
     }
   };
 
