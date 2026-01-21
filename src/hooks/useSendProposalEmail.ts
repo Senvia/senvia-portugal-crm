@@ -10,6 +10,7 @@ interface ProductItem {
 }
 
 export interface SendProposalEmailData {
+  organizationId: string;
   to: string;
   clientName: string;
   proposalCode: string;
@@ -19,7 +20,6 @@ export interface SendProposalEmailData {
   notes?: string;
   orgName: string;
   logoUrl?: string;
-  senderEmail?: string;
 }
 
 export function useSendProposalEmail() {

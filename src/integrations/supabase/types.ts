@@ -953,6 +953,8 @@ export type Database = {
       organizations: {
         Row: {
           ai_qualification_rules: string | null
+          brevo_api_key: string | null
+          brevo_sender_email: string | null
           client_fields_settings: Json | null
           code: string | null
           created_at: string | null
@@ -975,6 +977,8 @@ export type Database = {
         }
         Insert: {
           ai_qualification_rules?: string | null
+          brevo_api_key?: string | null
+          brevo_sender_email?: string | null
           client_fields_settings?: Json | null
           code?: string | null
           created_at?: string | null
@@ -997,6 +1001,8 @@ export type Database = {
         }
         Update: {
           ai_qualification_rules?: string | null
+          brevo_api_key?: string | null
+          brevo_sender_email?: string | null
           client_fields_settings?: Json | null
           code?: string | null
           created_at?: string | null
