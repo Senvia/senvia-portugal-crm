@@ -20,6 +20,7 @@ function transformForm(row: any): Form {
     msg_template_cold: row.msg_template_cold,
     ai_qualification_rules: row.ai_qualification_rules,
     meta_pixels: Array.isArray(row.meta_pixels) ? row.meta_pixels : [],
+    assigned_to: row.assigned_to,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -142,6 +143,7 @@ interface UpdateFormData {
   msg_template_cold?: string | null;
   ai_qualification_rules?: string | null;
   meta_pixels?: any[];
+  assigned_to?: string | null;
 }
 
 export function useUpdateForm() {
@@ -173,6 +175,7 @@ export function useUpdateForm() {
       if (data.msg_template_cold !== undefined) updateData.msg_template_cold = data.msg_template_cold;
       if (data.ai_qualification_rules !== undefined) updateData.ai_qualification_rules = data.ai_qualification_rules;
       if (data.meta_pixels !== undefined) updateData.meta_pixels = data.meta_pixels;
+      if (data.assigned_to !== undefined) updateData.assigned_to = data.assigned_to;
 
       const { data: updatedForm, error } = await supabase
         .from('forms')

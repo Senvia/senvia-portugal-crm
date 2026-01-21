@@ -119,12 +119,13 @@ Deno.serve(async (req) => {
       msg_template_cold: null as string | null,
       form_settings: null as any,
       form_name: null as string | null,
+      assigned_to: null as string | null,
     };
 
     if (body.form_id) {
       const { data: form, error: formError } = await supabase
         .from('forms')
-        .select('id, name, form_settings, ai_qualification_rules, msg_template_hot, msg_template_warm, msg_template_cold')
+        .select('id, name, form_settings, ai_qualification_rules, msg_template_hot, msg_template_warm, msg_template_cold, assigned_to')
         .eq('id', body.form_id)
         .eq('organization_id', org.id)
         .maybeSingle();
@@ -137,6 +138,7 @@ Deno.serve(async (req) => {
           msg_template_cold: form.msg_template_cold,
           form_settings: form.form_settings,
           form_name: form.name,
+          assigned_to: form.assigned_to,
         };
         console.log('Form-specific settings loaded for:', form.name);
       }
@@ -190,6 +192,7 @@ Deno.serve(async (req) => {
       .insert({
         organization_id: org.id,
         form_id: body.form_id || null,
+        assigned_to: formSettings.assigned_to || null,
         name: body.name?.trim() || 'Anónimo',
         email: body.email?.trim()?.toLowerCase() || 'nao-fornecido@placeholder.local',
         phone: cleanPhone || '000000000',

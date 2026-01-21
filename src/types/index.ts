@@ -79,6 +79,8 @@ export interface Form {
   ai_qualification_rules?: string | null;
   // Meta Pixels (per-form)
   meta_pixels?: MetaPixel[];
+  // Auto-assignment (per-form)
+  assigned_to?: string | null;
   created_at: string;
   updated_at: string;
 }
