@@ -154,16 +154,25 @@ export function CreateSaleModal({
   // Filter proposals based on selected client
   const filteredProposals = useMemo(() => {
     if (!proposals) return [];
+    
+    let filtered = proposals.filter(p => p.status === 'accepted');
+    
+    // Sempre incluir a proposta pré-selecionada (mesmo que ainda não esteja 'accepted')
+    if (prefillProposal && !filtered.find(p => p.id === prefillProposal.id)) {
+      filtered = [prefillProposal, ...filtered];
+    }
+    
     if (clientId) {
       // Filtrar por client_id ou pelo lead associado ao cliente (retrocompatibilidade)
       const client = clients?.find(c => c.id === clientId);
-      return proposals.filter(p => 
-        (p.client_id === clientId || (client?.lead_id && p.lead_id === client.lead_id)) && 
-        p.status === 'accepted'
+      filtered = filtered.filter(p => 
+        p.client_id === clientId || (client?.lead_id && p.lead_id === client.lead_id) ||
+        p.id === prefillProposal?.id // Manter a proposta pré-selecionada visível
       );
     }
-    return proposals.filter(p => p.status === 'accepted');
-  }, [proposals, clients, clientId]);
+    
+    return filtered;
+  }, [proposals, clients, clientId, prefillProposal]);
 
   // Calculate totals
   const subtotal = useMemo(() => {
