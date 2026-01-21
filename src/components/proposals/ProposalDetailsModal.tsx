@@ -65,15 +65,12 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
     return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(value);
   };
 
-  // Filtrar status "accepted" - só pode ser definido via criação de venda
-  const selectableStatuses = useMemo(() => 
-    PROPOSAL_STATUSES.filter(s => s !== 'accepted'), 
-    []
-  );
-
   const handleStatusChange = (newStatus: ProposalStatus) => {
-    // Bloquear mudança manual para "accepted"
-    if (newStatus === 'accepted') return;
+    // Quando seleciona "accepted", abre modal de venda (não muda status ainda)
+    if (newStatus === 'accepted') {
+      setShowSaleModal(true);
+      return;
+    }
     
     setStatus(newStatus);
     updateProposal.mutate({ id: proposal.id, status: newStatus });
@@ -169,36 +166,16 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
-                  {status === 'accepted' ? (
-                    <SelectItem value="accepted">
-                      {PROPOSAL_STATUS_LABELS['accepted']}
+              <SelectContent>
+                  {PROPOSAL_STATUSES.map((s) => (
+                    <SelectItem key={s} value={s}>
+                      {PROPOSAL_STATUS_LABELS[s]}
                     </SelectItem>
-                  ) : (
-                    selectableStatuses.map((s) => (
-                      <SelectItem key={s} value={s}>
-                        {PROPOSAL_STATUS_LABELS[s]}
-                      </SelectItem>
-                    ))
-                  )}
+                  ))}
                 </SelectContent>
               </Select>
             </div>
 
-            {/* Botão Converter em Venda - só aparece se proposta não estiver aceite */}
-            {status !== 'accepted' && (
-              <div className="pt-2">
-                <Button
-                  type="button"
-                  variant="default"
-                  className="w-full"
-                  onClick={() => setShowSaleModal(true)}
-                >
-                  <ShoppingCart className="h-4 w-4 mr-2" />
-                  Converter em Venda
-                </Button>
-              </div>
-            )}
 
             {proposalProducts.length > 0 && (
               <div className="space-y-2">
