@@ -28,7 +28,9 @@ import { useClientHistory } from "@/hooks/useClientHistory";
 import { useUpdateClient } from "@/hooks/useClients";
 import { useTeamMembers } from "@/hooks/useTeam";
 import { ClientTimeline } from "./ClientTimeline";
+import { AddCommunicationModal } from "./AddCommunicationModal";
 import type { CrmClient } from "@/types/clients";
+import type { CommunicationType, CommunicationDirection } from "@/types/communications";
 
 interface ClientDetailsDrawerProps {
   client: CrmClient | null;
@@ -54,11 +56,22 @@ export function ClientDetailsDrawer({
   const updateClient = useUpdateClient();
   const { data: teamMembers = [] } = useTeamMembers();
 
+  // Communication modal state
+  const [showAddCommunication, setShowAddCommunication] = useState(false);
+  const [defaultCommType, setDefaultCommType] = useState<CommunicationType>('note');
+  const [defaultCommDirection, setDefaultCommDirection] = useState<CommunicationDirection>('outbound');
+
   // Get team member name by user_id
   const getTeamMemberName = (userId: string | null | undefined) => {
     if (!userId) return null;
     const member = teamMembers.find(m => m.user_id === userId);
     return member?.full_name || null;
+  };
+
+  const handleOpenCommunicationModal = (type: CommunicationType = 'note', direction: CommunicationDirection = 'outbound') => {
+    setDefaultCommType(type);
+    setDefaultCommDirection(direction);
+    setShowAddCommunication(true);
   };
 
   // Notes editing state
@@ -370,7 +383,17 @@ export function ClientDetailsDrawer({
             </TabsContent>
 
             {/* Histórico Tab */}
-            <TabsContent value="historico" className="p-6 pt-4 mt-0">
+            <TabsContent value="historico" className="p-6 pt-4 mt-0 space-y-4">
+              <div className="flex justify-end">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => handleOpenCommunicationModal('note', 'outbound')}
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  Registar Contacto
+                </Button>
+              </div>
               <ClientTimeline events={timeline} isLoading={loadingHistory} />
             </TabsContent>
 
@@ -469,6 +492,16 @@ export function ClientDetailsDrawer({
             </TabsContent>
           </ScrollArea>
         </Tabs>
+
+        {/* Add Communication Modal */}
+        <AddCommunicationModal
+          open={showAddCommunication}
+          onOpenChange={setShowAddCommunication}
+          clientId={client.id}
+          clientName={client.name}
+          defaultType={defaultCommType}
+          defaultDirection={defaultCommDirection}
+        />
       </SheetContent>
     </Sheet>
   );

@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useMemo } from 'react';
+import type { ClientCommunication, CommunicationType } from '@/types/communications';
 
-export type HistoryEventType = 'proposal' | 'sale' | 'meeting' | 'note';
+export type HistoryEventType = 'proposal' | 'sale' | 'meeting' | 'note' | 'call' | 'whatsapp' | 'email';
 
 export interface ClientHistoryEvent {
   id: string;
@@ -12,6 +13,8 @@ export interface ClientHistoryEvent {
   date: string;
   value?: number;
   status?: string;
+  direction?: 'inbound' | 'outbound' | null;
+  duration_seconds?: number | null;
   metadata?: Record<string, unknown>;
 }
 
@@ -84,10 +87,41 @@ export function useClientEvents(clientId: string | null) {
   });
 }
 
+export function useClientCommunicationsHistory(clientId: string | null) {
+  return useQuery({
+    queryKey: ['client-communications', clientId],
+    queryFn: async () => {
+      if (!clientId) return [];
+
+      const { data, error } = await supabase
+        .from('client_communications')
+        .select('*')
+        .eq('client_id', clientId)
+        .order('occurred_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching client communications:', error);
+        throw error;
+      }
+
+      return data as ClientCommunication[];
+    },
+    enabled: !!clientId,
+  });
+}
+
+const COMMUNICATION_TYPE_LABELS: Record<CommunicationType, string> = {
+  call: 'Chamada',
+  whatsapp: 'WhatsApp',
+  email: 'Email',
+  note: 'Nota',
+};
+
 export function useClientHistory(clientId: string | null) {
   const { data: proposals = [], isLoading: loadingProposals } = useClientProposals(clientId);
   const { data: sales = [], isLoading: loadingSales } = useClientSales(clientId);
   const { data: events = [], isLoading: loadingEvents } = useClientEvents(clientId);
+  const { data: communications = [], isLoading: loadingCommunications } = useClientCommunicationsHistory(clientId);
 
   const timeline = useMemo(() => {
     const items: ClientHistoryEvent[] = [];
@@ -133,15 +167,34 @@ export function useClientHistory(clientId: string | null) {
       });
     });
 
+    // Add communications
+    communications.forEach((c) => {
+      const type = c.type as HistoryEventType;
+      const directionLabel = c.direction === 'inbound' ? 'recebida' : c.direction === 'outbound' ? 'enviada' : '';
+      const title = c.subject || `${COMMUNICATION_TYPE_LABELS[c.type]}${directionLabel ? ` ${directionLabel}` : ''}`;
+      
+      items.push({
+        id: c.id,
+        type,
+        title,
+        description: c.content || undefined,
+        date: c.occurred_at,
+        direction: c.direction,
+        duration_seconds: c.duration_seconds,
+        metadata: { communicationId: c.id, communicationType: c.type },
+      });
+    });
+
     // Sort by date descending
     return items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [proposals, sales, events]);
+  }, [proposals, sales, events, communications]);
 
   return {
     timeline,
     proposals,
     sales,
     events,
-    isLoading: loadingProposals || loadingSales || loadingEvents,
+    communications,
+    isLoading: loadingProposals || loadingSales || loadingEvents || loadingCommunications,
   };
 }
