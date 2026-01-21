@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { useAuth } from "@/contexts/AuthContext";
 import { SEO } from "@/components/SEO";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +19,7 @@ import { formatCurrency } from "@/lib/format";
 import { isWithinInterval, startOfDay, endOfDay, parseISO } from "date-fns";
 
 export default function Clients() {
+  const { profile, organization } = useAuth();
   const [search, setSearch] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedClient, setSelectedClient] = useState<CrmClient | null>(null);
@@ -92,7 +94,7 @@ export default function Clients() {
   };
 
   return (
-    <AppLayout>
+    <AppLayout userName={profile?.full_name} organizationName={organization?.name}>
       <SEO 
         title={`${labels.plural} | Senvia OS`}
         description={`Gestão de ${labels.plural.toLowerCase()} CRM`}
