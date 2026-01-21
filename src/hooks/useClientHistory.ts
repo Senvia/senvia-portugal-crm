@@ -131,7 +131,7 @@ export function useClientHistory(clientId: string | null) {
       items.push({
         id: p.id,
         type: 'proposal',
-        title: `Proposta #${p.id.slice(0, 8)}`,
+        title: p.code ? `Proposta ${p.code}` : 'Proposta',
         description: p.notes || undefined,
         date: p.created_at || '',
         value: p.total_value,
@@ -145,7 +145,7 @@ export function useClientHistory(clientId: string | null) {
       items.push({
         id: s.id,
         type: 'sale',
-        title: `Venda #${s.id.slice(0, 8)}`,
+        title: s.code ? `Venda ${s.code}` : 'Venda',
         description: s.notes || undefined,
         date: s.created_at || '',
         value: s.total_value,
