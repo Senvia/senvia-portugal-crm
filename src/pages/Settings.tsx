@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
-import { Building, Users, Palette, Link2, ArrowLeft, Package, GitBranch, LayoutGrid } from "lucide-react";
+import { Building, Users, Palette, Link2, ArrowLeft, Package, GitBranch, LayoutGrid, UserCheck } from "lucide-react";
 import { PipelineEditor } from '@/components/settings/PipelineEditor';
 import { ProductsTab } from '@/components/settings/ProductsTab';
 import { ModulesTab } from '@/components/settings/ModulesTab';
@@ -17,6 +17,7 @@ import { TeamTab } from '@/components/settings/TeamTab';
 import { FormsManager } from '@/components/settings/FormsManager';
 import { GeneralContent } from '@/components/settings/GeneralContent';
 import { IntegrationsContent } from '@/components/settings/IntegrationsContent';
+import { ClientFieldsEditor } from '@/components/settings/ClientFieldsEditor';
 import { PRODUCTION_URL } from '@/lib/constants';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { MobileSettingsNav, SettingsSection } from '@/components/settings/MobileSettingsNav';
@@ -193,6 +194,7 @@ export default function Settings() {
     modules: "Módulos",
     form: "Formulário",
     products: "Produtos",
+    clients: "Clientes",
     integrations: "Integrações",
   };
 
@@ -256,6 +258,7 @@ export default function Settings() {
               {mobileSection === "modules" && canManageIntegrations && <ModulesTab />}
               {mobileSection === "form" && canManageIntegrations && <FormsManager />}
               {mobileSection === "products" && canManageIntegrations && <ProductsTab />}
+              {mobileSection === "clients" && canManageIntegrations && <ClientFieldsEditor />}
               {mobileSection === "integrations" && canManageIntegrations && (
                 <IntegrationsContent
                   organization={organization}
@@ -329,6 +332,12 @@ export default function Settings() {
                   </TabsTrigger>
                 )}
                 {canManageIntegrations && (
+                  <TabsTrigger value="clients" className="gap-2">
+                    <UserCheck className="h-4 w-4" />
+                    Clientes
+                  </TabsTrigger>
+                )}
+                {canManageIntegrations && (
                   <TabsTrigger value="integrations" className="gap-2">
                     <Link2 className="h-4 w-4" />
                     Integrações
@@ -388,6 +397,12 @@ export default function Settings() {
               {canManageIntegrations && (
                 <TabsContent value="products" className="max-w-4xl">
                   <ProductsTab />
+                </TabsContent>
+              )}
+
+              {canManageIntegrations && (
+                <TabsContent value="clients" className="max-w-4xl">
+                  <ClientFieldsEditor />
                 </TabsContent>
               )}
 
