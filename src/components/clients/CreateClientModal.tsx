@@ -80,8 +80,8 @@ export function CreateClientModal({ open, onOpenChange, onCreated, initialData }
 
   // Validate required fields
   const isValid = useMemo(() => {
-    // Name is always required
-    if (!name.trim()) return false;
+    // Check name if required
+    if (settings.name.visible && settings.name.required && !name.trim()) return false;
     
     // Check other required fields
     if (settings.email.visible && settings.email.required && !email.trim()) return false;
@@ -156,17 +156,21 @@ export function CreateClientModal({ open, onOpenChange, onCreated, initialData }
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Name - Always visible */}
-            <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="name">{settings.name.label} *</Label>
-              <Input
-                id="name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder={`Nome do ${labels.singular.toLowerCase()}`}
-                required
-              />
-            </div>
+            {/* Name - Respects settings */}
+            {settings.name.visible && (
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="name">
+                  {settings.name.label} {settings.name.required && '*'}
+                </Label>
+                <Input
+                  id="name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder={`Nome do ${labels.singular.toLowerCase()}`}
+                  required={settings.name.required}
+                />
+              </div>
+            )}
 
             {/* Email */}
             {settings.email.visible && (
