@@ -171,7 +171,10 @@ export function useClientHistory(clientId: string | null) {
     communications.forEach((c) => {
       const type = c.type as HistoryEventType;
       const directionLabel = c.direction === 'inbound' ? 'recebida' : c.direction === 'outbound' ? 'enviada' : '';
-      const title = c.subject || `${COMMUNICATION_TYPE_LABELS[c.type]}${directionLabel ? ` ${directionLabel}` : ''}`;
+      const typeLabel = COMMUNICATION_TYPE_LABELS[c.type];
+      const title = c.subject 
+        ? `${typeLabel}: ${c.subject}` 
+        : `${typeLabel}${directionLabel ? ` ${directionLabel}` : ''}`;
       
       items.push({
         id: c.id,
