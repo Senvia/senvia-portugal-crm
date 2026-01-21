@@ -139,7 +139,11 @@ export function useCreateProposal() {
           proposal_date: data.proposal_date || new Date().toISOString().split('T')[0],
           created_by: user?.id,
         })
-        .select()
+        .select(`
+          *,
+          client:crm_clients(id, name, email, phone),
+          lead:leads(id, name, email, phone)
+        `)
         .single();
       
       if (proposalError) throw proposalError;
