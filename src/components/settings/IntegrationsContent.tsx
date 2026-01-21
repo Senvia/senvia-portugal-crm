@@ -2,6 +2,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import {
   Accordion,
   AccordionContent,
@@ -303,6 +304,15 @@ export const IntegrationsContent = ({
             <div className="flex items-center gap-2">
               <Mail className="h-5 w-5" />
               <span className="font-medium">Email (Brevo)</span>
+              {brevoApiKey && brevoSenderEmail ? (
+                <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20">
+                  Configurado
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="bg-red-500/10 text-red-600 border-red-500/20">
+                  Não configurado
+                </Badge>
+              )}
             </div>
             <span className="text-xs text-muted-foreground font-normal">
               Configure o envio de emails com a sua conta Brevo.

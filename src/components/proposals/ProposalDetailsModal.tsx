@@ -463,7 +463,8 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
     });
   };
 
-  const canSendEmail = proposal.client?.email && !sendProposalEmail.isPending;
+  const isBrevoConfigured = !!(orgData?.brevo_api_key && orgData?.brevo_sender_email);
+  const canSendEmail = proposal.client?.email && isBrevoConfigured && !sendProposalEmail.isPending;
 
   return (
     <>
@@ -577,14 +578,20 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
                 size="sm" 
                 onClick={handleSendEmail}
                 disabled={!canSendEmail}
-                title={!proposal.client?.email ? 'Cliente sem email' : 'Enviar proposta por email'}
+                title={
+                  !isBrevoConfigured 
+                    ? 'Configure o Brevo em Definições → Integrações' 
+                    : !proposal.client?.email 
+                      ? 'Cliente sem email' 
+                      : 'Enviar proposta por email'
+                }
               >
                 {sendProposalEmail.isPending ? (
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                 ) : (
                   <Mail className="h-4 w-4 mr-2" />
                 )}
-                Email
+                {!isBrevoConfigured ? 'Configurar Email' : 'Email'}
               </Button>
               <Button variant="outline" size="sm" onClick={handlePrint}>
                 <Printer className="h-4 w-4 mr-2" />
