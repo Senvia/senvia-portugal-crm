@@ -1,0 +1,67 @@
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { toast } from 'sonner';
+
+interface Recipient {
+  email: string;
+  name: string;
+  clientId?: string;
+  variables?: Record<string, string>;
+}
+
+interface SendTemplateRequest {
+  templateId: string;
+  recipients: Recipient[];
+}
+
+interface SendTemplateResponse {
+  success: boolean;
+  summary: {
+    total: number;
+    sent: number;
+    failed: number;
+  };
+  results: Array<{
+    email: string;
+    status: string;
+    error?: string;
+  }>;
+}
+
+export function useSendTemplateEmail() {
+  const { organization } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ templateId, recipients }: SendTemplateRequest): Promise<SendTemplateResponse> => {
+      if (!organization?.id) throw new Error('Sem organização');
+
+      const { data, error } = await supabase.functions.invoke('send-template-email', {
+        body: {
+          organizationId: organization.id,
+          templateId,
+          recipients,
+        },
+      });
+
+      if (error) throw error;
+      return data as SendTemplateResponse;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['email-sends'] });
+      
+      if (data.summary.failed === 0) {
+        toast.success(`Email enviado para ${data.summary.sent} destinatário(s)`);
+      } else if (data.summary.sent > 0) {
+        toast.warning(`${data.summary.sent} enviado(s), ${data.summary.failed} falhou/falharam`);
+      } else {
+        toast.error('Falha ao enviar emails');
+      }
+    },
+    onError: (error) => {
+      console.error('Error sending template:', error);
+      toast.error('Erro ao enviar email');
+    },
+  });
+}

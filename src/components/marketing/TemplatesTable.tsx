@@ -1,4 +1,4 @@
-import { MoreHorizontal, Pencil, Copy, Trash2, Eye, EyeOff } from "lucide-react";
+import { MoreHorizontal, Pencil, Copy, Trash2, Eye, EyeOff, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -37,9 +37,10 @@ interface TemplatesTableProps {
   templates: EmailTemplate[];
   isLoading: boolean;
   onEdit: (template: EmailTemplate) => void;
+  onSend: (template: EmailTemplate) => void;
 }
 
-export function TemplatesTable({ templates, isLoading, onEdit }: TemplatesTableProps) {
+export function TemplatesTable({ templates, isLoading, onEdit, onSend }: TemplatesTableProps) {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const deleteTemplate = useDeleteEmailTemplate();
   const duplicateTemplate = useDuplicateEmailTemplate();
@@ -125,6 +126,11 @@ export function TemplatesTable({ templates, isLoading, onEdit }: TemplatesTableP
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => onSend(template)}>
+                        <Send className="mr-2 h-4 w-4" />
+                        Enviar
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
                       <DropdownMenuItem onClick={() => onEdit(template)}>
                         <Pencil className="mr-2 h-4 w-4" />
                         Editar
