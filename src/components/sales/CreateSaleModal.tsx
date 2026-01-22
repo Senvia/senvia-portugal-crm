@@ -88,8 +88,11 @@ export function CreateSaleModal({
   const { finalPositiveStage } = useFinalStages();
   const updateLeadStatus = useUpdateLeadStatus();
   
-  // Fetch proposal products when prefillProposal is provided
-  const { data: proposalProducts } = useProposalProducts(prefillProposal?.id);
+  // State para proposta selecionada manualmente (para buscar produtos)
+  const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null);
+  
+  // Fetch proposal products - usa prefill OU seleção manual
+  const { data: proposalProducts } = useProposalProducts(prefillProposal?.id || selectedProposalId || undefined);
 
   // Form state
   const [clientId, setClientId] = useState<string>("");
@@ -109,6 +112,7 @@ export function CreateSaleModal({
       // If prefillProposal is provided, pre-populate fields
       if (prefillProposal) {
         setProposalId(prefillProposal.id);
+        setSelectedProposalId(null); // Não precisa, já vem do prefill
         
         // Find client by client_id or lead_id (retrocompatibilidade)
         if (prefillProposal.client_id) {
@@ -119,11 +123,18 @@ export function CreateSaleModal({
             setClientId(client.id);
           }
         }
+        
+        // Preencher notas da proposta
+        if (prefillProposal.notes) {
+          setNotes(prefillProposal.notes);
+        }
       } else if (prefillClientId) {
         setClientId(prefillClientId);
+        setSelectedProposalId(null);
       } else {
         setClientId("");
         setProposalId("");
+        setSelectedProposalId(null);
       }
       
       setSaleDate(new Date());
@@ -133,13 +144,15 @@ export function CreateSaleModal({
       setPaymentStatus("pending");
       setDueDate(undefined);
       setInvoiceReference("");
-      setNotes("");
+      if (!prefillProposal?.notes) {
+        setNotes("");
+      }
     }
   }, [open, prefillProposal, prefillClientId, clients]);
 
-  // Load proposal products when available
+  // Load proposal products when available (prefill ou seleção manual)
   useEffect(() => {
-    if (proposalProducts && proposalProducts.length > 0 && items.length === 0) {
+    if (proposalProducts && proposalProducts.length > 0) {
       const newItems: SaleItemDraft[] = proposalProducts.map(pp => ({
         id: crypto.randomUUID(),
         product_id: pp.product_id,
@@ -149,7 +162,7 @@ export function CreateSaleModal({
       }));
       setItems(newItems);
     }
-  }, [proposalProducts, items.length]);
+  }, [proposalProducts]);
 
   // Filter proposals based on selected client - show all except rejected
   const filteredProposals = useMemo(() => {
@@ -214,9 +227,38 @@ export function CreateSaleModal({
   const handleProposalSelect = (value: string) => {
     if (value === "none") {
       setProposalId("");
+      setSelectedProposalId(null);
+      setItems([]); // Limpar produtos
+      setNotes(""); // Limpar notas
       return;
     }
+    
     setProposalId(value);
+    setSelectedProposalId(value); // Trigger para buscar produtos
+    
+    // Encontrar a proposta e preencher dados
+    const proposal = proposals?.find(p => p.id === value);
+    if (proposal) {
+      // Preencher cliente se não estiver preenchido
+      if (!clientId) {
+        if (proposal.client_id) {
+          setClientId(proposal.client_id);
+        } else if (proposal.lead_id) {
+          const client = clients?.find(c => c.lead_id === proposal.lead_id);
+          if (client) {
+            setClientId(client.id);
+          }
+        }
+      }
+      
+      // Preencher notas da proposta
+      if (proposal.notes) {
+        setNotes(proposal.notes);
+      }
+      
+      // Limpar items para serem recarregados pelo useEffect de proposalProducts
+      setItems([]);
+    }
   };
 
   const handleAddProduct = (productId: string) => {
