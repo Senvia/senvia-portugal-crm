@@ -131,6 +131,86 @@ export type Database = {
         }
         Relationships: []
       }
+      client_list_members: {
+        Row: {
+          added_at: string
+          client_id: string
+          id: string
+          list_id: string
+        }
+        Insert: {
+          added_at?: string
+          client_id: string
+          id?: string
+          list_id: string
+        }
+        Update: {
+          added_at?: string
+          client_id?: string
+          id?: string
+          list_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_list_members_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "crm_clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_list_members_list_id_fkey"
+            columns: ["list_id"]
+            isOneToOne: false
+            referencedRelation: "client_lists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_lists: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          filter_criteria: Json | null
+          id: string
+          is_dynamic: boolean | null
+          name: string
+          organization_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          filter_criteria?: Json | null
+          id?: string
+          is_dynamic?: boolean | null
+          name: string
+          organization_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          filter_criteria?: Json | null
+          id?: string
+          is_dynamic?: boolean | null
+          name?: string
+          organization_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_lists_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crm_clients: {
         Row: {
           address_line1: string | null
@@ -501,6 +581,73 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_sends: {
+        Row: {
+          client_id: string | null
+          created_at: string
+          error_message: string | null
+          id: string
+          organization_id: string
+          recipient_email: string
+          recipient_name: string | null
+          sent_at: string | null
+          sent_by: string | null
+          status: string
+          subject: string
+          template_id: string | null
+        }
+        Insert: {
+          client_id?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          organization_id: string
+          recipient_email: string
+          recipient_name?: string | null
+          sent_at?: string | null
+          sent_by?: string | null
+          status?: string
+          subject: string
+          template_id?: string | null
+        }
+        Update: {
+          client_id?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          organization_id?: string
+          recipient_email?: string
+          recipient_name?: string | null
+          sent_at?: string | null
+          sent_by?: string | null
+          status?: string
+          subject?: string
+          template_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_sends_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "crm_clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_sends_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_sends_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "email_templates"
             referencedColumns: ["id"]
           },
         ]

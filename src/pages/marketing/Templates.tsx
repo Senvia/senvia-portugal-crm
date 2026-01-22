@@ -6,12 +6,14 @@ import { Button } from "@/components/ui/button";
 import { TemplatesTable } from "@/components/marketing/TemplatesTable";
 import { CreateTemplateModal } from "@/components/marketing/CreateTemplateModal";
 import { EditTemplateModal } from "@/components/marketing/EditTemplateModal";
+import { SendTemplateModal } from "@/components/marketing/SendTemplateModal";
 import { useEmailTemplates } from "@/hooks/useEmailTemplates";
 import type { EmailTemplate } from "@/types/marketing";
 
 export default function Templates() {
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<EmailTemplate | null>(null);
+  const [sendingTemplate, setSendingTemplate] = useState<EmailTemplate | null>(null);
   const { data: templates, isLoading } = useEmailTemplates();
 
   return (
@@ -43,6 +45,7 @@ export default function Templates() {
           templates={templates || []}
           isLoading={isLoading}
           onEdit={setEditingTemplate}
+          onSend={setSendingTemplate}
         />
 
         {/* Create Modal */}
@@ -56,6 +59,13 @@ export default function Templates() {
           template={editingTemplate}
           open={!!editingTemplate}
           onOpenChange={(open) => !open && setEditingTemplate(null)}
+        />
+
+        {/* Send Modal */}
+        <SendTemplateModal
+          template={sendingTemplate}
+          open={!!sendingTemplate}
+          onOpenChange={(open) => !open && setSendingTemplate(null)}
         />
       </div>
     </AppLayout>
