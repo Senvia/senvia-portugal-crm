@@ -151,13 +151,14 @@ export function CreateSaleModal({
     }
   }, [proposalProducts, items.length]);
 
-  // Filter proposals based on selected client
+  // Filter proposals based on selected client - show all except rejected
   const filteredProposals = useMemo(() => {
     if (!proposals) return [];
     
-    let filtered = proposals.filter(p => p.status === 'accepted');
+    // Mostrar todas as propostas exceto as rejeitadas
+    let filtered = proposals.filter(p => p.status !== 'rejected');
     
-    // Sempre incluir a proposta pré-selecionada (mesmo que ainda não esteja 'accepted')
+    // Sempre incluir a proposta pré-selecionada
     if (prefillProposal && !filtered.find(p => p.id === prefillProposal.id)) {
       filtered = [prefillProposal, ...filtered];
     }
@@ -173,6 +174,16 @@ export function CreateSaleModal({
     
     return filtered;
   }, [proposals, clients, clientId, prefillProposal]);
+
+  // Helper to get proposal status label
+  const getProposalStatusLabel = (status: string) => {
+    switch (status) {
+      case 'accepted': return 'Aceite';
+      case 'sent': return 'Enviada';
+      case 'pending': return 'Pendente';
+      default: return 'Rascunho';
+    }
+  };
 
   // Calculate totals
   const subtotal = useMemo(() => {
@@ -340,10 +351,10 @@ export function CreateSaleModal({
                 {/* Proposal Select */}
                 <div className="space-y-2">
                   <Label>Proposta</Label>
-                  <SearchableCombobox
+                <SearchableCombobox
                     options={filteredProposals.map((proposal): ComboboxOption => ({
                       value: proposal.id,
-                      label: `${proposal.client?.name || proposal.lead?.name || "Proposta"} - ${formatCurrency(proposal.total_value)}`,
+                      label: `${proposal.client?.name || proposal.lead?.name || "Proposta"} - ${formatCurrency(proposal.total_value)} (${getProposalStatusLabel(proposal.status)})`,
                       sublabel: proposal.code || undefined,
                     }))}
                     value={proposalId || null}
