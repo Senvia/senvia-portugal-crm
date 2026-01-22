@@ -268,6 +268,7 @@ export function TemplateEditor({ value, onChange, className }: TemplateEditorPro
               variant="outline"
               size="sm"
               className="h-7 text-xs"
+              onMouseDown={(e) => e.preventDefault()}
               onClick={() => insertVariable(v.key)}
             >
               {v.key}
