@@ -184,17 +184,26 @@ const ConversationalLeadForm = () => {
     // Removed noscript fallback - unnecessary for SPAs and can cause duplicate events
   }, [formData?.meta_pixels, formData?.form_id]);
 
+  // Ref to prevent duplicate tracking within same component lifecycle (React StrictMode)
+  const hasTrackedLeadRef = useRef(false);
+
   // Function to track Lead event - ONLY call after confirmed success with lead_id
   const trackLeadEvent = (leadId: string) => {
+    // Triple protection: ref (lifecycle) + sessionStorage (session) + eventID (Facebook dedup)
+    if (hasTrackedLeadRef.current) {
+      console.log('[Meta Pixel] Lead event already tracked (ref guard), skipping');
+      return;
+    }
+
     if (!formData?.meta_pixels || !formData?.form_id) {
       console.log('[Meta Pixel] No pixels or form_id to track Lead event');
       return;
     }
 
-    // Use sessionStorage to prevent duplicate Lead events (persists across React remounts)
-    const leadStorageKey = `pixel_lead_${formData.form_id}`;
+    // Use unique key per lead to allow multiple leads per session (different form submissions)
+    const leadStorageKey = `pixel_lead_${formData.form_id}_${leadId}`;
     if (sessionStorage.getItem(leadStorageKey)) {
-      console.log('[Meta Pixel] Lead event already tracked in this session, skipping');
+      console.log('[Meta Pixel] Lead event already tracked in sessionStorage, skipping:', leadId);
       return;
     }
     
@@ -206,15 +215,18 @@ const ConversationalLeadForm = () => {
     }
 
     // Mark as tracked BEFORE sending to prevent race conditions
+    hasTrackedLeadRef.current = true;
     sessionStorage.setItem(leadStorageKey, 'true');
+
+    console.log('[Meta Pixel] Tracking Lead event for lead:', leadId, 'pixels:', activePixels.length);
     
+    // Use fbq('track') with eventID for Facebook's automatic server-side deduplication
     activePixels.forEach((pixel) => {
-      // Use lead_id as eventID for Facebook's automatic deduplication
-      window.fbq('trackSingle', pixel.pixel_id, 'Lead', {
+      window.fbq('track', 'Lead', {
         content_name: formData.org_name,
         content_category: 'conversational_form_submission',
       }, { eventID: leadId });
-      console.log('[Meta Pixel] Lead event tracked for:', pixel.pixel_id, 'with eventID:', leadId);
+      console.log('[Meta Pixel] Lead event sent for pixel:', pixel.pixel_id, 'eventID:', leadId);
     });
   };
 
