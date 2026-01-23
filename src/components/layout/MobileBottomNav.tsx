@@ -17,6 +17,7 @@ const allNavItems: NavItem[] = [
   { to: "/clients", icon: UserCheck, label: "Clientes", moduleKey: 'clients' },
   { to: "/proposals", icon: FileText, label: "Propostas", moduleKey: 'proposals' },
   { to: "/sales", icon: ShoppingBag, label: "Vendas", moduleKey: 'sales' },
+  { to: "/calendar", icon: Calendar, label: "Agenda", moduleKey: 'calendar' },
   { to: "/marketing", icon: Mail, label: "Marketing", moduleKey: 'marketing' },
   { to: "/ecommerce", icon: Store, label: "Loja", moduleKey: 'ecommerce' },
   { to: "/settings", icon: Settings, label: "Config" },
