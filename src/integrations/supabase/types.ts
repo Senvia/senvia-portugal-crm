@@ -1866,21 +1866,29 @@ export type Database = {
       }
       sales: {
         Row: {
+          anos_contrato: number | null
           client_id: string | null
           code: string | null
+          comissao: number | null
+          consumo_anual: number | null
           created_at: string | null
           created_by: string | null
+          dbl: number | null
           discount: number | null
           due_date: string | null
           id: string
           invoice_reference: string | null
+          kwp: number | null
           lead_id: string | null
+          margem: number | null
+          modelo_servico: string | null
           notes: string | null
           organization_id: string
           paid_date: string | null
           payment_method: string | null
           payment_status: string | null
           proposal_id: string | null
+          proposal_type: string | null
           sale_date: string | null
           status: string
           subtotal: number | null
@@ -1888,21 +1896,29 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          anos_contrato?: number | null
           client_id?: string | null
           code?: string | null
+          comissao?: number | null
+          consumo_anual?: number | null
           created_at?: string | null
           created_by?: string | null
+          dbl?: number | null
           discount?: number | null
           due_date?: string | null
           id?: string
           invoice_reference?: string | null
+          kwp?: number | null
           lead_id?: string | null
+          margem?: number | null
+          modelo_servico?: string | null
           notes?: string | null
           organization_id: string
           paid_date?: string | null
           payment_method?: string | null
           payment_status?: string | null
           proposal_id?: string | null
+          proposal_type?: string | null
           sale_date?: string | null
           status?: string
           subtotal?: number | null
@@ -1910,21 +1926,29 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          anos_contrato?: number | null
           client_id?: string | null
           code?: string | null
+          comissao?: number | null
+          consumo_anual?: number | null
           created_at?: string | null
           created_by?: string | null
+          dbl?: number | null
           discount?: number | null
           due_date?: string | null
           id?: string
           invoice_reference?: string | null
+          kwp?: number | null
           lead_id?: string | null
+          margem?: number | null
+          modelo_servico?: string | null
           notes?: string | null
           organization_id?: string
           paid_date?: string | null
           payment_method?: string | null
           payment_status?: string | null
           proposal_id?: string | null
+          proposal_type?: string | null
           sale_date?: string | null
           status?: string
           subtotal?: number | null

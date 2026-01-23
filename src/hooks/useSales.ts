@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTeamFilter } from "@/hooks/useTeamFilter";
 import { toast } from "sonner";
-import type { SaleStatus, SaleWithDetails, PaymentMethod, PaymentStatus } from "@/types/sales";
+import type { SaleStatus, SaleWithDetails, PaymentMethod, PaymentStatus, ProposalType, ModeloServico } from "@/types/sales";
 
 export function useSales() {
   const { organization } = useAuth();
@@ -61,6 +61,15 @@ export function useCreateSale() {
       invoice_reference?: string;
       sale_date?: string;
       notes?: string;
+      // Campos específicos de proposta
+      proposal_type?: ProposalType;
+      consumo_anual?: number;
+      margem?: number;
+      dbl?: number;
+      anos_contrato?: number;
+      modelo_servico?: ModeloServico;
+      kwp?: number;
+      comissao?: number;
     }) => {
       if (!organization?.id) throw new Error("No organization");
 
@@ -82,6 +91,15 @@ export function useCreateSale() {
           notes: data.notes || null,
           created_by: user?.id || null,
           status: "pending",
+          // Campos específicos de proposta
+          proposal_type: data.proposal_type || null,
+          consumo_anual: data.consumo_anual || null,
+          margem: data.margem || null,
+          dbl: data.dbl || null,
+          anos_contrato: data.anos_contrato || null,
+          modelo_servico: data.modelo_servico || null,
+          kwp: data.kwp || null,
+          comissao: data.comissao || null,
         })
         .select()
         .single();
