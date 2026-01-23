@@ -134,3 +134,49 @@ export function useDeleteProposalCpe() {
     },
   });
 }
+
+export function useUpdateProposalCpes() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ proposalId, cpes }: { proposalId: string; cpes: CreateProposalCpeData[] }) => {
+      // 1. Delete existing CPEs for this proposal
+      const { error: deleteError } = await supabase
+        .from('proposal_cpes')
+        .delete()
+        .eq('proposal_id', proposalId);
+      
+      if (deleteError) throw deleteError;
+      
+      // 2. Insert new CPEs if any
+      if (cpes.length > 0) {
+        const { data: result, error: insertError } = await supabase
+          .from('proposal_cpes')
+          .insert(cpes.map(cpe => ({
+            proposal_id: proposalId,
+            existing_cpe_id: cpe.existing_cpe_id || null,
+            equipment_type: cpe.equipment_type,
+            serial_number: cpe.serial_number || null,
+            comercializador: cpe.comercializador,
+            fidelizacao_start: cpe.fidelizacao_start || null,
+            fidelizacao_end: cpe.fidelizacao_end || null,
+            notes: cpe.notes || null,
+          })))
+          .select();
+        
+        if (insertError) throw insertError;
+        return result;
+      }
+      
+      return [];
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['proposal_cpes', variables.proposalId] });
+      toast({ title: 'CPEs atualizados', description: 'Os CPEs da proposta foram atualizados.' });
+    },
+    onError: () => {
+      toast({ title: 'Erro', description: 'Não foi possível atualizar os CPEs.', variant: 'destructive' });
+    },
+  });
+}
