@@ -38,8 +38,8 @@ export function MobileBottomNav() {
     : navItems;
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-background border-t border-border safe-bottom">
-      <div className="flex items-center justify-around h-16 px-2">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-background border-t border-border safe-bottom overflow-hidden">
+      <div className="flex items-center h-16 px-2 overflow-x-auto no-scrollbar gap-1">
         {allItems.map((item) => {
           const isActive = location.pathname === item.to || 
             (item.to !== "/dashboard" && location.pathname.startsWith(item.to));
