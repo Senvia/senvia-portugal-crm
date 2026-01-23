@@ -35,7 +35,7 @@ export interface Proposal {
   // Campos Energia
   consumo_anual?: number | null;
   margem?: number | null;
-  dbl?: boolean | null;
+  dbl?: number | null;
   anos_contrato?: number | null;
   
   // Campos Serviços

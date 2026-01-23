@@ -569,10 +569,12 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
                       <span className="ml-2 font-medium">{proposal.anos_contrato} {proposal.anos_contrato === 1 ? 'ano' : 'anos'}</span>
                     </div>
                   )}
-                  <div>
-                    <span className="text-muted-foreground">Dual Bill:</span>
-                    <span className="ml-2 font-medium">{proposal.dbl ? 'Sim' : 'Não'}</span>
-                  </div>
+                  {proposal.dbl !== null && proposal.dbl !== undefined && (
+                    <div>
+                      <span className="text-muted-foreground">DBL:</span>
+                      <span className="ml-2 font-medium">{proposal.dbl}</span>
+                    </div>
+                  )}
                   {proposal.comissao && (
                     <div className="col-span-2">
                       <span className="text-muted-foreground">Comissão:</span>
