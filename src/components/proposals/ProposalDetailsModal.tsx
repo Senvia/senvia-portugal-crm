@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Trash2, Printer, Mail, Loader2 } from 'lucide-react';
+import { Trash2, Printer, Mail, Loader2, Router } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useSendProposalEmail } from '@/hooks/useSendProposalEmail';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useUpdateProposal, useDeleteProposal, useProposalProducts } from '@/hooks/useProposals';
+import { useProposalCpes } from '@/hooks/useProposalCpes';
 import { useUpdateLeadStatus, useUpdateLead } from '@/hooks/useLeads';
 import { useFinalStages } from '@/hooks/usePipelineStages';
 import { useOrganization } from '@/hooks/useOrganization';
@@ -38,6 +39,7 @@ interface ProposalDetailsModalProps {
 
 export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalDetailsModalProps) {
   const { data: proposalProducts = [] } = useProposalProducts(proposal?.id);
+  const { data: proposalCpes = [] } = useProposalCpes(proposal?.id);
   const { data: orgData } = useOrganization();
   const updateProposal = useUpdateProposal();
   const deleteProposal = useDeleteProposal();
@@ -543,6 +545,38 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
                         </p>
                       </div>
                       <p className="font-semibold">{formatCurrency(item.total)}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* CPEs Section */}
+            {proposalCpes.length > 0 && (
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <Router className="h-4 w-4" />
+                  CPEs (Equipamentos)
+                </Label>
+                <div className="space-y-2">
+                  {proposalCpes.map((cpe) => (
+                    <div
+                      key={cpe.id}
+                      className="flex items-center justify-between p-3 rounded-lg border bg-muted/30"
+                    >
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-sm">{cpe.equipment_type}</span>
+                          <Badge variant={cpe.existing_cpe_id ? 'secondary' : 'default'} className="text-xs">
+                            {cpe.existing_cpe_id ? 'Renovação' : 'Novo'}
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {cpe.comercializador}
+                          {cpe.serial_number && ` • ${cpe.serial_number}`}
+                          {cpe.fidelizacao_end && ` • Até ${cpe.fidelizacao_end}`}
+                        </p>
+                      </div>
                     </div>
                   ))}
                 </div>

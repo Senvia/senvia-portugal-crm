@@ -24,10 +24,12 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 // Lead removido - vendas são apenas para clientes
 import { useProposals, useProposalProducts } from "@/hooks/useProposals";
+import { useProposalCpes } from "@/hooks/useProposalCpes";
 import { useClients } from "@/hooks/useClients";
 import { useProducts } from "@/hooks/useProducts";
 import { useCreateSale } from "@/hooks/useSales";
 import { useCreateSaleItems } from "@/hooks/useSaleItems";
+import { useCreateCpe, useUpdateCpe } from "@/hooks/useCpes";
 import { useFinalStages } from "@/hooks/usePipelineStages";
 import { useUpdateLeadStatus } from "@/hooks/useLeads";
 import { formatCurrency } from "@/lib/format";
@@ -44,7 +46,8 @@ import {
   User,
   FileText,
   CreditCard,
-  Receipt
+  Receipt,
+  Router
 } from "lucide-react";
 import type { Proposal } from "@/types/proposals";
 import { 
@@ -85,6 +88,8 @@ export function CreateSaleModal({
   const { data: products } = useProducts();
   const createSale = useCreateSale();
   const createSaleItems = useCreateSaleItems();
+  const createCpe = useCreateCpe();
+  const updateCpe = useUpdateCpe();
   const { finalPositiveStage } = useFinalStages();
   const updateLeadStatus = useUpdateLeadStatus();
   
@@ -93,6 +98,9 @@ export function CreateSaleModal({
   
   // Fetch proposal products - usa prefill OU seleção manual
   const { data: proposalProducts } = useProposalProducts(prefillProposal?.id || selectedProposalId || undefined);
+  
+  // Fetch proposal CPEs - usa prefill OU seleção manual
+  const { data: proposalCpes = [] } = useProposalCpes(prefillProposal?.id || selectedProposalId || undefined);
 
   // Form state
   const [clientId, setClientId] = useState<string>("");
@@ -341,6 +349,34 @@ export function CreateSaleModal({
         );
       }
 
+      // Process CPEs - criar novos ou atualizar existentes
+      if (proposalCpes.length > 0 && clientId) {
+        for (const proposalCpe of proposalCpes) {
+          if (proposalCpe.existing_cpe_id) {
+            // Atualizar CPE existente (renovação)
+            await updateCpe.mutateAsync({
+              id: proposalCpe.existing_cpe_id,
+              comercializador: proposalCpe.comercializador,
+              fidelizacao_start: proposalCpe.fidelizacao_start || undefined,
+              fidelizacao_end: proposalCpe.fidelizacao_end || undefined,
+              notes: proposalCpe.notes || undefined,
+            });
+          } else {
+            // Criar novo CPE
+            await createCpe.mutateAsync({
+              client_id: clientId,
+              equipment_type: proposalCpe.equipment_type,
+              comercializador: proposalCpe.comercializador,
+              serial_number: proposalCpe.serial_number || undefined,
+              fidelizacao_start: proposalCpe.fidelizacao_start || undefined,
+              fidelizacao_end: proposalCpe.fidelizacao_end || undefined,
+              notes: proposalCpe.notes || undefined,
+              status: 'active',
+            });
+          }
+        }
+      }
+
       // Notify parent that sale was created successfully
       onSaleCreated?.();
 
@@ -527,6 +563,44 @@ export function CreateSaleModal({
                 </div>
               )}
             </div>
+
+            {/* Section 2.5: CPEs from Proposal */}
+            {proposalCpes.length > 0 && (
+              <>
+                <Separator />
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                    <Router className="h-4 w-4" />
+                    CPEs (serão criados/atualizados)
+                  </div>
+                  
+                  <div className="space-y-2">
+                    {proposalCpes.map((cpe) => (
+                      <div
+                        key={cpe.id}
+                        className="flex items-center justify-between p-3 rounded-lg border border-border/50 bg-muted/30"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="flex flex-col">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-sm">{cpe.equipment_type}</span>
+                              <Badge variant={cpe.existing_cpe_id ? 'secondary' : 'default'} className="text-xs">
+                                {cpe.existing_cpe_id ? 'Renovação' : 'Novo'}
+                              </Badge>
+                            </div>
+                            <span className="text-xs text-muted-foreground">
+                              {cpe.comercializador}
+                              {cpe.serial_number && ` • ${cpe.serial_number}`}
+                              {cpe.fidelizacao_end && ` • Até ${cpe.fidelizacao_end}`}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
 
             <Separator />
 

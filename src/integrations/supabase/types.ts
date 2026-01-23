@@ -1602,6 +1602,60 @@ export type Database = {
           },
         ]
       }
+      proposal_cpes: {
+        Row: {
+          comercializador: string
+          created_at: string
+          equipment_type: string
+          existing_cpe_id: string | null
+          fidelizacao_end: string | null
+          fidelizacao_start: string | null
+          id: string
+          notes: string | null
+          proposal_id: string
+          serial_number: string | null
+        }
+        Insert: {
+          comercializador: string
+          created_at?: string
+          equipment_type: string
+          existing_cpe_id?: string | null
+          fidelizacao_end?: string | null
+          fidelizacao_start?: string | null
+          id?: string
+          notes?: string | null
+          proposal_id: string
+          serial_number?: string | null
+        }
+        Update: {
+          comercializador?: string
+          created_at?: string
+          equipment_type?: string
+          existing_cpe_id?: string | null
+          fidelizacao_end?: string | null
+          fidelizacao_start?: string | null
+          id?: string
+          notes?: string | null
+          proposal_id?: string
+          serial_number?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposal_cpes_existing_cpe_id_fkey"
+            columns: ["existing_cpe_id"]
+            isOneToOne: false
+            referencedRelation: "cpes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposal_cpes_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       proposal_products: {
         Row: {
           created_at: string | null

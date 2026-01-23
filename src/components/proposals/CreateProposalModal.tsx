@@ -7,10 +7,13 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SearchableCombobox, type ComboboxOption } from '@/components/ui/searchable-combobox';
+import { Separator } from '@/components/ui/separator';
 import { useActiveProducts } from '@/hooks/useProducts';
 import { useCreateProposal } from '@/hooks/useProposals';
 import { useClients } from '@/hooks/useClients';
+import { useCreateProposalCpesBatch } from '@/hooks/useProposalCpes';
 import { CreateClientModal } from '@/components/clients/CreateClientModal';
+import { ProposalCpeSelector, type ProposalCpeDraft } from '@/components/proposals/ProposalCpeSelector';
 import type { CrmClient } from '@/types/clients';
 import { PROPOSAL_STATUS_LABELS, PROPOSAL_STATUSES, type ProposalStatus, type Proposal } from '@/types/proposals';
 
@@ -34,6 +37,7 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
   const { data: products = [] } = useActiveProducts();
   const { data: clients = [] } = useClients();
   const createProposal = useCreateProposal();
+  const createProposalCpesBatch = useCreateProposalCpesBatch();
   
   const [selectedClientId, setSelectedClientId] = useState<string | null>(client?.id || null);
   const [selectedProducts, setSelectedProducts] = useState<SelectedProduct[]>([]);
@@ -43,6 +47,9 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
   const [additionalValue, setAdditionalValue] = useState<string>('');
   const [discount, setDiscount] = useState<string>('');
   const [status, setStatus] = useState<ProposalStatus>('draft');
+  
+  // CPEs para a proposta
+  const [proposalCpes, setProposalCpes] = useState<ProposalCpeDraft[]>([]);
   
   // Modal para criar novo cliente
   const [isCreateClientOpen, setIsCreateClientOpen] = useState(false);
@@ -122,7 +129,7 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
     setSelectedClientId(newClientId);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     createProposal.mutate({
@@ -139,15 +146,31 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
         total: p.quantity * p.unit_price,
       })),
     }, {
-      onSuccess: (createdProposal) => {
+      onSuccess: async (createdProposal) => {
+        // Criar CPEs da proposta se existirem
+        if (proposalCpes.length > 0 && createdProposal?.id) {
+          await createProposalCpesBatch.mutateAsync(
+            proposalCpes.map(cpe => ({
+              proposal_id: createdProposal.id,
+              existing_cpe_id: cpe.existing_cpe_id,
+              equipment_type: cpe.equipment_type,
+              serial_number: cpe.serial_number || null,
+              comercializador: cpe.comercializador,
+              fidelizacao_start: cpe.fidelizacao_start || null,
+              fidelizacao_end: cpe.fidelizacao_end || null,
+              notes: cpe.notes || null,
+            }))
+          );
+        }
+        
         setSelectedClientId(null);
         setSelectedProducts([]);
         setNotes('');
         setProposalDate(new Date().toISOString().split('T')[0]);
-        
         setAdditionalValue('');
         setDiscount('');
         setStatus('draft');
+        setProposalCpes([]);
         
         // Fechar modal de criação
         onOpenChange(false);
@@ -379,6 +402,17 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
               </div>
             </div>
 
+            <Separator className="my-4" />
+
+            {/* CPEs Section */}
+            <ProposalCpeSelector
+              clientId={selectedClientId}
+              cpes={proposalCpes}
+              onCpesChange={setProposalCpes}
+            />
+
+            <Separator className="my-4" />
+
             <div className="space-y-2">
               <Label htmlFor="notes">Observações da Negociação</Label>
               <Textarea
@@ -394,8 +428,8 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={createProposal.isPending}>
-                {createProposal.isPending ? 'A criar...' : 'Criar Proposta'}
+              <Button type="submit" disabled={createProposal.isPending || createProposalCpesBatch.isPending}>
+                {createProposal.isPending || createProposalCpesBatch.isPending ? 'A criar...' : 'Criar Proposta'}
               </Button>
             </DialogFooter>
           </form>
