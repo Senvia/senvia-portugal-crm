@@ -428,7 +428,7 @@ export function LeadDetailsModal({
                 <Target className="h-4 w-4 text-muted-foreground" />
                 Dados de Campanha
               </h4>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {utmData.map((entry, index) => (
                   <div key={index} className="rounded-lg bg-muted/50 p-2">
                     <p className="text-xs text-muted-foreground">{entry.label}</p>

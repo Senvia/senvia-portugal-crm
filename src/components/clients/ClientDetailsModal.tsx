@@ -135,7 +135,7 @@ export function ClientDetailsModal({ client, open, onOpenChange, onEdit }: Clien
           <div className="space-y-3">
             <h4 className="text-sm font-semibold text-foreground">Métricas</h4>
             
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 xs:grid-cols-3 gap-4">
               <div className="rounded-lg bg-muted/50 p-3 text-center">
                 <div className="flex items-center justify-center gap-1 text-muted-foreground mb-1">
                   <FileText className="h-3 w-3" />

@@ -122,7 +122,7 @@ export function CreateFormModal({ open, onOpenChange }: CreateFormModalProps) {
           {/* Mode Selection */}
           <div className="space-y-2">
             <Label>Tipo de Formulário</Label>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {/* Traditional Mode */}
               <button
                 type="button"

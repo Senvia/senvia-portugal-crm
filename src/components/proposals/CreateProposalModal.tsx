@@ -338,7 +338,7 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
                   <span className="font-medium text-sm">Dados de Energia</span>
                 </div>
                 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-2">
                     <Label htmlFor="consumo-anual">Consumo Anual (kWh)</Label>
                     <Input
@@ -365,7 +365,7 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
                   </div>
                 </div>
                 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-2">
                     <Label htmlFor="anos-contrato">Anos de Contrato</Label>
                     <Input
@@ -432,7 +432,7 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
                   </RadioGroup>
                 </div>
                 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-2">
                     <Label htmlFor="kwp">Potência (kWp)</Label>
                     <Input
