@@ -54,7 +54,7 @@ export default function SystemAdminDashboard() {
           <p className="text-sm text-muted-foreground">Gestão global do sistema Senvia OS.</p>
         </div>
 
-        <div className="grid gap-4 grid-cols-2 lg:grid-cols-3 mb-6 lg:mb-8">
+        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 mb-6 lg:mb-8">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-xs lg:text-sm font-medium">Organizações</CardTitle>
