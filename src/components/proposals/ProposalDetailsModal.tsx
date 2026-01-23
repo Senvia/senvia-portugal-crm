@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Trash2, Printer, Mail, Loader2, Router, Zap, Wrench } from 'lucide-react';
+import { Trash2, Printer, Mail, Loader2, Router, Zap, Wrench, Pencil } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useSendProposalEmail } from '@/hooks/useSendProposalEmail';
 import { Button } from '@/components/ui/button';
@@ -30,6 +30,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { CreateSaleModal } from "@/components/sales/CreateSaleModal";
+import { EditProposalModal } from "@/components/proposals/EditProposalModal";
 
 interface ProposalDetailsModalProps {
   proposal: Proposal | null;
@@ -57,6 +58,7 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [editValue, setEditValue] = useState<string>('0');
   const [showSaleModal, setShowSaleModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
 
   // Sincronizar estado quando proposal muda
   useEffect(() => {
@@ -696,6 +698,16 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
               <Button 
                 variant="outline" 
                 size="sm" 
+                onClick={() => setShowEditModal(true)}
+                disabled={status === 'accepted'}
+                title={status === 'accepted' ? 'Não é possível editar propostas aceites' : 'Editar proposta'}
+              >
+                <Pencil className="h-4 w-4 mr-2" />
+                Editar
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
                 onClick={handleSendEmail}
                 disabled={!canSendEmail}
                 title={
@@ -748,6 +760,16 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
         prefillProposal={proposal}
         prefillClientId={proposal.client_id}
         onSaleCreated={handleSaleCreated}
+      />
+
+      <EditProposalModal
+        proposal={proposal}
+        open={showEditModal}
+        onOpenChange={setShowEditModal}
+        onSuccess={() => {
+          // Fechar modal de detalhes para forçar refetch
+          onOpenChange(false);
+        }}
       />
     </>
   );

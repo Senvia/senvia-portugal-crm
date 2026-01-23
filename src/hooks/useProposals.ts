@@ -202,12 +202,29 @@ export function useCreateProposal() {
   });
 }
 
+interface UpdateProposalData {
+  id: string;
+  client_id?: string | null;
+  total_value?: number;
+  status?: ProposalStatus;
+  notes?: string | null;
+  proposal_date?: string;
+  proposal_type?: 'energia' | 'servicos';
+  consumo_anual?: number | null;
+  margem?: number | null;
+  dbl?: number | null;
+  anos_contrato?: number | null;
+  modelo_servico?: 'transacional' | 'saas' | null;
+  kwp?: number | null;
+  comissao?: number | null;
+}
+
 export function useUpdateProposal() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async ({ id, ...data }: { id: string; status?: ProposalStatus; total_value?: number; notes?: string }) => {
+    mutationFn: async ({ id, ...data }: UpdateProposalData) => {
       const { error } = await supabase
         .from('proposals')
         .update(data)
@@ -221,6 +238,49 @@ export function useUpdateProposal() {
     },
     onError: () => {
       toast({ title: 'Erro', description: 'Não foi possível atualizar a proposta.', variant: 'destructive' });
+    },
+  });
+}
+
+export function useUpdateProposalProducts() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ proposalId, products }: { 
+      proposalId: string; 
+      products: { product_id: string; quantity: number; unit_price: number; total: number }[] 
+    }) => {
+      // Delete existing products
+      const { error: deleteError } = await supabase
+        .from('proposal_products')
+        .delete()
+        .eq('proposal_id', proposalId);
+      
+      if (deleteError) throw deleteError;
+
+      // Insert new products
+      if (products.length > 0) {
+        const { error: insertError } = await supabase
+          .from('proposal_products')
+          .insert(
+            products.map(p => ({
+              proposal_id: proposalId,
+              product_id: p.product_id,
+              quantity: p.quantity,
+              unit_price: p.unit_price,
+              total: p.total,
+            }))
+          );
+        
+        if (insertError) throw insertError;
+      }
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['proposal_products', variables.proposalId] });
+    },
+    onError: () => {
+      toast({ title: 'Erro', description: 'Não foi possível atualizar os produtos.', variant: 'destructive' });
     },
   });
 }
