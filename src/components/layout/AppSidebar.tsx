@@ -41,7 +41,7 @@ export function AppSidebar({
 }: AppSidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { signOut, roles, isSuperAdmin } = useAuth();
+  const { signOut, roles, isSuperAdmin, organization } = useAuth();
   const { modules } = useModules();
 
   // Filter nav items based on enabled modules
@@ -58,7 +58,11 @@ export function AppSidebar({
       <div className="flex h-full flex-col">
         {/* Logo */}
         <div className="flex h-16 items-center border-b border-sidebar-border px-4">
-          <img alt="SENVIA" className="h-10 w-40 object-contain" src="/lovable-uploads/a73ec7d1-f1a3-458c-8d12-82bca71d2d34.png" />
+          <img 
+            alt={organization?.name || "SENVIA"} 
+            className="h-10 w-40 object-contain" 
+            src={organization?.logo_url || "/lovable-uploads/a73ec7d1-f1a3-458c-8d12-82bca71d2d34.png"} 
+          />
         </div>
 
         {/* Organization Switcher */}
