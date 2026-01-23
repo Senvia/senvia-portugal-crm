@@ -19,7 +19,65 @@ declare global {
     fbq: (...args: unknown[]) => void;
     _fbq: unknown;
     __senvia_pixel_init?: Record<string, boolean>; // Global guard to prevent double init
+    __senvia_fbq_wrapped?: boolean; // Guard to prevent double wrapping
+    __senvia_allow_lead?: boolean; // Flag to allow Lead events only when explicitly set
+    __senvia_original_fbq?: (...args: unknown[]) => void; // Original fbq function
   }
+}
+
+// Install fbq firewall to block unauthorized Lead events
+const installFbqFirewall = () => {
+  if (window.__senvia_fbq_wrapped) return;
+  
+  const checkAndWrap = () => {
+    if (typeof window.fbq !== 'function') return;
+    if (window.__senvia_fbq_wrapped) return;
+    
+    // Store original fbq
+    const originalFbq = window.fbq;
+    window.__senvia_original_fbq = originalFbq;
+    
+    // Create wrapper that blocks unauthorized Lead events
+    const wrappedFbq = (...args: unknown[]) => {
+      const command = args[0] as string;
+      const eventName = args[1] as string;
+      
+      // Check if this is a Lead event
+      if ((command === 'track' || command === 'trackSingle' || command === 'trackCustom') && 
+          eventName === 'Lead') {
+        // Only allow if our flag is set
+        if (!window.__senvia_allow_lead) {
+          console.warn('[Meta Pixel] BLOCKED unauthorized Lead event. Stack trace:', new Error().stack);
+          return;
+        }
+        console.log('[Meta Pixel] Lead event ALLOWED (authorized)');
+      }
+      
+      // Call original fbq
+      return originalFbq.apply(window, args);
+    };
+    
+    // Copy all properties from original fbq
+    Object.assign(wrappedFbq, originalFbq);
+    
+    // Replace global fbq
+    window.fbq = wrappedFbq;
+    window.__senvia_fbq_wrapped = true;
+    console.log('[Meta Pixel] Firewall installed - unauthorized Lead events will be blocked');
+  };
+  
+  // Try immediately
+  checkAndWrap();
+  
+  // Also try after a delay (in case fbq loads later)
+  setTimeout(checkAndWrap, 100);
+  setTimeout(checkAndWrap, 500);
+  setTimeout(checkAndWrap, 1000);
+};
+
+// Install firewall immediately on module load
+if (typeof window !== 'undefined') {
+  installFbqFirewall();
 }
 
 interface FormDataResult {
@@ -237,14 +295,22 @@ export default function PublicLeadForm() {
 
     console.log('[Meta Pixel] Tracking Lead event for lead:', leadId, 'pixels:', activePixels.length);
     
-    // Use fbq('track') with eventID for Facebook's automatic server-side deduplication
-    activePixels.forEach((pixel) => {
-      window.fbq('track', 'Lead', {
-        content_name: formData.org_name,
-        content_category: 'form_submission',
-      }, { eventID: leadId });
-      console.log('[Meta Pixel] Lead event sent for pixel:', pixel.pixel_id, 'eventID:', leadId);
-    });
+    // CRITICAL: Enable the firewall flag to allow our Lead event
+    try {
+      window.__senvia_allow_lead = true;
+      
+      // Use fbq('track') with eventID for Facebook's automatic server-side deduplication
+      activePixels.forEach((pixel) => {
+        window.fbq('track', 'Lead', {
+          content_name: formData.org_name,
+          content_category: 'form_submission',
+        }, { eventID: leadId });
+        console.log('[Meta Pixel] Lead event sent for pixel:', pixel.pixel_id, 'eventID:', leadId);
+      });
+    } finally {
+      // Always reset the flag after sending
+      window.__senvia_allow_lead = false;
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
