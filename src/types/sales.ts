@@ -1,6 +1,8 @@
 export type SaleStatus = 'pending' | 'in_progress' | 'delivered' | 'cancelled';
 export type PaymentMethod = 'mbway' | 'transfer' | 'cash' | 'card' | 'check' | 'other';
 export type PaymentStatus = 'pending' | 'partial' | 'paid';
+export type ProposalType = 'energia' | 'servicos';
+export type ModeloServico = 'transacional' | 'saas';
 
 export const SALE_STATUS_LABELS: Record<SaleStatus, string> = {
   pending: 'Pendente',
@@ -64,6 +66,22 @@ export interface Sale {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  
+  // Campos do tipo de proposta
+  proposal_type: ProposalType | null;
+  
+  // Campos Energia
+  consumo_anual: number | null;
+  margem: number | null;
+  dbl: number | null;
+  anos_contrato: number | null;
+  
+  // Campos Serviços
+  modelo_servico: ModeloServico | null;
+  kwp: number | null;
+  
+  // Comum
+  comissao: number | null;
 }
 
 export interface SaleWithDetails extends Sale {

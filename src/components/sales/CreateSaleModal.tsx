@@ -47,7 +47,8 @@ import {
   FileText,
   CreditCard,
   Receipt,
-  Router
+  Router,
+  Zap
 } from "lucide-react";
 import type { Proposal } from "@/types/proposals";
 import { 
@@ -56,8 +57,20 @@ import {
   PAYMENT_STATUSES, 
   PAYMENT_STATUS_LABELS,
   type PaymentMethod,
-  type PaymentStatus
+  type PaymentStatus,
+  type ProposalType,
+  type ModeloServico
 } from "@/types/sales";
+
+const PROPOSAL_TYPE_LABELS: Record<ProposalType, string> = {
+  energia: 'Energia',
+  servicos: 'Serviços',
+};
+
+const MODELO_SERVICO_LABELS: Record<ModeloServico, string> = {
+  transacional: 'Transacional',
+  saas: 'SAAS',
+};
 
 interface SaleItemDraft {
   id: string;
@@ -119,6 +132,16 @@ export function CreateSaleModal({
   
   // Track which proposal we've already initialized items for
   const [initializedProposalId, setInitializedProposalId] = useState<string | null>(null);
+  
+  // Campos específicos de proposta (Energia / Serviços)
+  const [proposalType, setProposalType] = useState<ProposalType | null>(null);
+  const [consumoAnual, setConsumoAnual] = useState<string>("");
+  const [margem, setMargem] = useState<string>("");
+  const [dbl, setDbl] = useState<string>("");
+  const [anosContrato, setAnosContrato] = useState<string>("");
+  const [modeloServico, setModeloServico] = useState<ModeloServico | null>(null);
+  const [kwp, setKwp] = useState<string>("");
+  const [comissao, setComissao] = useState<string>("");
 
   // Reset form when modal opens
   useEffect(() => {
@@ -145,13 +168,41 @@ export function CreateSaleModal({
         if (prefillProposal.notes) {
           setNotes(prefillProposal.notes);
         }
+        
+        // Preencher campos específicos de Energia/Serviços
+        setProposalType(prefillProposal.proposal_type || null);
+        setConsumoAnual(prefillProposal.consumo_anual?.toString() || "");
+        setMargem(prefillProposal.margem?.toString() || "");
+        setDbl(prefillProposal.dbl?.toString() || "");
+        setAnosContrato(prefillProposal.anos_contrato?.toString() || "");
+        setModeloServico(prefillProposal.modelo_servico || null);
+        setKwp(prefillProposal.kwp?.toString() || "");
+        setComissao(prefillProposal.comissao?.toString() || "");
       } else if (prefillClientId) {
         setClientId(prefillClientId);
         setSelectedProposalId(null);
+        // Reset campos específicos
+        setProposalType(null);
+        setConsumoAnual("");
+        setMargem("");
+        setDbl("");
+        setAnosContrato("");
+        setModeloServico(null);
+        setKwp("");
+        setComissao("");
       } else {
         setClientId("");
         setProposalId("");
         setSelectedProposalId(null);
+        // Reset campos específicos
+        setProposalType(null);
+        setConsumoAnual("");
+        setMargem("");
+        setDbl("");
+        setAnosContrato("");
+        setModeloServico(null);
+        setKwp("");
+        setComissao("");
       }
       
       setSaleDate(new Date());
@@ -328,6 +379,16 @@ export function CreateSaleModal({
         setNotes(proposal.notes);
       }
       
+      // Preencher campos específicos de Energia/Serviços
+      setProposalType(proposal.proposal_type || null);
+      setConsumoAnual(proposal.consumo_anual?.toString() || "");
+      setMargem(proposal.margem?.toString() || "");
+      setDbl(proposal.dbl?.toString() || "");
+      setAnosContrato(proposal.anos_contrato?.toString() || "");
+      setModeloServico(proposal.modelo_servico || null);
+      setKwp(proposal.kwp?.toString() || "");
+      setComissao(proposal.comissao?.toString() || "");
+      
       // Limpar items para serem recarregados pelo useEffect de proposalProducts
       setItems([]);
     }
@@ -397,6 +458,15 @@ export function CreateSaleModal({
         invoice_reference: invoiceReference.trim() || undefined,
         sale_date: format(saleDate, 'yyyy-MM-dd'),
         notes: notes.trim() || undefined,
+        // Campos específicos de proposta
+        proposal_type: proposalType || undefined,
+        consumo_anual: parseFloat(consumoAnual) || undefined,
+        margem: parseFloat(margem) || undefined,
+        dbl: parseFloat(dbl) || undefined,
+        anos_contrato: parseInt(anosContrato) || undefined,
+        modelo_servico: modeloServico || undefined,
+        kwp: parseFloat(kwp) || undefined,
+        comissao: parseFloat(comissao) || undefined,
       });
 
       // Create sale items
@@ -661,6 +731,108 @@ export function CreateSaleModal({
                         </div>
                       </div>
                     ))}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Section 2.6: Dados Energia/Serviços */}
+            {proposalType && (
+              <>
+                <Separator />
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                    <Zap className="h-4 w-4" />
+                    Dados {PROPOSAL_TYPE_LABELS[proposalType]}
+                  </div>
+                  
+                  {proposalType === 'energia' && (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label className="text-xs">Consumo Anual (kWh)</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={consumoAnual}
+                          onChange={(e) => setConsumoAnual(e.target.value)}
+                          placeholder="Ex: 15000"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs">Margem (€/MWh)</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={margem}
+                          onChange={(e) => setMargem(e.target.value)}
+                          placeholder="Ex: 5.50"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs">DBL</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={dbl}
+                          onChange={(e) => setDbl(e.target.value)}
+                          placeholder="Ex: 2.00"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs">Anos Contrato</Label>
+                        <Input
+                          type="number"
+                          step="1"
+                          min="1"
+                          value={anosContrato}
+                          onChange={(e) => setAnosContrato(e.target.value)}
+                          placeholder="Ex: 2"
+                        />
+                      </div>
+                    </div>
+                  )}
+                  
+                  {proposalType === 'servicos' && (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label className="text-xs">Modelo Serviço</Label>
+                        <Select 
+                          value={modeloServico || "none"} 
+                          onValueChange={(v) => setModeloServico(v === "none" ? null : v as ModeloServico)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecionar..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Não definido</SelectItem>
+                            <SelectItem value="transacional">{MODELO_SERVICO_LABELS.transacional}</SelectItem>
+                            <SelectItem value="saas">{MODELO_SERVICO_LABELS.saas}</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs">kWp</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={kwp}
+                          onChange={(e) => setKwp(e.target.value)}
+                          placeholder="Ex: 10.5"
+                        />
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Comissão - comum a ambos */}
+                  <div className="max-w-[200px] space-y-2">
+                    <Label className="text-xs">Comissão (€)</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={comissao}
+                      onChange={(e) => setComissao(e.target.value)}
+                      placeholder="Ex: 150.00"
+                    />
                   </div>
                 </div>
               </>
