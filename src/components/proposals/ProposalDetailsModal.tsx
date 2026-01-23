@@ -492,8 +492,8 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
           </DialogHeader>
 
           <div className="space-y-4">
-            <div className="flex items-center justify-between p-4 rounded-lg bg-primary/10 border border-primary/20">
-              <div className="flex-1">
+            <div className="flex items-center justify-between gap-4 p-4 rounded-lg bg-primary/10 border border-primary/20">
+              <div className="flex-1 min-w-0">
                 <p className="text-sm text-muted-foreground mb-1">Valor Total</p>
                 <div className="flex items-center gap-1">
                   <Input
@@ -508,7 +508,7 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
                   <span className="text-lg text-primary font-medium">€</span>
                 </div>
               </div>
-              <div className="text-right">
+              <div className="text-right shrink-0">
                 <p className="text-sm text-muted-foreground">Data</p>
                 <p className="font-medium">
                   {format(new Date(proposal.proposal_date), "d 'de' MMMM 'de' yyyy", { locale: pt })}
