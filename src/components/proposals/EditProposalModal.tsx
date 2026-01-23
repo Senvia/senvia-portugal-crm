@@ -14,6 +14,8 @@ import { useActiveProducts } from '@/hooks/useProducts';
 import { useUpdateProposal, useUpdateProposalProducts, useProposalProducts } from '@/hooks/useProposals';
 import { useClients } from '@/hooks/useClients';
 import { CreateClientModal } from '@/components/clients/CreateClientModal';
+import { ProposalCpeSelector, type ProposalCpeDraft } from './ProposalCpeSelector';
+import { useProposalCpes, useUpdateProposalCpes } from '@/hooks/useProposalCpes';
 import { 
   PROPOSAL_STATUS_LABELS, 
   PROPOSAL_STATUSES, 
@@ -41,8 +43,10 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
   const { data: products = [] } = useActiveProducts();
   const { data: clients = [] } = useClients();
   const { data: existingProducts = [] } = useProposalProducts(proposal.id);
+  const { data: existingCpes = [] } = useProposalCpes(proposal.id);
   const updateProposal = useUpdateProposal();
   const updateProposalProducts = useUpdateProposalProducts();
+  const updateProposalCpes = useUpdateProposalCpes();
   
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [selectedProducts, setSelectedProducts] = useState<SelectedProduct[]>([]);
@@ -68,6 +72,9 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
   
   // Comum
   const [comissao, setComissao] = useState<string>('');
+  
+  // CPEs para propostas de energia
+  const [proposalCpes, setProposalCpes] = useState<ProposalCpeDraft[]>([]);
   
   // Modal para criar novo cliente
   const [isCreateClientOpen, setIsCreateClientOpen] = useState(false);
@@ -115,6 +122,27 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
       setSelectedProducts([]);
     }
   }, [open, existingProducts]);
+
+  // Carregar CPEs existentes quando disponíveis
+  useEffect(() => {
+    if (open && existingCpes.length > 0) {
+      setProposalCpes(
+        existingCpes.map(cpe => ({
+          id: cpe.id,
+          existing_cpe_id: cpe.existing_cpe_id,
+          equipment_type: cpe.equipment_type,
+          serial_number: cpe.serial_number || '',
+          comercializador: cpe.comercializador,
+          fidelizacao_start: cpe.fidelizacao_start || '',
+          fidelizacao_end: cpe.fidelizacao_end || '',
+          notes: cpe.notes || '',
+          isNew: !cpe.existing_cpe_id, // Se não tem existing_cpe_id, foi criado como novo
+        }))
+      );
+    } else if (open) {
+      setProposalCpes([]);
+    }
+  }, [open, existingCpes]);
 
   const productsSubtotal = useMemo(() => {
     return selectedProducts.reduce((sum, p) => sum + (p.quantity * p.unit_price), 0);
@@ -212,6 +240,23 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
       })),
     });
 
+    // Atualizar CPEs (apenas para propostas de energia)
+    if (proposalType === 'energia') {
+      await updateProposalCpes.mutateAsync({
+        proposalId: proposal.id,
+        cpes: proposalCpes.map(cpe => ({
+          proposal_id: proposal.id,
+          existing_cpe_id: cpe.existing_cpe_id || null,
+          equipment_type: cpe.equipment_type,
+          serial_number: cpe.serial_number || null,
+          comercializador: cpe.comercializador,
+          fidelizacao_start: cpe.fidelizacao_start || null,
+          fidelizacao_end: cpe.fidelizacao_end || null,
+          notes: cpe.notes || null,
+        })),
+      });
+    }
+
     onOpenChange(false);
     onSuccess?.();
   };
@@ -228,7 +273,7 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
   const hasDiscount = parseFloat(discount) > 0;
   const showBreakdown = selectedProducts.length > 0 || hasAdditional || hasDiscount;
 
-  const isSubmitting = updateProposal.isPending || updateProposalProducts.isPending;
+  const isSubmitting = updateProposal.isPending || updateProposalProducts.isPending || updateProposalCpes.isPending;
 
   return (
     <>
@@ -400,6 +445,18 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
                     </div>
                   </div>
                 </div>
+              )}
+
+              {/* CPE Selector para propostas de Energia */}
+              {proposalType === 'energia' && (
+                <>
+                  <Separator className="my-2" />
+                  <ProposalCpeSelector
+                    clientId={selectedClientId}
+                    cpes={proposalCpes}
+                    onCpesChange={setProposalCpes}
+                  />
+                </>
               )}
 
               {/* Campos específicos de Serviços */}
