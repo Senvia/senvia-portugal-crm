@@ -160,6 +160,7 @@ export function CreateSaleModal({
 
   // Load proposal products when available (prefill ou seleção manual)
   useEffect(() => {
+    // Se há produtos da proposta, usar esses
     if (proposalProducts && proposalProducts.length > 0) {
       const newItems: SaleItemDraft[] = proposalProducts.map(pp => ({
         id: crypto.randomUUID(),
@@ -169,8 +170,25 @@ export function CreateSaleModal({
         unit_price: pp.unit_price,
       }));
       setItems(newItems);
+    } 
+    // Se não há produtos mas há um prefillProposal com valor, criar item genérico
+    else if (prefillProposal && prefillProposal.total_value > 0) {
+      // Criar um item com o valor total da proposta
+      const itemName = prefillProposal.proposal_type === 'energia' 
+        ? 'Contrato de Energia' 
+        : prefillProposal.proposal_type === 'servicos'
+          ? 'Serviços'
+          : 'Proposta ' + (prefillProposal.code || '');
+      
+      setItems([{
+        id: crypto.randomUUID(),
+        product_id: null,
+        name: itemName,
+        quantity: 1,
+        unit_price: prefillProposal.total_value,
+      }]);
     }
-  }, [proposalProducts]);
+  }, [proposalProducts, prefillProposal]);
 
   // Filter proposals based on selected client - show all except rejected
   const filteredProposals = useMemo(() => {
