@@ -4,6 +4,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { SEO } from '@/components/SEO';
 import { CheckCircle, Clock, MessageSquare, HelpCircle, Zap, Users, Stethoscope, HardHat, Home, ArrowDown, ExternalLink, ChevronDown } from 'lucide-react';
 import { useState } from 'react';
+import { buildUrlWithUtms } from '@/components/TrackingLink';
 import senviaLogo from "@/assets/senvia-logo.png";
 
 // FAQ Data for SEO
@@ -40,8 +41,10 @@ function FAQItem({
 }
 const CONVERSATIONAL_FORM_URL = "https://app.senvia.pt/c/empresa-teste";
 function ConversationalFormButton() {
+  const trackedUrl = buildUrlWithUtms(CONVERSATIONAL_FORM_URL);
+  
   return <Button size="lg" className="bg-[#25D366] hover:bg-[#22c55e] text-white text-base px-8 py-6 h-auto shadow-lg hover:shadow-xl transition-all" asChild>
-      <a href={CONVERSATIONAL_FORM_URL} target="_blank" rel="noopener noreferrer">
+      <a href={trackedUrl} target="_blank" rel="noopener noreferrer">
         <MessageSquare className="mr-2 w-5 h-5" />
         RECEBER MENSAGEM DE TESTE
         <ExternalLink className="ml-2 w-4 h-4" />
