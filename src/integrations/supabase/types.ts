@@ -211,6 +211,66 @@ export type Database = {
           },
         ]
       }
+      cpes: {
+        Row: {
+          client_id: string
+          comercializador: string
+          created_at: string
+          equipment_type: string
+          fidelizacao_end: string | null
+          fidelizacao_start: string | null
+          id: string
+          notes: string | null
+          organization_id: string
+          serial_number: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          comercializador: string
+          created_at?: string
+          equipment_type: string
+          fidelizacao_end?: string | null
+          fidelizacao_start?: string | null
+          id?: string
+          notes?: string | null
+          organization_id: string
+          serial_number?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          comercializador?: string
+          created_at?: string
+          equipment_type?: string
+          fidelizacao_end?: string | null
+          fidelizacao_start?: string | null
+          id?: string
+          notes?: string | null
+          organization_id?: string
+          serial_number?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cpes_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "crm_clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cpes_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crm_clients: {
         Row: {
           address_line1: string | null

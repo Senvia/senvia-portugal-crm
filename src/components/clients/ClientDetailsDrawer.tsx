@@ -20,6 +20,7 @@ import {
   Save,
   X,
   User,
+  Router,
 } from "lucide-react";
 import { formatDate, formatCurrency, getWhatsAppUrl } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -27,8 +28,10 @@ import { useClientLabels } from "@/hooks/useClientLabels";
 import { useClientHistory } from "@/hooks/useClientHistory";
 import { useUpdateClient } from "@/hooks/useClients";
 import { useTeamMembers } from "@/hooks/useTeam";
+import { useCpes } from "@/hooks/useCpes";
 import { ClientTimeline } from "./ClientTimeline";
 import { AddCommunicationModal } from "./AddCommunicationModal";
+import { CpeList } from "./CpeList";
 import type { CrmClient } from "@/types/clients";
 import type { CommunicationType, CommunicationDirection } from "@/types/communications";
 
@@ -55,6 +58,7 @@ export function ClientDetailsDrawer({
   const { timeline, proposals, sales, events, isLoading: loadingHistory } = useClientHistory(client?.id || null);
   const updateClient = useUpdateClient();
   const { data: teamMembers = [] } = useTeamMembers();
+  const { data: cpes = [] } = useCpes(client?.id || null);
 
   // Communication modal state
   const [showAddCommunication, setShowAddCommunication] = useState(false);
@@ -200,6 +204,10 @@ export function ClientDetailsDrawer({
         <Tabs defaultValue="resumo" className="w-full mt-4 flex-1 flex flex-col min-h-0">
           <TabsList className="w-full justify-start px-6 h-auto flex-wrap shrink-0">
             <TabsTrigger value="resumo" className="text-xs">Resumo</TabsTrigger>
+            <TabsTrigger value="cpes" className="text-xs">
+              <Router className="h-3 w-3 mr-1" />
+              CPEs ({cpes.length})
+            </TabsTrigger>
             <TabsTrigger value="notas" className="text-xs">Notas</TabsTrigger>
             <TabsTrigger value="historico" className="text-xs">Histórico</TabsTrigger>
             <TabsTrigger value="propostas" className="text-xs">
@@ -332,6 +340,11 @@ export function ClientDetailsDrawer({
                   <p className="text-sm text-muted-foreground">Sem responsável atribuído</p>
                 )}
               </div>
+            </TabsContent>
+
+            {/* CPEs Tab */}
+            <TabsContent value="cpes" className="p-6 pt-4 mt-0">
+              <CpeList clientId={client.id} />
             </TabsContent>
 
             {/* Notas Tab */}
