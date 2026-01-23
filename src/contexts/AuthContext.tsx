@@ -24,6 +24,7 @@ interface Organization {
   form_settings?: unknown;
   niche?: string;
   enabled_modules?: unknown;
+  logo_url?: string | null;
 }
 
 interface UserOrganizationMembership {
