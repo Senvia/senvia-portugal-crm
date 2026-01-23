@@ -278,7 +278,7 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col">
+        <SheetContent side="right" className="w-full sm:max-w-md px-0 pb-0 pt-safe flex flex-col">
           <SheetHeader className="px-6 pt-6 pb-4 border-b">
             <SheetTitle>Editar Proposta {proposal.code}</SheetTitle>
           </SheetHeader>
