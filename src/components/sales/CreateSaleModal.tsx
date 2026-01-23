@@ -96,11 +96,14 @@ export function CreateSaleModal({
   // State para proposta selecionada manualmente (para buscar produtos)
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null);
   
-  // Fetch proposal products - usa prefill OU seleção manual
-  const { data: proposalProducts } = useProposalProducts(prefillProposal?.id || selectedProposalId || undefined);
+  // Gate queries by modal open state - ensures fresh data when modal opens
+  const effectiveProposalId = open ? (prefillProposal?.id || selectedProposalId || undefined) : undefined;
   
-  // Fetch proposal CPEs - usa prefill OU seleção manual
-  const { data: proposalCpes = [] } = useProposalCpes(prefillProposal?.id || selectedProposalId || undefined);
+  // Fetch proposal products - usa prefill OU seleção manual, gated by open
+  const { data: proposalProducts } = useProposalProducts(effectiveProposalId);
+  
+  // Fetch proposal CPEs - usa prefill OU seleção manual, gated by open
+  const { data: proposalCpes = [] } = useProposalCpes(effectiveProposalId);
 
   // Form state
   const [clientId, setClientId] = useState<string>("");
@@ -113,10 +116,16 @@ export function CreateSaleModal({
   const [dueDate, setDueDate] = useState<Date | undefined>();
   const [invoiceReference, setInvoiceReference] = useState("");
   const [notes, setNotes] = useState("");
+  
+  // Track which proposal we've already initialized items for
+  const [initializedProposalId, setInitializedProposalId] = useState<string | null>(null);
 
   // Reset form when modal opens
   useEffect(() => {
     if (open) {
+      // Reset initialization tracker
+      setInitializedProposalId(null);
+      
       // If prefillProposal is provided, pre-populate fields
       if (prefillProposal) {
         setProposalId(prefillProposal.id);
@@ -155,11 +164,24 @@ export function CreateSaleModal({
       if (!prefillProposal?.notes) {
         setNotes("");
       }
+    } else {
+      // Reset when modal closes
+      setInitializedProposalId(null);
     }
   }, [open, prefillProposal, prefillClientId, clients]);
 
-  // Load proposal products when available (prefill ou seleção manual)
+  // Load proposal products/value when available (prefill ou seleção manual)
+  // This runs AFTER the reset effect and only when we have new data
   useEffect(() => {
+    if (!open) return;
+    
+    const currentProposalId = prefillProposal?.id || selectedProposalId;
+    
+    // Skip if already initialized for this proposal
+    if (currentProposalId && initializedProposalId === currentProposalId) {
+      return;
+    }
+    
     // Se há produtos da proposta, usar esses
     if (proposalProducts && proposalProducts.length > 0) {
       const newItems: SaleItemDraft[] = proposalProducts.map(pp => ({
@@ -170,10 +192,13 @@ export function CreateSaleModal({
         unit_price: pp.unit_price,
       }));
       setItems(newItems);
+      if (currentProposalId) {
+        setInitializedProposalId(currentProposalId);
+      }
     } 
     // Se não há produtos mas há um prefillProposal com valor, criar item genérico
-    else if (prefillProposal && prefillProposal.total_value > 0) {
-      // Criar um item com o valor total da proposta
+    else if (prefillProposal && prefillProposal.total_value > 0 && proposalProducts !== undefined) {
+      // proposalProducts !== undefined garante que a query já carregou (não está loading)
       const itemName = prefillProposal.proposal_type === 'energia' 
         ? 'Contrato de Energia' 
         : prefillProposal.proposal_type === 'servicos'
@@ -187,8 +212,29 @@ export function CreateSaleModal({
         quantity: 1,
         unit_price: prefillProposal.total_value,
       }]);
+      setInitializedProposalId(prefillProposal.id);
     }
-  }, [proposalProducts, prefillProposal]);
+    // Para seleção manual de proposta (sem prefill), criar item genérico se não há produtos
+    else if (selectedProposalId && proposalProducts !== undefined && proposalProducts.length === 0) {
+      const selectedProposal = proposals?.find(p => p.id === selectedProposalId);
+      if (selectedProposal && selectedProposal.total_value > 0) {
+        const itemName = selectedProposal.proposal_type === 'energia' 
+          ? 'Contrato de Energia' 
+          : selectedProposal.proposal_type === 'servicos'
+            ? 'Serviços'
+            : 'Proposta ' + (selectedProposal.code || '');
+        
+        setItems([{
+          id: crypto.randomUUID(),
+          product_id: null,
+          name: itemName,
+          quantity: 1,
+          unit_price: selectedProposal.total_value,
+        }]);
+        setInitializedProposalId(selectedProposalId);
+      }
+    }
+  }, [open, proposalProducts, prefillProposal, selectedProposalId, initializedProposalId, proposals]);
 
   // Filter proposals based on selected client - show all except rejected
   const filteredProposals = useMemo(() => {
