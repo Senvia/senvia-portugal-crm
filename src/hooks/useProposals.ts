@@ -48,7 +48,11 @@ export function useLeadProposals(leadId: string | undefined) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('proposals')
-        .select('*')
+        .select(`
+          *,
+          lead:leads(id, name, email, phone),
+          client:crm_clients(id, name, email, phone)
+        `)
         .eq('lead_id', leadId!)
         .order('created_at', { ascending: false });
       
