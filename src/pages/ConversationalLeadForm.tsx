@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
+import { detectLeadSource } from "@/lib/source-detection";
 import { useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Loader2 } from "lucide-react";
@@ -101,39 +102,13 @@ interface StepConfig {
 }
 
 // UTM source mapping
-const mapSourceToLabel = (source: string | null): string => {
-  if (!source) return 'Direto';
-  
-  const mapping: Record<string, string> = {
-    'facebook': 'Facebook',
-    'fb': 'Facebook',
-    'instagram': 'Instagram',
-    'ig': 'Instagram',
-    'google': 'Google',
-    'youtube': 'Youtube',
-    'linkedin': 'LinkedIn',
-    'tiktok': 'TikTok',
-    'twitter': 'Twitter',
-    'x': 'Twitter',
-    'email': 'Email Marketing',
-    'newsletter': 'Newsletter',
-    'whatsapp': 'WhatsApp',
-    'sms': 'SMS',
-  };
-  
-  return mapping[source.toLowerCase()] || source;
-};
-
 const ConversationalLeadForm = () => {
   const { slug, formSlug } = useParams<{ slug: string; formSlug?: string }>();
   const [currentStep, setCurrentStep] = useState(0);
 
-  // UTM parameters detection
-  const urlParams = new URLSearchParams(window.location.search);
-  const utmSource = urlParams.get('utm_source');
-  const utmMedium = urlParams.get('utm_medium');
-  const utmCampaign = urlParams.get('utm_campaign');
-  const detectedSource = mapSourceToLabel(utmSource);
+  // Intelligent source detection with fallbacks
+  const sourceDetection = useMemo(() => detectLeadSource(), []);
+  const detectedSource = sourceDetection.source;
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasSubmitted, setHasSubmitted] = useState(false); // Prevent duplicate submissions
   const [isComplete, setIsComplete] = useState(false);
@@ -422,9 +397,7 @@ const ConversationalLeadForm = () => {
       form_id: formData.form_id,  // Include form_id for form-specific settings
       custom_data: {
         ...customData,
-        ...(utmSource && { utm_source: utmSource }),
-        ...(utmMedium && { utm_medium: utmMedium }),
-        ...(utmCampaign && { utm_campaign: utmCampaign }),
+        ...sourceDetection.tracking,
         form_type: 'conversational',
       },
       gdpr_consent: true,

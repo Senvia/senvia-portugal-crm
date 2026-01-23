@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { detectLeadSource } from '@/lib/source-detection';
 import { useParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -110,37 +111,9 @@ export default function PublicLeadForm() {
   const [gdprConsent, setGdprConsent] = useState(false);
   const [customData, setCustomData] = useState<Record<string, string | number | boolean>>({});
 
-  // UTM parameters detection
-  const mapSourceToLabel = (source: string | null): string => {
-    if (!source) return 'Direto';
-    
-    const mapping: Record<string, string> = {
-      'facebook': 'Facebook',
-      'fb': 'Facebook',
-      'instagram': 'Instagram',
-      'ig': 'Instagram',
-      'google': 'Google',
-      'youtube': 'Youtube',
-      'linkedin': 'LinkedIn',
-      'tiktok': 'TikTok',
-      'twitter': 'Twitter',
-      'x': 'Twitter',
-      'email': 'Email Marketing',
-      'newsletter': 'Newsletter',
-      'whatsapp': 'WhatsApp',
-      'sms': 'SMS',
-    };
-    
-    return mapping[source.toLowerCase()] || source;
-  };
-
-  const urlParams = new URLSearchParams(window.location.search);
-  const utmSource = urlParams.get('utm_source');
-  const utmMedium = urlParams.get('utm_medium');
-  const utmCampaign = urlParams.get('utm_campaign');
-  const utmContent = urlParams.get('utm_content');
-  const utmTerm = urlParams.get('utm_term');
-  const detectedSource = mapSourceToLabel(utmSource);
+  // Intelligent source detection with fallbacks
+  const sourceDetection = useMemo(() => detectLeadSource(), []);
+  const detectedSource = sourceDetection.source;
 
   // Validate slug on mount and fetch form
   useEffect(() => {
@@ -374,11 +347,7 @@ export default function PublicLeadForm() {
         source: detectedSource,
         custom_data: {
           ...customData,
-          ...(utmSource && { utm_source: utmSource }),
-          ...(utmMedium && { utm_medium: utmMedium }),
-          ...(utmCampaign && { utm_campaign: utmCampaign }),
-          ...(utmContent && { utm_content: utmContent }),
-          ...(utmTerm && { utm_term: utmTerm }),
+          ...sourceDetection.tracking,
         },
       };
 
