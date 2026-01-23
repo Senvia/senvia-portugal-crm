@@ -105,7 +105,7 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
 
     const finalComercializador = updateComercializador === 'other' 
       ? updateCustomComercializador 
-      : (updateComercializador || existingCpe.comercializador);
+      : (updateComercializador === 'keep_current' || !updateComercializador ? existingCpe.comercializador : updateComercializador);
 
     const updateCpe: ProposalCpeDraft = {
       id: crypto.randomUUID(),
@@ -326,7 +326,7 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
                           <SelectValue placeholder="Manter atual..." />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="">Manter atual</SelectItem>
+                          <SelectItem value="keep_current">Manter atual</SelectItem>
                           {COMERCIALIZADORES.map((c) => (
                             <SelectItem key={c} value={c}>{c}</SelectItem>
                           ))}
