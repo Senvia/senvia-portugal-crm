@@ -65,7 +65,7 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
   // Campos Energia
   const [consumoAnual, setConsumoAnual] = useState<string>('');
   const [margem, setMargem] = useState<string>('');
-  const [dbl, setDbl] = useState(false);
+  const [dbl, setDbl] = useState<string>('');
   const [anosContrato, setAnosContrato] = useState<string>('');
   
   // Campos Serviços
@@ -176,7 +176,7 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
       proposal_type: proposalType,
       consumo_anual: proposalType === 'energia' ? (parseFloat(consumoAnual) || undefined) : undefined,
       margem: proposalType === 'energia' ? (parseFloat(margem) || undefined) : undefined,
-      dbl: proposalType === 'energia' ? dbl : undefined,
+      dbl: proposalType === 'energia' ? (parseInt(dbl) || undefined) : undefined,
       anos_contrato: proposalType === 'energia' ? (parseInt(anosContrato) || undefined) : undefined,
       modelo_servico: proposalType === 'servicos' ? modeloServico : undefined,
       kwp: proposalType === 'servicos' ? (parseFloat(kwp) || undefined) : undefined,
@@ -212,7 +212,7 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
         setProposalType('energia');
         setConsumoAnual('');
         setMargem('');
-        setDbl(false);
+        setDbl('');
         setAnosContrato('');
         setModeloServico('transacional');
         setKwp('');
@@ -392,15 +392,16 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
                   </div>
                 </div>
                 
-                <div className="flex items-center gap-3">
-                  <Checkbox
+                <div className="space-y-2">
+                  <Label htmlFor="dbl">DBL</Label>
+                  <Input
                     id="dbl"
-                    checked={dbl}
-                    onCheckedChange={(checked) => setDbl(checked === true)}
+                    type="number"
+                    min="0"
+                    value={dbl}
+                    onChange={(e) => setDbl(e.target.value)}
+                    placeholder="Ex: 1"
                   />
-                  <Label htmlFor="dbl" className="cursor-pointer">
-                    Dual Bill (Eletricidade + Gás)
-                  </Label>
                 </div>
               </div>
             )}

@@ -1703,7 +1703,7 @@ export type Database = {
           consumo_anual: number | null
           created_at: string | null
           created_by: string | null
-          dbl: boolean | null
+          dbl: number | null
           id: string
           kwp: number | null
           lead_id: string | null
@@ -1725,7 +1725,7 @@ export type Database = {
           consumo_anual?: number | null
           created_at?: string | null
           created_by?: string | null
-          dbl?: boolean | null
+          dbl?: number | null
           id?: string
           kwp?: number | null
           lead_id?: string | null
@@ -1747,7 +1747,7 @@ export type Database = {
           consumo_anual?: number | null
           created_at?: string | null
           created_by?: string | null
-          dbl?: boolean | null
+          dbl?: number | null
           id?: string
           kwp?: number | null
           lead_id?: string | null

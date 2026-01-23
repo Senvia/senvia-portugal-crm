@@ -108,7 +108,7 @@ interface CreateProposalData {
   // Campos Energia
   consumo_anual?: number;
   margem?: number;
-  dbl?: boolean;
+  dbl?: number;
   anos_contrato?: number;
   
   // Campos Serviços
@@ -158,7 +158,7 @@ export function useCreateProposal() {
           proposal_type: data.proposal_type || 'energia',
           consumo_anual: data.consumo_anual || null,
           margem: data.margem || null,
-          dbl: data.dbl || false,
+          dbl: data.dbl ?? null,
           anos_contrato: data.anos_contrato || null,
           modelo_servico: data.modelo_servico || null,
           kwp: data.kwp || null,
