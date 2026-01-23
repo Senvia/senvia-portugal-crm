@@ -1,5 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Trash2, Printer, Mail, Loader2, Router, Zap, Wrench, Pencil } from 'lucide-react';
+import { Trash2, Printer, Mail, Loader2, Router, Zap, Wrench, Pencil, MoreHorizontal } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useSendProposalEmail } from '@/hooks/useSendProposalEmail';
 import { Button } from '@/components/ui/button';
@@ -684,52 +690,52 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
             </div>
           </div>
 
-          <DialogFooter className="flex justify-between sm:justify-between gap-2">
+          <DialogFooter className="flex flex-row justify-between gap-2 pt-4 border-t">
             <Button
               type="button"
               variant="destructive"
               size="sm"
               onClick={() => setShowDeleteConfirm(true)}
             >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Eliminar
+              <Trash2 className="h-4 w-4" />
+              <span className="hidden sm:inline ml-2">Eliminar</span>
             </Button>
+            
             <div className="flex gap-2">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => setShowEditModal(true)}
-                disabled={status === 'accepted'}
-                title={status === 'accepted' ? 'Não é possível editar propostas aceites' : 'Editar proposta'}
-              >
-                <Pencil className="h-4 w-4 mr-2" />
-                Editar
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={handleSendEmail}
-                disabled={!canSendEmail}
-                title={
-                  !isBrevoConfigured 
-                    ? 'Configure o Brevo em Definições → Integrações' 
-                    : !proposal.client?.email 
-                      ? 'Cliente sem email' 
-                      : 'Enviar proposta por email'
-                }
-              >
-                {sendProposalEmail.isPending ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <Mail className="h-4 w-4 mr-2" />
-                )}
-                {!isBrevoConfigured ? 'Configurar Email' : 'Email'}
-              </Button>
-              <Button variant="outline" size="sm" onClick={handlePrint}>
-                <Printer className="h-4 w-4 mr-2" />
-                Imprimir
-              </Button>
-              <Button variant="outline" onClick={() => onOpenChange(false)}>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <MoreHorizontal className="h-4 w-4" />
+                    <span className="hidden sm:inline ml-2">Ações</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="bg-popover">
+                  <DropdownMenuItem 
+                    onClick={() => setShowEditModal(true)}
+                    disabled={status === 'accepted'}
+                  >
+                    <Pencil className="h-4 w-4 mr-2" />
+                    Editar
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    onClick={handleSendEmail}
+                    disabled={!canSendEmail}
+                  >
+                    {sendProposalEmail.isPending ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Mail className="h-4 w-4 mr-2" />
+                    )}
+                    {!isBrevoConfigured ? 'Configurar Email' : 'Enviar Email'}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handlePrint}>
+                    <Printer className="h-4 w-4 mr-2" />
+                    Imprimir
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              
+              <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
                 Fechar
               </Button>
             </div>
