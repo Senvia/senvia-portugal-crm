@@ -16,6 +16,7 @@ declare global {
   interface Window {
     fbq: (...args: unknown[]) => void;
     _fbq: unknown;
+    __senvia_pixel_init?: Record<string, boolean>; // Global guard to prevent double init
   }
 }
 
@@ -166,11 +167,26 @@ const ConversationalLeadForm = () => {
 
     // Wait for fbq to be available, then initialize
     const initPixels = () => {
+      // Initialize global guard
+      if (!window.__senvia_pixel_init) {
+        window.__senvia_pixel_init = {};
+      }
+
       activePixels.forEach(pixel => {
         if (typeof window.fbq === 'function') {
+          // Check global guard to prevent duplicate init on same page
+          if (window.__senvia_pixel_init![pixel.pixel_id]) {
+            console.log('[Meta Pixel] Already initialized globally, skipping:', pixel.pixel_id);
+            return;
+          }
+          window.__senvia_pixel_init![pixel.pixel_id] = true;
+
+          // CRITICAL: Disable automatic event detection BEFORE init
+          window.fbq('set', 'autoConfig', false, pixel.pixel_id);
+          
           window.fbq('init', pixel.pixel_id);
           window.fbq('trackSingle', pixel.pixel_id, 'PageView');
-          console.log('[Meta Pixel] PageView tracked for:', pixel.pixel_id);
+          console.log('[Meta Pixel] PageView tracked for:', pixel.pixel_id, '(autoConfig disabled)');
         }
       });
     };
