@@ -1165,6 +1165,7 @@ export type Database = {
           enabled_modules: Json | null
           form_settings: Json | null
           id: string
+          logo_url: string | null
           meta_pixels: Json | null
           msg_template_cold: string | null
           msg_template_hot: string | null
@@ -1189,6 +1190,7 @@ export type Database = {
           enabled_modules?: Json | null
           form_settings?: Json | null
           id?: string
+          logo_url?: string | null
           meta_pixels?: Json | null
           msg_template_cold?: string | null
           msg_template_hot?: string | null
@@ -1213,6 +1215,7 @@ export type Database = {
           enabled_modules?: Json | null
           form_settings?: Json | null
           id?: string
+          logo_url?: string | null
           meta_pixels?: Json | null
           msg_template_cold?: string | null
           msg_template_hot?: string | null
