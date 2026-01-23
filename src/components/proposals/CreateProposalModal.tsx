@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Plus, Minus, X, UserPlus } from 'lucide-react';
+import { Plus, Minus, X, UserPlus, Zap, Wrench } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,6 +8,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SearchableCombobox, type ComboboxOption } from '@/components/ui/searchable-combobox';
 import { Separator } from '@/components/ui/separator';
+import { Checkbox } from '@/components/ui/checkbox';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useActiveProducts } from '@/hooks/useProducts';
 import { useCreateProposal } from '@/hooks/useProposals';
 import { useClients } from '@/hooks/useClients';
@@ -15,7 +17,16 @@ import { useCreateProposalCpesBatch } from '@/hooks/useProposalCpes';
 import { CreateClientModal } from '@/components/clients/CreateClientModal';
 import { ProposalCpeSelector, type ProposalCpeDraft } from '@/components/proposals/ProposalCpeSelector';
 import type { CrmClient } from '@/types/clients';
-import { PROPOSAL_STATUS_LABELS, PROPOSAL_STATUSES, type ProposalStatus, type Proposal } from '@/types/proposals';
+import { 
+  PROPOSAL_STATUS_LABELS, 
+  PROPOSAL_STATUSES, 
+  PROPOSAL_TYPE_LABELS,
+  MODELO_SERVICO_LABELS,
+  type ProposalStatus, 
+  type ProposalType,
+  type ModeloServico,
+  type Proposal 
+} from '@/types/proposals';
 
 interface CreateProposalModalProps {
   client?: CrmClient | null;
@@ -47,6 +58,22 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
   const [additionalValue, setAdditionalValue] = useState<string>('');
   const [discount, setDiscount] = useState<string>('');
   const [status, setStatus] = useState<ProposalStatus>('draft');
+  
+  // Tipo de proposta
+  const [proposalType, setProposalType] = useState<ProposalType>('energia');
+  
+  // Campos Energia
+  const [consumoAnual, setConsumoAnual] = useState<string>('');
+  const [margem, setMargem] = useState<string>('');
+  const [dbl, setDbl] = useState(false);
+  const [anosContrato, setAnosContrato] = useState<string>('');
+  
+  // Campos Serviços
+  const [modeloServico, setModeloServico] = useState<ModeloServico>('transacional');
+  const [kwp, setKwp] = useState<string>('');
+  
+  // Comum
+  const [comissao, setComissao] = useState<string>('');
   
   // CPEs para a proposta
   const [proposalCpes, setProposalCpes] = useState<ProposalCpeDraft[]>([]);
@@ -145,6 +172,15 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
         unit_price: p.unit_price,
         total: p.quantity * p.unit_price,
       })),
+      // Campos por tipo de proposta
+      proposal_type: proposalType,
+      consumo_anual: proposalType === 'energia' ? (parseFloat(consumoAnual) || undefined) : undefined,
+      margem: proposalType === 'energia' ? (parseFloat(margem) || undefined) : undefined,
+      dbl: proposalType === 'energia' ? dbl : undefined,
+      anos_contrato: proposalType === 'energia' ? (parseInt(anosContrato) || undefined) : undefined,
+      modelo_servico: proposalType === 'servicos' ? modeloServico : undefined,
+      kwp: proposalType === 'servicos' ? (parseFloat(kwp) || undefined) : undefined,
+      comissao: parseFloat(comissao) || undefined,
     }, {
       onSuccess: async (createdProposal) => {
         // Criar CPEs da proposta se existirem
@@ -171,6 +207,16 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
         setDiscount('');
         setStatus('draft');
         setProposalCpes([]);
+        
+        // Reset campos específicos
+        setProposalType('energia');
+        setConsumoAnual('');
+        setMargem('');
+        setDbl(false);
+        setAnosContrato('');
+        setModeloServico('transacional');
+        setKwp('');
+        setComissao('');
         
         // Fechar modal de criação
         onOpenChange(false);
@@ -259,7 +305,162 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
               </div>
             </div>
 
+            {/* Tipo de Proposta */}
+            <div className="space-y-3">
+              <Label>Tipo de Proposta</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  variant={proposalType === 'energia' ? 'default' : 'outline'}
+                  className="flex items-center justify-center gap-2 h-12"
+                  onClick={() => setProposalType('energia')}
+                >
+                  <Zap className="h-4 w-4" />
+                  Energia
+                </Button>
+                <Button
+                  type="button"
+                  variant={proposalType === 'servicos' ? 'default' : 'outline'}
+                  className="flex items-center justify-center gap-2 h-12"
+                  onClick={() => setProposalType('servicos')}
+                >
+                  <Wrench className="h-4 w-4" />
+                  Outros Serviços
+                </Button>
+              </div>
+            </div>
 
+            {/* Campos específicos de Energia */}
+            {proposalType === 'energia' && (
+              <div className="space-y-4 p-4 rounded-lg border bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800">
+                <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
+                  <Zap className="h-4 w-4" />
+                  <span className="font-medium text-sm">Dados de Energia</span>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="consumo-anual">Consumo Anual (kWh)</Label>
+                    <Input
+                      id="consumo-anual"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={consumoAnual}
+                      onChange={(e) => setConsumoAnual(e.target.value)}
+                      placeholder="Ex: 5000"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="margem">Margem (€)</Label>
+                    <Input
+                      id="margem"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={margem}
+                      onChange={(e) => setMargem(e.target.value)}
+                      placeholder="Ex: 150"
+                    />
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="anos-contrato">Anos de Contrato</Label>
+                    <Input
+                      id="anos-contrato"
+                      type="number"
+                      min="1"
+                      max="10"
+                      value={anosContrato}
+                      onChange={(e) => setAnosContrato(e.target.value)}
+                      placeholder="Ex: 2"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="comissao-energia">Comissão (€)</Label>
+                    <Input
+                      id="comissao-energia"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={comissao}
+                      onChange={(e) => setComissao(e.target.value)}
+                      placeholder="Ex: 100"
+                    />
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-3">
+                  <Checkbox
+                    id="dbl"
+                    checked={dbl}
+                    onCheckedChange={(checked) => setDbl(checked === true)}
+                  />
+                  <Label htmlFor="dbl" className="cursor-pointer">
+                    Dual Bill (Eletricidade + Gás)
+                  </Label>
+                </div>
+              </div>
+            )}
+
+            {/* Campos específicos de Serviços */}
+            {proposalType === 'servicos' && (
+              <div className="space-y-4 p-4 rounded-lg border bg-blue-50/50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800">
+                <div className="flex items-center gap-2 text-blue-700 dark:text-blue-400">
+                  <Wrench className="h-4 w-4" />
+                  <span className="font-medium text-sm">Dados do Serviço</span>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label>Modelo de Serviço</Label>
+                  <RadioGroup
+                    value={modeloServico}
+                    onValueChange={(v) => setModeloServico(v as ModeloServico)}
+                    className="flex gap-4"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="transacional" id="transacional" />
+                      <Label htmlFor="transacional" className="cursor-pointer">Transacional</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="saas" id="saas" />
+                      <Label htmlFor="saas" className="cursor-pointer">SAAS</Label>
+                    </div>
+                  </RadioGroup>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="kwp">Potência (kWp)</Label>
+                    <Input
+                      id="kwp"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={kwp}
+                      onChange={(e) => setKwp(e.target.value)}
+                      placeholder="Ex: 6.5"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="comissao-servicos">Comissão (€)</Label>
+                    <Input
+                      id="comissao-servicos"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={comissao}
+                      onChange={(e) => setComissao(e.target.value)}
+                      placeholder="Ex: 250"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <Separator className="my-2" />
             <div className="space-y-2">
               <Label>Produtos/Serviços</Label>
               {availableProducts.length > 0 && (
@@ -402,16 +603,20 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
               </div>
             </div>
 
-            <Separator className="my-4" />
+            <Separator className="my-2" />
 
-            {/* CPEs Section */}
-            <ProposalCpeSelector
-              clientId={selectedClientId}
-              cpes={proposalCpes}
-              onCpesChange={setProposalCpes}
-            />
-
-            <Separator className="my-4" />
+            {/* CPEs Section - Only for Energia type */}
+            {proposalType === 'energia' && (
+              <>
+                <ProposalCpeSelector
+                  clientId={selectedClientId}
+                  cpes={proposalCpes}
+                  onCpesChange={setProposalCpes}
+                />
+                <Separator className="my-2" />
+              </>
+            )}
+            <Separator className="my-2" />
 
             <div className="space-y-2">
               <Label htmlFor="notes">Observações da Negociação</Label>

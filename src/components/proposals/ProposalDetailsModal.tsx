@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Trash2, Printer, Mail, Loader2, Router } from 'lucide-react';
+import { Trash2, Printer, Mail, Loader2, Router, Zap, Wrench } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useSendProposalEmail } from '@/hooks/useSendProposalEmail';
 import { Button } from '@/components/ui/button';
@@ -14,8 +14,8 @@ import { useUpdateLeadStatus, useUpdateLead } from '@/hooks/useLeads';
 import { useFinalStages } from '@/hooks/usePipelineStages';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useAuth } from '@/contexts/AuthContext';
-import { PROPOSAL_STATUS_LABELS, PROPOSAL_STATUS_COLORS, PROPOSAL_STATUSES } from '@/types/proposals';
-import type { Proposal, ProposalStatus } from '@/types/proposals';
+import { PROPOSAL_STATUS_LABELS, PROPOSAL_STATUS_COLORS, PROPOSAL_STATUSES, PROPOSAL_TYPE_LABELS, MODELO_SERVICO_LABELS } from '@/types/proposals';
+import type { Proposal, ProposalStatus, ProposalType } from '@/types/proposals';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
@@ -528,6 +528,90 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
               </Select>
             </div>
 
+            {/* Tipo de Proposta Badge */}
+            {proposal.proposal_type && (
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className={cn(
+                  "flex items-center gap-1.5",
+                  proposal.proposal_type === 'energia' 
+                    ? "border-amber-500/50 text-amber-600 dark:text-amber-400" 
+                    : "border-blue-500/50 text-blue-600 dark:text-blue-400"
+                )}>
+                  {proposal.proposal_type === 'energia' ? <Zap className="h-3 w-3" /> : <Wrench className="h-3 w-3" />}
+                  {PROPOSAL_TYPE_LABELS[proposal.proposal_type as ProposalType] || proposal.proposal_type}
+                </Badge>
+              </div>
+            )}
+
+            {/* Campos específicos de Energia */}
+            {proposal.proposal_type === 'energia' && (
+              <div className="space-y-3 p-4 rounded-lg border bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800">
+                <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
+                  <Zap className="h-4 w-4" />
+                  <span className="font-medium text-sm">Dados de Energia</span>
+                </div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                  {proposal.consumo_anual && (
+                    <div>
+                      <span className="text-muted-foreground">Consumo Anual:</span>
+                      <span className="ml-2 font-medium">{proposal.consumo_anual.toLocaleString('pt-PT')} kWh</span>
+                    </div>
+                  )}
+                  {proposal.margem && (
+                    <div>
+                      <span className="text-muted-foreground">Margem:</span>
+                      <span className="ml-2 font-medium">{formatCurrency(proposal.margem)}</span>
+                    </div>
+                  )}
+                  {proposal.anos_contrato && (
+                    <div>
+                      <span className="text-muted-foreground">Contrato:</span>
+                      <span className="ml-2 font-medium">{proposal.anos_contrato} {proposal.anos_contrato === 1 ? 'ano' : 'anos'}</span>
+                    </div>
+                  )}
+                  <div>
+                    <span className="text-muted-foreground">Dual Bill:</span>
+                    <span className="ml-2 font-medium">{proposal.dbl ? 'Sim' : 'Não'}</span>
+                  </div>
+                  {proposal.comissao && (
+                    <div className="col-span-2">
+                      <span className="text-muted-foreground">Comissão:</span>
+                      <span className="ml-2 font-medium text-green-600 dark:text-green-400">{formatCurrency(proposal.comissao)}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Campos específicos de Serviços */}
+            {proposal.proposal_type === 'servicos' && (
+              <div className="space-y-3 p-4 rounded-lg border bg-blue-50/50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800">
+                <div className="flex items-center gap-2 text-blue-700 dark:text-blue-400">
+                  <Wrench className="h-4 w-4" />
+                  <span className="font-medium text-sm">Dados do Serviço</span>
+                </div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                  {proposal.modelo_servico && (
+                    <div>
+                      <span className="text-muted-foreground">Modelo:</span>
+                      <span className="ml-2 font-medium">{MODELO_SERVICO_LABELS[proposal.modelo_servico as keyof typeof MODELO_SERVICO_LABELS] || proposal.modelo_servico}</span>
+                    </div>
+                  )}
+                  {proposal.kwp && (
+                    <div>
+                      <span className="text-muted-foreground">Potência:</span>
+                      <span className="ml-2 font-medium">{proposal.kwp} kWp</span>
+                    </div>
+                  )}
+                  {proposal.comissao && (
+                    <div className="col-span-2">
+                      <span className="text-muted-foreground">Comissão:</span>
+                      <span className="ml-2 font-medium text-green-600 dark:text-green-400">{formatCurrency(proposal.comissao)}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {proposalProducts.length > 0 && (
               <div className="space-y-2">

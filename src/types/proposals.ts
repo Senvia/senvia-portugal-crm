@@ -1,6 +1,8 @@
 // Proposal Types for Senvia OS
 
 export type ProposalStatus = 'draft' | 'sent' | 'negotiating' | 'accepted' | 'rejected' | 'expired';
+export type ProposalType = 'energia' | 'servicos';
+export type ModeloServico = 'transacional' | 'saas';
 
 export interface Product {
   id: string;
@@ -26,6 +28,23 @@ export interface Proposal {
   created_by?: string | null;
   created_at: string;
   updated_at: string;
+  
+  // Campos por tipo de proposta
+  proposal_type?: ProposalType | null;
+  
+  // Campos Energia
+  consumo_anual?: number | null;
+  margem?: number | null;
+  dbl?: boolean | null;
+  anos_contrato?: number | null;
+  
+  // Campos Serviços
+  modelo_servico?: ModeloServico | null;
+  kwp?: number | null;
+  
+  // Comum
+  comissao?: number | null;
+  
   products?: ProposalProduct[];
   client?: {
     id: string;
@@ -71,3 +90,13 @@ export const PROPOSAL_STATUS_COLORS: Record<ProposalStatus, string> = {
 };
 
 export const PROPOSAL_STATUSES: ProposalStatus[] = ['draft', 'sent', 'negotiating', 'accepted', 'rejected', 'expired'];
+
+export const PROPOSAL_TYPE_LABELS: Record<ProposalType, string> = {
+  energia: 'Energia',
+  servicos: 'Outros Serviços',
+};
+
+export const MODELO_SERVICO_LABELS: Record<ModeloServico, string> = {
+  transacional: 'Transacional',
+  saas: 'SAAS',
+};
