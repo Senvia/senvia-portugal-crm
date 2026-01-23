@@ -11,19 +11,14 @@ export function useCpes(clientId?: string | null) {
   return useQuery({
     queryKey: ['cpes', organizationId, clientId],
     queryFn: async () => {
-      if (!organizationId) return [];
+      if (!organizationId || !clientId) return [];
 
-      let query = supabase
+      const { data, error } = await supabase
         .from('cpes')
         .select('*')
         .eq('organization_id', organizationId)
+        .eq('client_id', clientId)
         .order('created_at', { ascending: false });
-
-      if (clientId) {
-        query = query.eq('client_id', clientId);
-      }
-
-      const { data, error } = await query;
 
       if (error) {
         console.error('Error fetching CPEs:', error);
@@ -32,7 +27,7 @@ export function useCpes(clientId?: string | null) {
 
       return data as Cpe[];
     },
-    enabled: !!organizationId,
+    enabled: !!organizationId && !!clientId,
   });
 }
 
