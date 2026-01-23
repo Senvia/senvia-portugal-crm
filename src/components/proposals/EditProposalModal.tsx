@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Plus, Minus, X, UserPlus, Zap, Wrench } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { SearchableCombobox, type ComboboxOption } from '@/components/ui/searchable-combobox';
 import { Separator } from '@/components/ui/separator';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { useActiveProducts } from '@/hooks/useProducts';
 import { useUpdateProposal, useUpdateProposalProducts, useProposalProducts } from '@/hooks/useProposals';
 import { useClients } from '@/hooks/useClients';
@@ -231,393 +232,406 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
 
   return (
     <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Editar Proposta {proposal.code}</DialogTitle>
-          </DialogHeader>
+      <Sheet open={open} onOpenChange={onOpenChange}>
+        <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col">
+          <SheetHeader className="px-6 pt-6 pb-4 border-b">
+            <SheetTitle>Editar Proposta {proposal.code}</SheetTitle>
+          </SheetHeader>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Client Selector */}
-            <div className="space-y-2">
-              <Label>Cliente</Label>
-              <div className="flex gap-2">
-                <SearchableCombobox
-                  options={clients.map((c): ComboboxOption => ({
-                    value: c.id,
-                    label: c.name,
-                    sublabel: c.code || c.email || undefined,
-                  }))}
-                  value={selectedClientId}
-                  onValueChange={setSelectedClientId}
-                  placeholder="Selecionar cliente..."
-                  searchPlaceholder="Pesquisar cliente..."
-                  emptyLabel="Sem cliente associado"
-                  emptyText="Nenhum cliente encontrado."
-                  className="flex-1"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setIsCreateClientOpen(true)}
-                  title="Novo Cliente"
-                >
-                  <UserPlus className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
+          <ScrollArea className="flex-1">
+            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+              {/* Client Selector */}
               <div className="space-y-2">
-                <Label htmlFor="proposal-date">Data da Proposta</Label>
-                <Input
-                  id="proposal-date"
-                  type="date"
-                  value={proposalDate}
-                  onChange={(e) => setProposalDate(e.target.value)}
-                />
+                <Label>Cliente</Label>
+                <div className="flex gap-2">
+                  <SearchableCombobox
+                    options={clients.map((c): ComboboxOption => ({
+                      value: c.id,
+                      label: c.name,
+                      sublabel: c.code || c.email || undefined,
+                    }))}
+                    value={selectedClientId}
+                    onValueChange={setSelectedClientId}
+                    placeholder="Selecionar cliente..."
+                    searchPlaceholder="Pesquisar cliente..."
+                    emptyLabel="Sem cliente associado"
+                    emptyText="Nenhum cliente encontrado."
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setIsCreateClientOpen(true)}
+                    title="Novo Cliente"
+                  >
+                    <UserPlus className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="status">Estado</Label>
-                <Select value={status} onValueChange={(v) => setStatus(v as ProposalStatus)}>
-                  <SelectTrigger id="status">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PROPOSAL_STATUSES.map((s) => (
-                      <SelectItem key={s} value={s}>
-                        {PROPOSAL_STATUS_LABELS[s]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
 
-            {/* Tipo de Proposta */}
-            <div className="space-y-3">
-              <Label>Tipo de Proposta</Label>
-              <div className="grid grid-cols-2 gap-2">
-                <Button
-                  type="button"
-                  variant={proposalType === 'energia' ? 'default' : 'outline'}
-                  className="flex items-center justify-center gap-2 h-12"
-                  onClick={() => setProposalType('energia')}
-                >
-                  <Zap className="h-4 w-4" />
-                  Energia
-                </Button>
-                <Button
-                  type="button"
-                  variant={proposalType === 'servicos' ? 'default' : 'outline'}
-                  className="flex items-center justify-center gap-2 h-12"
-                  onClick={() => setProposalType('servicos')}
-                >
-                  <Wrench className="h-4 w-4" />
-                  Outros Serviços
-                </Button>
-              </div>
-            </div>
-
-            {/* Campos específicos de Energia */}
-            {proposalType === 'energia' && (
-              <div className="space-y-4 p-4 rounded-lg border bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800">
-                <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
-                  <Zap className="h-4 w-4" />
-                  <span className="font-medium text-sm">Dados de Energia</span>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="consumo-anual">Consumo Anual (kWh)</Label>
-                    <Input
-                      id="consumo-anual"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={consumoAnual}
-                      onChange={(e) => setConsumoAnual(e.target.value)}
-                      placeholder="Ex: 5000"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="margem">Margem (€)</Label>
-                    <Input
-                      id="margem"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={margem}
-                      onChange={(e) => setMargem(e.target.value)}
-                      placeholder="Ex: 150"
-                    />
-                  </div>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="anos-contrato">Anos de Contrato</Label>
-                    <Input
-                      id="anos-contrato"
-                      type="number"
-                      min="1"
-                      max="10"
-                      value={anosContrato}
-                      onChange={(e) => setAnosContrato(e.target.value)}
-                      placeholder="Ex: 2"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="comissao-energia">Comissão (€)</Label>
-                    <Input
-                      id="comissao-energia"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={comissao}
-                      onChange={(e) => setComissao(e.target.value)}
-                      placeholder="Ex: 100"
-                    />
-                  </div>
-                </div>
-                
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="dbl">DBL</Label>
+                  <Label htmlFor="proposal-date">Data da Proposta</Label>
                   <Input
-                    id="dbl"
+                    id="proposal-date"
+                    type="date"
+                    value={proposalDate}
+                    onChange={(e) => setProposalDate(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="status">Estado</Label>
+                  <Select value={status} onValueChange={(v) => setStatus(v as ProposalStatus)}>
+                    <SelectTrigger id="status">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PROPOSAL_STATUSES.map((s) => (
+                        <SelectItem key={s} value={s}>
+                          {PROPOSAL_STATUS_LABELS[s]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Tipo de Proposta */}
+              <div className="space-y-3">
+                <Label>Tipo de Proposta</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    type="button"
+                    variant={proposalType === 'energia' ? 'default' : 'outline'}
+                    className="flex items-center justify-center gap-2 h-10"
+                    onClick={() => setProposalType('energia')}
+                  >
+                    <Zap className="h-4 w-4" />
+                    Energia
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={proposalType === 'servicos' ? 'default' : 'outline'}
+                    className="flex items-center justify-center gap-2 h-10"
+                    onClick={() => setProposalType('servicos')}
+                  >
+                    <Wrench className="h-4 w-4" />
+                    Outros Serviços
+                  </Button>
+                </div>
+              </div>
+
+              {/* Campos específicos de Energia */}
+              {proposalType === 'energia' && (
+                <div className="space-y-3 p-3 rounded-lg border bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800">
+                  <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
+                    <Zap className="h-4 w-4" />
+                    <span className="font-medium text-sm">Dados de Energia</span>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label htmlFor="consumo-anual" className="text-xs">Consumo Anual (kWh)</Label>
+                      <Input
+                        id="consumo-anual"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={consumoAnual}
+                        onChange={(e) => setConsumoAnual(e.target.value)}
+                        placeholder="Ex: 5000"
+                        className="h-9"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="margem" className="text-xs">Margem (€)</Label>
+                      <Input
+                        id="margem"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={margem}
+                        onChange={(e) => setMargem(e.target.value)}
+                        placeholder="Ex: 150"
+                        className="h-9"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="space-y-1">
+                      <Label htmlFor="anos-contrato" className="text-xs">Anos</Label>
+                      <Input
+                        id="anos-contrato"
+                        type="number"
+                        min="1"
+                        max="10"
+                        value={anosContrato}
+                        onChange={(e) => setAnosContrato(e.target.value)}
+                        placeholder="2"
+                        className="h-9"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="dbl" className="text-xs">DBL</Label>
+                      <Input
+                        id="dbl"
+                        type="number"
+                        min="0"
+                        value={dbl}
+                        onChange={(e) => setDbl(e.target.value)}
+                        placeholder="1"
+                        className="h-9"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="comissao-energia" className="text-xs">Comissão €</Label>
+                      <Input
+                        id="comissao-energia"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={comissao}
+                        onChange={(e) => setComissao(e.target.value)}
+                        placeholder="100"
+                        className="h-9"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Campos específicos de Serviços */}
+              {proposalType === 'servicos' && (
+                <div className="space-y-3 p-3 rounded-lg border bg-blue-50/50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800">
+                  <div className="flex items-center gap-2 text-blue-700 dark:text-blue-400">
+                    <Wrench className="h-4 w-4" />
+                    <span className="font-medium text-sm">Dados do Serviço</span>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label className="text-xs">Modelo de Serviço</Label>
+                    <RadioGroup
+                      value={modeloServico}
+                      onValueChange={(v) => setModeloServico(v as ModeloServico)}
+                      className="flex gap-4"
+                    >
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="transacional" id="edit-transacional" />
+                        <Label htmlFor="edit-transacional" className="cursor-pointer text-sm">Transacional</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="saas" id="edit-saas" />
+                        <Label htmlFor="edit-saas" className="cursor-pointer text-sm">SAAS</Label>
+                      </div>
+                    </RadioGroup>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label htmlFor="kwp" className="text-xs">Potência (kWp)</Label>
+                      <Input
+                        id="kwp"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={kwp}
+                        onChange={(e) => setKwp(e.target.value)}
+                        placeholder="Ex: 6.5"
+                        className="h-9"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="comissao-servicos" className="text-xs">Comissão (€)</Label>
+                      <Input
+                        id="comissao-servicos"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={comissao}
+                        onChange={(e) => setComissao(e.target.value)}
+                        placeholder="Ex: 250"
+                        className="h-9"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <Separator />
+              
+              {/* Produtos/Serviços */}
+              <div className="space-y-2">
+                <Label>Produtos/Serviços</Label>
+                {availableProducts.length > 0 && (
+                  <Select onValueChange={handleAddProduct}>
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="Adicionar produto..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableProducts.map((product) => (
+                        <SelectItem key={product.id} value={product.id}>
+                          {product.name} - {formatCurrency(product.price || 0)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+
+                {selectedProducts.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-3 text-center">
+                    Nenhum produto selecionado.
+                  </p>
+                ) : (
+                  <div className="space-y-2 mt-2">
+                    {selectedProducts.map((product) => (
+                      <div
+                        key={product.product_id}
+                        className="flex items-center gap-2 p-2 rounded-lg border bg-muted/30"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm truncate">{product.name}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <div className="flex items-center gap-1">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                className="h-6 w-6"
+                                onClick={() => handleQuantityChange(product.product_id, -1)}
+                              >
+                                <Minus className="h-3 w-3" />
+                              </Button>
+                              <span className="w-6 text-center text-sm">{product.quantity}</span>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                className="h-6 w-6"
+                                onClick={() => handleQuantityChange(product.product_id, 1)}
+                              >
+                                <Plus className="h-3 w-3" />
+                              </Button>
+                            </div>
+                            <span className="text-xs text-muted-foreground">×</span>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={product.unit_price}
+                              onChange={(e) => handlePriceChange(product.product_id, parseFloat(e.target.value) || 0)}
+                              className="w-20 h-6 text-sm"
+                            />
+                            <span className="text-xs text-muted-foreground">€</span>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-semibold text-sm">
+                            {formatCurrency(product.quantity * product.unit_price)}
+                          </p>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            onClick={() => handleRemoveProduct(product.product_id)}
+                          >
+                            <X className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Valor Adicional e Desconto */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label htmlFor="additional-value" className="text-xs">Valor Adicional</Label>
+                  <Input
+                    id="additional-value"
                     type="number"
+                    step="0.01"
                     min="0"
-                    value={dbl}
-                    onChange={(e) => setDbl(e.target.value)}
-                    placeholder="Ex: 1"
+                    value={additionalValue}
+                    onChange={(e) => setAdditionalValue(e.target.value)}
+                    placeholder="0.00"
+                    className="h-9"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="discount" className="text-xs">Desconto</Label>
+                  <Input
+                    id="discount"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={discount}
+                    onChange={(e) => setDiscount(e.target.value)}
+                    placeholder="0.00"
+                    className="h-9"
                   />
                 </div>
               </div>
-            )}
 
-            {/* Campos específicos de Serviços */}
-            {proposalType === 'servicos' && (
-              <div className="space-y-4 p-4 rounded-lg border bg-blue-50/50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800">
-                <div className="flex items-center gap-2 text-blue-700 dark:text-blue-400">
-                  <Wrench className="h-4 w-4" />
-                  <span className="font-medium text-sm">Dados do Serviço</span>
-                </div>
-                
-                <div className="space-y-2">
-                  <Label>Modelo de Serviço</Label>
-                  <RadioGroup
-                    value={modeloServico}
-                    onValueChange={(v) => setModeloServico(v as ModeloServico)}
-                    className="flex gap-4"
-                  >
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="transacional" id="edit-transacional" />
-                      <Label htmlFor="edit-transacional" className="cursor-pointer">Transacional</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="saas" id="edit-saas" />
-                      <Label htmlFor="edit-saas" className="cursor-pointer">SAAS</Label>
-                    </div>
-                  </RadioGroup>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="kwp">Potência (kWp)</Label>
-                    <Input
-                      id="kwp"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={kwp}
-                      onChange={(e) => setKwp(e.target.value)}
-                      placeholder="Ex: 6.5"
-                    />
+              {/* Total com breakdown */}
+              <div className="p-3 rounded-lg bg-primary/10 border border-primary/20 space-y-2">
+                {showBreakdown && (
+                  <div className="text-sm text-muted-foreground space-y-1">
+                    {selectedProducts.length > 0 && (
+                      <div className="flex justify-between text-xs">
+                        <span>Subtotal Produtos</span>
+                        <span>{formatCurrency(productsSubtotal)}</span>
+                      </div>
+                    )}
+                    {hasAdditional && (
+                      <div className="flex justify-between text-xs text-green-600">
+                        <span>+ Valor Adicional</span>
+                        <span>{formatCurrency(parseFloat(additionalValue))}</span>
+                      </div>
+                    )}
+                    {hasDiscount && (
+                      <div className="flex justify-between text-xs text-red-500">
+                        <span>- Desconto</span>
+                        <span>-{formatCurrency(parseFloat(discount))}</span>
+                      </div>
+                    )}
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="comissao-servicos">Comissão (€)</Label>
-                    <Input
-                      id="comissao-servicos"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={comissao}
-                      onChange={(e) => setComissao(e.target.value)}
-                      placeholder="Ex: 250"
-                    />
-                  </div>
+                )}
+                <div className={`flex items-center justify-between ${showBreakdown ? 'pt-2 border-t border-primary/20' : ''}`}>
+                  <span className="font-medium text-sm">Total da Proposta</span>
+                  <span className="text-lg font-bold text-primary">{formatCurrency(totalValue)}</span>
                 </div>
               </div>
-            )}
 
-            <Separator className="my-2" />
-            <div className="space-y-2">
-              <Label>Produtos/Serviços</Label>
-              {availableProducts.length > 0 && (
-                <Select onValueChange={handleAddProduct}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Adicionar produto..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableProducts.map((product) => (
-                      <SelectItem key={product.id} value={product.id}>
-                        {product.name} - {formatCurrency(product.price || 0)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
+              <Separator />
 
-              {selectedProducts.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-4 text-center">
-                  Nenhum produto selecionado.
-                </p>
-              ) : (
-                <div className="space-y-2 mt-2">
-                  {selectedProducts.map((product) => (
-                    <div
-                      key={product.product_id}
-                      className="flex items-center gap-2 p-3 rounded-lg border bg-muted/30"
-                    >
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm truncate">{product.name}</p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <div className="flex items-center gap-1">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="icon"
-                              className="h-6 w-6"
-                              onClick={() => handleQuantityChange(product.product_id, -1)}
-                            >
-                              <Minus className="h-3 w-3" />
-                            </Button>
-                            <span className="w-8 text-center text-sm">{product.quantity}</span>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="icon"
-                              className="h-6 w-6"
-                              onClick={() => handleQuantityChange(product.product_id, 1)}
-                            >
-                              <Plus className="h-3 w-3" />
-                            </Button>
-                          </div>
-                          <span className="text-xs text-muted-foreground">×</span>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={product.unit_price}
-                            onChange={(e) => handlePriceChange(product.product_id, parseFloat(e.target.value) || 0)}
-                            className="w-24 h-7 text-sm"
-                          />
-                          <span className="text-xs text-muted-foreground">€</span>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-semibold text-sm">
-                          {formatCurrency(product.quantity * product.unit_price)}
-                        </p>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 mt-1"
-                          onClick={() => handleRemoveProduct(product.product_id)}
-                        >
-                          <X className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Valor Adicional e Desconto */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="additional-value">Valor Adicional</Label>
-                <Input
-                  id="additional-value"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={additionalValue}
-                  onChange={(e) => setAdditionalValue(e.target.value)}
-                  placeholder="0.00"
+              <div className="space-y-1">
+                <Label htmlFor="notes" className="text-xs">Observações da Negociação</Label>
+                <Textarea
+                  id="notes"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Notas internas sobre a negociação..."
+                  rows={2}
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="discount">Desconto</Label>
-                <Input
-                  id="discount"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={discount}
-                  onChange={(e) => setDiscount(e.target.value)}
-                  placeholder="0.00"
-                />
+
+              {/* Footer com botões */}
+              <div className="flex gap-2 pt-2">
+                <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="flex-1">
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={isSubmitting} className="flex-1">
+                  {isSubmitting ? 'A guardar...' : 'Guardar'}
+                </Button>
               </div>
-            </div>
-
-            {/* Total com breakdown */}
-            <div className="p-4 rounded-lg bg-primary/10 border border-primary/20 space-y-2">
-              {showBreakdown && (
-                <div className="text-sm text-muted-foreground space-y-1">
-                  {selectedProducts.length > 0 && (
-                    <div className="flex justify-between">
-                      <span>Subtotal Produtos</span>
-                      <span>{formatCurrency(productsSubtotal)}</span>
-                    </div>
-                  )}
-                  {hasAdditional && (
-                    <div className="flex justify-between text-green-600">
-                      <span>+ Valor Adicional</span>
-                      <span>{formatCurrency(parseFloat(additionalValue))}</span>
-                    </div>
-                  )}
-                  {hasDiscount && (
-                    <div className="flex justify-between text-red-500">
-                      <span>- Desconto</span>
-                      <span>-{formatCurrency(parseFloat(discount))}</span>
-                    </div>
-                  )}
-                </div>
-              )}
-              <div className={`flex items-center justify-between ${showBreakdown ? 'pt-2 border-t border-primary/20' : ''}`}>
-                <span className="font-medium">Total da Proposta</span>
-                <span className="text-xl font-bold text-primary">{formatCurrency(totalValue)}</span>
-              </div>
-            </div>
-
-            <Separator className="my-2" />
-
-            <div className="space-y-2">
-              <Label htmlFor="notes">Observações da Negociação</Label>
-              <Textarea
-                id="notes"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Notas internas sobre a negociação..."
-                rows={3}
-              />
-            </div>
-
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? 'A guardar...' : 'Guardar Alterações'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+            </form>
+          </ScrollArea>
+        </SheetContent>
+      </Sheet>
 
       <CreateClientModal
         open={isCreateClientOpen}
