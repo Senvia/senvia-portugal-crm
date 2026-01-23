@@ -516,6 +516,38 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
               </div>
             </div>
 
+            {/* Dados do Cliente */}
+            {proposal.client && (
+              <div className="p-4 rounded-lg border bg-muted/30">
+                <p className="text-sm text-muted-foreground mb-2">Cliente</p>
+                <div className="space-y-1">
+                  <p className="font-medium text-base">{proposal.client.name}</p>
+                  {proposal.client.email && (
+                    <p className="text-sm text-muted-foreground">{proposal.client.email}</p>
+                  )}
+                  {proposal.client.phone && (
+                    <p className="text-sm text-muted-foreground">{proposal.client.phone}</p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Fallback para Lead (retrocompatibilidade) */}
+            {!proposal.client && proposal.lead && (
+              <div className="p-4 rounded-lg border bg-muted/30">
+                <p className="text-sm text-muted-foreground mb-2">Lead</p>
+                <div className="space-y-1">
+                  <p className="font-medium text-base">{proposal.lead.name}</p>
+                  {proposal.lead.email && (
+                    <p className="text-sm text-muted-foreground">{proposal.lead.email}</p>
+                  )}
+                  {proposal.lead.phone && (
+                    <p className="text-sm text-muted-foreground">{proposal.lead.phone}</p>
+                  )}
+                </div>
+              </div>
+            )}
+
             <div className="space-y-2">
               <Label>Status da Proposta</Label>
               <Select 
