@@ -1696,43 +1696,67 @@ export type Database = {
       }
       proposals: {
         Row: {
+          anos_contrato: number | null
           client_id: string | null
           code: string | null
+          comissao: number | null
+          consumo_anual: number | null
           created_at: string | null
           created_by: string | null
+          dbl: boolean | null
           id: string
+          kwp: number | null
           lead_id: string | null
+          margem: number | null
+          modelo_servico: string | null
           notes: string | null
           organization_id: string
           proposal_date: string | null
+          proposal_type: string | null
           status: string
           total_value: number
           updated_at: string | null
         }
         Insert: {
+          anos_contrato?: number | null
           client_id?: string | null
           code?: string | null
+          comissao?: number | null
+          consumo_anual?: number | null
           created_at?: string | null
           created_by?: string | null
+          dbl?: boolean | null
           id?: string
+          kwp?: number | null
           lead_id?: string | null
+          margem?: number | null
+          modelo_servico?: string | null
           notes?: string | null
           organization_id: string
           proposal_date?: string | null
+          proposal_type?: string | null
           status?: string
           total_value?: number
           updated_at?: string | null
         }
         Update: {
+          anos_contrato?: number | null
           client_id?: string | null
           code?: string | null
+          comissao?: number | null
+          consumo_anual?: number | null
           created_at?: string | null
           created_by?: string | null
+          dbl?: boolean | null
           id?: string
+          kwp?: number | null
           lead_id?: string | null
+          margem?: number | null
+          modelo_servico?: string | null
           notes?: string | null
           organization_id?: string
           proposal_date?: string | null
+          proposal_type?: string | null
           status?: string
           total_value?: number
           updated_at?: string | null

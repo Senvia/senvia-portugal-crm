@@ -101,6 +101,22 @@ interface CreateProposalData {
   notes?: string;
   proposal_date?: string;
   products: { product_id: string; quantity: number; unit_price: number; total: number }[];
+  
+  // Campos por tipo de proposta
+  proposal_type?: 'energia' | 'servicos';
+  
+  // Campos Energia
+  consumo_anual?: number;
+  margem?: number;
+  dbl?: boolean;
+  anos_contrato?: number;
+  
+  // Campos Serviços
+  modelo_servico?: 'transacional' | 'saas';
+  kwp?: number;
+  
+  // Comum
+  comissao?: number;
 }
 
 export function useCreateProposal() {
@@ -138,6 +154,15 @@ export function useCreateProposal() {
           notes: data.notes || null,
           proposal_date: data.proposal_date || new Date().toISOString().split('T')[0],
           created_by: user?.id,
+          // Campos por tipo
+          proposal_type: data.proposal_type || 'energia',
+          consumo_anual: data.consumo_anual || null,
+          margem: data.margem || null,
+          dbl: data.dbl || false,
+          anos_contrato: data.anos_contrato || null,
+          modelo_servico: data.modelo_servico || null,
+          kwp: data.kwp || null,
+          comissao: data.comissao || null,
         })
         .select(`
           *,
