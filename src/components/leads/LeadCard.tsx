@@ -1,9 +1,10 @@
-import { Lead, LeadTemperature, TEMPERATURE_LABELS, TEMPERATURE_STYLES } from "@/types";
+import { Lead, LeadTemperature, LeadTipologia, TEMPERATURE_LABELS, TEMPERATURE_STYLES, TIPOLOGIA_LABELS, TIPOLOGIA_STYLES } from "@/types";
 import { formatRelativeTime, getWhatsAppUrl, formatCurrency } from "@/lib/format";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MessageCircle, Phone, Mail, MoreVertical, GripVertical, Thermometer, CalendarClock } from "lucide-react";
+import { MessageCircle, Phone, Mail, MoreVertical, GripVertical, Thermometer, CalendarClock, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
@@ -46,6 +47,9 @@ export function LeadCard({
   pipelineStages = []
 }: LeadCardProps) {
   const { canDeleteLeads } = usePermissions();
+  const { organization } = useAuth();
+  const isTelecom = organization?.niche === 'telecom';
+  
   const temperature = lead.temperature || 'cold';
   const tempStyle = TEMPERATURE_STYLES[temperature];
   
@@ -192,14 +196,36 @@ export function LeadCard({
       {/* Content */}
       <div className="mt-3">
         <h4 className="font-semibold text-card-foreground">{lead.name}</h4>
-        {(proposalValue || lead.value) ? (
-          <p className="mt-1 text-lg font-bold text-primary">
-            {formatCurrency(proposalValue || lead.value || 0)}
-            {proposalValue ? (
-              <span className="text-xs font-normal text-muted-foreground ml-1">(propostas)</span>
-            ) : null}
-          </p>
-        ) : null}
+        
+        {/* Tipologia badge for Telecom */}
+        {isTelecom && lead.tipologia && (
+          <Badge 
+            variant="outline" 
+            className={cn("mt-2 gap-1", TIPOLOGIA_STYLES[lead.tipologia].color, TIPOLOGIA_STYLES[lead.tipologia].bgClass)}
+          >
+            <span>{TIPOLOGIA_STYLES[lead.tipologia].emoji}</span>
+            {TIPOLOGIA_LABELS[lead.tipologia]}
+          </Badge>
+        )}
+        
+        {/* Conditional: Show consumo_anual for Telecom, value for others */}
+        {isTelecom ? (
+          lead.consumo_anual ? (
+            <p className="mt-1 text-lg font-bold text-primary">
+              {new Intl.NumberFormat('pt-PT').format(lead.consumo_anual)} kWh
+            </p>
+          ) : null
+        ) : (
+          (proposalValue || lead.value) ? (
+            <p className="mt-1 text-lg font-bold text-primary">
+              {formatCurrency(proposalValue || lead.value || 0)}
+              {proposalValue ? (
+                <span className="text-xs font-normal text-muted-foreground ml-1">(propostas)</span>
+              ) : null}
+            </p>
+          ) : null
+        )}
+        
         <p className="mt-2 text-xs text-muted-foreground">
           {formatRelativeTime(lead.created_at)}
         </p>

@@ -31,11 +31,12 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 
-import { Lead, LeadTemperature, TEMPERATURE_STYLES } from '@/types';
+import { Lead, LeadTemperature, LeadTipologia, TEMPERATURE_STYLES, TIPOLOGIA_LABELS, TIPOLOGIA_STYLES } from '@/types';
 import { formatCurrency, formatPhoneForWhatsApp } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { usePipelineStages, PipelineStage } from '@/hooks/usePipelineStages';
 import { useLeadProposalValues } from '@/hooks/useLeadProposalValues';
+import { useAuth } from '@/contexts/AuthContext';
 import { Skeleton } from '@/components/ui/skeleton';
 
 interface LeadsTableViewProps {
@@ -46,7 +47,7 @@ interface LeadsTableViewProps {
   onDelete: (leadId: string) => void;
 }
 
-type SortField = 'name' | 'email' | 'status' | 'temperature' | 'value' | 'source' | 'created_at';
+type SortField = 'name' | 'email' | 'status' | 'temperature' | 'tipologia' | 'value' | 'consumo_anual' | 'source' | 'created_at';
 type SortDirection = 'asc' | 'desc';
 
 // Helper to generate badge style from hex color
@@ -65,6 +66,9 @@ export function LeadsTableView({
 }: LeadsTableViewProps) {
   const { data: stages = [], isLoading: stagesLoading } = usePipelineStages();
   const { data: proposalValues } = useLeadProposalValues();
+  const { organization } = useAuth();
+  const isTelecom = organization?.niche === 'telecom';
+  
   const [sortField, setSortField] = useState<SortField>('created_at');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
@@ -93,8 +97,14 @@ export function LeadsTableView({
       case 'temperature':
         comparison = (a.temperature || '').localeCompare(b.temperature || '');
         break;
+      case 'tipologia':
+        comparison = (a.tipologia || '').localeCompare(b.tipologia || '');
+        break;
       case 'value':
         comparison = (a.value || 0) - (b.value || 0);
+        break;
+      case 'consumo_anual':
+        comparison = (a.consumo_anual || 0) - (b.consumo_anual || 0);
         break;
       case 'source':
         comparison = (a.source || '').localeCompare(b.source || '');
@@ -175,8 +185,17 @@ export function LeadsTableView({
               <TableHead className="hidden sm:table-cell">
                 <SortableHeader field="temperature">Temp.</SortableHeader>
               </TableHead>
+              {isTelecom && (
+                <TableHead className="hidden sm:table-cell">
+                  <SortableHeader field="tipologia">Tipologia</SortableHeader>
+                </TableHead>
+              )}
               <TableHead className="hidden lg:table-cell">
-                <SortableHeader field="value">Valor</SortableHeader>
+                {isTelecom ? (
+                  <SortableHeader field="consumo_anual">Consumo (kWh)</SortableHeader>
+                ) : (
+                  <SortableHeader field="value">Valor</SortableHeader>
+                )}
               </TableHead>
               <TableHead className="hidden xl:table-cell">
                 <SortableHeader field="source">Fonte</SortableHeader>
@@ -190,7 +209,7 @@ export function LeadsTableView({
           <TableBody>
             {sortedLeads.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={isTelecom ? 10 : 9} className="h-24 text-center text-muted-foreground">
                   Nenhum lead encontrado.
                 </TableCell>
               </TableRow>
@@ -198,7 +217,7 @@ export function LeadsTableView({
               sortedLeads.map((lead) => {
                 const currentStage = getStageByKey(lead.status || '');
                 return (
-                  <TableRow 
+                  <TableRow
                     key={lead.id} 
                     className="cursor-pointer hover:bg-muted/50"
                     onClick={() => onViewDetails(lead)}
@@ -273,20 +292,47 @@ export function LeadsTableView({
                         </SelectContent>
                       </Select>
                     </TableCell>
+                    {/* Tipologia column - Only for Telecom */}
+                    {isTelecom && (
+                      <TableCell className="hidden sm:table-cell">
+                        {lead.tipologia ? (
+                          <Badge 
+                            variant="outline" 
+                            className={cn("text-xs gap-1", TIPOLOGIA_STYLES[lead.tipologia].color, TIPOLOGIA_STYLES[lead.tipologia].bgClass)}
+                          >
+                            <span>{TIPOLOGIA_STYLES[lead.tipologia].emoji}</span>
+                            {TIPOLOGIA_LABELS[lead.tipologia]}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
+                    )}
+                    {/* Conditional: Consumo for Telecom, Value for others */}
                     <TableCell className="hidden lg:table-cell">
-                      {(() => {
-                        const pValue = proposalValues?.get(lead.id);
-                        const displayValue = pValue || lead.value;
-                        if (!displayValue) return <span className="text-muted-foreground">-</span>;
-                        return (
+                      {isTelecom ? (
+                        lead.consumo_anual ? (
                           <span className="font-medium text-primary">
-                            {formatCurrency(displayValue)}
-                            {pValue && (
-                              <span className="text-xs font-normal text-muted-foreground ml-1">(propostas)</span>
-                            )}
+                            {new Intl.NumberFormat('pt-PT').format(lead.consumo_anual)} kWh
                           </span>
-                        );
-                      })()}
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )
+                      ) : (
+                        (() => {
+                          const pValue = proposalValues?.get(lead.id);
+                          const displayValue = pValue || lead.value;
+                          if (!displayValue) return <span className="text-muted-foreground">-</span>;
+                          return (
+                            <span className="font-medium text-primary">
+                              {formatCurrency(displayValue)}
+                              {pValue && (
+                                <span className="text-xs font-normal text-muted-foreground ml-1">(propostas)</span>
+                              )}
+                            </span>
+                          );
+                        })()
+                      )}
                     </TableCell>
                     <TableCell className="hidden xl:table-cell">
                       <span className="text-muted-foreground text-sm">

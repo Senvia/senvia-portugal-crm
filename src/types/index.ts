@@ -3,6 +3,7 @@
 export type AppRole = 'super_admin' | 'admin' | 'viewer' | 'salesperson';
 export type LeadStatus = 'new' | 'contacted' | 'scheduled' | 'proposal' | 'won' | 'lost';
 export type LeadTemperature = 'cold' | 'warm' | 'hot';
+export type LeadTipologia = 'ee' | 'gas' | 'servicos' | 'ee_servicos';
 export type OrganizationPlan = 'basic' | 'pro';
 
 // Meta Ads Pixel
@@ -59,6 +60,9 @@ export interface Lead {
   automation_enabled: boolean;
   custom_data?: Record<string, string | number | boolean | string[] | null>;
   assigned_to?: string | null;
+  // Telecom template fields
+  tipologia?: LeadTipologia | null;
+  consumo_anual?: number | null;
   created_at: string;
   updated_at?: string;
 }
@@ -124,6 +128,22 @@ export const TEMPERATURE_STYLES: Record<LeadTemperature, { color: string; emoji:
   cold: { color: 'text-blue-500', emoji: '🥶' },
   warm: { color: 'text-amber-500', emoji: '😐' },
   hot: { color: 'text-red-500', emoji: '🔥' },
+};
+
+// PT-PT Tipologia Labels (for Telecom template)
+export const TIPOLOGIA_LABELS: Record<LeadTipologia, string> = {
+  ee: 'EE',
+  gas: 'Gás',
+  servicos: 'Serviços',
+  ee_servicos: 'EE + Serviços',
+};
+
+// Tipologia Styles
+export const TIPOLOGIA_STYLES: Record<LeadTipologia, { color: string; emoji: string; bgClass: string }> = {
+  ee: { color: 'text-yellow-500', emoji: '⚡', bgClass: 'bg-yellow-500/10' },
+  gas: { color: 'text-orange-500', emoji: '🔥', bgClass: 'bg-orange-500/10' },
+  servicos: { color: 'text-purple-500', emoji: '🔧', bgClass: 'bg-purple-500/10' },
+  ee_servicos: { color: 'text-green-500', emoji: '⚡🔧', bgClass: 'bg-green-500/10' },
 };
 
 export type FormMode = 'traditional' | 'conversational';

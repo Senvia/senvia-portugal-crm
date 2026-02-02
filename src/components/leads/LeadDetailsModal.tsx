@@ -1,4 +1,4 @@
-import { Lead, STATUS_LABELS, LeadStatus, LeadTemperature, TEMPERATURE_LABELS, TEMPERATURE_STYLES, FormSettings, CustomField, ROLE_LABELS } from "@/types";
+import { Lead, STATUS_LABELS, LeadStatus, LeadTemperature, LeadTipologia, TEMPERATURE_LABELS, TEMPERATURE_STYLES, TIPOLOGIA_LABELS, TIPOLOGIA_STYLES, FormSettings, CustomField, ROLE_LABELS } from "@/types";
 import { formatDate, formatDateTime, getWhatsAppUrl } from "@/lib/format";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useAuth } from "@/contexts/AuthContext";
@@ -60,7 +60,8 @@ import {
   Thermometer,
   ClipboardList,
   Target,
-  UserCircle
+  UserCircle,
+  Zap
 } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { cn } from "@/lib/utils";
@@ -98,15 +99,20 @@ export function LeadDetailsModal({
   
   // Editable fields state
   const [editValue, setEditValue] = useState<string>("");
+  const [editConsumo, setEditConsumo] = useState<string>("");
   const [editNotes, setEditNotes] = useState<string>("");
   const [editName, setEditName] = useState<string>("");
   const [editEmail, setEditEmail] = useState<string>("");
   const [editPhone, setEditPhone] = useState<string>("");
   const [isEditingValue, setIsEditingValue] = useState(false);
+  const [isEditingConsumo, setIsEditingConsumo] = useState(false);
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [isEditingEmail, setIsEditingEmail] = useState(false);
   const [isEditingPhone, setIsEditingPhone] = useState(false);
+  
+  // Check if telecom template
+  const isTelecom = organization?.niche === 'telecom';
 
   // Get form settings for custom field labels
   const formSettings = organization?.form_settings as FormSettings | undefined;
@@ -177,6 +183,14 @@ export function LeadDetailsModal({
           setEditValue(lead.value ? formatNumberWithSpaces(lead.value) : "");
         }
       }
+      // Sync consumo_anual
+      if (!isEditingConsumo) {
+        const currentConsumo = parseFormattedNumber(editConsumo);
+        const leadConsumo = lead.consumo_anual ? Number(lead.consumo_anual) : null;
+        if (currentConsumo !== leadConsumo) {
+          setEditConsumo(lead.consumo_anual ? formatNumberWithSpaces(lead.consumo_anual) : "");
+        }
+      }
       if (!isEditingNotes) {
         setEditNotes(lead.notes || "");
       }
@@ -190,7 +204,7 @@ export function LeadDetailsModal({
         setEditPhone(lead.phone || "");
       }
     }
-  }, [lead, isEditingValue, isEditingNotes, isEditingName, isEditingEmail, isEditingPhone, editValue]);
+  }, [lead, isEditingValue, isEditingConsumo, isEditingNotes, isEditingName, isEditingEmail, isEditingPhone, editValue, editConsumo]);
 
   if (!lead) return null;
 
@@ -213,6 +227,21 @@ export function LeadDetailsModal({
       handleFieldSave("value", numValue);
     }
     setIsEditingValue(false);
+  };
+
+  const handleConsumoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatNumberWithSpaces(e.target.value);
+    setEditConsumo(formatted);
+  };
+
+  const handleConsumoBlur = () => {
+    const numValue = parseFormattedNumber(editConsumo);
+    const currentConsumo = lead.consumo_anual ? Number(lead.consumo_anual) : null;
+    
+    if (numValue !== currentConsumo) {
+      handleFieldSave("consumo_anual" as keyof Lead, numValue);
+    }
+    setIsEditingConsumo(false);
   };
 
   const handleNotesBlur = () => {
@@ -299,6 +328,31 @@ export function LeadDetailsModal({
             </Select>
           </div>
 
+          {/* Tipologia - Only for Telecom template */}
+          {isTelecom && (
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-muted-foreground">Tipologia</span>
+              <Select
+                value={lead.tipologia || ''}
+                onValueChange={(value) => onUpdate?.(lead.id, { tipologia: value as LeadTipologia })}
+              >
+                <SelectTrigger className="w-48">
+                  <SelectValue placeholder="Selecionar tipologia" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(Object.keys(TIPOLOGIA_LABELS) as LeadTipologia[]).map((tipo) => (
+                    <SelectItem key={tipo} value={tipo}>
+                      <div className="flex items-center gap-2">
+                        <span className={TIPOLOGIA_STYLES[tipo].color}>{TIPOLOGIA_STYLES[tipo].emoji}</span>
+                        {TIPOLOGIA_LABELS[tipo]}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           {/* Assigned To - Only visible to admins */}
           {canManageTeam && teamMembers && teamMembers.length > 0 && (
             <div className="flex items-center justify-between">
@@ -329,26 +383,50 @@ export function LeadDetailsModal({
             </div>
           )}
 
-          <div className="space-y-2">
-            <Label htmlFor="lead-value" className="flex items-center gap-2 text-sm font-medium">
-              <Euro className="h-4 w-4 text-muted-foreground" />
-              Valor do Negócio
-            </Label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">€</span>
-              <Input
-                id="lead-value"
-                type="text"
-                inputMode="numeric"
-                placeholder="0"
-                value={editValue}
-                onChange={handleValueChange}
-                onFocus={() => setIsEditingValue(true)}
-                onBlur={handleValueBlur}
-                className="pl-8"
-              />
+          {/* Conditional: Consumo Anual for Telecom, Valor do Negócio for others */}
+          {isTelecom ? (
+            <div className="space-y-2">
+              <Label htmlFor="lead-consumo" className="flex items-center gap-2 text-sm font-medium">
+                <Zap className="h-4 w-4 text-muted-foreground" />
+                Consumo Anual/kWp (kWh)
+              </Label>
+              <div className="relative">
+                <Input
+                  id="lead-consumo"
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="0"
+                  value={editConsumo}
+                  onChange={handleConsumoChange}
+                  onFocus={() => setIsEditingConsumo(true)}
+                  onBlur={handleConsumoBlur}
+                  className="pr-12"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">kWh</span>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="space-y-2">
+              <Label htmlFor="lead-value" className="flex items-center gap-2 text-sm font-medium">
+                <Euro className="h-4 w-4 text-muted-foreground" />
+                Valor do Negócio
+              </Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">€</span>
+                <Input
+                  id="lead-value"
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="0"
+                  value={editValue}
+                  onChange={handleValueChange}
+                  onFocus={() => setIsEditingValue(true)}
+                  onBlur={handleValueBlur}
+                  className="pl-8"
+                />
+              </div>
+            </div>
+          )}
 
           <Separator />
 
