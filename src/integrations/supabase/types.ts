@@ -903,6 +903,7 @@ export type Database = {
         Row: {
           assigned_to: string | null
           automation_enabled: boolean
+          consumo_anual: number | null
           created_at: string | null
           custom_data: Json | null
           email: string
@@ -916,12 +917,14 @@ export type Database = {
           source: string | null
           status: string | null
           temperature: string | null
+          tipologia: string | null
           updated_at: string | null
           value: number | null
         }
         Insert: {
           assigned_to?: string | null
           automation_enabled?: boolean
+          consumo_anual?: number | null
           created_at?: string | null
           custom_data?: Json | null
           email: string
@@ -935,12 +938,14 @@ export type Database = {
           source?: string | null
           status?: string | null
           temperature?: string | null
+          tipologia?: string | null
           updated_at?: string | null
           value?: number | null
         }
         Update: {
           assigned_to?: string | null
           automation_enabled?: boolean
+          consumo_anual?: number | null
           created_at?: string | null
           custom_data?: Json | null
           email?: string
@@ -954,6 +959,7 @@ export type Database = {
           source?: string | null
           status?: string | null
           temperature?: string | null
+          tipologia?: string | null
           updated_at?: string | null
           value?: number | null
         }

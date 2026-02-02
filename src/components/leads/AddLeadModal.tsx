@@ -32,8 +32,9 @@ import { Loader2, Zap, UserCircle } from "lucide-react";
 import { useCreateLead } from "@/hooks/useLeads";
 import { useTeamMembers } from "@/hooks/useTeam";
 import { usePermissions } from "@/hooks/usePermissions";
-import type { LeadTemperature, ROLE_LABELS } from "@/types";
-import { ROLE_LABELS as RoleLabels } from "@/types";
+import { useAuth } from "@/contexts/AuthContext";
+import type { LeadTemperature, LeadTipologia } from "@/types";
+import { ROLE_LABELS as RoleLabels, TIPOLOGIA_LABELS, TIPOLOGIA_STYLES } from "@/types";
 
 const SOURCES = [
   "Entrada Manual",
@@ -67,6 +68,9 @@ const addLeadSchema = z.object({
   }),
   automation_enabled: z.boolean().default(true),
   assigned_to: z.string().optional(),
+  // Telecom template fields
+  tipologia: z.enum(["ee", "gas", "servicos", "ee_servicos"]).optional(),
+  consumo_anual: z.coerce.number().min(0, "Consumo inválido").optional().or(z.literal("")),
 });
 
 type AddLeadFormData = z.infer<typeof addLeadSchema>;
@@ -80,6 +84,10 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
   const createLead = useCreateLead();
   const { data: teamMembers } = useTeamMembers();
   const { canManageTeam } = usePermissions();
+  const { organization } = useAuth();
+  
+  // Check if organization is telecom template
+  const isTelecom = organization?.niche === 'telecom';
   
   const form = useForm<AddLeadFormData>({
     resolver: zodResolver(addLeadSchema),
@@ -94,6 +102,8 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
       gdpr_consent: undefined,
       automation_enabled: true,
       assigned_to: "",
+      tipologia: undefined,
+      consumo_anual: "",
     },
   });
 
@@ -104,12 +114,19 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
       phone: data.phone,
       source: data.source,
       temperature: data.temperature as LeadTemperature,
-      value: data.value ? Number(data.value) : undefined,
+      // For telecom, use consumo_anual; for others, use value
+      value: isTelecom ? undefined : (data.value ? Number(data.value) : undefined),
       notes: data.notes,
       gdpr_consent: data.gdpr_consent,
       automation_enabled: data.automation_enabled,
       assigned_to: data.assigned_to && data.assigned_to !== 'unassigned' ? data.assigned_to : undefined,
+      // Telecom fields
+      tipologia: isTelecom ? data.tipologia as LeadTipologia : undefined,
+      consumo_anual: isTelecom && data.consumo_anual ? Number(data.consumo_anual) : undefined,
     });
+    
+    form.reset();
+    onOpenChange(false);
     
     form.reset();
     onOpenChange(false);
@@ -219,25 +236,79 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
               />
             </div>
 
-            <FormField
-              control={form.control}
-              name="value"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Valor do Negócio (€)</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      placeholder="0.00"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {/* Tipologia - Only for Telecom template */}
+            {isTelecom && (
+              <FormField
+                control={form.control}
+                name="tipologia"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Tipologia</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecionar tipologia" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {(Object.keys(TIPOLOGIA_LABELS) as LeadTipologia[]).map((tipo) => (
+                          <SelectItem key={tipo} value={tipo}>
+                            <span className="flex items-center gap-2">
+                              <span>{TIPOLOGIA_STYLES[tipo].emoji}</span>
+                              {TIPOLOGIA_LABELS[tipo]}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+
+            {/* Conditional: Value for non-telecom, Consumo Anual for telecom */}
+            {isTelecom ? (
+              <FormField
+                control={form.control}
+                name="consumo_anual"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Consumo Anual/kWp (kWh)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="1"
+                        placeholder="0"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            ) : (
+              <FormField
+                control={form.control}
+                name="value"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Valor do Negócio (€)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="0.00"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             {/* Assigned To - Only visible to admins */}
             {canManageTeam && teamMembers && teamMembers.length > 0 && (

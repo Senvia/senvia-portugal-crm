@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTeamFilter } from '@/hooks/useTeamFilter';
-import type { Lead, LeadStatus, LeadTemperature } from '@/types';
+import type { Lead, LeadStatus, LeadTemperature, LeadTipologia } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { Json } from '@/integrations/supabase/types';
 
@@ -147,6 +147,9 @@ export function useCreateLead() {
       gdpr_consent: boolean;
       automation_enabled?: boolean;
       assigned_to?: string;
+      // Telecom template fields
+      tipologia?: LeadTipologia;
+      consumo_anual?: number;
     }) => {
       if (!organization?.id) throw new Error('Sem organização');
       
