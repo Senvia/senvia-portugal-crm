@@ -262,7 +262,8 @@ serve(async (req) => {
           eventDate.setDate(eventDate.getDate() - 7); // Event 7 days before expiry
           
           const [hours, minutes] = (org.fidelization_event_time || '10:00').split(':');
-          eventDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+          const preferredHour = parseInt(hours);
+          const preferredMinute = parseInt(minutes);
 
           // Get first admin user for the organization
           const { data: members } = await supabase
@@ -274,20 +275,68 @@ serve(async (req) => {
             .limit(1);
 
           if (members && members.length > 0) {
-            const endTime = new Date(eventDate);
-            endTime.setHours(endTime.getHours() + 1);
+            const userId = members[0].user_id;
+            
+            // Get all events for this day to check conflicts
+            const dayStart = new Date(eventDate);
+            dayStart.setHours(0, 0, 0, 0);
+            const dayEnd = new Date(eventDate);
+            dayEnd.setHours(23, 59, 59, 999);
 
-            await supabase.from('calendar_events').insert({
-              organization_id: org.id,
-              user_id: members[0].user_id,
-              client_id: cpe.client_id,
-              title: `Renovação - ${alert.client_name}`,
-              description: `Fidelização do ${cpe.equipment_type} (${cpe.comercializador}) expira em ${new Date(cpe.fidelizacao_end).toLocaleDateString('pt-PT')}. Contactar cliente para renovação.`,
-              event_type: 'visit',
-              start_time: eventDate.toISOString(),
-              end_time: endTime.toISOString(),
-            });
-            results.events_created++;
+            const { data: existingEvents } = await supabase
+              .from('calendar_events')
+              .select('start_time, end_time')
+              .eq('organization_id', org.id)
+              .eq('user_id', userId)
+              .gte('start_time', dayStart.toISOString())
+              .lte('start_time', dayEnd.toISOString())
+              .neq('status', 'cancelled');
+
+            // Find first free slot (30-minute increments from preferred time until 18:00)
+            let foundSlot = false;
+            let slotStart = new Date(eventDate);
+            slotStart.setHours(preferredHour, preferredMinute, 0, 0);
+
+            while (!foundSlot && slotStart.getHours() < 18) {
+              const slotEnd = new Date(slotStart);
+              slotEnd.setHours(slotEnd.getHours() + 1);
+
+              // Check if this slot conflicts with any existing event
+              const hasConflict = (existingEvents || []).some(event => {
+                const eventStart = new Date(event.start_time);
+                const eventEnd = event.end_time ? new Date(event.end_time) : new Date(eventStart.getTime() + 60 * 60 * 1000);
+                
+                // Overlap check: slot overlaps if it starts before event ends AND ends after event starts
+                return slotStart < eventEnd && slotEnd > eventStart;
+              });
+
+              if (!hasConflict) {
+                foundSlot = true;
+              } else {
+                // Try next 30-minute slot
+                slotStart.setMinutes(slotStart.getMinutes() + 30);
+              }
+            }
+
+            if (foundSlot) {
+              const endTime = new Date(slotStart);
+              endTime.setHours(endTime.getHours() + 1);
+
+              await supabase.from('calendar_events').insert({
+                organization_id: org.id,
+                user_id: userId,
+                client_id: cpe.client_id,
+                title: `Renovação - ${alert.client_name}`,
+                description: `Fidelização do ${cpe.equipment_type} (${cpe.comercializador}) expira em ${new Date(cpe.fidelizacao_end).toLocaleDateString('pt-PT')}. Contactar cliente para renovação.`,
+                event_type: 'visit',
+                start_time: slotStart.toISOString(),
+                end_time: endTime.toISOString(),
+              });
+              results.events_created++;
+              console.log(`Created event for ${alert.client_name} at ${slotStart.toISOString()}`);
+            } else {
+              console.log(`No free slot found for ${alert.client_name} on ${eventDate.toDateString()}`);
+            }
           }
         }
 
