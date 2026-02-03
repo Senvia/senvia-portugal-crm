@@ -8,9 +8,9 @@ import {
   Trash2, 
   MessageSquare, 
   Phone,
-  CreditCard,
-  Receipt,
-  Package
+  Package,
+  Zap,
+  Wrench
 } from "lucide-react";
 import {
   Dialog,
@@ -37,26 +37,18 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useAuth } from "@/contexts/AuthContext";
 import { useUpdateSale, useDeleteSale } from "@/hooks/useSales";
 import { useSaleItems } from "@/hooks/useSaleItems";
+import { useProposalCpes } from "@/hooks/useProposalCpes";
 import { formatCurrency } from "@/lib/format";
-import type { SaleWithDetails, SaleStatus, PaymentStatus } from "@/types/sales";
-import { 
-  SALE_STATUS_LABELS, 
-  SALE_STATUS_COLORS, 
-  SALE_STATUSES,
-  PAYMENT_METHOD_LABELS,
-  PAYMENT_STATUS_LABELS,
-  PAYMENT_STATUS_COLORS,
-  PAYMENT_STATUSES,
-  PAYMENT_METHODS,
-  type PaymentMethod
-} from "@/types/sales";
+import { MODELO_SERVICO_LABELS } from "@/types/proposals";
+import type { SaleWithDetails, SaleStatus } from "@/types/sales";
+import { SALE_STATUS_LABELS, SALE_STATUS_COLORS, SALE_STATUSES } from "@/types/sales";
 
 interface SaleDetailsModalProps {
   sale: SaleWithDetails | null;
@@ -66,21 +58,24 @@ interface SaleDetailsModalProps {
 
 export function SaleDetailsModal({ sale, open, onOpenChange }: SaleDetailsModalProps) {
   const [status, setStatus] = useState<SaleStatus>("pending");
-  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>("pending");
   const [notes, setNotes] = useState("");
-  const [editValue, setEditValue] = useState("");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
+  const { organization } = useAuth();
   const { data: saleItems = [] } = useSaleItems(sale?.id);
+  const { data: proposalCpes = [] } = useProposalCpes(sale?.proposal_id ?? undefined);
   const updateSale = useUpdateSale();
   const deleteSale = useDeleteSale();
+
+  // Conditional labels based on organization niche
+  const isTelecom = organization?.niche === 'telecom';
+  const cpeLabel = isTelecom ? 'CPE/CUI (Pontos de Consumo)' : 'CPEs (Equipamentos)';
+  const serialLabel = isTelecom ? 'Local de Consumo' : 'Nº Série';
 
   useEffect(() => {
     if (sale) {
       setStatus(sale.status);
-      setPaymentStatus((sale.payment_status as PaymentStatus) || "pending");
       setNotes(sale.notes || "");
-      setEditValue(sale.total_value?.toString() || "0");
     }
   }, [sale]);
 
@@ -91,27 +86,9 @@ export function SaleDetailsModal({ sale, open, onOpenChange }: SaleDetailsModalP
     updateSale.mutate({ saleId: sale.id, updates: { status: newStatus } });
   };
 
-  const handlePaymentStatusChange = (newStatus: PaymentStatus) => {
-    setPaymentStatus(newStatus);
-    const updates: { payment_status: PaymentStatus; paid_date?: string | null } = { 
-      payment_status: newStatus 
-    };
-    if (newStatus === 'paid') {
-      updates.paid_date = new Date().toISOString().split('T')[0];
-    }
-    updateSale.mutate({ saleId: sale.id, updates });
-  };
-
   const handleNotesBlur = () => {
     if (notes !== sale.notes) {
       updateSale.mutate({ saleId: sale.id, updates: { notes } });
-    }
-  };
-
-  const handleValueBlur = () => {
-    const numValue = parseFloat(editValue) || 0;
-    if (numValue !== sale.total_value) {
-      updateSale.mutate({ saleId: sale.id, updates: { total_value: numValue } });
     }
   };
 
@@ -130,6 +107,14 @@ export function SaleDetailsModal({ sale, open, onOpenChange }: SaleDetailsModalP
       window.open(`https://wa.me/${phone}`, "_blank");
     }
   };
+
+  // Check if has energy or service data
+  const hasEnergyData = sale.proposal_type === 'energia' && (
+    sale.consumo_anual || sale.margem || sale.dbl || sale.anos_contrato || sale.comissao
+  );
+  const hasServiceData = sale.proposal_type === 'servicos' && (
+    sale.modelo_servico || sale.kwp || sale.comissao
+  );
 
   return (
     <>
@@ -158,189 +143,272 @@ export function SaleDetailsModal({ sale, open, onOpenChange }: SaleDetailsModalP
 
           <ScrollArea className="max-h-[calc(90vh-10rem)]">
             <div className="p-6 space-y-6">
-              {/* Status & Payment Status */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Estado da Venda</Label>
-                  <Select value={status} onValueChange={handleStatusChange}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {SALE_STATUSES.map((s) => (
-                        <SelectItem key={s} value={s}>
-                          {SALE_STATUS_LABELS[s]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Estado do Pagamento</Label>
-                  <Select value={paymentStatus} onValueChange={handlePaymentStatusChange}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {PAYMENT_STATUSES.map((s) => (
-                        <SelectItem key={s} value={s}>
-                          {PAYMENT_STATUS_LABELS[s]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {/* Value */}
+              {/* Status */}
               <div className="space-y-2">
-                <Label>Valor Total</Label>
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={editValue}
-                    onChange={(e) => setEditValue(e.target.value)}
-                    onBlur={handleValueBlur}
-                    className="text-xl font-bold"
-                  />
-                  <span className="text-muted-foreground">€</span>
-                </div>
-                {(sale.discount || 0) > 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    Subtotal: {formatCurrency(sale.subtotal || 0)} | Desconto: -{formatCurrency(sale.discount || 0)}
-                  </p>
-                )}
+                <Label>Estado da Venda</Label>
+                <Select value={status} onValueChange={handleStatusChange}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SALE_STATUSES.map((s) => (
+                      <SelectItem key={s} value={s}>
+                        {SALE_STATUS_LABELS[s]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <Separator />
+
+              {/* Energy Data Section */}
+              {hasEnergyData && (
+                <>
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Zap className="h-4 w-4 text-amber-500" />
+                      <Label className="text-muted-foreground">Dados de Energia</Label>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 p-3 rounded-lg bg-muted/30">
+                      {sale.consumo_anual && (
+                        <div>
+                          <p className="text-xs text-muted-foreground">Consumo Anual</p>
+                          <p className="text-sm font-medium">
+                            {sale.consumo_anual.toLocaleString('pt-PT')} kWh
+                          </p>
+                        </div>
+                      )}
+                      {sale.margem && (
+                        <div>
+                          <p className="text-xs text-muted-foreground">Margem</p>
+                          <p className="text-sm font-medium">
+                            {sale.margem.toLocaleString('pt-PT', { minimumFractionDigits: 2 })} €/MWh
+                          </p>
+                        </div>
+                      )}
+                      {sale.anos_contrato && (
+                        <div>
+                          <p className="text-xs text-muted-foreground">Contrato</p>
+                          <p className="text-sm font-medium">
+                            {sale.anos_contrato} {sale.anos_contrato === 1 ? 'ano' : 'anos'}
+                          </p>
+                        </div>
+                      )}
+                      {sale.dbl != null && (
+                        <div>
+                          <p className="text-xs text-muted-foreground">DBL</p>
+                          <p className="text-sm font-medium">
+                            {sale.dbl.toLocaleString('pt-PT', { minimumFractionDigits: 2 })}
+                          </p>
+                        </div>
+                      )}
+                      {sale.comissao && (
+                        <div className="col-span-2">
+                          <p className="text-xs text-muted-foreground">Comissão</p>
+                          <p className="text-sm font-medium text-green-500">
+                            {formatCurrency(sale.comissao)}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <Separator />
+                </>
+              )}
+
+              {/* Service Data Section */}
+              {hasServiceData && (
+                <>
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Wrench className="h-4 w-4 text-blue-500" />
+                      <Label className="text-muted-foreground">Dados do Serviço</Label>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 p-3 rounded-lg bg-muted/30">
+                      {sale.modelo_servico && (
+                        <div>
+                          <p className="text-xs text-muted-foreground">Modelo</p>
+                          <p className="text-sm font-medium">
+                            {MODELO_SERVICO_LABELS[sale.modelo_servico as keyof typeof MODELO_SERVICO_LABELS] || sale.modelo_servico}
+                          </p>
+                        </div>
+                      )}
+                      {sale.kwp && (
+                        <div>
+                          <p className="text-xs text-muted-foreground">Potência</p>
+                          <p className="text-sm font-medium">
+                            {sale.kwp.toLocaleString('pt-PT', { minimumFractionDigits: 2 })} kWp
+                          </p>
+                        </div>
+                      )}
+                      {sale.comissao && (
+                        <div className="col-span-2">
+                          <p className="text-xs text-muted-foreground">Comissão</p>
+                          <p className="text-sm font-medium text-green-500">
+                            {formatCurrency(sale.comissao)}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <Separator />
+                </>
+              )}
+
+              {/* CPE/CUI Section */}
+              {proposalCpes.length > 0 && (
+                <>
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Zap className="h-4 w-4 text-amber-500" />
+                      <Label className="text-muted-foreground">{cpeLabel}</Label>
+                    </div>
+                    <div className="space-y-2">
+                      {proposalCpes.map((cpe) => (
+                        <div
+                          key={cpe.id}
+                          className="p-3 rounded-lg border bg-muted/30 space-y-2"
+                        >
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Badge variant="outline" className="text-xs">
+                              {cpe.equipment_type}
+                            </Badge>
+                            <Badge variant="secondary" className="text-xs">
+                              {cpe.comercializador}
+                            </Badge>
+                            {cpe.existing_cpe_id ? (
+                              <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-500 border-blue-500/30">
+                                Renovação
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-xs bg-green-500/10 text-green-500 border-green-500/30">
+                                Novo
+                              </Badge>
+                            )}
+                          </div>
+                          {cpe.serial_number && (
+                            <div>
+                              <p className="text-xs text-muted-foreground">{serialLabel}</p>
+                              <p className="text-sm font-mono">{cpe.serial_number}</p>
+                            </div>
+                          )}
+                          {(cpe.fidelizacao_start || cpe.fidelizacao_end) && (
+                            <div>
+                              <p className="text-xs text-muted-foreground">Fidelização</p>
+                              <p className="text-sm">
+                                {cpe.fidelizacao_start 
+                                  ? format(new Date(cpe.fidelizacao_start), "dd/MM/yyyy", { locale: pt })
+                                  : '—'
+                                }
+                                {' → '}
+                                {cpe.fidelizacao_end 
+                                  ? format(new Date(cpe.fidelizacao_end), "dd/MM/yyyy", { locale: pt })
+                                  : '—'
+                                }
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <Separator />
+                </>
+              )}
 
               {/* Sale Items */}
               {saleItems.length > 0 && (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Package className="h-4 w-4 text-muted-foreground" />
-                    <Label className="text-muted-foreground">Produtos/Serviços</Label>
-                  </div>
-                  <div className="space-y-2">
-                    {saleItems.map((item) => (
-                      <div
-                        key={item.id}
-                        className="flex items-center justify-between p-3 rounded-lg border bg-muted/30"
-                      >
-                        <div>
-                          <p className="font-medium text-sm">{item.name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {item.quantity} × {formatCurrency(item.unit_price)}
-                          </p>
+                <>
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Package className="h-4 w-4 text-muted-foreground" />
+                      <Label className="text-muted-foreground">Produtos/Serviços</Label>
+                    </div>
+                    <div className="space-y-2">
+                      {saleItems.map((item) => (
+                        <div
+                          key={item.id}
+                          className="flex items-center justify-between p-3 rounded-lg border bg-muted/30"
+                        >
+                          <div>
+                            <p className="font-medium text-sm">{item.name}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {item.quantity} × {formatCurrency(item.unit_price)}
+                            </p>
+                          </div>
+                          <p className="font-semibold">{formatCurrency(item.total)}</p>
                         </div>
-                        <p className="font-semibold">{formatCurrency(item.total)}</p>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
+                  <Separator />
+                </>
               )}
-
-              {/* Payment Info */}
-              {(sale.payment_method || sale.due_date || sale.invoice_reference) && (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <CreditCard className="h-4 w-4 text-muted-foreground" />
-                    <Label className="text-muted-foreground">Informação de Pagamento</Label>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3 p-3 rounded-lg bg-muted/30">
-                    {sale.payment_method && (
-                      <div>
-                        <p className="text-xs text-muted-foreground">Método</p>
-                        <p className="text-sm font-medium">
-                          {PAYMENT_METHOD_LABELS[sale.payment_method as PaymentMethod] || sale.payment_method}
-                        </p>
-                      </div>
-                    )}
-                    {sale.due_date && (
-                      <div>
-                        <p className="text-xs text-muted-foreground">Vencimento</p>
-                        <p className="text-sm font-medium">
-                          {format(new Date(sale.due_date), "d MMM yyyy", { locale: pt })}
-                        </p>
-                      </div>
-                    )}
-                    {sale.paid_date && (
-                      <div>
-                        <p className="text-xs text-muted-foreground">Data Pagamento</p>
-                        <p className="text-sm font-medium text-green-500">
-                          {format(new Date(sale.paid_date), "d MMM yyyy", { locale: pt })}
-                        </p>
-                      </div>
-                    )}
-                    {sale.invoice_reference && (
-                      <div>
-                        <p className="text-xs text-muted-foreground">Referência</p>
-                        <p className="text-sm font-medium">{sale.invoice_reference}</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              <Separator />
 
               {/* Client/Lead Info */}
               {(sale.client || sale.lead) && (
-                <div className="space-y-3">
-                  <Label className="text-muted-foreground">Cliente</Label>
-                  <div className="bg-muted/30 rounded-lg p-3 space-y-2">
+                <>
+                  <div className="space-y-3">
                     <div className="flex items-center gap-2">
                       <User className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-medium">{sale.client?.name || sale.lead?.name}</span>
-                      {sale.client?.code && (
-                        <Badge variant="outline" className="font-mono text-xs">
-                          {sale.client.code}
-                        </Badge>
+                      <Label className="text-muted-foreground">Cliente</Label>
+                    </div>
+                    <div className="bg-muted/30 rounded-lg p-3 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{sale.client?.name || sale.lead?.name}</span>
+                        {sale.client?.code && (
+                          <Badge variant="outline" className="font-mono text-xs">
+                            {sale.client.code}
+                          </Badge>
+                        )}
+                      </div>
+                      {sale.lead?.email && (
+                        <p className="text-sm text-muted-foreground">{sale.lead.email}</p>
+                      )}
+                      {sale.lead?.phone && (
+                        <div className="flex items-center gap-2">
+                          <Phone className="h-3 w-3 text-muted-foreground" />
+                          <span className="text-sm text-muted-foreground">{sale.lead.phone}</span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 px-2 text-green-500 hover:text-green-400"
+                            onClick={openWhatsApp}
+                          >
+                            <MessageSquare className="h-3 w-3 mr-1" />
+                            WhatsApp
+                          </Button>
+                        </div>
                       )}
                     </div>
-                    {sale.lead?.email && (
-                      <p className="text-sm text-muted-foreground pl-6">{sale.lead.email}</p>
-                    )}
-                    {sale.lead?.phone && (
-                      <div className="flex items-center gap-2 pl-6">
-                        <Phone className="h-3 w-3 text-muted-foreground" />
-                        <span className="text-sm text-muted-foreground">{sale.lead.phone}</span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 px-2 text-green-500 hover:text-green-400"
-                          onClick={openWhatsApp}
-                        >
-                          <MessageSquare className="h-3 w-3 mr-1" />
-                          WhatsApp
-                        </Button>
-                      </div>
-                    )}
                   </div>
-                </div>
+                  <Separator />
+                </>
               )}
 
               {/* Proposal Info */}
               {sale.proposal && (
-                <div className="space-y-2">
-                  <Label className="text-muted-foreground">Proposta Associada</Label>
-                  <div className="flex items-center gap-2 text-sm p-3 bg-muted/30 rounded-lg">
-                    <FileText className="h-4 w-4 text-muted-foreground" />
-                    {sale.proposal.code && (
-                      <Badge variant="outline" className="font-mono text-xs">
-                        {sale.proposal.code}
-                      </Badge>
-                    )}
-                    <span>
-                      {format(new Date(sale.proposal.proposal_date), "d MMM yyyy", { locale: pt })}
-                    </span>
+                <>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-muted-foreground" />
+                      <Label className="text-muted-foreground">Proposta Associada</Label>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm p-3 bg-muted/30 rounded-lg">
+                      {sale.proposal.code && (
+                        <Badge variant="outline" className="font-mono text-xs">
+                          {sale.proposal.code}
+                        </Badge>
+                      )}
+                      <span>
+                        {format(new Date(sale.proposal.proposal_date), "d MMM yyyy", { locale: pt })}
+                      </span>
+                    </div>
                   </div>
-                </div>
+                  <Separator />
+                </>
               )}
-
-              <Separator />
 
               {/* Notes */}
               <div className="space-y-2">
