@@ -19,15 +19,16 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useCreateCpe } from '@/hooks/useCpes';
-import { EQUIPMENT_TYPES, COMERCIALIZADORES, type CpeStatus } from '@/types/cpes';
+import { EQUIPMENT_TYPES, COMERCIALIZADORES, ENERGY_TYPES, ENERGY_COMERCIALIZADORES, type CpeStatus } from '@/types/cpes';
 
 interface CreateCpeModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   clientId: string;
+  isTelecom?: boolean;
 }
 
-export function CreateCpeModal({ open, onOpenChange, clientId }: CreateCpeModalProps) {
+export function CreateCpeModal({ open, onOpenChange, clientId, isTelecom = false }: CreateCpeModalProps) {
   const createCpe = useCreateCpe();
   
   const [equipmentType, setEquipmentType] = useState('');
@@ -39,6 +40,17 @@ export function CreateCpeModal({ open, onOpenChange, clientId }: CreateCpeModalP
   const [fidelizacaoEnd, setFidelizacaoEnd] = useState('');
   const [status, setStatus] = useState<CpeStatus>('active');
   const [notes, setNotes] = useState('');
+  
+  // Conditional labels and options based on niche
+  const typeLabel = isTelecom ? 'Tipo *' : 'Tipo de Equipamento *';
+  const serialLabel = isTelecom ? 'Local de Consumo (CPE/CUI)' : 'Número de Série';
+  const serialPlaceholder = isTelecom ? 'Ex: PT0002000012345678XX' : 'Ex: SN123456789';
+  const typeOptions = isTelecom ? ENERGY_TYPES : EQUIPMENT_TYPES;
+  const comercializadorOptions = isTelecom ? ENERGY_COMERCIALIZADORES : COMERCIALIZADORES;
+  const modalTitle = isTelecom ? 'Adicionar CPE/CUI' : 'Adicionar CPE';
+  const modalDescription = isTelecom 
+    ? 'Registe um novo ponto de consumo para este cliente.' 
+    : 'Registe um novo equipamento para este cliente.';
 
   const resetForm = () => {
     setEquipmentType('');
@@ -84,22 +96,22 @@ export function CreateCpeModal({ open, onOpenChange, clientId }: CreateCpeModalP
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Adicionar CPE</DialogTitle>
+          <DialogTitle>{modalTitle}</DialogTitle>
           <DialogDescription>
-            Registe um novo equipamento para este cliente.
+            {modalDescription}
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Equipment Type */}
           <div className="space-y-2">
-            <Label>Tipo de Equipamento *</Label>
+            <Label>{typeLabel}</Label>
             <Select value={equipmentType} onValueChange={setEquipmentType}>
               <SelectTrigger>
                 <SelectValue placeholder="Selecione o tipo" />
               </SelectTrigger>
               <SelectContent>
-                {EQUIPMENT_TYPES.map((type) => (
+                {typeOptions.map((type) => (
                   <SelectItem key={type} value={type}>{type}</SelectItem>
                 ))}
               </SelectContent>
@@ -113,11 +125,11 @@ export function CreateCpeModal({ open, onOpenChange, clientId }: CreateCpeModalP
             )}
           </div>
 
-          {/* Serial Number */}
+          {/* Serial Number / CPE-CUI */}
           <div className="space-y-2">
-            <Label>Número de Série</Label>
+            <Label>{serialLabel}</Label>
             <Input
-              placeholder="Ex: SN123456789"
+              placeholder={serialPlaceholder}
               value={serialNumber}
               onChange={(e) => setSerialNumber(e.target.value)}
             />
@@ -131,7 +143,7 @@ export function CreateCpeModal({ open, onOpenChange, clientId }: CreateCpeModalP
                 <SelectValue placeholder="Selecione o comercializador" />
               </SelectTrigger>
               <SelectContent>
-                {COMERCIALIZADORES.map((c) => (
+                {comercializadorOptions.map((c) => (
                   <SelectItem key={c} value={c}>{c}</SelectItem>
                 ))}
               </SelectContent>

@@ -41,7 +41,14 @@ export const EQUIPMENT_TYPES = [
   'Outro',
 ];
 
-// Common comercializadores in Portugal
+// Energy types for telecom niche (Portuguese energy market)
+export const ENERGY_TYPES = [
+  'Energia',
+  'Gás',
+  'Outro',
+];
+
+// Common comercializadores in Portugal (mixed)
 export const COMERCIALIZADORES = [
   // Telecom
   'MEO',
@@ -56,5 +63,25 @@ export const COMERCIALIZADORES = [
   'Iberdrola',
   'Goldenergy',
   'Luzboa',
+  'Outro',
+];
+
+// Energy comercializadores for telecom niche (E-Redes Portugal)
+export const ENERGY_COMERCIALIZADORES = [
+  'EDP Comercial',
+  'Endesa Energia',
+  'Galp Power',
+  'Iberdrola',
+  'Goldenergy',
+  'Luzboa',
+  'Repsol Energia',
+  'SU Eletricidade',
+  'Energia Unida',
+  'Pleno Energia',
+  'Nossa Energia',
+  'Alfa Energia',
+  'Axpo Energia',
+  'Muon Electric',
+  'Coopernico',
   'Outro',
 ];
