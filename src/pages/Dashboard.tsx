@@ -5,10 +5,12 @@ import { useDashboardWidgets } from "@/hooks/useDashboardWidgets";
 import { DynamicWidget } from "@/components/dashboard/DynamicWidget";
 import { WidgetSelector } from "@/components/dashboard/WidgetSelector";
 import { TeamMemberFilter } from "@/components/dashboard/TeamMemberFilter";
+import { FidelizationAlertsWidget } from "@/components/dashboard/FidelizationAlertsWidget";
 import { Button } from "@/components/ui/button";
 import { Loader2, Settings2 } from "lucide-react";
 import { WidgetType, NicheType } from "@/lib/dashboard-templates";
 import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription";
+import { useModules } from "@/hooks/useModules";
 
 export default function Dashboard() {
   // Subscribe to realtime updates for dashboard data
@@ -18,6 +20,8 @@ export default function Dashboard() {
     { table: 'sales', queryKeys: [['sales'], ['dashboard-stats']] },
   ]);
   const { profile, organization } = useAuth();
+  const { modules } = useModules();
+  const clientsModuleEnabled = modules.clients;
   const { 
     visibleWidgets, 
     widgets,
@@ -74,14 +78,24 @@ export default function Dashboard() {
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
         ) : (
-          <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {visibleWidgets.map((widget) => (
-              <DynamicWidget
-                key={widget.id || widget.widget_type}
-                widgetType={widget.widget_type as WidgetType}
-                niche={niche as NicheType}
-              />
-            ))}
+          <div className="space-y-6">
+            {/* Fidelization Alerts Widget - shows if clients module is enabled */}
+            {clientsModuleEnabled && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <FidelizationAlertsWidget />
+              </div>
+            )}
+            
+            {/* Regular widgets */}
+            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {visibleWidgets.map((widget) => (
+                <DynamicWidget
+                  key={widget.id || widget.widget_type}
+                  widgetType={widget.widget_type as WidgetType}
+                  niche={niche as NicheType}
+                />
+              ))}
+            </div>
           </div>
         )}
 

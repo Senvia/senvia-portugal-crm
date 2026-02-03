@@ -213,6 +213,8 @@ export type Database = {
       }
       cpes: {
         Row: {
+          alert_30d_sent: boolean | null
+          alert_7d_sent: boolean | null
           client_id: string
           comercializador: string
           created_at: string
@@ -227,6 +229,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          alert_30d_sent?: boolean | null
+          alert_7d_sent?: boolean | null
           client_id: string
           comercializador: string
           created_at?: string
@@ -241,6 +245,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          alert_30d_sent?: boolean | null
+          alert_7d_sent?: boolean | null
           client_id?: string
           comercializador?: string
           created_at?: string
@@ -1229,6 +1235,11 @@ export type Database = {
           code: string | null
           created_at: string | null
           enabled_modules: Json | null
+          fidelization_alert_days: Json | null
+          fidelization_create_event: boolean | null
+          fidelization_email: string | null
+          fidelization_email_enabled: boolean | null
+          fidelization_event_time: string | null
           form_settings: Json | null
           id: string
           logo_url: string | null
@@ -1254,6 +1265,11 @@ export type Database = {
           code?: string | null
           created_at?: string | null
           enabled_modules?: Json | null
+          fidelization_alert_days?: Json | null
+          fidelization_create_event?: boolean | null
+          fidelization_email?: string | null
+          fidelization_email_enabled?: boolean | null
+          fidelization_event_time?: string | null
           form_settings?: Json | null
           id?: string
           logo_url?: string | null
@@ -1279,6 +1295,11 @@ export type Database = {
           code?: string | null
           created_at?: string | null
           enabled_modules?: Json | null
+          fidelization_alert_days?: Json | null
+          fidelization_create_event?: boolean | null
+          fidelization_email?: string | null
+          fidelization_email_enabled?: boolean | null
+          fidelization_event_time?: string | null
           form_settings?: Json | null
           id?: string
           logo_url?: string | null

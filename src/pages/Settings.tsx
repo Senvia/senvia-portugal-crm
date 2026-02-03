@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
-import { Building, Users, Palette, Link2, ArrowLeft, Package, GitBranch, LayoutGrid, UserCheck } from "lucide-react";
+import { Building, Users, Palette, Link2, ArrowLeft, Package, GitBranch, LayoutGrid, UserCheck, Zap } from "lucide-react";
 import { PipelineEditor } from '@/components/settings/PipelineEditor';
 import { ProductsTab } from '@/components/settings/ProductsTab';
 import { ModulesTab } from '@/components/settings/ModulesTab';
@@ -18,6 +18,7 @@ import { FormsManager } from '@/components/settings/FormsManager';
 import { GeneralContent } from '@/components/settings/GeneralContent';
 import { IntegrationsContent } from '@/components/settings/IntegrationsContent';
 import { ClientFieldsEditor } from '@/components/settings/ClientFieldsEditor';
+import { FidelizationAlertsSettings } from '@/components/settings/FidelizationAlertsSettings';
 import { PRODUCTION_URL } from '@/lib/constants';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { MobileSettingsNav, SettingsSection } from '@/components/settings/MobileSettingsNav';
@@ -209,6 +210,7 @@ export default function Settings() {
     form: "Formulário",
     products: "Produtos",
     clients: "Campos",
+    alerts: "Alertas",
     integrations: "Integrações",
   };
 
@@ -273,6 +275,7 @@ export default function Settings() {
               {mobileSection === "form" && canManageIntegrations && <FormsManager />}
               {mobileSection === "products" && canManageIntegrations && <ProductsTab />}
               {mobileSection === "clients" && canManageIntegrations && <ClientFieldsEditor />}
+              {mobileSection === "alerts" && canManageIntegrations && <FidelizationAlertsSettings />}
               {mobileSection === "integrations" && canManageIntegrations && (
                 <IntegrationsContent
                   organization={organization}
@@ -359,6 +362,12 @@ export default function Settings() {
                   </TabsTrigger>
                 )}
                 {canManageIntegrations && (
+                  <TabsTrigger value="alerts" className="gap-2">
+                    <Zap className="h-4 w-4" />
+                    Alertas
+                  </TabsTrigger>
+                )}
+                {canManageIntegrations && (
                   <TabsTrigger value="integrations" className="gap-2">
                     <Link2 className="h-4 w-4" />
                     Integrações
@@ -424,6 +433,12 @@ export default function Settings() {
               {canManageIntegrations && (
                 <TabsContent value="clients" className="max-w-4xl">
                   <ClientFieldsEditor />
+                </TabsContent>
+              )}
+
+              {canManageIntegrations && (
+                <TabsContent value="alerts" className="max-w-4xl">
+                  <FidelizationAlertsSettings />
                 </TabsContent>
               )}
 
