@@ -1,127 +1,74 @@
 
 
-## Sistema de Alertas de Fidelização (CPE/CUI)
+## Adaptar Separador de Vendas (Dados de Energia + CPE/CUI)
 
 ### Resumo
-Implementar um sistema completo de alertas automáticos para notificar quando contratos de fidelização estão a expirar, com configuração via Definições e envio opcional por email.
+Modificar o modal de detalhes da venda para:
+1. **Remover** a secção de "Valores e Cobranças" (Valor Total, Pagamento, etc.)
+2. **Adicionar** secção de "Dados de Energia" (consumo, margem, anos contrato, etc.)
+3. **Adicionar** secção de CPE/CUI associados à venda
+4. Manter a atualização automática das permanências (já existe)
 
 ---
 
-### Funcionalidades
+### O Que Será Removido
 
-1. **Nova secção "Alertas" nas Definições**
-2. **Edge Function CRON para verificar expiração**
-3. **Notificações Push automáticas**
-4. **Envio opcional de Email**
-5. **Widget no Dashboard com expiração próxima**
-
----
-
-### Estrutura Visual - Configurações de Alertas
-
-```text
-┌─────────────────────────────────────────────────────────────┐
-│  ⚡ Alertas de Fidelização                                   │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  ┌───────────────────────────────────────────────────────┐  │
-│  │  Dias de Antecedência                                 │  │
-│  │  ┌─────────────────────┐ ┌─────────────────────┐      │  │
-│  │  │ Primeiro alerta     │ │ Segundo alerta      │      │  │
-│  │  │ [  30  ] dias       │ │ [  7   ] dias       │      │  │
-│  │  └─────────────────────┘ └─────────────────────┘      │  │
-│  └───────────────────────────────────────────────────────┘  │
-│                                                             │
-│  ┌───────────────────────────────────────────────────────┐  │
-│  │  [x] Criar evento de "Visita de Renovação"            │  │
-│  │      Hora sugerida: [ 10:00 ]                         │  │
-│  └───────────────────────────────────────────────────────┘  │
-│                                                             │
-│  ┌───────────────────────────────────────────────────────┐  │
-│  │  [x] Receber alertas por email                        │  │
-│  │      Email: [ comercial@empresa.pt             ]      │  │
-│  │      (Usa as configurações Brevo da organização)      │  │
-│  └───────────────────────────────────────────────────────┘  │
-│                                                             │
-│  [ Guardar Configurações ]                                  │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
-```
+Do `SaleDetailsModal.tsx`:
+- Campo editável "Valor Total"
+- Secção "Informação de Pagamento" (método, vencimento, data pagamento, referência)
+- Estado do Pagamento
+- Subtotal/Desconto
 
 ---
 
-### Widget no Dashboard
+### O Que Será Adicionado
 
+**1. Secção "Dados de Energia"** (se `proposal_type === 'energia'`):
 ```text
 ┌─────────────────────────────────────┐
-│ ⚡ Fidelizações a Expirar           │
+│ ⚡ Dados de Energia                  │
 ├─────────────────────────────────────┤
-│ 🔴 Urgente (7 dias)          2      │
+│ Consumo Anual: 15.000 kWh           │
+│ Margem: 5,50 €/MWh                  │
+│ Contrato: 2 anos                    │
+│ DBL: 2.00                           │
+│ Comissão: 150,00 €                  │
+└─────────────────────────────────────┘
+```
+
+**2. Secção "Dados de Serviço"** (se `proposal_type === 'servicos'`):
+```text
+┌─────────────────────────────────────┐
+│ 🔧 Dados do Serviço                 │
 ├─────────────────────────────────────┤
-│   Maria Silva                       │
-│   Energia | EDP | 05/02/2026        │
-│   [Ver Cliente]                     │
+│ Modelo: Transacional                │
+│ Potência: 10.5 kWp                  │
+│ Comissão: 150,00 €                  │
+└─────────────────────────────────────┘
+```
+
+**3. Secção "CPE/CUI"** (busca via `proposal_id`):
+```text
+┌─────────────────────────────────────┐
+│ ⚡ CPE/CUI (Pontos de Consumo)       │
 ├─────────────────────────────────────┤
-│   João Costa                        │
-│   Gás | Galp | 08/02/2026           │
-│   [Ver Cliente]                     │
+│ Energia | EDP Comercial | Novo      │
+│ CPE/CUI: PT0002000012345678XX       │
+│ Fidelização: 01/01/2024 → 31/12/2026│
 ├─────────────────────────────────────┤
-│ 🟡 Próximos 30 dias          5      │
-│   [Ver todos →]                     │
+│ Gás | Galp Power | Renovação        │
+│ CPE/CUI: PT0003000012345678YY       │
+│ Fidelização: 01/01/2024 → 31/12/2025│
 └─────────────────────────────────────┘
 ```
 
 ---
 
-### Alterações na Base de Dados
+### Lógica de Busca de CPEs
 
-**1. Tabela `organizations` - Novos campos de configuração:**
-
-| Campo | Tipo | Default | Descrição |
-|-------|------|---------|-----------|
-| `fidelization_alert_days` | jsonb | `[30, 7]` | Dias de antecedência para alertas |
-| `fidelization_create_event` | boolean | `true` | Criar evento de calendário |
-| `fidelization_event_time` | time | `10:00` | Hora do evento sugerido |
-| `fidelization_email_enabled` | boolean | `false` | Enviar alertas por email |
-| `fidelization_email` | text | `null` | Email para receber alertas |
-
-**2. Tabela `cpes` - Campos de controlo:**
-
-| Campo | Tipo | Default | Descrição |
-|-------|------|---------|-----------|
-| `alert_30d_sent` | boolean | `false` | Alerta de 30 dias enviado |
-| `alert_7d_sent` | boolean | `false` | Alerta de 7 dias enviado |
-
----
-
-### Nova Edge Function: `check-fidelization-alerts`
-
-Executada diariamente via CRON (09:00):
-
-```text
-1. Buscar todas as organizações com alertas configurados
-
-2. Para cada organização:
-   a. Buscar CPEs com fidelizacao_end dentro dos dias configurados
-   b. Filtrar CPEs que ainda não tiveram alerta enviado
-   
-3. Para cada CPE a alertar:
-   a. Enviar Push Notification
-   b. Se email configurado, enviar email via Brevo
-   c. Se criar evento ativo, criar evento no calendário
-   d. Marcar alerta como enviado
-```
-
----
-
-### Ficheiros a Criar
-
-| Ficheiro | Descrição |
-|----------|-----------|
-| `supabase/functions/check-fidelization-alerts/index.ts` | Edge function CRON |
-| `src/components/settings/FidelizationAlertsSettings.tsx` | Interface de configuração |
-| `src/components/dashboard/FidelizationAlertsWidget.tsx` | Widget do dashboard |
-| `src/hooks/useFidelizationAlerts.ts` | Hook para buscar CPEs a expirar |
+Como a venda pode ter `proposal_id`, buscar os CPEs de duas formas:
+1. **Via proposta**: `proposal_cpes` onde `proposal_id = sale.proposal_id`
+2. **Via cliente**: `cpes` onde `client_id = sale.client_id` (para mostrar CPEs atuais do cliente)
 
 ---
 
@@ -129,101 +76,129 @@ Executada diariamente via CRON (09:00):
 
 | Ficheiro | Alteração |
 |----------|-----------|
-| `supabase/migrations/` | Adicionar campos à tabela organizations e cpes |
-| `src/pages/Settings.tsx` | Adicionar tab "Alertas" |
-| `src/components/settings/MobileSettingsNav.tsx` | Adicionar item "Alertas" |
-| `src/pages/Dashboard.tsx` | Adicionar widget de fidelizações |
-| `src/hooks/useOrganization.ts` | Adicionar campos de fidelização ao update |
-| `src/integrations/supabase/types.ts` | Auto-gerado após migração |
+| `src/components/sales/SaleDetailsModal.tsx` | Remover valores/pagamento, adicionar Dados Energia e CPE/CUI |
 
 ---
 
-### Fluxo de Email de Alerta
-
-Quando email está configurado, o sistema envia:
+### Estrutura Final do Modal
 
 ```text
-Assunto: ⚠️ Fidelização a expirar - Maria Silva
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-  🏢 [Logo da Organização]
-  
-  Olá,
-  
-  A fidelização do cliente abaixo expira em 7 dias:
-  
-  ┌────────────────────────────────────┐
-  │  Cliente: Maria Silva              │
-  │  Empresa: Clínica Dental Sorriso   │
-  │  Tipo: Energia                     │
-  │  Comercializador: EDP Comercial    │
-  │  CPE/CUI: PT0002000012345678XX     │
-  │  Data de Expiração: 10/02/2026     │
-  └────────────────────────────────────┘
-  
-  Recomendamos que contacte o cliente para
-  renovar ou renegociar o contrato.
-  
-  [Ver Cliente no CRM →]
-  
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┌─────────────────────────────────────┐
+│  #SALE001    [Pendente]   2 Jan 2026│
+├─────────────────────────────────────┤
+│                                     │
+│  Estado da Venda                    │
+│  [▼ Pendente                    ]   │
+│                                     │
+│  ─────────────────────────────────  │
+│                                     │
+│  ⚡ Dados de Energia                 │
+│  ┌───────────────────────────────┐  │
+│  │ Consumo: 15.000 kWh           │  │
+│  │ Margem: 5,50 €/MWh            │  │
+│  │ Contrato: 2 anos | DBL: 2.00  │  │
+│  │ Comissão: 150,00 €            │  │
+│  └───────────────────────────────┘  │
+│                                     │
+│  ─────────────────────────────────  │
+│                                     │
+│  ⚡ CPE/CUI                          │
+│  ┌───────────────────────────────┐  │
+│  │ Energia | EDP | Novo          │  │
+│  │ PT0002000012345678XX          │  │
+│  │ 01/01/24 → 31/12/26           │  │
+│  └───────────────────────────────┘  │
+│                                     │
+│  ─────────────────────────────────  │
+│                                     │
+│  📦 Produtos/Serviços               │
+│  ┌───────────────────────────────┐  │
+│  │ Contrato de Energia           │  │
+│  │ 1 × 0,00 €           0,00 €   │  │
+│  └───────────────────────────────┘  │
+│                                     │
+│  ─────────────────────────────────  │
+│                                     │
+│  👤 Cliente                         │
+│  ┌───────────────────────────────┐  │
+│  │ Maria Silva  #CLI001          │  │
+│  │ email@exemplo.com             │  │
+│  │ +351 912 345 678  [WhatsApp]  │  │
+│  └───────────────────────────────┘  │
+│                                     │
+│  ─────────────────────────────────  │
+│                                     │
+│  📎 Proposta Associada              │
+│  ┌───────────────────────────────┐  │
+│  │ #PROP001 | 1 Jan 2026         │  │
+│  └───────────────────────────────┘  │
+│                                     │
+│  ─────────────────────────────────  │
+│                                     │
+│  Notas                              │
+│  ┌───────────────────────────────┐  │
+│  │ Observações...                │  │
+│  └───────────────────────────────┘  │
+│                                     │
+├─────────────────────────────────────┤
+│  [🗑️ Eliminar Venda]               │
+└─────────────────────────────────────┘
 ```
 
 ---
 
-### Ordem de Implementação
+### Labels Condicionais (Telecom)
 
-1. **Migração BD**: Adicionar campos de configuração e controlo
-2. **Hook**: Criar `useFidelizationAlerts` para buscar CPEs a expirar
-3. **Componente Settings**: Interface de configuração dos alertas
-4. **Integrar Settings**: Adicionar nova tab/secção nas Definições
-5. **Widget Dashboard**: Mostrar CPEs com expiração próxima
-6. **Edge Function**: Criar `check-fidelization-alerts` com lógica de envio
-7. **CRON**: Configurar execução diária via pg_cron ou invoke
+A secção de CPE/CUI usará labels condicionais baseadas no niche da organização:
+- **Telecom**: "CPE/CUI (Pontos de Consumo)"
+- **Outros**: "CPEs (Equipamentos)"
 
 ---
 
 ### Detalhes Técnicos
 
-**Query para CPEs a expirar:**
-```sql
-SELECT 
-  c.*,
-  cl.name as client_name,
-  cl.company as client_company,
-  cl.email as client_email,
-  cl.phone as client_phone
-FROM cpes c
-JOIN crm_clients cl ON c.client_id = cl.id
-WHERE c.organization_id = $org_id
-  AND c.fidelizacao_end IS NOT NULL
-  AND c.status = 'active'
-  AND (
-    (c.fidelizacao_end BETWEEN CURRENT_DATE AND CURRENT_DATE + $days_interval
-     AND c.alert_30d_sent = false)
-    OR
-    (c.fidelizacao_end BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'
-     AND c.alert_7d_sent = false)
-  )
-ORDER BY c.fidelizacao_end ASC;
+**Importações adicionais:**
+```typescript
+import { Zap, Wrench } from "lucide-react";
+import { useProposalCpes } from "@/hooks/useProposalCpes";
+import { useCpes } from "@/hooks/useCpes";
+import { useAuth } from "@/contexts/AuthContext";
+import { ENERGY_TYPES, ENERGY_COMERCIALIZADORES } from "@/types/cpes";
 ```
 
-**Estrutura de notificação:**
+**Buscar CPEs via proposal_id:**
 ```typescript
-// Push notification
-{
-  organization_id: "uuid",
-  title: "⚠️ Fidelização a expirar em 7 dias",
-  body: "Maria Silva | Energia | EDP | 10/02/2026",
-  url: "/clients?highlight=client-id"
-}
+const { data: proposalCpes = [] } = useProposalCpes(sale.proposal_id);
+```
 
-// Email via Brevo (usa configuração da organização)
-{
-  to: org.fidelization_email,
-  subject: "⚠️ Fidelização a expirar - Maria Silva",
-  html: "... template com dados do cliente ..."
+**Ou buscar CPEs do cliente:**
+```typescript
+const { data: clientCpes = [] } = useCpes(sale.client_id);
+```
+
+**Labels condicionais:**
+```typescript
+const { organization } = useAuth();
+const isTelecom = organization?.niche === 'telecom';
+const cpeLabel = isTelecom ? 'CPE/CUI (Pontos de Consumo)' : 'CPEs (Equipamentos)';
+const serialLabel = isTelecom ? 'Local de Consumo' : 'Nº Série';
+```
+
+---
+
+### Atualização Automática de Permanências
+
+Esta funcionalidade **já existe** no `CreateSaleModal.tsx`:
+- Quando a venda é criada, o código processa cada `proposalCpe`
+- Se `existing_cpe_id` existe → atualiza o CPE existente (renovação)
+- Se não existe → cria um novo CPE no cliente
+
+O código atual (linhas 486-512) já faz isso automaticamente:
+```typescript
+if (proposalCpe.existing_cpe_id) {
+  await updateCpe.mutateAsync({ ... });
+} else {
+  await createCpe.mutateAsync({ ... });
 }
 ```
 
@@ -231,11 +206,8 @@ ORDER BY c.fidelizacao_end ASC;
 
 ### Resultado Esperado
 
-- Área de configuração nas Definições para personalizar alertas
-- Campo para definir email de notificação
-- Push notifications automáticas quando CPE/CUI está a expirar
-- Email opcional com detalhes do cliente e contrato
-- Widget no Dashboard para visualização rápida
-- Eventos de calendário criados automaticamente (opcional)
-- Controlo de alertas já enviados para evitar duplicados
+- Modal de vendas mostra Dados de Energia/Serviço em vez de valores/cobranças
+- CPE/CUI associados são visíveis no detalhe da venda
+- Labels adaptadas ao nicho da organização (Telecom = CPE/CUI)
+- Atualização automática das permanências continua a funcionar
 
