@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, X, Router, RefreshCw } from 'lucide-react';
+import { Plus, X, Router, RefreshCw, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -7,7 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useCpes } from '@/hooks/useCpes';
-import { EQUIPMENT_TYPES, COMERCIALIZADORES, type Cpe } from '@/types/cpes';
+import { useAuth } from '@/contexts/AuthContext';
+import { EQUIPMENT_TYPES, COMERCIALIZADORES, ENERGY_TYPES, ENERGY_COMERCIALIZADORES, type Cpe } from '@/types/cpes';
 
 export interface ProposalCpeDraft {
   id: string;
@@ -29,8 +30,19 @@ interface ProposalCpeSelectorProps {
 
 export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCpeSelectorProps) {
   const { data: clientCpes = [] } = useCpes(clientId);
+  const { organization } = useAuth();
   
   const [activeTab, setActiveTab] = useState<'new' | 'existing'>('new');
+  
+  // Telecom niche uses energy-specific labels and options
+  const isTelecom = organization?.niche === 'telecom';
+  const typeOptions = isTelecom ? ENERGY_TYPES : EQUIPMENT_TYPES;
+  const comercializadorOptions = isTelecom ? ENERGY_COMERCIALIZADORES : COMERCIALIZADORES;
+  const sectionLabel = isTelecom ? 'CPE/CUI (Pontos de Consumo)' : 'CPEs (Equipamentos)';
+  const serialLabel = isTelecom ? 'CPE/CUI' : 'Nº Série';
+  const serialPlaceholder = isTelecom ? 'PT0002...' : 'S/N...';
+  const typeLabel = isTelecom ? 'Tipo' : 'Tipo de Equipamento';
+  const SectionIcon = isTelecom ? Zap : Router;
   
   // State for new CPE form
   const [equipmentType, setEquipmentType] = useState('');
@@ -140,8 +152,8 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
   return (
     <div className="space-y-4">
       <Label className="flex items-center gap-2">
-        <Router className="h-4 w-4" />
-        CPEs (Equipamentos)
+        <SectionIcon className="h-4 w-4" />
+        {sectionLabel}
       </Label>
 
       {/* List of added CPEs */}
@@ -198,13 +210,13 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
         <TabsContent value="new" className="space-y-3 mt-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label className="text-xs">Tipo de Equipamento</Label>
+              <Label className="text-xs">{typeLabel}</Label>
               <Select value={equipmentType} onValueChange={setEquipmentType}>
                 <SelectTrigger className="h-9">
                   <SelectValue placeholder="Selecionar..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {EQUIPMENT_TYPES.map((type) => (
+                  {typeOptions.map((type) => (
                     <SelectItem key={type} value={type}>{type}</SelectItem>
                   ))}
                   <SelectItem value="other">Outro...</SelectItem>
@@ -227,7 +239,7 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
                   <SelectValue placeholder="Selecionar..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {COMERCIALIZADORES.map((c) => (
+                  {comercializadorOptions.map((c) => (
                     <SelectItem key={c} value={c}>{c}</SelectItem>
                   ))}
                   <SelectItem value="other">Outro...</SelectItem>
@@ -246,12 +258,12 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="space-y-1">
-              <Label className="text-xs">Nº Série (opcional)</Label>
+              <Label className="text-xs">{serialLabel} (opcional)</Label>
               <Input
                 value={serialNumber}
                 onChange={(e) => setSerialNumber(e.target.value)}
                 className="h-9"
-                placeholder="S/N..."
+                placeholder={serialPlaceholder}
               />
             </div>
             <div className="space-y-1">
@@ -327,7 +339,7 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="keep_current">Manter atual</SelectItem>
-                          {COMERCIALIZADORES.map((c) => (
+                          {comercializadorOptions.map((c) => (
                             <SelectItem key={c} value={c}>{c}</SelectItem>
                           ))}
                           <SelectItem value="other">Outro...</SelectItem>

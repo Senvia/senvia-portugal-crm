@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { format, differenceInDays, isPast } from 'date-fns';
 import { pt } from 'date-fns/locale';
-import { Router, Plus, Pencil, Trash2, AlertTriangle, Calendar } from 'lucide-react';
+import { Router, Plus, Pencil, Trash2, AlertTriangle, Calendar, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,6 +17,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useCpes, useDeleteCpe } from '@/hooks/useCpes';
+import { useAuth } from '@/contexts/AuthContext';
 import { CPE_STATUS_LABELS, CPE_STATUS_STYLES, type Cpe } from '@/types/cpes';
 import { CreateCpeModal } from './CreateCpeModal';
 import { EditCpeModal } from './EditCpeModal';
@@ -28,10 +29,20 @@ interface CpeListProps {
 export function CpeList({ clientId }: CpeListProps) {
   const { data: cpes, isLoading } = useCpes(clientId);
   const deleteCpe = useDeleteCpe();
+  const { organization } = useAuth();
   
   const [createOpen, setCreateOpen] = useState(false);
   const [editingCpe, setEditingCpe] = useState<Cpe | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  
+  // Telecom niche uses energy-specific labels
+  const isTelecom = organization?.niche === 'telecom';
+  const sectionTitle = isTelecom ? 'Pontos de Consumo (CPE/CUI)' : 'Equipamentos (CPE)';
+  const serialLabel = isTelecom ? 'CPE/CUI' : 'S/N';
+  const emptyMessage = isTelecom 
+    ? 'Nenhum CPE/CUI registado para este cliente.' 
+    : 'Nenhum CPE registado para este cliente.';
+  const SectionIcon = isTelecom ? Zap : Router;
 
   const getFidelizacaoStatus = (cpe: Cpe) => {
     if (!cpe.fidelizacao_end) return null;
@@ -64,8 +75,8 @@ export function CpeList({ clientId }: CpeListProps) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-          <Router className="h-4 w-4" />
-          Equipamentos (CPE)
+          <SectionIcon className="h-4 w-4" />
+          {sectionTitle}
         </h3>
         <Button size="sm" variant="outline" onClick={() => setCreateOpen(true)}>
           <Plus className="h-4 w-4 mr-1" />
@@ -76,7 +87,7 @@ export function CpeList({ clientId }: CpeListProps) {
       {cpes?.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="py-6 text-center text-muted-foreground text-sm">
-            Nenhum CPE registado para este cliente.
+            {emptyMessage}
           </CardContent>
         </Card>
       ) : (
@@ -106,7 +117,7 @@ export function CpeList({ clientId }: CpeListProps) {
                         <div className="flex items-center gap-4 flex-wrap">
                           <span className="font-medium text-foreground">{cpe.comercializador}</span>
                           {cpe.serial_number && (
-                            <span className="font-mono text-xs">S/N: {cpe.serial_number}</span>
+                            <span className="font-mono text-xs">{serialLabel}: {cpe.serial_number}</span>
                           )}
                         </div>
                         
@@ -166,6 +177,7 @@ export function CpeList({ clientId }: CpeListProps) {
         open={createOpen} 
         onOpenChange={setCreateOpen} 
         clientId={clientId}
+        isTelecom={isTelecom}
       />
 
       {/* Edit Modal */}
@@ -174,6 +186,7 @@ export function CpeList({ clientId }: CpeListProps) {
           cpe={editingCpe}
           open={!!editingCpe}
           onOpenChange={(open) => !open && setEditingCpe(null)}
+          isTelecom={isTelecom}
         />
       )}
 

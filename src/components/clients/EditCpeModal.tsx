@@ -19,15 +19,16 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useUpdateCpe } from '@/hooks/useCpes';
-import { EQUIPMENT_TYPES, COMERCIALIZADORES, type Cpe, type CpeStatus } from '@/types/cpes';
+import { EQUIPMENT_TYPES, COMERCIALIZADORES, ENERGY_TYPES, ENERGY_COMERCIALIZADORES, type Cpe, type CpeStatus } from '@/types/cpes';
 
 interface EditCpeModalProps {
   cpe: Cpe;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  isTelecom?: boolean;
 }
 
-export function EditCpeModal({ cpe, open, onOpenChange }: EditCpeModalProps) {
+export function EditCpeModal({ cpe, open, onOpenChange, isTelecom = false }: EditCpeModalProps) {
   const updateCpe = useUpdateCpe();
   
   const [equipmentType, setEquipmentType] = useState('');
@@ -39,11 +40,23 @@ export function EditCpeModal({ cpe, open, onOpenChange }: EditCpeModalProps) {
   const [fidelizacaoEnd, setFidelizacaoEnd] = useState('');
   const [status, setStatus] = useState<CpeStatus>('active');
   const [notes, setNotes] = useState('');
+  
+  // Conditional labels and options based on niche
+  const typeLabel = isTelecom ? 'Tipo *' : 'Tipo de Equipamento *';
+  const serialLabel = isTelecom ? 'Local de Consumo (CPE/CUI)' : 'Número de Série';
+  const serialPlaceholder = isTelecom ? 'Ex: PT0002000012345678XX' : 'Ex: SN123456789';
+  const typeOptions = isTelecom ? ENERGY_TYPES : EQUIPMENT_TYPES;
+  const comercializadorOptions = isTelecom ? ENERGY_COMERCIALIZADORES : COMERCIALIZADORES;
+  const modalTitle = isTelecom ? 'Editar CPE/CUI' : 'Editar CPE';
+  const modalDescription = isTelecom 
+    ? 'Atualize os dados do ponto de consumo.' 
+    : 'Atualize os dados do equipamento.';
 
   useEffect(() => {
     if (cpe && open) {
-      // Check if equipment type is in predefined list
-      if (EQUIPMENT_TYPES.includes(cpe.equipment_type)) {
+      // Check if equipment type is in predefined list (use appropriate list based on niche)
+      const typeList = isTelecom ? ENERGY_TYPES : EQUIPMENT_TYPES;
+      if (typeList.includes(cpe.equipment_type)) {
         setEquipmentType(cpe.equipment_type);
         setCustomEquipmentType('');
       } else {
@@ -52,7 +65,8 @@ export function EditCpeModal({ cpe, open, onOpenChange }: EditCpeModalProps) {
       }
 
       // Check if comercializador is in predefined list
-      if (COMERCIALIZADORES.includes(cpe.comercializador)) {
+      const comercializadorList = isTelecom ? ENERGY_COMERCIALIZADORES : COMERCIALIZADORES;
+      if (comercializadorList.includes(cpe.comercializador)) {
         setComercializador(cpe.comercializador);
         setCustomComercializador('');
       } else {
@@ -66,7 +80,7 @@ export function EditCpeModal({ cpe, open, onOpenChange }: EditCpeModalProps) {
       setStatus(cpe.status as CpeStatus);
       setNotes(cpe.notes || '');
     }
-  }, [cpe, open]);
+  }, [cpe, open, isTelecom]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -99,22 +113,22 @@ export function EditCpeModal({ cpe, open, onOpenChange }: EditCpeModalProps) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Editar CPE</DialogTitle>
+          <DialogTitle>{modalTitle}</DialogTitle>
           <DialogDescription>
-            Atualize os dados do equipamento.
+            {modalDescription}
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Equipment Type */}
           <div className="space-y-2">
-            <Label>Tipo de Equipamento *</Label>
+            <Label>{typeLabel}</Label>
             <Select value={equipmentType} onValueChange={setEquipmentType}>
               <SelectTrigger>
                 <SelectValue placeholder="Selecione o tipo" />
               </SelectTrigger>
               <SelectContent>
-                {EQUIPMENT_TYPES.map((type) => (
+                {typeOptions.map((type) => (
                   <SelectItem key={type} value={type}>{type}</SelectItem>
                 ))}
               </SelectContent>
@@ -128,11 +142,11 @@ export function EditCpeModal({ cpe, open, onOpenChange }: EditCpeModalProps) {
             )}
           </div>
 
-          {/* Serial Number */}
+          {/* Serial Number / CPE-CUI */}
           <div className="space-y-2">
-            <Label>Número de Série</Label>
+            <Label>{serialLabel}</Label>
             <Input
-              placeholder="Ex: SN123456789"
+              placeholder={serialPlaceholder}
               value={serialNumber}
               onChange={(e) => setSerialNumber(e.target.value)}
             />
@@ -146,7 +160,7 @@ export function EditCpeModal({ cpe, open, onOpenChange }: EditCpeModalProps) {
                 <SelectValue placeholder="Selecione o comercializador" />
               </SelectTrigger>
               <SelectContent>
-                {COMERCIALIZADORES.map((c) => (
+                {comercializadorOptions.map((c) => (
                   <SelectItem key={c} value={c}>{c}</SelectItem>
                 ))}
               </SelectContent>

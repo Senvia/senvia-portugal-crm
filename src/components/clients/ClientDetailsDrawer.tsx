@@ -21,6 +21,7 @@ import {
   X,
   User,
   Router,
+  Zap,
 } from "lucide-react";
 import { formatDate, formatCurrency, getWhatsAppUrl } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -29,6 +30,7 @@ import { useClientHistory } from "@/hooks/useClientHistory";
 import { useUpdateClient } from "@/hooks/useClients";
 import { useTeamMembers } from "@/hooks/useTeam";
 import { useCpes } from "@/hooks/useCpes";
+import { useAuth } from "@/contexts/AuthContext";
 import { ClientTimeline } from "./ClientTimeline";
 import { AddCommunicationModal } from "./AddCommunicationModal";
 import { CpeList } from "./CpeList";
@@ -59,6 +61,12 @@ export function ClientDetailsDrawer({
   const updateClient = useUpdateClient();
   const { data: teamMembers = [] } = useTeamMembers();
   const { data: cpes = [] } = useCpes(client?.id || null);
+  const { organization } = useAuth();
+  
+  // Telecom niche uses energy-specific labels
+  const isTelecom = organization?.niche === 'telecom';
+  const cpeTabLabel = isTelecom ? 'CPE/CUI' : 'CPEs';
+  const CpeIcon = isTelecom ? Zap : Router;
 
   // Communication modal state
   const [showAddCommunication, setShowAddCommunication] = useState(false);
@@ -205,8 +213,8 @@ export function ClientDetailsDrawer({
           <TabsList className="w-full justify-start px-6 h-auto flex-wrap shrink-0">
             <TabsTrigger value="resumo" className="text-xs">Resumo</TabsTrigger>
             <TabsTrigger value="cpes" className="text-xs">
-              <Router className="h-3 w-3 mr-1" />
-              CPEs ({cpes.length})
+              <CpeIcon className="h-3 w-3 mr-1" />
+              {cpeTabLabel} ({cpes.length})
             </TabsTrigger>
             <TabsTrigger value="notas" className="text-xs">Notas</TabsTrigger>
             <TabsTrigger value="historico" className="text-xs">Histórico</TabsTrigger>
@@ -239,6 +247,30 @@ export function ClientDetailsDrawer({
 
               <Separator />
 
+              {/* Empresa (prioritized for telecom niche) */}
+              {isTelecom && (client.company || client.nif) && (
+                <>
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-medium">Empresa</h3>
+                    <div className="space-y-2">
+                      {client.company && (
+                        <div className="flex items-center gap-3 text-sm">
+                          <Building2 className="h-4 w-4 text-muted-foreground" />
+                          <span className="font-medium">{client.company}</span>
+                        </div>
+                      )}
+                      {client.nif && (
+                        <div className="flex items-center gap-3 text-sm">
+                          <FileText className="h-4 w-4 text-muted-foreground" />
+                          <span>NIF: {client.nif}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <Separator />
+                </>
+              )}
+
               {/* Contacto */}
               <div className="space-y-3">
                 <h3 className="text-sm font-medium">Contacto</h3>
@@ -268,8 +300,8 @@ export function ClientDetailsDrawer({
                 </div>
               </div>
 
-              {/* Empresa */}
-              {(client.company || client.nif) && (
+              {/* Empresa (for non-telecom niches, shown after Contacto) */}
+              {!isTelecom && (client.company || client.nif) && (
                 <>
                   <Separator />
                   <div className="space-y-3">
