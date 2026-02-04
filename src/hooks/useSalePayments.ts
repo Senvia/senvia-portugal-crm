@@ -28,6 +28,7 @@ interface CreatePaymentData {
   payment_date: string;
   payment_method?: PaymentMethod | null;
   invoice_reference?: string | null;
+  invoice_file_url?: string | null;
   status: PaymentRecordStatus;
   notes?: string | null;
 }
@@ -66,6 +67,7 @@ interface UpdatePaymentData {
     payment_date?: string;
     payment_method?: PaymentMethod | null;
     invoice_reference?: string | null;
+    invoice_file_url?: string | null;
     status?: PaymentRecordStatus;
     notes?: string | null;
   };

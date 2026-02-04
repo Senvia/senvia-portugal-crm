@@ -1923,6 +1923,7 @@ export type Database = {
           amount: number
           created_at: string | null
           id: string
+          invoice_file_url: string | null
           invoice_reference: string | null
           notes: string | null
           organization_id: string
@@ -1936,6 +1937,7 @@ export type Database = {
           amount: number
           created_at?: string | null
           id?: string
+          invoice_file_url?: string | null
           invoice_reference?: string | null
           notes?: string | null
           organization_id: string
@@ -1949,6 +1951,7 @@ export type Database = {
           amount?: number
           created_at?: string | null
           id?: string
+          invoice_file_url?: string | null
           invoice_reference?: string | null
           notes?: string | null
           organization_id?: string
