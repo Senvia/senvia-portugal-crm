@@ -478,7 +478,7 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
               <Badge className={cn(PROPOSAL_STATUS_COLORS[status])}>
                 {PROPOSAL_STATUS_LABELS[status]}
               </Badge>
-              {proposal.negotiation_type && (
+              {orgData?.niche === 'telecom' && proposal.negotiation_type && (
                 <Badge variant="outline" className="text-xs">
                   {NEGOTIATION_TYPE_LABELS[proposal.negotiation_type as NegotiationType]}
                 </Badge>
@@ -563,8 +563,8 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
               </Select>
             </div>
 
-            {/* Tipo de Proposta Badge */}
-            {proposal.proposal_type && (
+            {/* Tipo de Proposta Badge - Apenas Telecom */}
+            {orgData?.niche === 'telecom' && proposal.proposal_type && (
               <div className="flex items-center gap-2">
                 <Badge variant="outline" className={cn(
                   "flex items-center gap-1.5",
@@ -578,8 +578,8 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
               </div>
             )}
 
-            {/* CPEs com Dados de Energia por CPE */}
-            {proposalCpes.length > 0 && (
+            {/* CPEs com Dados de Energia por CPE - Apenas Telecom */}
+            {orgData?.niche === 'telecom' && proposalCpes.length > 0 && (
               <div className="space-y-3">
                 <Label className="flex items-center gap-2">
                   <Router className="h-4 w-4" />
@@ -672,8 +672,8 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
               </div>
             )}
 
-            {/* Campos específicos de Serviços */}
-            {proposal.proposal_type === 'servicos' && (
+            {/* Campos específicos de Serviços - Apenas Telecom */}
+            {orgData?.niche === 'telecom' && proposal.proposal_type === 'servicos' && (
               <div className="space-y-3 p-4 rounded-lg border bg-blue-50/50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800">
                 <div className="flex items-center gap-2 text-blue-700 dark:text-blue-400">
                   <Wrench className="h-4 w-4" />
