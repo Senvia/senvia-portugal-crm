@@ -1,20 +1,42 @@
 
-## Funcionalidade: Editar Vendas Completo
 
-### Situação Atual
+## Funcionalidade: Sistema de Pagamentos com Múltiplas Parcelas
 
-O sistema atualmente só permite:
-- Ver detalhes da venda (SaleDetailsModal)
-- Alterar estado e notas
-- Eliminar a venda
+### Problemas Identificados
 
-**Não existe forma de editar completamente uma venda** (adicionar produtos, alterar descontos, métodos de pagamento, etc.)
-
----
+1. **Campo de Fatura não visível** - O campo `invoiceReference` está no modal mas sem o label correto destacado
+2. **Pagamento Parcial sem valor** - Quando estado é "Parcial", não há campo para indicar quanto foi recebido
+3. **Falta flexibilidade** - Uma venda pode ter múltiplos pagamentos (ex: 50% adiantamento + 50% na entrega)
 
 ### Solução Proposta
 
-Criar um **EditSaleModal** completo que permita editar todos os campos de uma venda que não esteja em estado "Entregue" ou "Cancelado".
+Criar uma **tabela de pagamentos** (`sale_payments`) que permite registar múltiplos pagamentos por venda, cada um com:
+- Valor recebido
+- Data do pagamento
+- Método de pagamento
+- Referência de fatura própria
+
+---
+
+### Nova Estrutura de Dados
+
+```text
+┌─────────────────────────────────────────────────────────────────┐
+│ VENDA #0012                                     Total: €1.000  │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  💳 PAGAMENTOS                                                  │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │ 15 Jan 2024 │ MB Way  │ €500    │ FT 2024/001  │ [✓ Pago] │  │
+│  │ 20 Jan 2024 │ Transf. │ €500    │ FT 2024/002  │ [Aguarda]│  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                                                                 │
+│  [+ Adicionar Pagamento]                                        │
+│                                                                 │
+│  Total Pago: €500 / €1.000 (50%)                               │
+│  Em Falta: €500                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
@@ -22,223 +44,224 @@ Criar um **EditSaleModal** completo que permita editar todos os campos de uma ve
 
 | Ficheiro | Tipo | Descrição |
 |----------|------|-----------|
-| `src/components/sales/EditSaleModal.tsx` | Novo | Modal completo para edição de vendas |
-| `src/hooks/useSaleItems.ts` | Modificar | Adicionar hook para atualizar item existente |
-| `src/hooks/useSales.ts` | Modificar | Expandir campos atualizáveis |
-| `src/components/sales/SaleDetailsModal.tsx` | Modificar | Adicionar botão "Editar" |
-| `src/pages/Sales.tsx` | Modificar | Integrar modal de edição |
+| Migração SQL | Novo | Criar tabela `sale_payments` |
+| `src/types/sales.ts` | Modificar | Adicionar tipos para pagamentos |
+| `src/hooks/useSalePayments.ts` | Novo | CRUD de pagamentos |
+| `src/components/sales/SalePaymentsList.tsx` | Novo | Lista de pagamentos com ações |
+| `src/components/sales/AddPaymentModal.tsx` | Novo | Modal para adicionar/editar pagamento |
+| `src/components/sales/EditSaleModal.tsx` | Modificar | Integrar secção de pagamentos |
+| `src/components/sales/SaleDetailsModal.tsx` | Modificar | Mostrar lista de pagamentos |
 
 ---
 
-### Interface do Utilizador
+### Base de Dados: Tabela `sale_payments`
 
-#### Botão de Editar no SaleDetailsModal
+```sql
+CREATE TABLE sale_payments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  sale_id UUID NOT NULL REFERENCES sales(id) ON DELETE CASCADE,
+  amount NUMERIC NOT NULL,
+  payment_date DATE NOT NULL,
+  payment_method TEXT,  -- 'mbway', 'transfer', 'cash', 'card', 'check', 'other'
+  invoice_reference TEXT,
+  status TEXT NOT NULL DEFAULT 'pending',  -- 'pending', 'paid'
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
 
-No modal de detalhes, se a venda **NÃO** estiver em "Entregue" ou "Cancelado":
+-- RLS
+ALTER TABLE sale_payments ENABLE ROW LEVEL SECURITY;
 
-```text
-┌──────────────────────────────────────────────────────────────┐
-│ [Código] Venda #0012    │ Badge: Pendente │   12 Jan 2024    │
-├──────────────────────────────────────────────────────────────┤
-│                                                              │
-│  [Estado da Venda: Pendente ▼]                               │
-│                                                              │
-│  ... (dados da venda) ...                                    │
-│                                                              │
-├──────────────────────────────────────────────────────────────┤
-│  [✏️ Editar Venda]                     [🗑️ Eliminar Venda]  │
-└──────────────────────────────────────────────────────────────┘
+CREATE POLICY "Users can view their org payments"
+  ON sale_payments FOR SELECT
+  USING (organization_id = get_user_org_id(auth.uid()));
+
+CREATE POLICY "Users can insert payments"
+  ON sale_payments FOR INSERT
+  WITH CHECK (organization_id = get_user_org_id(auth.uid()));
+
+CREATE POLICY "Users can update payments"
+  ON sale_payments FOR UPDATE
+  USING (organization_id = get_user_org_id(auth.uid()));
+
+CREATE POLICY "Users can delete payments"
+  ON sale_payments FOR DELETE
+  USING (organization_id = get_user_org_id(auth.uid()));
 ```
 
-#### Modal de Edição (EditSaleModal)
+---
 
-Estrutura semelhante ao CreateSaleModal mas com dados pré-preenchidos:
+### Interface de Pagamentos
+
+#### No Modal de Edição (EditSaleModal)
+
+Nova secção "Pagamentos" que substitui os campos antigos de pagamento:
 
 ```text
 ┌──────────────────────────────────────────────────────────────┐
-│                    Editar Venda #0012                        │
+│ 💳 PAGAMENTOS                                                │
 ├──────────────────────────────────────────────────────────────┤
 │                                                              │
-│  👤 Cliente: [João Silva ▼]          📅 Data: [12/01/2024]  │
-│                                                              │
-│  ─────────────────────────────────────────────────────────   │
-│  📦 PRODUTOS/SERVIÇOS                                        │
 │  ┌────────────────────────────────────────────────────────┐ │
-│  │ Tratamento Facial    Qtd: [1]  Preço: €150   [×]       │ │
-│  │ Botox                Qtd: [2]  Preço: €300   [×]       │ │
+│  │ 15/01/2024  MB Way   €500,00   FT 2024/01  [Pago] [×]  │ │
 │  └────────────────────────────────────────────────────────┘ │
-│  [+ Adicionar Produto ▼]                                     │
 │                                                              │
-│  ─────────────────────────────────────────────────────────   │
-│  💰 PAGAMENTO                                                │
+│  [+ Adicionar Pagamento]                                     │
 │                                                              │
-│  Método: [MB Way ▼]        Estado: [Pendente ▼]             │
-│  Data Vencimento: [📅]     Referência Fatura: [____]        │
-│                                                              │
-│  ─────────────────────────────────────────────────────────   │
-│  📝 RESUMO                                                   │
-│                                                              │
-│  Subtotal:                                          €750,00  │
-│  Desconto: [___€]                                   -€50,00  │
 │  ──────────────────────────────────────────────────────────  │
-│  TOTAL:                                             €700,00  │
+│  Resumo:                                                     │
+│  Total Pago:     €500,00                                     │
+│  Em Falta:       €500,00                                     │
+│  ──────────────────────────────────────────────────────────  │
 │                                                              │
-│  Notas: [________________________________]                   │
+└──────────────────────────────────────────────────────────────┘
+```
+
+#### Modal "Adicionar Pagamento"
+
+```text
+┌──────────────────────────────────────────────────────────────┐
+│                   Adicionar Pagamento                        │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│  Valor *                           Data do Pagamento *       │
+│  [€___________]                    [📅 15/01/2024    ]       │
+│                                                              │
+│  Método de Pagamento               Estado                    │
+│  [MB Way ▼]                        [○ Pago  ○ Agendado]      │
+│                                                              │
+│  Referência da Fatura                                        │
+│  [FT 2024/0001______________]                                │
+│                                                              │
+│  Notas                                                       │
+│  [________________________________]                          │
 │                                                              │
 ├──────────────────────────────────────────────────────────────┤
-│  [Cancelar]                            [💾 Guardar Alterações]│
+│  [Cancelar]                              [Guardar Pagamento] │
 └──────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-### Campos Editáveis
-
-| Campo | Editável | Observação |
-|-------|----------|------------|
-| Cliente | ✓ | Dropdown de clientes |
-| Data da Venda | ✓ | Date picker |
-| Produtos/Serviços | ✓ | Adicionar, remover, alterar quantidade e preço |
-| Desconto | ✓ | Valor em euros |
-| Método de Pagamento | ✓ | MB Way, Transferência, etc. |
-| Estado do Pagamento | ✓ | Pendente, Parcial, Pago |
-| Data de Vencimento | ✓ | Data limite para pagamento |
-| Data de Pagamento | ✓ | Quando foi pago (aparece se Pago) |
-| Referência da Fatura | ✓ | Número da fatura |
-| Notas | ✓ | Observações |
-| Estado da Venda | ✗ | Editado no modal de detalhes |
-| Proposta Associada | ✗ | Apenas leitura |
-
----
-
-### Condições de Edição
-
-| Estado | Pode Editar? | Justificação |
-|--------|--------------|--------------|
-| Pendente | ✅ Sim | Ainda não processada |
-| Em Progresso | ✅ Sim | Pode precisar de ajustes |
-| Entregue | ⚠️ Parcial | Só notas e referência fatura |
-| Cancelado | ❌ Não | Venda fechada |
-
----
-
-### Detalhes Técnicos
-
-#### 1. Novo Hook: useUpdateSaleItem (em useSaleItems.ts)
+### Tipos TypeScript
 
 ```typescript
-export function useUpdateSaleItem() {
-  const queryClient = useQueryClient();
+// src/types/sales.ts - Novos tipos
 
-  return useMutation({
-    mutationFn: async ({ 
-      itemId, 
-      saleId,
-      updates 
-    }: { 
-      itemId: string; 
-      saleId: string;
-      updates: { 
-        quantity?: number; 
-        unit_price?: number; 
-        total?: number;
-        name?: string;
-      } 
-    }) => {
-      const { error } = await supabase
-        .from("sale_items")
-        .update(updates)
-        .eq("id", itemId);
+export type PaymentRecordStatus = 'pending' | 'paid';
 
+export interface SalePayment {
+  id: string;
+  organization_id: string;
+  sale_id: string;
+  amount: number;
+  payment_date: string;
+  payment_method: PaymentMethod | null;
+  invoice_reference: string | null;
+  status: PaymentRecordStatus;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const PAYMENT_RECORD_STATUS_LABELS: Record<PaymentRecordStatus, string> = {
+  pending: 'Agendado',
+  paid: 'Pago',
+};
+```
+
+---
+
+### Hook: useSalePayments
+
+```typescript
+// src/hooks/useSalePayments.ts
+
+export function useSalePayments(saleId: string | undefined) {
+  return useQuery({
+    queryKey: ["sale-payments", saleId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("sale_payments")
+        .select("*")
+        .eq("sale_id", saleId)
+        .order("payment_date", { ascending: true });
       if (error) throw error;
-      return { saleId };
+      return data as SalePayment[];
     },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["sale-items", data.saleId] });
-      queryClient.invalidateQueries({ queryKey: ["sales"] });
-    },
+    enabled: !!saleId,
   });
 }
+
+export function useCreateSalePayment() { /* ... */ }
+export function useUpdateSalePayment() { /* ... */ }
+export function useDeleteSalePayment() { /* ... */ }
 ```
 
-#### 2. Expandir useUpdateSale (em useSales.ts)
+---
 
-Adicionar campos:
+### Componente: SalePaymentsList
+
 ```typescript
-updates: { 
-  // Campos existentes...
-  client_id?: string | null;
-  sale_date?: string;
-  // Campos de energia/serviços se necessário
-  proposal_type?: ProposalType | null;
-  consumo_anual?: number | null;
-  margem?: number | null;
-  // etc.
-}
-```
-
-#### 3. EditSaleModal.tsx (Novo Componente)
-
-Interface:
-```typescript
-interface EditSaleModalProps {
-  sale: SaleWithDetails;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onSuccess?: () => void;
+interface SalePaymentsListProps {
+  saleId: string;
+  saleTotal: number;
+  readonly?: boolean;
+  onAddPayment?: () => void;
 }
 ```
 
 Funcionalidades:
-- Carregar dados atuais da venda
-- Carregar sale_items existentes (useSaleItems)
-- Permitir adicionar novos produtos (useProducts)
-- Permitir remover/editar items existentes
-- Calcular totais em tempo real
-- Guardar alterações (useUpdateSale + operações em sale_items)
+- Lista todos os pagamentos da venda
+- Mostra estado (badge Pago/Agendado)
+- Permite editar/eliminar pagamentos
+- Calcula total pago vs. em falta
+- Barra de progresso visual
 
-#### 4. SaleDetailsModal - Adicionar Botão Editar
+---
 
-```tsx
-const canEdit = sale.status !== 'delivered' && sale.status !== 'cancelled';
+### Lógica de Cálculo
 
-// No footer:
-<div className="flex gap-2">
-  {canEdit && (
-    <Button variant="outline" onClick={() => onEdit?.(sale)}>
-      <Pencil className="h-4 w-4 mr-2" />
-      Editar Venda
-    </Button>
-  )}
-  <Button variant="destructive" onClick={() => setShowDeleteConfirm(true)}>
-    <Trash2 className="h-4 w-4 mr-2" />
-    Eliminar Venda
-  </Button>
-</div>
+```typescript
+// Total pago = soma de pagamentos com status 'paid'
+const totalPaid = payments
+  .filter(p => p.status === 'paid')
+  .reduce((sum, p) => sum + p.amount, 0);
+
+// Em falta = total da venda - total pago
+const remaining = saleTotal - totalPaid;
+
+// Percentagem paga
+const percentage = (totalPaid / saleTotal) * 100;
+
+// Estado do pagamento da venda (auto-calculado)
+const paymentStatus = 
+  totalPaid === 0 ? 'pending' :
+  totalPaid >= saleTotal ? 'paid' :
+  'partial';
 ```
 
-#### 5. Sales.tsx - Integrar Modal de Edição
+---
 
-```tsx
-const [saleToEdit, setSaleToEdit] = useState<SaleWithDetails | null>(null);
+### Migração de Dados Existentes
 
-// No SaleDetailsModal:
-<SaleDetailsModal
-  sale={selectedSale}
-  open={!!selectedSale}
-  onOpenChange={(open) => !open && setSelectedSale(null)}
-  onEdit={(sale) => {
-    setSelectedSale(null);
-    setSaleToEdit(sale);
-  }}
-/>
+A migração SQL incluirá código para converter dados existentes:
 
-// Adicionar EditSaleModal:
-<EditSaleModal
-  sale={saleToEdit!}
-  open={!!saleToEdit}
-  onOpenChange={(open) => !open && setSaleToEdit(null)}
-/>
+```sql
+-- Migrar pagamentos existentes (se houver paid_date)
+INSERT INTO sale_payments (organization_id, sale_id, amount, payment_date, payment_method, invoice_reference, status)
+SELECT 
+  organization_id,
+  id as sale_id,
+  total_value as amount,
+  COALESCE(paid_date, sale_date) as payment_date,
+  payment_method,
+  invoice_reference,
+  CASE WHEN payment_status = 'paid' THEN 'paid' ELSE 'pending' END as status
+FROM sales
+WHERE payment_status = 'paid' OR invoice_reference IS NOT NULL;
 ```
 
 ---
@@ -246,50 +269,33 @@ const [saleToEdit, setSaleToEdit] = useState<SaleWithDetails | null>(null);
 ### Fluxo de Utilização
 
 ```text
-1. Utilizador abre venda na lista
-2. Modal de detalhes abre
-3. Se estado permite, vê botão "Editar Venda"
-4. Clica em "Editar Venda"
-5. Modal de detalhes fecha, modal de edição abre
-6. Edita campos necessários (produtos, pagamento, etc.)
-7. Clica "Guardar Alterações"
-8. Sistema atualiza venda e items
-9. Toast de sucesso + modal fecha
-10. Lista de vendas atualizada
+1. Utilizador abre venda existente
+2. Vê secção de pagamentos (vazia ou com histórico)
+3. Clica "+ Adicionar Pagamento"
+4. Modal abre com campos:
+   - Valor (ex: €500)
+   - Data (ex: hoje)
+   - Método (ex: MB Way)
+   - Fatura (ex: FT 2024/0001)
+   - Estado (Pago ou Agendado)
+5. Guarda pagamento
+6. Lista atualiza com novo pagamento
+7. Resumo mostra "Total Pago: €500 / €1.000"
+8. Pode adicionar mais pagamentos
+9. Quando total pago = total da venda, estado muda para "Pago"
 ```
 
 ---
 
-### Tratamento de Sale Items
+### Vantagens desta Abordagem
 
-| Ação | Implementação |
-|------|---------------|
-| Item existente alterado | `useUpdateSaleItem` |
-| Item existente removido | `useDeleteSaleItem` |
-| Novo item adicionado | `useCreateSaleItems` |
-
-A lógica no submit:
-```typescript
-// 1. Identificar items a criar (novos)
-const newItems = editedItems.filter(i => i.isNew);
-
-// 2. Identificar items a atualizar (existentes modificados)
-const updatedItems = editedItems.filter(i => !i.isNew && i.isModified);
-
-// 3. Identificar items a eliminar (removidos)
-const deletedIds = originalItemIds.filter(id => 
-  !editedItems.find(i => i.id === id)
-);
-
-// Executar operações
-await Promise.all([
-  ...deletedIds.map(id => deleteSaleItem.mutateAsync({ itemId: id, saleId })),
-  ...updatedItems.map(item => updateSaleItem.mutateAsync({ ... })),
-]);
-if (newItems.length > 0) {
-  await createSaleItems.mutateAsync(newItems);
-}
-```
+| Benefício | Descrição |
+|-----------|-----------|
+| Múltiplos pagamentos | Adiantamento + Entrega + Parcelas |
+| Fatura por pagamento | Cada recebimento pode ter a sua fatura |
+| Histórico completo | Registo de quando/como foi pago |
+| Pagamentos agendados | Marcar pagamentos futuros |
+| Cálculo automático | Estado da venda atualiza automaticamente |
 
 ---
 
@@ -297,10 +303,13 @@ if (newItems.length > 0) {
 
 | Componente | Ação |
 |------------|------|
-| `EditSaleModal.tsx` | Criar |
-| `useSaleItems.ts` | Adicionar useUpdateSaleItem |
-| `useSales.ts` | Expandir useUpdateSale |
-| `SaleDetailsModal.tsx` | Adicionar botão + prop onEdit |
-| `Sales.tsx` | Gerir estado saleToEdit + integrar modal |
+| Migração SQL | Criar tabela `sale_payments` + RLS + migrar dados |
+| `src/types/sales.ts` | Adicionar tipos de pagamento |
+| `src/hooks/useSalePayments.ts` | Criar (CRUD completo) |
+| `src/components/sales/SalePaymentsList.tsx` | Criar (lista + resumo) |
+| `src/components/sales/AddPaymentModal.tsx` | Criar (adicionar/editar) |
+| `src/components/sales/EditSaleModal.tsx` | Substituir secção pagamento por nova |
+| `src/components/sales/SaleDetailsModal.tsx` | Mostrar lista de pagamentos |
 
-**Total: 1 novo ficheiro + 4 modificações**
+**Total: 1 migração + 2 novos ficheiros + 3 novos componentes + 2 modificações**
+
