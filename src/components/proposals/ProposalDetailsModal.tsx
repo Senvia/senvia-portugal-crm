@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Trash2, Printer, Mail, Loader2, Router, Zap, Wrench, Pencil, MoreHorizontal } from 'lucide-react';
+import { Trash2, Printer, Mail, Loader2, Router, Zap, Wrench, Pencil, MoreHorizontal, CalendarDays, TrendingUp } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,7 +20,15 @@ import { useUpdateLeadStatus, useUpdateLead } from '@/hooks/useLeads';
 import { useFinalStages } from '@/hooks/usePipelineStages';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useAuth } from '@/contexts/AuthContext';
-import { PROPOSAL_STATUS_LABELS, PROPOSAL_STATUS_COLORS, PROPOSAL_STATUSES, PROPOSAL_TYPE_LABELS, MODELO_SERVICO_LABELS } from '@/types/proposals';
+import { 
+  PROPOSAL_STATUS_LABELS, 
+  PROPOSAL_STATUS_COLORS, 
+  PROPOSAL_STATUSES, 
+  PROPOSAL_TYPE_LABELS, 
+  MODELO_SERVICO_LABELS,
+  NEGOTIATION_TYPE_LABELS,
+  type NegotiationType 
+} from '@/types/proposals';
 import type { Proposal, ProposalStatus, ProposalType } from '@/types/proposals';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -262,9 +270,9 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
               letter-spacing: -1px;
             }
             
-            /* TABELA DE PRODUTOS */
-            .products { margin: 30px 0; }
-            .products h3 { 
+            /* CPE TABLE */
+            .cpes { margin: 30px 0; }
+            .cpes h3 { 
               font-size: 11px; 
               color: #64748b; 
               text-transform: uppercase;
@@ -272,42 +280,29 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
               font-weight: 600;
               margin-bottom: 12px;
             }
-            .products-table { 
-              width: 100%; 
-              border-collapse: collapse; 
+            .cpe-card {
+              background: #fffbeb;
+              border: 1px solid #fcd34d;
+              border-radius: 8px;
+              padding: 16px;
+              margin-bottom: 12px;
             }
-            .products-table th { 
-              background: #f1f5f9; 
-              padding: 12px 14px; 
-              text-align: left; 
-              font-size: 11px;
-              text-transform: uppercase;
-              letter-spacing: 0.5px;
-              color: #64748b;
+            .cpe-header {
               font-weight: 600;
-              border-bottom: 2px solid #e2e8f0;
+              margin-bottom: 8px;
+              color: #92400e;
             }
-            .products-table th:last-child { text-align: right; }
-            .products-table td { 
-              padding: 14px; 
-              border-bottom: 1px solid #e2e8f0;
-              font-size: 14px;
-              color: #1a1a1a;
+            .cpe-grid {
+              display: grid;
+              grid-template-columns: 1fr 1fr 1fr;
+              gap: 8px;
+              font-size: 13px;
             }
-            .products-table td:first-child { font-weight: 500; }
-            .products-table td:last-child { 
-              font-weight: 600; 
-              text-align: right; 
-              color: #3B82F6;
+            .cpe-field {
+              color: #78350f;
             }
-            .products-table .qty-cell { text-align: center; color: #64748b; }
-            .products-table .price-cell { text-align: right; color: #64748b; }
-            
-            /* SUBTOTAL ROW */
-            .products-table tfoot td {
-              padding-top: 16px;
-              border-bottom: none;
-              font-weight: 600;
+            .cpe-field strong {
+              color: #92400e;
             }
             
             /* OBSERVAÇÕES */
@@ -388,30 +383,25 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
             <div class="value">${formatCurrency(parseFloat(editValue) || proposal.total_value)}</div>
           </div>
 
-          <!-- TABELA DE PRODUTOS -->
-          ${proposalProducts.length > 0 ? `
-            <div class="products">
-              <h3>Produtos / Serviços</h3>
-              <table class="products-table">
-                <thead>
-                  <tr>
-                    <th>Descrição</th>
-                    <th style="text-align: center;">Qtd.</th>
-                    <th style="text-align: right;">Preço Unit.</th>
-                    <th>Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${proposalProducts.map(item => `
-                    <tr>
-                      <td>${item.product?.name || 'Produto'}</td>
-                      <td class="qty-cell">${item.quantity}</td>
-                      <td class="price-cell">${formatCurrency(item.unit_price)}</td>
-                      <td>${formatCurrency(item.total)}</td>
-                    </tr>
-                  `).join('')}
-                </tbody>
-              </table>
+          <!-- CPEs com dados de energia -->
+          ${proposalCpes.length > 0 ? `
+            <div class="cpes">
+              <h3>CPEs / Pontos de Consumo</h3>
+              ${proposalCpes.map(cpe => `
+                <div class="cpe-card">
+                  <div class="cpe-header">${cpe.equipment_type} ${cpe.serial_number ? `- ${cpe.serial_number}` : ''}</div>
+                  <div class="cpe-grid">
+                    <div class="cpe-field"><strong>Comercializador:</strong> ${cpe.comercializador}</div>
+                    ${cpe.consumo_anual ? `<div class="cpe-field"><strong>Consumo:</strong> ${Number(cpe.consumo_anual).toLocaleString('pt-PT')} kWh</div>` : ''}
+                    ${cpe.duracao_contrato ? `<div class="cpe-field"><strong>Duração:</strong> ${cpe.duracao_contrato} anos</div>` : ''}
+                    ${cpe.dbl ? `<div class="cpe-field"><strong>DBL:</strong> ${cpe.dbl} €/MWh</div>` : ''}
+                    ${cpe.margem ? `<div class="cpe-field"><strong>Margem:</strong> ${formatCurrency(Number(cpe.margem))}</div>` : ''}
+                    ${cpe.comissao ? `<div class="cpe-field"><strong>Comissão:</strong> ${formatCurrency(Number(cpe.comissao))}</div>` : ''}
+                    ${cpe.contrato_inicio ? `<div class="cpe-field"><strong>Início:</strong> ${cpe.contrato_inicio}</div>` : ''}
+                    ${cpe.contrato_fim ? `<div class="cpe-field"><strong>Fim:</strong> ${cpe.contrato_fim}</div>` : ''}
+                  </div>
+                </div>
+              `).join('')}
             </div>
           ` : ''}
 
@@ -481,13 +471,18 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader className="pr-10">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <DialogTitle>
                 Proposta {proposal.code || ''}
               </DialogTitle>
               <Badge className={cn(PROPOSAL_STATUS_COLORS[status])}>
                 {PROPOSAL_STATUS_LABELS[status]}
               </Badge>
+              {proposal.negotiation_type && (
+                <Badge variant="outline" className="text-xs">
+                  {NEGOTIATION_TYPE_LABELS[proposal.negotiation_type as NegotiationType]}
+                </Badge>
+              )}
             </div>
           </DialogHeader>
 
@@ -583,44 +578,96 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
               </div>
             )}
 
-            {/* Campos específicos de Energia */}
-            {proposal.proposal_type === 'energia' && (
-              <div className="space-y-3 p-4 rounded-lg border bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800">
-                <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
-                  <Zap className="h-4 w-4" />
-                  <span className="font-medium text-sm">Dados de Energia</span>
-                </div>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                  {proposal.consumo_anual && (
-                    <div>
-                      <span className="text-muted-foreground">Consumo Anual:</span>
-                      <span className="ml-2 font-medium">{proposal.consumo_anual.toLocaleString('pt-PT')} kWh</span>
+            {/* CPEs com Dados de Energia por CPE */}
+            {proposalCpes.length > 0 && (
+              <div className="space-y-3">
+                <Label className="flex items-center gap-2">
+                  <Router className="h-4 w-4" />
+                  CPEs / Pontos de Consumo
+                </Label>
+                <div className="space-y-3">
+                  {proposalCpes.map((cpe) => (
+                    <div
+                      key={cpe.id}
+                      className="p-4 rounded-lg border bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800"
+                    >
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <Zap className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                          <span className="font-medium text-sm">{cpe.equipment_type}</span>
+                          <Badge variant={cpe.existing_cpe_id ? 'secondary' : 'default'} className="text-xs">
+                            {cpe.existing_cpe_id ? 'Renovação' : 'Novo'}
+                          </Badge>
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                        <div>
+                          <span className="text-muted-foreground text-xs">Comercializador:</span>
+                          <p className="font-medium">{cpe.comercializador}</p>
+                        </div>
+                        {cpe.serial_number && (
+                          <div>
+                            <span className="text-muted-foreground text-xs">CPE/CUI:</span>
+                            <p className="font-medium font-mono text-xs">{cpe.serial_number}</p>
+                          </div>
+                        )}
+                        
+                        {/* Dados de Energia */}
+                        {cpe.consumo_anual && (
+                          <div>
+                            <span className="text-muted-foreground text-xs">Consumo Anual:</span>
+                            <p className="font-medium">{Number(cpe.consumo_anual).toLocaleString('pt-PT')} kWh</p>
+                          </div>
+                        )}
+                        {cpe.duracao_contrato && (
+                          <div>
+                            <span className="text-muted-foreground text-xs">Duração:</span>
+                            <p className="font-medium">{cpe.duracao_contrato} {cpe.duracao_contrato === 1 ? 'ano' : 'anos'}</p>
+                          </div>
+                        )}
+                        {cpe.dbl && (
+                          <div>
+                            <span className="text-muted-foreground text-xs">DBL:</span>
+                            <p className="font-medium">{cpe.dbl} €/MWh</p>
+                          </div>
+                        )}
+                        {cpe.margem && (
+                          <div>
+                            <span className="text-muted-foreground text-xs flex items-center gap-1">
+                              <TrendingUp className="h-3 w-3" /> Margem:
+                            </span>
+                            <p className="font-medium text-green-600 dark:text-green-400">{formatCurrency(Number(cpe.margem))}</p>
+                          </div>
+                        )}
+                        {cpe.comissao && (
+                          <div>
+                            <span className="text-muted-foreground text-xs">Comissão:</span>
+                            <p className="font-medium text-primary">{formatCurrency(Number(cpe.comissao))}</p>
+                          </div>
+                        )}
+                        
+                        {/* Datas de Contrato */}
+                        {(cpe.contrato_inicio || cpe.contrato_fim) && (
+                          <div className="col-span-2 flex items-center gap-4 pt-2 border-t border-amber-200 dark:border-amber-700 mt-1">
+                            <CalendarDays className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                            {cpe.contrato_inicio && (
+                              <div>
+                                <span className="text-muted-foreground text-xs">Início:</span>
+                                <p className="font-medium text-xs">{cpe.contrato_inicio}</p>
+                              </div>
+                            )}
+                            {cpe.contrato_fim && (
+                              <div>
+                                <span className="text-muted-foreground text-xs">Fim:</span>
+                                <p className="font-medium text-xs">{cpe.contrato_fim}</p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  )}
-                  {proposal.margem && (
-                    <div>
-                      <span className="text-muted-foreground">Margem:</span>
-                      <span className="ml-2 font-medium">{formatCurrency(proposal.margem)}</span>
-                    </div>
-                  )}
-                  {proposal.anos_contrato && (
-                    <div>
-                      <span className="text-muted-foreground">Contrato:</span>
-                      <span className="ml-2 font-medium">{proposal.anos_contrato} {proposal.anos_contrato === 1 ? 'ano' : 'anos'}</span>
-                    </div>
-                  )}
-                  {proposal.dbl !== null && proposal.dbl !== undefined && (
-                    <div>
-                      <span className="text-muted-foreground">DBL:</span>
-                      <span className="ml-2 font-medium">{proposal.dbl}</span>
-                    </div>
-                  )}
-                  {proposal.comissao && (
-                    <div className="col-span-2">
-                      <span className="text-muted-foreground">Comissão:</span>
-                      <span className="ml-2 font-medium text-green-600 dark:text-green-400">{formatCurrency(proposal.comissao)}</span>
-                    </div>
-                  )}
+                  ))}
                 </div>
               </div>
             )}
@@ -633,6 +680,18 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
                   <span className="font-medium text-sm">Dados do Serviço</span>
                 </div>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                  {proposal.servicos_produtos && proposal.servicos_produtos.length > 0 && (
+                    <div className="col-span-2">
+                      <span className="text-muted-foreground">Produtos:</span>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {proposal.servicos_produtos.map((prod) => (
+                          <Badge key={prod} variant="secondary" className="text-xs">
+                            {prod}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   {proposal.modelo_servico && (
                     <div>
                       <span className="text-muted-foreground">Modelo:</span>
@@ -671,38 +730,6 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
                         </p>
                       </div>
                       <p className="font-semibold">{formatCurrency(item.total)}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* CPEs Section */}
-            {proposalCpes.length > 0 && (
-              <div className="space-y-2">
-                <Label className="flex items-center gap-2">
-                  <Router className="h-4 w-4" />
-                  CPEs (Equipamentos)
-                </Label>
-                <div className="space-y-2">
-                  {proposalCpes.map((cpe) => (
-                    <div
-                      key={cpe.id}
-                      className="flex items-center justify-between p-3 rounded-lg border bg-muted/30"
-                    >
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-sm">{cpe.equipment_type}</span>
-                          <Badge variant={cpe.existing_cpe_id ? 'secondary' : 'default'} className="text-xs">
-                            {cpe.existing_cpe_id ? 'Renovação' : 'Novo'}
-                          </Badge>
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          {cpe.comercializador}
-                          {cpe.serial_number && ` • ${cpe.serial_number}`}
-                          {cpe.fidelizacao_end && ` • Até ${cpe.fidelizacao_end}`}
-                        </p>
-                      </div>
                     </div>
                   ))}
                 </div>
