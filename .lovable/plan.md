@@ -1,113 +1,151 @@
 
 
-## Correção: CreateProposalModal - Campos Telecom Apenas para Telecom
+## Correção: Formulário de Proposta Completo para Nichos Não-Telecom
 
 ### Problema Identificado
 
-No ficheiro `CreateProposalModal.tsx`, a variável `isTelecom` existe (linha 47) mas **apenas condiciona o "Tipo de Negociação"** (linhas 243-261).
+Ao esconder os campos específicos de telecom (CPEs, Tipo de Proposta, Energia, etc.), o formulário de criação/edição de propostas ficou incompleto para outros nichos:
 
-Os seguintes elementos estão visíveis para **TODOS os nichos** quando deveriam ser exclusivos de telecom:
-
-| Elemento | Linhas | Estado Atual |
-|----------|--------|--------------|
-| Tipo de Proposta (Energia/Serviços) | 265-288 | Visível para todos |
-| CPE Selector | 290-300 | Visível para todos |
-| Campos Serviços | 302-359 | Visível para todos |
-| Resumo CPEs | 374-389 | Visível para todos |
+| O que falta | Impacto |
+|-------------|---------|
+| Campo "Valor da Proposta" | Não há forma de definir o valor manualmente |
+| Seletor de Produtos | Não há como adicionar produtos da organização |
+| Observações contextuais | O label "Notas" é genérico |
 
 ### Solução
 
-Adicionar a condição `isTelecom &&` a todos os blocos de renderização específicos de telecom.
+Adicionar uma secção para **nichos NÃO-telecom** com:
+
+1. **Campo "Valor da Proposta"** - Input numérico para inserir o valor total manualmente
+2. **Seletor de Produtos/Serviços** - Lista dos produtos da organização com quantidade e preço
+3. **Melhoria do campo Notas** - Renomear para "Observações da Negociação"
 
 ---
 
-### Ficheiro a Modificar
+### Ficheiros a Modificar
 
 | Ficheiro | Alteração |
 |----------|-----------|
-| `src/components/proposals/CreateProposalModal.tsx` | Condicionar Tipo de Proposta, CPE Selector, Serviços e Resumo a `isTelecom` |
+| `src/components/proposals/CreateProposalModal.tsx` | Adicionar secção genérica com valor + produtos |
+| `src/components/proposals/EditProposalModal.tsx` | Mesmo tratamento para edição |
 
 ---
 
-### Alterações Específicas
+### Alterações em CreateProposalModal.tsx
 
-**1. Tipo de Proposta (linhas 263-288)**
-
-Antes:
+**1. Adicionar imports e hooks:**
 ```tsx
-<Separator />
-
-{/* Tipo de Proposta */}
-<div className="space-y-3">
+import { useProducts } from '@/hooks/useProducts';
 ```
 
-Depois:
+**2. Adicionar estados para nichos não-telecom:**
 ```tsx
-{isTelecom && (
-  <>
-    <Separator />
-    <div className="space-y-3">
-      <Label>Tipo de Proposta</Label>
-      ...
+// Campos para nichos NÃO-telecom
+const [manualValue, setManualValue] = useState<string>('');
+const [selectedProducts, setSelectedProducts] = useState<Array<{
+  product_id: string;
+  quantity: number;
+  unit_price: number;
+}>>([]);
+```
+
+**3. Buscar produtos:**
+```tsx
+const { data: products = [] } = useProducts();
+```
+
+**4. Nova secção para nichos NÃO-telecom (após o grid de data/estado):**
+```tsx
+{/* Campos para nichos NÃO-telecom */}
+{!isTelecom && (
+  <div className="space-y-4">
+    {/* Valor da Proposta */}
+    <div className="space-y-2">
+      <Label htmlFor="manual-value">Valor da Proposta (€)</Label>
+      <Input
+        id="manual-value"
+        type="number"
+        step="0.01"
+        min="0"
+        value={manualValue}
+        onChange={(e) => setManualValue(e.target.value)}
+        placeholder="Ex: 1500.00"
+      />
     </div>
-  </>
+    
+    {/* Produtos/Serviços (se houver produtos cadastrados) */}
+    {products.length > 0 && (
+      <div className="space-y-2">
+        <Label>Produtos/Serviços</Label>
+        {/* Seletor de produtos com quantidade */}
+        ...
+      </div>
+    )}
+  </div>
 )}
 ```
 
----
-
-**2. CPE Selector (linhas 290-300)**
-
-Antes:
+**5. Renomear campo Notas:**
 ```tsx
-{proposalType === 'energia' && (
+<Label htmlFor="notes">Observações da Negociação</Label>
+<Textarea
+  id="notes"
+  value={notes}
+  onChange={(e) => setNotes(e.target.value)}
+  placeholder="Detalhes da negociação, condições especiais, etc..."
+  rows={3}
+/>
 ```
 
-Depois:
+**6. Atualizar cálculo do valor total:**
 ```tsx
-{isTelecom && proposalType === 'energia' && (
-```
-
----
-
-**3. Campos Serviços (linhas 302-359)**
-
-Antes:
-```tsx
-{proposalType === 'servicos' && (
-```
-
-Depois:
-```tsx
-{isTelecom && proposalType === 'servicos' && (
-```
-
----
-
-**4. Resumo CPEs (linhas 374-389)**
-
-Antes:
-```tsx
-{proposalType === 'energia' && proposalCpes.length > 0 && (
-```
-
-Depois:
-```tsx
-{isTelecom && proposalType === 'energia' && proposalCpes.length > 0 && (
+const calculatedTotalValue = useMemo(() => {
+  if (isTelecom) {
+    if (proposalType === 'energia') {
+      return proposalCpes.reduce((sum, cpe) => sum + (parseFloat(cpe.margem) || 0), 0);
+    }
+    return 0;
+  }
+  // Para não-telecom: usar valor manual + produtos
+  const productsTotal = selectedProducts.reduce((sum, p) => sum + (p.quantity * p.unit_price), 0);
+  return productsTotal + (parseFloat(manualValue) || 0);
+}, [isTelecom, proposalType, proposalCpes, selectedProducts, manualValue]);
 ```
 
 ---
 
-### Comportamento por Nicho Após Correção
+### Alterações em EditProposalModal.tsx
 
-| Nicho | Tipo Negociação | Tipo Proposta | CPE Selector | Campos Serviços |
-|-------|-----------------|---------------|--------------|-----------------|
-| `telecom` | Visível | Visível | Visível | Visível |
-| `generic` | Oculto | Oculto | Oculto | Oculto |
-| `clinic` | Oculto | Oculto | Oculto | Oculto |
-| `construction` | Oculto | Oculto | Oculto | Oculto |
-| `real_estate` | Oculto | Oculto | Oculto | Oculto |
-| `ecommerce` | Oculto | Oculto | Oculto | Oculto |
+Aplicar a mesma lógica:
+1. Carregar produtos da organização
+2. Campo de valor manual para nichos não-telecom
+3. Seletor de produtos
+4. Preencher valores ao abrir modal
 
-Para nichos não-telecom, a criação de propostas ficará simplificada: apenas cliente, data, estado e notas.
+---
+
+### Resumo Visual por Nicho
+
+| Campo | Telecom | Generic/Clinic/Construction/etc |
+|-------|---------|--------------------------------|
+| Cliente | ✓ | ✓ |
+| Data | ✓ | ✓ |
+| Estado | ✓ | ✓ |
+| Tipo Negociação | ✓ | - |
+| Tipo Proposta | ✓ | - |
+| CPE Selector | ✓ (energia) | - |
+| Campos Serviços | ✓ (serviços) | - |
+| **Valor Manual** | - | **✓** |
+| **Produtos/Serviços** | - | **✓** |
+| Observações | ✓ | ✓ |
+
+---
+
+### Detalhes Técnicos
+
+O formulário de propostas será adaptativo:
+- **Telecom**: Mantém toda a lógica atual (CPEs, Energia, Serviços)
+- **Outros nichos**: Formulário simplificado com valor manual e produtos do catálogo
+
+Isto permite que clínicas, imobiliárias, construção civil, etc. criem propostas com os seus próprios produtos/serviços configurados nas definições.
 
