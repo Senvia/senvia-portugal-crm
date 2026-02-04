@@ -17,6 +17,9 @@ import Calendar from "./pages/Calendar";
 import Settings from "./pages/Settings";
 import Proposals from "./pages/Proposals";
 import Sales from "./pages/Sales";
+import Finance from "./pages/Finance";
+import FinancePayments from "./pages/finance/Payments";
+import FinanceInvoices from "./pages/finance/Invoices";
 import Ecommerce from "./pages/Ecommerce";
 import Marketing from "./pages/Marketing";
 import MarketingTemplates from "./pages/marketing/Templates";
@@ -92,6 +95,21 @@ const App = () => (
             <Route path="/sales" element={
               <ProtectedRoute>
                 <Sales />
+              </ProtectedRoute>
+            } />
+            <Route path="/financeiro" element={
+              <ProtectedRoute>
+                <Finance />
+              </ProtectedRoute>
+            } />
+            <Route path="/financeiro/pagamentos" element={
+              <ProtectedRoute>
+                <FinancePayments />
+              </ProtectedRoute>
+            } />
+            <Route path="/financeiro/faturas" element={
+              <ProtectedRoute>
+                <FinanceInvoices />
               </ProtectedRoute>
             } />
             <Route path="/ecommerce" element={
