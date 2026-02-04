@@ -11,6 +11,7 @@ export interface EnabledModules {
   ecommerce: boolean;
   clients: boolean;
   marketing: boolean;
+  finance: boolean;
 }
 
 export const DEFAULT_MODULES: EnabledModules = {
@@ -20,6 +21,7 @@ export const DEFAULT_MODULES: EnabledModules = {
   ecommerce: false,
   clients: true,
   marketing: false,
+  finance: true,
 };
 
 export function useModules() {
