@@ -54,6 +54,39 @@ export function useCreateSaleItems() {
   });
 }
 
+export function useUpdateSaleItem() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ 
+      itemId, 
+      saleId,
+      updates 
+    }: { 
+      itemId: string; 
+      saleId: string;
+      updates: { 
+        quantity?: number; 
+        unit_price?: number; 
+        total?: number;
+        name?: string;
+      } 
+    }) => {
+      const { error } = await supabase
+        .from("sale_items")
+        .update(updates)
+        .eq("id", itemId);
+
+      if (error) throw error;
+      return { saleId };
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["sale-items", data.saleId] });
+      queryClient.invalidateQueries({ queryKey: ["sales"] });
+    },
+  });
+}
+
 export function useDeleteSaleItem() {
   const queryClient = useQueryClient();
 
@@ -69,6 +102,7 @@ export function useDeleteSaleItem() {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["sale-items", data.saleId] });
+      queryClient.invalidateQueries({ queryKey: ["sales"] });
     },
   });
 }

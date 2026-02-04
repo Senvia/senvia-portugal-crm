@@ -10,6 +10,7 @@ import { useSales } from "@/hooks/useSales";
 import { useSalesRealtime } from "@/hooks/useRealtimeSubscription";
 import { SaleDetailsModal } from "@/components/sales/SaleDetailsModal";
 import { CreateSaleModal } from "@/components/sales/CreateSaleModal";
+import { EditSaleModal } from "@/components/sales/EditSaleModal";
 import { TeamMemberFilter } from "@/components/dashboard/TeamMemberFilter";
 import { formatCurrency } from "@/lib/format";
 import { format } from "date-fns";
@@ -28,6 +29,7 @@ export default function Sales() {
   const [statusFilter, setStatusFilter] = useState<SaleStatus | "all">("all");
   const [selectedSale, setSelectedSale] = useState<SaleWithDetails | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [saleToEdit, setSaleToEdit] = useState<SaleWithDetails | null>(null);
 
   const filteredSales = useMemo(() => {
     if (!sales) return [];
@@ -235,7 +237,20 @@ export default function Sales() {
           sale={selectedSale}
           open={!!selectedSale}
           onOpenChange={(open) => !open && setSelectedSale(null)}
+          onEdit={(sale) => {
+            setSelectedSale(null);
+            setSaleToEdit(sale);
+          }}
         />
+
+        {/* Edit Sale Modal */}
+        {saleToEdit && (
+          <EditSaleModal
+            sale={saleToEdit}
+            open={!!saleToEdit}
+            onOpenChange={(open) => !open && setSaleToEdit(null)}
+          />
+        )}
 
         {/* Create Sale Modal */}
         <CreateSaleModal
