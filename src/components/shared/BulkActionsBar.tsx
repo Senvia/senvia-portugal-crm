@@ -1,10 +1,18 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { CheckSquare, UserPlus, X } from "lucide-react";
+import { CheckSquare, UserPlus, X, Download, FileSpreadsheet, FileText } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface BulkActionsBarProps {
   selectedCount: number;
   onAssignTeamMember: () => void;
+  onExportCsv?: () => void;
+  onExportExcel?: () => void;
   onClearSelection: () => void;
   entityLabel?: string;
 }
@@ -12,9 +20,13 @@ interface BulkActionsBarProps {
 export function BulkActionsBar({
   selectedCount,
   onAssignTeamMember,
+  onExportCsv,
+  onExportExcel,
   onClearSelection,
   entityLabel = "selecionados",
 }: BulkActionsBarProps) {
+  const hasExportOptions = onExportCsv || onExportExcel;
+
   return (
     <AnimatePresence>
       {selectedCount > 0 && (
@@ -38,8 +50,34 @@ export function BulkActionsBar({
               className="flex-1 sm:flex-none"
             >
               <UserPlus className="h-4 w-4 mr-2" />
-              Atribuir Colaborador
+              <span className="hidden sm:inline">Atribuir Colaborador</span>
+              <span className="sm:hidden">Atribuir</span>
             </Button>
+            
+            {hasExportOptions && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="secondary" size="sm" className="flex-1 sm:flex-none">
+                    <Download className="h-4 w-4 sm:mr-2" />
+                    <span className="hidden sm:inline">Exportar</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {onExportCsv && (
+                    <DropdownMenuItem onClick={onExportCsv}>
+                      <FileText className="h-4 w-4 mr-2" />
+                      Exportar CSV
+                    </DropdownMenuItem>
+                  )}
+                  {onExportExcel && (
+                    <DropdownMenuItem onClick={onExportExcel}>
+                      <FileSpreadsheet className="h-4 w-4 mr-2" />
+                      Exportar Excel
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
             
             <Button
               variant="ghost"

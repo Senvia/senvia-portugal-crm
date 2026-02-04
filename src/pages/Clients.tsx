@@ -18,7 +18,9 @@ import { BulkActionsBar } from "@/components/shared/BulkActionsBar";
 import { AssignTeamMemberModal } from "@/components/shared/AssignTeamMemberModal";
 import type { CrmClient } from "@/types/clients";
 import { formatCurrency } from "@/lib/format";
-import { isWithinInterval, startOfDay, endOfDay, parseISO } from "date-fns";
+import { mapClientsForExport, exportToCsv, exportToExcel } from "@/lib/export";
+import { toast } from "sonner";
+import { format, isWithinInterval, startOfDay, endOfDay, parseISO } from "date-fns";
 
 export default function Clients() {
   const { profile, organization } = useAuth();
@@ -108,6 +110,21 @@ export default function Clients() {
   const handleAssignSuccess = () => {
     setSelectedIds([]);
     setShowAssignModal(false);
+  };
+
+  // Export handlers
+  const handleExportCsv = () => {
+    const selectedClients = filteredClients.filter(c => selectedIds.includes(c.id));
+    const data = mapClientsForExport(selectedClients);
+    exportToCsv(data, `clientes_${format(new Date(), 'yyyy-MM-dd')}`);
+    toast.success(`${selectedClients.length} clientes exportados para CSV`);
+  };
+
+  const handleExportExcel = () => {
+    const selectedClients = filteredClients.filter(c => selectedIds.includes(c.id));
+    const data = mapClientsForExport(selectedClients);
+    exportToExcel(data, `clientes_${format(new Date(), 'yyyy-MM-dd')}`);
+    toast.success(`${selectedClients.length} clientes exportados para Excel`);
   };
 
   return (
@@ -214,6 +231,8 @@ export default function Clients() {
         <BulkActionsBar
           selectedCount={selectedIds.length}
           onAssignTeamMember={() => setShowAssignModal(true)}
+          onExportCsv={handleExportCsv}
+          onExportExcel={handleExportExcel}
           onClearSelection={() => setSelectedIds([])}
           entityLabel="clientes selecionados"
         />

@@ -31,6 +31,8 @@ import { Search, Users, Loader2, CalendarIcon, X, Plus, LayoutGrid, List } from 
 import { format, endOfDay } from "date-fns";
 import { pt } from "date-fns/locale";
 import { normalizeString, cn } from "@/lib/utils";
+import { mapLeadsForExport, exportToCsv, exportToExcel } from "@/lib/export";
+import { toast } from "sonner";
 import type { Lead, LeadTemperature } from "@/types";
 
 export default function Leads() {
@@ -281,6 +283,21 @@ export default function Leads() {
     setShowAssignModal(false);
   };
 
+  // Export handlers
+  const handleExportCsv = () => {
+    const selectedLeads = filteredLeads.filter(l => selectedIds.includes(l.id));
+    const data = mapLeadsForExport(selectedLeads);
+    exportToCsv(data, `leads_${format(new Date(), 'yyyy-MM-dd')}`);
+    toast.success(`${selectedLeads.length} leads exportados para CSV`);
+  };
+
+  const handleExportExcel = () => {
+    const selectedLeads = filteredLeads.filter(l => selectedIds.includes(l.id));
+    const data = mapLeadsForExport(selectedLeads);
+    exportToExcel(data, `leads_${format(new Date(), 'yyyy-MM-dd')}`);
+    toast.success(`${selectedLeads.length} leads exportados para Excel`);
+  };
+
   // Helper to get badge style from stage color
   const getBadgeStyle = (hexColor: string, isActive: boolean) => {
     if (isActive) {
@@ -458,6 +475,8 @@ export default function Leads() {
           <BulkActionsBar
             selectedCount={selectedIds.length}
             onAssignTeamMember={() => setShowAssignModal(true)}
+            onExportCsv={handleExportCsv}
+            onExportExcel={handleExportExcel}
             onClearSelection={() => setSelectedIds([])}
             entityLabel="leads selecionados"
           />
