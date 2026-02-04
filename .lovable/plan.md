@@ -1,25 +1,23 @@
 
 
-## Correção: Tab de CPEs Apenas para Nicho Telecom
+## Correção: CreateProposalModal - Campos Telecom Apenas para Telecom
 
 ### Problema Identificado
 
-No ficheiro `ClientDetailsDrawer.tsx`:
+No ficheiro `CreateProposalModal.tsx`, a variável `isTelecom` existe (linha 47) mas **apenas condiciona o "Tipo de Negociação"** (linhas 243-261).
 
-- **Linha 67-69**: Existe a verificação `isTelecom` mas apenas para adaptar labels
-- **Linhas 215-218**: O tab "CPEs" é **sempre renderizado** independentemente do nicho
-- **Linhas 377-380**: O conteúdo do tab "CPEs" também é **sempre renderizado**
+Os seguintes elementos estão visíveis para **TODOS os nichos** quando deveriam ser exclusivos de telecom:
 
-Isto faz com que organizações de outros templates (generic, clinic, construction, etc.) vejam o tab de CPEs, quando deveria ser uma funcionalidade exclusiva do nicho **telecom**.
-
----
+| Elemento | Linhas | Estado Atual |
+|----------|--------|--------------|
+| Tipo de Proposta (Energia/Serviços) | 265-288 | Visível para todos |
+| CPE Selector | 290-300 | Visível para todos |
+| Campos Serviços | 302-359 | Visível para todos |
+| Resumo CPEs | 374-389 | Visível para todos |
 
 ### Solução
 
-Adicionar renderização condicional baseada em `isTelecom` para:
-
-1. O `TabsTrigger` de CPEs (ocultar o tab na lista)
-2. O `TabsContent` de CPEs (ocultar o conteúdo)
+Adicionar a condição `isTelecom &&` a todos os blocos de renderização específicos de telecom.
 
 ---
 
@@ -27,74 +25,89 @@ Adicionar renderização condicional baseada em `isTelecom` para:
 
 | Ficheiro | Alteração |
 |----------|-----------|
-| `src/components/clients/ClientDetailsDrawer.tsx` | Condicionar tab e conteúdo de CPEs a `isTelecom` |
+| `src/components/proposals/CreateProposalModal.tsx` | Condicionar Tipo de Proposta, CPE Selector, Serviços e Resumo a `isTelecom` |
 
 ---
 
 ### Alterações Específicas
 
-**Linhas 215-218 (TabsTrigger):**
+**1. Tipo de Proposta (linhas 263-288)**
 
 Antes:
 ```tsx
-<TabsTrigger value="cpes" className="text-xs">
-  <CpeIcon className="h-3 w-3 mr-1" />
-  {cpeTabLabel} ({cpes.length})
-</TabsTrigger>
+<Separator />
+
+{/* Tipo de Proposta */}
+<div className="space-y-3">
 ```
 
 Depois:
 ```tsx
 {isTelecom && (
-  <TabsTrigger value="cpes" className="text-xs">
-    <CpeIcon className="h-3 w-3 mr-1" />
-    {cpeTabLabel} ({cpes.length})
-  </TabsTrigger>
+  <>
+    <Separator />
+    <div className="space-y-3">
+      <Label>Tipo de Proposta</Label>
+      ...
+    </div>
+  </>
 )}
 ```
 
 ---
 
-**Linhas 377-380 (TabsContent):**
+**2. CPE Selector (linhas 290-300)**
 
 Antes:
 ```tsx
-<TabsContent value="cpes" className="p-6 pt-4 mt-0">
-  <CpeList clientId={client.id} />
-</TabsContent>
+{proposalType === 'energia' && (
 ```
 
 Depois:
 ```tsx
-{isTelecom && (
-  <TabsContent value="cpes" className="p-6 pt-4 mt-0">
-    <CpeList clientId={client.id} />
-  </TabsContent>
-)}
+{isTelecom && proposalType === 'energia' && (
 ```
 
 ---
 
-### Resultado Esperado
+**3. Campos Serviços (linhas 302-359)**
 
-| Nicho | Tab CPEs/CUI Visível |
-|-------|---------------------|
-| `telecom` | Sim |
-| `generic` | Não |
-| `clinic` | Não |
-| `construction` | Não |
-| `real_estate` | Não |
-| `ecommerce` | Não |
-
----
-
-### Considerações Adicionais
-
-O hook `useCpes(client?.id)` na linha 63 continuará a ser chamado mesmo em nichos não-telecom. Para otimização futura, pode-se também condicionar esta chamada:
-
+Antes:
 ```tsx
-const { data: cpes = [] } = useCpes(isTelecom ? client?.id : null);
+{proposalType === 'servicos' && (
 ```
 
-Isto evita queries desnecessárias à base de dados para organizações que não usam CPEs.
+Depois:
+```tsx
+{isTelecom && proposalType === 'servicos' && (
+```
+
+---
+
+**4. Resumo CPEs (linhas 374-389)**
+
+Antes:
+```tsx
+{proposalType === 'energia' && proposalCpes.length > 0 && (
+```
+
+Depois:
+```tsx
+{isTelecom && proposalType === 'energia' && proposalCpes.length > 0 && (
+```
+
+---
+
+### Comportamento por Nicho Após Correção
+
+| Nicho | Tipo Negociação | Tipo Proposta | CPE Selector | Campos Serviços |
+|-------|-----------------|---------------|--------------|-----------------|
+| `telecom` | Visível | Visível | Visível | Visível |
+| `generic` | Oculto | Oculto | Oculto | Oculto |
+| `clinic` | Oculto | Oculto | Oculto | Oculto |
+| `construction` | Oculto | Oculto | Oculto | Oculto |
+| `real_estate` | Oculto | Oculto | Oculto | Oculto |
+| `ecommerce` | Oculto | Oculto | Oculto | Oculto |
+
+Para nichos não-telecom, a criação de propostas ficará simplificada: apenas cliente, data, estado e notas.
 
