@@ -12,13 +12,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { SearchableCombobox, type ComboboxOption } from "@/components/ui/searchable-combobox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
@@ -26,6 +19,7 @@ import { useClients } from "@/hooks/useClients";
 import { useProducts } from "@/hooks/useProducts";
 import { useUpdateSale } from "@/hooks/useSales";
 import { useSaleItems, useCreateSaleItems, useUpdateSaleItem, useDeleteSaleItem } from "@/hooks/useSaleItems";
+import { useAuth } from "@/contexts/AuthContext";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { format, parseISO } from "date-fns";
@@ -39,21 +33,11 @@ import {
   X, 
   Package, 
   User,
-  CreditCard,
-  Receipt,
-  FileText
+  FileText,
+  AlertCircle
 } from "lucide-react";
 import type { SaleWithDetails } from "@/types/sales";
-import { 
-  PAYMENT_METHODS, 
-  PAYMENT_METHOD_LABELS, 
-  PAYMENT_STATUSES, 
-  PAYMENT_STATUS_LABELS,
-  type PaymentMethod,
-  type PaymentStatus,
-  type ProposalType,
-  type ModeloServico
-} from "@/types/sales";
+import { SalePaymentsList } from "./SalePaymentsList";
 
 interface SaleItemDraft {
   id: string;
@@ -88,17 +72,14 @@ export function EditSaleModal({
   const updateSaleItem = useUpdateSaleItem();
   const deleteSaleItem = useDeleteSaleItem();
 
+  const { organization } = useAuth();
+  
   // Form state
   const [clientId, setClientId] = useState<string>("");
   const [saleDate, setSaleDate] = useState<Date>(new Date());
   const [items, setItems] = useState<SaleItemDraft[]>([]);
   const [originalItemIds, setOriginalItemIds] = useState<string[]>([]);
   const [discount, setDiscount] = useState<string>("0");
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | "">("");
-  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>("pending");
-  const [dueDate, setDueDate] = useState<Date | undefined>();
-  const [paidDate, setPaidDate] = useState<Date | undefined>();
-  const [invoiceReference, setInvoiceReference] = useState("");
   const [notes, setNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -108,11 +89,6 @@ export function EditSaleModal({
       setClientId(sale.client_id || "");
       setSaleDate(sale.sale_date ? parseISO(sale.sale_date) : new Date());
       setDiscount(sale.discount?.toString() || "0");
-      setPaymentMethod(sale.payment_method || "");
-      setPaymentStatus(sale.payment_status || "pending");
-      setDueDate(sale.due_date ? parseISO(sale.due_date) : undefined);
-      setPaidDate(sale.paid_date ? parseISO(sale.paid_date) : undefined);
-      setInvoiceReference(sale.invoice_reference || "");
       setNotes(sale.notes || "");
     }
   }, [open, sale]);
@@ -235,7 +211,7 @@ export function EditSaleModal({
     setIsSubmitting(true);
 
     try {
-      // 1. Update the sale record
+      // 1. Update the sale record (pagamentos são geridos separadamente via SalePaymentsList)
       await updateSale.mutateAsync({
         saleId: sale.id,
         updates: {
@@ -244,11 +220,6 @@ export function EditSaleModal({
           total_value: total,
           subtotal: subtotal,
           discount: discountValue,
-          payment_method: paymentMethod || null,
-          payment_status: paymentStatus,
-          due_date: dueDate ? format(dueDate, 'yyyy-MM-dd') : null,
-          paid_date: paidDate ? format(paidDate, 'yyyy-MM-dd') : null,
-          invoice_reference: invoiceReference.trim() || null,
           notes: notes.trim() || null,
         },
       });
@@ -492,127 +463,15 @@ export function EditSaleModal({
                 </>
               )}
 
-              {/* Payment Section */}
-              <div className="space-y-4">
-                <Label className="flex items-center gap-2">
-                  <CreditCard className="h-4 w-4 text-muted-foreground" />
-                  Pagamento
-                </Label>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label className="text-xs text-muted-foreground">Método</Label>
-                    <Select 
-                      value={paymentMethod} 
-                      onValueChange={(v) => setPaymentMethod(v as PaymentMethod)}
-                      disabled={!canFullEdit}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecionar..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {PAYMENT_METHODS.map((method) => (
-                          <SelectItem key={method} value={method}>
-                            {PAYMENT_METHOD_LABELS[method]}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label className="text-xs text-muted-foreground">Estado</Label>
-                    <Select 
-                      value={paymentStatus} 
-                      onValueChange={(v) => setPaymentStatus(v as PaymentStatus)}
-                      disabled={!canFullEdit}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {PAYMENT_STATUSES.map((status) => (
-                          <SelectItem key={status} value={status}>
-                            {PAYMENT_STATUS_LABELS[status]}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label className="text-xs text-muted-foreground">Data de Vencimento</Label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className={cn(
-                            "w-full justify-start text-left font-normal",
-                            !dueDate && "text-muted-foreground"
-                          )}
-                          disabled={!canFullEdit}
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {dueDate ? format(dueDate, "dd/MM/yyyy", { locale: pt }) : "Selecionar..."}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={dueDate}
-                          onSelect={setDueDate}
-                          locale={pt}
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-
-                  {paymentStatus === 'paid' && (
-                    <div className="space-y-2">
-                      <Label className="text-xs text-muted-foreground">Data de Pagamento</Label>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant="outline"
-                            className={cn(
-                              "w-full justify-start text-left font-normal",
-                              !paidDate && "text-muted-foreground"
-                            )}
-                          >
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            {paidDate ? format(paidDate, "dd/MM/yyyy", { locale: pt }) : "Selecionar..."}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                          <Calendar
-                            mode="single"
-                            selected={paidDate}
-                            onSelect={setPaidDate}
-                            locale={pt}
-                          />
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* Invoice Reference */}
-              <div className="space-y-2">
-                <Label className="flex items-center gap-2">
-                  <Receipt className="h-4 w-4 text-muted-foreground" />
-                  Referência da Fatura
-                </Label>
-                <Input
-                  value={invoiceReference}
-                  onChange={(e) => setInvoiceReference(e.target.value)}
-                  placeholder="FT 2024/0001"
+              {/* Payment Section - New Multi-Payment Component */}
+              {organization && (
+                <SalePaymentsList
+                  saleId={sale.id}
+                  organizationId={organization.id}
+                  saleTotal={total}
+                  readonly={!canFullEdit && sale.status === 'cancelled'}
                 />
-              </div>
+              )}
 
               <Separator />
 
