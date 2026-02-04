@@ -10,7 +10,8 @@ import {
   Phone,
   Package,
   Zap,
-  Wrench
+  Wrench,
+  Pencil
 } from "lucide-react";
 import {
   Dialog,
@@ -54,9 +55,10 @@ interface SaleDetailsModalProps {
   sale: SaleWithDetails | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onEdit?: (sale: SaleWithDetails) => void;
 }
 
-export function SaleDetailsModal({ sale, open, onOpenChange }: SaleDetailsModalProps) {
+export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetailsModalProps) {
   const [status, setStatus] = useState<SaleStatus>("pending");
   const [notes, setNotes] = useState("");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -425,10 +427,23 @@ export function SaleDetailsModal({ sale, open, onOpenChange }: SaleDetailsModalP
           </ScrollArea>
 
           {/* Actions */}
-          <div className="p-4 border-t border-border/50">
+          <div className="p-4 border-t border-border/50 flex gap-3">
+            {sale.status !== 'delivered' && sale.status !== 'cancelled' && onEdit && (
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => {
+                  onOpenChange(false);
+                  onEdit(sale);
+                }}
+              >
+                <Pencil className="h-4 w-4 mr-2" />
+                Editar Venda
+              </Button>
+            )}
             <Button
               variant="destructive"
-              className="w-full"
+              className={sale.status !== 'delivered' && sale.status !== 'cancelled' && onEdit ? "flex-1" : "w-full"}
               onClick={() => setShowDeleteConfirm(true)}
             >
               <Trash2 className="h-4 w-4 mr-2" />

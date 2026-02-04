@@ -215,6 +215,16 @@ export function useUpdateSale() {
         invoice_reference?: string | null;
         discount?: number;
         subtotal?: number;
+        client_id?: string | null;
+        sale_date?: string;
+        proposal_type?: ProposalType | null;
+        consumo_anual?: number | null;
+        margem?: number | null;
+        dbl?: number | null;
+        anos_contrato?: number | null;
+        modelo_servico?: ModeloServico | null;
+        kwp?: number | null;
+        comissao?: number | null;
       } 
     }) => {
       const { error } = await supabase
