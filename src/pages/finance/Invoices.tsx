@@ -51,7 +51,7 @@ export default function FinanceInvoices() {
 
   return (
     <AppLayout>
-      <div className="space-y-6 pb-20 md:pb-6">
+      <div className="p-4 md:p-6 lg:p-8 space-y-6 pb-20 md:pb-6">
         {/* Header */}
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-4">

@@ -23,7 +23,7 @@ export default function Finance() {
 
   return (
     <AppLayout>
-      <div className="space-y-6 pb-20 md:pb-6">
+      <div className="p-4 md:p-6 lg:p-8 space-y-6 pb-20 md:pb-6">
         {/* Header */}
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
