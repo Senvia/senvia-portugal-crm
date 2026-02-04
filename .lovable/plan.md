@@ -1,12 +1,20 @@
 
+## Funcionalidade: Editar Vendas Completo
 
-## Funcionalidade: Exportar Registos (CSV + Excel)
+### Situação Atual
 
-### Objetivo
+O sistema atualmente só permite:
+- Ver detalhes da venda (SaleDetailsModal)
+- Alterar estado e notas
+- Eliminar a venda
 
-Adicionar botões de exportação à barra de ações em massa para **Leads** e **Clientes**:
-- **CSV** - Formato universal compatível com qualquer software
-- **Excel (XLSX)** - Formato nativo para Excel com melhor formatação
+**Não existe forma de editar completamente uma venda** (adicionar produtos, alterar descontos, métodos de pagamento, etc.)
+
+---
+
+### Solução Proposta
+
+Criar um **EditSaleModal** completo que permita editar todos os campos de uma venda que não esteja em estado "Entregue" ou "Cancelado".
 
 ---
 
@@ -14,209 +22,223 @@ Adicionar botões de exportação à barra de ações em massa para **Leads** e 
 
 | Ficheiro | Tipo | Descrição |
 |----------|------|-----------|
-| `src/lib/export.ts` | Novo | Funções utilitárias de exportação |
-| `src/components/shared/BulkActionsBar.tsx` | Modificar | Adicionar botões de exportação |
-| `src/pages/Leads.tsx` | Modificar | Integrar handlers de exportação |
-| `src/pages/Clients.tsx` | Modificar | Integrar handlers de exportação |
+| `src/components/sales/EditSaleModal.tsx` | Novo | Modal completo para edição de vendas |
+| `src/hooks/useSaleItems.ts` | Modificar | Adicionar hook para atualizar item existente |
+| `src/hooks/useSales.ts` | Modificar | Expandir campos atualizáveis |
+| `src/components/sales/SaleDetailsModal.tsx` | Modificar | Adicionar botão "Editar" |
+| `src/pages/Sales.tsx` | Modificar | Integrar modal de edição |
 
 ---
 
 ### Interface do Utilizador
 
-A barra de ações em massa passará a mostrar:
+#### Botão de Editar no SaleDetailsModal
+
+No modal de detalhes, se a venda **NÃO** estiver em "Entregue" ou "Cancelado":
 
 ```text
-┌────────────────────────────────────────────────────────────────────────────┐
-│ ☑ 5 selecionados  [Atribuir Colaborador]  [Exportar ▼]  [✕ Limpar]        │
-└────────────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│ [Código] Venda #0012    │ Badge: Pendente │   12 Jan 2024    │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│  [Estado da Venda: Pendente ▼]                               │
+│                                                              │
+│  ... (dados da venda) ...                                    │
+│                                                              │
+├──────────────────────────────────────────────────────────────┤
+│  [✏️ Editar Venda]                     [🗑️ Eliminar Venda]  │
+└──────────────────────────────────────────────────────────────┘
 ```
 
-O botão **Exportar** abre um dropdown com:
-- 📄 Exportar CSV
-- 📊 Exportar Excel
+#### Modal de Edição (EditSaleModal)
+
+Estrutura semelhante ao CreateSaleModal mas com dados pré-preenchidos:
+
+```text
+┌──────────────────────────────────────────────────────────────┐
+│                    Editar Venda #0012                        │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│  👤 Cliente: [João Silva ▼]          📅 Data: [12/01/2024]  │
+│                                                              │
+│  ─────────────────────────────────────────────────────────   │
+│  📦 PRODUTOS/SERVIÇOS                                        │
+│  ┌────────────────────────────────────────────────────────┐ │
+│  │ Tratamento Facial    Qtd: [1]  Preço: €150   [×]       │ │
+│  │ Botox                Qtd: [2]  Preço: €300   [×]       │ │
+│  └────────────────────────────────────────────────────────┘ │
+│  [+ Adicionar Produto ▼]                                     │
+│                                                              │
+│  ─────────────────────────────────────────────────────────   │
+│  💰 PAGAMENTO                                                │
+│                                                              │
+│  Método: [MB Way ▼]        Estado: [Pendente ▼]             │
+│  Data Vencimento: [📅]     Referência Fatura: [____]        │
+│                                                              │
+│  ─────────────────────────────────────────────────────────   │
+│  📝 RESUMO                                                   │
+│                                                              │
+│  Subtotal:                                          €750,00  │
+│  Desconto: [___€]                                   -€50,00  │
+│  ──────────────────────────────────────────────────────────  │
+│  TOTAL:                                             €700,00  │
+│                                                              │
+│  Notas: [________________________________]                   │
+│                                                              │
+├──────────────────────────────────────────────────────────────┤
+│  [Cancelar]                            [💾 Guardar Alterações]│
+└──────────────────────────────────────────────────────────────┘
+```
 
 ---
 
-### Dependência Nova
+### Campos Editáveis
 
-Para gerar ficheiros Excel nativos, será necessário instalar:
-```bash
-npm install xlsx
-```
+| Campo | Editável | Observação |
+|-------|----------|------------|
+| Cliente | ✓ | Dropdown de clientes |
+| Data da Venda | ✓ | Date picker |
+| Produtos/Serviços | ✓ | Adicionar, remover, alterar quantidade e preço |
+| Desconto | ✓ | Valor em euros |
+| Método de Pagamento | ✓ | MB Way, Transferência, etc. |
+| Estado do Pagamento | ✓ | Pendente, Parcial, Pago |
+| Data de Vencimento | ✓ | Data limite para pagamento |
+| Data de Pagamento | ✓ | Quando foi pago (aparece se Pago) |
+| Referência da Fatura | ✓ | Número da fatura |
+| Notas | ✓ | Observações |
+| Estado da Venda | ✗ | Editado no modal de detalhes |
+| Proposta Associada | ✗ | Apenas leitura |
 
-Esta biblioteca permite:
-- Criar ficheiros .xlsx nativos
-- Formatar células (cabeçalhos a negrito)
-- Ajustar largura de colunas automaticamente
+---
+
+### Condições de Edição
+
+| Estado | Pode Editar? | Justificação |
+|--------|--------------|--------------|
+| Pendente | ✅ Sim | Ainda não processada |
+| Em Progresso | ✅ Sim | Pode precisar de ajustes |
+| Entregue | ⚠️ Parcial | Só notas e referência fatura |
+| Cancelado | ❌ Não | Venda fechada |
 
 ---
 
 ### Detalhes Técnicos
 
-#### 1. src/lib/export.ts (Novo Ficheiro)
+#### 1. Novo Hook: useUpdateSaleItem (em useSaleItems.ts)
 
 ```typescript
-import * as XLSX from 'xlsx';
+export function useUpdateSaleItem() {
+  const queryClient = useQueryClient();
 
-// Mapear dados de Leads para exportação
-export function mapLeadsForExport(leads: Lead[]) {
-  return leads.map(lead => ({
-    'Nome': lead.name,
-    'Email': lead.email,
-    'Telefone': lead.phone,
-    'Status': lead.status,
-    'Temperatura': lead.temperature,
-    'Fonte': lead.source || '',
-    'Valor': lead.value || 0,
-    'Data de Criação': formatDate(lead.created_at),
-  }));
-}
+  return useMutation({
+    mutationFn: async ({ 
+      itemId, 
+      saleId,
+      updates 
+    }: { 
+      itemId: string; 
+      saleId: string;
+      updates: { 
+        quantity?: number; 
+        unit_price?: number; 
+        total?: number;
+        name?: string;
+      } 
+    }) => {
+      const { error } = await supabase
+        .from("sale_items")
+        .update(updates)
+        .eq("id", itemId);
 
-// Mapear dados de Clientes para exportação
-export function mapClientsForExport(clients: CrmClient[]) {
-  return clients.map(client => ({
-    'Código': client.code || '',
-    'Nome': client.name,
-    'Email': client.email || '',
-    'Telefone': client.phone || '',
-    'Empresa': client.company || '',
-    'NIF': client.nif || '',
-    'Estado': CLIENT_STATUS_LABELS[client.status],
-    'Total Propostas': client.total_proposals,
-    'Total Vendas': client.total_sales,
-    'Valor Total': client.total_value,
-    'Data de Criação': formatDate(client.created_at),
-  }));
-}
-
-// Exportar para CSV
-export function exportToCsv(data: Record<string, any>[], filename: string) {
-  const ws = XLSX.utils.json_to_sheet(data);
-  const csv = XLSX.utils.sheet_to_csv(ws);
-  downloadFile(csv, `${filename}.csv`, 'text/csv');
-}
-
-// Exportar para Excel
-export function exportToExcel(data: Record<string, any>[], filename: string) {
-  const ws = XLSX.utils.json_to_sheet(data);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Dados');
-  XLSX.writeFile(wb, `${filename}.xlsx`);
-}
-
-// Helper para download
-function downloadFile(content: string, filename: string, type: string) {
-  const blob = new Blob([content], { type: `${type};charset=utf-8;` });
-  const link = document.createElement('a');
-  link.href = URL.createObjectURL(blob);
-  link.download = filename;
-  link.click();
+      if (error) throw error;
+      return { saleId };
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["sale-items", data.saleId] });
+      queryClient.invalidateQueries({ queryKey: ["sales"] });
+    },
+  });
 }
 ```
 
-#### 2. BulkActionsBar.tsx (Modificações)
+#### 2. Expandir useUpdateSale (em useSales.ts)
 
-Novas props:
+Adicionar campos:
 ```typescript
-interface BulkActionsBarProps {
-  selectedCount: number;
-  onAssignTeamMember: () => void;
-  onExportCsv?: () => void;     // NOVO
-  onExportExcel?: () => void;   // NOVO
-  onClearSelection: () => void;
-  entityLabel?: string;
+updates: { 
+  // Campos existentes...
+  client_id?: string | null;
+  sale_date?: string;
+  // Campos de energia/serviços se necessário
+  proposal_type?: ProposalType | null;
+  consumo_anual?: number | null;
+  margem?: number | null;
+  // etc.
 }
 ```
 
-Adicionar dropdown de exportação:
+#### 3. EditSaleModal.tsx (Novo Componente)
+
+Interface:
+```typescript
+interface EditSaleModalProps {
+  sale: SaleWithDetails;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSuccess?: () => void;
+}
+```
+
+Funcionalidades:
+- Carregar dados atuais da venda
+- Carregar sale_items existentes (useSaleItems)
+- Permitir adicionar novos produtos (useProducts)
+- Permitir remover/editar items existentes
+- Calcular totais em tempo real
+- Guardar alterações (useUpdateSale + operações em sale_items)
+
+#### 4. SaleDetailsModal - Adicionar Botão Editar
+
 ```tsx
-import { Download, FileSpreadsheet, FileText } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+const canEdit = sale.status !== 'delivered' && sale.status !== 'cancelled';
 
-// Dentro do componente:
-{(onExportCsv || onExportExcel) && (
-  <DropdownMenu>
-    <DropdownMenuTrigger asChild>
-      <Button variant="secondary" size="sm">
-        <Download className="h-4 w-4 mr-2" />
-        Exportar
-      </Button>
-    </DropdownMenuTrigger>
-    <DropdownMenuContent>
-      {onExportCsv && (
-        <DropdownMenuItem onClick={onExportCsv}>
-          <FileText className="h-4 w-4 mr-2" />
-          Exportar CSV
-        </DropdownMenuItem>
-      )}
-      {onExportExcel && (
-        <DropdownMenuItem onClick={onExportExcel}>
-          <FileSpreadsheet className="h-4 w-4 mr-2" />
-          Exportar Excel
-        </DropdownMenuItem>
-      )}
-    </DropdownMenuContent>
-  </DropdownMenu>
-)}
+// No footer:
+<div className="flex gap-2">
+  {canEdit && (
+    <Button variant="outline" onClick={() => onEdit?.(sale)}>
+      <Pencil className="h-4 w-4 mr-2" />
+      Editar Venda
+    </Button>
+  )}
+  <Button variant="destructive" onClick={() => setShowDeleteConfirm(true)}>
+    <Trash2 className="h-4 w-4 mr-2" />
+    Eliminar Venda
+  </Button>
+</div>
 ```
 
-#### 3. Leads.tsx (Modificações)
+#### 5. Sales.tsx - Integrar Modal de Edição
 
-Adicionar handlers de exportação:
-```typescript
-import { mapLeadsForExport, exportToCsv, exportToExcel } from '@/lib/export';
-import { toast } from 'sonner';
+```tsx
+const [saleToEdit, setSaleToEdit] = useState<SaleWithDetails | null>(null);
 
-// Dentro do componente:
-const handleExportCsv = () => {
-  const selectedLeads = filteredLeads.filter(l => selectedIds.includes(l.id));
-  const data = mapLeadsForExport(selectedLeads);
-  exportToCsv(data, `leads_${format(new Date(), 'yyyy-MM-dd')}`);
-  toast.success(`${selectedLeads.length} leads exportados para CSV`);
-};
-
-const handleExportExcel = () => {
-  const selectedLeads = filteredLeads.filter(l => selectedIds.includes(l.id));
-  const data = mapLeadsForExport(selectedLeads);
-  exportToExcel(data, `leads_${format(new Date(), 'yyyy-MM-dd')}`);
-  toast.success(`${selectedLeads.length} leads exportados para Excel`);
-};
-
-// Na BulkActionsBar:
-<BulkActionsBar
-  selectedCount={selectedIds.length}
-  onAssignTeamMember={() => setShowAssignModal(true)}
-  onExportCsv={handleExportCsv}
-  onExportExcel={handleExportExcel}
-  onClearSelection={() => setSelectedIds([])}
-  entityLabel="leads selecionados"
+// No SaleDetailsModal:
+<SaleDetailsModal
+  sale={selectedSale}
+  open={!!selectedSale}
+  onOpenChange={(open) => !open && setSelectedSale(null)}
+  onEdit={(sale) => {
+    setSelectedSale(null);
+    setSaleToEdit(sale);
+  }}
 />
-```
 
-#### 4. Clients.tsx (Modificações)
-
-Mesmo padrão:
-```typescript
-import { mapClientsForExport, exportToCsv, exportToExcel } from '@/lib/export';
-
-const handleExportCsv = () => {
-  const selectedClients = filteredClients.filter(c => selectedIds.includes(c.id));
-  const data = mapClientsForExport(selectedClients);
-  exportToCsv(data, `clientes_${format(new Date(), 'yyyy-MM-dd')}`);
-  toast.success(`${selectedClients.length} clientes exportados para CSV`);
-};
-
-const handleExportExcel = () => {
-  const selectedClients = filteredClients.filter(c => selectedIds.includes(c.id));
-  const data = mapClientsForExport(selectedClients);
-  exportToExcel(data, `clientes_${format(new Date(), 'yyyy-MM-dd')}`);
-  toast.success(`${selectedClients.length} clientes exportados para Excel`);
-};
+// Adicionar EditSaleModal:
+<EditSaleModal
+  sale={saleToEdit!}
+  open={!!saleToEdit}
+  onOpenChange={(open) => !open && setSaleToEdit(null)}
+/>
 ```
 
 ---
@@ -224,32 +246,50 @@ const handleExportExcel = () => {
 ### Fluxo de Utilização
 
 ```text
-1. Utilizador seleciona vários leads/clientes
-2. Barra de ações aparece
-3. Clica no botão "Exportar"
-4. Dropdown mostra opções (CSV ou Excel)
-5. Seleciona formato desejado
-6. Ficheiro é gerado e descarregado automaticamente
-7. Toast de sucesso confirma a exportação
+1. Utilizador abre venda na lista
+2. Modal de detalhes abre
+3. Se estado permite, vê botão "Editar Venda"
+4. Clica em "Editar Venda"
+5. Modal de detalhes fecha, modal de edição abre
+6. Edita campos necessários (produtos, pagamento, etc.)
+7. Clica "Guardar Alterações"
+8. Sistema atualiza venda e items
+9. Toast de sucesso + modal fecha
+10. Lista de vendas atualizada
 ```
 
 ---
 
-### Campos Exportados
+### Tratamento de Sale Items
 
-| Leads | Clientes |
-|-------|----------|
-| Nome | Código |
-| Email | Nome |
-| Telefone | Email |
-| Status | Telefone |
-| Temperatura | Empresa |
-| Fonte | NIF |
-| Valor | Estado |
-| Data de Criação | Total Propostas |
-| | Total Vendas |
-| | Valor Total |
-| | Data de Criação |
+| Ação | Implementação |
+|------|---------------|
+| Item existente alterado | `useUpdateSaleItem` |
+| Item existente removido | `useDeleteSaleItem` |
+| Novo item adicionado | `useCreateSaleItems` |
+
+A lógica no submit:
+```typescript
+// 1. Identificar items a criar (novos)
+const newItems = editedItems.filter(i => i.isNew);
+
+// 2. Identificar items a atualizar (existentes modificados)
+const updatedItems = editedItems.filter(i => !i.isNew && i.isModified);
+
+// 3. Identificar items a eliminar (removidos)
+const deletedIds = originalItemIds.filter(id => 
+  !editedItems.find(i => i.id === id)
+);
+
+// Executar operações
+await Promise.all([
+  ...deletedIds.map(id => deleteSaleItem.mutateAsync({ itemId: id, saleId })),
+  ...updatedItems.map(item => updateSaleItem.mutateAsync({ ... })),
+]);
+if (newItems.length > 0) {
+  await createSaleItems.mutateAsync(newItems);
+}
+```
 
 ---
 
@@ -257,11 +297,10 @@ const handleExportExcel = () => {
 
 | Componente | Ação |
 |------------|------|
-| `xlsx` (npm) | Instalar dependência |
-| `src/lib/export.ts` | Criar (funções utilitárias) |
-| `BulkActionsBar.tsx` | Modificar (dropdown exportação) |
-| `Leads.tsx` | Modificar (handlers) |
-| `Clients.tsx` | Modificar (handlers) |
+| `EditSaleModal.tsx` | Criar |
+| `useSaleItems.ts` | Adicionar useUpdateSaleItem |
+| `useSales.ts` | Expandir useUpdateSale |
+| `SaleDetailsModal.tsx` | Adicionar botão + prop onEdit |
+| `Sales.tsx` | Gerir estado saleToEdit + integrar modal |
 
-**Total: 1 dependência + 1 novo ficheiro + 3 modificações**
-
+**Total: 1 novo ficheiro + 4 modificações**
