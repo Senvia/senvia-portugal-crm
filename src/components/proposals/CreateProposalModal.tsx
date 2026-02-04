@@ -260,35 +260,39 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
               </div>
             )}
 
-            <Separator />
+            {isTelecom && (
+              <>
+                <Separator />
 
-            {/* Tipo de Proposta */}
-            <div className="space-y-3">
-              <Label>Tipo de Proposta</Label>
-              <div className="grid grid-cols-2 gap-2">
-                <Button
-                  type="button"
-                  variant={proposalType === 'energia' ? 'default' : 'outline'}
-                  className="flex items-center justify-center gap-2 h-12"
-                  onClick={() => setProposalType('energia')}
-                >
-                  <Zap className="h-4 w-4" />
-                  Energia
-                </Button>
-                <Button
-                  type="button"
-                  variant={proposalType === 'servicos' ? 'default' : 'outline'}
-                  className="flex items-center justify-center gap-2 h-12"
-                  onClick={() => setProposalType('servicos')}
-                >
-                  <Wrench className="h-4 w-4" />
-                  Outros Serviços
-                </Button>
-              </div>
-            </div>
+                {/* Tipo de Proposta */}
+                <div className="space-y-3">
+                  <Label>Tipo de Proposta</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      type="button"
+                      variant={proposalType === 'energia' ? 'default' : 'outline'}
+                      className="flex items-center justify-center gap-2 h-12"
+                      onClick={() => setProposalType('energia')}
+                    >
+                      <Zap className="h-4 w-4" />
+                      Energia
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={proposalType === 'servicos' ? 'default' : 'outline'}
+                      className="flex items-center justify-center gap-2 h-12"
+                      onClick={() => setProposalType('servicos')}
+                    >
+                      <Wrench className="h-4 w-4" />
+                      Outros Serviços
+                    </Button>
+                  </div>
+                </div>
+              </>
+            )}
 
             {/* CPE Selector para propostas de Energia */}
-            {proposalType === 'energia' && (
+            {isTelecom && proposalType === 'energia' && (
               <>
                 <Separator />
                 <ProposalCpeSelector
@@ -300,7 +304,7 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
             )}
 
             {/* Campos específicos de Serviços */}
-            {proposalType === 'servicos' && (
+            {isTelecom && proposalType === 'servicos' && (
               <div className="space-y-4 p-4 rounded-lg border bg-secondary/30 border-border">
                 <div className="flex items-center gap-2 text-foreground">
                   <Wrench className="h-4 w-4" />
@@ -371,7 +375,7 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
             </div>
 
             {/* Summary */}
-            {proposalType === 'energia' && proposalCpes.length > 0 && (
+            {isTelecom && proposalType === 'energia' && proposalCpes.length > 0 && (
               <div className="p-3 rounded-lg bg-muted text-sm">
                 <div className="flex justify-between">
                   <span>CPE/CUI adicionados:</span>
