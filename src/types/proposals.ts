@@ -3,6 +3,7 @@
 export type ProposalStatus = 'draft' | 'sent' | 'negotiating' | 'accepted' | 'rejected' | 'expired';
 export type ProposalType = 'energia' | 'servicos';
 export type ModeloServico = 'transacional' | 'saas';
+export type NegotiationType = 'angariacao' | 'angariacao_indexado' | 'renovacao' | 'sem_volume';
 
 export interface Product {
   id: string;
@@ -31,8 +32,9 @@ export interface Proposal {
   
   // Campos por tipo de proposta
   proposal_type?: ProposalType | null;
+  negotiation_type?: NegotiationType | null;
   
-  // Campos Energia
+  // Campos Energia (legacy - agora por CPE)
   consumo_anual?: number | null;
   margem?: number | null;
   dbl?: number | null;
@@ -41,6 +43,7 @@ export interface Proposal {
   // Campos Serviços
   modelo_servico?: ModeloServico | null;
   kwp?: number | null;
+  servicos_produtos?: string[] | null; // Fixed products checkboxes
   
   // Comum
   comissao?: number | null;
@@ -100,3 +103,20 @@ export const MODELO_SERVICO_LABELS: Record<ModeloServico, string> = {
   transacional: 'Transacional',
   saas: 'SAAS',
 };
+
+export const NEGOTIATION_TYPE_LABELS: Record<NegotiationType, string> = {
+  angariacao: 'Angariação',
+  angariacao_indexado: 'Angariação Indexado',
+  renovacao: 'Renovação',
+  sem_volume: 'Sem Volume',
+};
+
+export const NEGOTIATION_TYPES: NegotiationType[] = ['angariacao', 'angariacao_indexado', 'renovacao', 'sem_volume'];
+
+// Produtos fixos para Outros Serviços (telecom)
+export const SERVICOS_PRODUCTS = [
+  'Solar',
+  'Carregadores/Baterias',
+  'Condensadores',
+  'Coberturas',
+];

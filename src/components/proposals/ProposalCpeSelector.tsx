@@ -1,14 +1,15 @@
-import { useState } from 'react';
-import { Plus, X, Router, RefreshCw, Zap } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Plus, X, RefreshCw, Zap, Calculator } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Separator } from '@/components/ui/separator';
 import { useCpes } from '@/hooks/useCpes';
 import { useAuth } from '@/contexts/AuthContext';
-import { EQUIPMENT_TYPES, COMERCIALIZADORES, ENERGY_TYPES, ENERGY_COMERCIALIZADORES, type Cpe } from '@/types/cpes';
+import { ENERGY_TYPES, ENERGY_COMERCIALIZADORES, type Cpe } from '@/types/cpes';
 
 export interface ProposalCpeDraft {
   id: string;
@@ -19,7 +20,15 @@ export interface ProposalCpeDraft {
   fidelizacao_start: string;
   fidelizacao_end: string;
   notes: string;
-  isNew: boolean; // true = novo CPE, false = atualização de CPE existente
+  isNew: boolean;
+  // Dados de energia por CPE
+  consumo_anual: string;
+  duracao_contrato: string;
+  dbl: string;
+  margem: string;
+  comissao: string;
+  contrato_inicio: string;
+  contrato_fim: string;
 }
 
 interface ProposalCpeSelectorProps {
@@ -28,21 +37,26 @@ interface ProposalCpeSelectorProps {
   onCpesChange: (cpes: ProposalCpeDraft[]) => void;
 }
 
+// Calcula margem: consumo × duração × DBL / 1000
+function calculateMargem(consumo: string, duracao: string, dbl: string): string {
+  const c = parseFloat(consumo) || 0;
+  const d = parseFloat(duracao) || 0;
+  const db = parseFloat(dbl) || 0;
+  if (c > 0 && d > 0 && db > 0) {
+    return ((c * d * db) / 1000).toFixed(2);
+  }
+  return '';
+}
+
 export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCpeSelectorProps) {
   const { data: clientCpes = [] } = useCpes(clientId);
   const { organization } = useAuth();
   
   const [activeTab, setActiveTab] = useState<'new' | 'existing'>('new');
   
-  // Telecom niche uses energy-specific labels and options
-  const isTelecom = organization?.niche === 'telecom';
-  const typeOptions = isTelecom ? ENERGY_TYPES : EQUIPMENT_TYPES;
-  const comercializadorOptions = isTelecom ? ENERGY_COMERCIALIZADORES : COMERCIALIZADORES;
-  const sectionLabel = isTelecom ? 'CPE/CUI (Pontos de Consumo)' : 'CPEs (Equipamentos)';
-  const serialLabel = isTelecom ? 'CPE/CUI' : 'Nº Série';
-  const serialPlaceholder = isTelecom ? 'PT0002...' : 'S/N...';
-  const typeLabel = isTelecom ? 'Tipo' : 'Tipo de Equipamento';
-  const SectionIcon = isTelecom ? Zap : Router;
+  // Labels for telecom/energy niche
+  const typeOptions = ENERGY_TYPES;
+  const comercializadorOptions = ENERGY_COMERCIALIZADORES;
   
   // State for new CPE form
   const [equipmentType, setEquipmentType] = useState('');
@@ -50,17 +64,60 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
   const [serialNumber, setSerialNumber] = useState('');
   const [comercializador, setComercializador] = useState('');
   const [customComercializador, setCustomComercializador] = useState('');
-  const [fidelizacaoStart, setFidelizacaoStart] = useState('');
-  const [fidelizacaoEnd, setFidelizacaoEnd] = useState('');
+  const [consumoAnual, setConsumoAnual] = useState('');
+  const [duracaoContrato, setDuracaoContrato] = useState('');
+  const [dbl, setDbl] = useState('');
+  const [comissao, setComissao] = useState('');
+  const [contratoInicio, setContratoInicio] = useState('');
+  const [contratoFim, setContratoFim] = useState('');
   const [notes, setNotes] = useState('');
   
   // State for existing CPE update form
   const [selectedExistingCpe, setSelectedExistingCpe] = useState<string | null>(null);
-  const [updateFidelizacaoStart, setUpdateFidelizacaoStart] = useState('');
-  const [updateFidelizacaoEnd, setUpdateFidelizacaoEnd] = useState('');
+  const [updateConsumoAnual, setUpdateConsumoAnual] = useState('');
+  const [updateDuracaoContrato, setUpdateDuracaoContrato] = useState('');
+  const [updateDbl, setUpdateDbl] = useState('');
+  const [updateComissao, setUpdateComissao] = useState('');
+  const [updateContratoInicio, setUpdateContratoInicio] = useState('');
+  const [updateContratoFim, setUpdateContratoFim] = useState('');
   const [updateComercializador, setUpdateComercializador] = useState('');
   const [updateCustomComercializador, setUpdateCustomComercializador] = useState('');
   const [updateNotes, setUpdateNotes] = useState('');
+
+  // Auto-calculate margem for new CPE
+  const newMargem = useMemo(() => 
+    calculateMargem(consumoAnual, duracaoContrato, dbl), 
+    [consumoAnual, duracaoContrato, dbl]
+  );
+  
+  // Auto-calculate margem for existing CPE update
+  const updateMargem = useMemo(() => 
+    calculateMargem(updateConsumoAnual, updateDuracaoContrato, updateDbl), 
+    [updateConsumoAnual, updateDuracaoContrato, updateDbl]
+  );
+
+  // Auto-calculate contrato fim when start + duration changes
+  useEffect(() => {
+    if (contratoInicio && duracaoContrato) {
+      const start = new Date(contratoInicio);
+      const years = parseInt(duracaoContrato) || 0;
+      if (years > 0) {
+        start.setFullYear(start.getFullYear() + years);
+        setContratoFim(start.toISOString().split('T')[0]);
+      }
+    }
+  }, [contratoInicio, duracaoContrato]);
+  
+  useEffect(() => {
+    if (updateContratoInicio && updateDuracaoContrato) {
+      const start = new Date(updateContratoInicio);
+      const years = parseInt(updateDuracaoContrato) || 0;
+      if (years > 0) {
+        start.setFullYear(start.getFullYear() + years);
+        setUpdateContratoFim(start.toISOString().split('T')[0]);
+      }
+    }
+  }, [updateContratoInicio, updateDuracaoContrato]);
 
   const resetNewForm = () => {
     setEquipmentType('');
@@ -68,15 +125,23 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
     setSerialNumber('');
     setComercializador('');
     setCustomComercializador('');
-    setFidelizacaoStart('');
-    setFidelizacaoEnd('');
+    setConsumoAnual('');
+    setDuracaoContrato('');
+    setDbl('');
+    setComissao('');
+    setContratoInicio('');
+    setContratoFim('');
     setNotes('');
   };
 
   const resetExistingForm = () => {
     setSelectedExistingCpe(null);
-    setUpdateFidelizacaoStart('');
-    setUpdateFidelizacaoEnd('');
+    setUpdateConsumoAnual('');
+    setUpdateDuracaoContrato('');
+    setUpdateDbl('');
+    setUpdateComissao('');
+    setUpdateContratoInicio('');
+    setUpdateContratoFim('');
     setUpdateComercializador('');
     setUpdateCustomComercializador('');
     setUpdateNotes('');
@@ -94,10 +159,17 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
       equipment_type: finalEquipmentType,
       serial_number: serialNumber,
       comercializador: finalComercializador,
-      fidelizacao_start: fidelizacaoStart,
-      fidelizacao_end: fidelizacaoEnd,
+      fidelizacao_start: contratoInicio,
+      fidelizacao_end: contratoFim,
       notes: notes,
       isNew: true,
+      consumo_anual: consumoAnual,
+      duracao_contrato: duracaoContrato,
+      dbl: dbl,
+      margem: newMargem,
+      comissao: comissao,
+      contrato_inicio: contratoInicio,
+      contrato_fim: contratoFim,
     };
 
     onCpesChange([...cpes, newCpe]);
@@ -125,10 +197,17 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
       equipment_type: existingCpe.equipment_type,
       serial_number: existingCpe.serial_number || '',
       comercializador: finalComercializador,
-      fidelizacao_start: updateFidelizacaoStart || existingCpe.fidelizacao_start || '',
-      fidelizacao_end: updateFidelizacaoEnd || existingCpe.fidelizacao_end || '',
+      fidelizacao_start: updateContratoInicio || existingCpe.fidelizacao_start || '',
+      fidelizacao_end: updateContratoFim || existingCpe.fidelizacao_end || '',
       notes: updateNotes,
       isNew: false,
+      consumo_anual: updateConsumoAnual,
+      duracao_contrato: updateDuracaoContrato,
+      dbl: updateDbl,
+      margem: updateMargem,
+      comissao: updateComissao,
+      contrato_inicio: updateContratoInicio,
+      contrato_fim: updateContratoFim,
     };
 
     onCpesChange([...cpes, updateCpe]);
@@ -137,6 +216,27 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
 
   const handleRemoveCpe = (id: string) => {
     onCpesChange(cpes.filter(c => c.id !== id));
+  };
+
+  const handleUpdateCpeField = (id: string, field: keyof ProposalCpeDraft, value: string) => {
+    onCpesChange(cpes.map(cpe => {
+      if (cpe.id !== id) return cpe;
+      const updated = { ...cpe, [field]: value };
+      // Auto-recalculate margem when relevant fields change
+      if (['consumo_anual', 'duracao_contrato', 'dbl'].includes(field)) {
+        updated.margem = calculateMargem(updated.consumo_anual, updated.duracao_contrato, updated.dbl);
+      }
+      // Auto-recalculate contrato_fim when start + duration changes
+      if ((field === 'contrato_inicio' || field === 'duracao_contrato') && updated.contrato_inicio && updated.duracao_contrato) {
+        const start = new Date(updated.contrato_inicio);
+        const years = parseInt(updated.duracao_contrato) || 0;
+        if (years > 0) {
+          start.setFullYear(start.getFullYear() + years);
+          updated.contrato_fim = start.toISOString().split('T')[0];
+        }
+      }
+      return updated;
+    }));
   };
 
   // Filter out already selected CPEs from the list
@@ -149,45 +249,170 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
   
   const canAddExisting = selectedExistingCpe !== null;
 
+  const formatCurrency = (value: string) => {
+    const num = parseFloat(value) || 0;
+    return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(num);
+  };
+
   return (
     <div className="space-y-4">
       <Label className="flex items-center gap-2">
-        <SectionIcon className="h-4 w-4" />
-        {sectionLabel}
+        <Zap className="h-4 w-4" />
+        CPE/CUI (Pontos de Consumo)
       </Label>
 
-      {/* List of added CPEs */}
+      {/* List of added CPEs with energy data */}
       {cpes.length > 0 && (
-        <div className="space-y-2 mb-4">
-          {cpes.map((cpe) => (
+        <div className="space-y-4">
+          {cpes.map((cpe, index) => (
             <div
               key={cpe.id}
-              className="flex items-center justify-between p-3 rounded-lg border bg-muted/30"
+              className="p-4 rounded-lg border bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800"
             >
-              <div className="flex items-center gap-3">
-                <div className="flex flex-col">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-sm">{cpe.equipment_type}</span>
-                    <Badge variant={cpe.isNew ? 'default' : 'secondary'} className="text-xs">
-                      {cpe.isNew ? 'Novo' : 'Renovação'}
-                    </Badge>
-                  </div>
-                  <span className="text-xs text-muted-foreground">
-                    {cpe.comercializador}
-                    {cpe.serial_number && ` • ${cpe.serial_number}`}
-                    {cpe.fidelizacao_end && ` • Até ${cpe.fidelizacao_end}`}
-                  </span>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Zap className="h-4 w-4 text-amber-600" />
+                  <span className="font-medium text-sm">CPE/CUI #{index + 1}</span>
+                  <Badge variant={cpe.isNew ? 'default' : 'secondary'} className="text-xs">
+                    {cpe.isNew ? 'Novo' : 'Renovação'}
+                  </Badge>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                  onClick={() => handleRemoveCpe(cpe.id)}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              
+              {/* CPE basic info */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
+                <div className="space-y-1">
+                  <Label className="text-xs">Tipo</Label>
+                  <Input
+                    value={cpe.equipment_type}
+                    onChange={(e) => handleUpdateCpeField(cpe.id, 'equipment_type', e.target.value)}
+                    className="h-8 text-sm"
+                    disabled
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Comercializador</Label>
+                  <Input
+                    value={cpe.comercializador}
+                    onChange={(e) => handleUpdateCpeField(cpe.id, 'comercializador', e.target.value)}
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">CPE/CUI</Label>
+                  <Input
+                    value={cpe.serial_number}
+                    onChange={(e) => handleUpdateCpeField(cpe.id, 'serial_number', e.target.value)}
+                    className="h-8 text-sm"
+                    placeholder="PT0002..."
+                  />
                 </div>
               </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                onClick={() => handleRemoveCpe(cpe.id)}
-              >
-                <X className="h-4 w-4" />
-              </Button>
+
+              <Separator className="my-3" />
+              
+              {/* Energy data per CPE */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2">
+                <div className="space-y-1">
+                  <Label className="text-xs">Consumo Anual (kWh)</Label>
+                  <Input
+                    type="number"
+                    step="1"
+                    min="0"
+                    value={cpe.consumo_anual}
+                    onChange={(e) => handleUpdateCpeField(cpe.id, 'consumo_anual', e.target.value)}
+                    className="h-8 text-sm"
+                    placeholder="15000"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Duração (anos)</Label>
+                  <Input
+                    type="number"
+                    min="1"
+                    max="10"
+                    value={cpe.duracao_contrato}
+                    onChange={(e) => handleUpdateCpeField(cpe.id, 'duracao_contrato', e.target.value)}
+                    className="h-8 text-sm"
+                    placeholder="2"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">DBL (€/MWh)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={cpe.dbl}
+                    onChange={(e) => handleUpdateCpeField(cpe.id, 'dbl', e.target.value)}
+                    className="h-8 text-sm"
+                    placeholder="5.50"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs flex items-center gap-1">
+                    <Calculator className="h-3 w-3" />
+                    Margem (€)
+                  </Label>
+                  <Input
+                    value={cpe.margem}
+                    className="h-8 text-sm bg-muted font-medium"
+                    disabled
+                    placeholder="Auto"
+                  />
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-xs">Comissão (€)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={cpe.comissao}
+                    onChange={(e) => handleUpdateCpeField(cpe.id, 'comissao', e.target.value)}
+                    className="h-8 text-sm"
+                    placeholder="150"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Início Contrato</Label>
+                  <Input
+                    type="date"
+                    value={cpe.contrato_inicio}
+                    onChange={(e) => handleUpdateCpeField(cpe.id, 'contrato_inicio', e.target.value)}
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Fim Contrato</Label>
+                  <Input
+                    type="date"
+                    value={cpe.contrato_fim}
+                    onChange={(e) => handleUpdateCpeField(cpe.id, 'contrato_fim', e.target.value)}
+                    className="h-8 text-sm bg-muted"
+                    disabled
+                  />
+                </div>
+              </div>
+
+              {/* Summary */}
+              {cpe.margem && parseFloat(cpe.margem) > 0 && (
+                <div className="mt-3 p-2 bg-amber-100 dark:bg-amber-900/30 rounded text-xs text-amber-800 dark:text-amber-200">
+                  Margem calculada: <strong>{formatCurrency(cpe.margem)}</strong>
+                  {cpe.comissao && ` | Comissão: ${formatCurrency(cpe.comissao)}`}
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -208,9 +433,9 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
 
         {/* New CPE Tab */}
         <TabsContent value="new" className="space-y-3 mt-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="space-y-1">
-              <Label className="text-xs">{typeLabel}</Label>
+              <Label className="text-xs">Tipo</Label>
               <Select value={equipmentType} onValueChange={setEquipmentType}>
                 <SelectTrigger className="h-9">
                   <SelectValue placeholder="Selecionar..." />
@@ -254,34 +479,101 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
                 />
               )}
             </div>
-          </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="space-y-1">
-              <Label className="text-xs">{serialLabel} (opcional)</Label>
+              <Label className="text-xs">CPE/CUI (opcional)</Label>
               <Input
                 value={serialNumber}
                 onChange={(e) => setSerialNumber(e.target.value)}
                 className="h-9"
-                placeholder={serialPlaceholder}
+                placeholder="PT0002..."
+              />
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Energy fields for new CPE */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div className="space-y-1">
+              <Label className="text-xs">Consumo Anual (kWh)</Label>
+              <Input
+                type="number"
+                step="1"
+                min="0"
+                value={consumoAnual}
+                onChange={(e) => setConsumoAnual(e.target.value)}
+                className="h-8"
+                placeholder="15000"
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">Início Fidelização</Label>
+              <Label className="text-xs">Duração (anos)</Label>
               <Input
-                type="date"
-                value={fidelizacaoStart}
-                onChange={(e) => setFidelizacaoStart(e.target.value)}
-                className="h-9"
+                type="number"
+                min="1"
+                max="10"
+                value={duracaoContrato}
+                onChange={(e) => setDuracaoContrato(e.target.value)}
+                className="h-8"
+                placeholder="2"
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">Fim Fidelização</Label>
+              <Label className="text-xs">DBL (€/MWh)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={dbl}
+                onChange={(e) => setDbl(e.target.value)}
+                className="h-8"
+                placeholder="5.50"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs flex items-center gap-1">
+                <Calculator className="h-3 w-3" />
+                Margem (€)
+              </Label>
+              <Input
+                value={newMargem}
+                className="h-8 bg-muted font-medium"
+                disabled
+                placeholder="Auto"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            <div className="space-y-1">
+              <Label className="text-xs">Comissão (€)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={comissao}
+                onChange={(e) => setComissao(e.target.value)}
+                className="h-8"
+                placeholder="150"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Início Contrato</Label>
               <Input
                 type="date"
-                value={fidelizacaoEnd}
-                onChange={(e) => setFidelizacaoEnd(e.target.value)}
-                className="h-9"
+                value={contratoInicio}
+                onChange={(e) => setContratoInicio(e.target.value)}
+                className="h-8"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Fim Contrato</Label>
+              <Input
+                type="date"
+                value={contratoFim}
+                className="h-8 bg-muted"
+                disabled
               />
             </div>
           </div>
@@ -295,7 +587,7 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
             className="w-full"
           >
             <Plus className="h-4 w-4 mr-2" />
-            Adicionar CPE
+            Adicionar CPE/CUI
           </Button>
         </TabsContent>
 
@@ -330,7 +622,7 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
 
               {selectedExistingCpe && (
                 <>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                     <div className="space-y-1">
                       <Label className="text-xs">Novo Comercializador</Label>
                       <Select value={updateComercializador} onValueChange={setUpdateComercializador}>
@@ -355,23 +647,90 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
                       )}
                     </div>
                     <div className="space-y-1">
-                      <Label className="text-xs">Nova Data Início</Label>
+                      <Label className="text-xs">Início Contrato</Label>
                       <Input
                         type="date"
-                        value={updateFidelizacaoStart}
-                        onChange={(e) => setUpdateFidelizacaoStart(e.target.value)}
+                        value={updateContratoInicio}
+                        onChange={(e) => setUpdateContratoInicio(e.target.value)}
                         className="h-9"
                       />
                     </div>
                     <div className="space-y-1">
-                      <Label className="text-xs">Nova Data Fim</Label>
+                      <Label className="text-xs">Fim Contrato</Label>
                       <Input
                         type="date"
-                        value={updateFidelizacaoEnd}
-                        onChange={(e) => setUpdateFidelizacaoEnd(e.target.value)}
-                        className="h-9"
+                        value={updateContratoFim}
+                        className="h-9 bg-muted"
+                        disabled
                       />
                     </div>
+                  </div>
+
+                  <Separator />
+
+                  {/* Energy fields for existing CPE */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Consumo Anual (kWh)</Label>
+                      <Input
+                        type="number"
+                        step="1"
+                        min="0"
+                        value={updateConsumoAnual}
+                        onChange={(e) => setUpdateConsumoAnual(e.target.value)}
+                        className="h-8"
+                        placeholder="15000"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Duração (anos)</Label>
+                      <Input
+                        type="number"
+                        min="1"
+                        max="10"
+                        value={updateDuracaoContrato}
+                        onChange={(e) => setUpdateDuracaoContrato(e.target.value)}
+                        className="h-8"
+                        placeholder="2"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">DBL (€/MWh)</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={updateDbl}
+                        onChange={(e) => setUpdateDbl(e.target.value)}
+                        className="h-8"
+                        placeholder="5.50"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs flex items-center gap-1">
+                        <Calculator className="h-3 w-3" />
+                        Margem (€)
+                      </Label>
+                      <Input
+                        value={updateMargem}
+                        className="h-8 bg-muted font-medium"
+                        disabled
+                        placeholder="Auto"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-xs">Comissão (€)</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={updateComissao}
+                      onChange={(e) => setUpdateComissao(e.target.value)}
+                      className="h-8 w-full sm:w-1/3"
+                      placeholder="150"
+                    />
                   </div>
 
                   <Button

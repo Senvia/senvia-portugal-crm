@@ -13,6 +13,14 @@ export interface ProposalCpe {
   fidelizacao_end: string | null;
   notes: string | null;
   created_at: string;
+  // Campos de energia por CPE
+  consumo_anual: number | null;
+  duracao_contrato: number | null;
+  dbl: number | null;
+  margem: number | null;
+  comissao: number | null;
+  contrato_inicio: string | null;
+  contrato_fim: string | null;
 }
 
 export interface CreateProposalCpeData {
@@ -24,6 +32,14 @@ export interface CreateProposalCpeData {
   fidelizacao_start?: string | null;
   fidelizacao_end?: string | null;
   notes?: string | null;
+  // Campos de energia por CPE
+  consumo_anual?: number | null;
+  duracao_contrato?: number | null;
+  dbl?: number | null;
+  margem?: number | null;
+  comissao?: number | null;
+  contrato_inicio?: string | null;
+  contrato_fim?: string | null;
 }
 
 export function useProposalCpes(proposalId: string | undefined) {
@@ -60,6 +76,13 @@ export function useCreateProposalCpe() {
           fidelizacao_start: data.fidelizacao_start || null,
           fidelizacao_end: data.fidelizacao_end || null,
           notes: data.notes || null,
+          consumo_anual: data.consumo_anual ?? null,
+          duracao_contrato: data.duracao_contrato ?? null,
+          dbl: data.dbl ?? null,
+          margem: data.margem ?? null,
+          comissao: data.comissao ?? null,
+          contrato_inicio: data.contrato_inicio || null,
+          contrato_fim: data.contrato_fim || null,
         })
         .select()
         .single();
@@ -95,6 +118,13 @@ export function useCreateProposalCpesBatch() {
           fidelizacao_start: cpe.fidelizacao_start || null,
           fidelizacao_end: cpe.fidelizacao_end || null,
           notes: cpe.notes || null,
+          consumo_anual: cpe.consumo_anual ?? null,
+          duracao_contrato: cpe.duracao_contrato ?? null,
+          dbl: cpe.dbl ?? null,
+          margem: cpe.margem ?? null,
+          comissao: cpe.comissao ?? null,
+          contrato_inicio: cpe.contrato_inicio || null,
+          contrato_fim: cpe.contrato_fim || null,
         })))
         .select();
       
@@ -162,6 +192,13 @@ export function useUpdateProposalCpes() {
             fidelizacao_start: cpe.fidelizacao_start || null,
             fidelizacao_end: cpe.fidelizacao_end || null,
             notes: cpe.notes || null,
+            consumo_anual: cpe.consumo_anual ?? null,
+            duracao_contrato: cpe.duracao_contrato ?? null,
+            dbl: cpe.dbl ?? null,
+            margem: cpe.margem ?? null,
+            comissao: cpe.comissao ?? null,
+            contrato_inicio: cpe.contrato_inicio || null,
+            contrato_fim: cpe.contrato_fim || null,
           })))
           .select();
         
