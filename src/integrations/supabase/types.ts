@@ -1918,6 +1918,63 @@ export type Database = {
           },
         ]
       }
+      sale_payments: {
+        Row: {
+          amount: number
+          created_at: string | null
+          id: string
+          invoice_reference: string | null
+          notes: string | null
+          organization_id: string
+          payment_date: string
+          payment_method: string | null
+          sale_id: string
+          status: string
+          updated_at: string | null
+        }
+        Insert: {
+          amount: number
+          created_at?: string | null
+          id?: string
+          invoice_reference?: string | null
+          notes?: string | null
+          organization_id: string
+          payment_date: string
+          payment_method?: string | null
+          sale_id: string
+          status?: string
+          updated_at?: string | null
+        }
+        Update: {
+          amount?: number
+          created_at?: string | null
+          id?: string
+          invoice_reference?: string | null
+          notes?: string | null
+          organization_id?: string
+          payment_date?: string
+          payment_method?: string | null
+          sale_id?: string
+          status?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sale_payments_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sale_payments_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sales: {
         Row: {
           anos_contrato: number | null

@@ -43,6 +43,33 @@ export const PAYMENT_STATUS_COLORS: Record<PaymentStatus, string> = {
   paid: 'bg-green-500/20 text-green-500 border-green-500/30',
 };
 
+// Payment record types (for sale_payments table)
+export type PaymentRecordStatus = 'pending' | 'paid';
+
+export interface SalePayment {
+  id: string;
+  organization_id: string;
+  sale_id: string;
+  amount: number;
+  payment_date: string;
+  payment_method: PaymentMethod | null;
+  invoice_reference: string | null;
+  status: PaymentRecordStatus;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const PAYMENT_RECORD_STATUS_LABELS: Record<PaymentRecordStatus, string> = {
+  pending: 'Agendado',
+  paid: 'Pago',
+};
+
+export const PAYMENT_RECORD_STATUS_COLORS: Record<PaymentRecordStatus, string> = {
+  pending: 'bg-amber-500/20 text-amber-500 border-amber-500/30',
+  paid: 'bg-green-500/20 text-green-500 border-green-500/30',
+};
+
 export const PAYMENT_STATUSES: PaymentStatus[] = ['pending', 'partial', 'paid'];
 
 export interface Sale {

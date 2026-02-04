@@ -50,6 +50,7 @@ import { formatCurrency } from "@/lib/format";
 import { MODELO_SERVICO_LABELS } from "@/types/proposals";
 import type { SaleWithDetails, SaleStatus } from "@/types/sales";
 import { SALE_STATUS_LABELS, SALE_STATUS_COLORS, SALE_STATUSES } from "@/types/sales";
+import { SalePaymentsList } from "./SalePaymentsList";
 
 interface SaleDetailsModalProps {
   sale: SaleWithDetails | null;
@@ -412,6 +413,19 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                 </>
               )}
 
+              {/* Payments Section */}
+              {organization && (
+                <>
+                  <SalePaymentsList
+                    saleId={sale.id}
+                    organizationId={organization.id}
+                    saleTotal={sale.total_value}
+                    readonly={false}
+                  />
+                  <Separator />
+                </>
+              )}
+
               {/* Notes */}
               <div className="space-y-2">
                 <Label>Notas</Label>
@@ -428,7 +442,7 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
 
           {/* Actions */}
           <div className="p-4 border-t border-border/50 flex gap-3">
-            {sale.status !== 'delivered' && sale.status !== 'cancelled' && onEdit && (
+            {sale.status !== 'cancelled' && onEdit && (
               <Button
                 variant="outline"
                 className="flex-1"
@@ -443,7 +457,7 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
             )}
             <Button
               variant="destructive"
-              className={sale.status !== 'delivered' && sale.status !== 'cancelled' && onEdit ? "flex-1" : "w-full"}
+              className={sale.status !== 'cancelled' && onEdit ? "flex-1" : "w-full"}
               onClick={() => setShowDeleteConfirm(true)}
             >
               <Trash2 className="h-4 w-4 mr-2" />
