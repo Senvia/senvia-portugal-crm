@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Plus, Minus, X, UserPlus, Zap, Wrench } from 'lucide-react';
+import { X, UserPlus, Zap, Wrench } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,8 +10,8 @@ import { SearchableCombobox, type ComboboxOption } from '@/components/ui/searcha
 import { Separator } from '@/components/ui/separator';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { useActiveProducts } from '@/hooks/useProducts';
-import { useUpdateProposal, useUpdateProposalProducts, useProposalProducts } from '@/hooks/useProposals';
+import { Checkbox } from '@/components/ui/checkbox';
+import { useUpdateProposal } from '@/hooks/useProposals';
 import { useClients } from '@/hooks/useClients';
 import { CreateClientModal } from '@/components/clients/CreateClientModal';
 import { ProposalCpeSelector, type ProposalCpeDraft } from './ProposalCpeSelector';
@@ -19,9 +19,13 @@ import { useProposalCpes, useUpdateProposalCpes } from '@/hooks/useProposalCpes'
 import { 
   PROPOSAL_STATUS_LABELS, 
   PROPOSAL_STATUSES, 
+  NEGOTIATION_TYPE_LABELS,
+  NEGOTIATION_TYPES,
+  SERVICOS_PRODUCTS,
   type ProposalStatus, 
   type ProposalType,
   type ModeloServico,
+  type NegotiationType,
   type Proposal 
 } from '@/types/proposals';
 
@@ -32,48 +36,30 @@ interface EditProposalModalProps {
   onSuccess?: () => void;
 }
 
-interface SelectedProduct {
-  product_id: string;
-  name: string;
-  quantity: number;
-  unit_price: number;
-}
-
 export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: EditProposalModalProps) {
-  const { data: products = [] } = useActiveProducts();
   const { data: clients = [] } = useClients();
-  const { data: existingProducts = [] } = useProposalProducts(proposal.id);
   const { data: existingCpes = [] } = useProposalCpes(proposal.id);
   const updateProposal = useUpdateProposal();
-  const updateProposalProducts = useUpdateProposalProducts();
   const updateProposalCpes = useUpdateProposalCpes();
   
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
-  const [selectedProducts, setSelectedProducts] = useState<SelectedProduct[]>([]);
   const [notes, setNotes] = useState('');
   const [proposalDate, setProposalDate] = useState('');
-  
-  const [additionalValue, setAdditionalValue] = useState<string>('');
-  const [discount, setDiscount] = useState<string>('');
   const [status, setStatus] = useState<ProposalStatus>('draft');
+  
+  // Tipo de negociação (novo)
+  const [negotiationType, setNegotiationType] = useState<NegotiationType | null>(null);
   
   // Tipo de proposta
   const [proposalType, setProposalType] = useState<ProposalType>('energia');
   
-  // Campos Energia
-  const [consumoAnual, setConsumoAnual] = useState<string>('');
-  const [margem, setMargem] = useState<string>('');
-  const [dbl, setDbl] = useState<string>('');
-  const [anosContrato, setAnosContrato] = useState<string>('');
-  
   // Campos Serviços
   const [modeloServico, setModeloServico] = useState<ModeloServico>('transacional');
   const [kwp, setKwp] = useState<string>('');
+  const [servicosComissao, setServicosComissao] = useState<string>('');
+  const [servicosProdutos, setServicosProdutos] = useState<string[]>([]);
   
-  // Comum
-  const [comissao, setComissao] = useState<string>('');
-  
-  // CPEs para propostas de energia
+  // CPEs para propostas de energia (contêm os dados de energia)
   const [proposalCpes, setProposalCpes] = useState<ProposalCpeDraft[]>([]);
   
   // Modal para criar novo cliente
@@ -87,41 +73,15 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
       setProposalDate(proposal.proposal_date?.split('T')[0] || new Date().toISOString().split('T')[0]);
       setStatus(proposal.status);
       setProposalType((proposal.proposal_type as ProposalType) || 'energia');
-      
-      // Campos Energia
-      setConsumoAnual(proposal.consumo_anual?.toString() || '');
-      setMargem(proposal.margem?.toString() || '');
-      setDbl(proposal.dbl?.toString() || '');
-      setAnosContrato(proposal.anos_contrato?.toString() || '');
+      setNegotiationType((proposal.negotiation_type as NegotiationType) || null);
       
       // Campos Serviços
       setModeloServico((proposal.modelo_servico as ModeloServico) || 'transacional');
       setKwp(proposal.kwp?.toString() || '');
-      
-      // Comum
-      setComissao(proposal.comissao?.toString() || '');
-      
-      // Calcular valores adicionais/desconto com base no total e produtos
-      setAdditionalValue('');
-      setDiscount('');
+      setServicosComissao(proposal.comissao?.toString() || '');
+      setServicosProdutos(proposal.servicos_produtos || []);
     }
   }, [open, proposal]);
-
-  // Carregar produtos existentes quando disponíveis
-  useEffect(() => {
-    if (open && existingProducts.length > 0) {
-      setSelectedProducts(
-        existingProducts.map(p => ({
-          product_id: p.product_id,
-          name: p.product?.name || 'Produto',
-          quantity: p.quantity,
-          unit_price: p.unit_price,
-        }))
-      );
-    } else if (open && existingProducts.length === 0) {
-      setSelectedProducts([]);
-    }
-  }, [open, existingProducts]);
 
   // Carregar CPEs existentes quando disponíveis
   useEffect(() => {
@@ -136,7 +96,7 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
           fidelizacao_start: cpe.fidelizacao_start || '',
           fidelizacao_end: cpe.fidelizacao_end || '',
           notes: cpe.notes || '',
-          isNew: !cpe.existing_cpe_id, // Se não tem existing_cpe_id, foi criado como novo
+          isNew: !cpe.existing_cpe_id,
           // Novos campos de energia por CPE
           consumo_anual: cpe.consumo_anual?.toString() || '',
           duracao_contrato: cpe.duracao_contrato?.toString() || '',
@@ -152,68 +112,30 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
     }
   }, [open, existingCpes]);
 
-  const productsSubtotal = useMemo(() => {
-    return selectedProducts.reduce((sum, p) => sum + (p.quantity * p.unit_price), 0);
-  }, [selectedProducts]);
-
+  // Calcular total baseado nos CPEs (soma das margens + comissões) para energia
   const totalValue = useMemo(() => {
-    const additional = parseFloat(additionalValue) || 0;
-    const disc = parseFloat(discount) || 0;
-    return Math.max(0, productsSubtotal + additional - disc);
-  }, [productsSubtotal, additionalValue, discount]);
-
-  const handleAddProduct = (productId: string) => {
-    const product = products.find(p => p.id === productId);
-    if (!product) return;
-
-    const existing = selectedProducts.find(p => p.product_id === productId);
-    if (existing) {
-      setSelectedProducts(prev =>
-        prev.map(p =>
-          p.product_id === productId
-            ? { ...p, quantity: p.quantity + 1 }
-            : p
-        )
-      );
+    if (proposalType === 'energia') {
+      return proposalCpes.reduce((sum, cpe) => {
+        const margem = parseFloat(cpe.margem) || 0;
+        const comissao = parseFloat(cpe.comissao) || 0;
+        return sum + margem + comissao;
+      }, 0);
     } else {
-      setSelectedProducts(prev => [
-        ...prev,
-        {
-          product_id: product.id,
-          name: product.name,
-          quantity: 1,
-          unit_price: product.price || 0,
-        },
-      ]);
+      // Para serviços, usar comissão
+      return parseFloat(servicosComissao) || 0;
     }
-  };
-
-  const handleRemoveProduct = (productId: string) => {
-    setSelectedProducts(prev => prev.filter(p => p.product_id !== productId));
-  };
-
-  const handleQuantityChange = (productId: string, delta: number) => {
-    setSelectedProducts(prev =>
-      prev.map(p => {
-        if (p.product_id !== productId) return p;
-        const newQty = Math.max(1, p.quantity + delta);
-        return { ...p, quantity: newQty };
-      })
-    );
-  };
-
-  const handlePriceChange = (productId: string, price: number) => {
-    setSelectedProducts(prev =>
-      prev.map(p =>
-        p.product_id === productId
-          ? { ...p, unit_price: price }
-          : p
-      )
-    );
-  };
+  }, [proposalType, proposalCpes, servicosComissao]);
 
   const handleClientCreated = (newClientId: string) => {
     setSelectedClientId(newClientId);
+  };
+
+  const handleServicosProdutoToggle = (produto: string, checked: boolean) => {
+    if (checked) {
+      setServicosProdutos(prev => [...prev, produto]);
+    } else {
+      setServicosProdutos(prev => prev.filter(p => p !== produto));
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -228,24 +150,17 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
       notes: notes.trim() || null,
       proposal_date: proposalDate,
       proposal_type: proposalType,
-      consumo_anual: proposalType === 'energia' ? (parseFloat(consumoAnual) || null) : null,
-      margem: proposalType === 'energia' ? (parseFloat(margem) || null) : null,
-      dbl: proposalType === 'energia' ? (parseInt(dbl) || null) : null,
-      anos_contrato: proposalType === 'energia' ? (parseInt(anosContrato) || null) : null,
+      negotiation_type: negotiationType,
+      // Campos legacy ao nível da proposta - limpar
+      consumo_anual: null,
+      margem: null,
+      dbl: null,
+      anos_contrato: null,
+      // Campos Serviços
       modelo_servico: proposalType === 'servicos' ? modeloServico : null,
       kwp: proposalType === 'servicos' ? (parseFloat(kwp) || null) : null,
-      comissao: parseFloat(comissao) || null,
-    });
-
-    // Atualizar produtos
-    await updateProposalProducts.mutateAsync({
-      proposalId: proposal.id,
-      products: selectedProducts.map(p => ({
-        product_id: p.product_id,
-        quantity: p.quantity,
-        unit_price: p.unit_price,
-        total: p.quantity * p.unit_price,
-      })),
+      comissao: proposalType === 'servicos' ? (parseFloat(servicosComissao) || null) : null,
+      servicos_produtos: proposalType === 'servicos' ? servicosProdutos : null,
     });
 
     // Atualizar CPEs (apenas para propostas de energia)
@@ -261,7 +176,7 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
           fidelizacao_start: cpe.fidelizacao_start || null,
           fidelizacao_end: cpe.fidelizacao_end || null,
           notes: cpe.notes || null,
-          // Novos campos de energia por CPE
+          // Dados de energia por CPE
           consumo_anual: cpe.consumo_anual ? parseFloat(cpe.consumo_anual) : null,
           duracao_contrato: cpe.duracao_contrato ? parseInt(cpe.duracao_contrato) : null,
           dbl: cpe.dbl ? parseFloat(cpe.dbl) : null,
@@ -281,15 +196,7 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
     return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(value);
   };
 
-  const availableProducts = products.filter(
-    p => !selectedProducts.find(sp => sp.product_id === p.id)
-  );
-
-  const hasAdditional = parseFloat(additionalValue) > 0;
-  const hasDiscount = parseFloat(discount) > 0;
-  const showBreakdown = selectedProducts.length > 0 || hasAdditional || hasDiscount;
-
-  const isSubmitting = updateProposal.isPending || updateProposalProducts.isPending || updateProposalCpes.isPending;
+  const isSubmitting = updateProposal.isPending || updateProposalCpes.isPending;
 
   return (
     <>
@@ -358,6 +265,25 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
                 </div>
               </div>
 
+              {/* Tipo de Negociação */}
+              <div className="space-y-3">
+                <Label>Tipo de Negociação</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {NEGOTIATION_TYPES.map((type) => (
+                    <Button
+                      key={type}
+                      type="button"
+                      variant={negotiationType === type ? 'default' : 'outline'}
+                      size="sm"
+                      className="text-xs"
+                      onClick={() => setNegotiationType(type)}
+                    >
+                      {NEGOTIATION_TYPE_LABELS[type]}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
               {/* Tipo de Proposta */}
               <div className="space-y-3">
                 <Label>Tipo de Proposta</Label>
@@ -383,87 +309,7 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
                 </div>
               </div>
 
-              {/* Campos específicos de Energia */}
-              {proposalType === 'energia' && (
-                <div className="space-y-3 p-3 rounded-lg border bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800">
-                  <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
-                    <Zap className="h-4 w-4" />
-                    <span className="font-medium text-sm">Dados de Energia</span>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <Label htmlFor="consumo-anual" className="text-xs">Consumo Anual (kWh)</Label>
-                      <Input
-                        id="consumo-anual"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={consumoAnual}
-                        onChange={(e) => setConsumoAnual(e.target.value)}
-                        placeholder="Ex: 5000"
-                        className="h-9"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label htmlFor="margem" className="text-xs">Margem (€)</Label>
-                      <Input
-                        id="margem"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={margem}
-                        onChange={(e) => setMargem(e.target.value)}
-                        placeholder="Ex: 150"
-                        className="h-9"
-                      />
-                    </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="space-y-1">
-                      <Label htmlFor="anos-contrato" className="text-xs">Anos</Label>
-                      <Input
-                        id="anos-contrato"
-                        type="number"
-                        min="1"
-                        max="10"
-                        value={anosContrato}
-                        onChange={(e) => setAnosContrato(e.target.value)}
-                        placeholder="2"
-                        className="h-9"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label htmlFor="dbl" className="text-xs">DBL</Label>
-                      <Input
-                        id="dbl"
-                        type="number"
-                        min="0"
-                        value={dbl}
-                        onChange={(e) => setDbl(e.target.value)}
-                        placeholder="1"
-                        className="h-9"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label htmlFor="comissao-energia" className="text-xs">Comissão €</Label>
-                      <Input
-                        id="comissao-energia"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={comissao}
-                        onChange={(e) => setComissao(e.target.value)}
-                        placeholder="100"
-                        className="h-9"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* CPE Selector para propostas de Energia */}
+              {/* CPE Selector para propostas de Energia (com dados de energia por CPE) */}
               {proposalType === 'energia' && (
                 <>
                   <Separator className="my-2" />
@@ -477,10 +323,32 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
 
               {/* Campos específicos de Serviços */}
               {proposalType === 'servicos' && (
-                <div className="space-y-3 p-3 rounded-lg border bg-blue-50/50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800">
+                <div className="space-y-4 p-4 rounded-lg border bg-blue-50/50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800">
                   <div className="flex items-center gap-2 text-blue-700 dark:text-blue-400">
                     <Wrench className="h-4 w-4" />
                     <span className="font-medium text-sm">Dados do Serviço</span>
+                  </div>
+                  
+                  {/* Produtos fixos com checkboxes */}
+                  <div className="space-y-2">
+                    <Label className="text-xs">Produtos</Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {SERVICOS_PRODUCTS.map((produto) => (
+                        <div key={produto} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`edit-produto-${produto}`}
+                            checked={servicosProdutos.includes(produto)}
+                            onCheckedChange={(checked) => handleServicosProdutoToggle(produto, !!checked)}
+                          />
+                          <Label 
+                            htmlFor={`edit-produto-${produto}`} 
+                            className="text-sm cursor-pointer"
+                          >
+                            {produto}
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                   
                   <div className="space-y-2">
@@ -503,9 +371,9 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
                   
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
-                      <Label htmlFor="kwp" className="text-xs">Potência (kWp)</Label>
+                      <Label htmlFor="edit-kwp" className="text-xs">Potência (kWp)</Label>
                       <Input
-                        id="kwp"
+                        id="edit-kwp"
                         type="number"
                         step="0.01"
                         min="0"
@@ -516,14 +384,14 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
                       />
                     </div>
                     <div className="space-y-1">
-                      <Label htmlFor="comissao-servicos" className="text-xs">Comissão (€)</Label>
+                      <Label htmlFor="edit-comissao-servicos" className="text-xs">Comissão (€)</Label>
                       <Input
-                        id="comissao-servicos"
+                        id="edit-comissao-servicos"
                         type="number"
                         step="0.01"
                         min="0"
-                        value={comissao}
-                        onChange={(e) => setComissao(e.target.value)}
+                        value={servicosComissao}
+                        onChange={(e) => setServicosComissao(e.target.value)}
                         placeholder="Ex: 250"
                         className="h-9"
                       />
@@ -532,151 +400,17 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
                 </div>
               )}
 
-              <Separator />
-              
-              {/* Produtos/Serviços */}
-              <div className="space-y-2">
-                <Label>Produtos/Serviços</Label>
-                {availableProducts.length > 0 && (
-                  <Select onValueChange={handleAddProduct}>
-                    <SelectTrigger className="h-9">
-                      <SelectValue placeholder="Adicionar produto..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableProducts.map((product) => (
-                        <SelectItem key={product.id} value={product.id}>
-                          {product.name} - {formatCurrency(product.price || 0)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-
-                {selectedProducts.length === 0 ? (
-                  <p className="text-sm text-muted-foreground py-3 text-center">
-                    Nenhum produto selecionado.
-                  </p>
-                ) : (
-                  <div className="space-y-2 mt-2">
-                    {selectedProducts.map((product) => (
-                      <div
-                        key={product.product_id}
-                        className="flex items-center gap-2 p-2 rounded-lg border bg-muted/30"
-                      >
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm truncate">{product.name}</p>
-                          <div className="flex items-center gap-2 mt-1">
-                            <div className="flex items-center gap-1">
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="icon"
-                                className="h-6 w-6"
-                                onClick={() => handleQuantityChange(product.product_id, -1)}
-                              >
-                                <Minus className="h-3 w-3" />
-                              </Button>
-                              <span className="w-6 text-center text-sm">{product.quantity}</span>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="icon"
-                                className="h-6 w-6"
-                                onClick={() => handleQuantityChange(product.product_id, 1)}
-                              >
-                                <Plus className="h-3 w-3" />
-                              </Button>
-                            </div>
-                            <span className="text-xs text-muted-foreground">×</span>
-                            <Input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              value={product.unit_price}
-                              onChange={(e) => handlePriceChange(product.product_id, parseFloat(e.target.value) || 0)}
-                              className="w-20 h-6 text-sm"
-                            />
-                            <span className="text-xs text-muted-foreground">€</span>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-semibold text-sm">
-                            {formatCurrency(product.quantity * product.unit_price)}
-                          </p>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6"
-                            onClick={() => handleRemoveProduct(product.product_id)}
-                          >
-                            <X className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Valor Adicional e Desconto */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label htmlFor="additional-value" className="text-xs">Valor Adicional</Label>
-                  <Input
-                    id="additional-value"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={additionalValue}
-                    onChange={(e) => setAdditionalValue(e.target.value)}
-                    placeholder="0.00"
-                    className="h-9"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="discount" className="text-xs">Desconto</Label>
-                  <Input
-                    id="discount"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={discount}
-                    onChange={(e) => setDiscount(e.target.value)}
-                    placeholder="0.00"
-                    className="h-9"
-                  />
-                </div>
-              </div>
-
-              {/* Total com breakdown */}
-              <div className="p-3 rounded-lg bg-primary/10 border border-primary/20 space-y-2">
-                {showBreakdown && (
-                  <div className="text-sm text-muted-foreground space-y-1">
-                    {selectedProducts.length > 0 && (
-                      <div className="flex justify-between text-xs">
-                        <span>Subtotal Produtos</span>
-                        <span>{formatCurrency(productsSubtotal)}</span>
-                      </div>
-                    )}
-                    {hasAdditional && (
-                      <div className="flex justify-between text-xs text-green-600">
-                        <span>+ Valor Adicional</span>
-                        <span>{formatCurrency(parseFloat(additionalValue))}</span>
-                      </div>
-                    )}
-                    {hasDiscount && (
-                      <div className="flex justify-between text-xs text-red-500">
-                        <span>- Desconto</span>
-                        <span>-{formatCurrency(parseFloat(discount))}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-                <div className={`flex items-center justify-between ${showBreakdown ? 'pt-2 border-t border-primary/20' : ''}`}>
+              {/* Total calculado */}
+              <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
+                <div className="flex items-center justify-between">
                   <span className="font-medium text-sm">Total da Proposta</span>
                   <span className="text-lg font-bold text-primary">{formatCurrency(totalValue)}</span>
                 </div>
+                {proposalType === 'energia' && proposalCpes.length > 0 && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Soma das margens e comissões de {proposalCpes.length} CPE(s)
+                  </p>
+                )}
               </div>
 
               <Separator />

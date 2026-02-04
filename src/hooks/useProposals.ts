@@ -218,6 +218,7 @@ interface UpdateProposalData {
   notes?: string | null;
   proposal_date?: string;
   proposal_type?: 'energia' | 'servicos';
+  negotiation_type?: 'angariacao' | 'angariacao_indexado' | 'renovacao' | 'sem_volume' | null;
   consumo_anual?: number | null;
   margem?: number | null;
   dbl?: number | null;
@@ -225,6 +226,7 @@ interface UpdateProposalData {
   modelo_servico?: 'transacional' | 'saas' | null;
   kwp?: number | null;
   comissao?: number | null;
+  servicos_produtos?: string[] | null;
 }
 
 export function useUpdateProposal() {
