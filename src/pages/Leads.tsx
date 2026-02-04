@@ -10,6 +10,8 @@ import { CreateProposalModal } from "@/components/proposals/CreateProposalModal"
 import { ProposalDetailsModal } from "@/components/proposals/ProposalDetailsModal";
 import { CreateClientModal } from "@/components/clients/CreateClientModal";
 import { TeamMemberFilter } from "@/components/dashboard/TeamMemberFilter";
+import { BulkActionsBar } from "@/components/shared/BulkActionsBar";
+import { AssignTeamMemberModal } from "@/components/shared/AssignTeamMemberModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProposals } from "@/hooks/useProposals";
 import { useCalendarEvents } from "@/hooks/useCalendarEvents";
@@ -68,6 +70,10 @@ export default function Leads() {
     return (saved === 'table' || saved === 'kanban') ? saved : 'kanban';
   });
 
+  // Bulk selection state
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [showAssignModal, setShowAssignModal] = useState(false);
+
   // Persist view mode preference
   useEffect(() => {
     localStorage.setItem('leads-view-mode', viewMode);
@@ -96,6 +102,11 @@ export default function Leads() {
     setStatusFilter([]);
     setDateRange({ from: undefined, to: undefined });
   };
+
+  // Clear selection when filters change
+  useEffect(() => {
+    setSelectedIds([]);
+  }, [searchQuery, statusFilter, dateRange]);
 
   const hasActiveFilters = searchQuery || statusFilter.length > 0 || dateRange.from || dateRange.to;
 
@@ -263,6 +274,11 @@ export default function Leads() {
 
   const handleUpdate = (leadId: string, updates: Partial<Lead>) => {
     updateLead.mutate({ leadId, updates });
+  };
+
+  const handleAssignSuccess = () => {
+    setSelectedIds([]);
+    setShowAssignModal(false);
   };
 
   // Helper to get badge style from stage color
@@ -437,6 +453,16 @@ export default function Leads() {
           </div>
         </div>
 
+        {/* Bulk Actions Bar */}
+        {viewMode === 'table' && (
+          <BulkActionsBar
+            selectedCount={selectedIds.length}
+            onAssignTeamMember={() => setShowAssignModal(true)}
+            onClearSelection={() => setSelectedIds([])}
+            entityLabel="leads selecionados"
+          />
+        )}
+
         <div className="rounded-xl border bg-card p-3 lg:p-4">
           {isLoading ? (
             <div className="flex h-64 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
@@ -458,7 +484,9 @@ export default function Leads() {
               onStatusChange={handleStatusChange} 
               onTemperatureChange={handleTemperatureChange} 
               onViewDetails={handleViewDetails} 
-              onDelete={handleDelete} 
+              onDelete={handleDelete}
+              selectedIds={selectedIds}
+              onSelectionChange={setSelectedIds}
             />
           )}
         </div>
@@ -538,6 +566,15 @@ export default function Leads() {
             setIsProposalDetailsModalOpen(open);
             if (!open) setSelectedProposal(null);
           }}
+        />
+
+        {/* Assign Team Member Modal */}
+        <AssignTeamMemberModal
+          open={showAssignModal}
+          onOpenChange={setShowAssignModal}
+          selectedIds={selectedIds}
+          entityType="leads"
+          onSuccess={handleAssignSuccess}
         />
       </div>
     </AppLayout>

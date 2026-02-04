@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -45,6 +46,8 @@ interface LeadsTableViewProps {
   onTemperatureChange: (leadId: string, temperature: LeadTemperature) => void;
   onViewDetails: (lead: Lead) => void;
   onDelete: (leadId: string) => void;
+  selectedIds?: string[];
+  onSelectionChange?: (ids: string[]) => void;
 }
 
 type SortField = 'name' | 'email' | 'status' | 'temperature' | 'tipologia' | 'value' | 'consumo_anual' | 'source' | 'created_at';
@@ -63,6 +66,8 @@ export function LeadsTableView({
   onTemperatureChange,
   onViewDetails,
   onDelete,
+  selectedIds = [],
+  onSelectionChange,
 }: LeadsTableViewProps) {
   const { data: stages = [], isLoading: stagesLoading } = usePipelineStages();
   const { data: proposalValues } = useLeadProposalValues();
@@ -71,6 +76,27 @@ export function LeadsTableView({
   
   const [sortField, setSortField] = useState<SortField>('created_at');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+
+  const handleSelectAll = (checked: boolean) => {
+    if (!onSelectionChange) return;
+    if (checked) {
+      onSelectionChange(leads.map(l => l.id));
+    } else {
+      onSelectionChange([]);
+    }
+  };
+
+  const handleSelectOne = (leadId: string, checked: boolean) => {
+    if (!onSelectionChange) return;
+    if (checked) {
+      onSelectionChange([...selectedIds, leadId]);
+    } else {
+      onSelectionChange(selectedIds.filter(id => id !== leadId));
+    }
+  };
+
+  const allSelected = leads.length > 0 && selectedIds.length === leads.length;
+  const someSelected = selectedIds.length > 0 && selectedIds.length < leads.length;
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -172,6 +198,20 @@ export function LeadsTableView({
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
+              {onSelectionChange && (
+                <TableHead className="w-[50px]">
+                  <Checkbox
+                    checked={allSelected}
+                    ref={(ref) => {
+                      if (ref) {
+                        (ref as HTMLButtonElement).dataset.state = someSelected ? 'indeterminate' : allSelected ? 'checked' : 'unchecked';
+                      }
+                    }}
+                    onCheckedChange={handleSelectAll}
+                    aria-label="Selecionar todos"
+                  />
+                </TableHead>
+              )}
               <TableHead className="w-[200px]">
                 <SortableHeader field="name">Nome</SortableHeader>
               </TableHead>
@@ -208,20 +248,33 @@ export function LeadsTableView({
           </TableHeader>
           <TableBody>
             {sortedLeads.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={isTelecom ? 10 : 9} className="h-24 text-center text-muted-foreground">
+            <TableRow>
+                <TableCell colSpan={isTelecom ? 11 : 10} className="h-24 text-center text-muted-foreground">
                   Nenhum lead encontrado.
                 </TableCell>
               </TableRow>
             ) : (
               sortedLeads.map((lead) => {
                 const currentStage = getStageByKey(lead.status || '');
+                const isSelected = selectedIds.includes(lead.id);
                 return (
                   <TableRow
                     key={lead.id} 
-                    className="cursor-pointer hover:bg-muted/50"
+                    className={cn(
+                      "cursor-pointer hover:bg-muted/50",
+                      isSelected && "bg-primary/5"
+                    )}
                     onClick={() => onViewDetails(lead)}
                   >
+                    {onSelectionChange && (
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={(checked) => handleSelectOne(lead.id, !!checked)}
+                          aria-label={`Selecionar ${lead.name}`}
+                        />
+                      </TableCell>
+                    )}
                     <TableCell>
                       <span className="font-medium truncate max-w-[150px]">{lead.name}</span>
                     </TableCell>

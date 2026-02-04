@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,9 +39,11 @@ interface ClientsTableProps {
   onEdit: (client: CrmClient) => void;
   onView: (client: CrmClient) => void;
   onDelete: (clientId: string) => void;
+  selectedIds?: string[];
+  onSelectionChange?: (ids: string[]) => void;
 }
 
-export function ClientsTable({ clients, onEdit, onView, onDelete }: ClientsTableProps) {
+export function ClientsTable({ clients, onEdit, onView, onDelete, selectedIds = [], onSelectionChange }: ClientsTableProps) {
   const [deleteClientId, setDeleteClientId] = useState<string | null>(null);
   const { canDeleteLeads } = usePermissions();
   const { data: teamMembers = [] } = useTeamMembers();
@@ -50,6 +53,27 @@ export function ClientsTable({ clients, onEdit, onView, onDelete }: ClientsTable
     const member = teamMembers.find(m => m.user_id === userId);
     return member?.full_name || null;
   };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (!onSelectionChange) return;
+    if (checked) {
+      onSelectionChange(clients.map(c => c.id));
+    } else {
+      onSelectionChange([]);
+    }
+  };
+
+  const handleSelectOne = (clientId: string, checked: boolean) => {
+    if (!onSelectionChange) return;
+    if (checked) {
+      onSelectionChange([...selectedIds, clientId]);
+    } else {
+      onSelectionChange(selectedIds.filter(id => id !== clientId));
+    }
+  };
+
+  const allSelected = clients.length > 0 && selectedIds.length === clients.length;
+  const someSelected = selectedIds.length > 0 && selectedIds.length < clients.length;
 
   const handleConfirmDelete = () => {
     if (deleteClientId) {
@@ -78,6 +102,20 @@ export function ClientsTable({ clients, onEdit, onView, onDelete }: ClientsTable
         <Table>
           <TableHeader>
             <TableRow>
+              {onSelectionChange && (
+                <TableHead className="w-[50px]">
+                  <Checkbox
+                    checked={allSelected}
+                    ref={(ref) => {
+                      if (ref) {
+                        (ref as HTMLButtonElement).dataset.state = someSelected ? 'indeterminate' : allSelected ? 'checked' : 'unchecked';
+                      }
+                    }}
+                    onCheckedChange={handleSelectAll}
+                    aria-label="Selecionar todos"
+                  />
+                </TableHead>
+              )}
               <TableHead>Cliente</TableHead>
               <TableHead className="hidden md:table-cell">Contacto</TableHead>
               <TableHead className="hidden lg:table-cell">Empresa</TableHead>
@@ -88,8 +126,26 @@ export function ClientsTable({ clients, onEdit, onView, onDelete }: ClientsTable
             </TableRow>
           </TableHeader>
           <TableBody>
-            {clients.map((client) => (
-              <TableRow key={client.id} className="cursor-pointer" onClick={() => onView(client)}>
+            {clients.map((client) => {
+              const isSelected = selectedIds.includes(client.id);
+              return (
+                <TableRow 
+                  key={client.id} 
+                  className={cn(
+                    "cursor-pointer",
+                    isSelected && "bg-primary/5"
+                  )}
+                  onClick={() => onView(client)}
+                >
+                  {onSelectionChange && (
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={(checked) => handleSelectOne(client.id, !!checked)}
+                        aria-label={`Selecionar ${client.name}`}
+                      />
+                    </TableCell>
+                  )}
                 <TableCell>
                   <div>
                     <p className="font-medium">{client.name}</p>
@@ -192,7 +248,8 @@ export function ClientsTable({ clients, onEdit, onView, onDelete }: ClientsTable
                   </DropdownMenu>
                 </TableCell>
               </TableRow>
-            ))}
+              );
+            })}
           </TableBody>
         </Table>
       </div>
