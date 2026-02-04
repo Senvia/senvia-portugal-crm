@@ -13,6 +13,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useUpdateProposal } from '@/hooks/useProposals';
 import { useClients } from '@/hooks/useClients';
+import { useAuth } from '@/contexts/AuthContext';
 import { CreateClientModal } from '@/components/clients/CreateClientModal';
 import { ProposalCpeSelector, type ProposalCpeDraft } from './ProposalCpeSelector';
 import { useProposalCpes, useUpdateProposalCpes } from '@/hooks/useProposalCpes';
@@ -39,27 +40,31 @@ interface EditProposalModalProps {
 export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: EditProposalModalProps) {
   const { data: clients = [] } = useClients();
   const { data: existingCpes = [] } = useProposalCpes(proposal.id);
+  const { organization } = useAuth();
   const updateProposal = useUpdateProposal();
   const updateProposalCpes = useUpdateProposalCpes();
+  
+  // Verificar se é nicho telecom
+  const isTelecom = organization?.niche === 'telecom';
   
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [notes, setNotes] = useState('');
   const [proposalDate, setProposalDate] = useState('');
   const [status, setStatus] = useState<ProposalStatus>('draft');
   
-  // Tipo de negociação (novo)
+  // Tipo de negociação (apenas telecom)
   const [negotiationType, setNegotiationType] = useState<NegotiationType | null>(null);
   
-  // Tipo de proposta
+  // Tipo de proposta (apenas telecom)
   const [proposalType, setProposalType] = useState<ProposalType>('energia');
   
-  // Campos Serviços
+  // Campos Serviços (apenas telecom)
   const [modeloServico, setModeloServico] = useState<ModeloServico>('transacional');
   const [kwp, setKwp] = useState<string>('');
   const [servicosComissao, setServicosComissao] = useState<string>('');
   const [servicosProdutos, setServicosProdutos] = useState<string[]>([]);
   
-  // CPEs para propostas de energia (contêm os dados de energia)
+  // CPEs para propostas de energia (apenas telecom)
   const [proposalCpes, setProposalCpes] = useState<ProposalCpeDraft[]>([]);
   
   // Modal para criar novo cliente
@@ -265,52 +270,56 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
                 </div>
               </div>
 
-              {/* Tipo de Negociação */}
-              <div className="space-y-3">
-                <Label>Tipo de Negociação</Label>
-                <div className="grid grid-cols-2 gap-2">
-                  {NEGOTIATION_TYPES.map((type) => (
+              {/* Tipo de Negociação - Apenas Telecom */}
+              {isTelecom && (
+                <div className="space-y-3">
+                  <Label>Tipo de Negociação</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {NEGOTIATION_TYPES.map((type) => (
+                      <Button
+                        key={type}
+                        type="button"
+                        variant={negotiationType === type ? 'default' : 'outline'}
+                        size="sm"
+                        className="text-xs"
+                        onClick={() => setNegotiationType(type)}
+                      >
+                        {NEGOTIATION_TYPE_LABELS[type]}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Tipo de Proposta - Apenas Telecom */}
+              {isTelecom && (
+                <div className="space-y-3">
+                  <Label>Tipo de Proposta</Label>
+                  <div className="grid grid-cols-2 gap-2">
                     <Button
-                      key={type}
                       type="button"
-                      variant={negotiationType === type ? 'default' : 'outline'}
-                      size="sm"
-                      className="text-xs"
-                      onClick={() => setNegotiationType(type)}
+                      variant={proposalType === 'energia' ? 'default' : 'outline'}
+                      className="flex items-center justify-center gap-2 h-10"
+                      onClick={() => setProposalType('energia')}
                     >
-                      {NEGOTIATION_TYPE_LABELS[type]}
+                      <Zap className="h-4 w-4" />
+                      Energia
                     </Button>
-                  ))}
+                    <Button
+                      type="button"
+                      variant={proposalType === 'servicos' ? 'default' : 'outline'}
+                      className="flex items-center justify-center gap-2 h-10"
+                      onClick={() => setProposalType('servicos')}
+                    >
+                      <Wrench className="h-4 w-4" />
+                      Outros Serviços
+                    </Button>
+                  </div>
                 </div>
-              </div>
+              )}
 
-              {/* Tipo de Proposta */}
-              <div className="space-y-3">
-                <Label>Tipo de Proposta</Label>
-                <div className="grid grid-cols-2 gap-2">
-                  <Button
-                    type="button"
-                    variant={proposalType === 'energia' ? 'default' : 'outline'}
-                    className="flex items-center justify-center gap-2 h-10"
-                    onClick={() => setProposalType('energia')}
-                  >
-                    <Zap className="h-4 w-4" />
-                    Energia
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={proposalType === 'servicos' ? 'default' : 'outline'}
-                    className="flex items-center justify-center gap-2 h-10"
-                    onClick={() => setProposalType('servicos')}
-                  >
-                    <Wrench className="h-4 w-4" />
-                    Outros Serviços
-                  </Button>
-                </div>
-              </div>
-
-              {/* CPE Selector para propostas de Energia (com dados de energia por CPE) */}
-              {proposalType === 'energia' && (
+              {/* CPE Selector para propostas de Energia - Apenas Telecom */}
+              {isTelecom && proposalType === 'energia' && (
                 <>
                   <Separator className="my-2" />
                   <ProposalCpeSelector
@@ -321,8 +330,8 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
                 </>
               )}
 
-              {/* Campos específicos de Serviços */}
-              {proposalType === 'servicos' && (
+              {/* Campos específicos de Serviços - Apenas Telecom */}
+              {isTelecom && proposalType === 'servicos' && (
                 <div className="space-y-4 p-4 rounded-lg border bg-blue-50/50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800">
                   <div className="flex items-center gap-2 text-blue-700 dark:text-blue-400">
                     <Wrench className="h-4 w-4" />
