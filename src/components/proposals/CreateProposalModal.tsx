@@ -72,6 +72,8 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
     name: string;
     quantity: number;
     unit_price: number;
+    discount_type: 'percentage' | 'fixed';
+    discount_value: number;
   }>>([]);
   
   // Modal para criar novo cliente
@@ -88,6 +90,15 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
     }
   }, [open, client?.id, preselectedClientId]);
 
+  // Helper function for product total with discount
+  const getProductTotal = (product: typeof selectedProducts[0]) => {
+    const subtotal = product.quantity * product.unit_price;
+    if (product.discount_type === 'percentage') {
+      return subtotal * (1 - product.discount_value / 100);
+    }
+    return Math.max(0, subtotal - product.discount_value);
+  };
+
   // Calculate total value
   const totalValue = useMemo(() => {
     if (isTelecom) {
@@ -96,8 +107,8 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
       }
       return 0;
     }
-    // Para não-telecom: valor manual + produtos
-    const productsTotal = selectedProducts.reduce((sum, p) => sum + (p.quantity * p.unit_price), 0);
+    // Para não-telecom: valor manual + produtos (com desconto)
+    const productsTotal = selectedProducts.reduce((sum, p) => sum + getProductTotal(p), 0);
     return productsTotal + (parseFloat(manualValue) || 0);
   }, [isTelecom, proposalType, proposalCpes, selectedProducts, manualValue]);
 
@@ -136,9 +147,31 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
         name: product.name,
         quantity: 1,
         unit_price: product.price || 0,
+        discount_type: 'percentage' as const,
+        discount_value: 0,
       }]);
     }
   };
+
+  const handleUpdateProductPrice = (productId: string, price: number) => {
+    setSelectedProducts(prev => 
+      prev.map(p => p.product_id === productId ? { ...p, unit_price: price } : p)
+    );
+  };
+
+  const handleUpdateProductDiscount = (
+    productId: string, 
+    discountType: 'percentage' | 'fixed', 
+    discountValue: number
+  ) => {
+    setSelectedProducts(prev => 
+      prev.map(p => p.product_id === productId 
+        ? { ...p, discount_type: discountType, discount_value: discountValue } 
+        : p
+      )
+    );
+  };
+
 
   const handleRemoveProduct = (productId: string) => {
     setSelectedProducts(prev => prev.filter(p => p.product_id !== productId));
@@ -447,34 +480,107 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
                       </SelectContent>
                     </Select>
                     
-                    {/* Lista de produtos selecionados */}
+                    {/* Lista de produtos selecionados com desconto */}
                     {selectedProducts.length > 0 && (
-                      <div className="space-y-2">
-                        {selectedProducts.map((item) => (
-                          <div key={item.product_id} className="flex items-center gap-2 p-2 rounded-lg bg-muted">
-                            <Package className="h-4 w-4 text-muted-foreground" />
-                            <span className="flex-1 text-sm">{item.name}</span>
-                            <Input
-                              type="number"
-                              min="1"
-                              value={item.quantity}
-                              onChange={(e) => handleUpdateProductQuantity(item.product_id, parseInt(e.target.value) || 0)}
-                              className="w-16 h-8 text-center"
-                            />
-                            <span className="text-sm text-muted-foreground w-20 text-right">
-                              {formatCurrency(item.quantity * item.unit_price)}
-                            </span>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 w-8 p-0"
-                              onClick={() => handleRemoveProduct(item.product_id)}
-                            >
-                              ×
-                            </Button>
-                          </div>
-                        ))}
+                      <div className="space-y-3">
+                        {selectedProducts.map((item) => {
+                          const subtotal = item.quantity * item.unit_price;
+                          const discountedTotal = getProductTotal(item);
+                          const hasDiscount = item.discount_value > 0;
+                          
+                          return (
+                            <div key={item.product_id} className="p-3 rounded-lg bg-muted space-y-2">
+                              <div className="flex items-center gap-2">
+                                <Package className="h-4 w-4 text-muted-foreground" />
+                                <span className="flex-1 text-sm font-medium">{item.name}</span>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 w-8 p-0"
+                                  onClick={() => handleRemoveProduct(item.product_id)}
+                                >
+                                  ×
+                                </Button>
+                              </div>
+                              
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <Label className="text-xs text-muted-foreground">Quantidade</Label>
+                                  <Input
+                                    type="number"
+                                    min="1"
+                                    value={item.quantity}
+                                    onChange={(e) => handleUpdateProductQuantity(item.product_id, parseInt(e.target.value) || 0)}
+                                    className="h-8"
+                                  />
+                                </div>
+                                <div>
+                                  <Label className="text-xs text-muted-foreground">Preço Unit.</Label>
+                                  <Input
+                                    type="number"
+                                    step="0.01"
+                                    value={item.unit_price}
+                                    onChange={(e) => handleUpdateProductPrice(item.product_id, parseFloat(e.target.value) || 0)}
+                                    className="h-8"
+                                  />
+                                </div>
+                              </div>
+                              
+                              <div className="flex items-end gap-2">
+                                <div className="flex-1">
+                                  <Label className="text-xs text-muted-foreground">Desconto</Label>
+                                  <div className="flex gap-1">
+                                    <Button
+                                      type="button"
+                                      variant={item.discount_type === 'percentage' ? 'default' : 'outline'}
+                                      size="sm"
+                                      className="h-8 w-10 p-0"
+                                      onClick={() => handleUpdateProductDiscount(item.product_id, 'percentage', item.discount_value)}
+                                    >
+                                      %
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant={item.discount_type === 'fixed' ? 'default' : 'outline'}
+                                      size="sm"
+                                      className="h-8 w-10 p-0"
+                                      onClick={() => handleUpdateProductDiscount(item.product_id, 'fixed', item.discount_value)}
+                                    >
+                                      €
+                                    </Button>
+                                    <Input
+                                      type="number"
+                                      step="0.01"
+                                      min="0"
+                                      value={item.discount_value || ''}
+                                      onChange={(e) => handleUpdateProductDiscount(
+                                        item.product_id, 
+                                        item.discount_type, 
+                                        parseFloat(e.target.value) || 0
+                                      )}
+                                      className="h-8 flex-1"
+                                      placeholder="0"
+                                    />
+                                  </div>
+                                </div>
+                                <div className="text-right min-w-[80px]">
+                                  <Label className="text-xs text-muted-foreground">Subtotal</Label>
+                                  <div className="text-sm font-medium">
+                                    {hasDiscount && (
+                                      <span className="text-xs text-muted-foreground line-through mr-1">
+                                        {formatCurrency(subtotal)}
+                                      </span>
+                                    )}
+                                    <span className={hasDiscount ? 'text-green-600' : ''}>
+                                      {formatCurrency(discountedTotal)}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
