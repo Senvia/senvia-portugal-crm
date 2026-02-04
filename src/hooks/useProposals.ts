@@ -99,7 +99,7 @@ export function useProposalProducts(proposalId: string | undefined) {
 
 interface CreateProposalData {
   client_id?: string;
-  lead_id?: string; // Mantido para retrocompatibilidade
+  lead_id?: string;
   total_value: number;
   status?: ProposalStatus;
   notes?: string;
@@ -108,8 +108,9 @@ interface CreateProposalData {
   
   // Campos por tipo de proposta
   proposal_type?: 'energia' | 'servicos';
+  negotiation_type?: 'angariacao' | 'angariacao_indexado' | 'renovacao' | 'sem_volume';
   
-  // Campos Energia
+  // Campos Energia (legacy)
   consumo_anual?: number;
   margem?: number;
   dbl?: number;
@@ -118,6 +119,7 @@ interface CreateProposalData {
   // Campos Serviços
   modelo_servico?: 'transacional' | 'saas';
   kwp?: number;
+  servicos_produtos?: string[];
   
   // Comum
   comissao?: number;
@@ -160,6 +162,7 @@ export function useCreateProposal() {
           created_by: user?.id,
           // Campos por tipo
           proposal_type: data.proposal_type || 'energia',
+          negotiation_type: data.negotiation_type || null,
           consumo_anual: data.consumo_anual || null,
           margem: data.margem || null,
           dbl: data.dbl ?? null,
@@ -167,6 +170,7 @@ export function useCreateProposal() {
           modelo_servico: data.modelo_servico || null,
           kwp: data.kwp || null,
           comissao: data.comissao || null,
+          servicos_produtos: data.servicos_produtos || null,
         })
         .select(`
           *,

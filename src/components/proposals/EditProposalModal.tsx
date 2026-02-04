@@ -137,6 +137,14 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
           fidelizacao_end: cpe.fidelizacao_end || '',
           notes: cpe.notes || '',
           isNew: !cpe.existing_cpe_id, // Se não tem existing_cpe_id, foi criado como novo
+          // Novos campos de energia por CPE
+          consumo_anual: cpe.consumo_anual?.toString() || '',
+          duracao_contrato: cpe.duracao_contrato?.toString() || '',
+          dbl: cpe.dbl?.toString() || '',
+          margem: cpe.margem?.toString() || '',
+          comissao: cpe.comissao?.toString() || '',
+          contrato_inicio: cpe.contrato_inicio || '',
+          contrato_fim: cpe.contrato_fim || '',
         }))
       );
     } else if (open) {
@@ -253,6 +261,14 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
           fidelizacao_start: cpe.fidelizacao_start || null,
           fidelizacao_end: cpe.fidelizacao_end || null,
           notes: cpe.notes || null,
+          // Novos campos de energia por CPE
+          consumo_anual: cpe.consumo_anual ? parseFloat(cpe.consumo_anual) : null,
+          duracao_contrato: cpe.duracao_contrato ? parseInt(cpe.duracao_contrato) : null,
+          dbl: cpe.dbl ? parseFloat(cpe.dbl) : null,
+          margem: cpe.margem ? parseFloat(cpe.margem) : null,
+          comissao: cpe.comissao ? parseFloat(cpe.comissao) : null,
+          contrato_inicio: cpe.contrato_inicio || null,
+          contrato_fim: cpe.contrato_fim || null,
         })),
       });
     }

@@ -1632,36 +1632,57 @@ export type Database = {
       proposal_cpes: {
         Row: {
           comercializador: string
+          comissao: number | null
+          consumo_anual: number | null
+          contrato_fim: string | null
+          contrato_inicio: string | null
           created_at: string
+          dbl: number | null
+          duracao_contrato: number | null
           equipment_type: string
           existing_cpe_id: string | null
           fidelizacao_end: string | null
           fidelizacao_start: string | null
           id: string
+          margem: number | null
           notes: string | null
           proposal_id: string
           serial_number: string | null
         }
         Insert: {
           comercializador: string
+          comissao?: number | null
+          consumo_anual?: number | null
+          contrato_fim?: string | null
+          contrato_inicio?: string | null
           created_at?: string
+          dbl?: number | null
+          duracao_contrato?: number | null
           equipment_type: string
           existing_cpe_id?: string | null
           fidelizacao_end?: string | null
           fidelizacao_start?: string | null
           id?: string
+          margem?: number | null
           notes?: string | null
           proposal_id: string
           serial_number?: string | null
         }
         Update: {
           comercializador?: string
+          comissao?: number | null
+          consumo_anual?: number | null
+          contrato_fim?: string | null
+          contrato_inicio?: string | null
           created_at?: string
+          dbl?: number | null
+          duracao_contrato?: number | null
           equipment_type?: string
           existing_cpe_id?: string | null
           fidelizacao_end?: string | null
           fidelizacao_start?: string | null
           id?: string
+          margem?: number | null
           notes?: string | null
           proposal_id?: string
           serial_number?: string | null
@@ -1736,10 +1757,12 @@ export type Database = {
           lead_id: string | null
           margem: number | null
           modelo_servico: string | null
+          negotiation_type: string | null
           notes: string | null
           organization_id: string
           proposal_date: string | null
           proposal_type: string | null
+          servicos_produtos: string[] | null
           status: string
           total_value: number
           updated_at: string | null
@@ -1758,10 +1781,12 @@ export type Database = {
           lead_id?: string | null
           margem?: number | null
           modelo_servico?: string | null
+          negotiation_type?: string | null
           notes?: string | null
           organization_id: string
           proposal_date?: string | null
           proposal_type?: string | null
+          servicos_produtos?: string[] | null
           status?: string
           total_value?: number
           updated_at?: string | null
@@ -1780,10 +1805,12 @@ export type Database = {
           lead_id?: string | null
           margem?: number | null
           modelo_servico?: string | null
+          negotiation_type?: string | null
           notes?: string | null
           organization_id?: string
           proposal_date?: string | null
           proposal_type?: string | null
+          servicos_produtos?: string[] | null
           status?: string
           total_value?: number
           updated_at?: string | null
