@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { X, UserPlus, Zap, Wrench } from 'lucide-react';
+import { X, UserPlus, Zap, Wrench, Package } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,6 +13,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useUpdateProposal } from '@/hooks/useProposals';
 import { useClients } from '@/hooks/useClients';
+import { useActiveProducts } from '@/hooks/useProducts';
 import { useAuth } from '@/contexts/AuthContext';
 import { CreateClientModal } from '@/components/clients/CreateClientModal';
 import { ProposalCpeSelector, type ProposalCpeDraft } from './ProposalCpeSelector';
@@ -39,6 +40,7 @@ interface EditProposalModalProps {
 
 export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: EditProposalModalProps) {
   const { data: clients = [] } = useClients();
+  const { data: products = [] } = useActiveProducts();
   const { data: existingCpes = [] } = useProposalCpes(proposal.id);
   const { organization } = useAuth();
   const updateProposal = useUpdateProposal();
@@ -67,6 +69,15 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
   // CPEs para propostas de energia (apenas telecom)
   const [proposalCpes, setProposalCpes] = useState<ProposalCpeDraft[]>([]);
   
+  // Campos para nichos NÃO-telecom
+  const [manualValue, setManualValue] = useState<string>('');
+  const [selectedProducts, setSelectedProducts] = useState<Array<{
+    product_id: string;
+    name: string;
+    quantity: number;
+    unit_price: number;
+  }>>([]);
+  
   // Modal para criar novo cliente
   const [isCreateClientOpen, setIsCreateClientOpen] = useState(false);
 
@@ -80,13 +91,20 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
       setProposalType((proposal.proposal_type as ProposalType) || 'energia');
       setNegotiationType((proposal.negotiation_type as NegotiationType) || null);
       
-      // Campos Serviços
+      // Campos Serviços (telecom)
       setModeloServico((proposal.modelo_servico as ModeloServico) || 'transacional');
       setKwp(proposal.kwp?.toString() || '');
       setServicosComissao(proposal.comissao?.toString() || '');
       setServicosProdutos(proposal.servicos_produtos || []);
+      
+      // Campos não-telecom
+      if (!isTelecom) {
+        setManualValue(proposal.total_value?.toString() || '');
+        // TODO: Carregar produtos selecionados se existir tabela proposal_products
+        setSelectedProducts([]);
+      }
     }
-  }, [open, proposal]);
+  }, [open, proposal, isTelecom]);
 
   // Carregar CPEs existentes quando disponíveis
   useEffect(() => {
@@ -119,17 +137,21 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
 
   // Calcular total baseado nos CPEs (soma das margens + comissões) para energia
   const totalValue = useMemo(() => {
-    if (proposalType === 'energia') {
-      return proposalCpes.reduce((sum, cpe) => {
-        const margem = parseFloat(cpe.margem) || 0;
-        const comissao = parseFloat(cpe.comissao) || 0;
-        return sum + margem + comissao;
-      }, 0);
-    } else {
-      // Para serviços, usar comissão
+    if (isTelecom) {
+      if (proposalType === 'energia') {
+        return proposalCpes.reduce((sum, cpe) => {
+          const margem = parseFloat(cpe.margem) || 0;
+          const comissao = parseFloat(cpe.comissao) || 0;
+          return sum + margem + comissao;
+        }, 0);
+      }
+      // Para serviços telecom, usar comissão
       return parseFloat(servicosComissao) || 0;
     }
-  }, [proposalType, proposalCpes, servicosComissao]);
+    // Para não-telecom: valor manual + produtos
+    const productsTotal = selectedProducts.reduce((sum, p) => sum + (p.quantity * p.unit_price), 0);
+    return productsTotal + (parseFloat(manualValue) || 0);
+  }, [isTelecom, proposalType, proposalCpes, servicosComissao, selectedProducts, manualValue]);
 
   const handleClientCreated = (newClientId: string) => {
     setSelectedClientId(newClientId);
@@ -141,6 +163,39 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
     } else {
       setServicosProdutos(prev => prev.filter(p => p !== produto));
     }
+  };
+
+  const handleAddProduct = (productId: string) => {
+    const product = products.find(p => p.id === productId);
+    if (!product) return;
+    
+    const existing = selectedProducts.find(p => p.product_id === productId);
+    if (existing) {
+      setSelectedProducts(prev => 
+        prev.map(p => p.product_id === productId ? { ...p, quantity: p.quantity + 1 } : p)
+      );
+    } else {
+      setSelectedProducts(prev => [...prev, {
+        product_id: product.id,
+        name: product.name,
+        quantity: 1,
+        unit_price: product.price || 0,
+      }]);
+    }
+  };
+
+  const handleRemoveProduct = (productId: string) => {
+    setSelectedProducts(prev => prev.filter(p => p.product_id !== productId));
+  };
+
+  const handleUpdateProductQuantity = (productId: string, quantity: number) => {
+    if (quantity <= 0) {
+      handleRemoveProduct(productId);
+      return;
+    }
+    setSelectedProducts(prev => 
+      prev.map(p => p.product_id === productId ? { ...p, quantity } : p)
+    );
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -424,14 +479,96 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
 
               <Separator />
 
+              {/* Campos para nichos NÃO-telecom */}
+              {!isTelecom && (
+                <div className="space-y-4">
+                  <Separator />
+                  
+                  {/* Valor da Proposta */}
+                  <div className="space-y-2">
+                    <Label htmlFor="manual-value" className="text-xs">Valor da Proposta (€)</Label>
+                    <Input
+                      id="manual-value"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={manualValue}
+                      onChange={(e) => setManualValue(e.target.value)}
+                      placeholder="Ex: 1500.00"
+                      className="h-9"
+                    />
+                  </div>
+                  
+                  {/* Produtos/Serviços */}
+                  {products.length > 0 && (
+                    <div className="space-y-3">
+                      <Label className="text-xs">Produtos/Serviços</Label>
+                      
+                      <Select onValueChange={handleAddProduct}>
+                        <SelectTrigger className="h-9">
+                          <SelectValue placeholder="Adicionar produto/serviço..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {products.map((product) => (
+                            <SelectItem key={product.id} value={product.id}>
+                              {product.name} {product.price ? `- ${formatCurrency(product.price)}` : ''}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      
+                      {selectedProducts.length > 0 && (
+                        <div className="space-y-2">
+                          {selectedProducts.map((item) => (
+                            <div key={item.product_id} className="flex items-center gap-2 p-2 rounded-lg bg-muted">
+                              <Package className="h-4 w-4 text-muted-foreground" />
+                              <span className="flex-1 text-sm truncate">{item.name}</span>
+                              <Input
+                                type="number"
+                                min="1"
+                                value={item.quantity}
+                                onChange={(e) => handleUpdateProductQuantity(item.product_id, parseInt(e.target.value) || 0)}
+                                className="w-14 h-7 text-center text-xs"
+                              />
+                              <span className="text-xs text-muted-foreground w-16 text-right">
+                                {formatCurrency(item.quantity * item.unit_price)}
+                              </span>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 w-7 p-0"
+                                onClick={() => handleRemoveProduct(item.product_id)}
+                              >
+                                ×
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
+                  {/* Resumo do valor */}
+                  {(parseFloat(manualValue) > 0 || selectedProducts.length > 0) && (
+                    <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium text-sm">Total da Proposta</span>
+                        <span className="text-lg font-bold text-primary">{formatCurrency(totalValue)}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="space-y-1">
                 <Label htmlFor="notes" className="text-xs">Observações da Negociação</Label>
                 <Textarea
                   id="notes"
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Notas internas sobre a negociação..."
-                  rows={2}
+                  placeholder="Detalhes da negociação, condições especiais, etc..."
+                  rows={3}
                 />
               </div>
 
