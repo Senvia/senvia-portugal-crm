@@ -43,6 +43,7 @@ export function useFinanceStats() {
         payment_date: payment.payment_date,
         payment_method: payment.payment_method as PaymentMethod | null,
         invoice_reference: payment.invoice_reference,
+        invoice_file_url: payment.invoice_file_url,
         status: payment.status as PaymentRecordStatus,
         notes: payment.notes,
         created_at: payment.created_at,

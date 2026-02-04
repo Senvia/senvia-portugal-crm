@@ -54,6 +54,7 @@ export interface SalePayment {
   payment_date: string;
   payment_method: PaymentMethod | null;
   invoice_reference: string | null;
+  invoice_file_url: string | null;
   status: PaymentRecordStatus;
   notes: string | null;
   created_at: string;

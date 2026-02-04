@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { format, parseISO } from "date-fns";
 import { pt } from "date-fns/locale";
-import { CalendarIcon, Loader2, Receipt, CreditCard, FileText } from "lucide-react";
+import { CalendarIcon, Loader2, Receipt, CreditCard, FileText, Paperclip } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -25,6 +25,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
 import { useCreateSalePayment, useUpdateSalePayment } from "@/hooks/useSalePayments";
+import { InvoiceUploader } from "./InvoiceUploader";
 import type { SalePayment, PaymentMethod, PaymentRecordStatus } from "@/types/sales";
 import { PAYMENT_METHODS, PAYMENT_METHOD_LABELS } from "@/types/sales";
 
@@ -57,6 +58,7 @@ export function AddPaymentModal({
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | "">("");
   const [status, setStatus] = useState<PaymentRecordStatus>("paid");
   const [invoiceReference, setInvoiceReference] = useState("");
+  const [invoiceFileUrl, setInvoiceFileUrl] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
 
   // Reset form when modal opens/closes or payment changes
@@ -69,6 +71,7 @@ export function AddPaymentModal({
         setPaymentMethod(payment.payment_method || "");
         setStatus(payment.status);
         setInvoiceReference(payment.invoice_reference || "");
+        setInvoiceFileUrl(payment.invoice_file_url || null);
         setNotes(payment.notes || "");
       } else {
         // Creating mode - pre-fill with remaining amount
@@ -77,6 +80,7 @@ export function AddPaymentModal({
         setPaymentMethod("");
         setStatus("paid");
         setInvoiceReference("");
+        setInvoiceFileUrl(null);
         setNotes("");
       }
     }
@@ -95,6 +99,7 @@ export function AddPaymentModal({
       payment_date: format(paymentDate, 'yyyy-MM-dd'),
       payment_method: paymentMethod || null,
       invoice_reference: invoiceReference.trim() || null,
+      invoice_file_url: invoiceFileUrl,
       status,
       notes: notes.trim() || null,
     };
@@ -238,6 +243,20 @@ export function AddPaymentModal({
               value={invoiceReference}
               onChange={(e) => setInvoiceReference(e.target.value)}
               placeholder="FT 2024/0001"
+            />
+          </div>
+
+          {/* Invoice File Upload */}
+          <div className="space-y-2">
+            <Label className="flex items-center gap-2">
+              <Paperclip className="h-4 w-4 text-muted-foreground" />
+              Anexar Fatura
+            </Label>
+            <InvoiceUploader
+              value={invoiceFileUrl}
+              onChange={setInvoiceFileUrl}
+              organizationId={organizationId}
+              disabled={isSubmitting}
             />
           </div>
 

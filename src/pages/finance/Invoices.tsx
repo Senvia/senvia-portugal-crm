@@ -3,18 +3,21 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowLeft, Download, Search, FileText } from "lucide-react";
+import { ArrowLeft, Download, Search, FileText, Loader2 } from "lucide-react";
 import { useAllPayments } from "@/hooks/useAllPayments";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNavigate } from "react-router-dom";
 import { useState, useMemo } from "react";
 import { exportToExcel } from "@/lib/export";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 export default function FinanceInvoices() {
   const { data: payments, isLoading } = useAllPayments();
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState("");
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   // Filter only payments with invoice reference
   const invoices = useMemo(() => {
@@ -47,6 +50,30 @@ export default function FinanceInvoices() {
       Valor: p.amount,
     }));
     exportToExcel(exportData, 'faturas');
+  };
+
+  const handleDownload = async (fileUrl: string, invoiceId: string) => {
+    setDownloadingId(invoiceId);
+    try {
+      const { data, error } = await supabase.storage
+        .from('invoices')
+        .createSignedUrl(fileUrl, 60);
+
+      if (error) {
+        console.error('Error creating signed URL:', error);
+        toast.error("Erro ao obter ficheiro");
+        return;
+      }
+
+      if (data?.signedUrl) {
+        window.open(data.signedUrl, '_blank');
+      }
+    } catch (error) {
+      console.error('Download error:', error);
+      toast.error("Erro ao fazer download");
+    } finally {
+      setDownloadingId(null);
+    }
   };
 
   return (
@@ -117,6 +144,7 @@ export default function FinanceInvoices() {
                       <TableHead>Venda</TableHead>
                       <TableHead>Cliente</TableHead>
                       <TableHead className="text-right">Valor</TableHead>
+                      <TableHead className="text-center w-[60px]">Anexo</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -136,6 +164,25 @@ export default function FinanceInvoices() {
                         </TableCell>
                         <TableCell className="text-right font-semibold whitespace-nowrap">
                           {formatCurrency(invoice.amount)}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {invoice.invoice_file_url ? (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => handleDownload(invoice.invoice_file_url!, invoice.id)}
+                              disabled={downloadingId === invoice.id}
+                            >
+                              {downloadingId === invoice.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Download className="h-4 w-4" />
+                              )}
+                            </Button>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">—</span>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))}
