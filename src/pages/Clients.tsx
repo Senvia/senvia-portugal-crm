@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useAuth } from "@/contexts/AuthContext";
 import { SEO } from "@/components/SEO";
@@ -14,6 +14,8 @@ import { CreateClientModal } from "@/components/clients/CreateClientModal";
 import { EditClientModal } from "@/components/clients/EditClientModal";
 import { ClientDetailsDrawer } from "@/components/clients/ClientDetailsDrawer";
 import { ClientFilters, defaultFilters, type ClientFiltersState } from "@/components/clients/ClientFilters";
+import { BulkActionsBar } from "@/components/shared/BulkActionsBar";
+import { AssignTeamMemberModal } from "@/components/shared/AssignTeamMemberModal";
 import type { CrmClient } from "@/types/clients";
 import { formatCurrency } from "@/lib/format";
 import { isWithinInterval, startOfDay, endOfDay, parseISO } from "date-fns";
@@ -26,6 +28,10 @@ export default function Clients() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDetailsDrawer, setShowDetailsDrawer] = useState(false);
   const [filters, setFilters] = useState<ClientFiltersState>(defaultFilters);
+
+  // Bulk selection state
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [showAssignModal, setShowAssignModal] = useState(false);
 
   const { data: clients, isLoading } = useClients();
   const { stats } = useClientStats();
@@ -92,6 +98,16 @@ export default function Clients() {
 
   const handleClearFilters = () => {
     setFilters(defaultFilters);
+  };
+
+  // Clear selection when filters change
+  useEffect(() => {
+    setSelectedIds([]);
+  }, [search, filters]);
+
+  const handleAssignSuccess = () => {
+    setSelectedIds([]);
+    setShowAssignModal(false);
   };
 
   return (
@@ -194,6 +210,14 @@ export default function Clients() {
           />
         </div>
 
+        {/* Bulk Actions Bar */}
+        <BulkActionsBar
+          selectedCount={selectedIds.length}
+          onAssignTeamMember={() => setShowAssignModal(true)}
+          onClearSelection={() => setSelectedIds([])}
+          entityLabel="clientes selecionados"
+        />
+
         {/* Table */}
         {isLoading ? (
           <div className="space-y-4">
@@ -207,6 +231,8 @@ export default function Clients() {
             onEdit={handleEdit}
             onView={handleView}
             onDelete={handleDelete}
+            selectedIds={selectedIds}
+            onSelectionChange={setSelectedIds}
           />
         )}
       </div>
@@ -228,6 +254,15 @@ export default function Clients() {
         open={showDetailsDrawer}
         onOpenChange={setShowDetailsDrawer}
         onEdit={handleEdit}
+      />
+
+      {/* Assign Team Member Modal */}
+      <AssignTeamMemberModal
+        open={showAssignModal}
+        onOpenChange={setShowAssignModal}
+        selectedIds={selectedIds}
+        entityType="clients"
+        onSuccess={handleAssignSuccess}
       />
     </AppLayout>
   );
