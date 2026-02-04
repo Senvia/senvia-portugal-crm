@@ -1,151 +1,230 @@
 
 
-## Correção: Formulário de Proposta Completo para Nichos Não-Telecom
+## Funcionalidade: Desconto nos Produtos das Propostas
 
-### Problema Identificado
+### Objetivo
 
-Ao esconder os campos específicos de telecom (CPEs, Tipo de Proposta, Energia, etc.), o formulário de criação/edição de propostas ficou incompleto para outros nichos:
-
-| O que falta | Impacto |
-|-------------|---------|
-| Campo "Valor da Proposta" | Não há forma de definir o valor manualmente |
-| Seletor de Produtos | Não há como adicionar produtos da organização |
-| Observações contextuais | O label "Notas" é genérico |
-
-### Solução
-
-Adicionar uma secção para **nichos NÃO-telecom** com:
-
-1. **Campo "Valor da Proposta"** - Input numérico para inserir o valor total manualmente
-2. **Seletor de Produtos/Serviços** - Lista dos produtos da organização com quantidade e preço
-3. **Melhoria do campo Notas** - Renomear para "Observações da Negociação"
+Adicionar campo de desconto para cada produto adicionado nas propostas, permitindo:
+- Desconto por **percentagem** (%)
+- Ou desconto por **valor fixo** (€)
 
 ---
 
-### Ficheiros a Modificar
+### Alterações nos Ficheiros
 
 | Ficheiro | Alteração |
 |----------|-----------|
-| `src/components/proposals/CreateProposalModal.tsx` | Adicionar secção genérica com valor + produtos |
-| `src/components/proposals/EditProposalModal.tsx` | Mesmo tratamento para edição |
+| `src/components/proposals/CreateProposalModal.tsx` | Adicionar campo de desconto e tipo de desconto por produto |
+| `src/components/proposals/EditProposalModal.tsx` | Mesma funcionalidade para edição |
+
+---
+
+### Estrutura do Produto Selecionado (Atualizada)
+
+```typescript
+interface SelectedProduct {
+  product_id: string;
+  name: string;
+  quantity: number;
+  unit_price: number;
+  discount_type: 'percentage' | 'fixed';  // NOVO
+  discount_value: number;                   // NOVO
+}
+```
+
+---
+
+### Interface do Utilizador
+
+Para cada produto adicionado, mostrar:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ [📦] Tratamento Facial                                  │
+│                                                         │
+│ Qtd: [1]  Preço: €150,00                               │
+│                                                         │
+│ Desconto: [% | €]  Valor: [___]                        │
+│                                                         │
+│ Subtotal: €135,00 (com 10% desconto)           [×]     │
+└─────────────────────────────────────────────────────────┘
+```
+
+---
+
+### Cálculo do Total
+
+```typescript
+const calculateProductTotal = (product: SelectedProduct) => {
+  const subtotal = product.quantity * product.unit_price;
+  
+  if (product.discount_type === 'percentage') {
+    return subtotal * (1 - product.discount_value / 100);
+  }
+  
+  // Desconto fixo
+  return subtotal - product.discount_value;
+};
+
+const totalValue = useMemo(() => {
+  const productsTotal = selectedProducts.reduce(
+    (sum, p) => sum + calculateProductTotal(p), 
+    0
+  );
+  return productsTotal + (parseFloat(manualValue) || 0);
+}, [selectedProducts, manualValue]);
+```
 
 ---
 
 ### Alterações em CreateProposalModal.tsx
 
-**1. Adicionar imports e hooks:**
+**1. Atualizar tipo do estado:**
 ```tsx
-import { useProducts } from '@/hooks/useProducts';
-```
-
-**2. Adicionar estados para nichos não-telecom:**
-```tsx
-// Campos para nichos NÃO-telecom
-const [manualValue, setManualValue] = useState<string>('');
 const [selectedProducts, setSelectedProducts] = useState<Array<{
   product_id: string;
+  name: string;
   quantity: number;
   unit_price: number;
+  discount_type: 'percentage' | 'fixed';
+  discount_value: number;
 }>>([]);
 ```
 
-**3. Buscar produtos:**
+**2. Atualizar handleAddProduct:**
 ```tsx
-const { data: products = [] } = useProducts();
+setSelectedProducts(prev => [...prev, {
+  product_id: product.id,
+  name: product.name,
+  quantity: 1,
+  unit_price: product.price || 0,
+  discount_type: 'percentage',  // Default
+  discount_value: 0,
+}]);
 ```
 
-**4. Nova secção para nichos NÃO-telecom (após o grid de data/estado):**
+**3. Adicionar função de atualização de desconto:**
 ```tsx
-{/* Campos para nichos NÃO-telecom */}
-{!isTelecom && (
-  <div className="space-y-4">
-    {/* Valor da Proposta */}
-    <div className="space-y-2">
-      <Label htmlFor="manual-value">Valor da Proposta (€)</Label>
-      <Input
-        id="manual-value"
-        type="number"
-        step="0.01"
-        min="0"
-        value={manualValue}
-        onChange={(e) => setManualValue(e.target.value)}
-        placeholder="Ex: 1500.00"
-      />
-    </div>
+const handleUpdateProductDiscount = (
+  productId: string, 
+  discountType: 'percentage' | 'fixed', 
+  discountValue: number
+) => {
+  setSelectedProducts(prev => 
+    prev.map(p => p.product_id === productId 
+      ? { ...p, discount_type: discountType, discount_value: discountValue } 
+      : p
+    )
+  );
+};
+```
+
+**4. UI por produto (secção de lista):**
+```tsx
+{selectedProducts.map((item) => {
+  const subtotal = item.quantity * item.unit_price;
+  const discountedTotal = item.discount_type === 'percentage'
+    ? subtotal * (1 - item.discount_value / 100)
+    : subtotal - item.discount_value;
     
-    {/* Produtos/Serviços (se houver produtos cadastrados) */}
-    {products.length > 0 && (
-      <div className="space-y-2">
-        <Label>Produtos/Serviços</Label>
-        {/* Seletor de produtos com quantidade */}
-        ...
+  return (
+    <div key={item.product_id} className="p-3 rounded-lg bg-muted space-y-2">
+      <div className="flex items-center gap-2">
+        <Package className="h-4 w-4 text-muted-foreground" />
+        <span className="flex-1 text-sm font-medium">{item.name}</span>
+        <Button variant="ghost" size="sm" onClick={() => handleRemoveProduct(item.product_id)}>
+          ×
+        </Button>
       </div>
-    )}
-  </div>
-)}
-```
-
-**5. Renomear campo Notas:**
-```tsx
-<Label htmlFor="notes">Observações da Negociação</Label>
-<Textarea
-  id="notes"
-  value={notes}
-  onChange={(e) => setNotes(e.target.value)}
-  placeholder="Detalhes da negociação, condições especiais, etc..."
-  rows={3}
-/>
-```
-
-**6. Atualizar cálculo do valor total:**
-```tsx
-const calculatedTotalValue = useMemo(() => {
-  if (isTelecom) {
-    if (proposalType === 'energia') {
-      return proposalCpes.reduce((sum, cpe) => sum + (parseFloat(cpe.margem) || 0), 0);
-    }
-    return 0;
-  }
-  // Para não-telecom: usar valor manual + produtos
-  const productsTotal = selectedProducts.reduce((sum, p) => sum + (p.quantity * p.unit_price), 0);
-  return productsTotal + (parseFloat(manualValue) || 0);
-}, [isTelecom, proposalType, proposalCpes, selectedProducts, manualValue]);
+      
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <Label className="text-xs text-muted-foreground">Quantidade</Label>
+          <Input
+            type="number"
+            min="1"
+            value={item.quantity}
+            onChange={(e) => handleUpdateProductQuantity(item.product_id, parseInt(e.target.value) || 0)}
+            className="h-8"
+          />
+        </div>
+        <div>
+          <Label className="text-xs text-muted-foreground">Preço Unit.</Label>
+          <Input
+            type="number"
+            step="0.01"
+            value={item.unit_price}
+            onChange={(e) => handleUpdateProductPrice(item.product_id, parseFloat(e.target.value) || 0)}
+            className="h-8"
+          />
+        </div>
+      </div>
+      
+      <div className="flex items-end gap-2">
+        <div className="flex-1">
+          <Label className="text-xs text-muted-foreground">Desconto</Label>
+          <div className="flex gap-1">
+            <Button
+              type="button"
+              variant={item.discount_type === 'percentage' ? 'default' : 'outline'}
+              size="sm"
+              className="h-8 w-10 p-0"
+              onClick={() => handleUpdateProductDiscount(item.product_id, 'percentage', item.discount_value)}
+            >
+              %
+            </Button>
+            <Button
+              type="button"
+              variant={item.discount_type === 'fixed' ? 'default' : 'outline'}
+              size="sm"
+              className="h-8 w-10 p-0"
+              onClick={() => handleUpdateProductDiscount(item.product_id, 'fixed', item.discount_value)}
+            >
+              €
+            </Button>
+            <Input
+              type="number"
+              step="0.01"
+              min="0"
+              value={item.discount_value}
+              onChange={(e) => handleUpdateProductDiscount(
+                item.product_id, 
+                item.discount_type, 
+                parseFloat(e.target.value) || 0
+              )}
+              className="h-8 flex-1"
+              placeholder="0"
+            />
+          </div>
+        </div>
+        <div className="text-right">
+          <Label className="text-xs text-muted-foreground">Subtotal</Label>
+          <div className="text-sm font-medium">{formatCurrency(discountedTotal)}</div>
+        </div>
+      </div>
+    </div>
+  );
+})}
 ```
 
 ---
 
-### Alterações em EditProposalModal.tsx
+### Resultado Visual
 
-Aplicar a mesma lógica:
-1. Carregar produtos da organização
-2. Campo de valor manual para nichos não-telecom
-3. Seletor de produtos
-4. Preencher valores ao abrir modal
-
----
-
-### Resumo Visual por Nicho
-
-| Campo | Telecom | Generic/Clinic/Construction/etc |
-|-------|---------|--------------------------------|
-| Cliente | ✓ | ✓ |
-| Data | ✓ | ✓ |
-| Estado | ✓ | ✓ |
-| Tipo Negociação | ✓ | - |
-| Tipo Proposta | ✓ | - |
-| CPE Selector | ✓ (energia) | - |
-| Campos Serviços | ✓ (serviços) | - |
-| **Valor Manual** | - | **✓** |
-| **Produtos/Serviços** | - | **✓** |
-| Observações | ✓ | ✓ |
+| Campo | Antes | Depois |
+|-------|-------|--------|
+| Quantidade | ✓ | ✓ |
+| Preço Unitário | ✓ (fixo) | ✓ (editável) |
+| Tipo Desconto | - | ✓ (% ou €) |
+| Valor Desconto | - | ✓ |
+| Subtotal com Desconto | - | ✓ |
 
 ---
 
-### Detalhes Técnicos
+### Notas Técnicas
 
-O formulário de propostas será adaptativo:
-- **Telecom**: Mantém toda a lógica atual (CPEs, Energia, Serviços)
-- **Outros nichos**: Formulário simplificado com valor manual e produtos do catálogo
-
-Isto permite que clínicas, imobiliárias, construção civil, etc. criem propostas com os seus próprios produtos/serviços configurados nas definições.
+- O desconto é aplicado **por linha de produto**
+- O campo "Valor da Proposta" continua disponível para valores adicionais/manuais
+- O total final = soma dos subtotais com desconto + valor manual
+- Esta funcionalidade aplica-se apenas a **nichos não-telecom**
 
