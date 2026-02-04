@@ -79,8 +79,8 @@ export default function Dashboard() {
           </div>
         ) : (
           <div className="space-y-6">
-            {/* Fidelization Alerts Widget - shows if clients module is enabled */}
-            {clientsModuleEnabled && (
+            {/* Fidelization Alerts Widget - shows only for telecom niche */}
+            {organization?.niche === 'telecom' && clientsModuleEnabled && (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <FidelizationAlertsWidget />
               </div>
