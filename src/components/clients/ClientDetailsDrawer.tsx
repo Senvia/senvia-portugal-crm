@@ -60,11 +60,11 @@ export function ClientDetailsDrawer({
   const { timeline, proposals, sales, events, isLoading: loadingHistory } = useClientHistory(client?.id || null);
   const updateClient = useUpdateClient();
   const { data: teamMembers = [] } = useTeamMembers();
-  const { data: cpes = [] } = useCpes(client?.id || null);
   const { organization } = useAuth();
   
   // Telecom niche uses energy-specific labels
   const isTelecom = organization?.niche === 'telecom';
+  const { data: cpes = [] } = useCpes(isTelecom ? client?.id : null);
   const cpeTabLabel = isTelecom ? 'CPE/CUI' : 'CPEs';
   const CpeIcon = isTelecom ? Zap : Router;
 
@@ -212,10 +212,12 @@ export function ClientDetailsDrawer({
         <Tabs defaultValue="resumo" className="w-full mt-4 flex-1 flex flex-col min-h-0">
           <TabsList className="w-full justify-start px-6 h-auto flex-wrap shrink-0">
             <TabsTrigger value="resumo" className="text-xs">Resumo</TabsTrigger>
-            <TabsTrigger value="cpes" className="text-xs">
-              <CpeIcon className="h-3 w-3 mr-1" />
-              {cpeTabLabel} ({cpes.length})
-            </TabsTrigger>
+            {isTelecom && (
+              <TabsTrigger value="cpes" className="text-xs">
+                <CpeIcon className="h-3 w-3 mr-1" />
+                {cpeTabLabel} ({cpes.length})
+              </TabsTrigger>
+            )}
             <TabsTrigger value="notas" className="text-xs">Notas</TabsTrigger>
             <TabsTrigger value="historico" className="text-xs">Histórico</TabsTrigger>
             <TabsTrigger value="propostas" className="text-xs">
@@ -374,10 +376,12 @@ export function ClientDetailsDrawer({
               </div>
             </TabsContent>
 
-            {/* CPEs Tab */}
-            <TabsContent value="cpes" className="p-6 pt-4 mt-0">
-              <CpeList clientId={client.id} />
-            </TabsContent>
+            {/* CPEs Tab - Only for telecom niche */}
+            {isTelecom && (
+              <TabsContent value="cpes" className="p-6 pt-4 mt-0">
+                <CpeList clientId={client.id} />
+              </TabsContent>
+            )}
 
             {/* Notas Tab */}
             <TabsContent value="notas" className="p-6 pt-4 mt-0">
