@@ -12,6 +12,7 @@ export interface Product {
   description?: string | null;
   price: number | null;
   is_active: boolean;
+  is_recurring: boolean;
   created_at: string;
   updated_at: string;
 }

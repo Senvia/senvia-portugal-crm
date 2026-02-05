@@ -49,7 +49,7 @@ export function useCreateProduct() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async (data: { name: string; description?: string; price?: number }) => {
+    mutationFn: async (data: { name: string; description?: string; price?: number; is_recurring?: boolean }) => {
       const { error } = await supabase
         .from('products')
         .insert({
@@ -57,6 +57,7 @@ export function useCreateProduct() {
           name: data.name,
           description: data.description || null,
           price: data.price || null,
+          is_recurring: data.is_recurring || false,
         });
       
       if (error) throw error;
@@ -76,7 +77,7 @@ export function useUpdateProduct() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async ({ id, ...data }: { id: string; name?: string; description?: string | null; price?: number | null; is_active?: boolean }) => {
+    mutationFn: async ({ id, ...data }: { id: string; name?: string; description?: string | null; price?: number | null; is_active?: boolean; is_recurring?: boolean }) => {
       const { error } = await supabase
         .from('products')
         .update(data)

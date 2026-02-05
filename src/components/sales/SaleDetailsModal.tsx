@@ -51,6 +51,7 @@ import { MODELO_SERVICO_LABELS } from "@/types/proposals";
 import type { SaleWithDetails, SaleStatus } from "@/types/sales";
 import { SALE_STATUS_LABELS, SALE_STATUS_COLORS, SALE_STATUSES } from "@/types/sales";
 import { SalePaymentsList } from "./SalePaymentsList";
+import { RecurringSection } from "./RecurringSection";
 
 interface SaleDetailsModalProps {
   sale: SaleWithDetails | null;
@@ -409,6 +410,21 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                       </span>
                     </div>
                   </div>
+                  <Separator />
+                </>
+              )}
+
+              {/* Recurring Section */}
+              {sale.has_recurring && organization && (
+                <>
+                  <RecurringSection
+                    saleId={sale.id}
+                    organizationId={organization.id}
+                    recurringValue={sale.recurring_value || 0}
+                    recurringStatus={sale.recurring_status}
+                    nextRenewalDate={sale.next_renewal_date}
+                    lastRenewalDate={sale.last_renewal_date}
+                  />
                   <Separator />
                 </>
               )}

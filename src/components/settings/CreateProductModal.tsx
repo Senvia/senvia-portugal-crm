@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
+import { RefreshCw } from 'lucide-react';
 import { useCreateProduct } from '@/hooks/useProducts';
 
 interface CreateProductModalProps {
@@ -16,6 +18,7 @@ export function CreateProductModal({ open, onOpenChange }: CreateProductModalPro
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
+  const [isRecurring, setIsRecurring] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,11 +29,13 @@ export function CreateProductModal({ open, onOpenChange }: CreateProductModalPro
       name: name.trim(),
       description: description.trim() || undefined,
       price: price ? parseFloat(price) : undefined,
+      is_recurring: isRecurring,
     }, {
       onSuccess: () => {
         setName('');
         setDescription('');
         setPrice('');
+        setIsRecurring(false);
         onOpenChange(false);
       },
     });
@@ -74,6 +79,26 @@ export function CreateProductModal({ open, onOpenChange }: CreateProductModalPro
               onChange={(e) => setPrice(e.target.value)}
               placeholder="0.00"
             />
+          </div>
+          <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <RefreshCw className="h-4 w-4 text-primary" />
+                <Label htmlFor="recurring" className="font-medium cursor-pointer">
+                  Produto Recorrente
+                </Label>
+              </div>
+              <Switch
+                id="recurring"
+                checked={isRecurring}
+                onCheckedChange={setIsRecurring}
+              />
+            </div>
+            {isRecurring && (
+              <p className="text-xs text-muted-foreground">
+                Este produto é cobrado mensalmente. Vendas com este produto terão opção de renovação.
+              </p>
+            )}
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

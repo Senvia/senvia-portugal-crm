@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Pencil, Trash2, Package } from 'lucide-react';
+import { Plus, Pencil, Trash2, Package, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -81,6 +81,12 @@ export function ProductsTab() {
                   <div className="flex-1 min-w-0 mr-4">
                     <div className="flex items-center gap-2">
                       <h4 className="font-medium truncate">{product.name}</h4>
+                      {product.is_recurring && (
+                        <Badge variant="outline" className="text-xs gap-1 bg-primary/10 text-primary border-primary/30">
+                          <RefreshCw className="h-3 w-3" />
+                          Mensal
+                        </Badge>
+                      )}
                       {!product.is_active && (
                         <Badge variant="secondary" className="text-xs">Inativo</Badge>
                       )}

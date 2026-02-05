@@ -73,6 +73,20 @@ export const PAYMENT_RECORD_STATUS_COLORS: Record<PaymentRecordStatus, string> =
 
 export const PAYMENT_STATUSES: PaymentStatus[] = ['pending', 'partial', 'paid'];
 
+export type RecurringStatus = 'active' | 'cancelled' | 'paused';
+
+export const RECURRING_STATUS_LABELS: Record<RecurringStatus, string> = {
+  active: 'Ativo',
+  cancelled: 'Cancelado',
+  paused: 'Pausado',
+};
+
+export const RECURRING_STATUS_COLORS: Record<RecurringStatus, string> = {
+  active: 'bg-green-500/20 text-green-500 border-green-500/30',
+  cancelled: 'bg-red-500/20 text-red-500 border-red-500/30',
+  paused: 'bg-amber-500/20 text-amber-500 border-amber-500/30',
+};
+
 export interface Sale {
   id: string;
   organization_id: string;
@@ -110,6 +124,13 @@ export interface Sale {
   
   // Comum
   comissao: number | null;
+  
+  // Campos de Recorrência
+  has_recurring: boolean;
+  recurring_value: number;
+  recurring_status: RecurringStatus | null;
+  next_renewal_date: string | null;
+  last_renewal_date: string | null;
 }
 
 export interface SaleWithDetails extends Sale {

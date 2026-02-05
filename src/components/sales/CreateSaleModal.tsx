@@ -34,7 +34,7 @@ import { useFinalStages } from "@/hooks/usePipelineStages";
 import { useUpdateLeadStatus } from "@/hooks/useLeads";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { format } from "date-fns";
+import { format, addMonths } from "date-fns";
 import { pt } from "date-fns/locale";
 import { 
   Loader2, 
@@ -446,6 +446,21 @@ export function CreateSaleModal({
     if (total <= 0 && items.length === 0) return;
 
     try {
+      // Calculate recurring value from items with recurring products
+      const recurringItems = items.filter(item => {
+        if (!item.product_id) return false;
+        const product = products?.find(p => p.id === item.product_id);
+        return product?.is_recurring;
+      });
+      
+      const recurringValue = recurringItems.reduce(
+        (sum, item) => sum + (item.quantity * item.unit_price), 0
+      );
+      const hasRecurring = recurringValue > 0;
+      const nextRenewalDate = hasRecurring 
+        ? addMonths(saleDate, 1).toISOString().split('T')[0] 
+        : undefined;
+
       const sale = await createSale.mutateAsync({
         client_id: clientId || undefined,
         proposal_id: proposalId || undefined,
@@ -467,6 +482,11 @@ export function CreateSaleModal({
         modelo_servico: modeloServico || undefined,
         kwp: parseFloat(kwp) || undefined,
         comissao: parseFloat(comissao) || undefined,
+        // Campos de recorrência
+        has_recurring: hasRecurring,
+        recurring_value: recurringValue,
+        recurring_status: hasRecurring ? 'active' : undefined,
+        next_renewal_date: nextRenewalDate,
       });
 
       // Create sale items
