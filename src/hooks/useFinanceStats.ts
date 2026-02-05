@@ -16,7 +16,7 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
   const organizationId = organization?.id;
   const dateRange = options?.dateRange;
 
-  const { data: payments, isLoading } = useQuery({
+  const { data: payments, isLoading: loadingPayments } = useQuery({
     queryKey: ['finance-stats', organizationId],
     queryFn: async () => {
       if (!organizationId) return [];
@@ -66,6 +66,33 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
     enabled: !!organizationId,
   });
 
+  // Fetch expenses
+  const { data: expenses, isLoading: loadingExpenses } = useQuery({
+    queryKey: ['expenses-stats', organizationId],
+    queryFn: async () => {
+      if (!organizationId) return [];
+
+      const { data, error } = await supabase
+        .from('expenses')
+        .select('*')
+        .eq('organization_id', organizationId)
+        .order('expense_date', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching expenses:', error);
+        throw error;
+      }
+
+      return (data || []).map((e) => ({
+        ...e,
+        amount: Number(e.amount),
+      }));
+    },
+    enabled: !!organizationId,
+  });
+
+  const isLoading = loadingPayments || loadingExpenses;
+
   // Filter payments by date range
   const filteredPayments = useMemo(() => {
     if (!payments) return [];
@@ -79,8 +106,21 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
     });
   }, [payments, dateRange]);
 
+  // Filter expenses by date range
+  const filteredExpenses = useMemo(() => {
+    if (!expenses) return [];
+    if (!dateRange?.from) return expenses;
+
+    return expenses.filter(e => {
+      const date = parseISO(e.expense_date);
+      if (dateRange.from && date < startOfDay(dateRange.from)) return false;
+      if (dateRange.to && date > endOfDay(dateRange.to)) return false;
+      return true;
+    });
+  }, [expenses, dateRange]);
+
   const stats = useMemo((): FinanceStats => {
-    if (!filteredPayments || filteredPayments.length === 0) {
+    if ((!filteredPayments || filteredPayments.length === 0) && (!filteredExpenses || filteredExpenses.length === 0)) {
       return {
         totalBilled: 0,
         totalReceived: 0,
@@ -90,6 +130,9 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
         dueSoonCount: 0,
         dueSoonPayments: [],
         cashflowTrend: [],
+        totalExpenses: 0,
+        expensesThisMonth: 0,
+        balance: 0,
       };
     }
 
@@ -129,6 +172,19 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
 
     const dueSoon = dueSoonPayments.reduce((sum, p) => sum + p.amount, 0);
 
+    // Expenses totals
+    const totalExpenses = filteredExpenses.reduce((sum, e) => sum + e.amount, 0);
+    
+    const expensesThisMonth = filteredExpenses
+      .filter(e => {
+        const date = parseISO(e.expense_date);
+        return isWithinInterval(date, { start: monthStart, end: monthEnd });
+      })
+      .reduce((sum, e) => sum + e.amount, 0);
+
+    // Balance
+    const balance = receivedThisMonth - expensesThisMonth;
+
     // Cashflow trend - use date range if provided, otherwise last 30 days + next 7 days
     const trendStart = dateRange?.from ? startOfDay(dateRange.from) : subDays(now, 30);
     const trendEnd = dateRange?.to ? endOfDay(dateRange.to) : next7Days;
@@ -145,10 +201,15 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
         .filter(p => p.status === 'pending' && p.payment_date === dayStr)
         .reduce((sum, p) => sum + p.amount, 0);
 
+      const expensesOnDay = filteredExpenses
+        .filter(e => e.expense_date === dayStr)
+        .reduce((sum, e) => sum + e.amount, 0);
+
       cashflowTrend.push({
         date: dayStr,
         received,
         scheduled,
+        expenses: expensesOnDay,
       });
     }
 
@@ -161,8 +222,11 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
       dueSoonCount: dueSoonPayments.length,
       dueSoonPayments,
       cashflowTrend,
+      totalExpenses,
+      expensesThisMonth,
+      balance,
     };
-  }, [filteredPayments, dateRange]);
+  }, [filteredPayments, filteredExpenses, dateRange]);
 
   return {
     stats,
