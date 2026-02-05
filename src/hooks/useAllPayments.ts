@@ -17,15 +17,17 @@ export function useAllPayments() {
         .from('sale_payments')
         .select(`
           *,
-          sales:sale_id (
+          sales:sale_id!inner (
             id,
             code,
+            status,
             total_value,
             leads:lead_id (name),
             crm_clients:client_id (name)
           )
         `)
         .eq('organization_id', organizationId)
+        .eq('sales.status', 'delivered')
         .order('payment_date', { ascending: false });
 
       if (error) {

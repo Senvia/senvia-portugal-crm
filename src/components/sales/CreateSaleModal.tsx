@@ -519,24 +519,8 @@ export function CreateSaleModal({
         );
         
         // Create automatic payments for recurring items with due date
-        if (organization) {
-          const recurringItemsWithDate = items.filter(item => {
-            if (!item.product_id) return false;
-            const product = products?.find(p => p.id === item.product_id);
-            return product?.is_recurring && item.first_due_date;
-          });
-          
-          for (const item of recurringItemsWithDate) {
-            await createSalePayment.mutateAsync({
-              sale_id: sale.id,
-              organization_id: organization.id,
-              amount: item.quantity * item.unit_price,
-              payment_date: format(item.first_due_date!, 'yyyy-MM-dd'),
-              status: 'pending',
-              notes: `Mensalidade: ${item.name}`,
-            });
-          }
-        }
+        // Only create payments if sale status would be 'delivered' (it's 'pending' by default)
+        // Payments will be created when sale status changes to 'delivered'
       }
 
       // Process CPEs - criar novos ou atualizar existentes

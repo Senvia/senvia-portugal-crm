@@ -7,7 +7,7 @@ export type ModeloServico = 'transacional' | 'saas';
 export const SALE_STATUS_LABELS: Record<SaleStatus, string> = {
   pending: 'Pendente',
   in_progress: 'Em Progresso',
-  delivered: 'Entregue',
+  delivered: 'Concluída',
   cancelled: 'Cancelado',
 };
 
