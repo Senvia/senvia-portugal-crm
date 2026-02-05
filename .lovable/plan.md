@@ -1,43 +1,24 @@
 
 
-## Criar Pagamentos Automáticos a Partir de Produtos Mensais
+## Sincronizar Pagamentos de Produtos Mensais Existentes
 
-### Problema Identificado
+### Problema
 
-Quando adicionas um produto mensal com data de vencimento (`first_due_date`) a uma venda, essa data é guardada apenas na tabela `sale_items`. O módulo financeiro, no entanto, só mostra dados da tabela `sale_payments` - **não há nenhuma ligação entre os dois**.
+A logica atual so cria pagamentos automaticos para:
+- Items novos no CreateSaleModal
+- Items novos no EditSaleModal
 
-```text
-FLUXO ATUAL (partido):
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│  EditSaleModal  │ --> │   sale_items    │     │  sale_payments  │
-│  first_due_date │     │  first_due_date │     │   (vazio)       │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
-                                                        ↓
-                                               ┌─────────────────┐
-                                               │   Financeiro    │
-                                               │   "Sem dados"   │
-                                               └─────────────────┘
-```
+**Nao cobre**: Items existentes que foram atualizados com uma nova `first_due_date`.
+
+A tua venda 0003 tem o produto "Trafego Pago" com data 2026-02-09, mas nao foi criado um pagamento pendente para essa data.
 
 ---
 
 ### Solucao
 
-Ao guardar uma venda com produtos mensais, criar automaticamente um registo em `sale_payments` para cada item recorrente que tenha `first_due_date` definido.
-
-```text
-FLUXO CORRIGIDO:
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│  EditSaleModal  │ --> │   sale_items    │ --> │  sale_payments  │
-│  first_due_date │     │  first_due_date │     │  payment_date   │
-└─────────────────┘     └─────────────────┘     │  status=pending │
-                                                └─────────────────┘
-                                                        ↓
-                                               ┌─────────────────┐
-                                               │   Financeiro    │
-                                               │   Mostra data   │
-                                               └─────────────────┘
-```
+Melhorar a logica do `EditSaleModal` para tambem criar pagamentos quando:
+1. Um item existente e atualizado com uma `first_due_date` nova
+2. Verificar se ja existe um pagamento para evitar duplicados
 
 ---
 
@@ -45,57 +26,42 @@ FLUXO CORRIGIDO:
 
 | Ficheiro | Alteracao |
 |----------|-----------|
-| `src/components/sales/CreateSaleModal.tsx` | Apos criar items, criar pagamentos para items recorrentes |
-| `src/components/sales/EditSaleModal.tsx` | Ao modificar items, sincronizar pagamentos recorrentes |
+| `src/components/sales/EditSaleModal.tsx` | Criar pagamentos para items existentes que recebem `first_due_date` |
 
 ---
 
-### Implementacao Tecnica
+### Implementacao
 
-#### 1. CreateSaleModal - Criar pagamentos automaticos
-
-Apos criar os `sale_items` (linha ~516), adicionar logica para criar pagamentos:
+No `EditSaleModal`, apos atualizar items existentes, verificar se precisam de pagamento:
 
 ```typescript
-// Após criar sale items, criar pagamentos para items recorrentes
-if (items.length > 0 && sale?.id) {
-  await createSaleItems.mutateAsync(...);
-  
-  // NOVO: Criar pagamentos automáticos para items mensais
-  const recurringItemsWithDate = items.filter(item => {
-    if (!item.product_id) return false;
+// Para cada item existente com first_due_date atualizado
+for (const item of items) {
+  if (item.id && !item.id.startsWith('new-')) {
+    // Item existente
     const product = products?.find(p => p.id === item.product_id);
-    return product?.is_recurring && item.first_due_date;
-  });
-  
-  for (const item of recurringItemsWithDate) {
-    await createPayment.mutateAsync({
-      sale_id: sale.id,
-      organization_id: organization.id,
-      amount: item.quantity * item.unit_price,
-      payment_date: format(item.first_due_date!, 'yyyy-MM-dd'),
-      status: 'pending',
-      notes: `Mensalidade: ${item.name}`,
-    });
+    if (product?.is_recurring && item.first_due_date) {
+      // Verificar se ja existe pagamento com essa data
+      const { data: existingPayments } = await supabase
+        .from('sale_payments')
+        .select('id')
+        .eq('sale_id', sale.id)
+        .eq('payment_date', format(item.first_due_date, 'yyyy-MM-dd'))
+        .eq('status', 'pending');
+      
+      // Se nao existe, criar
+      if (!existingPayments || existingPayments.length === 0) {
+        await createSalePayment.mutateAsync({
+          sale_id: sale.id,
+          organization_id: organization.id,
+          amount: item.quantity * item.unit_price,
+          payment_date: format(item.first_due_date, 'yyyy-MM-dd'),
+          status: 'pending',
+          notes: `Mensalidade: ${item.name}`,
+        });
+      }
+    }
   }
-}
-```
-
-#### 2. EditSaleModal - Sincronizar pagamentos ao modificar items
-
-Ao guardar alteracoes de items recorrentes com nova data, verificar se precisa criar/atualizar pagamentos:
-
-```typescript
-// Para items novos com first_due_date, criar pagamento
-if (item.isNew && item.first_due_date && isRecurring) {
-  await createPayment.mutateAsync({
-    sale_id: sale.id,
-    organization_id: organizationId,
-    amount: item.quantity * item.unit_price,
-    payment_date: format(item.first_due_date, 'yyyy-MM-dd'),
-    status: 'pending',
-    notes: `Mensalidade: ${item.name}`,
-  });
 }
 ```
 
@@ -103,21 +69,18 @@ if (item.isNew && item.first_due_date && isRecurring) {
 
 ### Comportamento Final
 
-| Acao | Resultado |
-|------|-----------|
-| Criar venda com produto mensal + data | Cria item + cria pagamento pendente com essa data |
-| Editar venda e adicionar produto mensal + data | Cria novo item + cria pagamento pendente |
-| Financeiro → Proximos Recebimentos | Mostra o pagamento agendado |
-| Financeiro → Grafico | Inclui no "Agendado" |
+| Cenario | Resultado |
+|---------|-----------|
+| Criar venda com produto mensal + data | Cria pagamento pendente |
+| Adicionar produto mensal a venda existente | Cria pagamento pendente |
+| Alterar data de produto mensal existente | Cria pagamento pendente (se nao existir) |
+| Guardar sem alterar data | Nao duplica pagamentos |
 
 ---
 
-### Resumo de Alteracoes
+### Nota Adicional
 
-| Tipo | Ficheiro | Descricao |
-|------|----------|-----------|
-| Frontend | `CreateSaleModal.tsx` | Criar pagamentos apos criar items recorrentes |
-| Frontend | `EditSaleModal.tsx` | Criar pagamentos para novos items recorrentes |
+Para a tua venda atual (0003), apos esta alteracao, basta abrir o modal de editar e guardar novamente - o sistema vai criar o pagamento pendente automaticamente.
 
-**Total: 2 ficheiros modificados**
+**Total: 1 ficheiro modificado**
 
