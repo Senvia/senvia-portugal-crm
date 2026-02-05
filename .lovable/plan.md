@@ -1,303 +1,361 @@
 
 
-## Adicionar Filtros Avançados ao Modulo Financeiro
+## Expandir Módulo Financeiro com Despesas
 
 ### Conceito
 
-O modulo financeiro precisa de filtros robustos para permitir analises precisas. O filtro de data sera um unico campo de calendario onde o utilizador seleciona a data de inicio e fim (range selection).
+Adicionar uma secção de **Despesas** ao módulo financeiro para registar e categorizar todos os custos operacionais da empresa. Inclui também uma área nas Configurações para gerir os **Tipos de Despesas** (categorias personalizáveis por organização).
 
 ---
 
-### Filtros a Implementar
+### Novas Funcionalidades
 
-#### Pagina Dashboard Financeiro (`/financeiro`)
-
-| Filtro | Tipo | Opcoes |
-|--------|------|--------|
-| Periodo | Date Range Picker | Data inicio e fim num unico calendario |
-
-Os cards de metricas e o grafico serao recalculados com base no periodo selecionado.
-
-#### Pagina Pagamentos (`/financeiro/pagamentos`)
-
-| Filtro | Tipo | Opcoes |
-|--------|------|--------|
-| Pesquisa | Input texto | Cliente, venda, fatura |
-| Periodo | Date Range Picker | Data inicio e fim |
-| Estado | Select | Todos, Pagos, Agendados |
-| Metodo | Select | Todos, MB Way, Transferencia, etc. |
-
-#### Pagina Faturas (`/financeiro/faturas`)
-
-| Filtro | Tipo | Opcoes |
-|--------|------|--------|
-| Pesquisa | Input texto | Referencia, cliente, venda |
-| Periodo | Date Range Picker | Data inicio e fim |
+| Funcionalidade | Descrição |
+|----------------|-----------|
+| Tipos de Despesas | Categorias personalizáveis (Configurações) |
+| Registar Despesas | Modal para adicionar despesas com categoria, valor, data |
+| Listar Despesas | Tabela filtrada por período, categoria, pesquisa |
+| Dashboard atualizado | Novos cards: Total Despesas, Balanço (Receitas - Despesas) |
+| Anexar Comprovativos | Upload de ficheiros (PDF/imagem) |
 
 ---
 
-### Date Range Picker (Um Unico Calendario)
-
-Usaremos o `mode="range"` do react-day-picker que permite selecionar data inicial e final num unico calendario.
-
-**Interface:**
+### Interface do Dashboard Financeiro (Atualizada)
 
 ```text
-┌─────────────────────────────────────────────────┐
-│  [📅 01/01/2026 - 31/01/2026 ▼]                │
-└─────────────────────────────────────────────────┘
-          │
-          ▼
-┌─────────────────────────────────────────────────┐
-│     ◄    Janeiro 2026    ►                      │
-├─────────────────────────────────────────────────┤
-│  Seg  Ter  Qua  Qui  Sex  Sab  Dom              │
-│   ·    ·    [1]  2    3    4    5               │
-│   6    7    8    9   10   11   12               │
-│  13   14   15   16   17   18   19               │
-│  20   21   22   23   24   25   26               │
-│  27   28   29   30  [31]  ·    ·                │
-└─────────────────────────────────────────────────┘
-
-[1] = Data inicio (azul solido)
-[31] = Data fim (azul solido)
-2-30 = Range selecionado (azul claro)
-```
-
-**Comportamento:**
-- Primeiro clique: define data inicio
-- Segundo clique: define data fim
-- O range entre as datas fica destacado
-- Botao para limpar as datas selecionadas
-
----
-
-### Interface Proposta
-
-#### Dashboard Financeiro
-
-```text
-┌────────────────────────────────────────────────────────────────────┐
-│  💰 FINANCEIRO                                                     │
-├────────────────────────────────────────────────────────────────────┤
-│  Periodo: [📅 01/01/2026 - 31/01/2026 ▼] [× Limpar]               │
-│                                                                    │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌───────────┐ │
-│  │ Faturado    │  │ Recebido    │  │ Pendente    │  │ A Vencer  │ │
-│  │ €15.000     │  │ €8.500      │  │ €6.500      │  │ €2.000    │ │
-│  └─────────────┘  └─────────────┘  └─────────────┘  └───────────┘ │
-│                                                                    │
-│  [📊 Grafico filtrado pelo periodo selecionado]                   │
-└────────────────────────────────────────────────────────────────────┘
-```
-
-#### Pagamentos
-
-```text
-┌────────────────────────────────────────────────────────────────────┐
-│  💳 PAGAMENTOS                                    [Exportar]       │
-├────────────────────────────────────────────────────────────────────┤
-│                                                                    │
-│  [🔍 Pesquisar...         ] [📅 Periodo ▼] [Estado ▼] [Metodo ▼]  │
-│  [× Limpar filtros]                                                │
-│                                                                    │
-│  ┌────────────────────────────────────────────────────────────────┐│
-│  │ Data       │ Venda   │ Cliente    │ Valor  │ Metodo  │ Estado ││
-│  └────────────────────────────────────────────────────────────────┘│
-└────────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────────┐
+│  💰 FINANCEIRO                                                             │
+├────────────────────────────────────────────────────────────────────────────┤
+│  Período: [📅 01/01/2026 - 31/01/2026 ▼]                                   │
+│                                                                            │
+│  ┌───────────┐ ┌───────────┐ ┌───────────┐ ┌───────────┐ ┌───────────┐    │
+│  │ Faturado  │ │ Recebido  │ │ Pendente  │ │ Despesas  │ │ Balanço   │    │
+│  │ €15.000   │ │ €8.500    │ │ €6.500    │ │ €3.200    │ │ €5.300    │    │
+│  │           │ │   ↑       │ │           │ │    ↓      │ │ Receitas  │    │
+│  └───────────┘ └───────────┘ └───────────┘ └───────────┘ └───────────┘    │
+│                                                                            │
+│  [📊 Gráfico com linha de receitas vs despesas]                            │
+│                                                                            │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐                      │
+│  │  Pagamentos  │  │   Faturas    │  │  Despesas    │  ← NOVO CARD         │
+│  │  Ver todos   │  │  Ver todas   │  │  Ver todas   │                      │
+│  └──────────────┘  └──────────────┘  └──────────────┘                      │
+└────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-### Componente DateRangePicker
+### Nova Página: Despesas (`/financeiro/despesas`)
 
-Criar um componente reutilizavel para o date range picker:
-
-```typescript
-// src/components/ui/date-range-picker.tsx
-
-interface DateRangePickerProps {
-  value: { from: Date | undefined; to: Date | undefined };
-  onChange: (range: { from: Date | undefined; to: Date | undefined }) => void;
-  placeholder?: string;
-  className?: string;
-}
+```text
+┌────────────────────────────────────────────────────────────────────────────┐
+│  📤 DESPESAS                                        [+ Adicionar Despesa]  │
+├────────────────────────────────────────────────────────────────────────────┤
+│                                                                            │
+│  [🔍 Pesquisar...] [📅 Período ▼] [Categoria ▼] [× Limpar] [Exportar]     │
+│                                                                            │
+│  ┌────────────────────────────────────────────────────────────────────────┐│
+│  │ Data       │ Descrição      │ Categoria    │ Valor   │ Anexo │ Ações  ││
+│  ├────────────────────────────────────────────────────────────────────────┤│
+│  │ 04/02/2026 │ Renda escritór │ Instalações  │ €800    │  [📎] │ [✏️🗑️] ││
+│  │ 03/02/2026 │ Campanha Meta  │ Marketing    │ €250    │  --   │ [✏️🗑️] ││
+│  │ 01/02/2026 │ Licença Adobe  │ Software     │ €59,99  │  [📎] │ [✏️🗑️] ││
+│  └────────────────────────────────────────────────────────────────────────┘│
+│                                                                            │
+│  Total no período: €1.109,99                                               │
+└────────────────────────────────────────────────────────────────────────────┘
 ```
 
-Caracteristicas:
-- Botao que mostra o range selecionado formatado
-- Popover com calendario em modo range
-- Suporte para limpar selecao
-- Estilo consistente com o resto do sistema
-- Locale em portugues
+---
+
+### Modal: Adicionar/Editar Despesa
+
+```text
+┌──────────────────────────────────────────────────────────────────┐
+│  ✖  Adicionar Despesa                                            │
+├──────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  Descrição *                                                     │
+│  [Renda do escritório de Janeiro____________________]            │
+│                                                                  │
+│  Categoria *                     Valor *                         │
+│  [Instalações              ▼]    [€ 800,00        ]              │
+│                                                                  │
+│  Data *                          Recorrente?                     │
+│  [📅 01/02/2026            ]     [ ] Sim                         │
+│                                                                  │
+│  Notas                                                           │
+│  [__________________________________________________]            │
+│                                                                  │
+│  📎 Anexar Comprovativo                                          │
+│  ┌────────────────────────────────────────────────────────────┐  │
+│  │  [PDF Icon] recibo-renda.pdf              [× Remover]      │  │
+│  └────────────────────────────────────────────────────────────┘  │
+│                                                                  │
+│                              [Cancelar]  [Guardar]               │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### Nova Secção nas Configurações: Tipos de Despesas
+
+Adicionar nova tab "Despesas" nas Configurações (similar a "Produtos"):
+
+```text
+┌────────────────────────────────────────────────────────────────────────────┐
+│  ⚙️ CONFIGURAÇÕES                                                          │
+├────────────────────────────────────────────────────────────────────────────┤
+│  [Geral] [Equipa] [Pipeline] [Módulos] [Formulário] [Produtos]            │
+│  [Campos] [Alertas] [Despesas] [Integrações]                  ← NOVA TAB  │
+└────────────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│  📂 Tipos de Despesas                                   [+ Adicionar]      │
+├────────────────────────────────────────────────────────────────────────────┤
+│                                                                            │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  Instalações         Renda, água, eletricidade...        [✏️] [🗑️]  │   │
+│  ├─────────────────────────────────────────────────────────────────────┤   │
+│  │  Marketing           Publicidade, anúncios, eventos      [✏️] [🗑️]  │   │
+│  ├─────────────────────────────────────────────────────────────────────┤   │
+│  │  Software            Licenças, subscrições, ferramentas  [✏️] [🗑️]  │   │
+│  ├─────────────────────────────────────────────────────────────────────┤   │
+│  │  Pessoal             Salários, formação, benefícios      [✏️] [🗑️]  │   │
+│  ├─────────────────────────────────────────────────────────────────────┤   │
+│  │  Operacional         Material, combustível, manutenção   [✏️] [🗑️]  │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### Arquitetura de Base de Dados
+
+#### Nova Tabela: `expense_categories`
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| id | UUID | Identificador único |
+| organization_id | UUID | FK para organizations |
+| name | TEXT | Nome da categoria |
+| description | TEXT | Descrição opcional |
+| color | TEXT | Cor para badges (hex) |
+| is_active | BOOLEAN | Se está ativa |
+| created_at | TIMESTAMP | Data de criação |
+| updated_at | TIMESTAMP | Data de atualização |
+
+#### Nova Tabela: `expenses`
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| id | UUID | Identificador único |
+| organization_id | UUID | FK para organizations |
+| category_id | UUID | FK para expense_categories |
+| description | TEXT | Descrição da despesa |
+| amount | DECIMAL | Valor da despesa |
+| expense_date | DATE | Data da despesa |
+| is_recurring | BOOLEAN | Se é recorrente |
+| notes | TEXT | Notas adicionais |
+| receipt_file_url | TEXT | URL do comprovativo |
+| created_by | UUID | Quem registou |
+| created_at | TIMESTAMP | Data de criação |
+| updated_at | TIMESTAMP | Data de atualização |
+
+---
+
+### Migração SQL
+
+```sql
+-- Tabela de categorias de despesas
+CREATE TABLE expense_categories (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  description TEXT,
+  color TEXT DEFAULT '#6366f1',
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Índices
+CREATE INDEX idx_expense_categories_org ON expense_categories(organization_id);
+
+-- RLS
+ALTER TABLE expense_categories ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "expense_categories_org_access" ON expense_categories
+  FOR ALL USING (organization_id = get_user_org_id(auth.uid()));
+
+-- Tabela de despesas
+CREATE TABLE expenses (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  category_id UUID REFERENCES expense_categories(id) ON DELETE SET NULL,
+  description TEXT NOT NULL,
+  amount DECIMAL(12,2) NOT NULL,
+  expense_date DATE NOT NULL,
+  is_recurring BOOLEAN DEFAULT false,
+  notes TEXT,
+  receipt_file_url TEXT,
+  created_by UUID REFERENCES auth.users(id),
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Índices
+CREATE INDEX idx_expenses_org ON expenses(organization_id);
+CREATE INDEX idx_expenses_date ON expenses(expense_date);
+CREATE INDEX idx_expenses_category ON expenses(category_id);
+
+-- RLS
+ALTER TABLE expenses ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "expenses_org_access" ON expenses
+  FOR ALL USING (organization_id = get_user_org_id(auth.uid()));
+
+-- Trigger updated_at
+CREATE TRIGGER update_expense_categories_updated_at
+  BEFORE UPDATE ON expense_categories
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_expenses_updated_at
+  BEFORE UPDATE ON expenses
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+```
 
 ---
 
 ### Ficheiros a Criar
 
-| Ficheiro | Tipo | Descricao |
+| Ficheiro | Tipo | Descrição |
 |----------|------|-----------|
-| `src/components/ui/date-range-picker.tsx` | Novo | Componente reutilizavel de date range |
+| `src/types/expenses.ts` | Tipos | Interfaces e constantes |
+| `src/hooks/useExpenseCategories.ts` | Hook | CRUD de categorias |
+| `src/hooks/useExpenses.ts` | Hook | CRUD de despesas |
+| `src/pages/finance/Expenses.tsx` | Página | Listagem de despesas |
+| `src/components/finance/AddExpenseModal.tsx` | Componente | Modal criar despesa |
+| `src/components/finance/EditExpenseModal.tsx` | Componente | Modal editar despesa |
+| `src/components/settings/ExpenseCategoriesTab.tsx` | Componente | Gestão de categorias |
+| `src/components/settings/CreateExpenseCategoryModal.tsx` | Componente | Modal criar categoria |
+| `src/components/settings/EditExpenseCategoryModal.tsx` | Componente | Modal editar categoria |
 
 ---
 
 ### Ficheiros a Modificar
 
-| Ficheiro | Alteracao |
+| Ficheiro | Alteração |
 |----------|-----------|
-| `src/pages/Finance.tsx` | Adicionar filtro de periodo e passar para o hook |
-| `src/pages/finance/Payments.tsx` | Adicionar filtros de periodo e metodo |
-| `src/pages/finance/Invoices.tsx` | Adicionar filtro de periodo |
-| `src/hooks/useFinanceStats.ts` | Receber parametros de filtro de data |
+| `src/App.tsx` | Adicionar rota `/financeiro/despesas` |
+| `src/pages/Finance.tsx` | Novo card de despesas, métricas atualizadas |
+| `src/pages/Settings.tsx` | Nova tab "Despesas" |
+| `src/components/settings/MobileSettingsNav.tsx` | Nova secção "Despesas" |
+| `src/hooks/useFinanceStats.ts` | Incluir totalExpenses e balance |
+| `src/types/finance.ts` | Adicionar campos de despesas ao FinanceStats |
 
 ---
 
-### Detalhes Tecnicos
-
-#### 1. Componente DateRangePicker
+### Tipos TypeScript
 
 ```typescript
-import { useState } from "react";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Button } from "@/components/ui/button";
-import { CalendarIcon, X } from "lucide-react";
-import { format } from "date-fns";
-import { pt } from "date-fns/locale";
-import { DateRange } from "react-day-picker";
+// src/types/expenses.ts
 
-interface DateRangePickerProps {
-  value: DateRange | undefined;
-  onChange: (range: DateRange | undefined) => void;
-  placeholder?: string;
-  className?: string;
+export interface ExpenseCategory {
+  id: string;
+  organization_id: string;
+  name: string;
+  description: string | null;
+  color: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
-export function DateRangePicker({ value, onChange, placeholder = "Selecionar periodo", className }: DateRangePickerProps) {
-  const [open, setOpen] = useState(false);
-
-  const formatRange = () => {
-    if (!value?.from) return placeholder;
-    if (!value.to) return format(value.from, "dd/MM/yyyy", { locale: pt });
-    return `${format(value.from, "dd/MM/yy", { locale: pt })} - ${format(value.to, "dd/MM/yy", { locale: pt })}`;
-  };
-
-  return (
-    <div className="flex items-center gap-1">
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button variant="outline" className={className}>
-            <CalendarIcon className="mr-2 h-4 w-4" />
-            {formatRange()}
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-auto p-0" align="start">
-          <Calendar
-            mode="range"
-            selected={value}
-            onSelect={onChange}
-            numberOfMonths={1}
-            locale={pt}
-            className="pointer-events-auto"
-          />
-        </PopoverContent>
-      </Popover>
-      {value?.from && (
-        <Button 
-          variant="ghost" 
-          size="icon" 
-          className="h-8 w-8"
-          onClick={() => onChange(undefined)}
-        >
-          <X className="h-4 w-4" />
-        </Button>
-      )}
-    </div>
-  );
+export interface Expense {
+  id: string;
+  organization_id: string;
+  category_id: string | null;
+  description: string;
+  amount: number;
+  expense_date: string;
+  is_recurring: boolean;
+  notes: string | null;
+  receipt_file_url: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  category?: ExpenseCategory;
 }
+
+// Categorias padrão para novas organizações
+export const DEFAULT_EXPENSE_CATEGORIES = [
+  { name: 'Instalações', description: 'Renda, água, eletricidade, internet', color: '#3b82f6' },
+  { name: 'Marketing', description: 'Publicidade, anúncios, eventos', color: '#f59e0b' },
+  { name: 'Software', description: 'Licenças, subscrições, ferramentas', color: '#8b5cf6' },
+  { name: 'Pessoal', description: 'Salários, formação, benefícios', color: '#10b981' },
+  { name: 'Operacional', description: 'Material, combustível, manutenção', color: '#ef4444' },
+];
 ```
 
-#### 2. Filtros na Pagina Payments
+---
+
+### Atualização do FinanceStats
 
 ```typescript
-// Estados
-const [dateRange, setDateRange] = useState<DateRange | undefined>();
-const [methodFilter, setMethodFilter] = useState<string>("all");
+// src/types/finance.ts (atualizado)
 
-// Logica de filtragem
-const filteredPayments = useMemo(() => {
-  return payments.filter(payment => {
-    // Filtro de data
-    if (dateRange?.from) {
-      const paymentDate = new Date(payment.payment_date);
-      if (paymentDate < dateRange.from) return false;
-      if (dateRange.to && paymentDate > endOfDay(dateRange.to)) return false;
-    }
-    
-    // Filtro de metodo
-    if (methodFilter !== "all" && payment.payment_method !== methodFilter) {
-      return false;
-    }
-    
-    // ... outros filtros existentes
-    return true;
-  });
-}, [payments, dateRange, methodFilter, /* ... */]);
-```
-
-#### 3. Filtros no Dashboard Finance
-
-O hook `useFinanceStats` sera modificado para receber parametros opcionais de data:
-
-```typescript
-// useFinanceStats.ts
-export function useFinanceStats(dateRange?: { from?: Date; to?: Date }) {
-  // Filtra pagamentos pelo range de data antes de calcular estatisticas
-  const filteredPayments = payments.filter(p => {
-    const date = new Date(p.payment_date);
-    if (dateRange?.from && date < dateRange.from) return false;
-    if (dateRange?.to && date > endOfDay(dateRange.to)) return false;
-    return true;
-  });
+export interface FinanceStats {
+  // Existentes
+  totalBilled: number;
+  totalReceived: number;
+  totalPending: number;
+  receivedThisMonth: number;
+  dueSoon: number;
+  dueSoonCount: number;
+  dueSoonPayments: PaymentWithSale[];
+  cashflowTrend: CashflowPoint[];
   
-  // Calcular stats com filteredPayments
+  // Novos campos
+  totalExpenses: number;         // Total de despesas no período
+  expensesThisMonth: number;     // Despesas do mês atual
+  balance: number;               // receivedThisMonth - expensesThisMonth
+}
+
+export interface CashflowPoint {
+  date: string;
+  received: number;
+  scheduled: number;
+  expenses: number;  // NOVO: despesas por dia
 }
 ```
 
 ---
 
-### Layout Mobile (First Mobile)
+### Fluxo de Implementação
 
-Os filtros serao responsivos:
+| Passo | Tipo | Descrição |
+|-------|------|-----------|
+| 1 | Migração SQL | Criar tabelas expense_categories e expenses |
+| 2 | Tipos | Criar src/types/expenses.ts |
+| 3 | Hooks | Criar useExpenseCategories e useExpenses |
+| 4 | Settings | Criar ExpenseCategoriesTab e modais |
+| 5 | Settings | Integrar nova tab nas configurações |
+| 6 | Página | Criar página de listagem de despesas |
+| 7 | Modais | Criar AddExpenseModal e EditExpenseModal |
+| 8 | Rota | Adicionar rota no App.tsx |
+| 9 | Dashboard | Atualizar Finance.tsx com novos cards |
+| 10 | Hook Stats | Atualizar useFinanceStats para incluir despesas |
 
-**Desktop:**
-```text
-[🔍 Pesquisar...] [📅 Periodo ▼] [Estado ▼] [Metodo ▼] [× Limpar]
-```
-
-**Mobile:**
-```text
-┌─────────────────────────────────────────┐
-│ [🔍 Pesquisar...                     ] │
-├─────────────────────────────────────────┤
-│ [📅 Periodo] [Estado ▼] [Metodo ▼]     │
-│ [× Limpar]                              │
-└─────────────────────────────────────────┘
-```
-
-Os filtros ficam em linhas separadas com scroll horizontal se necessario.
+**Total: 1 migração + 9 novos ficheiros + 6 ficheiros modificados**
 
 ---
 
-### Resumo de Implementacao
+### Segurança
 
-| Passo | Tipo | Descricao |
-|-------|------|-----------|
-| 1 | Componente | Criar `DateRangePicker` reutilizavel |
-| 2 | Hook | Modificar `useFinanceStats` para aceitar filtros |
-| 3 | Dashboard | Adicionar filtro de periodo ao `Finance.tsx` |
-| 4 | Pagamentos | Adicionar filtros de periodo e metodo |
-| 5 | Faturas | Adicionar filtro de periodo |
-
-**Total: 1 novo componente + 4 ficheiros modificados**
+| Aspecto | Implementação |
+|---------|---------------|
+| RLS | Políticas por organization_id |
+| Storage | Bucket privado `expense-receipts` (similar a invoices) |
+| Permissões | Apenas utilizadores autenticados da organização |
 
