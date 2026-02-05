@@ -1,245 +1,79 @@
 
 
-## Expandir Módulo Financeiro com Despesas
+## Reorganizar Interface do Módulo Financeiro
 
 ### Conceito
 
-Adicionar uma secção de **Despesas** ao módulo financeiro para registar e categorizar todos os custos operacionais da empresa. Inclui também uma área nas Configurações para gerir os **Tipos de Despesas** (categorias personalizáveis por organização).
+Tornar a navegação mais intuitiva transformando os cards de métricas em elementos clicáveis e adicionar tabs de navegação no topo da página.
 
 ---
 
-### Novas Funcionalidades
+### Alterações a Implementar
 
-| Funcionalidade | Descrição |
-|----------------|-----------|
-| Tipos de Despesas | Categorias personalizáveis (Configurações) |
-| Registar Despesas | Modal para adicionar despesas com categoria, valor, data |
-| Listar Despesas | Tabela filtrada por período, categoria, pesquisa |
-| Dashboard atualizado | Novos cards: Total Despesas, Balanço (Receitas - Despesas) |
-| Anexar Comprovativos | Upload de ficheiros (PDF/imagem) |
+| Elemento Atual | Nova Comportamento |
+|----------------|-------------------|
+| Card "Recebido" | Clicável - navega para `/financeiro/pagamentos` |
+| Card "Despesas" | Clicável - navega para `/financeiro/despesas` |
+| 3 Cards no fundo (Quick Links) | Remover completamente |
+| Card "Faturas" (era quick link) | Passa a ser uma Tab no topo da página |
 
 ---
 
-### Interface do Dashboard Financeiro (Atualizada)
+### Nova Interface
 
 ```text
 ┌────────────────────────────────────────────────────────────────────────────┐
 │  💰 FINANCEIRO                                                             │
 ├────────────────────────────────────────────────────────────────────────────┤
+│  [Resumo] [Faturas]                               ← NOVA NAVEGAÇÃO TABS    │
+├────────────────────────────────────────────────────────────────────────────┤
 │  Período: [📅 01/01/2026 - 31/01/2026 ▼]                                   │
 │                                                                            │
 │  ┌───────────┐ ┌───────────┐ ┌───────────┐ ┌───────────┐ ┌───────────┐    │
 │  │ Faturado  │ │ Recebido  │ │ Pendente  │ │ Despesas  │ │ Balanço   │    │
-│  │ €15.000   │ │ €8.500    │ │ €6.500    │ │ €3.200    │ │ €5.300    │    │
-│  │           │ │   ↑       │ │           │ │    ↓      │ │ Receitas  │    │
+│  │ €15.000   │ │ €8.500 →  │ │ €6.500    │ │ €3.200 →  │ │ €5.300    │    │
+│  │           │ │ clicável  │ │           │ │ clicável  │ │           │    │
 │  └───────────┘ └───────────┘ └───────────┘ └───────────┘ └───────────┘    │
+│                    ↓                            ↓                          │
+│           /financeiro/pagamentos       /financeiro/despesas                │
 │                                                                            │
-│  [📊 Gráfico com linha de receitas vs despesas]                            │
+│  [📊 Gráfico Fluxo de Caixa]                                               │
 │                                                                            │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐                      │
-│  │  Pagamentos  │  │   Faturas    │  │  Despesas    │  ← NOVO CARD         │
-│  │  Ver todos   │  │  Ver todas   │  │  Ver todas   │                      │
-│  └──────────────┘  └──────────────┘  └──────────────┘                      │
+│  [📅 Próximos Recebimentos]                                                │
+│                                                                            │
+│  (SEM CARDS DE QUICK LINKS NO FUNDO)                                       │
 └────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-### Nova Página: Despesas (`/financeiro/despesas`)
+### Cards Clicáveis
+
+Os cards "Recebido" e "Despesas" terão:
+- Cursor pointer ao passar o rato
+- Efeito hover sutil (bg-muted/50)
+- Indicador visual de que são clicáveis (seta pequena ou transição)
 
 ```text
-┌────────────────────────────────────────────────────────────────────────────┐
-│  📤 DESPESAS                                        [+ Adicionar Despesa]  │
-├────────────────────────────────────────────────────────────────────────────┤
-│                                                                            │
-│  [🔍 Pesquisar...] [📅 Período ▼] [Categoria ▼] [× Limpar] [Exportar]     │
-│                                                                            │
-│  ┌────────────────────────────────────────────────────────────────────────┐│
-│  │ Data       │ Descrição      │ Categoria    │ Valor   │ Anexo │ Ações  ││
-│  ├────────────────────────────────────────────────────────────────────────┤│
-│  │ 04/02/2026 │ Renda escritór │ Instalações  │ €800    │  [📎] │ [✏️🗑️] ││
-│  │ 03/02/2026 │ Campanha Meta  │ Marketing    │ €250    │  --   │ [✏️🗑️] ││
-│  │ 01/02/2026 │ Licença Adobe  │ Software     │ €59,99  │  [📎] │ [✏️🗑️] ││
-│  └────────────────────────────────────────────────────────────────────────┘│
-│                                                                            │
-│  Total no período: €1.109,99                                               │
-└────────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────┐
+│  Recebido              ↗    │  ← Indicador de navegação
+│  €8.500                     │
+│  Este mês                   │
+└─────────────────────────────┘
 ```
 
 ---
 
-### Modal: Adicionar/Editar Despesa
+### Sistema de Tabs
 
-```text
-┌──────────────────────────────────────────────────────────────────┐
-│  ✖  Adicionar Despesa                                            │
-├──────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  Descrição *                                                     │
-│  [Renda do escritório de Janeiro____________________]            │
-│                                                                  │
-│  Categoria *                     Valor *                         │
-│  [Instalações              ▼]    [€ 800,00        ]              │
-│                                                                  │
-│  Data *                          Recorrente?                     │
-│  [📅 01/02/2026            ]     [ ] Sim                         │
-│                                                                  │
-│  Notas                                                           │
-│  [__________________________________________________]            │
-│                                                                  │
-│  📎 Anexar Comprovativo                                          │
-│  ┌────────────────────────────────────────────────────────────┐  │
-│  │  [PDF Icon] recibo-renda.pdf              [× Remover]      │  │
-│  └────────────────────────────────────────────────────────────┘  │
-│                                                                  │
-│                              [Cancelar]  [Guardar]               │
-└──────────────────────────────────────────────────────────────────┘
-```
+Adicionar tabs no header da página para alternar entre:
 
----
+| Tab | Conteúdo |
+|-----|----------|
+| Resumo | Dashboard atual (métricas, gráfico, próximos recebimentos) |
+| Faturas | Tabela de faturas (atual página `/financeiro/faturas`) |
 
-### Nova Secção nas Configurações: Tipos de Despesas
-
-Adicionar nova tab "Despesas" nas Configurações (similar a "Produtos"):
-
-```text
-┌────────────────────────────────────────────────────────────────────────────┐
-│  ⚙️ CONFIGURAÇÕES                                                          │
-├────────────────────────────────────────────────────────────────────────────┤
-│  [Geral] [Equipa] [Pipeline] [Módulos] [Formulário] [Produtos]            │
-│  [Campos] [Alertas] [Despesas] [Integrações]                  ← NOVA TAB  │
-└────────────────────────────────────────────────────────────────────────────┘
-
-┌────────────────────────────────────────────────────────────────────────────┐
-│  📂 Tipos de Despesas                                   [+ Adicionar]      │
-├────────────────────────────────────────────────────────────────────────────┤
-│                                                                            │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │  Instalações         Renda, água, eletricidade...        [✏️] [🗑️]  │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │  Marketing           Publicidade, anúncios, eventos      [✏️] [🗑️]  │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │  Software            Licenças, subscrições, ferramentas  [✏️] [🗑️]  │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │  Pessoal             Salários, formação, benefícios      [✏️] [🗑️]  │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │  Operacional         Material, combustível, manutenção   [✏️] [🗑️]  │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-└────────────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-### Arquitetura de Base de Dados
-
-#### Nova Tabela: `expense_categories`
-
-| Campo | Tipo | Descrição |
-|-------|------|-----------|
-| id | UUID | Identificador único |
-| organization_id | UUID | FK para organizations |
-| name | TEXT | Nome da categoria |
-| description | TEXT | Descrição opcional |
-| color | TEXT | Cor para badges (hex) |
-| is_active | BOOLEAN | Se está ativa |
-| created_at | TIMESTAMP | Data de criação |
-| updated_at | TIMESTAMP | Data de atualização |
-
-#### Nova Tabela: `expenses`
-
-| Campo | Tipo | Descrição |
-|-------|------|-----------|
-| id | UUID | Identificador único |
-| organization_id | UUID | FK para organizations |
-| category_id | UUID | FK para expense_categories |
-| description | TEXT | Descrição da despesa |
-| amount | DECIMAL | Valor da despesa |
-| expense_date | DATE | Data da despesa |
-| is_recurring | BOOLEAN | Se é recorrente |
-| notes | TEXT | Notas adicionais |
-| receipt_file_url | TEXT | URL do comprovativo |
-| created_by | UUID | Quem registou |
-| created_at | TIMESTAMP | Data de criação |
-| updated_at | TIMESTAMP | Data de atualização |
-
----
-
-### Migração SQL
-
-```sql
--- Tabela de categorias de despesas
-CREATE TABLE expense_categories (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-  name TEXT NOT NULL,
-  description TEXT,
-  color TEXT DEFAULT '#6366f1',
-  is_active BOOLEAN DEFAULT true,
-  created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now()
-);
-
--- Índices
-CREATE INDEX idx_expense_categories_org ON expense_categories(organization_id);
-
--- RLS
-ALTER TABLE expense_categories ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "expense_categories_org_access" ON expense_categories
-  FOR ALL USING (organization_id = get_user_org_id(auth.uid()));
-
--- Tabela de despesas
-CREATE TABLE expenses (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-  category_id UUID REFERENCES expense_categories(id) ON DELETE SET NULL,
-  description TEXT NOT NULL,
-  amount DECIMAL(12,2) NOT NULL,
-  expense_date DATE NOT NULL,
-  is_recurring BOOLEAN DEFAULT false,
-  notes TEXT,
-  receipt_file_url TEXT,
-  created_by UUID REFERENCES auth.users(id),
-  created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now()
-);
-
--- Índices
-CREATE INDEX idx_expenses_org ON expenses(organization_id);
-CREATE INDEX idx_expenses_date ON expenses(expense_date);
-CREATE INDEX idx_expenses_category ON expenses(category_id);
-
--- RLS
-ALTER TABLE expenses ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "expenses_org_access" ON expenses
-  FOR ALL USING (organization_id = get_user_org_id(auth.uid()));
-
--- Trigger updated_at
-CREATE TRIGGER update_expense_categories_updated_at
-  BEFORE UPDATE ON expense_categories
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_expenses_updated_at
-  BEFORE UPDATE ON expenses
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-```
-
----
-
-### Ficheiros a Criar
-
-| Ficheiro | Tipo | Descrição |
-|----------|------|-----------|
-| `src/types/expenses.ts` | Tipos | Interfaces e constantes |
-| `src/hooks/useExpenseCategories.ts` | Hook | CRUD de categorias |
-| `src/hooks/useExpenses.ts` | Hook | CRUD de despesas |
-| `src/pages/finance/Expenses.tsx` | Página | Listagem de despesas |
-| `src/components/finance/AddExpenseModal.tsx` | Componente | Modal criar despesa |
-| `src/components/finance/EditExpenseModal.tsx` | Componente | Modal editar despesa |
-| `src/components/settings/ExpenseCategoriesTab.tsx` | Componente | Gestão de categorias |
-| `src/components/settings/CreateExpenseCategoryModal.tsx` | Componente | Modal criar categoria |
-| `src/components/settings/EditExpenseCategoryModal.tsx` | Componente | Modal editar categoria |
+A tab "Faturas" embebe o conteúdo da página Invoices diretamente na página Finance, sem navegação para URL diferente.
 
 ---
 
@@ -247,115 +81,98 @@ CREATE TRIGGER update_expenses_updated_at
 
 | Ficheiro | Alteração |
 |----------|-----------|
-| `src/App.tsx` | Adicionar rota `/financeiro/despesas` |
-| `src/pages/Finance.tsx` | Novo card de despesas, métricas atualizadas |
-| `src/pages/Settings.tsx` | Nova tab "Despesas" |
-| `src/components/settings/MobileSettingsNav.tsx` | Nova secção "Despesas" |
-| `src/hooks/useFinanceStats.ts` | Incluir totalExpenses e balance |
-| `src/types/finance.ts` | Adicionar campos de despesas ao FinanceStats |
+| `src/pages/Finance.tsx` | Adicionar tabs, tornar cards clicáveis, remover quick links |
 
 ---
 
-### Tipos TypeScript
+### Implementação Técnica
+
+#### 1. Adicionar Tabs no Topo
 
 ```typescript
-// src/types/expenses.ts
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-export interface ExpenseCategory {
-  id: string;
-  organization_id: string;
-  name: string;
-  description: string | null;
-  color: string;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface Expense {
-  id: string;
-  organization_id: string;
-  category_id: string | null;
-  description: string;
-  amount: number;
-  expense_date: string;
-  is_recurring: boolean;
-  notes: string | null;
-  receipt_file_url: string | null;
-  created_by: string | null;
-  created_at: string;
-  updated_at: string;
-  category?: ExpenseCategory;
-}
-
-// Categorias padrão para novas organizações
-export const DEFAULT_EXPENSE_CATEGORIES = [
-  { name: 'Instalações', description: 'Renda, água, eletricidade, internet', color: '#3b82f6' },
-  { name: 'Marketing', description: 'Publicidade, anúncios, eventos', color: '#f59e0b' },
-  { name: 'Software', description: 'Licenças, subscrições, ferramentas', color: '#8b5cf6' },
-  { name: 'Pessoal', description: 'Salários, formação, benefícios', color: '#10b981' },
-  { name: 'Operacional', description: 'Material, combustível, manutenção', color: '#ef4444' },
-];
-```
-
----
-
-### Atualização do FinanceStats
-
-```typescript
-// src/types/finance.ts (atualizado)
-
-export interface FinanceStats {
-  // Existentes
-  totalBilled: number;
-  totalReceived: number;
-  totalPending: number;
-  receivedThisMonth: number;
-  dueSoon: number;
-  dueSoonCount: number;
-  dueSoonPayments: PaymentWithSale[];
-  cashflowTrend: CashflowPoint[];
+// No componente
+<Tabs defaultValue="resumo" className="space-y-6">
+  <TabsList>
+    <TabsTrigger value="resumo">Resumo</TabsTrigger>
+    <TabsTrigger value="faturas">Faturas</TabsTrigger>
+  </TabsList>
   
-  // Novos campos
-  totalExpenses: number;         // Total de despesas no período
-  expensesThisMonth: number;     // Despesas do mês atual
-  balance: number;               // receivedThisMonth - expensesThisMonth
-}
+  <TabsContent value="resumo">
+    {/* Dashboard atual */}
+  </TabsContent>
+  
+  <TabsContent value="faturas">
+    {/* Conteúdo de faturas inline */}
+  </TabsContent>
+</Tabs>
+```
 
-export interface CashflowPoint {
-  date: string;
-  received: number;
-  scheduled: number;
-  expenses: number;  // NOVO: despesas por dia
-}
+#### 2. Cards Clicáveis
+
+```typescript
+// Card Recebido - agora clicável
+<Card 
+  className="cursor-pointer hover:bg-muted/50 transition-colors group"
+  onClick={() => navigate('/financeiro/pagamentos')}
+>
+  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+    <CardTitle className="text-sm font-medium">Recebido</CardTitle>
+    <TrendingUp className="h-4 w-4 text-emerald-500 group-hover:translate-x-0.5 transition-transform" />
+  </CardHeader>
+  ...
+</Card>
+
+// Card Despesas - agora clicável
+<Card 
+  className="cursor-pointer hover:bg-muted/50 transition-colors group"
+  onClick={() => navigate('/financeiro/despesas')}
+>
+  ...
+</Card>
+```
+
+#### 3. Remover Quick Links
+
+Remover completamente a secção de 3 cards no fundo da página (linhas 303-349).
+
+#### 4. Inline Faturas Tab
+
+Mover a lógica da página `Invoices.tsx` para dentro da tab "Faturas", ou criar um componente reutilizável `InvoicesContent` que pode ser usado tanto na tab como numa página separada (se necessário manter a rota).
+
+---
+
+### Layout Mobile
+
+```text
+┌────────────────────────────────────────┐
+│  💰 FINANCEIRO                         │
+├────────────────────────────────────────┤
+│  [Resumo] [Faturas]     ← Tabs         │
+├────────────────────────────────────────┤
+│  ┌────────────┐ ┌────────────┐         │
+│  │ Faturado   │ │ Recebido → │ ← Clica │
+│  │ €15.000    │ │ €8.500     │         │
+│  └────────────┘ └────────────┘         │
+│  ┌────────────┐ ┌────────────┐         │
+│  │ Pendente   │ │ Despesas → │ ← Clica │
+│  │ €6.500     │ │ €3.200     │         │
+│  └────────────┘ └────────────┘         │
+│  ...                                   │
+└────────────────────────────────────────┘
 ```
 
 ---
 
-### Fluxo de Implementação
+### Resumo de Alterações
 
-| Passo | Tipo | Descrição |
-|-------|------|-----------|
-| 1 | Migração SQL | Criar tabelas expense_categories e expenses |
-| 2 | Tipos | Criar src/types/expenses.ts |
-| 3 | Hooks | Criar useExpenseCategories e useExpenses |
-| 4 | Settings | Criar ExpenseCategoriesTab e modais |
-| 5 | Settings | Integrar nova tab nas configurações |
-| 6 | Página | Criar página de listagem de despesas |
-| 7 | Modais | Criar AddExpenseModal e EditExpenseModal |
-| 8 | Rota | Adicionar rota no App.tsx |
-| 9 | Dashboard | Atualizar Finance.tsx com novos cards |
-| 10 | Hook Stats | Atualizar useFinanceStats para incluir despesas |
+| Tipo | Descrição |
+|------|-----------|
+| Adicionar | Tabs (Resumo / Faturas) no header |
+| Adicionar | onClick e estilos hover nos cards Recebido e Despesas |
+| Remover | 3 cards de Quick Links no fundo |
+| Mover | Conteúdo de Faturas para dentro da tab |
 
-**Total: 1 migração + 9 novos ficheiros + 6 ficheiros modificados**
-
----
-
-### Segurança
-
-| Aspecto | Implementação |
-|---------|---------------|
-| RLS | Políticas por organization_id |
-| Storage | Bucket privado `expense-receipts` (similar a invoices) |
-| Permissões | Apenas utilizadores autenticados da organização |
+**Total: 1 ficheiro modificado**
 
