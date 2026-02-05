@@ -20,6 +20,7 @@ import Sales from "./pages/Sales";
 import Finance from "./pages/Finance";
 import FinancePayments from "./pages/finance/Payments";
 import FinanceInvoices from "./pages/finance/Invoices";
+import FinanceExpenses from "./pages/finance/Expenses";
 import Ecommerce from "./pages/Ecommerce";
 import Marketing from "./pages/Marketing";
 import MarketingTemplates from "./pages/marketing/Templates";
@@ -110,6 +111,11 @@ const App = () => (
             <Route path="/financeiro/faturas" element={
               <ProtectedRoute>
                 <FinanceInvoices />
+              </ProtectedRoute>
+            } />
+            <Route path="/financeiro/despesas" element={
+              <ProtectedRoute>
+                <FinanceExpenses />
               </ProtectedRoute>
             } />
             <Route path="/ecommerce" element={

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Wallet, TrendingUp, Clock, CalendarDays, ArrowRight, CreditCard, FileText } from "lucide-react";
+import { Wallet, TrendingUp, Clock, CalendarDays, ArrowRight, CreditCard, FileText, TrendingDown, Scale, Receipt } from "lucide-react";
 import { useFinanceStats } from "@/hooks/useFinanceStats";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -61,7 +61,7 @@ export default function Finance() {
         </Card>
 
         {/* Stats Cards */}
-        <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Faturado</CardTitle>
@@ -108,6 +108,40 @@ export default function Finance() {
                 <div className="text-2xl font-bold text-amber-600">{formatCurrency(stats.totalPending)}</div>
               )}
               <p className="text-xs text-muted-foreground">A receber</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Despesas</CardTitle>
+              <TrendingDown className="h-4 w-4 text-destructive" />
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <Skeleton className="h-8 w-24" />
+              ) : (
+                <div className="text-2xl font-bold text-destructive">{formatCurrency(stats.totalExpenses)}</div>
+              )}
+              <p className="text-xs text-muted-foreground">
+                {hasFilters ? "No período" : "Este mês"}
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Balanço</CardTitle>
+              <Scale className="h-4 w-4 text-primary" />
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <Skeleton className="h-8 w-24" />
+              ) : (
+                <div className={`text-2xl font-bold ${stats.balance >= 0 ? 'text-emerald-600' : 'text-destructive'}`}>
+                  {formatCurrency(stats.balance)}
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground">Receitas - Despesas</p>
             </CardContent>
           </Card>
 
@@ -191,6 +225,15 @@ export default function Finance() {
                     fill="url(#colorScheduled)"
                     strokeWidth={2}
                   />
+                  <Area
+                    type="monotone"
+                    dataKey="expenses"
+                    name="Despesas"
+                    stroke="hsl(var(--destructive))"
+                    fillOpacity={0.3}
+                    fill="hsl(var(--destructive))"
+                    strokeWidth={2}
+                  />
                 </AreaChart>
               </ResponsiveContainer>
             )}
@@ -258,7 +301,7 @@ export default function Finance() {
         </Card>
 
         {/* Quick Links */}
-        <div className="grid gap-4 grid-cols-2">
+        <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">
           <Card 
             className="cursor-pointer hover:bg-muted/50 transition-colors"
             onClick={() => navigate('/financeiro/pagamentos')}
@@ -285,6 +328,21 @@ export default function Finance() {
               <div>
                 <h3 className="font-semibold">Faturas</h3>
                 <p className="text-sm text-muted-foreground">Referências de faturas</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card 
+            className="cursor-pointer hover:bg-muted/50 transition-colors"
+            onClick={() => navigate('/financeiro/despesas')}
+          >
+            <CardContent className="flex items-center gap-4 p-6">
+              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-destructive/10">
+                <Receipt className="h-6 w-6 text-destructive" />
+              </div>
+              <div>
+                <h3 className="font-semibold">Despesas</h3>
+                <p className="text-sm text-muted-foreground">Gerir custos</p>
               </div>
             </CardContent>
           </Card>

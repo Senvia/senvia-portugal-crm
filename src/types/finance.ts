@@ -26,6 +26,7 @@ export interface CashflowPoint {
   date: string;
   received: number;
   scheduled: number;
+  expenses: number;
 }
 
 export interface FinanceStats {
@@ -37,4 +38,8 @@ export interface FinanceStats {
   dueSoonCount: number;
   dueSoonPayments: PaymentWithSale[];
   cashflowTrend: CashflowPoint[];
+  // Expenses
+  totalExpenses: number;
+  expensesThisMonth: number;
+  balance: number;
 }
