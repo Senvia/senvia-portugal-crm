@@ -323,66 +323,69 @@ export default function Settings() {
             </div>
 
             <Tabs defaultValue="general" className="space-y-6">
-              <TabsList>
-                <TabsTrigger value="general" className="gap-2">
-                  <Building className="h-4 w-4" />
-                  Geral
-                </TabsTrigger>
-                {canManageTeam && (
-                  <TabsTrigger value="team" className="gap-2">
-                    <Users className="h-4 w-4" />
-                    Equipa
+              <div className="space-y-2">
+                {/* Primeira linha de tabs */}
+                <TabsList>
+                  <TabsTrigger value="general" className="gap-2">
+                    <Building className="h-4 w-4" />
+                    Geral
                   </TabsTrigger>
-                )}
+                  {canManageTeam && (
+                    <TabsTrigger value="team" className="gap-2">
+                      <Users className="h-4 w-4" />
+                      Equipa
+                    </TabsTrigger>
+                  )}
+                  {canManageIntegrations && (
+                    <TabsTrigger value="pipeline" className="gap-2">
+                      <GitBranch className="h-4 w-4" />
+                      Pipeline
+                    </TabsTrigger>
+                  )}
+                  {canManageIntegrations && (
+                    <TabsTrigger value="modules" className="gap-2">
+                      <LayoutGrid className="h-4 w-4" />
+                      Módulos
+                    </TabsTrigger>
+                  )}
+                  {canManageIntegrations && (
+                    <TabsTrigger value="form" className="gap-2">
+                      <Palette className="h-4 w-4" />
+                      Formulário
+                    </TabsTrigger>
+                  )}
+                  {canManageIntegrations && (
+                    <TabsTrigger value="products" className="gap-2">
+                      <Package className="h-4 w-4" />
+                      Produtos
+                    </TabsTrigger>
+                  )}
+                  {canManageIntegrations && (
+                    <TabsTrigger value="clients" className="gap-2">
+                      <UserCheck className="h-4 w-4" />
+                      Campos
+                    </TabsTrigger>
+                  )}
+                </TabsList>
+
+                {/* Segunda linha de tabs */}
                 {canManageIntegrations && (
-                  <TabsTrigger value="pipeline" className="gap-2">
-                    <GitBranch className="h-4 w-4" />
-                    Pipeline
-                  </TabsTrigger>
+                  <TabsList>
+                    <TabsTrigger value="alerts" className="gap-2">
+                      <Zap className="h-4 w-4" />
+                      Alertas
+                    </TabsTrigger>
+                    <TabsTrigger value="expenses" className="gap-2">
+                      <Receipt className="h-4 w-4" />
+                      Despesas
+                    </TabsTrigger>
+                    <TabsTrigger value="integrations" className="gap-2">
+                      <Link2 className="h-4 w-4" />
+                      Integrações
+                    </TabsTrigger>
+                  </TabsList>
                 )}
-                {canManageIntegrations && (
-                  <TabsTrigger value="modules" className="gap-2">
-                    <LayoutGrid className="h-4 w-4" />
-                    Módulos
-                  </TabsTrigger>
-                )}
-                {canManageIntegrations && (
-                  <TabsTrigger value="form" className="gap-2">
-                    <Palette className="h-4 w-4" />
-                    Formulário
-                  </TabsTrigger>
-                )}
-                {canManageIntegrations && (
-                  <TabsTrigger value="products" className="gap-2">
-                    <Package className="h-4 w-4" />
-                    Produtos
-                  </TabsTrigger>
-                )}
-              {canManageIntegrations && (
-                  <TabsTrigger value="clients" className="gap-2">
-                    <UserCheck className="h-4 w-4" />
-                    Campos
-                  </TabsTrigger>
-                )}
-                {canManageIntegrations && (
-                  <TabsTrigger value="alerts" className="gap-2">
-                    <Zap className="h-4 w-4" />
-                    Alertas
-                  </TabsTrigger>
-                )}
-                {canManageIntegrations && (
-                  <TabsTrigger value="expenses" className="gap-2">
-                    <Receipt className="h-4 w-4" />
-                    Despesas
-                  </TabsTrigger>
-                )}
-                {canManageIntegrations && (
-                  <TabsTrigger value="integrations" className="gap-2">
-                    <Link2 className="h-4 w-4" />
-                    Integrações
-                  </TabsTrigger>
-                )}
-              </TabsList>
+              </div>
 
               <TabsContent value="general" className="space-y-6">
                 <GeneralContent
