@@ -29,7 +29,9 @@ import { useClients } from "@/hooks/useClients";
 import { useProducts } from "@/hooks/useProducts";
 import { useCreateSale } from "@/hooks/useSales";
 import { useCreateSaleItems } from "@/hooks/useSaleItems";
+import { useCreateSalePayment } from "@/hooks/useSalePayments";
 import { useCreateCpe, useUpdateCpe } from "@/hooks/useCpes";
+import { useAuth } from "@/contexts/AuthContext";
 import { useFinalStages } from "@/hooks/usePipelineStages";
 import { useUpdateLeadStatus } from "@/hooks/useLeads";
 import { formatCurrency } from "@/lib/format";
@@ -102,10 +104,12 @@ export function CreateSaleModal({
   const { data: products } = useProducts();
   const createSale = useCreateSale();
   const createSaleItems = useCreateSaleItems();
+  const createSalePayment = useCreateSalePayment();
   const createCpe = useCreateCpe();
   const updateCpe = useUpdateCpe();
   const { finalPositiveStage } = useFinalStages();
   const updateLeadStatus = useUpdateLeadStatus();
+  const { organization } = useAuth();
   
   // State para proposta selecionada manualmente (para buscar produtos)
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null);
@@ -513,6 +517,26 @@ export function CreateSaleModal({
               : null,
           }))
         );
+        
+        // Create automatic payments for recurring items with due date
+        if (organization) {
+          const recurringItemsWithDate = items.filter(item => {
+            if (!item.product_id) return false;
+            const product = products?.find(p => p.id === item.product_id);
+            return product?.is_recurring && item.first_due_date;
+          });
+          
+          for (const item of recurringItemsWithDate) {
+            await createSalePayment.mutateAsync({
+              sale_id: sale.id,
+              organization_id: organization.id,
+              amount: item.quantity * item.unit_price,
+              payment_date: format(item.first_due_date!, 'yyyy-MM-dd'),
+              status: 'pending',
+              notes: `Mensalidade: ${item.name}`,
+            });
+          }
+        }
       }
 
       // Process CPEs - criar novos ou atualizar existentes
