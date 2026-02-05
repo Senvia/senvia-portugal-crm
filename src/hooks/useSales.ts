@@ -236,6 +236,11 @@ export function useUpdateSale() {
         modelo_servico?: ModeloServico | null;
         kwp?: number | null;
         comissao?: number | null;
+        // Campos de recorrência
+        has_recurring?: boolean;
+        recurring_value?: number;
+        next_renewal_date?: string | null;
+        recurring_status?: 'active' | 'cancelled' | 'paused' | null;
       } 
     }) => {
       const { error } = await supabase
@@ -248,6 +253,7 @@ export function useUpdateSale() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sales"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["recurring-sales"] });
     },
     onError: () => {
       toast.error("Erro ao atualizar venda");

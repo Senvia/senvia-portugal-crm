@@ -12,6 +12,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableCombobox, type ComboboxOption } from "@/components/ui/searchable-combobox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
@@ -34,8 +36,10 @@ import {
   Package, 
   User,
   FileText,
-  AlertCircle
+  AlertCircle,
+  RefreshCw
 } from "lucide-react";
+import type { RecurringStatus } from "@/types/sales";
 import type { SaleWithDetails } from "@/types/sales";
 import { SalePaymentsList } from "./SalePaymentsList";
 
@@ -83,6 +87,12 @@ export function EditSaleModal({
   const [notes, setNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Campos de recorrência
+  const [hasRecurring, setHasRecurring] = useState(false);
+  const [recurringValue, setRecurringValue] = useState<string>("0");
+  const [nextRenewalDate, setNextRenewalDate] = useState<Date | undefined>();
+  const [recurringStatus, setRecurringStatus] = useState<RecurringStatus>("active");
+
   // Initialize form with sale data
   useEffect(() => {
     if (open && sale) {
@@ -90,6 +100,11 @@ export function EditSaleModal({
       setSaleDate(sale.sale_date ? parseISO(sale.sale_date) : new Date());
       setDiscount(sale.discount?.toString() || "0");
       setNotes(sale.notes || "");
+      // Campos de recorrência
+      setHasRecurring(sale.has_recurring || false);
+      setRecurringValue(sale.recurring_value?.toString() || "0");
+      setNextRenewalDate(sale.next_renewal_date ? parseISO(sale.next_renewal_date) : undefined);
+      setRecurringStatus(sale.recurring_status || "active");
     }
   }, [open, sale]);
 
@@ -221,6 +236,11 @@ export function EditSaleModal({
           subtotal: subtotal,
           discount: discountValue,
           notes: notes.trim() || null,
+          // Campos de recorrência
+          has_recurring: hasRecurring,
+          recurring_value: hasRecurring ? parseFloat(recurringValue) || 0 : 0,
+          next_renewal_date: hasRecurring && nextRenewalDate ? format(nextRenewalDate, 'yyyy-MM-dd') : null,
+          recurring_status: hasRecurring ? recurringStatus : null,
         },
       });
 
@@ -472,6 +492,89 @@ export function EditSaleModal({
                   readonly={!canFullEdit && sale.status === 'cancelled'}
                 />
               )}
+
+              <Separator />
+
+              {/* Recurring Section */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label className="flex items-center gap-2">
+                    <RefreshCw className="h-4 w-4 text-muted-foreground" />
+                    Recorrência Mensal
+                  </Label>
+                  <Switch
+                    checked={hasRecurring}
+                    onCheckedChange={setHasRecurring}
+                    disabled={!canFullEdit}
+                  />
+                </div>
+                
+                {hasRecurring && (
+                  <div className="p-4 rounded-lg border bg-muted/30 space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Valor Mensal (€)</Label>
+                        <Input
+                          type="number"
+                          value={recurringValue}
+                          onChange={(e) => setRecurringValue(e.target.value)}
+                          step="0.01"
+                          min="0"
+                          disabled={!canFullEdit}
+                        />
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <Label>Próxima Cobrança</Label>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className={cn(
+                                "w-full justify-start text-left font-normal",
+                                !nextRenewalDate && "text-muted-foreground"
+                              )}
+                              disabled={!canFullEdit}
+                            >
+                              <CalendarIcon className="h-4 w-4 mr-2" />
+                              {nextRenewalDate 
+                                ? format(nextRenewalDate, "PPP", { locale: pt }) 
+                                : "Selecionar..."}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              mode="single"
+                              selected={nextRenewalDate}
+                              onSelect={setNextRenewalDate}
+                              locale={pt}
+                              className="pointer-events-auto"
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label>Estado</Label>
+                      <Select 
+                        value={recurringStatus} 
+                        onValueChange={(value) => setRecurringStatus(value as RecurringStatus)}
+                        disabled={!canFullEdit}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="active">🟢 Ativo</SelectItem>
+                          <SelectItem value="paused">🟠 Pausado</SelectItem>
+                          <SelectItem value="cancelled">🔴 Cancelado</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                )}
+              </div>
 
               <Separator />
 
