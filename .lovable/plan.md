@@ -1,214 +1,303 @@
 
 
-## Funcionalidade: Anexar Ficheiro de Fatura aos Pagamentos
+## Adicionar Filtros Avançados ao Modulo Financeiro
 
 ### Conceito
 
-Quando registares um pagamento, podes anexar o ficheiro PDF da fatura. Depois, na página de Faturas do módulo financeiro, cada linha terá um botão para fazer download do ficheiro.
+O modulo financeiro precisa de filtros robustos para permitir analises precisas. O filtro de data sera um unico campo de calendario onde o utilizador seleciona a data de inicio e fim (range selection).
 
 ---
 
-### Fluxo de Utilização
+### Filtros a Implementar
+
+#### Pagina Dashboard Financeiro (`/financeiro`)
+
+| Filtro | Tipo | Opcoes |
+|--------|------|--------|
+| Periodo | Date Range Picker | Data inicio e fim num unico calendario |
+
+Os cards de metricas e o grafico serao recalculados com base no periodo selecionado.
+
+#### Pagina Pagamentos (`/financeiro/pagamentos`)
+
+| Filtro | Tipo | Opcoes |
+|--------|------|--------|
+| Pesquisa | Input texto | Cliente, venda, fatura |
+| Periodo | Date Range Picker | Data inicio e fim |
+| Estado | Select | Todos, Pagos, Agendados |
+| Metodo | Select | Todos, MB Way, Transferencia, etc. |
+
+#### Pagina Faturas (`/financeiro/faturas`)
+
+| Filtro | Tipo | Opcoes |
+|--------|------|--------|
+| Pesquisa | Input texto | Referencia, cliente, venda |
+| Periodo | Date Range Picker | Data inicio e fim |
+
+---
+
+### Date Range Picker (Um Unico Calendario)
+
+Usaremos o `mode="range"` do react-day-picker que permite selecionar data inicial e final num unico calendario.
+
+**Interface:**
 
 ```text
-1. Utilizador adiciona pagamento numa venda
-2. Preenche referência da fatura (FT 2024/001)
-3. Clica "Anexar Fatura" e seleciona o PDF
-4. Ficheiro é carregado para o storage
-5. Na página /financeiro/faturas, vê botão de download
-6. Clica e faz download do PDF original
+┌─────────────────────────────────────────────────┐
+│  [📅 01/01/2026 - 31/01/2026 ▼]                │
+└─────────────────────────────────────────────────┘
+          │
+          ▼
+┌─────────────────────────────────────────────────┐
+│     ◄    Janeiro 2026    ►                      │
+├─────────────────────────────────────────────────┤
+│  Seg  Ter  Qua  Qui  Sex  Sab  Dom              │
+│   ·    ·    [1]  2    3    4    5               │
+│   6    7    8    9   10   11   12               │
+│  13   14   15   16   17   18   19               │
+│  20   21   22   23   24   25   26               │
+│  27   28   29   30  [31]  ·    ·                │
+└─────────────────────────────────────────────────┘
+
+[1] = Data inicio (azul solido)
+[31] = Data fim (azul solido)
+2-30 = Range selecionado (azul claro)
 ```
 
----
-
-### Alterações Necessárias
-
-#### 1. Base de Dados
-
-**Novo campo na tabela `sale_payments`:**
-
-| Campo | Tipo | Descrição |
-|-------|------|-----------|
-| `invoice_file_url` | TEXT | URL do ficheiro da fatura no storage |
-
-**Novo bucket de storage:**
-
-| Bucket | Público | Limite |
-|--------|---------|--------|
-| `invoices` | Não (privado) | 10MB |
+**Comportamento:**
+- Primeiro clique: define data inicio
+- Segundo clique: define data fim
+- O range entre as datas fica destacado
+- Botao para limpar as datas selecionadas
 
 ---
 
-#### 2. Migração SQL
+### Interface Proposta
 
-```sql
--- Adicionar campo para URL do ficheiro
-ALTER TABLE sale_payments 
-ADD COLUMN invoice_file_url TEXT;
-
--- Criar bucket privado para faturas
-INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-VALUES (
-  'invoices', 
-  'invoices', 
-  false, 
-  10485760,  -- 10MB
-  ARRAY['application/pdf', 'image/png', 'image/jpeg']
-);
-
--- Políticas RLS para o bucket
-CREATE POLICY "Org members can upload invoices"
-ON storage.objects FOR INSERT
-WITH CHECK (
-  bucket_id = 'invoices' AND
-  (storage.foldername(name))[1] IN (
-    SELECT id::text FROM organizations 
-    WHERE id = get_user_org_id(auth.uid())
-  )
-);
-
-CREATE POLICY "Org members can read invoices"
-ON storage.objects FOR SELECT
-USING (
-  bucket_id = 'invoices' AND
-  (storage.foldername(name))[1] IN (
-    SELECT id::text FROM organizations 
-    WHERE id = get_user_org_id(auth.uid())
-  )
-);
-
-CREATE POLICY "Org members can delete invoices"
-ON storage.objects FOR DELETE
-USING (
-  bucket_id = 'invoices' AND
-  (storage.foldername(name))[1] IN (
-    SELECT id::text FROM organizations 
-    WHERE id = get_user_org_id(auth.uid())
-  )
-);
-```
-
----
-
-### 3. Ficheiros a Modificar
-
-| Ficheiro | Alteração |
-|----------|-----------|
-| `src/types/sales.ts` | Adicionar `invoice_file_url` à interface `SalePayment` |
-| `src/types/finance.ts` | Adicionar `invoice_file_url` à interface `PaymentWithSale` |
-| `src/components/sales/AddPaymentModal.tsx` | Adicionar upload de ficheiro |
-| `src/hooks/useSalePayments.ts` | Incluir `invoice_file_url` nas operações |
-| `src/pages/finance/Invoices.tsx` | Adicionar botão de download |
-
----
-
-### 4. Interface do Modal de Pagamento
-
-Nova secção no modal `AddPaymentModal`:
-
-```text
-┌──────────────────────────────────────────────────────────────┐
-│  Referência da Fatura                                        │
-│  [FT 2024/0001______________]                                │
-│                                                              │
-│  📎 Anexar Ficheiro                                          │
-│  ┌────────────────────────────────────────────────────────┐  │
-│  │  [PDF Icon] fatura-janeiro.pdf          [× Remover]    │  │
-│  └────────────────────────────────────────────────────────┘  │
-│  ou                                                          │
-│  ┌──────────────────────────────────────────────────────────┐│
-│  │        📄 Arraste o ficheiro ou clique para selecionar  ││
-│  │               PDF, PNG, JPG • Máx. 10MB                 ││
-│  └──────────────────────────────────────────────────────────┘│
-└──────────────────────────────────────────────────────────────┘
-```
-
----
-
-### 5. Interface da Tabela de Faturas
-
-Nova coluna na tabela de faturas:
+#### Dashboard Financeiro
 
 ```text
 ┌────────────────────────────────────────────────────────────────────┐
-│ Referência   │ Data       │ Venda   │ Cliente    │ Valor  │ Anexo │
+│  💰 FINANCEIRO                                                     │
 ├────────────────────────────────────────────────────────────────────┤
-│ FT 2024/001  │ 04/02/2026 │ #0015   │ João Silva │ €500   │ [↓]   │
-│ FT 2024/002  │ 01/02/2026 │ #0012   │ Maria      │ €600   │  --   │
+│  Periodo: [📅 01/01/2026 - 31/01/2026 ▼] [× Limpar]               │
+│                                                                    │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌───────────┐ │
+│  │ Faturado    │  │ Recebido    │  │ Pendente    │  │ A Vencer  │ │
+│  │ €15.000     │  │ €8.500      │  │ €6.500      │  │ €2.000    │ │
+│  └─────────────┘  └─────────────┘  └─────────────┘  └───────────┘ │
+│                                                                    │
+│  [📊 Grafico filtrado pelo periodo selecionado]                   │
 └────────────────────────────────────────────────────────────────────┘
+```
 
-[↓] = Botão de download (só aparece se tiver ficheiro anexo)
+#### Pagamentos
+
+```text
+┌────────────────────────────────────────────────────────────────────┐
+│  💳 PAGAMENTOS                                    [Exportar]       │
+├────────────────────────────────────────────────────────────────────┤
+│                                                                    │
+│  [🔍 Pesquisar...         ] [📅 Periodo ▼] [Estado ▼] [Metodo ▼]  │
+│  [× Limpar filtros]                                                │
+│                                                                    │
+│  ┌────────────────────────────────────────────────────────────────┐│
+│  │ Data       │ Venda   │ Cliente    │ Valor  │ Metodo  │ Estado ││
+│  └────────────────────────────────────────────────────────────────┘│
+└────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-### 6. Componente de Upload (InvoiceUploader)
+### Componente DateRangePicker
 
-Criar componente reutilizável para upload de faturas:
+Criar um componente reutilizavel para o date range picker:
 
 ```typescript
-// src/components/sales/InvoiceUploader.tsx
+// src/components/ui/date-range-picker.tsx
 
-interface InvoiceUploaderProps {
-  value: string | null;
-  onChange: (url: string | null) => void;
-  paymentId?: string; // Para organizar ficheiros por pagamento
+interface DateRangePickerProps {
+  value: { from: Date | undefined; to: Date | undefined };
+  onChange: (range: { from: Date | undefined; to: Date | undefined }) => void;
+  placeholder?: string;
+  className?: string;
 }
 ```
 
-Funcionalidades:
-- Upload de PDF, PNG ou JPG
-- Limite de 10MB
-- Preview do nome do ficheiro
-- Botão remover
-- Progresso de upload
+Caracteristicas:
+- Botao que mostra o range selecionado formatado
+- Popover com calendario em modo range
+- Suporte para limpar selecao
+- Estilo consistente com o resto do sistema
+- Locale em portugues
 
 ---
 
-### 7. Lógica de Download
+### Ficheiros a Criar
 
-Como o bucket é privado, usamos `createSignedUrl` para gerar URLs temporárias:
+| Ficheiro | Tipo | Descricao |
+|----------|------|-----------|
+| `src/components/ui/date-range-picker.tsx` | Novo | Componente reutilizavel de date range |
+
+---
+
+### Ficheiros a Modificar
+
+| Ficheiro | Alteracao |
+|----------|-----------|
+| `src/pages/Finance.tsx` | Adicionar filtro de periodo e passar para o hook |
+| `src/pages/finance/Payments.tsx` | Adicionar filtros de periodo e metodo |
+| `src/pages/finance/Invoices.tsx` | Adicionar filtro de periodo |
+| `src/hooks/useFinanceStats.ts` | Receber parametros de filtro de data |
+
+---
+
+### Detalhes Tecnicos
+
+#### 1. Componente DateRangePicker
 
 ```typescript
-const downloadInvoice = async (fileUrl: string) => {
-  // Extrair o path do URL
-  const path = extractPathFromUrl(fileUrl);
+import { useState } from "react";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
+import { CalendarIcon, X } from "lucide-react";
+import { format } from "date-fns";
+import { pt } from "date-fns/locale";
+import { DateRange } from "react-day-picker";
+
+interface DateRangePickerProps {
+  value: DateRange | undefined;
+  onChange: (range: DateRange | undefined) => void;
+  placeholder?: string;
+  className?: string;
+}
+
+export function DateRangePicker({ value, onChange, placeholder = "Selecionar periodo", className }: DateRangePickerProps) {
+  const [open, setOpen] = useState(false);
+
+  const formatRange = () => {
+    if (!value?.from) return placeholder;
+    if (!value.to) return format(value.from, "dd/MM/yyyy", { locale: pt });
+    return `${format(value.from, "dd/MM/yy", { locale: pt })} - ${format(value.to, "dd/MM/yy", { locale: pt })}`;
+  };
+
+  return (
+    <div className="flex items-center gap-1">
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button variant="outline" className={className}>
+            <CalendarIcon className="mr-2 h-4 w-4" />
+            {formatRange()}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0" align="start">
+          <Calendar
+            mode="range"
+            selected={value}
+            onSelect={onChange}
+            numberOfMonths={1}
+            locale={pt}
+            className="pointer-events-auto"
+          />
+        </PopoverContent>
+      </Popover>
+      {value?.from && (
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          className="h-8 w-8"
+          onClick={() => onChange(undefined)}
+        >
+          <X className="h-4 w-4" />
+        </Button>
+      )}
+    </div>
+  );
+}
+```
+
+#### 2. Filtros na Pagina Payments
+
+```typescript
+// Estados
+const [dateRange, setDateRange] = useState<DateRange | undefined>();
+const [methodFilter, setMethodFilter] = useState<string>("all");
+
+// Logica de filtragem
+const filteredPayments = useMemo(() => {
+  return payments.filter(payment => {
+    // Filtro de data
+    if (dateRange?.from) {
+      const paymentDate = new Date(payment.payment_date);
+      if (paymentDate < dateRange.from) return false;
+      if (dateRange.to && paymentDate > endOfDay(dateRange.to)) return false;
+    }
+    
+    // Filtro de metodo
+    if (methodFilter !== "all" && payment.payment_method !== methodFilter) {
+      return false;
+    }
+    
+    // ... outros filtros existentes
+    return true;
+  });
+}, [payments, dateRange, methodFilter, /* ... */]);
+```
+
+#### 3. Filtros no Dashboard Finance
+
+O hook `useFinanceStats` sera modificado para receber parametros opcionais de data:
+
+```typescript
+// useFinanceStats.ts
+export function useFinanceStats(dateRange?: { from?: Date; to?: Date }) {
+  // Filtra pagamentos pelo range de data antes de calcular estatisticas
+  const filteredPayments = payments.filter(p => {
+    const date = new Date(p.payment_date);
+    if (dateRange?.from && date < dateRange.from) return false;
+    if (dateRange?.to && date > endOfDay(dateRange.to)) return false;
+    return true;
+  });
   
-  // Gerar URL assinada (válida por 60 segundos)
-  const { data, error } = await supabase.storage
-    .from('invoices')
-    .createSignedUrl(path, 60);
-  
-  if (data) {
-    // Abrir numa nova tab ou fazer download
-    window.open(data.signedUrl, '_blank');
-  }
-};
+  // Calcular stats com filteredPayments
+}
 ```
 
 ---
 
-### Resumo de Implementação
+### Layout Mobile (First Mobile)
 
-| Passo | Tipo | Descrição |
-|-------|------|-----------|
-| 1 | Migração SQL | Adicionar coluna + criar bucket + RLS |
-| 2 | Tipos | Atualizar `SalePayment` e `PaymentWithSale` |
-| 3 | Componente | Criar `InvoiceUploader.tsx` |
-| 4 | Modal | Integrar uploader no `AddPaymentModal` |
-| 5 | Hook | Atualizar `useSalePayments` |
-| 6 | Página | Adicionar coluna de download em `Invoices.tsx` |
+Os filtros serao responsivos:
 
-**Total: 1 migração + 1 novo componente + 4 ficheiros modificados**
+**Desktop:**
+```text
+[🔍 Pesquisar...] [📅 Periodo ▼] [Estado ▼] [Metodo ▼] [× Limpar]
+```
+
+**Mobile:**
+```text
+┌─────────────────────────────────────────┐
+│ [🔍 Pesquisar...                     ] │
+├─────────────────────────────────────────┤
+│ [📅 Periodo] [Estado ▼] [Metodo ▼]     │
+│ [× Limpar]                              │
+└─────────────────────────────────────────┘
+```
+
+Os filtros ficam em linhas separadas com scroll horizontal se necessario.
 
 ---
 
-### Segurança
+### Resumo de Implementacao
 
-| Aspecto | Implementação |
-|---------|---------------|
-| Acesso | Apenas membros da organização podem ver/fazer upload |
-| Bucket | Privado (não acessível publicamente) |
-| URLs | Geradas temporariamente com `createSignedUrl` |
-| Estrutura | Ficheiros organizados por `{org_id}/{payment_id}/{filename}` |
+| Passo | Tipo | Descricao |
+|-------|------|-----------|
+| 1 | Componente | Criar `DateRangePicker` reutilizavel |
+| 2 | Hook | Modificar `useFinanceStats` para aceitar filtros |
+| 3 | Dashboard | Adicionar filtro de periodo ao `Finance.tsx` |
+| 4 | Pagamentos | Adicionar filtros de periodo e metodo |
+| 5 | Faturas | Adicionar filtro de periodo |
+
+**Total: 1 novo componente + 4 ficheiros modificados**
 
