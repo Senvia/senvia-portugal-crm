@@ -2,7 +2,8 @@ import { useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Wallet, TrendingUp, Clock, CalendarDays, ArrowRight, CreditCard, FileText, TrendingDown, Scale, Receipt } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Wallet, TrendingUp, Clock, CalendarDays, ArrowRight, TrendingDown, Scale, ExternalLink } from "lucide-react";
 import { useFinanceStats } from "@/hooks/useFinanceStats";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -14,6 +15,7 @@ import { pt } from "date-fns/locale";
 import { PAYMENT_METHOD_LABELS } from "@/types/sales";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { DateRange } from "react-day-picker";
+import { InvoicesContent } from "@/components/finance/InvoicesContent";
 
 export default function Finance() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
@@ -40,313 +42,293 @@ export default function Finance() {
           </div>
         </div>
 
-        {/* Date Filter */}
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <span className="text-sm font-medium text-muted-foreground">Período:</span>
-              <DateRangePicker
-                value={dateRange}
-                onChange={setDateRange}
-                placeholder="Todo o histórico"
-                className="w-full sm:w-auto"
-              />
-              {hasFilters && (
-                <span className="text-xs text-muted-foreground">
-                  (dados filtrados pelo período selecionado)
-                </span>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+        {/* Tabs */}
+        <Tabs defaultValue="resumo" className="space-y-6">
+          <TabsList>
+            <TabsTrigger value="resumo">Resumo</TabsTrigger>
+            <TabsTrigger value="faturas">Faturas</TabsTrigger>
+          </TabsList>
 
-        {/* Stats Cards */}
-        <div className="grid gap-4 grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Faturado</CardTitle>
-              <Wallet className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <Skeleton className="h-8 w-24" />
-              ) : (
-                <div className="text-2xl font-bold">{formatCurrency(stats.totalBilled)}</div>
-              )}
-              <p className="text-xs text-muted-foreground">
-                {hasFilters ? "No período" : "Histórico total"}
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Recebido</CardTitle>
-              <TrendingUp className="h-4 w-4 text-emerald-500" />
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <Skeleton className="h-8 w-24" />
-              ) : (
-                <div className="text-2xl font-bold text-emerald-600">{formatCurrency(stats.receivedThisMonth)}</div>
-              )}
-              <p className="text-xs text-muted-foreground">
-                {hasFilters ? "No período" : "Este mês"}
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Pendente</CardTitle>
-              <Clock className="h-4 w-4 text-amber-500" />
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <Skeleton className="h-8 w-24" />
-              ) : (
-                <div className="text-2xl font-bold text-amber-600">{formatCurrency(stats.totalPending)}</div>
-              )}
-              <p className="text-xs text-muted-foreground">A receber</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Despesas</CardTitle>
-              <TrendingDown className="h-4 w-4 text-destructive" />
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <Skeleton className="h-8 w-24" />
-              ) : (
-                <div className="text-2xl font-bold text-destructive">{formatCurrency(stats.totalExpenses)}</div>
-              )}
-              <p className="text-xs text-muted-foreground">
-                {hasFilters ? "No período" : "Este mês"}
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Balanço</CardTitle>
-              <Scale className="h-4 w-4 text-primary" />
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <Skeleton className="h-8 w-24" />
-              ) : (
-                <div className={`text-2xl font-bold ${stats.balance >= 0 ? 'text-emerald-600' : 'text-destructive'}`}>
-                  {formatCurrency(stats.balance)}
+          <TabsContent value="resumo" className="space-y-6 mt-0">
+            {/* Date Filter */}
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <span className="text-sm font-medium text-muted-foreground">Período:</span>
+                  <DateRangePicker
+                    value={dateRange}
+                    onChange={setDateRange}
+                    placeholder="Todo o histórico"
+                    className="w-full sm:w-auto"
+                  />
+                  {hasFilters && (
+                    <span className="text-xs text-muted-foreground">
+                      (dados filtrados pelo período selecionado)
+                    </span>
+                  )}
                 </div>
-              )}
-              <p className="text-xs text-muted-foreground">Receitas - Despesas</p>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">A Vencer (7 dias)</CardTitle>
-              <CalendarDays className="h-4 w-4 text-blue-500" />
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <Skeleton className="h-8 w-24" />
-              ) : (
-                <div className="text-2xl font-bold text-blue-600">{formatCurrency(stats.dueSoon)}</div>
-              )}
-              <p className="text-xs text-muted-foreground">{stats.dueSoonCount} pagamento(s)</p>
-            </CardContent>
-          </Card>
-        </div>
+            {/* Stats Cards */}
+            <div className="grid gap-4 grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Total Faturado</CardTitle>
+                  <Wallet className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  {isLoading ? (
+                    <Skeleton className="h-8 w-24" />
+                  ) : (
+                    <div className="text-2xl font-bold">{formatCurrency(stats.totalBilled)}</div>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    {hasFilters ? "No período" : "Histórico total"}
+                  </p>
+                </CardContent>
+              </Card>
 
-        {/* Chart */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">
-              Fluxo de Caixa {hasFilters ? "(período selecionado)" : "(últimos 30 dias)"}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <Skeleton className="h-64 w-full" />
-            ) : (
-              <ResponsiveContainer width="100%" height={250}>
-                <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="colorReceived" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="hsl(var(--chart-1))" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="hsl(var(--chart-1))" stopOpacity={0}/>
-                    </linearGradient>
-                    <linearGradient id="colorScheduled" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="hsl(var(--chart-2))" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="hsl(var(--chart-2))" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                  <XAxis 
-                    dataKey="dateLabel" 
-                    tick={{ fontSize: 12 }} 
-                    tickLine={false}
-                    axisLine={false}
-                    interval="preserveStartEnd"
-                  />
-                  <YAxis 
-                    tick={{ fontSize: 12 }} 
-                    tickLine={false}
-                    axisLine={false}
-                    tickFormatter={(value) => `€${value}`}
-                  />
-                  <Tooltip 
-                    formatter={(value: number) => formatCurrency(value)}
-                    labelFormatter={(label) => label}
-                    contentStyle={{ 
-                      backgroundColor: 'hsl(var(--background))',
-                      border: '1px solid hsl(var(--border))',
-                      borderRadius: '8px'
-                    }}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="received"
-                    name="Recebido"
-                    stroke="hsl(var(--chart-1))"
-                    fillOpacity={1}
-                    fill="url(#colorReceived)"
-                    strokeWidth={2}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="scheduled"
-                    name="Agendado"
-                    stroke="hsl(var(--chart-2))"
-                    fillOpacity={1}
-                    fill="url(#colorScheduled)"
-                    strokeWidth={2}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="expenses"
-                    name="Despesas"
-                    stroke="hsl(var(--destructive))"
-                    fillOpacity={0.3}
-                    fill="hsl(var(--destructive))"
-                    strokeWidth={2}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Upcoming Payments */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base">Próximos Recebimentos</CardTitle>
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              className="gap-1"
-              onClick={() => navigate('/financeiro/pagamentos')}
-            >
-              Ver todos
-              <ArrowRight className="h-4 w-4" />
-            </Button>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="space-y-3">
-                <Skeleton className="h-12 w-full" />
-                <Skeleton className="h-12 w-full" />
-                <Skeleton className="h-12 w-full" />
-              </div>
-            ) : stats.dueSoonPayments.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">
-                Sem pagamentos agendados para os próximos 7 dias
-              </p>
-            ) : (
-              <div className="space-y-3">
-                {stats.dueSoonPayments.slice(0, 5).map((payment) => (
-                  <div 
-                    key={payment.id} 
-                    className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="hidden sm:flex h-10 w-10 items-center justify-center rounded-full bg-blue-500/10">
-                        <CalendarDays className="h-5 w-5 text-blue-500" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium truncate">
-                          {payment.client_name || payment.lead_name || 'Cliente'}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Venda #{payment.sale.code} · {formatDate(payment.payment_date)}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="hidden sm:inline-flex">
-                        {payment.payment_method ? PAYMENT_METHOD_LABELS[payment.payment_method] : '--'}
-                      </Badge>
-                      <span className="font-semibold text-blue-600">
-                        {formatCurrency(payment.amount)}
-                      </span>
-                    </div>
+              {/* Card Recebido - Clicável */}
+              <Card 
+                className="cursor-pointer hover:bg-muted/50 transition-colors group"
+                onClick={() => navigate('/financeiro/pagamentos')}
+              >
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Recebido</CardTitle>
+                  <div className="flex items-center gap-1">
+                    <TrendingUp className="h-4 w-4 text-emerald-500" />
+                    <ExternalLink className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                   </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                </CardHeader>
+                <CardContent>
+                  {isLoading ? (
+                    <Skeleton className="h-8 w-24" />
+                  ) : (
+                    <div className="text-2xl font-bold text-emerald-600">{formatCurrency(stats.receivedThisMonth)}</div>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    {hasFilters ? "No período" : "Este mês"}
+                  </p>
+                </CardContent>
+              </Card>
 
-        {/* Quick Links */}
-        <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">
-          <Card 
-            className="cursor-pointer hover:bg-muted/50 transition-colors"
-            onClick={() => navigate('/financeiro/pagamentos')}
-          >
-            <CardContent className="flex items-center gap-4 p-6">
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
-                <CreditCard className="h-6 w-6 text-primary" />
-              </div>
-              <div>
-                <h3 className="font-semibold">Pagamentos</h3>
-                <p className="text-sm text-muted-foreground">Ver todos os pagamentos</p>
-              </div>
-            </CardContent>
-          </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Pendente</CardTitle>
+                  <Clock className="h-4 w-4 text-amber-500" />
+                </CardHeader>
+                <CardContent>
+                  {isLoading ? (
+                    <Skeleton className="h-8 w-24" />
+                  ) : (
+                    <div className="text-2xl font-bold text-amber-600">{formatCurrency(stats.totalPending)}</div>
+                  )}
+                  <p className="text-xs text-muted-foreground">A receber</p>
+                </CardContent>
+              </Card>
 
-          <Card 
-            className="cursor-pointer hover:bg-muted/50 transition-colors"
-            onClick={() => navigate('/financeiro/faturas')}
-          >
-            <CardContent className="flex items-center gap-4 p-6">
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
-                <FileText className="h-6 w-6 text-primary" />
-              </div>
-              <div>
-                <h3 className="font-semibold">Faturas</h3>
-                <p className="text-sm text-muted-foreground">Referências de faturas</p>
-              </div>
-            </CardContent>
-          </Card>
+              {/* Card Despesas - Clicável */}
+              <Card 
+                className="cursor-pointer hover:bg-muted/50 transition-colors group"
+                onClick={() => navigate('/financeiro/despesas')}
+              >
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Despesas</CardTitle>
+                  <div className="flex items-center gap-1">
+                    <TrendingDown className="h-4 w-4 text-destructive" />
+                    <ExternalLink className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {isLoading ? (
+                    <Skeleton className="h-8 w-24" />
+                  ) : (
+                    <div className="text-2xl font-bold text-destructive">{formatCurrency(stats.totalExpenses)}</div>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    {hasFilters ? "No período" : "Este mês"}
+                  </p>
+                </CardContent>
+              </Card>
 
-          <Card 
-            className="cursor-pointer hover:bg-muted/50 transition-colors"
-            onClick={() => navigate('/financeiro/despesas')}
-          >
-            <CardContent className="flex items-center gap-4 p-6">
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-destructive/10">
-                <Receipt className="h-6 w-6 text-destructive" />
-              </div>
-              <div>
-                <h3 className="font-semibold">Despesas</h3>
-                <p className="text-sm text-muted-foreground">Gerir custos</p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Balanço</CardTitle>
+                  <Scale className="h-4 w-4 text-primary" />
+                </CardHeader>
+                <CardContent>
+                  {isLoading ? (
+                    <Skeleton className="h-8 w-24" />
+                  ) : (
+                    <div className={`text-2xl font-bold ${stats.balance >= 0 ? 'text-emerald-600' : 'text-destructive'}`}>
+                      {formatCurrency(stats.balance)}
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">Receitas - Despesas</p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">A Vencer (7 dias)</CardTitle>
+                  <CalendarDays className="h-4 w-4 text-blue-500" />
+                </CardHeader>
+                <CardContent>
+                  {isLoading ? (
+                    <Skeleton className="h-8 w-24" />
+                  ) : (
+                    <div className="text-2xl font-bold text-blue-600">{formatCurrency(stats.dueSoon)}</div>
+                  )}
+                  <p className="text-xs text-muted-foreground">{stats.dueSoonCount} pagamento(s)</p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Chart */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">
+                  Fluxo de Caixa {hasFilters ? "(período selecionado)" : "(últimos 30 dias)"}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {isLoading ? (
+                  <Skeleton className="h-64 w-full" />
+                ) : (
+                  <ResponsiveContainer width="100%" height={250}>
+                    <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="colorReceived" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="hsl(var(--chart-1))" stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor="hsl(var(--chart-1))" stopOpacity={0}/>
+                        </linearGradient>
+                        <linearGradient id="colorScheduled" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="hsl(var(--chart-2))" stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor="hsl(var(--chart-2))" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                      <XAxis 
+                        dataKey="dateLabel" 
+                        tick={{ fontSize: 12 }} 
+                        tickLine={false}
+                        axisLine={false}
+                        interval="preserveStartEnd"
+                      />
+                      <YAxis 
+                        tick={{ fontSize: 12 }} 
+                        tickLine={false}
+                        axisLine={false}
+                        tickFormatter={(value) => `€${value}`}
+                      />
+                      <Tooltip 
+                        formatter={(value: number) => formatCurrency(value)}
+                        labelFormatter={(label) => label}
+                        contentStyle={{ 
+                          backgroundColor: 'hsl(var(--background))',
+                          border: '1px solid hsl(var(--border))',
+                          borderRadius: '8px'
+                        }}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="received"
+                        name="Recebido"
+                        stroke="hsl(var(--chart-1))"
+                        fillOpacity={1}
+                        fill="url(#colorReceived)"
+                        strokeWidth={2}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="scheduled"
+                        name="Agendado"
+                        stroke="hsl(var(--chart-2))"
+                        fillOpacity={1}
+                        fill="url(#colorScheduled)"
+                        strokeWidth={2}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="expenses"
+                        name="Despesas"
+                        stroke="hsl(var(--destructive))"
+                        fillOpacity={0.3}
+                        fill="hsl(var(--destructive))"
+                        strokeWidth={2}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Upcoming Payments */}
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle className="text-base">Próximos Recebimentos</CardTitle>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="gap-1"
+                  onClick={() => navigate('/financeiro/pagamentos')}
+                >
+                  Ver todos
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {isLoading ? (
+                  <div className="space-y-3">
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                  </div>
+                ) : stats.dueSoonPayments.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-8">
+                    Sem pagamentos agendados para os próximos 7 dias
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {stats.dueSoonPayments.slice(0, 5).map((payment) => (
+                      <div 
+                        key={payment.id} 
+                        className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="hidden sm:flex h-10 w-10 items-center justify-center rounded-full bg-blue-500/10">
+                            <CalendarDays className="h-5 w-5 text-blue-500" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate">
+                              {payment.client_name || payment.lead_name || 'Cliente'}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              Venda #{payment.sale.code} · {formatDate(payment.payment_date)}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="hidden sm:inline-flex">
+                            {payment.payment_method ? PAYMENT_METHOD_LABELS[payment.payment_method] : '--'}
+                          </Badge>
+                          <span className="font-semibold text-blue-600">
+                            {formatCurrency(payment.amount)}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="faturas" className="mt-0">
+            <InvoicesContent />
+          </TabsContent>
+        </Tabs>
       </div>
     </AppLayout>
   );
