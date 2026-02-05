@@ -5,10 +5,16 @@ import { useAuth } from '@/contexts/AuthContext';
 import { startOfMonth, endOfMonth, addDays, format, parseISO, isWithinInterval, subDays, startOfDay, endOfDay } from 'date-fns';
 import type { FinanceStats, PaymentWithSale, CashflowPoint } from '@/types/finance';
 import type { PaymentMethod, PaymentRecordStatus } from '@/types/sales';
+import { DateRange } from 'react-day-picker';
 
-export function useFinanceStats() {
+interface UseFinanceStatsOptions {
+  dateRange?: DateRange;
+}
+
+export function useFinanceStats(options?: UseFinanceStatsOptions) {
   const { organization } = useAuth();
   const organizationId = organization?.id;
+  const dateRange = options?.dateRange;
 
   const { data: payments, isLoading } = useQuery({
     queryKey: ['finance-stats', organizationId],
@@ -60,8 +66,21 @@ export function useFinanceStats() {
     enabled: !!organizationId,
   });
 
+  // Filter payments by date range
+  const filteredPayments = useMemo(() => {
+    if (!payments) return [];
+    if (!dateRange?.from) return payments;
+
+    return payments.filter(p => {
+      const date = parseISO(p.payment_date);
+      if (dateRange.from && date < startOfDay(dateRange.from)) return false;
+      if (dateRange.to && date > endOfDay(dateRange.to)) return false;
+      return true;
+    });
+  }, [payments, dateRange]);
+
   const stats = useMemo((): FinanceStats => {
-    if (!payments || payments.length === 0) {
+    if (!filteredPayments || filteredPayments.length === 0) {
       return {
         totalBilled: 0,
         totalReceived: 0,
@@ -79,19 +98,19 @@ export function useFinanceStats() {
     const monthEnd = endOfMonth(now);
     const next7Days = addDays(now, 7);
 
-    // Totals
-    const totalReceived = payments
+    // Totals based on filtered payments
+    const totalReceived = filteredPayments
       .filter(p => p.status === 'paid')
       .reduce((sum, p) => sum + p.amount, 0);
 
-    const totalPending = payments
+    const totalPending = filteredPayments
       .filter(p => p.status === 'pending')
       .reduce((sum, p) => sum + p.amount, 0);
 
     const totalBilled = totalReceived + totalPending;
 
-    // This month received
-    const receivedThisMonth = payments
+    // This month received (within filtered payments)
+    const receivedThisMonth = filteredPayments
       .filter(p => {
         if (p.status !== 'paid') return false;
         const date = parseISO(p.payment_date);
@@ -99,8 +118,8 @@ export function useFinanceStats() {
       })
       .reduce((sum, p) => sum + p.amount, 0);
 
-    // Due in next 7 days (pending payments)
-    const dueSoonPayments = payments
+    // Due in next 7 days (pending payments within filtered)
+    const dueSoonPayments = filteredPayments
       .filter(p => {
         if (p.status !== 'pending') return false;
         const date = parseISO(p.payment_date);
@@ -110,19 +129,19 @@ export function useFinanceStats() {
 
     const dueSoon = dueSoonPayments.reduce((sum, p) => sum + p.amount, 0);
 
-    // Cashflow trend (last 30 days + next 7 days)
-    const trendStart = subDays(now, 30);
-    const trendEnd = next7Days;
+    // Cashflow trend - use date range if provided, otherwise last 30 days + next 7 days
+    const trendStart = dateRange?.from ? startOfDay(dateRange.from) : subDays(now, 30);
+    const trendEnd = dateRange?.to ? endOfDay(dateRange.to) : next7Days;
     const cashflowTrend: CashflowPoint[] = [];
 
     for (let d = trendStart; d <= trendEnd; d = addDays(d, 1)) {
       const dayStr = format(d, 'yyyy-MM-dd');
       
-      const received = payments
+      const received = filteredPayments
         .filter(p => p.status === 'paid' && p.payment_date === dayStr)
         .reduce((sum, p) => sum + p.amount, 0);
 
-      const scheduled = payments
+      const scheduled = filteredPayments
         .filter(p => p.status === 'pending' && p.payment_date === dayStr)
         .reduce((sum, p) => sum + p.amount, 0);
 
@@ -143,11 +162,11 @@ export function useFinanceStats() {
       dueSoonPayments,
       cashflowTrend,
     };
-  }, [payments]);
+  }, [filteredPayments, dateRange]);
 
   return {
     stats,
     isLoading,
-    payments: payments || [],
+    payments: filteredPayments,
   };
 }

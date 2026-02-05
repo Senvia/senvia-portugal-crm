@@ -3,7 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowLeft, Download, Search, FileText, Loader2 } from "lucide-react";
+import { ArrowLeft, Download, Search, FileText, Loader2, X } from "lucide-react";
 import { useAllPayments } from "@/hooks/useAllPayments";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -12,11 +12,15 @@ import { useState, useMemo } from "react";
 import { exportToExcel } from "@/lib/export";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
+import { DateRange } from "react-day-picker";
+import { startOfDay, endOfDay, parseISO } from "date-fns";
 
 export default function FinanceInvoices() {
   const { data: payments, isLoading } = useAllPayments();
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState("");
+  const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   // Filter only payments with invoice reference
@@ -25,21 +29,38 @@ export default function FinanceInvoices() {
 
     const withInvoice = payments.filter(p => p.invoice_reference);
 
-    if (!searchTerm) return withInvoice;
-
-    const search = searchTerm.toLowerCase();
     return withInvoice.filter(payment => {
-      const clientName = payment.client_name?.toLowerCase() || '';
-      const leadName = payment.lead_name?.toLowerCase() || '';
-      const saleCode = payment.sale.code?.toLowerCase() || '';
-      const invoiceRef = payment.invoice_reference?.toLowerCase() || '';
-      
-      return invoiceRef.includes(search) ||
-             clientName.includes(search) || 
-             leadName.includes(search) || 
-             saleCode.includes(search);
+      // Date range filter
+      if (dateRange?.from) {
+        const paymentDate = parseISO(payment.payment_date);
+        if (paymentDate < startOfDay(dateRange.from)) return false;
+        if (dateRange.to && paymentDate > endOfDay(dateRange.to)) return false;
+      }
+
+      // Search filter
+      if (searchTerm) {
+        const search = searchTerm.toLowerCase();
+        const clientName = payment.client_name?.toLowerCase() || '';
+        const leadName = payment.lead_name?.toLowerCase() || '';
+        const saleCode = payment.sale.code?.toLowerCase() || '';
+        const invoiceRef = payment.invoice_reference?.toLowerCase() || '';
+        
+        return invoiceRef.includes(search) ||
+               clientName.includes(search) || 
+               leadName.includes(search) || 
+               saleCode.includes(search);
+      }
+
+      return true;
     });
-  }, [payments, searchTerm]);
+  }, [payments, searchTerm, dateRange]);
+
+  const hasActiveFilters = searchTerm || dateRange?.from;
+
+  const clearFilters = () => {
+    setSearchTerm("");
+    setDateRange(undefined);
+  };
 
   const handleExport = () => {
     const exportData = invoices.map(p => ({
@@ -102,20 +123,52 @@ export default function FinanceInvoices() {
           </Button>
         </div>
 
-        {/* Search */}
+        {/* Filters */}
         <Card>
           <CardContent className="pt-6">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Pesquisar por referência, cliente ou venda..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9"
-              />
+            <div className="flex flex-col gap-4">
+              {/* Search */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Pesquisar por referência, cliente ou venda..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+
+              {/* Date range */}
+              <div className="flex flex-wrap gap-3 items-center">
+                <DateRangePicker
+                  value={dateRange}
+                  onChange={setDateRange}
+                  placeholder="Período"
+                  className="w-full xs:w-auto"
+                />
+
+                {hasActiveFilters && (
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={clearFilters}
+                    className="gap-1 text-muted-foreground"
+                  >
+                    <X className="h-4 w-4" />
+                    Limpar
+                  </Button>
+                )}
+              </div>
             </div>
           </CardContent>
         </Card>
+
+        {/* Results count */}
+        {hasActiveFilters && !isLoading && (
+          <p className="text-sm text-muted-foreground">
+            {invoices.length} fatura(s) encontrada(s)
+          </p>
+        )}
 
         {/* Table */}
         <Card>
@@ -130,9 +183,19 @@ export default function FinanceInvoices() {
               <div className="flex flex-col items-center justify-center py-12 text-center">
                 <FileText className="h-12 w-12 text-muted-foreground/50 mb-4" />
                 <p className="text-muted-foreground">Nenhuma fatura encontrada</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  As faturas aparecem quando adiciona uma referência ao registar pagamentos
-                </p>
+                {hasActiveFilters ? (
+                  <Button 
+                    variant="link" 
+                    onClick={clearFilters} 
+                    className="mt-2"
+                  >
+                    Limpar filtros
+                  </Button>
+                ) : (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    As faturas aparecem quando adiciona uma referência ao registar pagamentos
+                  </p>
+                )}
               </div>
             ) : (
               <div className="overflow-x-auto">

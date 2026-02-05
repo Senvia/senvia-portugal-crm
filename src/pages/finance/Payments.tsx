@@ -1,31 +1,48 @@
 import { AppLayout } from "@/components/layout/AppLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Download, Search, CreditCard } from "lucide-react";
+import { ArrowLeft, Download, Search, CreditCard, X } from "lucide-react";
 import { useAllPayments } from "@/hooks/useAllPayments";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNavigate } from "react-router-dom";
 import { useState, useMemo } from "react";
-import { PAYMENT_METHOD_LABELS, PAYMENT_RECORD_STATUS_LABELS } from "@/types/sales";
+import { PAYMENT_METHOD_LABELS, PAYMENT_RECORD_STATUS_LABELS, PaymentMethod } from "@/types/sales";
 import { exportToExcel } from "@/lib/export";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
+import { DateRange } from "react-day-picker";
+import { startOfDay, endOfDay, parseISO } from "date-fns";
 
 export default function FinancePayments() {
   const { data: payments, isLoading } = useAllPayments();
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [methodFilter, setMethodFilter] = useState<string>("all");
+  const [dateRange, setDateRange] = useState<DateRange | undefined>();
 
   const filteredPayments = useMemo(() => {
     if (!payments) return [];
 
     return payments.filter(payment => {
+      // Date range filter
+      if (dateRange?.from) {
+        const paymentDate = parseISO(payment.payment_date);
+        if (paymentDate < startOfDay(dateRange.from)) return false;
+        if (dateRange.to && paymentDate > endOfDay(dateRange.to)) return false;
+      }
+
       // Status filter
       if (statusFilter !== "all" && payment.status !== statusFilter) {
+        return false;
+      }
+
+      // Method filter
+      if (methodFilter !== "all" && payment.payment_method !== methodFilter) {
         return false;
       }
 
@@ -45,7 +62,16 @@ export default function FinancePayments() {
 
       return true;
     });
-  }, [payments, searchTerm, statusFilter]);
+  }, [payments, searchTerm, statusFilter, methodFilter, dateRange]);
+
+  const hasActiveFilters = searchTerm || statusFilter !== "all" || methodFilter !== "all" || dateRange?.from;
+
+  const clearFilters = () => {
+    setSearchTerm("");
+    setStatusFilter("all");
+    setMethodFilter("all");
+    setDateRange(undefined);
+  };
 
   const handleExport = () => {
     const exportData = filteredPayments.map(p => ({
@@ -59,6 +85,13 @@ export default function FinancePayments() {
     }));
     exportToExcel(exportData, 'pagamentos');
   };
+
+  // Get unique payment methods from data
+  const availableMethods = useMemo(() => {
+    if (!payments) return [];
+    const methods = new Set(payments.map(p => p.payment_method).filter(Boolean));
+    return Array.from(methods) as PaymentMethod[];
+  }, [payments]);
 
   return (
     <AppLayout>
@@ -89,8 +122,9 @@ export default function FinancePayments() {
         {/* Filters */}
         <Card>
           <CardContent className="pt-6">
-            <div className="flex flex-col gap-4 sm:flex-row">
-              <div className="relative flex-1">
+            <div className="flex flex-col gap-4">
+              {/* First row: Search */}
+              <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Pesquisar por cliente, venda ou fatura..."
@@ -99,19 +133,63 @@ export default function FinancePayments() {
                   className="pl-9"
                 />
               </div>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-full sm:w-40">
-                  <SelectValue placeholder="Estado" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  <SelectItem value="paid">Pagos</SelectItem>
-                  <SelectItem value="pending">Agendados</SelectItem>
-                </SelectContent>
-              </Select>
+              
+              {/* Second row: Date range and selects */}
+              <div className="flex flex-wrap gap-3">
+                <DateRangePicker
+                  value={dateRange}
+                  onChange={setDateRange}
+                  placeholder="Período"
+                  className="w-full xs:w-auto"
+                />
+                
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="w-full xs:w-32">
+                    <SelectValue placeholder="Estado" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="paid">Pagos</SelectItem>
+                    <SelectItem value="pending">Agendados</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Select value={methodFilter} onValueChange={setMethodFilter}>
+                  <SelectTrigger className="w-full xs:w-36">
+                    <SelectValue placeholder="Método" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos métodos</SelectItem>
+                    {availableMethods.map(method => (
+                      <SelectItem key={method} value={method}>
+                        {PAYMENT_METHOD_LABELS[method]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {hasActiveFilters && (
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={clearFilters}
+                    className="gap-1 text-muted-foreground"
+                  >
+                    <X className="h-4 w-4" />
+                    Limpar
+                  </Button>
+                )}
+              </div>
             </div>
           </CardContent>
         </Card>
+
+        {/* Results count */}
+        {hasActiveFilters && !isLoading && (
+          <p className="text-sm text-muted-foreground">
+            {filteredPayments.length} pagamento(s) encontrado(s)
+          </p>
+        )}
 
         {/* Table */}
         <Card>
@@ -126,6 +204,15 @@ export default function FinancePayments() {
               <div className="flex flex-col items-center justify-center py-12 text-center">
                 <CreditCard className="h-12 w-12 text-muted-foreground/50 mb-4" />
                 <p className="text-muted-foreground">Nenhum pagamento encontrado</p>
+                {hasActiveFilters && (
+                  <Button 
+                    variant="link" 
+                    onClick={clearFilters} 
+                    className="mt-2"
+                  >
+                    Limpar filtros
+                  </Button>
+                )}
               </div>
             ) : (
               <div className="overflow-x-auto">
