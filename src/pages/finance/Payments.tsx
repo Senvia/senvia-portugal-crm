@@ -9,8 +9,8 @@ import { ArrowLeft, Download, Search, CreditCard, X } from "lucide-react";
 import { useAllPayments } from "@/hooks/useAllPayments";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useNavigate } from "react-router-dom";
-import { useState, useMemo } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { useState, useMemo, useEffect } from "react";
 import { PAYMENT_METHOD_LABELS, PAYMENT_RECORD_STATUS_LABELS, PaymentMethod } from "@/types/sales";
 import { exportToExcel } from "@/lib/export";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
@@ -20,10 +20,19 @@ import { startOfDay, endOfDay, parseISO } from "date-fns";
 export default function FinancePayments() {
   const { data: payments, isLoading } = useAllPayments();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [methodFilter, setMethodFilter] = useState<string>("all");
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
+
+  // Read status from URL on mount
+  useEffect(() => {
+    const statusFromUrl = searchParams.get('status');
+    if (statusFromUrl === 'pending') {
+      setStatusFilter('pending');
+    }
+  }, [searchParams]);
 
   const filteredPayments = useMemo(() => {
     if (!payments) return [];

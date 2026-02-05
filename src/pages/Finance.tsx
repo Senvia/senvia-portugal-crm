@@ -16,7 +16,6 @@ import { PAYMENT_METHOD_LABELS } from "@/types/sales";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { DateRange } from "react-day-picker";
 import { InvoicesContent } from "@/components/finance/InvoicesContent";
-import { RenewalAlertsWidget } from "@/components/finance/RenewalAlertsWidget";
 
 export default function Finance() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
@@ -114,10 +113,16 @@ export default function Finance() {
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card 
+                className="cursor-pointer hover:bg-muted/50 transition-colors group"
+                onClick={() => navigate('/financeiro/pagamentos?status=pending')}
+              >
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Pendente</CardTitle>
-                  <Clock className="h-4 w-4 text-amber-500" />
+                  <div className="flex items-center gap-1">
+                    <Clock className="h-4 w-4 text-amber-500" />
+                    <ExternalLink className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
                 </CardHeader>
                 <CardContent>
                   {isLoading ? (
@@ -265,71 +270,6 @@ export default function Finance() {
               </CardContent>
             </Card>
 
-            {/* Two column layout for upcoming payments and renewals */}
-            <div className="grid gap-6 lg:grid-cols-2">
-              {/* Upcoming Payments */}
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="text-base">Próximos Recebimentos</CardTitle>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  className="gap-1"
-                  onClick={() => navigate('/financeiro/pagamentos')}
-                >
-                  Ver todos
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
-              </CardHeader>
-              <CardContent>
-                {isLoading ? (
-                  <div className="space-y-3">
-                    <Skeleton className="h-12 w-full" />
-                    <Skeleton className="h-12 w-full" />
-                    <Skeleton className="h-12 w-full" />
-                  </div>
-                ) : stats.dueSoonPayments.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-8">
-                    Sem pagamentos agendados para os próximos 7 dias
-                  </p>
-                ) : (
-                  <div className="space-y-3">
-                    {stats.dueSoonPayments.slice(0, 5).map((payment) => (
-                      <div 
-                        key={payment.id} 
-                        className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="hidden sm:flex h-10 w-10 items-center justify-center rounded-full bg-blue-500/10">
-                            <CalendarDays className="h-5 w-5 text-blue-500" />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium truncate">
-                              {payment.client_name || payment.lead_name || 'Cliente'}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              Venda #{payment.sale.code} · {formatDate(payment.payment_date)}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline" className="hidden sm:inline-flex">
-                            {payment.payment_method ? PAYMENT_METHOD_LABELS[payment.payment_method] : '--'}
-                          </Badge>
-                          <span className="font-semibold text-blue-600">
-                            {formatCurrency(payment.amount)}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-              {/* Renewal Alerts Widget */}
-              <RenewalAlertsWidget />
-            </div>
           </TabsContent>
 
           <TabsContent value="faturas" className="mt-0">
