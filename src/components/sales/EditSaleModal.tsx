@@ -302,7 +302,8 @@ export function EditSaleModal({
         );
         
         // Create automatic payments for new recurring items with due date
-        if (organization) {
+        // Only if sale is delivered (completed)
+        if (organization && sale.status === 'delivered') {
           const recurringNewItemsWithDate = itemsToCreate.filter(item => {
             if (!item.product_id) return false;
             const product = products?.find(p => p.id === item.product_id);
@@ -323,7 +324,8 @@ export function EditSaleModal({
       }
 
       // Sync payments for existing recurring items with first_due_date
-      if (organization) {
+      // Only if sale is delivered (completed)
+      if (organization && sale.status === 'delivered') {
         for (const item of items) {
           // Only process existing items (not new ones)
           if (item.originalId && !item.isNew) {
