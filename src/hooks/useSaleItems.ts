@@ -12,7 +12,7 @@ export function useSaleItems(saleId: string | undefined) {
         .from("sale_items")
         .select(`
           *,
-          product:products(name, price)
+          product:products(name, price, is_recurring)
         `)
         .eq("sale_id", saleId)
         .order("created_at", { ascending: true });
@@ -35,6 +35,7 @@ export function useCreateSaleItems() {
       quantity: number;
       unit_price: number;
       total: number;
+      first_due_date?: string | null;
     }[]) => {
       if (items.length === 0) return [];
 
@@ -70,6 +71,7 @@ export function useUpdateSaleItem() {
         unit_price?: number; 
         total?: number;
         name?: string;
+        first_due_date?: string | null;
       } 
     }) => {
       const { error } = await supabase
