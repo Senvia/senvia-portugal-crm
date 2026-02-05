@@ -129,6 +129,37 @@ export function EditSaleModal({
     }
   }, [open, existingItems]);
 
+  // Auto-detectar produtos recorrentes e ativar toggle
+  useEffect(() => {
+    if (!products || items.length === 0) return;
+    
+    // Encontrar items que são produtos recorrentes
+    const recurringItems = items.filter(item => {
+      const product = products.find(p => p.id === item.product_id);
+      return product?.is_recurring;
+    });
+    
+    const calculatedRecurringValue = recurringItems.reduce(
+      (sum, item) => sum + (item.quantity * item.unit_price), 0
+    );
+    
+    // Se existem produtos recorrentes, ativar toggle e sugerir valores
+    if (calculatedRecurringValue > 0) {
+      if (!hasRecurring) {
+        setHasRecurring(true);
+      }
+      // Atualizar valor recorrente calculado
+      setRecurringValue(calculatedRecurringValue.toString());
+      
+      // Se não tem data definida, sugerir +1 mês
+      if (!nextRenewalDate) {
+        const nextMonth = new Date();
+        nextMonth.setMonth(nextMonth.getMonth() + 1);
+        setNextRenewalDate(nextMonth);
+      }
+    }
+  }, [items, products]);
+
   // Check if sale can be fully edited
   const canFullEdit = sale?.status !== 'delivered' && sale?.status !== 'cancelled';
 
@@ -312,7 +343,7 @@ export function EditSaleModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[90vh] p-0 gap-0">
+      <DialogContent className="max-w-lg h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
         <DialogHeader className="pl-6 pr-14 py-4 border-b border-border/50">
           <DialogTitle className="flex items-center gap-2">
             Editar Venda
@@ -325,7 +356,7 @@ export function EditSaleModal({
         </DialogHeader>
 
         <form onSubmit={handleSubmit}>
-          <ScrollArea className="max-h-[calc(90vh-10rem)]">
+          <ScrollArea className="flex-1 min-h-0">
             <div className="p-6 space-y-6">
               {/* Client & Date */}
               <div className="grid grid-cols-2 gap-4">
