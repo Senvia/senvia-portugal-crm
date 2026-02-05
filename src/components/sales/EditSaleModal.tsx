@@ -21,6 +21,7 @@ import { useClients } from "@/hooks/useClients";
 import { useProducts } from "@/hooks/useProducts";
 import { useUpdateSale } from "@/hooks/useSales";
 import { useSaleItems, useCreateSaleItems, useUpdateSaleItem, useDeleteSaleItem } from "@/hooks/useSaleItems";
+import { useCreateSalePayment } from "@/hooks/useSalePayments";
 import { useAuth } from "@/contexts/AuthContext";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -76,6 +77,7 @@ export function EditSaleModal({
   const createSaleItems = useCreateSaleItems();
   const updateSaleItem = useUpdateSaleItem();
   const deleteSaleItem = useDeleteSaleItem();
+  const createSalePayment = useCreateSalePayment();
 
   const { organization } = useAuth();
   
@@ -297,6 +299,26 @@ export function EditSaleModal({
               : null,
           }))
         );
+        
+        // Create automatic payments for new recurring items with due date
+        if (organization) {
+          const recurringNewItemsWithDate = itemsToCreate.filter(item => {
+            if (!item.product_id) return false;
+            const product = products?.find(p => p.id === item.product_id);
+            return product?.is_recurring && item.first_due_date;
+          });
+          
+          for (const item of recurringNewItemsWithDate) {
+            await createSalePayment.mutateAsync({
+              sale_id: sale.id,
+              organization_id: organization.id,
+              amount: item.quantity * item.unit_price,
+              payment_date: format(item.first_due_date!, 'yyyy-MM-dd'),
+              status: 'pending',
+              notes: `Mensalidade: ${item.name}`,
+            });
+          }
+        }
       }
 
       toast.success("Venda atualizada com sucesso!");
