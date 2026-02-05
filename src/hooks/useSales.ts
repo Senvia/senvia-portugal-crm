@@ -70,6 +70,11 @@ export function useCreateSale() {
       modelo_servico?: ModeloServico;
       kwp?: number;
       comissao?: number;
+      // Campos de recorrência
+      has_recurring?: boolean;
+      recurring_value?: number;
+      recurring_status?: 'active' | 'cancelled' | 'paused';
+      next_renewal_date?: string;
     }) => {
       if (!organization?.id) throw new Error("No organization");
 
@@ -100,6 +105,11 @@ export function useCreateSale() {
           modelo_servico: data.modelo_servico || null,
           kwp: data.kwp || null,
           comissao: data.comissao || null,
+          // Campos de recorrência
+          has_recurring: data.has_recurring || false,
+          recurring_value: data.recurring_value || 0,
+          recurring_status: data.recurring_status || 'active',
+          next_renewal_date: data.next_renewal_date || null,
         })
         .select()
         .single();
@@ -110,6 +120,7 @@ export function useCreateSale() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sales"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["recurring-sales"] });
       toast.success("Venda criada com sucesso!");
     },
     onError: () => {

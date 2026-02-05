@@ -1628,6 +1628,7 @@ export type Database = {
           is_active: boolean | null
           is_digital: boolean | null
           is_ecommerce: boolean | null
+          is_recurring: boolean | null
           low_stock_threshold: number | null
           name: string
           organization_id: string
@@ -1651,6 +1652,7 @@ export type Database = {
           is_active?: boolean | null
           is_digital?: boolean | null
           is_ecommerce?: boolean | null
+          is_recurring?: boolean | null
           low_stock_threshold?: number | null
           name: string
           organization_id: string
@@ -1674,6 +1676,7 @@ export type Database = {
           is_active?: boolean | null
           is_digital?: boolean | null
           is_ecommerce?: boolean | null
+          is_recurring?: boolean | null
           low_stock_threshold?: number | null
           name?: string
           organization_id?: string
@@ -2091,12 +2094,15 @@ export type Database = {
           dbl: number | null
           discount: number | null
           due_date: string | null
+          has_recurring: boolean | null
           id: string
           invoice_reference: string | null
           kwp: number | null
+          last_renewal_date: string | null
           lead_id: string | null
           margem: number | null
           modelo_servico: string | null
+          next_renewal_date: string | null
           notes: string | null
           organization_id: string
           paid_date: string | null
@@ -2104,6 +2110,8 @@ export type Database = {
           payment_status: string | null
           proposal_id: string | null
           proposal_type: string | null
+          recurring_status: string | null
+          recurring_value: number | null
           sale_date: string | null
           status: string
           subtotal: number | null
@@ -2121,12 +2129,15 @@ export type Database = {
           dbl?: number | null
           discount?: number | null
           due_date?: string | null
+          has_recurring?: boolean | null
           id?: string
           invoice_reference?: string | null
           kwp?: number | null
+          last_renewal_date?: string | null
           lead_id?: string | null
           margem?: number | null
           modelo_servico?: string | null
+          next_renewal_date?: string | null
           notes?: string | null
           organization_id: string
           paid_date?: string | null
@@ -2134,6 +2145,8 @@ export type Database = {
           payment_status?: string | null
           proposal_id?: string | null
           proposal_type?: string | null
+          recurring_status?: string | null
+          recurring_value?: number | null
           sale_date?: string | null
           status?: string
           subtotal?: number | null
@@ -2151,12 +2164,15 @@ export type Database = {
           dbl?: number | null
           discount?: number | null
           due_date?: string | null
+          has_recurring?: boolean | null
           id?: string
           invoice_reference?: string | null
           kwp?: number | null
+          last_renewal_date?: string | null
           lead_id?: string | null
           margem?: number | null
           modelo_servico?: string | null
+          next_renewal_date?: string | null
           notes?: string | null
           organization_id?: string
           paid_date?: string | null
@@ -2164,6 +2180,8 @@ export type Database = {
           payment_status?: string | null
           proposal_id?: string | null
           proposal_type?: string | null
+          recurring_status?: string | null
+          recurring_value?: number | null
           sale_date?: string | null
           status?: string
           subtotal?: number | null

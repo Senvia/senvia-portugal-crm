@@ -16,6 +16,7 @@ import { PAYMENT_METHOD_LABELS } from "@/types/sales";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { DateRange } from "react-day-picker";
 import { InvoicesContent } from "@/components/finance/InvoicesContent";
+import { RenewalAlertsWidget } from "@/components/finance/RenewalAlertsWidget";
 
 export default function Finance() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
@@ -264,7 +265,9 @@ export default function Finance() {
               </CardContent>
             </Card>
 
-            {/* Upcoming Payments */}
+            {/* Two column layout for upcoming payments and renewals */}
+            <div className="grid gap-6 lg:grid-cols-2">
+              {/* Upcoming Payments */}
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="text-base">Próximos Recebimentos</CardTitle>
@@ -323,6 +326,10 @@ export default function Finance() {
                 )}
               </CardContent>
             </Card>
+
+              {/* Renewal Alerts Widget */}
+              <RenewalAlertsWidget />
+            </div>
           </TabsContent>
 
           <TabsContent value="faturas" className="mt-0">
