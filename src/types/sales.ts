@@ -160,6 +160,7 @@ export interface SaleItem {
   quantity: number;
   unit_price: number;
   total: number;
+  first_due_date: string | null;
   created_at: string;
 }
 
@@ -167,5 +168,6 @@ export interface SaleItemWithProduct extends SaleItem {
   product?: {
     name: string;
     price: number | null;
+    is_recurring?: boolean;
   } | null;
 }

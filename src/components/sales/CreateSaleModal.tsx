@@ -78,6 +78,7 @@ interface SaleItemDraft {
   name: string;
   quantity: number;
   unit_price: number;
+  first_due_date?: Date | null; // Data de vencimento para produtos recorrentes
 }
 
 interface CreateSaleModalProps {
@@ -440,6 +441,14 @@ export function CreateSaleModal({
     setItems(items.filter(i => i.id !== itemId));
   };
 
+  const handleUpdateDueDate = (itemId: string, date: Date | undefined) => {
+    setItems(items.map(i => 
+      i.id === itemId 
+        ? { ...i, first_due_date: date || null }
+        : i
+    ));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -499,6 +508,9 @@ export function CreateSaleModal({
             quantity: item.quantity,
             unit_price: item.unit_price,
             total: item.quantity * item.unit_price,
+            first_due_date: item.first_due_date 
+              ? format(item.first_due_date, 'yyyy-MM-dd') 
+              : null,
           }))
         );
       }
@@ -655,59 +667,102 @@ export function CreateSaleModal({
               {/* Items List */}
               {items.length > 0 && (
                 <div className="space-y-2">
-                  {items.map((item) => (
-                    <div 
-                      key={item.id} 
-                      className="flex items-center gap-3 p-3 rounded-lg border border-border/50 bg-muted/30"
-                    >
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm truncate">{item.name}</p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon"
-                            className="h-6 w-6"
-                            onClick={() => handleUpdateQuantity(item.id, -1)}
-                          >
-                            <Minus className="h-3 w-3" />
-                          </Button>
-                          <span className="text-sm w-8 text-center">{item.quantity}</span>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon"
-                            className="h-6 w-6"
-                            onClick={() => handleUpdateQuantity(item.id, 1)}
-                          >
-                            <Plus className="h-3 w-3" />
-                          </Button>
-                          <span className="text-muted-foreground text-sm">×</span>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={item.unit_price}
-                            onChange={(e) => handleUpdatePrice(item.id, e.target.value)}
-                            className="w-24 h-7 text-sm"
-                          />
-                          <span className="text-muted-foreground text-sm">€</span>
-                        </div>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <p className="font-semibold">{formatCurrency(item.quantity * item.unit_price)}</p>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                        onClick={() => handleRemoveItem(item.id)}
+                  {items.map((item) => {
+                    const product = products?.find(p => p.id === item.product_id);
+                    const isRecurring = product?.is_recurring;
+                    
+                    return (
+                      <div 
+                        key={item.id} 
+                        className="p-3 rounded-lg border border-border/50 bg-muted/30 space-y-2"
                       >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
+                        {/* Linha principal do produto */}
+                        <div className="flex items-center gap-3">
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-sm truncate">{item.name}</p>
+                            <div className="flex items-center gap-2 mt-1">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                className="h-6 w-6"
+                                onClick={() => handleUpdateQuantity(item.id, -1)}
+                              >
+                                <Minus className="h-3 w-3" />
+                              </Button>
+                              <span className="text-sm w-8 text-center">{item.quantity}</span>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                className="h-6 w-6"
+                                onClick={() => handleUpdateQuantity(item.id, 1)}
+                              >
+                                <Plus className="h-3 w-3" />
+                              </Button>
+                              <span className="text-muted-foreground text-sm">×</span>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={item.unit_price}
+                                onChange={(e) => handleUpdatePrice(item.id, e.target.value)}
+                                className="w-24 h-7 text-sm"
+                              />
+                              <span className="text-muted-foreground text-sm">€</span>
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className="font-semibold">{formatCurrency(item.quantity * item.unit_price)}</p>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                            onClick={() => handleRemoveItem(item.id)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        
+                        {/* Data de vencimento para produtos recorrentes */}
+                        {isRecurring && (
+                          <div className="flex items-center gap-2 pl-2 text-sm border-t border-border/50 pt-2">
+                            <CalendarIcon className="h-4 w-4 text-primary" />
+                            <span className="text-muted-foreground">Vence em:</span>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button 
+                                  type="button"
+                                  variant="outline" 
+                                  size="sm"
+                                  className="h-7 text-xs"
+                                >
+                                  {item.first_due_date 
+                                    ? format(item.first_due_date, "dd/MM/yyyy")
+                                    : "Selecionar data"}
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0" align="start">
+                                <Calendar
+                                  mode="single"
+                                  selected={item.first_due_date || undefined}
+                                  onSelect={(date) => handleUpdateDueDate(item.id, date)}
+                                  locale={pt}
+                                  className="pointer-events-auto"
+                                />
+                              </PopoverContent>
+                            </Popover>
+                            <Badge variant="secondary" className="text-xs">
+                              <Zap className="h-3 w-3 mr-1" />
+                              Mensal
+                            </Badge>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
 
