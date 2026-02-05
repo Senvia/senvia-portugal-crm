@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,9 +12,12 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { format, parseISO } from "date-fns";
 import { pt } from "date-fns/locale";
 import { PAYMENT_METHOD_LABELS } from "@/types/sales";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
+import { DateRange } from "react-day-picker";
 
 export default function Finance() {
-  const { stats, isLoading } = useFinanceStats();
+  const [dateRange, setDateRange] = useState<DateRange | undefined>();
+  const { stats, isLoading } = useFinanceStats({ dateRange });
   const navigate = useNavigate();
 
   const chartData = stats.cashflowTrend.map(point => ({
@@ -21,11 +25,13 @@ export default function Finance() {
     dateLabel: format(parseISO(point.date), 'dd MMM', { locale: pt }),
   }));
 
+  const hasFilters = dateRange?.from !== undefined;
+
   return (
     <AppLayout>
       <div className="p-4 md:p-6 lg:p-8 space-y-6 pb-20 md:pb-6">
         {/* Header */}
-        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Financeiro</h1>
             <p className="text-sm text-muted-foreground">
@@ -33,6 +39,26 @@ export default function Finance() {
             </p>
           </div>
         </div>
+
+        {/* Date Filter */}
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <span className="text-sm font-medium text-muted-foreground">Período:</span>
+              <DateRangePicker
+                value={dateRange}
+                onChange={setDateRange}
+                placeholder="Todo o histórico"
+                className="w-full sm:w-auto"
+              />
+              {hasFilters && (
+                <span className="text-xs text-muted-foreground">
+                  (dados filtrados pelo período selecionado)
+                </span>
+              )}
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Stats Cards */}
         <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
@@ -47,13 +73,15 @@ export default function Finance() {
               ) : (
                 <div className="text-2xl font-bold">{formatCurrency(stats.totalBilled)}</div>
               )}
-              <p className="text-xs text-muted-foreground">Histórico total</p>
+              <p className="text-xs text-muted-foreground">
+                {hasFilters ? "No período" : "Histórico total"}
+              </p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Recebido Este Mês</CardTitle>
+              <CardTitle className="text-sm font-medium">Recebido</CardTitle>
               <TrendingUp className="h-4 w-4 text-emerald-500" />
             </CardHeader>
             <CardContent>
@@ -62,7 +90,9 @@ export default function Finance() {
               ) : (
                 <div className="text-2xl font-bold text-emerald-600">{formatCurrency(stats.receivedThisMonth)}</div>
               )}
-              <p className="text-xs text-muted-foreground">Pagamentos confirmados</p>
+              <p className="text-xs text-muted-foreground">
+                {hasFilters ? "No período" : "Este mês"}
+              </p>
             </CardContent>
           </Card>
 
@@ -100,7 +130,9 @@ export default function Finance() {
         {/* Chart */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Fluxo de Caixa (últimos 30 dias)</CardTitle>
+            <CardTitle className="text-base">
+              Fluxo de Caixa {hasFilters ? "(período selecionado)" : "(últimos 30 dias)"}
+            </CardTitle>
           </CardHeader>
           <CardContent>
             {isLoading ? (
