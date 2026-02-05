@@ -26,6 +26,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { format, parseISO } from "date-fns";
+import { supabase } from "@/integrations/supabase/client";
 import { pt } from "date-fns/locale";
 import { toast } from "sonner";
 import { 
@@ -317,6 +318,39 @@ export function EditSaleModal({
               status: 'pending',
               notes: `Mensalidade: ${item.name}`,
             });
+          }
+        }
+      }
+
+      // Sync payments for existing recurring items with first_due_date
+      if (organization) {
+        for (const item of items) {
+          // Only process existing items (not new ones)
+          if (item.originalId && !item.isNew) {
+            const product = products?.find(p => p.id === item.product_id);
+            if (product?.is_recurring && item.first_due_date) {
+              const paymentDateStr = format(item.first_due_date, 'yyyy-MM-dd');
+              
+              // Check if payment already exists for this date
+              const { data: existingPayments } = await supabase
+                .from('sale_payments')
+                .select('id')
+                .eq('sale_id', sale.id)
+                .eq('payment_date', paymentDateStr)
+                .eq('status', 'pending');
+              
+              // If no payment exists, create one
+              if (!existingPayments || existingPayments.length === 0) {
+                await createSalePayment.mutateAsync({
+                  sale_id: sale.id,
+                  organization_id: organization.id,
+                  amount: item.quantity * item.unit_price,
+                  payment_date: paymentDateStr,
+                  status: 'pending',
+                  notes: `Mensalidade: ${item.name}`,
+                });
+              }
+            }
           }
         }
       }
