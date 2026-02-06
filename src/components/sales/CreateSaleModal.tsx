@@ -524,26 +524,28 @@ export function CreateSaleModal({
       }
 
       // Process CPEs - criar novos ou atualizar existentes
+      // Quando proposta é aceite, comercializador é sempre "EDP Comercial"
       if (proposalCpes.length > 0 && clientId) {
         for (const proposalCpe of proposalCpes) {
           if (proposalCpe.existing_cpe_id) {
             // Atualizar CPE existente (renovação)
             await updateCpe.mutateAsync({
               id: proposalCpe.existing_cpe_id,
-              comercializador: proposalCpe.comercializador,
-              fidelizacao_start: proposalCpe.fidelizacao_start || undefined,
-              fidelizacao_end: proposalCpe.fidelizacao_end || undefined,
+              comercializador: 'EDP Comercial', // Sempre EDP quando proposta é ganha
+              fidelizacao_start: proposalCpe.contrato_inicio || proposalCpe.fidelizacao_start || undefined,
+              fidelizacao_end: proposalCpe.contrato_fim || proposalCpe.fidelizacao_end || undefined,
               notes: proposalCpe.notes || undefined,
+              status: 'active', // Reativar se estava inativo
             });
           } else {
             // Criar novo CPE
             await createCpe.mutateAsync({
               client_id: clientId,
               equipment_type: proposalCpe.equipment_type,
-              comercializador: proposalCpe.comercializador,
+              comercializador: 'EDP Comercial', // Sempre EDP quando proposta é ganha
               serial_number: proposalCpe.serial_number || undefined,
-              fidelizacao_start: proposalCpe.fidelizacao_start || undefined,
-              fidelizacao_end: proposalCpe.fidelizacao_end || undefined,
+              fidelizacao_start: proposalCpe.contrato_inicio || proposalCpe.fidelizacao_start || undefined,
+              fidelizacao_end: proposalCpe.contrato_fim || proposalCpe.fidelizacao_end || undefined,
               notes: proposalCpe.notes || undefined,
               status: 'active',
             });
