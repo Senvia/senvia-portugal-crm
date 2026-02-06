@@ -1,64 +1,73 @@
 
 
-## Renomear "Entregue" para "Concluída" e Filtrar Financeiro
+## Correcoes no Template Telecom - CPE/CUI na Proposta
 
-### Alteracoes
+### Resumo do Pedido
+
+O cliente do nicho "telecom" (energia) pediu:
+
+1. Na proposta, ao selecionar cliente, mostrar combobox com todos os CPE/CUI do cliente
+2. Preenchimento individual: selecionar CPE, preencher dados de energia, adicionar, repetir
+3. Quando proposta e ganha: atualizar fidelizacao dos CPE/CUI na ficha do cliente e definir comercializador como "EDP"
+
+---
+
+### Analise do Estado Atual
+
+**O que JA funciona corretamente:**
+
+- Combobox de CPEs do cliente existe na aba "Renovar Existente"
+- Preenchimento um a um funciona (seleciona, preenche, adiciona)
+- Quando proposta e aceite, CPEs sao atualizados no CreateSaleModal
+
+**O que precisa de ser corrigido:**
+
+O comercializador NAO esta a ser definido como "EDP" fixo - atualmente usa o valor da proposta
+
+---
+
+### Alteracoes Propostas
 
 | Ficheiro | Alteracao |
 |----------|-----------|
-| `src/types/sales.ts` | Renomear label "Entregue" para "Concluída" |
-| `src/hooks/useFinanceStats.ts` | Filtrar pagamentos apenas de vendas concluídas |
-| `src/hooks/useAllPayments.ts` | Filtrar pagamentos apenas de vendas concluídas |
-| `src/components/sales/EditSaleModal.tsx` | Só criar pagamentos automáticos se venda estiver concluída |
-| `src/components/sales/CreateSaleModal.tsx` | Só criar pagamentos automáticos se status for "delivered" |
+| `src/components/sales/CreateSaleModal.tsx` | Ao processar CPEs de proposta aceite, forcar comercializador = "EDP Comercial" |
 
 ---
 
 ### Detalhes Tecnicos
 
-#### 1. Renomear Label (types/sales.ts)
+#### 1. Atualizacao de CPEs com Comercializador Fixo (CreateSaleModal.tsx)
+
+Na secao onde os CPEs sao processados (linhas 526-552), alterar para usar sempre "EDP Comercial":
 
 ```typescript
-export const SALE_STATUS_LABELS: Record<SaleStatus, string> = {
-  pending: 'Pendente',
-  in_progress: 'Em Progresso',
-  delivered: 'Concluída',  // Antes: 'Entregue'
-  cancelled: 'Cancelado',
-};
-```
-
-#### 2. Filtrar Pagamentos no Financeiro
-
-Nos hooks `useFinanceStats.ts` e `useAllPayments.ts`, adicionar filtro para só buscar pagamentos de vendas com `status = 'delivered'`:
-
-```typescript
-// useAllPayments.ts - adicionar JOIN com filtro
-const { data, error } = await supabase
-  .from('sale_payments')
-  .select(`
-    *,
-    sales:sale_id!inner (
-      id,
-      code,
-      status,
-      total_value,
-      leads:lead_id (name),
-      crm_clients:client_id (name)
-    )
-  `)
-  .eq('organization_id', organizationId)
-  .eq('sales.status', 'delivered')  // Só vendas concluídas
-  .order('payment_date', { ascending: false });
-```
-
-#### 3. Pagamentos Automaticos Apenas para Vendas Concluidas
-
-No `EditSaleModal.tsx` e `CreateSaleModal.tsx`, verificar o status da venda antes de criar pagamentos:
-
-```typescript
-// Só criar pagamentos se a venda estiver concluída
-if (organization && sale.status === 'delivered') {
-  // ... lógica de criar pagamentos
+// Process CPEs - criar novos ou atualizar existentes
+if (proposalCpes.length > 0 && clientId) {
+  for (const proposalCpe of proposalCpes) {
+    if (proposalCpe.existing_cpe_id) {
+      // Atualizar CPE existente (renovacao)
+      await updateCpe.mutateAsync({
+        id: proposalCpe.existing_cpe_id,
+        comercializador: 'EDP Comercial', // <-- FIXO: sempre EDP
+        fidelizacao_start: proposalCpe.contrato_inicio || proposalCpe.fidelizacao_start || undefined,
+        fidelizacao_end: proposalCpe.contrato_fim || proposalCpe.fidelizacao_end || undefined,
+        notes: proposalCpe.notes || undefined,
+        status: 'active', // Reativar se estava inativo
+      });
+    } else {
+      // Criar novo CPE
+      await createCpe.mutateAsync({
+        client_id: clientId,
+        equipment_type: proposalCpe.equipment_type,
+        comercializador: 'EDP Comercial', // <-- FIXO: sempre EDP
+        serial_number: proposalCpe.serial_number || undefined,
+        fidelizacao_start: proposalCpe.contrato_inicio || proposalCpe.fidelizacao_start || undefined,
+        fidelizacao_end: proposalCpe.contrato_fim || proposalCpe.fidelizacao_end || undefined,
+        notes: proposalCpe.notes || undefined,
+        status: 'active',
+      });
+    }
+  }
 }
 ```
 
@@ -68,22 +77,18 @@ if (organization && sale.status === 'delivered') {
 
 | Cenario | Resultado |
 |---------|-----------|
-| Venda pendente/em progresso | Nao aparece no financeiro |
-| Venda concluida | Aparece no financeiro |
-| Alterar venda para "Concluida" | Pagamentos sao criados automaticamente |
-| Dashboard vendas | Mostra "Concluida" em vez de "Entregue" |
+| Criar proposta | Seleciona CPE existente ou cria novo, preenche dados um a um |
+| Proposta aceite (ganha) | CPE atualizado com comercializador "EDP Comercial" e novas datas de fidelizacao |
+| CPE inativo renovado | Status muda para "active" |
+| Novo CPE criado | Criado com comercializador "EDP Comercial" e status "active" |
 
 ---
 
-### Ficheiros a Modificar
+### Nota Importante
 
-| Ficheiro | Tipo de Alteracao |
-|----------|-------------------|
-| `src/types/sales.ts` | Renomear label |
-| `src/hooks/useFinanceStats.ts` | Adicionar filtro por status da venda |
-| `src/hooks/useAllPayments.ts` | Adicionar filtro por status da venda |
-| `src/components/sales/EditSaleModal.tsx` | Condicionar criacao de pagamentos |
-| `src/components/sales/CreateSaleModal.tsx` | Condicionar criacao de pagamentos |
+Se o cliente nao quiser que o comercializador seja SEMPRE "EDP", posso ajustar para:
+- Manter o comercializador da proposta (comportamento atual)
+- Ou dar opcao de escolher no momento da conversao
 
-**Total: 5 ficheiros modificados**
+**Total: 1 ficheiro modificado**
 
