@@ -1,15 +1,13 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Plus, X, RefreshCw, Zap, Calculator } from 'lucide-react';
+import { Plus, X, Zap, Calculator } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
 import { useCpes } from '@/hooks/useCpes';
-import { useAuth } from '@/contexts/AuthContext';
-import { ENERGY_TYPES, ENERGY_COMERCIALIZADORES, type Cpe } from '@/types/cpes';
+import { ENERGY_COMERCIALIZADORES } from '@/types/cpes';
 
 export interface ProposalCpeDraft {
   id: string;
@@ -50,29 +48,10 @@ function calculateMargem(consumo: string, duracao: string, dbl: string): string 
 
 export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCpeSelectorProps) {
   const { data: clientCpes = [] } = useCpes(clientId);
-  const { organization } = useAuth();
   
-  const [activeTab, setActiveTab] = useState<'new' | 'existing'>('new');
-  
-  // Labels for telecom/energy niche
-  const typeOptions = ENERGY_TYPES;
   const comercializadorOptions = ENERGY_COMERCIALIZADORES;
   
-  // State for new CPE form
-  const [equipmentType, setEquipmentType] = useState('');
-  const [customEquipmentType, setCustomEquipmentType] = useState('');
-  const [serialNumber, setSerialNumber] = useState('');
-  const [comercializador, setComercializador] = useState('');
-  const [customComercializador, setCustomComercializador] = useState('');
-  const [consumoAnual, setConsumoAnual] = useState('');
-  const [duracaoContrato, setDuracaoContrato] = useState('');
-  const [dbl, setDbl] = useState('');
-  const [comissao, setComissao] = useState('');
-  const [contratoInicio, setContratoInicio] = useState('');
-  const [contratoFim, setContratoFim] = useState('');
-  const [notes, setNotes] = useState('');
-  
-  // State for existing CPE update form
+  // State for existing CPE selection form
   const [selectedExistingCpe, setSelectedExistingCpe] = useState<string | null>(null);
   const [updateConsumoAnual, setUpdateConsumoAnual] = useState('');
   const [updateDuracaoContrato, setUpdateDuracaoContrato] = useState('');
@@ -82,32 +61,14 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
   const [updateContratoFim, setUpdateContratoFim] = useState('');
   const [updateComercializador, setUpdateComercializador] = useState('');
   const [updateCustomComercializador, setUpdateCustomComercializador] = useState('');
-  const [updateNotes, setUpdateNotes] = useState('');
 
-  // Auto-calculate margem for new CPE
-  const newMargem = useMemo(() => 
-    calculateMargem(consumoAnual, duracaoContrato, dbl), 
-    [consumoAnual, duracaoContrato, dbl]
-  );
-  
-  // Auto-calculate margem for existing CPE update
+  // Auto-calculate margem for existing CPE
   const updateMargem = useMemo(() => 
     calculateMargem(updateConsumoAnual, updateDuracaoContrato, updateDbl), 
     [updateConsumoAnual, updateDuracaoContrato, updateDbl]
   );
 
   // Auto-calculate contrato fim when start + duration changes
-  useEffect(() => {
-    if (contratoInicio && duracaoContrato) {
-      const start = new Date(contratoInicio);
-      const years = parseInt(duracaoContrato) || 0;
-      if (years > 0) {
-        start.setFullYear(start.getFullYear() + years);
-        setContratoFim(start.toISOString().split('T')[0]);
-      }
-    }
-  }, [contratoInicio, duracaoContrato]);
-  
   useEffect(() => {
     if (updateContratoInicio && updateDuracaoContrato) {
       const start = new Date(updateContratoInicio);
@@ -119,22 +80,7 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
     }
   }, [updateContratoInicio, updateDuracaoContrato]);
 
-  const resetNewForm = () => {
-    setEquipmentType('');
-    setCustomEquipmentType('');
-    setSerialNumber('');
-    setComercializador('');
-    setCustomComercializador('');
-    setConsumoAnual('');
-    setDuracaoContrato('');
-    setDbl('');
-    setComissao('');
-    setContratoInicio('');
-    setContratoFim('');
-    setNotes('');
-  };
-
-  const resetExistingForm = () => {
+  const resetForm = () => {
     setSelectedExistingCpe(null);
     setUpdateConsumoAnual('');
     setUpdateDuracaoContrato('');
@@ -144,36 +90,6 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
     setUpdateContratoFim('');
     setUpdateComercializador('');
     setUpdateCustomComercializador('');
-    setUpdateNotes('');
-  };
-
-  const handleAddNewCpe = () => {
-    const finalEquipmentType = equipmentType === 'other' ? customEquipmentType : equipmentType;
-    const finalComercializador = comercializador === 'other' ? customComercializador : comercializador;
-    
-    if (!finalEquipmentType || !finalComercializador) return;
-
-    const newCpe: ProposalCpeDraft = {
-      id: crypto.randomUUID(),
-      existing_cpe_id: null,
-      equipment_type: finalEquipmentType,
-      serial_number: serialNumber,
-      comercializador: finalComercializador,
-      fidelizacao_start: contratoInicio,
-      fidelizacao_end: contratoFim,
-      notes: notes,
-      isNew: true,
-      consumo_anual: consumoAnual,
-      duracao_contrato: duracaoContrato,
-      dbl: dbl,
-      margem: newMargem,
-      comissao: comissao,
-      contrato_inicio: contratoInicio,
-      contrato_fim: contratoFim,
-    };
-
-    onCpesChange([...cpes, newCpe]);
-    resetNewForm();
   };
 
   const handleAddExistingCpe = () => {
@@ -191,7 +107,7 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
       ? updateCustomComercializador 
       : (updateComercializador === 'keep_current' || !updateComercializador ? existingCpe.comercializador : updateComercializador);
 
-    const updateCpe: ProposalCpeDraft = {
+    const newCpe: ProposalCpeDraft = {
       id: crypto.randomUUID(),
       existing_cpe_id: existingCpe.id,
       equipment_type: existingCpe.equipment_type,
@@ -199,7 +115,7 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
       comercializador: finalComercializador,
       fidelizacao_start: updateContratoInicio || existingCpe.fidelizacao_start || '',
       fidelizacao_end: updateContratoFim || existingCpe.fidelizacao_end || '',
-      notes: updateNotes,
+      notes: '',
       isNew: false,
       consumo_anual: updateConsumoAnual,
       duracao_contrato: updateDuracaoContrato,
@@ -210,8 +126,8 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
       contrato_fim: updateContratoFim,
     };
 
-    onCpesChange([...cpes, updateCpe]);
-    resetExistingForm();
+    onCpesChange([...cpes, newCpe]);
+    resetForm();
   };
 
   const handleRemoveCpe = (id: string) => {
@@ -244,9 +160,6 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
     cpe => !cpes.find(c => c.existing_cpe_id === cpe.id)
   );
 
-  const canAddNew = (equipmentType === 'other' ? customEquipmentType : equipmentType) && 
-                    (comercializador === 'other' ? customComercializador : comercializador);
-  
   const canAddExisting = selectedExistingCpe !== null;
 
   const formatCurrency = (value: string) => {
@@ -273,8 +186,8 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
                 <div className="flex items-center gap-2">
                   <Zap className="h-4 w-4 text-amber-600" />
                   <span className="font-medium text-sm">CPE/CUI #{index + 1}</span>
-                  <Badge variant={cpe.isNew ? 'default' : 'secondary'} className="text-xs">
-                    {cpe.isNew ? 'Novo' : 'Renovação'}
+                  <Badge variant="secondary" className="text-xs">
+                    Renovação
                   </Badge>
                 </div>
                 <Button
@@ -294,7 +207,6 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
                   <Label className="text-xs">Tipo</Label>
                   <Input
                     value={cpe.equipment_type}
-                    onChange={(e) => handleUpdateCpeField(cpe.id, 'equipment_type', e.target.value)}
                     className="h-8 text-sm"
                     disabled
                   />
@@ -399,7 +311,6 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
                   <Input
                     type="date"
                     value={cpe.contrato_fim}
-                    onChange={(e) => handleUpdateCpeField(cpe.id, 'contrato_fim', e.target.value)}
                     className="h-8 text-sm bg-muted"
                     disabled
                   />
@@ -418,338 +329,174 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
         </div>
       )}
 
-      {/* Add CPE Form */}
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'new' | 'existing')}>
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="new" className="flex items-center gap-2">
-            <Plus className="h-3 w-3" />
-            Novo CPE
-          </TabsTrigger>
-          <TabsTrigger value="existing" className="flex items-center gap-2" disabled={!clientId}>
-            <RefreshCw className="h-3 w-3" />
-            Selecionar Existente
-          </TabsTrigger>
-        </TabsList>
-
-        {/* New CPE Tab */}
-        <TabsContent value="new" className="space-y-3 mt-3">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      {/* Add CPE from existing client CPEs */}
+      <div className="border rounded-lg p-4 bg-muted/30 space-y-3">
+        <Label className="text-sm font-medium">Selecionar CPE/CUI do Cliente</Label>
+        
+        {!clientId ? (
+          <p className="text-sm text-muted-foreground text-center py-4">
+            Selecione um cliente para ver os CPEs existentes
+          </p>
+        ) : clientCpes.length === 0 ? (
+          <div className="text-center py-4 space-y-2">
+            <p className="text-sm text-muted-foreground">
+              Este cliente não tem CPEs cadastrados.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Adicione primeiro os pontos de consumo na ficha do cliente.
+            </p>
+          </div>
+        ) : availableExistingCpes.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-4">
+            Todos os CPEs deste cliente já foram adicionados à proposta.
+          </p>
+        ) : (
+          <>
             <div className="space-y-1">
-              <Label className="text-xs">Tipo</Label>
-              <Select value={equipmentType} onValueChange={setEquipmentType}>
+              <Select value={selectedExistingCpe || ''} onValueChange={setSelectedExistingCpe}>
                 <SelectTrigger className="h-9">
-                  <SelectValue placeholder="Selecionar..." />
+                  <SelectValue placeholder="Selecionar CPE existente..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {typeOptions.map((type) => (
-                    <SelectItem key={type} value={type}>{type}</SelectItem>
+                  {availableExistingCpes.map((cpe) => (
+                    <SelectItem key={cpe.id} value={cpe.id}>
+                      {cpe.equipment_type} - {cpe.comercializador}
+                      {cpe.serial_number && ` (${cpe.serial_number})`}
+                    </SelectItem>
                   ))}
-                  <SelectItem value="other">Outro...</SelectItem>
                 </SelectContent>
               </Select>
-              {equipmentType === 'other' && (
-                <Input
-                  placeholder="Tipo personalizado..."
-                  value={customEquipmentType}
-                  onChange={(e) => setCustomEquipmentType(e.target.value)}
-                  className="h-8 mt-1"
-                />
-              )}
             </div>
 
-            <div className="space-y-1">
-              <Label className="text-xs">Comercializador</Label>
-              <Select value={comercializador} onValueChange={setComercializador}>
-                <SelectTrigger className="h-9">
-                  <SelectValue placeholder="Selecionar..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {comercializadorOptions.map((c) => (
-                    <SelectItem key={c} value={c}>{c}</SelectItem>
-                  ))}
-                  <SelectItem value="other">Outro...</SelectItem>
-                </SelectContent>
-              </Select>
-              {comercializador === 'other' && (
-                <Input
-                  placeholder="Comercializador..."
-                  value={customComercializador}
-                  onChange={(e) => setCustomComercializador(e.target.value)}
-                  className="h-8 mt-1"
-                />
-              )}
-            </div>
-
-            <div className="space-y-1">
-              <Label className="text-xs">CPE/CUI (opcional)</Label>
-              <Input
-                value={serialNumber}
-                onChange={(e) => setSerialNumber(e.target.value)}
-                className="h-9"
-                placeholder="PT0002..."
-              />
-            </div>
-          </div>
-
-          <Separator />
-
-          {/* Energy fields for new CPE */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            <div className="space-y-1">
-              <Label className="text-xs">Consumo Anual (kWh)</Label>
-              <Input
-                type="number"
-                step="1"
-                min="0"
-                value={consumoAnual}
-                onChange={(e) => setConsumoAnual(e.target.value)}
-                className="h-8"
-                placeholder="15000"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Duração (anos)</Label>
-              <Input
-                type="number"
-                min="1"
-                max="10"
-                value={duracaoContrato}
-                onChange={(e) => setDuracaoContrato(e.target.value)}
-                className="h-8"
-                placeholder="2"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">DBL (€/MWh)</Label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0"
-                value={dbl}
-                onChange={(e) => setDbl(e.target.value)}
-                className="h-8"
-                placeholder="5.50"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs flex items-center gap-1">
-                <Calculator className="h-3 w-3" />
-                Margem (€)
-              </Label>
-              <Input
-                value={newMargem}
-                className="h-8 bg-muted font-medium"
-                disabled
-                placeholder="Auto"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            <div className="space-y-1">
-              <Label className="text-xs">Comissão (€)</Label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0"
-                value={comissao}
-                onChange={(e) => setComissao(e.target.value)}
-                className="h-8"
-                placeholder="150"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Início Contrato</Label>
-              <Input
-                type="date"
-                value={contratoInicio}
-                onChange={(e) => setContratoInicio(e.target.value)}
-                className="h-8"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Fim Contrato</Label>
-              <Input
-                type="date"
-                value={contratoFim}
-                className="h-8 bg-muted"
-                disabled
-              />
-            </div>
-          </div>
-
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleAddNewCpe}
-            disabled={!canAddNew}
-            className="w-full"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Adicionar CPE/CUI
-          </Button>
-        </TabsContent>
-
-        {/* Existing CPE Tab */}
-        <TabsContent value="existing" className="space-y-3 mt-3">
-          {!clientId ? (
-            <p className="text-sm text-muted-foreground text-center py-4">
-              Selecione um cliente para ver os CPEs existentes
-            </p>
-          ) : availableExistingCpes.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-4">
-              Nenhum CPE disponível para este cliente
-            </p>
-          ) : (
-            <>
-              <div className="space-y-1">
-                <Label className="text-xs">Selecionar CPE do Cliente</Label>
-                <Select value={selectedExistingCpe || ''} onValueChange={setSelectedExistingCpe}>
-                  <SelectTrigger className="h-9">
-                    <SelectValue placeholder="Selecionar CPE existente..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableExistingCpes.map((cpe) => (
-                      <SelectItem key={cpe.id} value={cpe.id}>
-                        {cpe.equipment_type} - {cpe.comercializador}
-                        {cpe.serial_number && ` (${cpe.serial_number})`}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {selectedExistingCpe && (
-                <>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    <div className="space-y-1">
-                      <Label className="text-xs">Novo Comercializador</Label>
-                      <Select value={updateComercializador} onValueChange={setUpdateComercializador}>
-                        <SelectTrigger className="h-9">
-                          <SelectValue placeholder="Manter atual..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="keep_current">Manter atual</SelectItem>
-                          {comercializadorOptions.map((c) => (
-                            <SelectItem key={c} value={c}>{c}</SelectItem>
-                          ))}
-                          <SelectItem value="other">Outro...</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      {updateComercializador === 'other' && (
-                        <Input
-                          placeholder="Comercializador..."
-                          value={updateCustomComercializador}
-                          onChange={(e) => setUpdateCustomComercializador(e.target.value)}
-                          className="h-8 mt-1"
-                        />
-                      )}
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs">Início Contrato</Label>
-                      <Input
-                        type="date"
-                        value={updateContratoInicio}
-                        onChange={(e) => setUpdateContratoInicio(e.target.value)}
-                        className="h-9"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs">Fim Contrato</Label>
-                      <Input
-                        type="date"
-                        value={updateContratoFim}
-                        className="h-9 bg-muted"
-                        disabled
-                      />
-                    </div>
-                  </div>
-
-                  <Separator />
-
-                  {/* Energy fields for existing CPE */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    <div className="space-y-1">
-                      <Label className="text-xs">Consumo Anual (kWh)</Label>
-                      <Input
-                        type="number"
-                        step="1"
-                        min="0"
-                        value={updateConsumoAnual}
-                        onChange={(e) => setUpdateConsumoAnual(e.target.value)}
-                        className="h-8"
-                        placeholder="15000"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs">Duração (anos)</Label>
-                      <Input
-                        type="number"
-                        min="1"
-                        max="10"
-                        value={updateDuracaoContrato}
-                        onChange={(e) => setUpdateDuracaoContrato(e.target.value)}
-                        className="h-8"
-                        placeholder="2"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs">DBL (€/MWh)</Label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={updateDbl}
-                        onChange={(e) => setUpdateDbl(e.target.value)}
-                        className="h-8"
-                        placeholder="5.50"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs flex items-center gap-1">
-                        <Calculator className="h-3 w-3" />
-                        Margem (€)
-                      </Label>
-                      <Input
-                        value={updateMargem}
-                        className="h-8 bg-muted font-medium"
-                        disabled
-                        placeholder="Auto"
-                      />
-                    </div>
-                  </div>
-
+            {selectedExistingCpe && (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <div className="space-y-1">
-                    <Label className="text-xs">Comissão (€)</Label>
+                    <Label className="text-xs">Novo Comercializador</Label>
+                    <Select value={updateComercializador} onValueChange={setUpdateComercializador}>
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="Manter atual..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="keep_current">Manter atual</SelectItem>
+                        {comercializadorOptions.map((c) => (
+                          <SelectItem key={c} value={c}>{c}</SelectItem>
+                        ))}
+                        <SelectItem value="other">Outro...</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {updateComercializador === 'other' && (
+                      <Input
+                        placeholder="Comercializador..."
+                        value={updateCustomComercializador}
+                        onChange={(e) => setUpdateCustomComercializador(e.target.value)}
+                        className="h-8 mt-1"
+                      />
+                    )}
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Início Contrato</Label>
+                    <Input
+                      type="date"
+                      value={updateContratoInicio}
+                      onChange={(e) => setUpdateContratoInicio(e.target.value)}
+                      className="h-9"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Fim Contrato</Label>
+                    <Input
+                      type="date"
+                      value={updateContratoFim}
+                      className="h-9 bg-muted"
+                      disabled
+                    />
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Energy fields */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Consumo Anual (kWh)</Label>
+                    <Input
+                      type="number"
+                      step="1"
+                      min="0"
+                      value={updateConsumoAnual}
+                      onChange={(e) => setUpdateConsumoAnual(e.target.value)}
+                      className="h-8"
+                      placeholder="15000"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Duração (anos)</Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      max="10"
+                      value={updateDuracaoContrato}
+                      onChange={(e) => setUpdateDuracaoContrato(e.target.value)}
+                      className="h-8"
+                      placeholder="2"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">DBL (€/MWh)</Label>
                     <Input
                       type="number"
                       step="0.01"
                       min="0"
-                      value={updateComissao}
-                      onChange={(e) => setUpdateComissao(e.target.value)}
-                      className="h-8 w-full sm:w-1/3"
-                      placeholder="150"
+                      value={updateDbl}
+                      onChange={(e) => setUpdateDbl(e.target.value)}
+                      className="h-8"
+                      placeholder="5.50"
                     />
                   </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs flex items-center gap-1">
+                      <Calculator className="h-3 w-3" />
+                      Margem (€)
+                    </Label>
+                    <Input
+                      value={updateMargem}
+                      className="h-8 bg-muted font-medium"
+                      disabled
+                      placeholder="Auto"
+                    />
+                  </div>
+                </div>
 
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={handleAddExistingCpe}
-                    disabled={!canAddExisting}
-                    className="w-full"
-                  >
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    Adicionar Renovação
-                  </Button>
-                </>
-              )}
-            </>
-          )}
-        </TabsContent>
-      </Tabs>
+                <div className="space-y-1">
+                  <Label className="text-xs">Comissão (€)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={updateComissao}
+                    onChange={(e) => setUpdateComissao(e.target.value)}
+                    className="h-8 w-full sm:w-1/3"
+                    placeholder="150"
+                  />
+                </div>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAddExistingCpe}
+                  disabled={!canAddExisting}
+                  className="w-full"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Adicionar à Proposta
+                </Button>
+              </>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }
