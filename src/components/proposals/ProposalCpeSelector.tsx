@@ -427,7 +427,7 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
           </TabsTrigger>
           <TabsTrigger value="existing" className="flex items-center gap-2" disabled={!clientId}>
             <RefreshCw className="h-3 w-3" />
-            Renovar Existente
+            Selecionar Existente
           </TabsTrigger>
         </TabsList>
 
