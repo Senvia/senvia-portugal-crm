@@ -146,15 +146,11 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
     return Math.max(0, subtotal - product.discount_value);
   };
 
-  // Calcular total baseado nos CPEs (soma das margens + comissões) para energia
+  // Calcular total baseado nos CPEs (soma apenas das margens) para energia
   const totalValue = useMemo(() => {
     if (isTelecom) {
       if (proposalType === 'energia') {
-        return proposalCpes.reduce((sum, cpe) => {
-          const margem = parseFloat(cpe.margem) || 0;
-          const comissao = parseFloat(cpe.comissao) || 0;
-          return sum + margem + comissao;
-        }, 0);
+        return proposalCpes.reduce((sum, cpe) => sum + (parseFloat(cpe.margem) || 0), 0);
       }
       // Para serviços telecom, usar comissão
       return parseFloat(servicosComissao) || 0;
@@ -163,6 +159,14 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
     const productsTotal = selectedProducts.reduce((sum, p) => sum + getProductTotal(p), 0);
     return productsTotal + (parseFloat(manualValue) || 0);
   }, [isTelecom, proposalType, proposalCpes, servicosComissao, selectedProducts, manualValue]);
+
+  // Calcular total de comissão dos CPEs (telecom apenas)
+  const totalComissao = useMemo(() => {
+    if (proposalType === 'energia') {
+      return proposalCpes.reduce((sum, cpe) => sum + (parseFloat(cpe.comissao) || 0), 0);
+    }
+    return parseFloat(servicosComissao) || 0;
+  }, [proposalType, proposalCpes, servicosComissao]);
 
   const handleClientCreated = (newClientId: string) => {
     setSelectedClientId(newClientId);
@@ -496,15 +500,37 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
                 </div>
               )}
 
+              {/* Summary - Apenas telecom energia */}
+              {isTelecom && proposalType === 'energia' && proposalCpes.length > 0 && (
+                <div className="p-3 rounded-lg bg-muted text-sm space-y-1">
+                  <div className="flex justify-between">
+                    <span>CPE/CUI adicionados:</span>
+                    <span className="font-medium">{proposalCpes.length}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Margem Total:</span>
+                    <span className="font-medium text-primary">
+                      {formatCurrency(totalValue)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Comissão Total:</span>
+                    <span className="font-medium">
+                      {formatCurrency(totalComissao)}
+                    </span>
+                  </div>
+                </div>
+              )}
+
               {/* Total calculado */}
               <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
                 <div className="flex items-center justify-between">
                   <span className="font-medium text-sm">Total da Proposta</span>
                   <span className="text-lg font-bold text-primary">{formatCurrency(totalValue)}</span>
                 </div>
-                {proposalType === 'energia' && proposalCpes.length > 0 && (
+                {isTelecom && proposalType === 'energia' && proposalCpes.length > 0 && (
                   <p className="text-xs text-muted-foreground mt-1">
-                    Soma das margens e comissões de {proposalCpes.length} CPE(s)
+                    Soma das margens de {proposalCpes.length} CPE(s)
                   </p>
                 )}
               </div>
