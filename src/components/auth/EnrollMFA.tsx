@@ -32,6 +32,7 @@ export function EnrollMFA({ onSuccess, onCancel }: EnrollMFAProps) {
       const { data, error } = await supabase.auth.mfa.enroll({
         factorType: 'totp',
         friendlyName: 'Authenticator App',
+        issuer: 'Senvia OS',
       });
 
       if (error) throw error;
