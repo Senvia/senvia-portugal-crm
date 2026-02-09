@@ -1,44 +1,28 @@
 
 
-## Corrigir Geração do QR Code MFA
+## Alterar Nome no Authenticator App
 
 ### Problema
 
-Ao clicar em "Ativar 2FA", o sistema tenta criar um fator com o nome "Authenticator App", mas já existe um fator com esse nome (de uma tentativa anterior que não foi completada). O servidor rejeita com erro `mfa_factor_name_conflict`.
+Quando digitalizas o QR Code, o Microsoft Authenticator mostra o nome do dominio do projeto (ex: `senvia-portugal-crm.lovable.app`) como identificador. Isso acontece porque o Supabase usa o URL do projeto como "issuer" por defeito no TOTP.
 
-### Solução
+### Solucao
 
-Alterar o `handleEnroll` no ficheiro `src/components/auth/EnrollMFA.tsx` para:
+Adicionar o parametro `issuer` na chamada `supabase.auth.mfa.enroll()` para personalizar o nome que aparece na app de autenticacao.
 
-1. **Antes de criar um novo fator**, listar os fatores existentes com `supabase.auth.mfa.listFactors()`
-2. **Remover fatores TOTP não verificados** (status `unverified`) usando `supabase.auth.mfa.unenroll()`
-3. **Depois sim, criar o novo fator** normalmente
+### Ficheiro a editar
 
-### Secao Tecnica
-
-**Ficheiro a editar:** `src/components/auth/EnrollMFA.tsx`
-
-Logica atualizada do `handleEnroll`:
+**`src/components/auth/EnrollMFA.tsx`** - Adicionar `issuer: 'Senvia OS'` ao enroll:
 
 ```typescript
-const handleEnroll = async () => {
-  setIsEnrolling(true);
-  try {
-    // 1. Limpar fatores nao verificados
-    const { data: factors } = await supabase.auth.mfa.listFactors();
-    const unverifiedFactors = factors?.totp?.filter(f => f.status === 'unverified') || [];
-    for (const factor of unverifiedFactors) {
-      await supabase.auth.mfa.unenroll({ factorId: factor.id });
-    }
-
-    // 2. Criar novo fator
-    const { data, error } = await supabase.auth.mfa.enroll({
-      factorType: 'totp',
-      friendlyName: 'Authenticator App',
-    });
-    // ... resto igual
-  }
-};
+const { data, error } = await supabase.auth.mfa.enroll({
+  factorType: 'totp',
+  friendlyName: 'Authenticator App',
+  issuer: 'Senvia OS',
+});
 ```
 
-**Total: 1 ficheiro editado, ~10 linhas adicionadas**
+Assim, no Microsoft Authenticator vai aparecer **"Senvia OS"** em vez do dominio.
+
+**Total: 1 ficheiro, 1 linha adicionada**
+
