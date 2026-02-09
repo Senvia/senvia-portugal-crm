@@ -16,6 +16,7 @@ import { PAYMENT_METHOD_LABELS } from "@/types/sales";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { DateRange } from "react-day-picker";
 import { InvoicesContent } from "@/components/finance/InvoicesContent";
+import InternalRequests from "@/pages/finance/InternalRequests";
 
 export default function Finance() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
@@ -47,6 +48,7 @@ export default function Finance() {
           <TabsList>
             <TabsTrigger value="resumo">Resumo</TabsTrigger>
             <TabsTrigger value="faturas">Faturas</TabsTrigger>
+            <TabsTrigger value="outros">Outros</TabsTrigger>
           </TabsList>
 
           <TabsContent value="resumo" className="space-y-6 mt-0">
@@ -274,6 +276,10 @@ export default function Finance() {
 
           <TabsContent value="faturas" className="mt-0">
             <InvoicesContent />
+          </TabsContent>
+
+          <TabsContent value="outros" className="mt-0">
+            <InternalRequests />
           </TabsContent>
         </Tabs>
       </div>
