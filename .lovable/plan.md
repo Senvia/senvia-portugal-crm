@@ -1,246 +1,183 @@
 
 
-## Sistema de Pedidos Internos ("Outros")
+## Autenticacao Duplo Fator (2FA/MFA) com TOTP
 
-Nova funcionalidade para comerciais submeterem documentos que precisam de aprovacao e pagamento por parte de um gestor/admin.
+Implementar autenticacao de dois fatores usando TOTP (Time-based One-Time Password), compativel com Microsoft Authenticator, Google Authenticator, Authy, e qualquer app TOTP.
 
 ---
 
-### Fluxo do Sistema
+### Como Funciona
 
 ```text
-┌─────────────────────────────────────────────────────────────────────────┐
-│                           FLUXO DE PEDIDOS                              │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                         │
-│  COMERCIAL                      APROVADOR                    COMERCIAL  │
-│  ─────────                      ─────────                    ─────────  │
-│                                                                         │
-│  1. Submete pedido    ───►   2. Ve na lista      ───►   4. Recebe       │
-│     (despesa, ferias,           de pendentes            notificacao     │
-│     fatura)                                              "Pago" ou      │
-│                              3. Aprova/Rejeita          "Rejeitado"     │
-│     - Upload ficheiro           + Regista pagamento                     │
-│     - Valor                                                             │
-│     - Tipo                                                              │
-│     - Descricao                                                         │
-│                                                                         │
-└─────────────────────────────────────────────────────────────────────────┘
+REGISTO DO 2FA (uma vez):
+  Utilizador → Definicoes → Ativar 2FA → QR Code aparece
+  → Digitaliza com Microsoft Authenticator → Insere codigo → 2FA ativo
+
+LOGIN COM 2FA (cada vez):
+  Email + Password + Codigo Empresa → OK
+  → Ecra de verificacao → Insere codigo de 6 digitos do Authenticator → Acesso
 ```
 
 ---
 
-### Tipos de Pedido
-
-| Tipo | Descricao | Campos Especificos |
-|------|-----------|-------------------|
-| `expense` | Despesas pessoais (combustivel, refeicoes) | Valor, Data, Comprovativo |
-| `vacation` | Mapas de ferias / Ausencias | Ficheiro Excel/PDF, Periodo |
-| `invoice` | Faturas de fornecedores | Valor, Fornecedor, Ficheiro |
-
----
-
-### Estados do Pedido
-
-| Estado | Cor | Significado |
-|--------|-----|-------------|
-| `pending` | Amarelo | Aguarda aprovacao |
-| `approved` | Azul | Aprovado, aguarda pagamento |
-| `paid` | Verde | Pago (concluido) |
-| `rejected` | Vermelho | Rejeitado |
-
----
-
-### Alteracoes Necessarias
-
-#### 1. Base de Dados (nova tabela)
-
-```sql
-CREATE TABLE internal_requests (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  organization_id UUID NOT NULL REFERENCES organizations(id),
-  
-  -- Quem submeteu
-  submitted_by UUID NOT NULL REFERENCES auth.users(id),
-  submitted_at TIMESTAMPTZ DEFAULT now(),
-  
-  -- Tipo e detalhes
-  request_type TEXT NOT NULL CHECK (request_type IN ('expense', 'vacation', 'invoice')),
-  title TEXT NOT NULL,
-  description TEXT,
-  amount NUMERIC(12,2), -- Null para ferias
-  
-  -- Ficheiro anexo
-  file_url TEXT,
-  
-  -- Datas relevantes
-  expense_date DATE,
-  period_start DATE,
-  period_end DATE,
-  
-  -- Estado e aprovacao
-  status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'paid', 'rejected')),
-  reviewed_by UUID REFERENCES auth.users(id),
-  reviewed_at TIMESTAMPTZ,
-  review_notes TEXT,
-  
-  -- Pagamento
-  paid_at TIMESTAMPTZ,
-  payment_reference TEXT,
-  
-  created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now()
-);
-
--- RLS: Comerciais veem os seus, Admins veem todos
-```
-
-#### 2. Storage Bucket
-
-Criar bucket `internal-requests` para guardar ficheiros anexos (PDFs, Excel, etc.)
-
-#### 3. Ficheiros a Criar
+### Ficheiros a Criar
 
 | Ficheiro | Descricao |
 |----------|-----------|
-| `src/pages/finance/InternalRequests.tsx` | Pagina principal com lista de pedidos |
-| `src/components/finance/SubmitRequestModal.tsx` | Modal para comercial submeter pedido |
-| `src/components/finance/ReviewRequestModal.tsx` | Modal para admin aprovar/rejeitar/pagar |
-| `src/components/finance/RequestsTable.tsx` | Tabela de pedidos com filtros |
-| `src/hooks/useInternalRequests.ts` | Hook para CRUD de pedidos |
-| `src/types/internal-requests.ts` | Tipos TypeScript |
+| `src/components/auth/EnrollMFA.tsx` | Componente para ativar 2FA (mostra QR Code + verificacao) |
+| `src/components/auth/ChallengeMFA.tsx` | Ecra pos-login para inserir codigo TOTP |
+| `src/components/settings/SecuritySettings.tsx` | Seccao nas Definicoes para gerir 2FA (ativar/desativar) |
 
-#### 4. Alteracoes em Ficheiros Existentes
+### Ficheiros a Editar
 
 | Ficheiro | Alteracao |
 |----------|-----------|
-| `src/pages/Finance.tsx` | Adicionar tab "Outros" |
-| `src/App.tsx` | Adicionar rota `/financeiro/outros` |
+| `src/pages/Login.tsx` | Apos login com sucesso, verificar se o user tem MFA ativo e redirecionar para o ecra de challenge |
+| `src/contexts/AuthContext.tsx` | Adicionar verificacao do nivel de autenticacao (aal1 vs aal2) |
+| `src/components/auth/ProtectedRoute.tsx` | Verificar se o user tem aal2 quando MFA esta ativo, senao redirecionar para challenge |
+| `src/pages/Settings.tsx` | Adicionar tab/seccao "Seguranca" com opcao de ativar/desativar 2FA |
+
+---
+
+### Detalhes Tecnicos
+
+#### 1. Ativar 2FA (EnrollMFA)
+
+Usa a API `supabase.auth.mfa.enroll()` para gerar um QR Code TOTP:
+
+```typescript
+// Gerar QR Code
+const { data, error } = await supabase.auth.mfa.enroll({
+  factorType: 'totp',
+  friendlyName: 'Microsoft Authenticator'
+});
+// data.totp.qr_code = SVG do QR Code
+// data.id = factorId
+
+// Verificar apos digitalizar
+const challenge = await supabase.auth.mfa.challenge({ factorId });
+await supabase.auth.mfa.verify({
+  factorId,
+  challengeId: challenge.data.id,
+  code: codigoDoUtilizador // 6 digitos
+});
+```
+
+#### 2. Login com 2FA (ChallengeMFA)
+
+Apos login normal (email + password), o sistema verifica se o user tem fatores MFA ativos:
+
+```typescript
+const { data } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+// data.currentLevel = 'aal1' (sem MFA) ou 'aal2' (com MFA verificado)
+// data.nextLevel = 'aal2' se MFA esta ativo mas ainda nao verificado
+
+if (data.nextLevel === 'aal2' && data.currentLevel === 'aal1') {
+  // Mostrar ecra de challenge - pedir codigo
+}
+```
+
+#### 3. ProtectedRoute atualizado
+
+Verificar o nivel de autenticacao antes de permitir acesso:
+
+```typescript
+// Se o user tem MFA ativo mas so esta em aal1, redirecionar para challenge
+const assuranceLevel = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+if (assuranceLevel.data?.nextLevel === 'aal2' && 
+    assuranceLevel.data?.currentLevel !== 'aal2') {
+  return <ChallengeMFA />;
+}
+```
+
+#### 4. Desativar 2FA
+
+Nas definicoes, o user pode remover o fator:
+
+```typescript
+const { data } = await supabase.auth.mfa.listFactors();
+await supabase.auth.mfa.unenroll({ factorId: data.totp[0].id });
+```
 
 ---
 
 ### Interface do Utilizador
 
-#### Vista do Comercial
+#### Ecra de Ativacao (Definicoes)
 
 ```text
 ┌─────────────────────────────────────────────────┐
-│ Outros (Pedidos Internos)                       │
-│ ───────────────────────                         │
-│                        [+ Novo Pedido]          │
+│ Seguranca                                       │
 ├─────────────────────────────────────────────────┤
-│ Filtros: [Tipo ▼] [Estado ▼] [Periodo]          │
-├─────────────────────────────────────────────────┤
-│ Data    │ Tipo     │ Titulo     │ Valor  │ Est. │
-│ 05/02   │ Despesa  │ Combustiv. │ €45    │ 🟡   │
-│ 01/02   │ Fatura   │ Fornec. X  │ €230   │ 🟢   │
-│ 28/01   │ Ferias   │ Mapa Fev   │ -      │ 🔵   │
+│                                                 │
+│ Autenticacao de Dois Fatores (2FA)              │
+│ Estado: Desativado                              │
+│                                                 │
+│ [Ativar 2FA]                                    │
+│                                                 │
+│ ── Apos clicar ──                               │
+│                                                 │
+│ 1. Abra o Microsoft Authenticator               │
+│ 2. Digitalize este QR Code:                     │
+│                                                 │
+│    ┌─────────────┐                              │
+│    │  [QR CODE]  │                              │
+│    └─────────────┘                              │
+│                                                 │
+│ 3. Insira o codigo de 6 digitos:                │
+│    [______]                                     │
+│                                                 │
+│    [Cancelar]  [Confirmar]                      │
 └─────────────────────────────────────────────────┘
 ```
 
-#### Modal de Submissao
+#### Ecra de Challenge (Login)
 
 ```text
 ┌─────────────────────────────────────────────────┐
-│ Novo Pedido                               [X]   │
-├─────────────────────────────────────────────────┤
-│ Tipo de Pedido                                  │
-│ ┌───────────┐ ┌───────────┐ ┌───────────┐       │
-│ │ 💰        │ │ 📅        │ │ 📄        │       │
-│ │ Despesa   │ │ Ferias    │ │ Fatura    │       │
-│ └───────────┘ └───────────┘ └───────────┘       │
+│           [Logo SENVIA]                         │
 │                                                 │
-│ Titulo *                                        │
-│ [________________________________]              │
+│     Verificacao de Dois Fatores                 │
 │                                                 │
-│ Valor (€)           Data                        │
-│ [________]          [__/__/____]                │
+│  Abra o Microsoft Authenticator e               │
+│  insira o codigo de 6 digitos                   │
 │                                                 │
-│ Descricao                                       │
-│ [________________________________]              │
+│         [_] [_] [_] [_] [_] [_]                 │
 │                                                 │
-│ Anexo (PDF, Excel, Imagem)                      │
-│ ┌───────────────────────────────────────┐       │
-│ │   📎 Arraste ou clique para anexar    │       │
-│ └───────────────────────────────────────┘       │
+│              [Verificar]                        │
 │                                                 │
-│              [Cancelar]  [Submeter]             │
+│         Nao consegue aceder?                    │
+│         Contacte o administrador                │
 └─────────────────────────────────────────────────┘
 ```
 
-#### Vista do Aprovador (Admin)
+---
 
-- Ve todos os pedidos
-- Badge com contagem de pendentes
-- Botoes: Aprovar, Rejeitar, Marcar como Pago
-- Campo para notas de revisao e referencia de pagamento
+### Compatibilidade
+
+O TOTP e um padrao aberto (RFC 6238), funciona com:
+- Microsoft Authenticator
+- Google Authenticator
+- Authy
+- 1Password
+- Bitwarden
+- Qualquer app TOTP
 
 ---
 
-### Notificacoes
-
-| Evento | Destinatario | Mensagem |
-|--------|--------------|----------|
-| Novo pedido | Admins | "Novo pedido de [Nome]: [Titulo]" |
-| Aprovado | Comercial | "O seu pedido foi aprovado" |
-| Pago | Comercial | "O seu pedido foi pago" |
-| Rejeitado | Comercial | "O seu pedido foi rejeitado: [Motivo]" |
-
-As notificacoes utilizarao o sistema de push notifications ja existente no projeto.
-
----
-
-### Secao Tecnica
-
-#### Estrutura de Tipos
-
-```typescript
-interface InternalRequest {
-  id: string;
-  organization_id: string;
-  submitted_by: string;
-  submitted_at: string;
-  request_type: 'expense' | 'vacation' | 'invoice';
-  title: string;
-  description: string | null;
-  amount: number | null;
-  file_url: string | null;
-  expense_date: string | null;
-  period_start: string | null;
-  period_end: string | null;
-  status: 'pending' | 'approved' | 'paid' | 'rejected';
-  reviewed_by: string | null;
-  reviewed_at: string | null;
-  review_notes: string | null;
-  paid_at: string | null;
-  payment_reference: string | null;
-  // Joins
-  submitter?: { full_name: string; avatar_url: string | null };
-  reviewer?: { full_name: string };
-}
-```
-
-#### Politicas RLS
-
-- SELECT: Comerciais veem apenas os seus pedidos, Admins veem todos da organizacao
-- INSERT: Qualquer membro autenticado pode submeter
-- UPDATE: Apenas Admins podem aprovar/rejeitar/pagar
-
----
-
-### Resumo de Ficheiros
+### Resumo
 
 | Acao | Ficheiro |
 |------|----------|
-| Criar | `src/types/internal-requests.ts` |
-| Criar | `src/hooks/useInternalRequests.ts` |
-| Criar | `src/pages/finance/InternalRequests.tsx` |
-| Criar | `src/components/finance/SubmitRequestModal.tsx` |
-| Criar | `src/components/finance/ReviewRequestModal.tsx` |
-| Criar | `src/components/finance/RequestsTable.tsx` |
-| Editar | `src/pages/Finance.tsx` (adicionar tab) |
-| Editar | `src/App.tsx` (adicionar rota) |
-| Migrar | Nova tabela + bucket + RLS |
+| Criar | `src/components/auth/EnrollMFA.tsx` |
+| Criar | `src/components/auth/ChallengeMFA.tsx` |
+| Criar | `src/components/settings/SecuritySettings.tsx` |
+| Editar | `src/pages/Login.tsx` |
+| Editar | `src/contexts/AuthContext.tsx` |
+| Editar | `src/components/auth/ProtectedRoute.tsx` |
+| Editar | `src/pages/Settings.tsx` |
 
-**Total: 6 ficheiros novos, 2 editados, 1 migracao SQL**
+**Total: 3 ficheiros novos, 4 editados, 0 migracoes SQL**
+
+Nao e necessaria nenhuma alteracao na base de dados - o MFA e gerido internamente pelo sistema de autenticacao do Lovable Cloud.
 
