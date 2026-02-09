@@ -938,6 +938,83 @@ export type Database = {
           },
         ]
       }
+      internal_requests: {
+        Row: {
+          amount: number | null
+          created_at: string | null
+          description: string | null
+          expense_date: string | null
+          file_url: string | null
+          id: string
+          organization_id: string
+          paid_at: string | null
+          payment_reference: string | null
+          period_end: string | null
+          period_start: string | null
+          request_type: string
+          review_notes: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string | null
+          submitted_at: string | null
+          submitted_by: string
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          amount?: number | null
+          created_at?: string | null
+          description?: string | null
+          expense_date?: string | null
+          file_url?: string | null
+          id?: string
+          organization_id: string
+          paid_at?: string | null
+          payment_reference?: string | null
+          period_end?: string | null
+          period_start?: string | null
+          request_type: string
+          review_notes?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string | null
+          submitted_at?: string | null
+          submitted_by: string
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          amount?: number | null
+          created_at?: string | null
+          description?: string | null
+          expense_date?: string | null
+          file_url?: string | null
+          id?: string
+          organization_id?: string
+          paid_at?: string | null
+          payment_reference?: string | null
+          period_end?: string | null
+          period_start?: string | null
+          request_type?: string
+          review_notes?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string | null
+          submitted_at?: string | null
+          submitted_by?: string
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "internal_requests_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inventory_movements: {
         Row: {
           created_at: string | null
