@@ -1,28 +1,31 @@
 
 
-## Alterar Nome no Authenticator App
+## Corrigir Visibilidade dos Digitos no Input OTP
 
 ### Problema
 
-Quando digitalizas o QR Code, o Microsoft Authenticator mostra o nome do dominio do projeto (ex: `senvia-portugal-crm.lovable.app`) como identificador. Isso acontece porque o Supabase usa o URL do projeto como "issuer" por defeito no TOTP.
+Os numeros digitados no campo de verificacao 2FA nao sao visiveis. O componente `InputOTPSlot` nao tem cor de texto nem cor de fundo explicitas, o que faz com que os caracteres fiquem invisiveis no dark mode.
 
 ### Solucao
 
-Adicionar o parametro `issuer` na chamada `supabase.auth.mfa.enroll()` para personalizar o nome que aparece na app de autenticacao.
+Editar `src/components/ui/input-otp.tsx` para adicionar classes de cor ao `InputOTPSlot`:
+
+- `text-foreground` - garante que os digitos sao visiveis
+- `bg-background` - garante fundo solido nos slots
 
 ### Ficheiro a editar
 
-**`src/components/auth/EnrollMFA.tsx`** - Adicionar `issuer: 'Senvia OS'` ao enroll:
+**`src/components/ui/input-otp.tsx`** - Linha 35, adicionar classes ao slot:
 
-```typescript
-const { data, error } = await supabase.auth.mfa.enroll({
-  factorType: 'totp',
-  friendlyName: 'Authenticator App',
-  issuer: 'Senvia OS',
-});
+De:
+```
+"relative flex h-10 w-10 items-center justify-center border-y border-r border-input text-sm transition-all first:rounded-l-md first:border-l last:rounded-r-md"
 ```
 
-Assim, no Microsoft Authenticator vai aparecer **"Senvia OS"** em vez do dominio.
+Para:
+```
+"relative flex h-10 w-10 items-center justify-center border-y border-r border-input text-sm text-foreground bg-background transition-all first:rounded-l-md first:border-l last:rounded-r-md"
+```
 
-**Total: 1 ficheiro, 1 linha adicionada**
+**Total: 1 ficheiro, 1 linha alterada**
 
