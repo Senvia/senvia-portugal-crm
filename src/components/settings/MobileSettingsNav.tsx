@@ -1,7 +1,7 @@
-import { ChevronRight, Building, Users, Palette, Link2, Package, GitBranch, LayoutGrid, UserCheck, Zap, Receipt } from "lucide-react";
+import { ChevronRight, Building, Users, Palette, Link2, Package, GitBranch, LayoutGrid, UserCheck, Zap, Receipt, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type SettingsSection = "general" | "team" | "pipeline" | "modules" | "form" | "products" | "clients" | "integrations" | "alerts" | "expenses";
+export type SettingsSection = "general" | "security" | "team" | "pipeline" | "modules" | "form" | "products" | "clients" | "integrations" | "alerts" | "expenses";
 
 interface MobileSettingsNavProps {
   activeSection: SettingsSection | null;
@@ -12,6 +12,7 @@ interface MobileSettingsNavProps {
 
 const sections = [
   { id: "general" as const, label: "Geral", icon: Building, description: "Organização e conta" },
+  { id: "security" as const, label: "Segurança", icon: Shield, description: "Autenticação de dois fatores" },
   { id: "team" as const, label: "Equipa", icon: Users, description: "Gerir membros", requiresTeam: true },
   { id: "pipeline" as const, label: "Pipeline", icon: GitBranch, description: "Etapas de venda", requiresIntegrations: true },
   { id: "modules" as const, label: "Módulos", icon: LayoutGrid, description: "Funcionalidades ativas", requiresIntegrations: true },

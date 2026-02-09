@@ -2,13 +2,14 @@ import { useState, useEffect } from 'react';
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUpdateOrganization, useTestWebhook } from '@/hooks/useOrganization';
+import { SecuritySettings } from '@/components/settings/SecuritySettings';
 import { useUpdateProfile, useChangePassword } from '@/hooks/useProfile';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
-import { Building, Users, Palette, Link2, ArrowLeft, Package, GitBranch, LayoutGrid, UserCheck, Zap, Receipt } from "lucide-react";
+import { Building, Users, Palette, Link2, ArrowLeft, Package, GitBranch, LayoutGrid, UserCheck, Zap, Receipt, Shield } from "lucide-react";
 import { PipelineEditor } from '@/components/settings/PipelineEditor';
 import { ProductsTab } from '@/components/settings/ProductsTab';
 import { ModulesTab } from '@/components/settings/ModulesTab';
@@ -205,6 +206,7 @@ export default function Settings() {
   // Section titles for mobile header
   const sectionTitles: Record<SettingsSection, string> = {
     general: "Geral",
+    security: "Segurança",
     team: "Equipa",
     pipeline: "Pipeline",
     modules: "Módulos",
@@ -271,6 +273,7 @@ export default function Settings() {
                   pushNotifications={pushNotifications}
                 />
               )}
+              {mobileSection === "security" && <SecuritySettings />}
               {mobileSection === "team" && canManageTeam && <TeamTab />}
               {mobileSection === "pipeline" && canManageIntegrations && <PipelineEditor />}
               {mobileSection === "modules" && canManageIntegrations && <ModulesTab />}
@@ -369,22 +372,30 @@ export default function Settings() {
                 </TabsList>
 
                 {/* Segunda linha de tabs */}
-                {canManageIntegrations && (
-                  <TabsList>
+                <TabsList>
+                  <TabsTrigger value="security" className="gap-2">
+                    <Shield className="h-4 w-4" />
+                    Segurança
+                  </TabsTrigger>
+                  {canManageIntegrations && (
                     <TabsTrigger value="alerts" className="gap-2">
                       <Zap className="h-4 w-4" />
                       Alertas
                     </TabsTrigger>
+                  )}
+                  {canManageIntegrations && (
                     <TabsTrigger value="expenses" className="gap-2">
                       <Receipt className="h-4 w-4" />
                       Despesas
                     </TabsTrigger>
+                  )}
+                  {canManageIntegrations && (
                     <TabsTrigger value="integrations" className="gap-2">
                       <Link2 className="h-4 w-4" />
                       Integrações
                     </TabsTrigger>
-                  </TabsList>
-                )}
+                  )}
+                </TabsList>
               </div>
 
               <TabsContent value="general" className="space-y-6">
@@ -410,6 +421,10 @@ export default function Settings() {
                   changePasswordIsPending={changePassword.isPending}
                   pushNotifications={pushNotifications}
                 />
+              </TabsContent>
+
+              <TabsContent value="security" className="max-w-4xl">
+                <SecuritySettings />
               </TabsContent>
 
               {canManageTeam && (

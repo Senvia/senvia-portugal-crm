@@ -5,6 +5,8 @@ import type { AppRole } from '@/types';
 
 const ACTIVE_ORG_KEY = 'senvia_active_organization_id';
 
+type MFAStatus = 'none' | 'pending' | 'verified';
+
 interface Profile {
   id: string;
   organization_id: string | null;
@@ -46,6 +48,8 @@ interface AuthContextType {
   isLoading: boolean;
   isSuperAdmin: boolean;
   needsOrgSelection: boolean;
+  mfaStatus: MFAStatus;
+  completeMfaChallenge: () => void;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
@@ -66,8 +70,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingUserData, setIsLoadingUserData] = useState(false);
   const [needsOrgSelection, setNeedsOrgSelection] = useState(false);
+  const [mfaStatus, setMfaStatus] = useState<MFAStatus>('none');
 
   const isSuperAdmin = roles.includes('super_admin');
+
+  // Check MFA assurance level
+  const checkMFAStatus = useCallback(async () => {
+    try {
+      const { data, error } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      if (error || !data) {
+        setMfaStatus('none');
+        return;
+      }
+      if (data.nextLevel === 'aal2' && data.currentLevel !== 'aal2') {
+        setMfaStatus('pending');
+      } else if (data.currentLevel === 'aal2') {
+        setMfaStatus('verified');
+      } else {
+        setMfaStatus('none');
+      }
+    } catch {
+      setMfaStatus('none');
+    }
+  }, []);
+
+  const completeMfaChallenge = useCallback(() => {
+    setMfaStatus('verified');
+  }, []);
 
   // Load organization by ID
   const loadOrganization = useCallback(async (orgId: string) => {
@@ -155,19 +184,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (user?.id) {
       fetchUserData(user.id);
+      checkMFAStatus();
     } else {
       setProfile(null);
       setOrganization(null);
       setOrganizations([]);
       setRoles([]);
       setNeedsOrgSelection(false);
+      setMfaStatus('none');
       setIsLoadingUserData(false);
     }
 
     return () => {
       cancelled = true;
     };
-  }, [user?.id, loadOrganization]);
+  }, [user?.id, loadOrganization, checkMFAStatus]);
 
   // Auth state listener
   useEffect(() => {
@@ -301,6 +332,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading: isLoading || isLoadingUserData,
         isSuperAdmin,
         needsOrgSelection,
+        mfaStatus,
+        completeMfaChallenge,
         signIn,
         signUp,
         signOut,
