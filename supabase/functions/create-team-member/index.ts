@@ -217,7 +217,21 @@ serve(async (req) => {
 
     if (roleInsertError) {
       console.error('Error inserting role:', roleInsertError);
-      // Don't fail completely, the user was created
+    }
+
+    // Add to organization_members table
+    const { error: memberError } = await supabaseAdmin
+      .from('organization_members')
+      .upsert({
+        user_id: userId,
+        organization_id: organizationId,
+        role: role,
+        is_active: true,
+        joined_at: new Date().toISOString()
+      }, { onConflict: 'user_id,organization_id' });
+
+    if (memberError) {
+      console.error('Error inserting organization member:', memberError);
     }
 
     console.log(`Successfully added team member: ${email}`);
