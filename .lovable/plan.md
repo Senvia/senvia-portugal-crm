@@ -1,71 +1,91 @@
 
 
-## Corrigir taxa de IVA na emissao de faturas (suporte para isentos)
+## Corrigir emissao de faturas para regime isento (Art. 53.o - M10)
 
-### Problema critico
+### Problema encontrado
 
-O codigo atual **hardcoda IVA a 23%** em todas as faturas. Para organizacoes isentas de IVA, isto gera documentos fiscais incorretos que obrigam a nota de credito.
+Segundo a API do InvoiceXpress, para contas portuguesas com itens isentos de IVA (0%), e obrigatorio enviar o campo `tax_exemption` **ao nivel do documento** (raiz do payload), nao so ao nivel do item. O codigo atual so envia `exemption_reason` no item, mas falta o campo no documento.
 
-### Solucao
+### O que a API InvoiceXpress exige
 
-Adicionar configuracao fiscal na organizacao e usa-la na emissao de faturas.
+Para faturas com IVA isento, o payload deve ter esta estrutura:
 
-### Alteracoes
+```text
+{
+  "invoice": {
+    "date": "10/02/2026",
+    "due_date": "10/02/2026",
+    "tax_exemption": "M10",          <-- CAMPO QUE FALTA (nivel documento)
+    "client": { ... },
+    "items": [
+      {
+        "name": "Servico",
+        "unit_price": 500,
+        "quantity": 1,
+        "tax": {
+          "name": "Isento",
+          "value": 0
+        }
+      }
+    ]
+  }
+}
+```
 
-**1. Migracao SQL -- nova coluna na tabela `organizations`**
+Sem o campo `tax_exemption` ao nivel do documento, a API rejeita a fatura ou gera um documento invalido.
 
-Adicionar campo `tax_config` (JSONB) com:
-- `tax_name`: nome do imposto no InvoiceXpress (ex: `"IVA23"`, `"Isento"`)
-- `tax_value`: valor percentual (ex: `23`, `0`)
-- `tax_exemption_reason`: motivo de isencao AT (ex: `"M07 - Artigo 9.º do CIVA"`) -- obrigatorio quando valor = 0
+### Alteracao unica
 
-Valor por defeito: `{"tax_name": "IVA23", "tax_value": 23, "tax_exemption_reason": null}`
+**`supabase/functions/issue-invoice/index.ts`**
 
-**2. `src/components/settings/IntegrationsContent.tsx`**
+Na construcao do `invoicePayload`, quando `taxValue === 0` e existe `tax_exemption_reason` no config, adicionar o campo `tax_exemption` ao nivel do documento:
 
-Na seccao InvoiceXpress (ja existente), adicionar campos:
-- Select com opcoes: "IVA 23%", "IVA 6%", "IVA 13%", "Isento de IVA"
-- Quando "Isento" selecionado, mostrar campo para motivo de isencao (select com opcoes da AT: M01 a M16)
-- Gravar em `organizations.tax_config`
+```text
+// Antes (atual):
+const invoicePayload = {
+  [docKey]: {
+    date: formattedDate,
+    due_date: formattedDate,
+    client: { ... },
+    items: items,
+  },
+}
 
-**3. `supabase/functions/issue-invoice/index.ts`**
+// Depois (corrigido):
+const invoicePayload = {
+  [docKey]: {
+    date: formattedDate,
+    due_date: formattedDate,
+    ...(taxValue === 0 && taxConfig.tax_exemption_reason
+      ? { tax_exemption: taxConfig.tax_exemption_reason }
+      : {}),
+    client: { ... },
+    items: items,
+  },
+}
+```
 
-- Ler `tax_config` da organizacao (ja faz query a tabela organizations)
-- Usar `tax_name` e `tax_value` do config em vez do hardcoded `IVA23`
-- Se `tax_value` = 0 e existe `tax_exemption_reason`, adicionar ao item:
-  ```
-  tax: { name: "Isento", value: 0 },
-  tax_exemption_reason: "M07 - Artigo 9.º do CIVA"
-  ```
-- Se nao ha config, manter fallback IVA 23%
+Isto adiciona `"tax_exemption": "M10"` ao documento quando a organizacao esta configurada como isenta.
 
-**4. Validacao antes de emitir**
+### Validacao do tax_config na tua conta
 
-- Na edge function, se `tax_value` = 0 e `tax_exemption_reason` esta vazio, retornar erro:
-  "Configure o motivo de isencao de IVA nas definicoes antes de emitir faturas."
+No teu caso (Art. 53.o), o `tax_config` guardado na base de dados devera ser:
 
-### Motivos de isencao AT (para o select)
+```text
+{
+  "tax_name": "Isento",
+  "tax_value": 0,
+  "tax_exemption_reason": "M10"
+}
+```
 
-| Codigo | Descricao |
-|---|---|
-| M01 | Artigo 16.o n.o 6 do CIVA |
-| M02 | Artigo 6.o do Decreto-Lei n.o 198/90 |
-| M04 | Isento Artigo 13.o do CIVA |
-| M05 | Isento Artigo 14.o do CIVA |
-| M06 | Isento Artigo 15.o do CIVA |
-| M07 | Isento Artigo 9.o do CIVA |
-| M09 | IVA - nao confere direito a deducao |
-| M10 | IVA - regime de isencao (Art. 53.o) |
-| M11 | Regime particular do tabaco |
-| M12 | Regime da margem de lucro |
-| M13 | Regime de IVA de Caixa |
-| M16 | Isento Artigo 14.o do RITI |
+A interface de configuracao (Definicoes -> Integracoes -> InvoiceXpress) ja suporta estas opcoes. Basta selecionar "Isento de IVA" e "M10 - IVA regime de isencao (Art. 53.o)".
 
-### Resumo de ficheiros
+### Resumo
 
 | Ficheiro | Alteracao |
 |---|---|
-| Migracao SQL | Adicionar coluna `tax_config` JSONB em `organizations` |
-| `IntegrationsContent.tsx` | Campos de configuracao fiscal na seccao InvoiceXpress |
-| `issue-invoice/index.ts` | Ler config fiscal e usar na emissao em vez de IVA23 hardcoded |
+| `supabase/functions/issue-invoice/index.ts` | Adicionar `tax_exemption` ao nivel do documento no payload InvoiceXpress |
+
+Uma unica linha a adicionar. Zero risco de afetar faturas com IVA normal (o campo so e adicionado quando `taxValue === 0`).
 
