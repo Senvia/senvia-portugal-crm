@@ -1010,6 +1010,10 @@ export function CreateSaleModal({
             return summary.remaining;
           })()}
           onAdd={(payment) => setDraftPayments(prev => [...prev, payment])}
+          hideInvoiceReference={
+            (organization?.integrations_enabled as any)?.invoicexpress !== false
+            && !!(organization?.invoicexpress_account_name && organization?.invoicexpress_api_key)
+          }
         />
 
         {/* Footer */}

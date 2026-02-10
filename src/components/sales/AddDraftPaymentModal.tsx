@@ -43,6 +43,7 @@ interface AddDraftPaymentModalProps {
   saleTotal: number;
   remaining: number;
   onAdd: (payment: DraftPayment) => void;
+  hideInvoiceReference?: boolean;
 }
 
 export function AddDraftPaymentModal({
@@ -51,6 +52,7 @@ export function AddDraftPaymentModal({
   saleTotal,
   remaining,
   onAdd,
+  hideInvoiceReference,
 }: AddDraftPaymentModalProps) {
   const [amount, setAmount] = useState("");
   const [paymentDate, setPaymentDate] = useState<Date>(new Date());
@@ -186,17 +188,24 @@ export function AddDraftPaymentModal({
             </RadioGroup>
           </div>
 
-          <div className="space-y-2">
-            <Label className="flex items-center gap-2">
-              <Receipt className="h-4 w-4 text-muted-foreground" />
-              Referência da Fatura
-            </Label>
-            <Input
-              value={invoiceReference}
-              onChange={(e) => setInvoiceReference(e.target.value)}
-              placeholder="FT 2024/0001"
-            />
-          </div>
+          {hideInvoiceReference ? (
+            <p className="text-xs text-muted-foreground bg-muted/50 rounded-md p-3">
+              <Receipt className="h-3.5 w-3.5 inline mr-1.5 -mt-0.5" />
+              A fatura pode ser emitida após criar a venda.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <Receipt className="h-4 w-4 text-muted-foreground" />
+                Referência da Fatura
+              </Label>
+              <Input
+                value={invoiceReference}
+                onChange={(e) => setInvoiceReference(e.target.value)}
+                placeholder="FT 2024/0001"
+              />
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label className="flex items-center gap-2">
