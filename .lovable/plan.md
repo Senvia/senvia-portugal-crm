@@ -1,31 +1,37 @@
 
 
-## Corrigir toast "CPEs atualizados" em propostas nao-telecom
+## Corrigir modal de venda que nao abre ao aceitar proposta
 
 ### Problema
 
-Ao editar uma proposta num nicho generico (nao-telecom), aparece a mensagem "CPEs atualizados" e a atualizacao demora mais do que devia. Isto acontece porque:
-
-1. O estado `proposalType` e inicializado como `'energia'` (linha 61 do `EditProposalModal.tsx`)
-2. No `handleSubmit`, a condicao para atualizar CPEs e apenas `proposalType === 'energia'` (linha 263), sem verificar se e telecom
-3. Resultado: mesmo em nichos genericos, o sistema tenta atualizar CPEs (com array vazio), executa queries desnecessarias na base de dados e mostra o toast errado
+Quando o utilizador muda o status de uma proposta para "Aceite", o `CreateSaleModal` (um Dialog) abre por cima do `ProposalDetailsModal` (outro Dialog). O Radix UI interpreta isto como uma interacao fora do primeiro Dialog e dispara `onOpenChange(false)` no modal pai. Na pagina de Propostas, isso faz `setSelectedProposal(null)`, o que desmonta tudo -- incluindo o modal de venda que acabou de abrir.
 
 ### Solucao
 
-Adicionar a verificacao `isTelecom` a condicao no `handleSubmit` para que CPEs so sejam atualizados em organizacoes telecom.
+Modificar o `onOpenChange` do Dialog pai no `ProposalDetailsModal` para nao fechar enquanto o modal de venda (`showSaleModal`) estiver aberto. Isto impede que o Radix feche o modal pai quando o modal de venda aparece.
 
 ### Detalhes tecnicos
 
-**Ficheiro: `src/components/proposals/EditProposalModal.tsx`**
+**Ficheiro: `src/components/proposals/ProposalDetailsModal.tsx`**
 
-- Linha 263: alterar `if (proposalType === 'energia')` para `if (isTelecom && proposalType === 'energia')`
+Alterar a linha 487 de:
+```tsx
+<Dialog open={open} onOpenChange={onOpenChange}>
+```
+Para:
+```tsx
+<Dialog open={open} onOpenChange={(isOpen) => {
+  if (!isOpen && showSaleModal) return;
+  onOpenChange(isOpen);
+}}>
+```
 
 Isto garante que:
-- Nichos genericos nunca executam a logica de CPEs
-- A atualizacao e mais rapida (sem queries desnecessarias)
-- O toast "CPEs atualizados" nunca aparece fora do contexto telecom
+- Se o utilizador fecha o modal manualmente (clicando no X ou fora), funciona normalmente
+- Se o Radix tenta fechar o modal pai porque o `CreateSaleModal` abriu, o evento e ignorado
+- Depois de criar a venda, o `handleSaleCreated` atualiza o status e o fluxo continua normalmente
 
 | Ficheiro | Alteracao |
 |---|---|
-| `src/components/proposals/EditProposalModal.tsx` | Adicionar `isTelecom &&` na condicao de atualizacao de CPEs (linha 263) |
+| `src/components/proposals/ProposalDetailsModal.tsx` | Proteger `onOpenChange` do Dialog pai contra fecho quando `showSaleModal` esta aberto |
 
