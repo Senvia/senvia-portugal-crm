@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { Trash2, Printer, Mail, Loader2, Router, Zap, Wrench, Pencil, MoreHorizontal, CalendarDays, TrendingUp } from 'lucide-react';
 import {
   DropdownMenu,
@@ -73,6 +75,23 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
   const [editValue, setEditValue] = useState<string>('0');
   const [showSaleModal, setShowSaleModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+
+  // Verificar se existe venda concluída associada
+  const { data: completedSale } = useQuery({
+    queryKey: ['proposal-completed-sale', proposal?.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('sales')
+        .select('id, status')
+        .eq('proposal_id', proposal!.id)
+        .eq('status', 'delivered')
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!proposal?.id,
+  });
+
+  const hasCompletedSale = !!completedSale;
 
   // Sincronizar estado quando proposal muda
   useEffect(() => {
@@ -590,7 +609,7 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
               <Select 
                 value={status} 
                 onValueChange={(v) => handleStatusChange(v as ProposalStatus)}
-                disabled={status === 'accepted'}
+                disabled={hasCompletedSale}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -810,7 +829,7 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
                 <DropdownMenuContent align="end" className="bg-popover">
                   <DropdownMenuItem 
                     onClick={() => setShowEditModal(true)}
-                    disabled={status === 'accepted'}
+                    disabled={hasCompletedSale}
                   >
                     <Pencil className="h-4 w-4 mr-2" />
                     Editar
