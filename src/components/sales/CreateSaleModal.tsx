@@ -59,9 +59,12 @@ import {
   type ProposalType,
   type ModeloServico,
   type PaymentMethod,
+  type SaleStatus,
   PAYMENT_METHOD_LABELS,
   PAYMENT_RECORD_STATUS_LABELS,
   PAYMENT_RECORD_STATUS_COLORS,
+  SALE_STATUS_LABELS,
+  SALE_STATUSES,
 } from "@/types/sales";
 import { calculatePaymentSummary } from "@/hooks/useSalePayments";
 import { AddDraftPaymentModal, type DraftPayment } from "./AddDraftPaymentModal";
@@ -137,6 +140,9 @@ export function CreateSaleModal({
   const [kwp, setKwp] = useState<string>("");
   const [comissao, setComissao] = useState<string>("");
 
+  // Sale status
+  const [saleStatus, setSaleStatus] = useState<SaleStatus>("pending");
+
   // Draft payments state
   const [draftPayments, setDraftPayments] = useState<DraftPayment[]>([]);
   const [showDraftPaymentModal, setShowDraftPaymentModal] = useState(false);
@@ -204,6 +210,7 @@ export function CreateSaleModal({
       }
       
       setSaleDate(new Date());
+      setSaleStatus("pending");
       setItems([]);
       setDiscount("0");
       setDraftPayments([]);
@@ -463,6 +470,7 @@ export function CreateSaleModal({
       const sale = await createSale.mutateAsync({
         client_id: clientId || undefined,
         proposal_id: proposalId || undefined,
+        status: saleStatus,
         total_value: total,
         subtotal: subtotal,
         discount: discountValue,
@@ -643,6 +651,23 @@ export function CreateSaleModal({
                       />
                     </PopoverContent>
                   </Popover>
+                </div>
+
+                {/* Sale Status */}
+                <div className="space-y-2">
+                  <Label>Estado da Venda</Label>
+                  <Select value={saleStatus} onValueChange={(v) => setSaleStatus(v as SaleStatus)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SALE_STATUSES.map(s => (
+                        <SelectItem key={s} value={s}>
+                          {SALE_STATUS_LABELS[s]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             </div>
