@@ -56,6 +56,7 @@ import { SALE_STATUS_LABELS, SALE_STATUS_COLORS, SALE_STATUSES } from "@/types/s
 import { SalePaymentsList } from "./SalePaymentsList";
 import { RecurringSection } from "./RecurringSection";
 import { useIssueInvoice } from "@/hooks/useIssueInvoice";
+import { useSalePayments } from "@/hooks/useSalePayments";
 import { toast } from "sonner";
 
 interface SaleDetailsModalProps {
@@ -76,6 +77,9 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
   const updateSale = useUpdateSale();
   const deleteSale = useDeleteSale();
   const issueInvoice = useIssueInvoice();
+
+  const { data: salePayments = [] } = useSalePayments(sale?.id);
+  const hasPaidPayments = salePayments.some(p => p.status === 'paid');
 
   const hasInvoiceXpress = organization?.integrations_enabled?.invoicexpress !== false
     && !!(organization?.invoicexpress_account_name && organization?.invoicexpress_api_key);
@@ -516,7 +520,7 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
           {/* Actions */}
           <div className="p-4 border-t border-border/50 space-y-3">
             {/* Invoice Section */}
-            {hasInvoiceXpress && sale.status === 'delivered' && organization && (
+            {hasInvoiceXpress && hasPaidPayments && organization && (
               <div>
                 {sale.invoicexpress_id ? (
                   <Badge className="w-full justify-center py-2 bg-green-500/20 text-green-500 border-green-500/30">
