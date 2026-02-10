@@ -260,7 +260,7 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
     });
 
     // Atualizar CPEs (apenas para propostas de energia)
-    if (proposalType === 'energia') {
+    if (isTelecom && proposalType === 'energia') {
       await updateProposalCpes.mutateAsync({
         proposalId: proposal.id,
         cpes: proposalCpes.map(cpe => ({
