@@ -1,37 +1,50 @@
 
 
-## Corrigir modal de venda que nao abre ao aceitar proposta
+## Permitir editar propostas aceites (bloquear apenas com venda concluida)
 
 ### Problema
 
-Quando o utilizador muda o status de uma proposta para "Aceite", o `CreateSaleModal` (um Dialog) abre por cima do `ProposalDetailsModal` (outro Dialog). O Radix UI interpreta isto como uma interacao fora do primeiro Dialog e dispara `onOpenChange(false)` no modal pai. Na pagina de Propostas, isso faz `setSelectedProposal(null)`, o que desmonta tudo -- incluindo o modal de venda que acabou de abrir.
+Atualmente, quando uma proposta tem o status "Aceite", o botao "Editar" e o seletor de status ficam `disabled`. Isto e demasiado restritivo -- o utilizador quer poder continuar a editar propostas aceites. A edicao so deve ser bloqueada se ja existir uma **venda concluida** (status `delivered`) associada a proposta.
 
 ### Solucao
 
-Modificar o `onOpenChange` do Dialog pai no `ProposalDetailsModal` para nao fechar enquanto o modal de venda (`showSaleModal`) estiver aberto. Isto impede que o Radix feche o modal pai quando o modal de venda aparece.
+1. Adicionar uma query para verificar se existe uma venda com status `delivered` associada a proposta
+2. Substituir a condicao `status === 'accepted'` pela nova verificacao
 
 ### Detalhes tecnicos
 
 **Ficheiro: `src/components/proposals/ProposalDetailsModal.tsx`**
 
-Alterar a linha 487 de:
+1. Adicionar uma query ao Supabase para verificar se existe uma venda concluida:
 ```tsx
-<Dialog open={open} onOpenChange={onOpenChange}>
-```
-Para:
-```tsx
-<Dialog open={open} onOpenChange={(isOpen) => {
-  if (!isOpen && showSaleModal) return;
-  onOpenChange(isOpen);
-}}>
+const { data: completedSale } = useQuery({
+  queryKey: ['proposal-completed-sale', proposal?.id],
+  queryFn: async () => {
+    const { data } = await supabase
+      .from('sales')
+      .select('id, status')
+      .eq('proposal_id', proposal!.id)
+      .eq('status', 'delivered')
+      .maybeSingle();
+    return data;
+  },
+  enabled: !!proposal?.id,
+});
+
+const hasCompletedSale = !!completedSale;
 ```
 
-Isto garante que:
-- Se o utilizador fecha o modal manualmente (clicando no X ou fora), funciona normalmente
-- Se o Radix tenta fechar o modal pai porque o `CreateSaleModal` abriu, o evento e ignorado
-- Depois de criar a venda, o `handleSaleCreated` atualiza o status e o fluxo continua normalmente
+2. Linha 593 -- alterar `disabled={status === 'accepted'}` para `disabled={hasCompletedSale}` (seletor de status)
+
+3. Linha 813 -- alterar `disabled={status === 'accepted'}` para `disabled={hasCompletedSale}` (botao Editar no dropdown)
+
+### Resultado
+
+- Propostas aceites podem ser editadas normalmente
+- Apenas propostas com venda concluida ficam bloqueadas para edicao
+- O seletor de status tambem fica disponivel em propostas aceites (exceto se houver venda concluida)
 
 | Ficheiro | Alteracao |
 |---|---|
-| `src/components/proposals/ProposalDetailsModal.tsx` | Proteger `onOpenChange` do Dialog pai contra fecho quando `showSaleModal` esta aberto |
+| `src/components/proposals/ProposalDetailsModal.tsx` | Query para venda concluida + substituir condicoes `disabled` |
 
