@@ -418,8 +418,8 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
             ` : ''}
           </div>
 
-          <!-- CPEs com dados de energia -->
-          ${proposalCpes.length > 0 ? `
+          <!-- CPEs com dados de energia (apenas telecom) -->
+          ${orgData?.niche === 'telecom' && proposalCpes.length > 0 ? `
             <div class="cpes">
               <h3>CPEs / Pontos de Consumo</h3>
               ${proposalCpes.map(cpe => `
@@ -437,6 +437,33 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
                   </div>
                 </div>
               `).join('')}
+            </div>
+          ` : ''}
+
+          <!-- Produtos/Serviços (nichos não-telecom) -->
+          ${orgData?.niche !== 'telecom' && proposalProducts.length > 0 ? `
+            <div class="cpes">
+              <h3>Produtos / Serviços</h3>
+              <table style="width:100%; border-collapse:collapse;">
+                <thead>
+                  <tr style="border-bottom:2px solid #eee;">
+                    <th style="text-align:left; padding:8px;">Produto</th>
+                    <th style="text-align:center; padding:8px;">Qtd</th>
+                    <th style="text-align:right; padding:8px;">Preço Unit.</th>
+                    <th style="text-align:right; padding:8px;">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${proposalProducts.map(item => `
+                    <tr style="border-bottom:1px solid #f0f0f0;">
+                      <td style="padding:8px;">${item.product?.name || 'Produto'}</td>
+                      <td style="text-align:center; padding:8px;">${item.quantity}</td>
+                      <td style="text-align:right; padding:8px;">${formatCurrency(item.unit_price)}</td>
+                      <td style="text-align:right; padding:8px;">${formatCurrency(item.total)}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
             </div>
           ` : ''}
 
