@@ -66,7 +66,6 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
   const [proposalCpes, setProposalCpes] = useState<ProposalCpeDraft[]>([]);
   
   // Campos para nichos NÃO-telecom
-  const [manualValue, setManualValue] = useState<string>('');
   const [selectedProducts, setSelectedProducts] = useState<Array<{
     product_id: string;
     name: string;
@@ -107,10 +106,10 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
       }
       return 0;
     }
-    // Para não-telecom: valor manual + produtos (com desconto)
+    // Para não-telecom: soma dos produtos (com desconto)
     const productsTotal = selectedProducts.reduce((sum, p) => sum + getProductTotal(p), 0);
-    return productsTotal + (parseFloat(manualValue) || 0);
-  }, [isTelecom, proposalType, proposalCpes, selectedProducts, manualValue]);
+    return productsTotal;
+  }, [isTelecom, proposalType, proposalCpes, selectedProducts]);
 
   // Calculate total commission from CPEs (telecom only)
   const totalComissao = useMemo(() => {
@@ -240,7 +239,6 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
         setKwp('');
         setComissaoServicos('');
         setServicosProdutos([]);
-        setManualValue('');
         setSelectedProducts([]);
         
         onOpenChange(false);
@@ -447,20 +445,6 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
               <div className="space-y-4">
                 <Separator />
                 
-                {/* Valor da Proposta */}
-                <div className="space-y-2">
-                  <Label htmlFor="manual-value">Valor da Proposta (€)</Label>
-                  <Input
-                    id="manual-value"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={manualValue}
-                    onChange={(e) => setManualValue(e.target.value)}
-                    placeholder="Ex: 1500.00"
-                  />
-                </div>
-                
                 {/* Produtos/Serviços */}
                 {products.length > 0 && (
                   <div className="space-y-3">
@@ -587,7 +571,7 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
                 )}
                 
                 {/* Resumo do valor */}
-                {(parseFloat(manualValue) > 0 || selectedProducts.length > 0) && (
+                {selectedProducts.length > 0 && (
                   <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
                     <div className="flex items-center justify-between">
                       <span className="font-medium text-sm">Total da Proposta</span>
