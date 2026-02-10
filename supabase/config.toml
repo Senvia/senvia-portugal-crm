@@ -29,3 +29,6 @@ verify_jwt = false
 
 [functions.check-fidelization-alerts]
 verify_jwt = false
+
+[functions.issue-invoice]
+verify_jwt = false

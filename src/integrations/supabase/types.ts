@@ -2183,6 +2183,8 @@ export type Database = {
           has_recurring: boolean | null
           id: string
           invoice_reference: string | null
+          invoicexpress_id: number | null
+          invoicexpress_type: string | null
           kwp: number | null
           last_renewal_date: string | null
           lead_id: string | null
@@ -2218,6 +2220,8 @@ export type Database = {
           has_recurring?: boolean | null
           id?: string
           invoice_reference?: string | null
+          invoicexpress_id?: number | null
+          invoicexpress_type?: string | null
           kwp?: number | null
           last_renewal_date?: string | null
           lead_id?: string | null
@@ -2253,6 +2257,8 @@ export type Database = {
           has_recurring?: boolean | null
           id?: string
           invoice_reference?: string | null
+          invoicexpress_id?: number | null
+          invoicexpress_type?: string | null
           kwp?: number | null
           last_renewal_date?: string | null
           lead_id?: string | null

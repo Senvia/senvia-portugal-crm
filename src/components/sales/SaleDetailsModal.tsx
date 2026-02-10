@@ -11,7 +11,9 @@ import {
   Package,
   Zap,
   Wrench,
-  Pencil
+  Pencil,
+  Receipt,
+  Loader2
 } from "lucide-react";
 import {
   Dialog,
@@ -52,6 +54,8 @@ import type { SaleWithDetails, SaleStatus } from "@/types/sales";
 import { SALE_STATUS_LABELS, SALE_STATUS_COLORS, SALE_STATUSES } from "@/types/sales";
 import { SalePaymentsList } from "./SalePaymentsList";
 import { RecurringSection } from "./RecurringSection";
+import { useIssueInvoice } from "@/hooks/useIssueInvoice";
+import { toast } from "sonner";
 
 interface SaleDetailsModalProps {
   sale: SaleWithDetails | null;
@@ -70,6 +74,9 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
   const { data: proposalCpes = [] } = useProposalCpes(sale?.proposal_id ?? undefined);
   const updateSale = useUpdateSale();
   const deleteSale = useDeleteSale();
+  const issueInvoice = useIssueInvoice();
+
+  const hasInvoiceXpress = !!(organization?.invoicexpress_account_name && organization?.invoicexpress_api_key);
 
   // Conditional labels based on organization niche
   const isTelecom = organization?.niche === 'telecom';
@@ -503,28 +510,65 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
           </ScrollArea>
 
           {/* Actions */}
-          <div className="p-4 border-t border-border/50 flex gap-3">
-            {sale.status !== 'cancelled' && onEdit && (
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={() => {
-                  onOpenChange(false);
-                  onEdit(sale);
-                }}
-              >
-                <Pencil className="h-4 w-4 mr-2" />
-                Editar Venda
-              </Button>
+          <div className="p-4 border-t border-border/50 space-y-3">
+            {/* Invoice Section */}
+            {hasInvoiceXpress && sale.status === 'delivered' && organization && (
+              <div>
+                {sale.invoicexpress_id ? (
+                  <Badge className="w-full justify-center py-2 bg-green-500/20 text-green-500 border-green-500/30">
+                    <Receipt className="h-4 w-4 mr-2" />
+                    Fatura Emitida: {sale.invoice_reference || `#${sale.invoicexpress_id}`}
+                  </Badge>
+                ) : (
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    disabled={issueInvoice.isPending}
+                    onClick={() => {
+                      if (!sale.client?.nif) {
+                        toast.error("Cliente sem NIF. Adicione o NIF antes de emitir fatura.");
+                        return;
+                      }
+                      issueInvoice.mutate({
+                        saleId: sale.id,
+                        organizationId: organization.id,
+                      });
+                    }}
+                  >
+                    {issueInvoice.isPending ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Receipt className="h-4 w-4 mr-2" />
+                    )}
+                    Emitir Fatura-Recibo
+                  </Button>
+                )}
+              </div>
             )}
-            <Button
-              variant="destructive"
-              className={sale.status !== 'cancelled' && onEdit ? "flex-1" : "w-full"}
-              onClick={() => setShowDeleteConfirm(true)}
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Eliminar Venda
-            </Button>
+
+            <div className="flex gap-3">
+              {sale.status !== 'cancelled' && onEdit && (
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => {
+                    onOpenChange(false);
+                    onEdit(sale);
+                  }}
+                >
+                  <Pencil className="h-4 w-4 mr-2" />
+                  Editar Venda
+                </Button>
+              )}
+              <Button
+                variant="destructive"
+                className={sale.status !== 'cancelled' && onEdit ? "flex-1" : "w-full"}
+                onClick={() => setShowDeleteConfirm(true)}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Eliminar Venda
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
