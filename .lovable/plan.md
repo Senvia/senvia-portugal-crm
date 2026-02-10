@@ -1,30 +1,32 @@
 
 
-## Corrigir label de status da proposta no modal "Nova Venda"
+## Adicionar selector de status no modal "Nova Venda"
 
 ### Problema
 
-A funcao `getProposalStatusLabel` no `CreateSaleModal.tsx` (linha 310-317) nao trata o status `negotiating`. O switch so cobre `accepted`, `sent` e `pending`, e tudo o resto cai no `default: return 'Rascunho'`. Por isso, uma proposta "Em Negociacao" aparece como "Rascunho" no dropdown.
+O modal "Nova Venda" nao tem campo para escolher o status da venda. O status e sempre `pending` (hardcoded no hook `useCreateSale`, linha 98 de `useSales.ts`).
 
 ### Solucao
 
-Substituir o switch incompleto pela importacao do mapa `PROPOSAL_STATUS_LABELS` que ja existe em `src/types/proposals.ts` e contem todos os status corretamente traduzidos.
+Adicionar um campo Select para o status da venda no modal de criacao, e passar esse valor para a mutation.
 
-### Alteracao
+### Alteracoes
 
 **Ficheiro: `src/components/sales/CreateSaleModal.tsx`**
 
-Substituir a funcao `getProposalStatusLabel` (linhas 309-317) por:
+1. Adicionar state: `const [saleStatus, setSaleStatus] = useState<SaleStatus>("pending")`
+2. Importar `SALE_STATUS_LABELS`, `SALE_STATUSES`, `SaleStatus` de `@/types/sales` (alguns ja estao importados)
+3. Adicionar um campo Select na secao de informacao basica (junto ao campo de data e metodo de pagamento) com as opcoes de status
+4. Passar `status: saleStatus` no objecto enviado ao `createSale.mutateAsync`
+5. Reset do `saleStatus` para `"pending"` quando o modal abre
 
-```typescript
-const getProposalStatusLabel = (status: string) => {
-  return PROPOSAL_STATUS_LABELS[status as ProposalStatus] || status;
-};
-```
+**Ficheiro: `src/hooks/useSales.ts`**
 
-E adicionar o import de `PROPOSAL_STATUS_LABELS` e `ProposalStatus` de `@/types/proposals` (se nao estiver ja importado).
+1. Adicionar `status?: SaleStatus` ao tipo do `mutationFn`
+2. Usar `data.status || "pending"` em vez do hardcoded `"pending"` na linha 98
 
 | Ficheiro | Alteracao |
 |---|---|
-| `src/components/sales/CreateSaleModal.tsx` | Usar `PROPOSAL_STATUS_LABELS` em vez do switch incompleto |
+| `src/components/sales/CreateSaleModal.tsx` | Adicionar campo Select para status da venda + passar ao mutation |
+| `src/hooks/useSales.ts` | Aceitar `status` como parametro opcional na mutation |
 
