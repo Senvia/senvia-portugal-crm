@@ -379,8 +379,10 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
           
           <!-- VALOR TOTAL -->
           <div class="total-box">
-            <div class="label">Valor Total</div>
-            <div class="value">${formatCurrency(parseFloat(editValue) || proposal.total_value)}</div>
+            <div class="label">${orgData?.niche === 'telecom' ? 'Consumo Total MWh' : 'Valor Total'}</div>
+            <div class="value">${orgData?.niche === 'telecom' 
+              ? `${(proposalCpes.reduce((sum, cpe) => sum + (Number(cpe.consumo_anual) || 0), 0) / 1000).toLocaleString('pt-PT', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} MWh`
+              : formatCurrency(parseFloat(editValue) || proposal.total_value)}</div>
           </div>
 
           <!-- CPEs com dados de energia -->
@@ -489,19 +491,30 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
           <div className="space-y-4">
             <div className="flex items-center justify-between gap-4 p-4 rounded-lg bg-primary/10 border border-primary/20">
               <div className="flex-1 min-w-0">
-                <p className="text-sm text-muted-foreground mb-1">Valor Total</p>
-                <div className="flex items-center gap-1">
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={editValue}
-                    onChange={(e) => setEditValue(e.target.value)}
-                    onBlur={handleValueBlur}
-                    className="text-2xl font-bold text-primary border-none p-0 h-auto bg-transparent focus-visible:ring-1 focus-visible:ring-primary/50 max-w-[180px]"
-                  />
-                  <span className="text-lg text-primary font-medium">€</span>
-                </div>
+                {orgData?.niche === 'telecom' ? (
+                  <>
+                    <p className="text-sm text-muted-foreground mb-1">Consumo Total MWh</p>
+                    <p className="text-2xl font-bold text-primary">
+                      {(proposalCpes.reduce((sum, cpe) => sum + (Number(cpe.consumo_anual) || 0), 0) / 1000).toLocaleString('pt-PT', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} MWh
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm text-muted-foreground mb-1">Valor Total</p>
+                    <div className="flex items-center gap-1">
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        onBlur={handleValueBlur}
+                        className="text-2xl font-bold text-primary border-none p-0 h-auto bg-transparent focus-visible:ring-1 focus-visible:ring-primary/50 max-w-[180px]"
+                      />
+                      <span className="text-lg text-primary font-medium">€</span>
+                    </div>
+                  </>
+                )}
               </div>
               <div className="text-right shrink-0">
                 <p className="text-sm text-muted-foreground">Data</p>
@@ -595,9 +608,6 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
                         <div className="flex items-center gap-2">
                           <Zap className="h-4 w-4 text-amber-600 dark:text-amber-400" />
                           <span className="font-medium text-sm">{cpe.equipment_type}</span>
-                          <Badge variant={cpe.existing_cpe_id ? 'secondary' : 'default'} className="text-xs">
-                            {cpe.existing_cpe_id ? 'Renovação' : 'Novo'}
-                          </Badge>
                         </div>
                       </div>
                       
