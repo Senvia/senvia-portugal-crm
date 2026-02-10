@@ -178,6 +178,9 @@ Deno.serve(async (req) => {
       [docKey]: {
         date: formattedDate,
         due_date: formattedDate,
+        ...(taxValue === 0 && taxConfig.tax_exemption_reason
+          ? { tax_exemption: taxConfig.tax_exemption_reason }
+          : {}),
         client: {
           name: clientName,
           code: clientCode,
