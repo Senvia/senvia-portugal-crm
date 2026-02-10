@@ -149,6 +149,15 @@ export interface SaleWithDetails extends Sale {
     id: string;
     name: string;
     code?: string;
+    email?: string | null;
+    phone?: string | null;
+    company?: string | null;
+    nif?: string | null;
+    address_line1?: string | null;
+    address_line2?: string | null;
+    city?: string | null;
+    postal_code?: string | null;
+    country?: string | null;
   } | null;
 }
 

@@ -106,9 +106,10 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
   };
 
   const openWhatsApp = () => {
-    if (sale.lead?.phone) {
-      const phone = sale.lead.phone.replace(/\D/g, "");
-      window.open(`https://wa.me/${phone}`, "_blank");
+    const phone = sale.client?.phone || sale.lead?.phone;
+    if (phone) {
+      const cleaned = phone.replace(/\D/g, "");
+      window.open(`https://wa.me/${cleaned}`, "_blank");
     }
   };
 
@@ -174,7 +175,8 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                       <User className="h-4 w-4 text-muted-foreground" />
                       <Label className="text-muted-foreground">Cliente</Label>
                     </div>
-                    <div className="bg-muted/30 rounded-lg p-3 space-y-2">
+                    <div className="bg-muted/30 rounded-lg p-3 space-y-3">
+                      {/* Nome + Código */}
                       <div className="flex items-center gap-2">
                         <span className="font-medium">{sale.client?.name || sale.lead?.name}</span>
                         {sale.client?.code && (
@@ -183,13 +185,38 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                           </Badge>
                         )}
                       </div>
-                      {sale.lead?.email && (
-                        <p className="text-sm text-muted-foreground">{sale.lead.email}</p>
+
+                      {/* NIF & Empresa - prioritários para faturação */}
+                      {(sale.client?.nif || sale.client?.company) && (
+                        <div className="grid grid-cols-2 gap-2">
+                          {sale.client?.nif && (
+                            <div>
+                              <p className="text-xs text-muted-foreground">NIF</p>
+                              <p className="text-sm font-medium font-mono">{sale.client.nif}</p>
+                            </div>
+                          )}
+                          {sale.client?.company && (
+                            <div>
+                              <p className="text-xs text-muted-foreground">Empresa</p>
+                              <p className="text-sm font-medium">{sale.client.company}</p>
+                            </div>
+                          )}
+                        </div>
                       )}
-                      {sale.lead?.phone && (
+
+                      {/* Email - cliente tem prioridade, fallback para lead */}
+                      {(sale.client?.email || sale.lead?.email) && (
+                        <div>
+                          <p className="text-xs text-muted-foreground">Email</p>
+                          <p className="text-sm">{sale.client?.email || sale.lead?.email}</p>
+                        </div>
+                      )}
+
+                      {/* Telefone + WhatsApp - cliente tem prioridade */}
+                      {(sale.client?.phone || sale.lead?.phone) && (
                         <div className="flex items-center gap-2">
                           <Phone className="h-3 w-3 text-muted-foreground" />
-                          <span className="text-sm text-muted-foreground">{sale.lead.phone}</span>
+                          <span className="text-sm">{sale.client?.phone || sale.lead?.phone}</span>
                           <Button
                             variant="ghost"
                             size="sm"
@@ -199,6 +226,25 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                             <MessageSquare className="h-3 w-3 mr-1" />
                             WhatsApp
                           </Button>
+                        </div>
+                      )}
+
+                      {/* Morada completa */}
+                      {(sale.client?.address_line1 || sale.client?.city || sale.client?.postal_code) && (
+                        <div>
+                          <p className="text-xs text-muted-foreground">Morada</p>
+                          <div className="text-sm">
+                            {sale.client?.address_line1 && <p>{sale.client.address_line1}</p>}
+                            {sale.client?.address_line2 && <p>{sale.client.address_line2}</p>}
+                            {(sale.client?.postal_code || sale.client?.city) && (
+                              <p>
+                                {[sale.client?.postal_code, sale.client?.city].filter(Boolean).join(' ')}
+                              </p>
+                            )}
+                            {sale.client?.country && sale.client.country !== 'Portugal' && (
+                              <p>{sale.client.country}</p>
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>
