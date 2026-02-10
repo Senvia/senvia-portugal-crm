@@ -255,6 +255,7 @@ export default function Leads() {
     followUpDate: string;
     followUpTime: string;
     eventType: "call" | "meeting";
+    scheduleFollowUp: boolean;
   }) => {
     if (!pendingLostStatus || !pendingLead) return;
 
@@ -276,15 +277,17 @@ export default function Leads() {
     updateStatus.mutate({ leadId: pendingLostStatus.leadId, status: pendingLostStatus.status });
     updateLead.mutate({ leadId: pendingLostStatus.leadId, updates: { notes: updatedNotes } });
 
-    // Create follow-up calendar event
-    const followUpDate = new Date(`${data.followUpDate}T${data.followUpTime}:00`);
-    createEvent.mutate({
-      title: `Recontacto: ${pendingLead.name}`,
-      description: `Follow-up de lead perdido (${reasonLabel}). ${data.notes || ""}`.trim(),
-      event_type: data.eventType,
-      start_time: followUpDate.toISOString(),
-      lead_id: pendingLead.id,
-    });
+    // Create follow-up calendar event only if requested
+    if (data.scheduleFollowUp && data.followUpDate) {
+      const followUpDate = new Date(`${data.followUpDate}T${data.followUpTime}:00`);
+      createEvent.mutate({
+        title: `Recontacto: ${pendingLead.name}`,
+        description: `Follow-up de lead perdido (${reasonLabel}). ${data.notes || ""}`.trim(),
+        event_type: data.eventType,
+        start_time: followUpDate.toISOString(),
+        lead_id: pendingLead.id,
+      });
+    }
 
     // Cleanup
     setIsLostDialogOpen(false);
