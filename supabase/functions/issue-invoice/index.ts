@@ -14,12 +14,10 @@ const COUNTRY_CODE_MAP: Record<string, string> = {
 
 function mapCountryToInvoiceXpress(country?: string | null): string {
   if (!country) return 'Portugal'
-  // If it's a 2-letter code, map it
   const upper = country.trim().toUpperCase()
   if (upper.length === 2 && COUNTRY_CODE_MAP[upper]) {
     return COUNTRY_CODE_MAP[upper]
   }
-  // Already a full name or unmapped code — return as-is
   return country
 }
 
@@ -51,7 +49,7 @@ Deno.serve(async (req) => {
       })
     }
 
-    const { sale_id, organization_id, document_type = 'invoice_receipt', invoice_date } = await req.json()
+    const { sale_id, organization_id, document_type = 'invoice_receipt', invoice_date, payment_id, payment_amount } = await req.json()
     if (!sale_id || !organization_id) {
       return new Response(JSON.stringify({ error: 'sale_id e organization_id são obrigatórios' }), {
         status: 400,
@@ -59,7 +57,6 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Validate document_type
     const docType = document_type === 'invoice' ? 'invoice' : 'invoice_receipt'
     const isInvoice = docType === 'invoice'
     const endpointName = isInvoice ? 'invoices' : 'invoice_receipts'
@@ -106,6 +103,25 @@ Deno.serve(async (req) => {
       })
     }
 
+    // If payment_id provided, check if that payment already has an invoice
+    if (payment_id) {
+      const { data: existingPayment } = await supabase
+        .from('sale_payments')
+        .select('invoice_reference')
+        .eq('id', payment_id)
+        .single()
+
+      if (existingPayment?.invoice_reference) {
+        return new Response(JSON.stringify({ 
+          error: 'Fatura já emitida para este pagamento', 
+          invoice_reference: existingPayment.invoice_reference 
+        }), {
+          status: 409,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+    }
+
     // Fetch sale with client
     const { data: sale } = await supabase
       .from('sales')
@@ -125,7 +141,8 @@ Deno.serve(async (req) => {
       })
     }
 
-    if (sale.invoicexpress_id) {
+    // Only block if no payment_id and sale already has invoicexpress_id (legacy full-sale invoice)
+    if (!payment_id && sale.invoicexpress_id) {
       return new Response(JSON.stringify({ error: 'Fatura já emitida para esta venda', invoice_reference: sale.invoice_reference }), {
         status: 409,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -140,18 +157,11 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Fetch sale items
-    const { data: saleItems } = await supabase
-      .from('sale_items')
-      .select('*')
-      .eq('sale_id', sale_id)
-
     // Tax configuration
     const taxConfig = (org as any)?.tax_config || { tax_name: 'IVA23', tax_value: 23, tax_exemption_reason: null }
     const taxName = taxConfig.tax_value === 0 ? 'Isento' : (taxConfig.tax_name || 'IVA23')
     const taxValue = taxConfig.tax_value ?? 23
 
-    // Validate exemption reason when tax is 0
     if (taxValue === 0 && !taxConfig.tax_exemption_reason) {
       return new Response(JSON.stringify({ 
         error: 'Configure o motivo de isenção de IVA nas Definições → Integrações → InvoiceXpress antes de emitir faturas.' 
@@ -175,15 +185,29 @@ Deno.serve(async (req) => {
       return item
     }
 
-    const items = (saleItems || []).map((item: any) => 
-      buildItem(item.name, item.name, Number(item.unit_price), Number(item.quantity))
-    )
+    // Determine the invoice amount
+    let items: any[] = []
 
-    if (items.length === 0) {
-      items.push(buildItem('Serviço', `Venda ${sale.code || sale_id}`, Number(sale.total_value), 1))
+    if (payment_id && payment_amount) {
+      // Per-payment invoice: use the specific payment amount
+      items.push(buildItem('Serviço', `Pagamento - Venda ${sale.code || sale_id}`, Number(payment_amount), 1))
+    } else {
+      // Legacy: full sale invoice using sale_items
+      const { data: saleItems } = await supabase
+        .from('sale_items')
+        .select('*')
+        .eq('sale_id', sale_id)
+
+      items = (saleItems || []).map((item: any) => 
+        buildItem(item.name, item.name, Number(item.unit_price), Number(item.quantity))
+      )
+
+      if (items.length === 0) {
+        items.push(buildItem('Serviço', `Venda ${sale.code || sale_id}`, Number(sale.total_value), 1))
+      }
     }
 
-    // Use invoice_date if provided, otherwise sale_date
+    // Date
     const dateSource = invoice_date || sale.sale_date || new Date().toISOString().split('T')[0]
     const [y, m, d] = dateSource.split('-')
     const formattedDate = `${d}/${m}/${y}`
@@ -256,10 +280,6 @@ Deno.serve(async (req) => {
     if (!finalizeRes.ok) {
       const errorText = await finalizeRes.text()
       console.error('InvoiceXpress finalize error:', errorText)
-      await supabase
-        .from('sales')
-        .update({ invoicexpress_id: invoiceId, invoicexpress_type: endpointName })
-        .eq('id', sale_id)
 
       return new Response(JSON.stringify({ 
         error: 'Fatura criada mas não finalizada. Finalize manualmente no InvoiceXpress.',
@@ -281,15 +301,24 @@ Deno.serve(async (req) => {
       // Use default reference
     }
 
-    // 3. Update sale
-    await supabase
-      .from('sales')
-      .update({
-        invoicexpress_id: invoiceId,
-        invoicexpress_type: endpointName,
-        invoice_reference: invoiceReference,
-      })
-      .eq('id', sale_id)
+    // 3. Save reference
+    if (payment_id) {
+      // Per-payment: save on the payment record
+      await supabase
+        .from('sale_payments')
+        .update({ invoice_reference: invoiceReference })
+        .eq('id', payment_id)
+    } else {
+      // Legacy full-sale: save on the sale record
+      await supabase
+        .from('sales')
+        .update({
+          invoicexpress_id: invoiceId,
+          invoicexpress_type: endpointName,
+          invoice_reference: invoiceReference,
+        })
+        .eq('id', sale_id)
+    }
 
     return new Response(JSON.stringify({
       success: true,

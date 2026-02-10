@@ -7,13 +7,15 @@ interface IssueInvoiceParams {
   organizationId: string;
   documentType?: "invoice" | "invoice_receipt";
   invoiceDate?: string;
+  paymentId?: string;
+  paymentAmount?: number;
 }
 
 export function useIssueInvoice() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ saleId, organizationId, documentType, invoiceDate }: IssueInvoiceParams) => {
+    mutationFn: async ({ saleId, organizationId, documentType, invoiceDate, paymentId, paymentAmount }: IssueInvoiceParams) => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) throw new Error("Sessão expirada");
 
@@ -23,6 +25,8 @@ export function useIssueInvoice() {
           organization_id: organizationId,
           document_type: documentType || "invoice_receipt",
           invoice_date: invoiceDate,
+          payment_id: paymentId,
+          payment_amount: paymentAmount,
         },
       });
 
@@ -37,9 +41,12 @@ export function useIssueInvoice() {
 
       return data;
     },
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
       toast.success(`Fatura emitida: ${data.invoice_reference}`);
       queryClient.invalidateQueries({ queryKey: ["sales"] });
+      if (variables.paymentId) {
+        queryClient.invalidateQueries({ queryKey: ["sale-payments"] });
+      }
     },
     onError: (error: Error) => {
       toast.error(error.message || "Erro ao emitir fatura");
