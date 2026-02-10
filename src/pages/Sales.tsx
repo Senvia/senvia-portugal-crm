@@ -256,6 +256,16 @@ export default function Sales() {
         <CreateSaleModal
           open={showCreateModal}
           onOpenChange={setShowCreateModal}
+          onSaleCreated={(saleId) => {
+            setShowCreateModal(false);
+            // Wait for React Query cache to update, then open details
+            setTimeout(() => {
+              const createdSale = sales?.find(s => s.id === saleId);
+              if (createdSale) {
+                setSelectedSale(createdSale);
+              }
+            }, 500);
+          }}
         />
       </div>
     </AppLayout>
