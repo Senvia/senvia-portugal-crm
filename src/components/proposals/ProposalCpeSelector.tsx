@@ -186,9 +186,6 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
                 <div className="flex items-center gap-2">
                   <Zap className="h-4 w-4 text-amber-600" />
                   <span className="font-medium text-sm">CPE/CUI #{index + 1}</span>
-                  <Badge variant="secondary" className="text-xs">
-                    Renovação
-                  </Badge>
                 </div>
                 <Button
                   type="button"
