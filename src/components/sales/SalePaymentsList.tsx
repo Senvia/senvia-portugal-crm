@@ -16,6 +16,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useSalePayments, useDeleteSalePayment, calculatePaymentSummary } from "@/hooks/useSalePayments";
+import { useIssueInvoice } from "@/hooks/useIssueInvoice";
 import { formatCurrency } from "@/lib/format";
 import { AddPaymentModal } from "./AddPaymentModal";
 import { ScheduleRemainingModal } from "./ScheduleRemainingModal";
@@ -26,22 +27,33 @@ import {
   PAYMENT_RECORD_STATUS_COLORS 
 } from "@/types/sales";
 import type { PaymentMethod } from "@/types/sales";
+import { toast } from "sonner";
 
 interface SalePaymentsListProps {
   saleId: string;
   organizationId: string;
   saleTotal: number;
   readonly?: boolean;
+  hasInvoiceXpress?: boolean;
+  invoicexpressId?: number | null;
+  invoiceReference?: string | null;
+  clientNif?: string | null;
 }
 
 export function SalePaymentsList({ 
   saleId, 
   organizationId,
   saleTotal, 
-  readonly = false 
+  readonly = false,
+  hasInvoiceXpress = false,
+  invoicexpressId,
+  invoiceReference,
+  clientNif,
 }: SalePaymentsListProps) {
   const { data: payments = [], isLoading } = useSalePayments(saleId);
   const deletePayment = useDeleteSalePayment();
+  const issueInvoice = useIssueInvoice();
+  const hasPaidPayments = payments.some(p => p.status === 'paid');
   
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingPayment, setEditingPayment] = useState<SalePayment | null>(null);
@@ -222,6 +234,34 @@ export function SalePaymentsList({
                   {formatCurrency(summary.totalScheduled)}
                 </p>
               </div>
+            )}
+          </div>
+        )}
+
+        {/* Invoice Action */}
+        {hasInvoiceXpress && hasPaidPayments && (
+          <div className="pt-2">
+            {invoicexpressId ? (
+              <Badge className="bg-green-500/20 text-green-500 border-green-500/30 text-xs">
+                <Receipt className="h-3 w-3 mr-1" />
+                Fatura: {invoiceReference || `#${invoicexpressId}`}
+              </Badge>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={issueInvoice.isPending}
+                onClick={() => {
+                  if (!clientNif) {
+                    toast.error("Cliente sem NIF. Adicione o NIF antes de emitir fatura.");
+                    return;
+                  }
+                  issueInvoice.mutate({ saleId, organizationId });
+                }}
+              >
+                <Receipt className="h-3.5 w-3.5 mr-1.5" />
+                Emitir Fatura-Recibo
+              </Button>
             )}
           </div>
         )}
