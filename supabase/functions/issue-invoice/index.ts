@@ -207,10 +207,43 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Date
+    // Date - must not be before the last invoice in the series (InvoiceXpress rule)
     const now = new Date()
     const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-    const dateSource = invoice_date || todayStr
+    let dateSource = invoice_date || todayStr
+
+    // Query InvoiceXpress for the last document in this series to avoid date conflicts
+    const accountName = org.invoicexpress_account_name
+    const apiKey = org.invoicexpress_api_key
+    const baseUrl = `https://${accountName}.app.invoicexpress.com`
+
+    try {
+      const listRes = await fetch(`${baseUrl}/${endpointName}.json?api_key=${apiKey}&page=1&per_page=1`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+      })
+      if (listRes.ok) {
+        const listData = await listRes.json()
+        // InvoiceXpress returns array of docs, find the latest date
+        const docs = listData[endpointName] || listData.invoices || listData.invoice_receipts || []
+        if (Array.isArray(docs) && docs.length > 0) {
+          // Date format from InvoiceXpress is dd/mm/yyyy
+          const lastDateStr = docs[0]?.date
+          if (lastDateStr) {
+            const [ld, lm, ly] = lastDateStr.split('/')
+            const lastDateISO = `${ly}-${lm}-${ld}`
+            // If our date is before the last invoice date, use the last invoice date
+            if (dateSource < lastDateISO) {
+              console.warn(`Date ${dateSource} is before last invoice date ${lastDateISO}. Adjusting.`)
+              dateSource = lastDateISO
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Could not check last invoice date, proceeding with current date:', e)
+    }
+
     const [y, m, d] = dateSource.split('-')
     const formattedDate = `${d}/${m}/${y}`
 
@@ -239,9 +272,7 @@ Deno.serve(async (req) => {
       },
     }
 
-    const accountName = org.invoicexpress_account_name
-    const apiKey = org.invoicexpress_api_key
-    const baseUrl = `https://${accountName}.app.invoicexpress.com`
+    // accountName, apiKey, baseUrl already defined above
 
     // 1. Create draft
     const createRes = await fetch(`${baseUrl}/${endpointName}.json?api_key=${apiKey}`, {
