@@ -79,47 +79,50 @@ export function ChallengeMFA({ onSuccess, onCancel }: ChallengeMFAProps) {
               Abra a sua app de autenticação e insira o código de 6 dígitos.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="flex justify-center">
-              <InputOTP
-                maxLength={6}
-                value={code}
-                onChange={setCode}
-              >
-                <InputOTPGroup>
-                  <InputOTPSlot index={0} />
-                  <InputOTPSlot index={1} />
-                  <InputOTPSlot index={2} />
-                  <InputOTPSlot index={3} />
-                  <InputOTPSlot index={4} />
-                  <InputOTPSlot index={5} />
-                </InputOTPGroup>
-              </InputOTP>
-            </div>
-
-            <Button
-              onClick={handleVerify}
-              disabled={isVerifying || code.length !== 6}
-              className="w-full"
-            >
-              {isVerifying ? (
-                <><Loader2 className="mr-2 h-4 w-4 animate-spin" />A verificar...</>
-              ) : (
-                'Verificar'
-              )}
-            </Button>
-
-            <div className="text-center">
-              <p className="text-xs text-slate-500">
-                Não consegue aceder?{' '}
-                <button
-                  onClick={handleSignOut}
-                  className="text-primary hover:underline"
+          <CardContent>
+            <form onSubmit={(e) => { e.preventDefault(); handleVerify(); }} className="space-y-6">
+              <div className="flex justify-center">
+                <InputOTP
+                  maxLength={6}
+                  value={code}
+                  onChange={setCode}
                 >
-                  Terminar sessão
-                </button>
-              </p>
-            </div>
+                  <InputOTPGroup>
+                    <InputOTPSlot index={0} />
+                    <InputOTPSlot index={1} />
+                    <InputOTPSlot index={2} />
+                    <InputOTPSlot index={3} />
+                    <InputOTPSlot index={4} />
+                    <InputOTPSlot index={5} />
+                  </InputOTPGroup>
+                </InputOTP>
+              </div>
+
+              <Button
+                type="submit"
+                disabled={isVerifying || code.length !== 6}
+                className="w-full"
+              >
+                {isVerifying ? (
+                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" />A verificar...</>
+                ) : (
+                  'Verificar'
+                )}
+              </Button>
+
+              <div className="text-center">
+                <p className="text-xs text-slate-500">
+                  Não consegue aceder?{' '}
+                  <button
+                    type="button"
+                    onClick={handleSignOut}
+                    className="text-primary hover:underline"
+                  >
+                    Terminar sessão
+                  </button>
+                </p>
+              </div>
+            </form>
           </CardContent>
         </Card>
       </div>
