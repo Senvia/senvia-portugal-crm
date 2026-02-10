@@ -192,7 +192,7 @@ export function SalePaymentsList({
                           toast.error("Cliente sem NIF. Adicione o NIF antes de emitir fatura.");
                           return;
                         }
-                        issueInvoice.mutate({ saleId, organizationId, documentType: "invoice_receipt" });
+                        issueInvoice.mutate({ saleId, organizationId, documentType: "invoice_receipt", paymentId: payment.id, paymentAmount: Number(payment.amount) });
                       }}
                     >
                       <Receipt className="h-3 w-3 mr-1" />
@@ -215,6 +215,8 @@ export function SalePaymentsList({
                           organizationId, 
                           documentType: "invoice",
                           invoiceDate: payment.payment_date,
+                          paymentId: payment.id,
+                          paymentAmount: Number(payment.amount),
                         });
                       }}
                     >
