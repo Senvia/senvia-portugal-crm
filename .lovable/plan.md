@@ -1,55 +1,35 @@
 
 
-## Correcao: Utilizador criado mas nao aparece na equipa
+## Corrigir membros em falta na organização Telecom
 
-### Problema encontrado
+### Problema
 
-A edge function `create-team-member` cria o utilizador em 3 sitios:
-1. `auth.users` -- OK
-2. `profiles` (com `organization_id`) -- OK
-3. `user_roles` (com o role) -- OK
+Além do Thiago (já corrigido), há mais 3 utilizadores com perfil na Telecom que não estão na tabela `organization_members`, logo não aparecem na lista da equipa:
 
-Mas a funcao `get-team-members` busca membros da tabela **`organization_members`**, que **nunca e preenchida** pela `create-team-member`. Resultado: o utilizador existe mas nao aparece na lista.
+- **Filipe Coelho** (salesperson)
+- **Ana Calado** (viewer)
+- **Amt** (salesperson)
 
-O utilizador `thiagogaldino21@gmail.com` ja esta na base de dados -- so falta o registo em `organization_members`.
+### Solução
 
-### Solucao
-
-**1. Corrigir a edge function `create-team-member`**
-
-Adicionar um `INSERT` na tabela `organization_members` apos criar/atualizar o perfil e o role:
-
-```typescript
-// Adicionar à tabela organization_members
-const { error: memberError } = await supabaseAdmin
-  .from('organization_members')
-  .upsert({
-    user_id: userId,
-    organization_id: organizationId,
-    role: role,
-    is_active: true,
-    joined_at: new Date().toISOString()
-  }, { onConflict: 'user_id,organization_id' });
-```
-
-**2. Corrigir o utilizador ja criado**
-
-Executar uma migracao SQL para inserir o registo em falta:
+Executar uma migração SQL para inserir os 3 registos em falta:
 
 ```sql
 INSERT INTO organization_members (user_id, organization_id, role, is_active, joined_at)
-VALUES ('44a688ac-7124-4446-8f4d-1291782120d3', '96a3950e-31be-4c6d-abed-b82968c0d7e9', 'salesperson', true, now())
+VALUES 
+  ('76300665-aff2-4b54-be78-b1123356e6ce', '96a3950e-31be-4c6d-abed-b82968c0d7e9', 'salesperson', true, now()),
+  ('f96eca52-5546-45d5-839b-bb2a255f9549', '96a3950e-31be-4c6d-abed-b82968c0d7e9', 'viewer', true, now()),
+  ('f54baad9-0482-4f73-8040-f4d1cf370f84', '96a3950e-31be-4c6d-abed-b82968c0d7e9', 'salesperson', true, now())
 ON CONFLICT DO NOTHING;
 ```
 
-### Ficheiros a alterar
-
-| Ficheiro | Alteracao |
-|---|---|
-| `supabase/functions/create-team-member/index.ts` | Adicionar INSERT em `organization_members` apos criar perfil e role |
-| Nova migracao SQL | Inserir o registo em falta para o utilizador existente |
-
 ### Impacto
 
-- Todos os novos membros criados passarao a aparecer imediatamente na lista da equipa
-- O utilizador Thiago ficara visivel apos a migracao
+Após a migração, os 3 membros ficam imediatamente visíveis na lista de equipa da Telecom. Não é necessária nenhuma alteração de código -- a edge function já foi corrigida no passo anterior para que futuros membros sejam inseridos automaticamente.
+
+### Ficheiros a alterar
+
+| Ficheiro | Alteração |
+|---|---|
+| Nova migração SQL | INSERT dos 3 registos em falta em `organization_members` |
+
