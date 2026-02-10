@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 import { useTeamMembers, usePendingInvites, useCancelInvite, useResendInvite, useCreateTeamMember, PendingInvite, TeamMember } from '@/hooks/useTeam';
 import { useManageTeamMember } from '@/hooks/useProfile';
 import { useAuth } from '@/contexts/AuthContext';
@@ -13,7 +14,7 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
-import { Users, UserPlus, Copy, X, Check, Clock, Loader2, RefreshCw, Eye, EyeOff, MoreHorizontal, Key, UserCog, Ban, CheckCircle } from 'lucide-react';
+import { Users, UserPlus, Copy, X, Check, Clock, Loader2, RefreshCw, Eye, EyeOff, MoreHorizontal, Key, UserCog, Ban, CheckCircle, Mail } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { getBaseUrl } from '@/lib/constants';
@@ -33,7 +34,7 @@ const ROLE_VARIANTS: Record<string, 'default' | 'secondary' | 'outline'> = {
 };
 
 export function TeamTab() {
-  const { user } = useAuth();
+  const { user, organization } = useAuth();
   const { data: members, isLoading: loadingMembers } = useTeamMembers();
   const { data: invites, isLoading: loadingInvites } = usePendingInvites();
   const cancelInvite = useCancelInvite();
@@ -52,8 +53,10 @@ export function TeamTab() {
   const [showPassword, setShowPassword] = useState(false);
   
   // Success state
-  const [createdMember, setCreatedMember] = useState<{ email: string; password: string } | null>(null);
+  const [createdMember, setCreatedMember] = useState<{ email: string; password: string; fullName: string } | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
   
   // Invite list state
   const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null);
@@ -89,7 +92,7 @@ export function TeamTab() {
       { email, password, fullName, role },
       {
         onSuccess: () => {
-          setCreatedMember({ email, password });
+          setCreatedMember({ email, password, fullName });
         },
       }
     );
@@ -124,6 +127,40 @@ export function TeamTab() {
     setShowPassword(false);
     setCreatedMember(null);
     setCopiedField(null);
+    setSendingEmail(false);
+    setEmailSent(false);
+  };
+
+  const handleSendAccessEmail = async () => {
+    if (!createdMember || !organization) return;
+    
+    setSendingEmail(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('send-access-email', {
+        body: {
+          organizationId: organization.id,
+          recipientEmail: createdMember.email,
+          recipientName: createdMember.fullName,
+          loginUrl,
+          companyCode: organization.slug,
+          password: createdMember.password,
+        },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      setEmailSent(true);
+      toast({ title: 'Email enviado!', description: `Credenciais enviadas para ${createdMember.email}.` });
+    } catch (err: any) {
+      toast({ 
+        title: 'Erro ao enviar email', 
+        description: err.message || 'Verifique se a integração Brevo está configurada.', 
+        variant: 'destructive' 
+      });
+    } finally {
+      setSendingEmail(false);
+    }
   };
 
   const handleCancelInvite = (invite: PendingInvite) => {
@@ -365,6 +402,19 @@ export function TeamTab() {
                       </div>
                     </div>
                     <div className="space-y-2">
+                      <Label className="text-muted-foreground">Código da Empresa</Label>
+                      <div className="flex gap-2">
+                        <Input value={organization?.slug || ''} readOnly className="font-mono text-sm" />
+                        <Button 
+                          variant="outline" 
+                          size="icon" 
+                          onClick={() => copyToClipboard(organization?.slug || '', 'Código')}
+                        >
+                          {copiedField === 'Código' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
                       <Label className="text-muted-foreground">Email</Label>
                       <div className="flex gap-2">
                         <Input value={createdMember.email} readOnly className="font-mono text-sm" />
@@ -406,7 +456,22 @@ export function TeamTab() {
                       <p>Guarde estas informações - a password não poderá ser recuperada por si.</p>
                     </div>
                   </div>
-                  <DialogFooter>
+                  <DialogFooter className="flex-col sm:flex-row gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={handleSendAccessEmail}
+                      disabled={sendingEmail || emailSent}
+                      className="w-full sm:w-auto"
+                    >
+                      {sendingEmail ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : emailSent ? (
+                        <Check className="mr-2 h-4 w-4" />
+                      ) : (
+                        <Mail className="mr-2 h-4 w-4" />
+                      )}
+                      {emailSent ? 'Email Enviado' : 'Enviar Acesso por Email'}
+                    </Button>
                     <Button onClick={handleCloseDialog}>Fechar</Button>
                   </DialogFooter>
                 </>
