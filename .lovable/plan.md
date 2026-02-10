@@ -1,70 +1,53 @@
 
 
-## Corrigir produtos/servicos que nao guardam preco editado na proposta
+## Corrigir template de impressao: Dados de Energia so para Telecom
 
 ### Problema
 
-Ha dois bugs no `EditProposalModal.tsx` para propostas nao-telecom:
+No template de impressao da proposta (`ProposalDetailsModal.tsx`, linhas 421-441), a seccao "CPEs / Pontos de Consumo" com dados de energia (consumo, DBL, margem, comissao, etc.) e mostrada para **todos os nichos**. Deveria aparecer apenas para o nicho `telecom`.
 
-1. **Produtos nunca sao carregados ao editar**: Na linha 105-106, existe um `TODO` e `setSelectedProducts([])` -- os produtos da proposta nunca sao lidos da base de dados quando o modal de edicao abre. Ou seja, ao editar, os produtos aparecem vazios e o utilizador tem de adicionar tudo outra vez.
-
-2. **Produtos nunca sao guardados ao submeter**: O `handleSubmit` (linha 237) atualiza a proposta e os CPEs, mas **nunca chama** `useUpdateProposalProducts` para guardar os produtos editados (com precos alterados) na tabela `proposal_products`. O hook ja existe no codigo mas nao e importado nem usado.
-
-Resultado: mesmo que o total fique correto (porque e calculado localmente), os produtos na base de dados mantem o preco original do catalogo.
+Alem disso, para nichos nao-telecom, o template de impressao nao mostra os **produtos/servicos** da proposta (com precos editados), que e a informacao relevante para esses nichos.
 
 ### Solucao
 
-1. Carregar os produtos existentes da proposta quando o modal abre (substituir o `TODO`)
-2. Guardar os produtos editados ao submeter (chamar `useUpdateProposalProducts`)
+1. Envolver a seccao de CPEs no template de impressao com a condicao `orgData?.niche === 'telecom'`
+2. Adicionar uma seccao de produtos/servicos no template de impressao para nichos nao-telecom, usando os dados de `proposalProducts`
 
 ### Detalhes tecnicos
 
-**Ficheiro: `src/components/proposals/EditProposalModal.tsx`**
+**Ficheiro: `src/components/proposals/ProposalDetailsModal.tsx`**
 
-1. Importar `useProposalProducts` e `useUpdateProposalProducts` do hook `useProposals`
+1. **Linha 422**: Alterar `${proposalCpes.length > 0 ?` para `${orgData?.niche === 'telecom' && proposalCpes.length > 0 ?` -- isto garante que CPEs com dados de energia so aparecem no template de impressao para telecom.
 
-2. Adicionar query para carregar produtos existentes:
-```tsx
-const { data: existingProducts = [] } = useProposalProducts(proposal.id);
-const updateProposalProducts = useUpdateProposalProducts();
+2. **Apos linha 441**: Adicionar bloco para nichos nao-telecom que mostra os produtos/servicos da proposta:
+```html
+${orgData?.niche !== 'telecom' && proposalProducts.length > 0 ? `
+  <div class="cpes">
+    <h3>Produtos / Servicos</h3>
+    <table style="width:100%; border-collapse:collapse;">
+      <thead>
+        <tr style="border-bottom:2px solid #eee;">
+          <th style="text-align:left; padding:8px;">Produto</th>
+          <th style="text-align:center; padding:8px;">Qtd</th>
+          <th style="text-align:right; padding:8px;">Preco Unit.</th>
+          <th style="text-align:right; padding:8px;">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${proposalProducts.map(item => `
+          <tr style="border-bottom:1px solid #f0f0f0;">
+            <td style="padding:8px;">${item.product?.name || 'Produto'}</td>
+            <td style="text-align:center; padding:8px;">${item.quantity}</td>
+            <td style="text-align:right; padding:8px;">${formatCurrency(item.unit_price)}</td>
+            <td style="text-align:right; padding:8px;">${formatCurrency(item.total)}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  </div>
+` : ''}
 ```
-
-3. No `useEffect` (linhas 102-107), substituir o `setSelectedProducts([])` por logica que carrega os produtos existentes:
-```tsx
-if (!isTelecom && existingProducts.length > 0) {
-  setSelectedProducts(existingProducts.map(pp => ({
-    product_id: pp.product_id,
-    name: pp.product?.name || 'Produto',
-    quantity: pp.quantity,
-    unit_price: pp.unit_price,
-    discount_type: 'percentage' as const,
-    discount_value: 0,
-  })));
-  setManualValue('');
-} else if (!isTelecom) {
-  setManualValue(proposal.total_value?.toString() || '');
-  setSelectedProducts([]);
-}
-```
-
-4. No `handleSubmit` (apos linha 260), adicionar chamada para guardar produtos:
-```tsx
-if (!isTelecom && selectedProducts.length > 0) {
-  await updateProposalProducts.mutateAsync({
-    proposalId: proposal.id,
-    products: selectedProducts.map(p => ({
-      product_id: p.product_id,
-      quantity: p.quantity,
-      unit_price: p.unit_price,
-      total: getProductTotal(p),
-    })),
-  });
-}
-```
-
-5. Atualizar `isSubmitting` para incluir o novo mutation
 
 | Ficheiro | Alteracao |
 |---|---|
-| `src/components/proposals/EditProposalModal.tsx` | Importar e usar `useProposalProducts` + `useUpdateProposalProducts`; carregar produtos ao abrir; guardar ao submeter |
-
+| `src/components/proposals/ProposalDetailsModal.tsx` | Guardar seccao CPEs do template de impressao com condicao telecom; adicionar tabela de produtos para nao-telecom |
