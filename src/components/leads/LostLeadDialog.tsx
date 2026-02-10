@@ -20,7 +20,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CalendarClock, Phone, Users } from "lucide-react";
+import { CalendarClock, Phone, Users, XCircle } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 
 const LOSS_REASONS = [
   { value: "price", label: "Preço" },
@@ -45,6 +46,7 @@ interface LostLeadDialogProps {
     followUpDate: string;
     followUpTime: string;
     eventType: "call" | "meeting";
+    scheduleFollowUp: boolean;
   }) => void;
 }
 
@@ -59,6 +61,7 @@ export function LostLeadDialog({
   const [followUpDate, setFollowUpDate] = useState("");
   const [followUpTime, setFollowUpTime] = useState("10:00");
   const [eventType, setEventType] = useState<"call" | "meeting">("call");
+  const [scheduleFollowUp, setScheduleFollowUp] = useState(true);
 
   const handleQuickDate = (days: number) => {
     const date = addDays(new Date(), days);
@@ -66,14 +69,16 @@ export function LostLeadDialog({
   };
 
   const handleConfirm = () => {
-    if (!lossReason || !followUpDate) return;
-    onConfirm({ lossReason, notes, followUpDate, followUpTime, eventType });
+    if (!lossReason) return;
+    if (scheduleFollowUp && !followUpDate) return;
+    onConfirm({ lossReason, notes, followUpDate, followUpTime, eventType, scheduleFollowUp });
     // Reset
     setLossReason("");
     setNotes("");
     setFollowUpDate("");
     setFollowUpTime("10:00");
     setEventType("call");
+    setScheduleFollowUp(true);
   };
 
   const handleClose = (open: boolean) => {
@@ -83,11 +88,12 @@ export function LostLeadDialog({
       setFollowUpDate("");
       setFollowUpTime("10:00");
       setEventType("call");
+      setScheduleFollowUp(true);
     }
     onOpenChange(open);
   };
 
-  const isValid = lossReason && followUpDate;
+  const isValid = lossReason && (scheduleFollowUp ? followUpDate : true);
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -132,72 +138,87 @@ export function LostLeadDialog({
             />
           </div>
 
-          {/* Follow-up Date */}
-          <div className="space-y-2">
-            <Label>Data de recontacto *</Label>
-            <div className="flex gap-2 mb-2">
-              {[
-                { days: 30, label: "30 dias" },
-                { days: 60, label: "60 dias" },
-                { days: 90, label: "90 dias" },
-              ].map(({ days, label }) => (
-                <Button
-                  key={days}
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="flex-1 text-xs"
-                  onClick={() => handleQuickDate(days)}
-                >
-                  {label}
-                </Button>
-              ))}
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <Label className="text-xs text-muted-foreground mb-1">Data *</Label>
-                <Input
-                  type="date"
-                  value={followUpDate}
-                  onChange={(e) => setFollowUpDate(e.target.value)}
-                  min={format(addDays(new Date(), 1), "yyyy-MM-dd")}
-                />
-              </div>
-              <div>
-                <Label className="text-xs text-muted-foreground mb-1">Hora *</Label>
-                <Input
-                  type="time"
-                  value={followUpTime}
-                  onChange={(e) => setFollowUpTime(e.target.value)}
-                />
-              </div>
-            </div>
-            {followUpDate && (
+          {/* Schedule Follow-up Switch */}
+          <div className="flex items-center justify-between rounded-lg border p-3">
+            <div className="space-y-0.5">
+              <Label className="text-sm font-medium">Agendar recontacto futuro</Label>
               <p className="text-xs text-muted-foreground">
-                Recontacto a {format(new Date(followUpDate + "T12:00:00"), "d 'de' MMMM 'de' yyyy", { locale: pt })} às {followUpTime}
+                {scheduleFollowUp ? "Será criado um evento no calendário" : "Lead será marcado como perdido definitivo"}
               </p>
-            )}
+            </div>
+            <Switch checked={scheduleFollowUp} onCheckedChange={setScheduleFollowUp} />
           </div>
 
-          {/* Event Type */}
-          <div className="space-y-2">
-            <Label>Tipo de evento</Label>
-            <div className="flex gap-2">
-              {EVENT_TYPES.map(({ value, label, icon: Icon }) => (
-                <Button
-                  key={value}
-                  type="button"
-                  variant={eventType === value ? "default" : "outline"}
-                  size="sm"
-                  className="flex-1"
-                  onClick={() => setEventType(value as "call" | "meeting")}
-                >
-                  <Icon className="h-4 w-4 mr-1.5" />
-                  {label}
-                </Button>
-              ))}
-            </div>
-          </div>
+          {scheduleFollowUp && (
+            <>
+              {/* Follow-up Date */}
+              <div className="space-y-2">
+                <Label>Data de recontacto *</Label>
+                <div className="flex gap-2 mb-2">
+                  {[
+                    { days: 30, label: "30 dias" },
+                    { days: 60, label: "60 dias" },
+                    { days: 90, label: "90 dias" },
+                  ].map(({ days, label }) => (
+                    <Button
+                      key={days}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="flex-1 text-xs"
+                      onClick={() => handleQuickDate(days)}
+                    >
+                      {label}
+                    </Button>
+                  ))}
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label className="text-xs text-muted-foreground mb-1">Data *</Label>
+                    <Input
+                      type="date"
+                      value={followUpDate}
+                      onChange={(e) => setFollowUpDate(e.target.value)}
+                      min={format(addDays(new Date(), 1), "yyyy-MM-dd")}
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground mb-1">Hora *</Label>
+                    <Input
+                      type="time"
+                      value={followUpTime}
+                      onChange={(e) => setFollowUpTime(e.target.value)}
+                    />
+                  </div>
+                </div>
+                {followUpDate && (
+                  <p className="text-xs text-muted-foreground">
+                    Recontacto a {format(new Date(followUpDate + "T12:00:00"), "d 'de' MMMM 'de' yyyy", { locale: pt })} às {followUpTime}
+                  </p>
+                )}
+              </div>
+
+              {/* Event Type */}
+              <div className="space-y-2">
+                <Label>Tipo de evento</Label>
+                <div className="flex gap-2">
+                  {EVENT_TYPES.map(({ value, label, icon: Icon }) => (
+                    <Button
+                      key={value}
+                      type="button"
+                      variant={eventType === value ? "default" : "outline"}
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => setEventType(value as "call" | "meeting")}
+                    >
+                      <Icon className="h-4 w-4 mr-1.5" />
+                      {label}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
         <DialogFooter className="flex-col gap-2 sm:flex-row">
@@ -205,8 +226,11 @@ export function LostLeadDialog({
             Cancelar
           </Button>
           <Button onClick={handleConfirm} disabled={!isValid} className="w-full sm:w-auto">
-            <CalendarClock className="h-4 w-4 mr-2" />
-            Confirmar e Agendar
+            {scheduleFollowUp ? (
+              <><CalendarClock className="h-4 w-4 mr-2" />Confirmar e Agendar</>
+            ) : (
+              <><XCircle className="h-4 w-4 mr-2" />Confirmar Perda Definitiva</>
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>
