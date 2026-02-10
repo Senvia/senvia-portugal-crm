@@ -191,7 +191,30 @@ export function SalePaymentsList({
                           toast.error("Cliente sem NIF. Adicione o NIF antes de emitir fatura.");
                           return;
                         }
-                        issueInvoice.mutate({ saleId, organizationId });
+                        issueInvoice.mutate({ saleId, organizationId, documentType: "invoice_receipt" });
+                      }}
+                    >
+                      <Receipt className="h-3 w-3 mr-1" />
+                      Fatura-Recibo
+                    </Button>
+                  )}
+                  {payment.status === 'pending' && hasInvoiceXpress && !payment.invoice_reference && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 text-xs"
+                      disabled={issueInvoice.isPending}
+                      onClick={() => {
+                        if (!clientNif) {
+                          toast.error("Cliente sem NIF. Adicione o NIF antes de emitir fatura.");
+                          return;
+                        }
+                        issueInvoice.mutate({ 
+                          saleId, 
+                          organizationId, 
+                          documentType: "invoice",
+                          invoiceDate: payment.payment_date,
+                        });
                       }}
                     >
                       <Receipt className="h-3 w-3 mr-1" />
