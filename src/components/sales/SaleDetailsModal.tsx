@@ -166,6 +166,47 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
 
               <Separator />
 
+              {/* Client/Lead Info */}
+              {(sale.client || sale.lead) && (
+                <>
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <User className="h-4 w-4 text-muted-foreground" />
+                      <Label className="text-muted-foreground">Cliente</Label>
+                    </div>
+                    <div className="bg-muted/30 rounded-lg p-3 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{sale.client?.name || sale.lead?.name}</span>
+                        {sale.client?.code && (
+                          <Badge variant="outline" className="font-mono text-xs">
+                            {sale.client.code}
+                          </Badge>
+                        )}
+                      </div>
+                      {sale.lead?.email && (
+                        <p className="text-sm text-muted-foreground">{sale.lead.email}</p>
+                      )}
+                      {sale.lead?.phone && (
+                        <div className="flex items-center gap-2">
+                          <Phone className="h-3 w-3 text-muted-foreground" />
+                          <span className="text-sm text-muted-foreground">{sale.lead.phone}</span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 px-2 text-green-500 hover:text-green-400"
+                            onClick={openWhatsApp}
+                          >
+                            <MessageSquare className="h-3 w-3 mr-1" />
+                            WhatsApp
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <Separator />
+                </>
+              )}
+
               {/* Energy Data Section */}
               {hasEnergyData && (
                 <>
@@ -344,47 +385,6 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                           <p className="font-semibold">{formatCurrency(item.total)}</p>
                         </div>
                       ))}
-                    </div>
-                  </div>
-                  <Separator />
-                </>
-              )}
-
-              {/* Client/Lead Info */}
-              {(sale.client || sale.lead) && (
-                <>
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                      <User className="h-4 w-4 text-muted-foreground" />
-                      <Label className="text-muted-foreground">Cliente</Label>
-                    </div>
-                    <div className="bg-muted/30 rounded-lg p-3 space-y-2">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">{sale.client?.name || sale.lead?.name}</span>
-                        {sale.client?.code && (
-                          <Badge variant="outline" className="font-mono text-xs">
-                            {sale.client.code}
-                          </Badge>
-                        )}
-                      </div>
-                      {sale.lead?.email && (
-                        <p className="text-sm text-muted-foreground">{sale.lead.email}</p>
-                      )}
-                      {sale.lead?.phone && (
-                        <div className="flex items-center gap-2">
-                          <Phone className="h-3 w-3 text-muted-foreground" />
-                          <span className="text-sm text-muted-foreground">{sale.lead.phone}</span>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 px-2 text-green-500 hover:text-green-400"
-                            onClick={openWhatsApp}
-                          >
-                            <MessageSquare className="h-3 w-3 mr-1" />
-                            WhatsApp
-                          </Button>
-                        </div>
-                      )}
                     </div>
                   </div>
                   <Separator />
