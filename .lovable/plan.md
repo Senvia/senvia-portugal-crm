@@ -1,53 +1,79 @@
 
 
-## Corrigir template de impressao: Dados de Energia so para Telecom
+## Reorganizar modal de detalhes da proposta
 
 ### Problema
 
-No template de impressao da proposta (`ProposalDetailsModal.tsx`, linhas 421-441), a seccao "CPEs / Pontos de Consumo" com dados de energia (consumo, DBL, margem, comissao, etc.) e mostrada para **todos os nichos**. Deveria aparecer apenas para o nicho `telecom`.
+1. O campo "Valor Total" no topo e editavel diretamente no modal de detalhes -- deveria ser apenas de leitura (so editavel via "Editar Proposta")
+2. A ordem dos elementos nao corresponde ao pretendido
 
-Alem disso, para nichos nao-telecom, o template de impressao nao mostra os **produtos/servicos** da proposta (com precos editados), que e a informacao relevante para esses nichos.
+### Ordem atual vs pretendida
+
+```text
+ATUAL                          PRETENDIDO
+--------------------------     --------------------------
+Valor/Consumo + Data           Proposta (codigo + data)
+Cliente                        Cliente
+Status                         Status
+Tipo (telecom)                 Produtos/Servicos
+CPEs (telecom)                 Valor Total (read-only)
+Servicos (telecom)             Observacoes
+Produtos
+Observacoes
+```
 
 ### Solucao
 
-1. Envolver a seccao de CPEs no template de impressao com a condicao `orgData?.niche === 'telecom'`
-2. Adicionar uma seccao de produtos/servicos no template de impressao para nichos nao-telecom, usando os dados de `proposalProducts`
+**Ficheiro: `src/components/proposals/ProposalDetailsModal.tsx`**
+
+1. **Bloco do topo (linhas 555-600)**: Remover o Input editavel do valor. Substituir por um bloco simples com codigo da proposta + data. Para telecom, manter o resumo de consumo MWh neste bloco.
+
+2. **Mover "Cliente" para logo apos o bloco de proposta** (ja esta na posicao correta, linhas 602-632)
+
+3. **Mover "Status" para apos cliente** (ja esta na posicao correta, linhas 634-652)
+
+4. **Mover secao de Produtos/Servicos (linhas 802-821) + CPEs telecom (linhas 669-758) + Servicos telecom (linhas 760-800) para apos o status**
+
+5. **Adicionar bloco "Valor Total" read-only apos os produtos**: Mostrar `formatCurrency(proposal.total_value)` como texto simples, sem Input
+
+6. **Observacoes ficam no final** (ja esta na posicao correta, linhas 824-834)
+
+7. **Remover `handleValueBlur` e `editValue` state** -- ja nao sao necessarios pois o valor so e editavel via EditProposalModal
 
 ### Detalhes tecnicos
 
-**Ficheiro: `src/components/proposals/ProposalDetailsModal.tsx`**
+**Alteracoes no bloco do topo (linhas 555-600):**
+- Remover a branch nao-telecom com o `<Input>` editavel
+- Para telecom: manter resumo de consumo MWh
+- Para nao-telecom: mostrar apenas codigo da proposta e data (sem valor)
 
-1. **Linha 422**: Alterar `${proposalCpes.length > 0 ?` para `${orgData?.niche === 'telecom' && proposalCpes.length > 0 ?` -- isto garante que CPEs com dados de energia so aparecem no template de impressao para telecom.
-
-2. **Apos linha 441**: Adicionar bloco para nichos nao-telecom que mostra os produtos/servicos da proposta:
-```html
-${orgData?.niche !== 'telecom' && proposalProducts.length > 0 ? `
-  <div class="cpes">
-    <h3>Produtos / Servicos</h3>
-    <table style="width:100%; border-collapse:collapse;">
-      <thead>
-        <tr style="border-bottom:2px solid #eee;">
-          <th style="text-align:left; padding:8px;">Produto</th>
-          <th style="text-align:center; padding:8px;">Qtd</th>
-          <th style="text-align:right; padding:8px;">Preco Unit.</th>
-          <th style="text-align:right; padding:8px;">Total</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${proposalProducts.map(item => `
-          <tr style="border-bottom:1px solid #f0f0f0;">
-            <td style="padding:8px;">${item.product?.name || 'Produto'}</td>
-            <td style="text-align:center; padding:8px;">${item.quantity}</td>
-            <td style="text-align:right; padding:8px;">${formatCurrency(item.unit_price)}</td>
-            <td style="text-align:right; padding:8px;">${formatCurrency(item.total)}</td>
-          </tr>
-        `).join('')}
-      </tbody>
-    </table>
-  </div>
-` : ''}
+**Novo bloco "Valor Total" (apos produtos, antes de observacoes):**
+```tsx
+<div className="p-4 rounded-lg bg-primary/10 border border-primary/20">
+  <p className="text-sm text-muted-foreground mb-1">Valor Total</p>
+  <p className="text-2xl font-bold text-primary">
+    {formatCurrency(proposal.total_value)}
+  </p>
+</div>
 ```
+
+**Remover:**
+- State `editValue` (linha 75)
+- `setEditValue` no useEffect (linha 99)
+- Funcao `handleValueBlur` (linhas 151-156)
+
+**Nova ordem dos elementos no JSX:**
+1. Header com codigo + data (+ consumo MWh se telecom)
+2. Cliente
+3. Status
+4. Tipo badge (telecom only)
+5. CPEs (telecom only)
+6. Servicos telecom (telecom only)
+7. Produtos/Servicos (todos os nichos)
+8. Valor Total (read-only)
+9. Observacoes
 
 | Ficheiro | Alteracao |
 |---|---|
-| `src/components/proposals/ProposalDetailsModal.tsx` | Guardar seccao CPEs do template de impressao com condicao telecom; adicionar tabela de produtos para nao-telecom |
+| `src/components/proposals/ProposalDetailsModal.tsx` | Remover edicao inline do valor; reorganizar ordem dos blocos; adicionar valor total read-only |
+
