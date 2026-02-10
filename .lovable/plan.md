@@ -1,54 +1,65 @@
 
-## Ajustes no Template Telecom - Propostas
 
-### Situacao atual
+## Somatório de Energia / kWp no "Total da Proposta" (Telecom)
 
-Verifiquei o codigo e **nenhuma das duas alteracoes esta implementada**:
+### O que muda
 
-1. **"Valor Total"** -- Aparece como valor monetario (EUR) tanto no modal de detalhes como no documento de impressao. O utilizador quer que no template telecom este campo mostre **"Consumo Total MWh"** com o calculo: soma dos consumos anuais dos CPEs / 1000.
+No bloco principal azul do modal de detalhes da proposta (e no template de impressão), além do "Consumo Total MWh" já implementado, vão aparecer **métricas resumo adicionais** conforme o tipo de proposta:
 
-2. **Badge "Renovacao"** -- Aparece em dois sitios:
-   - `ProposalCpeSelector.tsx` (formulario de criacao/edicao) -- badge fixo "Renovacao" em todos os CPEs
-   - `ProposalDetailsModal.tsx` (modal de detalhes) -- badge "Renovacao" quando o CPE esta ligado a um CPE existente
+- **Tipo Energia**: Mostrar abaixo do Consumo Total MWh:
+  - **Margem Total** (soma das margens de todos os CPEs)
+  - **Comissão Total** (soma das comissões de todos os CPEs)
 
-### O que vai mudar
+- **Tipo Serviços**: Mostrar:
+  - **kWp Total** (campo `kwp` da proposta)
+  - **Comissão** (campo `comissao` da proposta)
 
-**1. Substituir "Valor Total" por "Consumo Total MWh" (apenas telecom)**
+Isto permite ver de relance os totais financeiros e técnicos sem precisar de abrir cada CPE individualmente.
 
-- No **modal de detalhes** (`ProposalDetailsModal.tsx`): quando o nicho e telecom, o bloco azul principal mostra "Consumo Total MWh" com o valor calculado (soma de `consumo_anual` de todos os CPEs da proposta / 1000), formatado com casas decimais e unidade "MWh". O valor monetario (margem total) pode manter-se como informacao secundaria.
-- No **documento de impressao** (HTML dentro do mesmo ficheiro): a mesma logica -- "Consumo Total MWh" em vez de "Valor Total" para telecom.
+### Layout proposto
 
-**2. Remover badge "Renovacao" dos quadros de CPE**
+O bloco azul principal fica assim (telecom):
 
-- `ProposalCpeSelector.tsx` (linha 189-191): remover o badge "Renovacao" fixo.
-- `ProposalDetailsModal.tsx` (linha 598-600): remover o badge condicional "Renovacao"/"Novo".
+```text
+┌──────────────────────────────────────┐
+│ Consumo Total MWh          Data      │
+│ 12,5 MWh                  10 Fev     │
+│                                      │
+│ Margem Total: 1.250,00 €            │
+│ Comissão Total: 450,00 €            │
+└──────────────────────────────────────┘
+```
 
-### Secao tecnica
+Para tipo "Serviços", em vez de Margem/Comissão dos CPEs, mostra kWp e Comissão do nível da proposta.
 
-#### Ficheiros a alterar
+### Secção técnica
 
-| Ficheiro | Alteracao |
-|---|---|
-| `src/components/proposals/ProposalDetailsModal.tsx` | Condicao telecom no bloco "Valor Total" (modal + HTML de impressao); remover badge Renovacao/Novo dos CPEs |
-| `src/components/proposals/ProposalCpeSelector.tsx` | Remover badge "Renovacao" fixo (linhas 189-191) |
+#### Ficheiro a alterar
 
-#### Logica do calculo "Consumo Total MWh"
+`src/components/proposals/ProposalDetailsModal.tsx`
+
+#### 1. No bloco do modal (linhas ~494-500)
+
+Depois do `<p>` com Consumo Total MWh, adicionar uma linha secundária com os totais:
 
 ```typescript
-const consumoTotalMwh = proposalCpes.reduce(
-  (sum, cpe) => sum + (Number(cpe.consumo_anual) || 0), 0
-) / 1000;
+// Energia: somar margem e comissão de todos os CPEs
+const margemTotal = proposalCpes.reduce((sum, cpe) => sum + (Number(cpe.margem) || 0), 0);
+const comissaoTotal = proposalCpes.reduce((sum, cpe) => sum + (Number(cpe.comissao) || 0), 0);
 ```
 
-#### Condicao no modal (pseudo-codigo)
+Renderizar abaixo do valor principal como texto mais pequeno:
+- Se `proposal_type === 'energia'`: "Margem Total: X € | Comissão Total: Y €"
+- Se `proposal_type === 'servicos'`: "kWp: Z | Comissão: W €"
 
-```
-Se nicho === 'telecom':
-  Label: "Consumo Total MWh"
-  Valor: consumoTotalMwh formatado (ex: "12,5 MWh")
-Senao:
-  Label: "Valor Total"
-  Valor: formatCurrency(...)
-```
+#### 2. No template de impressão HTML (linhas ~380-386)
 
-A mesma logica aplica-se ao template HTML de impressao.
+Adicionar a mesma informação secundária abaixo do valor principal no `total-box`, usando um `<div>` com estilo mais pequeno.
+
+#### Resumo de alterações
+
+| Ficheiro | Alteração |
+|---|---|
+| `src/components/proposals/ProposalDetailsModal.tsx` | Adicionar linha de resumo (margem/comissão ou kWp) no bloco azul do modal e no HTML de impressão |
+
+Nenhuma alteração de base de dados necessária — os dados já existem nos CPEs e na proposta.
