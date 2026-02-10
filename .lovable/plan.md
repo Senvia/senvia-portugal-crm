@@ -1,62 +1,85 @@
 
-
-## Corrigir Erro "Infinite Recursion" na Tabela de Membros
+## Corrigir: Pagamento marcado como "Pago" nao atualiza o estado da venda
 
 ### Problema
 
-O cliente Perfect2Gether nao consegue adicionar membros a equipa porque a base de dados retorna o erro:
+Quando adicionas um pagamento e o marcas como "Pago", o registo do pagamento e criado corretamente na tabela `sale_payments`, mas o campo `payment_status` na tabela `sales` nunca e atualizado. Ou seja, a venda continua a mostrar "Pendente" mesmo com pagamentos pagos.
 
-> **infinite recursion detected in policy for relation "organization_members"**
+### Causa
 
-A politica de seguranca "Admins manage org members" consulta a propria tabela `organization_members` dentro da sua regra de acesso, criando um ciclo infinito.
+O hook `useCreateSalePayment` e `useUpdateSalePayment` invalidam as queries de `sales`, o que faz o React Query refazer o fetch. No entanto, o campo `payment_status` na tabela `sales` nao e recalculado --- apenas os dados visuais no componente `SalePaymentsList` mostram o calculo correto (via `calculatePaymentSummary`), mas o valor na base de dados permanece inalterado.
 
 ### Solucao
 
-1. **Criar uma funcao auxiliar** `is_org_member` com `SECURITY DEFINER` que verifica se o utilizador pertence a uma organizacao sem passar pelas regras de seguranca (evitando a recursao).
-
-2. **Substituir a politica problematica** por uma nova que use esta funcao segura em vez de consultar a tabela diretamente.
+Criar um **trigger na base de dados** que, sempre que um pagamento e inserido, atualizado ou eliminado na tabela `sale_payments`, recalcula automaticamente o `payment_status` da venda correspondente.
 
 ### Secao Tecnica
 
-**Migracao SQL a executar:**
+**1. Migracao SQL -- Criar trigger de sincronizacao:**
 
 ```sql
--- 1. Funcao auxiliar SECURITY DEFINER para verificar membership sem recursao
-CREATE OR REPLACE FUNCTION public.is_org_member(_user_id uuid, _org_id uuid)
-RETURNS boolean
-LANGUAGE sql
-STABLE SECURITY DEFINER
+CREATE OR REPLACE FUNCTION public.sync_sale_payment_status()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
 SET search_path TO 'public'
 AS $$
-  SELECT EXISTS (
-    SELECT 1 FROM public.organization_members
-    WHERE user_id = _user_id
-      AND organization_id = _org_id
-      AND is_active = true
-  )
+DECLARE
+  _sale_id uuid;
+  _total_paid numeric;
+  _sale_total numeric;
+  _new_status text;
+BEGIN
+  -- Determinar o sale_id relevante
+  IF TG_OP = 'DELETE' THEN
+    _sale_id := OLD.sale_id;
+  ELSE
+    _sale_id := NEW.sale_id;
+  END IF;
+
+  -- Calcular total pago (apenas pagamentos com status 'paid')
+  SELECT COALESCE(SUM(amount), 0) INTO _total_paid
+  FROM sale_payments
+  WHERE sale_id = _sale_id AND status = 'paid';
+
+  -- Obter o total da venda
+  SELECT total_value INTO _sale_total
+  FROM sales
+  WHERE id = _sale_id;
+
+  -- Determinar novo estado
+  IF _total_paid <= 0 THEN
+    _new_status := 'pending';
+  ELSIF _total_paid >= _sale_total THEN
+    _new_status := 'paid';
+  ELSE
+    _new_status := 'partial';
+  END IF;
+
+  -- Atualizar a venda
+  UPDATE sales
+  SET payment_status = _new_status,
+      paid_date = CASE WHEN _new_status = 'paid' THEN now() ELSE NULL END
+  WHERE id = _sale_id;
+
+  IF TG_OP = 'DELETE' THEN
+    RETURN OLD;
+  END IF;
+  RETURN NEW;
+END;
 $$;
 
--- 2. Remover politica que causa recursao
-DROP POLICY IF EXISTS "Admins manage org members" ON public.organization_members;
-
--- 3. Criar politica corrigida usando a funcao segura
-CREATE POLICY "Admins manage org members"
-ON public.organization_members
-FOR ALL
-TO authenticated
-USING (
-  is_org_member(auth.uid(), organization_id)
-  AND has_role(auth.uid(), 'admin'::app_role)
-)
-WITH CHECK (
-  is_org_member(auth.uid(), organization_id)
-  AND has_role(auth.uid(), 'admin'::app_role)
-);
+-- Trigger para INSERT, UPDATE e DELETE
+CREATE TRIGGER trg_sync_sale_payment_status
+AFTER INSERT OR UPDATE OR DELETE ON public.sale_payments
+FOR EACH ROW EXECUTE FUNCTION public.sync_sale_payment_status();
 ```
 
-**Nenhum ficheiro de codigo precisa de ser alterado.** O problema esta exclusivamente na base de dados.
+**2. Nenhum ficheiro de codigo precisa de ser alterado.** O React Query ja invalida a query `["sales"]` apos criar/atualizar pagamentos, portanto a UI vai automaticamente refletir o novo `payment_status` calculado pelo trigger.
 
 ### Resultado Esperado
 
-Apos a migracao, os administradores da Perfect2Gether (e de todas as organizacoes) poderao adicionar membros a equipa sem erros.
-
+- Adicionar pagamento "Pago" com valor total -> venda fica com `payment_status = 'paid'`
+- Adicionar pagamento parcial -> venda fica com `payment_status = 'partial'`
+- Eliminar todos os pagamentos -> venda volta a `payment_status = 'pending'`
+- Tudo automatico, sem necessidade de acao extra do utilizador
