@@ -1,91 +1,55 @@
 
 
-## Corrigir emissao de faturas para regime isento (Art. 53.o - M10)
+## Novo fluxo de "Adicionar Pagamento" com escolha Total vs Parcelado
 
-### Problema encontrado
+### Problema atual
 
-Segundo a API do InvoiceXpress, para contas portuguesas com itens isentos de IVA (0%), e obrigatorio enviar o campo `tax_exemption` **ao nivel do documento** (raiz do payload), nao so ao nivel do item. O codigo atual so envia `exemption_reason` no item, mas falta o campo no documento.
+Ao clicar em "Adicionar Pagamento", abre diretamente o formulario de pagamento. O utilizador quer primeiro escolher o tipo de pagamento.
 
-### O que a API InvoiceXpress exige
-
-Para faturas com IVA isento, o payload deve ter esta estrutura:
+### Novo fluxo
 
 ```text
-{
-  "invoice": {
-    "date": "10/02/2026",
-    "due_date": "10/02/2026",
-    "tax_exemption": "M10",          <-- CAMPO QUE FALTA (nivel documento)
-    "client": { ... },
-    "items": [
-      {
-        "name": "Servico",
-        "unit_price": 500,
-        "quantity": 1,
-        "tax": {
-          "name": "Isento",
-          "value": 0
-        }
-      }
-    ]
-  }
-}
+[Adicionar Pagamento]
+       |
+       v
+  Modal de Escolha
+  +------------------+------------------+
+  |  Pagamento Total |  Parcelado       |
+  |  (valor total)   |  (dividir em     |
+  |                  |   parcelas)      |
+  +------------------+------------------+
+       |                     |
+       v                     v
+  AddPaymentModal      ScheduleRemainingModal
+  (pre-filled total,   (divide o total em
+   status = paid)       1-4 parcelas pendentes)
 ```
 
-Sem o campo `tax_exemption` ao nivel do documento, a API rejeita a fatura ou gera um documento invalido.
+### Alteracoes
 
-### Alteracao unica
+**1. Novo componente: `src/components/sales/PaymentTypeSelector.tsx`**
 
-**`supabase/functions/issue-invoice/index.ts`**
+Modal simples com dois cartoes clicaveis:
+- **Pagamento Total**: Icone de check, mostra o valor em falta. Ao clicar, abre o `AddPaymentModal` com o valor total pre-preenchido e status "paid".
+- **Pagamento Parcelado**: Icone de calendario, descricao "Dividir em parcelas". Ao clicar, abre o `ScheduleRemainingModal` diretamente (que ja tem a logica de dividir em 1-4 parcelas com datas).
 
-Na construcao do `invoicePayload`, quando `taxValue === 0` e existe `tax_exemption_reason` no config, adicionar o campo `tax_exemption` ao nivel do documento:
+Design dark mode, estilo cards lado a lado (mobile: empilhados verticalmente).
 
-```text
-// Antes (atual):
-const invoicePayload = {
-  [docKey]: {
-    date: formattedDate,
-    due_date: formattedDate,
-    client: { ... },
-    items: items,
-  },
-}
+**2. Alterar `src/components/sales/SalePaymentsList.tsx`**
 
-// Depois (corrigido):
-const invoicePayload = {
-  [docKey]: {
-    date: formattedDate,
-    due_date: formattedDate,
-    ...(taxValue === 0 && taxConfig.tax_exemption_reason
-      ? { tax_exemption: taxConfig.tax_exemption_reason }
-      : {}),
-    client: { ... },
-    items: items,
-  },
-}
-```
+- Adicionar estado `showTypeSelector` (boolean)
+- O botao "Adicionar" e "Adicionar Pagamento" passam a abrir o `PaymentTypeSelector` em vez do `AddPaymentModal` diretamente
+- O `PaymentTypeSelector` recebe callbacks `onSelectTotal` e `onSelectInstallments`:
+  - `onSelectTotal`: fecha o seletor e abre `AddPaymentModal` (comportamento atual)
+  - `onSelectInstallments`: fecha o seletor e abre `ScheduleRemainingModal` diretamente
+- Remover a logica atual que abre automaticamente o `ScheduleRemainingModal` apos um pagamento parcial (ja nao e necessario, pois o utilizador escolhe explicitamente)
 
-Isto adiciona `"tax_exemption": "M10"` ao documento quando a organizacao esta configurada como isenta.
+### Detalhes tecnicos
 
-### Validacao do tax_config na tua conta
-
-No teu caso (Art. 53.o), o `tax_config` guardado na base de dados devera ser:
-
-```text
-{
-  "tax_name": "Isento",
-  "tax_value": 0,
-  "tax_exemption_reason": "M10"
-}
-```
-
-A interface de configuracao (Definicoes -> Integracoes -> InvoiceXpress) ja suporta estas opcoes. Basta selecionar "Isento de IVA" e "M10 - IVA regime de isencao (Art. 53.o)".
-
-### Resumo
-
-| Ficheiro | Alteracao |
+| Ficheiro | Acao |
 |---|---|
-| `supabase/functions/issue-invoice/index.ts` | Adicionar `tax_exemption` ao nivel do documento no payload InvoiceXpress |
+| `src/components/sales/PaymentTypeSelector.tsx` | Criar -- modal com dois cartoes (Total / Parcelado) |
+| `src/components/sales/SalePaymentsList.tsx` | Alterar -- botoes "Adicionar" abrem o seletor; remover auto-schedule apos pagamento parcial |
 
-Uma unica linha a adicionar. Zero risco de afetar faturas com IVA normal (o campo so e adicionado quando `taxValue === 0`).
+Nenhuma alteracao na base de dados. Apenas UX.
 
