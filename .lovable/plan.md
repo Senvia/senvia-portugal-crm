@@ -1,75 +1,37 @@
 
 
-## Alinhar SaleDetailsModal com o template generico da ProposalDetailsModal
+## Mover botão "Emitir Fatura-Recibo" para a secção de Pagamentos
 
-### Sequencia do ProposalDetailsModal (generico / nao-telecom)
+### Problema
 
-```text
-1. Header (titulo + badge status + data)
-2. Cliente (card simples: nome, email, telefone)
-3. Status selector
-4. Produtos/Servicos (catalogo com qty x preco)
-5. Valor Total (bloco destacado bg-primary/10)
-6. Observacoes da Negociacao (textarea)
-7. Footer (acoes)
-```
+O botão "Emitir Fatura-Recibo" no footer do modal está a empurrar os botões "Editar Venda" e "Eliminar Venda" para fora da área visível, desconfigurando o layout.
 
-### Sequencia atual do SaleDetailsModal
+### Solução
 
-```text
-1. Header (code + status + data)
-2. Status selector
-3. Cliente (detalhado com NIF, empresa, morada, WhatsApp)
-4. Dados Energia (telecom)
-5. Dados Servico (telecom)
-6. CPEs (telecom)
-7. Itens da Venda
-8. Proposta Associada
-9. Recorrencia
-10. Pagamentos
-11. Notas
-12. Footer (fatura + editar + eliminar)
-```
+Remover o bloco de faturação InvoiceXpress do footer do `SaleDetailsModal.tsx` e movê-lo para dentro do `SalePaymentsList.tsx`, onde faz mais sentido contextualmente (a fatura está associada aos pagamentos).
 
-### Nova sequencia do SaleDetailsModal
+### Alterações
 
-```text
-1. Header (code + badge status + data)
-2. Cliente (card com nome, email, telefone, NIF, empresa, morada, WhatsApp)
-3. Status selector
-4. [Telecom only: Resumo Telecom, CPEs, Servicos telecom]
-5. Produtos/Servicos (itens da venda com qty x preco)
-6. Valor Total (bloco destacado bg-primary/10)
-7. Proposta Associada
-8. Recorrencia
-9. Pagamentos
-10. Observacoes da Negociacao (renomear label)
-11. Footer (fatura + editar + eliminar)
-```
+**1. `src/components/sales/SaleDetailsModal.tsx`**
 
-### Alteracoes no ficheiro `SaleDetailsModal.tsx`
+- Remover todo o bloco de faturação InvoiceXpress do footer (linhas 526-558)
+- Passar as props necessárias (`hasInvoiceXpress`, `hasPaidPayments`, `sale`, `organization`) para o `SalePaymentsList`
+- O footer fica apenas com os dois botões: "Editar Venda" e "Eliminar Venda"
 
-1. **Reordenar blocos JSX** dentro do ScrollArea para seguir a nova sequencia:
-   - Mover o bloco **Cliente** para antes do Status selector
-   - Mover secoes de Energia/Servico/CPEs para depois do Status (apenas telecom)
-   - Mover **Itens da Venda** para depois dos dados telecom
-   - Adicionar bloco **Valor Total** destacado (igual ao da proposta: `bg-primary/10 border-primary/20` com valor em `text-2xl font-bold text-primary`) depois dos itens
-   - Manter Proposta Associada, Recorrencia e Pagamentos na mesma ordem
-   - Renomear label "Notas" para "Observacoes da Negociacao"
+**2. `src/components/sales/SalePaymentsList.tsx`**
 
-2. **Adicionar bloco Valor Total** - Novo bloco visual entre os itens e a proposta associada:
-   ```text
-   [bg-primary/10 border border-primary/20 rounded-lg p-4]
-   Valor Total (text-sm text-muted-foreground)
-   1.200,00 EUR (text-2xl font-bold text-primary)
-   ```
+- Adicionar novas props: `hasInvoiceXpress`, `invoicexpressId`, `invoiceReference`, `clientNif`, `saleId` (já existe), `organizationId` (já existe)
+- Após o bloco de resumo de pagamentos (Summary), adicionar um botão pequeno e simples:
+  - Se já tem fatura emitida: badge compacta "Fatura: REF" em verde
+  - Se não tem fatura mas tem pagamentos pagos e InvoiceXpress ativo: botão `variant="outline" size="sm"` com ícone Receipt e texto "Emitir Fatura-Recibo"
+- Importar e usar o hook `useIssueInvoice` dentro do `SalePaymentsList`
 
-3. **Nenhuma alteracao de logica** - Apenas reordenacao de blocos existentes e adicao do bloco de valor total
+### Resultado visual
 
-| Alteracao | Detalhe |
+O footer do modal volta a ter apenas dois botões lado a lado. O botão de faturação fica integrado na secção de pagamentos, contextualmente correto e sem desconfigurar o layout.
+
+| Ficheiro | Alteração |
 |---|---|
-| Ordem: Cliente antes do Status | Mover bloco cliente/lead para cima |
-| Novo bloco: Valor Total | `bg-primary/10` com `formatCurrency(sale.total_value)` |
-| Rename: Notas -> Observacoes | Label "Observacoes da Negociacao" |
-| Ordem geral | Seguir sequencia do ProposalDetailsModal generico |
+| `SaleDetailsModal.tsx` | Remover bloco faturação do footer, passar props ao SalePaymentsList |
+| `SalePaymentsList.tsx` | Adicionar botão "Emitir Fatura-Recibo" após o resumo de pagamentos |
 
