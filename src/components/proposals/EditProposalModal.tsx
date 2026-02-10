@@ -11,7 +11,7 @@ import { Separator } from '@/components/ui/separator';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Checkbox } from '@/components/ui/checkbox';
-import { useUpdateProposal } from '@/hooks/useProposals';
+import { useUpdateProposal, useProposalProducts, useUpdateProposalProducts } from '@/hooks/useProposals';
 import { useClients } from '@/hooks/useClients';
 import { useActiveProducts } from '@/hooks/useProducts';
 import { useAuth } from '@/contexts/AuthContext';
@@ -42,9 +42,11 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
   const { data: clients = [] } = useClients();
   const { data: products = [] } = useActiveProducts();
   const { data: existingCpes = [] } = useProposalCpes(proposal.id);
+  const { data: existingProducts = [] } = useProposalProducts(proposal.id);
   const { organization } = useAuth();
   const updateProposal = useUpdateProposal();
   const updateProposalCpes = useUpdateProposalCpes();
+  const updateProposalProducts = useUpdateProposalProducts();
   
   // Verificar se é nicho telecom
   const isTelecom = organization?.niche === 'telecom';
@@ -100,13 +102,22 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
       setServicosProdutos(proposal.servicos_produtos || []);
       
       // Campos não-telecom
-      if (!isTelecom) {
+      if (!isTelecom && existingProducts.length > 0) {
+        setSelectedProducts(existingProducts.map(pp => ({
+          product_id: pp.product_id,
+          name: pp.product?.name || 'Produto',
+          quantity: pp.quantity,
+          unit_price: pp.unit_price,
+          discount_type: 'percentage' as const,
+          discount_value: 0,
+        })));
+        setManualValue('');
+      } else if (!isTelecom) {
         setManualValue(proposal.total_value?.toString() || '');
-        // TODO: Carregar produtos selecionados se existir tabela proposal_products
         setSelectedProducts([]);
       }
     }
-  }, [open, proposal, isTelecom]);
+  }, [open, proposal, isTelecom, existingProducts]);
 
   // Carregar CPEs existentes quando disponíveis
   useEffect(() => {
@@ -284,6 +295,19 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
       });
     }
 
+    // Guardar produtos editados (não-telecom)
+    if (!isTelecom && selectedProducts.length > 0) {
+      await updateProposalProducts.mutateAsync({
+        proposalId: proposal.id,
+        products: selectedProducts.map(p => ({
+          product_id: p.product_id,
+          quantity: p.quantity,
+          unit_price: p.unit_price,
+          total: getProductTotal(p),
+        })),
+      });
+    }
+
     onOpenChange(false);
     onSuccess?.();
   };
@@ -292,7 +316,7 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
     return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(value);
   };
 
-  const isSubmitting = updateProposal.isPending || updateProposalCpes.isPending;
+  const isSubmitting = updateProposal.isPending || updateProposalCpes.isPending || updateProposalProducts.isPending;
 
   return (
     <>
