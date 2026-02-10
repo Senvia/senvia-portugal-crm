@@ -1,58 +1,71 @@
 
 
-## Emitir Fatura (sem recibo) para pagamentos agendados
+## Corrigir taxa de IVA na emissao de faturas (suporte para isentos)
 
-### Contexto
+### Problema critico
 
-Atualmente, o sistema so emite **Fatura-Recibo** (`invoice_receipts`) via InvoiceXpress, e o botao so aparece em pagamentos com status "Pago". Ha empresas que precisam de receber a **Fatura** primeiro para depois fazer o pagamento.
+O codigo atual **hardcoda IVA a 23%** em todas as faturas. Para organizacoes isentas de IVA, isto gera documentos fiscais incorretos que obrigam a nota de credito.
 
 ### Solucao
 
-Permitir emitir dois tipos de documento:
-- **Fatura** (`invoices`): para pagamentos agendados/pendentes -- o cliente paga depois de receber a fatura
-- **Fatura-Recibo** (`invoice_receipts`): para pagamentos ja recebidos (comportamento atual)
+Adicionar configuracao fiscal na organizacao e usa-la na emissao de faturas.
 
-### Fluxo do utilizador
+### Alteracoes
 
-```text
-Pagamento com status "Agendado":
-  -> Botao "Fatura" visivel
-  -> Emite Fatura (documento sem recibo) com a data do agendamento
-  -> Referencia: "FT 123" em vez de "FR 123"
+**1. Migracao SQL -- nova coluna na tabela `organizations`**
 
-Pagamento com status "Pago":
-  -> Botao "Fatura-Recibo" visivel (como hoje)
-  -> Emite Fatura-Recibo com a data do pagamento
-  -> Referencia: "FR 123"
-```
+Adicionar campo `tax_config` (JSONB) com:
+- `tax_name`: nome do imposto no InvoiceXpress (ex: `"IVA23"`, `"Isento"`)
+- `tax_value`: valor percentual (ex: `23`, `0`)
+- `tax_exemption_reason`: motivo de isencao AT (ex: `"M07 - Artigo 9.º do CIVA"`) -- obrigatorio quando valor = 0
 
-### Alteracoes tecnicas
+Valor por defeito: `{"tax_name": "IVA23", "tax_value": 23, "tax_exemption_reason": null}`
 
-**1. `supabase/functions/issue-invoice/index.ts`**
+**2. `src/components/settings/IntegrationsContent.tsx`**
 
-- Aceitar novo parametro `document_type`: `"invoice"` ou `"invoice_receipt"` (default: `"invoice_receipt"`)
-- Aceitar parametro opcional `invoice_date` para usar a data do pagamento agendado em vez da data da venda
-- Alterar o endpoint do InvoiceXpress conforme o tipo:
-  - `invoice_receipt` -> `POST /invoice_receipts.json` + finalize em `/invoice_receipts/{id}/change-state.json`
-  - `invoice` -> `POST /invoices.json` + finalize em `/invoices/{id}/change-state.json`
-- Alterar o prefixo da referencia: `"FT"` para faturas, `"FR"` para faturas-recibo
-- Guardar o tipo correto em `invoicexpress_type` na tabela sales
+Na seccao InvoiceXpress (ja existente), adicionar campos:
+- Select com opcoes: "IVA 23%", "IVA 6%", "IVA 13%", "Isento de IVA"
+- Quando "Isento" selecionado, mostrar campo para motivo de isencao (select com opcoes da AT: M01 a M16)
+- Gravar em `organizations.tax_config`
 
-**2. `src/components/sales/SalePaymentsList.tsx`**
+**3. `supabase/functions/issue-invoice/index.ts`**
 
-- Mostrar botao "Fatura" tambem em pagamentos com status `pending` (agendados), nao so nos `paid`
-- Ao clicar em pagamento `pending`: chamar `issueInvoice` com `document_type: "invoice"` e `invoice_date` = data do agendamento
-- Ao clicar em pagamento `paid`: manter comportamento atual (`document_type: "invoice_receipt"`)
-- Diferenciar o label do botao: "Fatura" vs "Fatura-Recibo"
+- Ler `tax_config` da organizacao (ja faz query a tabela organizations)
+- Usar `tax_name` e `tax_value` do config em vez do hardcoded `IVA23`
+- Se `tax_value` = 0 e existe `tax_exemption_reason`, adicionar ao item:
+  ```
+  tax: { name: "Isento", value: 0 },
+  tax_exemption_reason: "M07 - Artigo 9.º do CIVA"
+  ```
+- Se nao ha config, manter fallback IVA 23%
 
-**3. `src/hooks/useIssueInvoice.ts`**
+**4. Validacao antes de emitir**
 
-- Adicionar `document_type` e `invoice_date` opcionais ao `IssueInvoiceParams`
-- Passar esses campos no body da chamada a edge function
+- Na edge function, se `tax_value` = 0 e `tax_exemption_reason` esta vazio, retornar erro:
+  "Configure o motivo de isencao de IVA nas definicoes antes de emitir faturas."
+
+### Motivos de isencao AT (para o select)
+
+| Codigo | Descricao |
+|---|---|
+| M01 | Artigo 16.o n.o 6 do CIVA |
+| M02 | Artigo 6.o do Decreto-Lei n.o 198/90 |
+| M04 | Isento Artigo 13.o do CIVA |
+| M05 | Isento Artigo 14.o do CIVA |
+| M06 | Isento Artigo 15.o do CIVA |
+| M07 | Isento Artigo 9.o do CIVA |
+| M09 | IVA - nao confere direito a deducao |
+| M10 | IVA - regime de isencao (Art. 53.o) |
+| M11 | Regime particular do tabaco |
+| M12 | Regime da margem de lucro |
+| M13 | Regime de IVA de Caixa |
+| M16 | Isento Artigo 14.o do RITI |
+
+### Resumo de ficheiros
 
 | Ficheiro | Alteracao |
 |---|---|
-| `supabase/functions/issue-invoice/index.ts` | Suportar tipo `invoice` alem de `invoice_receipt`, usar data do agendamento |
-| `src/hooks/useIssueInvoice.ts` | Aceitar `document_type` e `invoice_date` nos parametros |
-| `src/components/sales/SalePaymentsList.tsx` | Mostrar botao em pagamentos pendentes, passar tipo correto |
+| Migracao SQL | Adicionar coluna `tax_config` JSONB em `organizations` |
+| `IntegrationsContent.tsx` | Campos de configuracao fiscal na seccao InvoiceXpress |
+| `issue-invoice/index.ts` | Ler config fiscal e usar na emissao em vez de IVA23 hardcoded |
 
