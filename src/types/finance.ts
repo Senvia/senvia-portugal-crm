@@ -17,6 +17,8 @@ export interface PaymentWithSale {
     id: string;
     code: string;
     total_value: number;
+    invoice_reference: string | null;
+    invoicexpress_id: number | null;
   };
   client_name: string | null;
   lead_name: string | null;
