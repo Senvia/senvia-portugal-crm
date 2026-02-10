@@ -9,7 +9,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { Copy, ExternalLink, Code, Webhook, Send, Loader2, Check, Eye, EyeOff, MessageCircle, Mail } from "lucide-react";
+import { Copy, ExternalLink, Code, Webhook, Send, Loader2, Check, Eye, EyeOff, MessageCircle, Mail, Receipt } from "lucide-react";
 
 interface IntegrationsContentProps {
   organization: {
@@ -43,6 +43,13 @@ interface IntegrationsContentProps {
   showBrevoApiKey: boolean;
   setShowBrevoApiKey: (value: boolean) => void;
   handleSaveBrevo: () => void;
+  invoiceXpressAccountName: string;
+  setInvoiceXpressAccountName: (value: string) => void;
+  invoiceXpressApiKey: string;
+  setInvoiceXpressApiKey: (value: string) => void;
+  showInvoiceXpressApiKey: boolean;
+  setShowInvoiceXpressApiKey: (value: boolean) => void;
+  handleSaveInvoiceXpress: () => void;
 }
 
 export const IntegrationsContent = ({
@@ -75,6 +82,13 @@ export const IntegrationsContent = ({
   showBrevoApiKey,
   setShowBrevoApiKey,
   handleSaveBrevo,
+  invoiceXpressAccountName,
+  setInvoiceXpressAccountName,
+  invoiceXpressApiKey,
+  setInvoiceXpressApiKey,
+  showInvoiceXpressApiKey,
+  setShowInvoiceXpressApiKey,
+  handleSaveInvoiceXpress,
 }: IntegrationsContentProps) => (
   <div className="max-w-4xl">
     <div className="mb-4 p-4 rounded-lg bg-muted/50 border">
@@ -375,6 +389,94 @@ export const IntegrationsContent = ({
 
                 <Button
                   onClick={handleSaveBrevo}
+                  disabled={updateOrganizationIsPending}
+                >
+                  {updateOrganizationIsPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Guardar
+                </Button>
+              </>
+            )}
+          </div>
+        </AccordionContent>
+      </AccordionItem>
+
+      {/* Faturação (InvoiceXpress) */}
+      <AccordionItem value="invoicexpress">
+        <AccordionTrigger className="hover:no-underline">
+          <div className="flex flex-col items-start gap-1">
+            <div className="flex items-center gap-2">
+              <Receipt className="h-5 w-5" />
+              <span className="font-medium">Faturação (InvoiceXpress)</span>
+              {invoiceXpressAccountName && invoiceXpressApiKey ? (
+                <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20">
+                  Configurado
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="bg-red-500/10 text-red-600 border-red-500/20">
+                  Não configurado
+                </Badge>
+              )}
+            </div>
+            <span className="text-xs text-muted-foreground font-normal">
+              Emita faturas diretamente a partir do CRM.
+            </span>
+          </div>
+        </AccordionTrigger>
+        <AccordionContent>
+          <div className="space-y-4 pt-4">
+            {isLoadingIntegrations ? (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className="text-sm">A carregar...</span>
+              </div>
+            ) : (
+              <>
+                <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-3">
+                  <p className="text-sm text-amber-600 dark:text-amber-400">
+                    Encontre estas credenciais em InvoiceXpress → Conta → Integrações → API.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="ix-account-name">Account Name</Label>
+                  <Input
+                    id="ix-account-name"
+                    placeholder="minhaempresa"
+                    value={invoiceXpressAccountName}
+                    onChange={(e) => setInvoiceXpressAccountName(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Subdomínio da sua conta InvoiceXpress (ex: minhaempresa.app.invoicexpress.com).
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="ix-api-key">API Key</Label>
+                  <div className="relative">
+                    <Input
+                      id="ix-api-key"
+                      type={showInvoiceXpressApiKey ? 'text' : 'password'}
+                      placeholder="Chave de autenticação"
+                      value={invoiceXpressApiKey}
+                      onChange={(e) => setInvoiceXpressApiKey(e.target.value)}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-0 top-0 h-full px-3"
+                      onClick={() => setShowInvoiceXpressApiKey(!showInvoiceXpressApiKey)}
+                    >
+                      {showInvoiceXpressApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Chave de autenticação da API InvoiceXpress.
+                  </p>
+                </div>
+
+                <Button
+                  onClick={handleSaveInvoiceXpress}
                   disabled={updateOrganizationIsPending}
                 >
                   {updateOrganizationIsPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

@@ -42,6 +42,8 @@ interface UpdateOrganizationData {
   meta_pixels?: Json;
   brevo_api_key?: string | null;
   brevo_sender_email?: string | null;
+  invoicexpress_account_name?: string | null;
+  invoicexpress_api_key?: string | null;
 }
 
 export function useUpdateOrganization() {
