@@ -1,46 +1,75 @@
 
 
-## Corrigir tab Faturas no Financeiro para incluir faturas InvoiceXpress
+## Alinhar SaleDetailsModal com o template generico da ProposalDetailsModal
 
-### Problema atual
+### Sequencia do ProposalDetailsModal (generico / nao-telecom)
 
-A tab "Faturas" no modulo Financeiro tem dois problemas:
+```text
+1. Header (titulo + badge status + data)
+2. Cliente (card simples: nome, email, telefone)
+3. Status selector
+4. Produtos/Servicos (catalogo com qty x preco)
+5. Valor Total (bloco destacado bg-primary/10)
+6. Observacoes da Negociacao (textarea)
+7. Footer (acoes)
+```
 
-1. **Filtro de status**: O `useAllPayments` filtra apenas vendas com `status = 'delivered'`, excluindo faturas emitidas em vendas noutros estados
-2. **Fonte de dados incompleta**: A tab so mostra faturas manuais (campo `sale_payments.invoice_reference`), ignorando as faturas emitidas via InvoiceXpress (guardadas em `sales.invoice_reference` + `sales.invoicexpress_id`)
+### Sequencia atual do SaleDetailsModal
 
-### Alteracoes
+```text
+1. Header (code + status + data)
+2. Status selector
+3. Cliente (detalhado com NIF, empresa, morada, WhatsApp)
+4. Dados Energia (telecom)
+5. Dados Servico (telecom)
+6. CPEs (telecom)
+7. Itens da Venda
+8. Proposta Associada
+9. Recorrencia
+10. Pagamentos
+11. Notas
+12. Footer (fatura + editar + eliminar)
+```
 
-**1. `src/hooks/useAllPayments.ts`**
+### Nova sequencia do SaleDetailsModal
 
-- Remover o filtro `.eq('sales.status', 'delivered')` (linha 30) para incluir pagamentos de vendas em qualquer estado
-- Adicionar `invoice_reference` e `invoicexpress_id` ao select da relacao `sales` para saber se a venda tem fatura InvoiceXpress
+```text
+1. Header (code + badge status + data)
+2. Cliente (card com nome, email, telefone, NIF, empresa, morada, WhatsApp)
+3. Status selector
+4. [Telecom only: Resumo Telecom, CPEs, Servicos telecom]
+5. Produtos/Servicos (itens da venda com qty x preco)
+6. Valor Total (bloco destacado bg-primary/10)
+7. Proposta Associada
+8. Recorrencia
+9. Pagamentos
+10. Observacoes da Negociacao (renomear label)
+11. Footer (fatura + editar + eliminar)
+```
 
-**2. `src/hooks/useFinanceStats.ts`**
+### Alteracoes no ficheiro `SaleDetailsModal.tsx`
 
-- Remover o filtro `.eq('sales.status', 'delivered')` (linha 38) para manter consistencia com o `useAllPayments`
+1. **Reordenar blocos JSX** dentro do ScrollArea para seguir a nova sequencia:
+   - Mover o bloco **Cliente** para antes do Status selector
+   - Mover secoes de Energia/Servico/CPEs para depois do Status (apenas telecom)
+   - Mover **Itens da Venda** para depois dos dados telecom
+   - Adicionar bloco **Valor Total** destacado (igual ao da proposta: `bg-primary/10 border-primary/20` com valor em `text-2xl font-bold text-primary`) depois dos itens
+   - Manter Proposta Associada, Recorrencia e Pagamentos na mesma ordem
+   - Renomear label "Notas" para "Observacoes da Negociacao"
 
-**3. `src/types/finance.ts`**
+2. **Adicionar bloco Valor Total** - Novo bloco visual entre os itens e a proposta associada:
+   ```text
+   [bg-primary/10 border border-primary/20 rounded-lg p-4]
+   Valor Total (text-sm text-muted-foreground)
+   1.200,00 EUR (text-2xl font-bold text-primary)
+   ```
 
-- Adicionar campos ao tipo `PaymentWithSale.sale`: `invoice_reference`, `invoicexpress_id`
+3. **Nenhuma alteracao de logica** - Apenas reordenacao de blocos existentes e adicao do bloco de valor total
 
-**4. `src/components/finance/InvoicesContent.tsx`**
-
-- Alterar o filtro de faturas para incluir tambem pagamentos cuja **venda** tem `invoice_reference` ou `invoicexpress_id` (faturas InvoiceXpress)
-- Na coluna "Referencia", mostrar a referencia da fatura do pagamento OU da venda (prioridade: pagamento > venda)
-- Na coluna "Anexo", para faturas InvoiceXpress (sem ficheiro local), construir o link de download do PDF via a API do InvoiceXpress:
-  - Buscar as credenciais da organizacao (account_name)
-  - URL: `https://{account_name}.app.invoicexpress.com/invoice_receipts/{invoicexpress_id}.pdf`
-  - Abrir num novo separador
-- Para faturas manuais com ficheiro anexo, manter o comportamento atual (download do bucket `invoices`)
-- Adicionar uma badge/indicador visual para distinguir faturas manuais de faturas InvoiceXpress (ex: badge "InvoiceXpress" pequena)
-
-### Resumo
-
-| Ficheiro | Alteracao |
+| Alteracao | Detalhe |
 |---|---|
-| `useAllPayments.ts` | Remover filtro `status = delivered`, adicionar campos InvoiceXpress ao select |
-| `useFinanceStats.ts` | Remover filtro `status = delivered` |
-| `types/finance.ts` | Adicionar `invoice_reference` e `invoicexpress_id` ao tipo `sale` |
-| `InvoicesContent.tsx` | Mostrar faturas InvoiceXpress + manuais, botao download PDF para ambas |
+| Ordem: Cliente antes do Status | Mover bloco cliente/lead para cima |
+| Novo bloco: Valor Total | `bg-primary/10` com `formatCurrency(sale.total_value)` |
+| Rename: Notas -> Observacoes | Label "Observacoes da Negociacao" |
+| Ordem geral | Seguir sequencia do ProposalDetailsModal generico |
 
