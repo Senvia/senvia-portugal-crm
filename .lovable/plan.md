@@ -1,38 +1,55 @@
 
 
-## Adicionar hora ao agendamento de recontacto do lead perdido
+## Adicionar opcao "Perdido Definitivo" ao dialog de lead perdido
 
 ### Problema
 
-Atualmente, quando o lead e movido para "Perdido", o dialog pede a data mas nao a hora. O evento e criado sempre as 10:00 por defeito (hardcoded na linha 279 do Leads.tsx).
+Atualmente, sempre que um lead e movido para "Perdido", o dialog obriga a agendar um follow-up. Isto cria um ciclo infinito: Perdido -> Follow-up -> Perdido -> Follow-up...
 
-### Alteracoes
+Precisa existir uma forma de marcar o lead como **perdido definitivo** sem agendar recontacto.
+
+### Solucao
+
+Adicionar um **switch/checkbox** no `LostLeadDialog` que permite ao utilizador escolher entre:
+- **Agendar recontacto** (comportamento atual, por defeito)
+- **Perdido definitivo** (sem follow-up, apenas motivo e notas)
+
+Quando "Perdido definitivo" esta ativo, os campos de data, hora e tipo de evento ficam escondidos e deixam de ser obrigatorios.
+
+### Fluxo do utilizador
+
+```text
+1. Lead move para "Perdido"
+2. Dialog abre com switch: "Agendar recontacto" (ON por defeito)
+   - ON: mostra campos de data/hora/tipo (como atualmente)
+   - OFF: esconde esses campos, so pede motivo + notas
+3. Botao muda de texto:
+   - ON: "Confirmar e Agendar"
+   - OFF: "Confirmar Perda Definitiva"
+```
+
+### Alteracoes tecnicas
 
 **1. `src/components/leads/LostLeadDialog.tsx`**
 
-- Adicionar estado `followUpTime` com valor inicial `"10:00"`
-- Adicionar um `<Input type="time">` ao lado do input de data, no mesmo grid
-- Incluir `followUpTime` no objeto passado ao `onConfirm`
-- Atualizar a interface `LostLeadDialogProps.onConfirm` para incluir `followUpTime: string`
-- Atualizar o reset do formulario para limpar o `followUpTime` de volta a `"10:00"`
-- Na preview da data, mostrar tambem a hora selecionada
-
-Layout dos inputs de data/hora:
-```text
-[Data de recontacto *]        [Hora *]
-[____/____/____]              [10:00]
-```
+- Adicionar estado `scheduleFollowUp` (booleano, `true` por defeito)
+- Adicionar um `Switch` com label "Agendar recontacto futuro"
+- Quando `scheduleFollowUp` e `false`:
+  - Esconder secao de data/hora e tipo de evento
+  - Campos de follow-up deixam de ser obrigatorios
+  - `followUpDate` e `followUpTime` sao enviados como strings vazias
+- Atualizar `onConfirm` para incluir `scheduleFollowUp: boolean`
+- Atualizar validacao: se `scheduleFollowUp` e true, exigir data; se false, so exigir motivo
+- Mudar texto do botao conforme o modo
 
 **2. `src/pages/Leads.tsx`**
 
-- Atualizar o tipo do `handleLostConfirm` para incluir `followUpTime: string`
-- Na linha 279, usar `data.followUpTime` em vez do `T10:00:00` hardcoded:
-  ```
-  const followUpDate = new Date(`${data.followUpDate}T${data.followUpTime}:00`);
-  ```
+- No `handleLostConfirm`, verificar `data.scheduleFollowUp`
+- Se `true`: criar evento no calendario (comportamento atual)
+- Se `false`: apenas atualizar status e notas, sem criar evento
 
 | Ficheiro | Alteracao |
 |---|---|
-| `LostLeadDialog.tsx` | Adicionar input de hora + incluir no onConfirm |
-| `Leads.tsx` | Usar hora dinamica em vez de 10:00 hardcoded |
+| `LostLeadDialog.tsx` | Adicionar switch "Agendar recontacto" + esconder campos quando OFF |
+| `Leads.tsx` | Condicionar criacao de evento ao valor de `scheduleFollowUp` |
 
