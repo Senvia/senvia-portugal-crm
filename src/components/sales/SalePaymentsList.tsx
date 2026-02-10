@@ -85,7 +85,7 @@ export function SalePaymentsList({
               </Badge>
             )}
           </div>
-          {!readonly && (
+          {!readonly && summary.remaining > 0 && (
             <Button
               variant="outline"
               size="sm"
@@ -143,7 +143,7 @@ export function SalePaymentsList({
                   )}
                 </div>
 
-                {!readonly && (
+                {!readonly && payment.status !== 'paid' && (
                   <div className="flex items-center gap-1">
                     <Button
                       variant="ghost"
@@ -172,7 +172,7 @@ export function SalePaymentsList({
             <p className="text-sm text-muted-foreground mb-3">
               Nenhum pagamento registado
             </p>
-            {!readonly && (
+            {!readonly && summary.remaining > 0 && (
               <Button
                 variant="outline"
                 size="sm"
