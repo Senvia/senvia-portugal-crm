@@ -69,7 +69,7 @@ Deno.serve(async (req) => {
     // Fetch organization credentials
     const { data: org } = await supabase
       .from('organizations')
-      .select('invoicexpress_account_name, invoicexpress_api_key, integrations_enabled')
+      .select('invoicexpress_account_name, invoicexpress_api_key, integrations_enabled, tax_config')
       .eq('id', organization_id)
       .single()
 
@@ -128,22 +128,41 @@ Deno.serve(async (req) => {
       .select('*')
       .eq('sale_id', sale_id)
 
-    const items = (saleItems || []).map((item: any) => ({
-      name: item.name,
-      description: item.name,
-      unit_price: Number(item.unit_price),
-      quantity: Number(item.quantity),
-      tax: { name: 'IVA23', value: 23 },
-    }))
+    // Tax configuration
+    const taxConfig = (org as any)?.tax_config || { tax_name: 'IVA23', tax_value: 23, tax_exemption_reason: null }
+    const taxName = taxConfig.tax_value === 0 ? 'Isento' : (taxConfig.tax_name || 'IVA23')
+    const taxValue = taxConfig.tax_value ?? 23
+
+    // Validate exemption reason when tax is 0
+    if (taxValue === 0 && !taxConfig.tax_exemption_reason) {
+      return new Response(JSON.stringify({ 
+        error: 'Configure o motivo de isenção de IVA nas Definições → Integrações → InvoiceXpress antes de emitir faturas.' 
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    const buildItem = (name: string, description: string, unitPrice: number, quantity: number) => {
+      const item: any = {
+        name,
+        description,
+        unit_price: unitPrice,
+        quantity,
+        tax: { name: taxName, value: taxValue },
+      }
+      if (taxValue === 0 && taxConfig.tax_exemption_reason) {
+        item.exemption_reason = taxConfig.tax_exemption_reason
+      }
+      return item
+    }
+
+    const items = (saleItems || []).map((item: any) => 
+      buildItem(item.name, item.name, Number(item.unit_price), Number(item.quantity))
+    )
 
     if (items.length === 0) {
-      items.push({
-        name: 'Serviço',
-        description: `Venda ${sale.code || sale_id}`,
-        unit_price: Number(sale.total_value),
-        quantity: 1,
-        tax: { name: 'IVA23', value: 23 },
-      })
+      items.push(buildItem('Serviço', `Venda ${sale.code || sale_id}`, Number(sale.total_value), 1))
     }
 
     // Use invoice_date if provided, otherwise sale_date

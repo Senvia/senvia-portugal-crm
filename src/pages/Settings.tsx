@@ -58,6 +58,8 @@ export default function Settings() {
   const [invoiceXpressAccountName, setInvoiceXpressAccountName] = useState('');
   const [invoiceXpressApiKey, setInvoiceXpressApiKey] = useState('');
   const [showInvoiceXpressApiKey, setShowInvoiceXpressApiKey] = useState(false);
+  const [taxRate, setTaxRate] = useState('23');
+  const [taxExemptionReason, setTaxExemptionReason] = useState('');
 
   // Integrations enabled state
   const [integrationsEnabled, setIntegrationsEnabled] = useState<Record<string, boolean>>({
@@ -101,7 +103,7 @@ export default function Settings() {
       setIsLoadingIntegrations(true);
       const { data, error } = await supabase
         .from('organizations')
-        .select('webhook_url, whatsapp_base_url, whatsapp_instance, whatsapp_api_key, form_settings, brevo_api_key, brevo_sender_email, invoicexpress_account_name, invoicexpress_api_key, integrations_enabled')
+        .select('webhook_url, whatsapp_base_url, whatsapp_instance, whatsapp_api_key, form_settings, brevo_api_key, brevo_sender_email, invoicexpress_account_name, invoicexpress_api_key, integrations_enabled, tax_config')
         .eq('id', organization.id)
         .single();
       
@@ -114,6 +116,13 @@ export default function Settings() {
         setBrevoSenderEmail(data.brevo_sender_email || '');
         setInvoiceXpressAccountName((data as any).invoicexpress_account_name || '');
         setInvoiceXpressApiKey((data as any).invoicexpress_api_key || '');
+
+        // Tax config
+        const tc = (data as any).tax_config;
+        if (tc) {
+          setTaxRate(String(tc.tax_value ?? 23));
+          setTaxExemptionReason(tc.tax_exemption_reason || '');
+        }
 
         // Set integrations enabled state
         if ((data as any).integrations_enabled) {
@@ -174,10 +183,17 @@ export default function Settings() {
   };
 
   const handleSaveInvoiceXpress = () => {
+    const taxValue = Number(taxRate);
+    const taxName = taxValue === 0 ? 'Isento' : `IVA${taxValue}`;
     updateOrganization.mutate({
       invoicexpress_account_name: invoiceXpressAccountName.trim() || null,
       invoicexpress_api_key: invoiceXpressApiKey.trim() || null,
-    });
+      tax_config: {
+        tax_name: taxName,
+        tax_value: taxValue,
+        tax_exemption_reason: taxValue === 0 ? taxExemptionReason : null,
+      },
+    } as any);
   };
 
   const handleTestWebhook = () => {
@@ -357,6 +373,10 @@ export default function Settings() {
                   showInvoiceXpressApiKey={showInvoiceXpressApiKey}
                   setShowInvoiceXpressApiKey={setShowInvoiceXpressApiKey}
                   handleSaveInvoiceXpress={handleSaveInvoiceXpress}
+                  taxRate={taxRate}
+                  setTaxRate={setTaxRate}
+                  taxExemptionReason={taxExemptionReason}
+                  setTaxExemptionReason={setTaxExemptionReason}
                   integrationsEnabled={integrationsEnabled}
                   onToggleIntegration={handleToggleIntegration}
                 />
@@ -560,6 +580,10 @@ export default function Settings() {
                     showInvoiceXpressApiKey={showInvoiceXpressApiKey}
                     setShowInvoiceXpressApiKey={setShowInvoiceXpressApiKey}
                     handleSaveInvoiceXpress={handleSaveInvoiceXpress}
+                    taxRate={taxRate}
+                    setTaxRate={setTaxRate}
+                    taxExemptionReason={taxExemptionReason}
+                    setTaxExemptionReason={setTaxExemptionReason}
                     integrationsEnabled={integrationsEnabled}
                     onToggleIntegration={handleToggleIntegration}
                   />

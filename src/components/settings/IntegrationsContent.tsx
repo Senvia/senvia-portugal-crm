@@ -51,6 +51,10 @@ interface IntegrationsContentProps {
   showInvoiceXpressApiKey: boolean;
   setShowInvoiceXpressApiKey: (value: boolean) => void;
   handleSaveInvoiceXpress: () => void;
+  taxRate: string;
+  setTaxRate: (value: string) => void;
+  taxExemptionReason: string;
+  setTaxExemptionReason: (value: string) => void;
   integrationsEnabled: Record<string, boolean>;
   onToggleIntegration: (key: string, enabled: boolean) => void;
 }
@@ -92,6 +96,10 @@ export const IntegrationsContent = ({
   showInvoiceXpressApiKey,
   setShowInvoiceXpressApiKey,
   handleSaveInvoiceXpress,
+  taxRate,
+  setTaxRate,
+  taxExemptionReason,
+  setTaxExemptionReason,
   integrationsEnabled,
   onToggleIntegration,
 }: IntegrationsContentProps) => {
@@ -508,6 +516,55 @@ export const IntegrationsContent = ({
                     Chave de autenticação da API InvoiceXpress.
                   </p>
                 </div>
+
+                <Separator />
+
+                <div className="space-y-2">
+                  <Label>Taxa de IVA</Label>
+                  <select
+                    value={taxRate}
+                    onChange={(e) => setTaxRate(e.target.value)}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <option value="23">IVA 23%</option>
+                    <option value="13">IVA 13%</option>
+                    <option value="6">IVA 6%</option>
+                    <option value="0">Isento de IVA</option>
+                  </select>
+                  <p className="text-xs text-muted-foreground">
+                    Taxa de imposto aplicada nas faturas emitidas.
+                  </p>
+                </div>
+
+                {taxRate === '0' && (
+                  <div className="space-y-2">
+                    <Label>Motivo de Isenção (AT)</Label>
+                    <select
+                      value={taxExemptionReason}
+                      onChange={(e) => setTaxExemptionReason(e.target.value)}
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <option value="">Selecione o motivo...</option>
+                      <option value="M01">M01 - Artigo 16.º n.º 6 do CIVA</option>
+                      <option value="M02">M02 - Artigo 6.º do Decreto-Lei n.º 198/90</option>
+                      <option value="M04">M04 - Isento Artigo 13.º do CIVA</option>
+                      <option value="M05">M05 - Isento Artigo 14.º do CIVA</option>
+                      <option value="M06">M06 - Isento Artigo 15.º do CIVA</option>
+                      <option value="M07">M07 - Isento Artigo 9.º do CIVA</option>
+                      <option value="M09">M09 - IVA não confere direito a dedução</option>
+                      <option value="M10">M10 - IVA regime de isenção (Art. 53.º)</option>
+                      <option value="M11">M11 - Regime particular do tabaco</option>
+                      <option value="M12">M12 - Regime da margem de lucro</option>
+                      <option value="M13">M13 - Regime de IVA de Caixa</option>
+                      <option value="M16">M16 - Isento Artigo 14.º do RITI</option>
+                    </select>
+                    {!taxExemptionReason && (
+                      <p className="text-xs text-destructive">
+                        Obrigatório para emissão de faturas isentas de IVA.
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 <Button
                   onClick={handleSaveInvoiceXpress}
