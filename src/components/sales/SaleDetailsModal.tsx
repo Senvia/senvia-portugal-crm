@@ -501,7 +501,7 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                     invoiceReference={sale.invoice_reference}
                     clientNif={sale.client?.nif}
                     clientName={sale.client?.name || sale.lead?.name}
-                    taxConfig={organization?.tax_config as { tax_rate?: number; tax_exemption_reason?: string } | null}
+                    taxConfig={organization?.tax_config as { tax_value?: number; tax_exemption_reason?: string } | null}
                   />
                   <Separator />
                 </>

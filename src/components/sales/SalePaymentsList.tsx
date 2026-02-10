@@ -41,7 +41,7 @@ interface SalePaymentsListProps {
   invoiceReference?: string | null;
   clientNif?: string | null;
   clientName?: string | null;
-  taxConfig?: { tax_rate?: number; tax_exemption_reason?: string } | null;
+  taxConfig?: { tax_value?: number; tax_exemption_reason?: string } | null;
 }
 
 export function SalePaymentsList({ 
