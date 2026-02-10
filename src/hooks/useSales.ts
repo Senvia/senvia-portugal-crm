@@ -52,6 +52,7 @@ export function useCreateSale() {
       proposal_id?: string;
       lead_id?: string;
       client_id?: string;
+      status?: SaleStatus;
       total_value: number;
       subtotal?: number;
       discount?: number;
@@ -95,7 +96,7 @@ export function useCreateSale() {
           sale_date: data.sale_date || new Date().toISOString().split('T')[0],
           notes: data.notes || null,
           created_by: user?.id || null,
-          status: "pending",
+          status: data.status || "pending",
           // Campos específicos de proposta
           proposal_type: data.proposal_type || null,
           consumo_anual: data.consumo_anual || null,
