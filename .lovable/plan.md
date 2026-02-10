@@ -1,40 +1,74 @@
 
 
-## Correcao da Data de Emissao da Fatura
+## Modal de Rascunho antes de Emitir Fatura
 
-### Problema
-Quando emites uma fatura hoje (10/02/2026), a data na fatura sai como 12/03/2026 porque:
-- Para **Fatura-Recibo** (pagamento pago): o frontend nao envia `invoiceDate`, entao a edge function usa `sale.sale_date` como fallback
-- Para **Fatura** (pagamento pendente): o frontend envia `payment.payment_date` (a data de vencimento do pagamento, nao a data de hoje)
+### Fluxo Atual
+Clicar "Fatura" ou "Fatura-Recibo" -> Chama edge function -> Cria rascunho no InvoiceXpress -> Finaliza automaticamente -> Fatura emitida.
 
-Em ambos os casos, a data de emissao deveria ser **a data de hoje** (o dia em que realmente emites a fatura).
+### Novo Fluxo
+Clicar "Fatura" ou "Fatura-Recibo" -> Abre modal com preview do rascunho -> Utilizador revê os dados -> Clica "Emitir" -> Chama edge function -> Fatura emitida.
 
-### Correcao
+### Alteracoes
 
-**`supabase/functions/issue-invoice/index.ts`** (linha 211):
-- Alterar a prioridade da data: usar `invoice_date` se explicitamente enviado, senao usar **a data de hoje**
-- Remover `sale.sale_date` como fallback, porque a data de emissao e sempre "hoje" por defeito
-- Usar metodo seguro para obter a data local (evitar problemas de timezone com `toISOString()`)
+**1. Novo componente: `src/components/sales/InvoiceDraftModal.tsx`**
 
-Antes:
-```
-const dateSource = invoice_date || sale.sale_date || new Date().toISOString().split('T')[0]
-```
+Modal que mostra um resumo/preview da fatura antes de emitir:
+- Nome do cliente e NIF
+- Tipo de documento (Fatura ou Fatura-Recibo)
+- Data de emissao (hoje)
+- Valor do pagamento
+- Metodo de pagamento (se disponivel)
+- Configuracao de IVA atual (taxa ou isento + motivo)
+- Botao "Cancelar" e botao "Emitir Fatura" (com loading state)
 
-Depois:
-```
-const now = new Date()
-const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`
-const dateSource = invoice_date || todayStr
-```
+**2. Alteracao: `src/components/sales/SalePaymentsList.tsx`**
 
-**`src/components/sales/SalePaymentsList.tsx`** (linhas 213-220):
-- Remover o envio de `invoiceDate: payment.payment_date` no botao de Fatura (pagamento pendente), porque a data de emissao deve ser "hoje", nao a data de vencimento do pagamento
+Em vez de chamar `issueInvoice.mutate()` diretamente nos botoes "Fatura" e "Fatura-Recibo":
+- Adicionar estado `draftPayment` para guardar o pagamento selecionado e o tipo de documento
+- Ao clicar no botao, guardar os dados e abrir o `InvoiceDraftModal`
+- O modal recebe os dados e, ao confirmar, chama `issueInvoice.mutate()`
 
-### Ficheiros alterados
+**3. Dados para o preview**
+
+O modal precisa de:
+- `clientName`, `clientNif` (ja disponiveis via props ou contexto)
+- `documentType` ("invoice" ou "invoice_receipt")
+- `paymentAmount`, `paymentDate`, `paymentMethod` (do pagamento selecionado)
+- `taxConfig` (sera buscado da organizacao via query existente ou passado como prop)
+
+Para obter o `tax_config`, sera adicionada uma query simples no componente ou passado como prop a partir do `SaleDetailsModal` que ja tem acesso a organizacao.
+
+### Detalhe tecnico
 
 | Ficheiro | Alteracao |
 |---|---|
-| `supabase/functions/issue-invoice/index.ts` | Data de emissao = hoje por defeito (sem fallback para sale_date) |
-| `src/components/sales/SalePaymentsList.tsx` | Remover envio de `invoiceDate: payment.payment_date` |
+| `src/components/sales/InvoiceDraftModal.tsx` | Novo componente - modal de preview com dados da fatura |
+| `src/components/sales/SalePaymentsList.tsx` | Substituir chamada direta por abertura do modal de rascunho |
+| `src/hooks/useOrganization.ts` (se necessario) | Verificar se ja expoe `tax_config`; se nao, adicionar |
 
+### Layout do Modal (mobile-first)
+
+```text
++----------------------------------+
+|  Rascunho de Fatura              |
++----------------------------------+
+|                                  |
+|  Tipo: Fatura-Recibo             |
+|  Data: 10/02/2026                |
+|                                  |
+|  Cliente: Joao Silva             |
+|  NIF: 123456789                  |
+|                                  |
+|  Valor: 500,00 EUR               |
+|  IVA: Isento (Art. 53.o)         |
+|                                  |
+|  Total: 500,00 EUR               |
+|                                  |
++----------------------------------+
+|  [Cancelar]     [Emitir Fatura]  |
++----------------------------------+
+```
+
+### Edge function
+
+Nenhuma alteracao necessaria - a edge function ja funciona corretamente. Toda a logica nova e no frontend.
