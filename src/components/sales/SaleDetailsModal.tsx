@@ -76,7 +76,8 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
   const deleteSale = useDeleteSale();
   const issueInvoice = useIssueInvoice();
 
-  const hasInvoiceXpress = !!(organization?.invoicexpress_account_name && organization?.invoicexpress_api_key);
+  const hasInvoiceXpress = organization?.integrations_enabled?.invoicexpress !== false
+    && !!(organization?.invoicexpress_account_name && organization?.invoicexpress_api_key);
 
   // Conditional labels based on organization niche
   const isTelecom = organization?.niche === 'telecom';

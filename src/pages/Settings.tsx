@@ -59,6 +59,10 @@ export default function Settings() {
   const [invoiceXpressApiKey, setInvoiceXpressApiKey] = useState('');
   const [showInvoiceXpressApiKey, setShowInvoiceXpressApiKey] = useState(false);
 
+  // Integrations enabled state
+  const [integrationsEnabled, setIntegrationsEnabled] = useState<Record<string, boolean>>({
+    webhook: true, whatsapp: true, brevo: true, invoicexpress: true,
+  });
 
   // Form mode state (for dynamic URL)
   const [formMode, setFormMode] = useState<'traditional' | 'conversational'>('traditional');
@@ -97,7 +101,7 @@ export default function Settings() {
       setIsLoadingIntegrations(true);
       const { data, error } = await supabase
         .from('organizations')
-        .select('webhook_url, whatsapp_base_url, whatsapp_instance, whatsapp_api_key, form_settings, brevo_api_key, brevo_sender_email, invoicexpress_account_name, invoicexpress_api_key')
+        .select('webhook_url, whatsapp_base_url, whatsapp_instance, whatsapp_api_key, form_settings, brevo_api_key, brevo_sender_email, invoicexpress_account_name, invoicexpress_api_key, integrations_enabled')
         .eq('id', organization.id)
         .single();
       
@@ -110,6 +114,14 @@ export default function Settings() {
         setBrevoSenderEmail(data.brevo_sender_email || '');
         setInvoiceXpressAccountName((data as any).invoicexpress_account_name || '');
         setInvoiceXpressApiKey((data as any).invoicexpress_api_key || '');
+
+        // Set integrations enabled state
+        if ((data as any).integrations_enabled) {
+          setIntegrationsEnabled({
+            webhook: true, whatsapp: true, brevo: true, invoicexpress: true,
+            ...((data as any).integrations_enabled as Record<string, boolean>),
+          });
+        }
         
         // Set form mode from settings
         if (data.form_settings) {
@@ -122,6 +134,17 @@ export default function Settings() {
 
     fetchIntegrations();
   }, [organization?.id, refreshTrigger]);
+
+  const handleToggleIntegration = async (key: string, enabled: boolean) => {
+    const newState = { ...integrationsEnabled, [key]: enabled };
+    setIntegrationsEnabled(newState);
+    if (organization?.id) {
+      await supabase
+        .from('organizations')
+        .update({ integrations_enabled: newState } as any)
+        .eq('id', organization.id);
+    }
+  };
 
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
@@ -334,6 +357,8 @@ export default function Settings() {
                   showInvoiceXpressApiKey={showInvoiceXpressApiKey}
                   setShowInvoiceXpressApiKey={setShowInvoiceXpressApiKey}
                   handleSaveInvoiceXpress={handleSaveInvoiceXpress}
+                  integrationsEnabled={integrationsEnabled}
+                  onToggleIntegration={handleToggleIntegration}
                 />
               )}
             </>
@@ -535,6 +560,8 @@ export default function Settings() {
                     showInvoiceXpressApiKey={showInvoiceXpressApiKey}
                     setShowInvoiceXpressApiKey={setShowInvoiceXpressApiKey}
                     handleSaveInvoiceXpress={handleSaveInvoiceXpress}
+                    integrationsEnabled={integrationsEnabled}
+                    onToggleIntegration={handleToggleIntegration}
                   />
                 </TabsContent>
               )}

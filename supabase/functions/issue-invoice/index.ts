@@ -62,9 +62,18 @@ Deno.serve(async (req) => {
     // Fetch organization credentials
     const { data: org } = await supabase
       .from('organizations')
-      .select('invoicexpress_account_name, invoicexpress_api_key')
+      .select('invoicexpress_account_name, invoicexpress_api_key, integrations_enabled')
       .eq('id', organization_id)
       .single()
+
+    // Check if integration is enabled
+    const integrationsEnabled = (org?.integrations_enabled as Record<string, boolean> | null) || {}
+    if (integrationsEnabled.invoicexpress === false) {
+      return new Response(JSON.stringify({ error: 'Integração InvoiceXpress desativada' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
 
     if (!org?.invoicexpress_account_name || !org?.invoicexpress_api_key) {
       return new Response(JSON.stringify({ error: 'Credenciais InvoiceXpress não configuradas' }), {
