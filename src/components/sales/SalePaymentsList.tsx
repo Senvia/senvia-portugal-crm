@@ -20,13 +20,14 @@ import { useIssueInvoice } from "@/hooks/useIssueInvoice";
 import { formatCurrency } from "@/lib/format";
 import { AddPaymentModal } from "./AddPaymentModal";
 import { ScheduleRemainingModal } from "./ScheduleRemainingModal";
+import { PaymentTypeSelector } from "./PaymentTypeSelector";
 import type { SalePayment } from "@/types/sales";
 import { 
   PAYMENT_METHOD_LABELS, 
   PAYMENT_RECORD_STATUS_LABELS,
   PAYMENT_RECORD_STATUS_COLORS 
 } from "@/types/sales";
-import type { PaymentMethod } from "@/types/sales";
+
 import { toast } from "sonner";
 
 interface SalePaymentsListProps {
@@ -55,11 +56,11 @@ export function SalePaymentsList({
   const issueInvoice = useIssueInvoice();
   const hasPaidPayments = payments.some(p => p.status === 'paid');
   
+  const [showTypeSelector, setShowTypeSelector] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingPayment, setEditingPayment] = useState<SalePayment | null>(null);
   const [deletingPayment, setDeletingPayment] = useState<SalePayment | null>(null);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
-  const [lastPaymentMethod, setLastPaymentMethod] = useState<PaymentMethod | null>(null);
 
   const summary = calculatePaymentSummary(payments, saleTotal);
 
@@ -105,7 +106,7 @@ export function SalePaymentsList({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setShowAddModal(true)}
+              onClick={() => setShowTypeSelector(true)}
             >
               <Plus className="h-4 w-4 mr-1" />
               Adicionar
@@ -235,7 +236,7 @@ export function SalePaymentsList({
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setShowAddModal(true)}
+                onClick={() => setShowTypeSelector(true)}
               >
                 <Plus className="h-4 w-4 mr-1" />
                 Adicionar Pagamento
@@ -283,6 +284,21 @@ export function SalePaymentsList({
 
       </div>
 
+      {/* Type Selector */}
+      <PaymentTypeSelector
+        open={showTypeSelector}
+        onOpenChange={setShowTypeSelector}
+        remainingAmount={summary.remaining}
+        onSelectTotal={() => {
+          setShowTypeSelector(false);
+          setShowAddModal(true);
+        }}
+        onSelectInstallments={() => {
+          setShowTypeSelector(false);
+          setShowScheduleModal(true);
+        }}
+      />
+
       {/* Add/Edit Modal */}
       <AddPaymentModal
         open={showAddModal || !!editingPayment}
@@ -297,15 +313,6 @@ export function SalePaymentsList({
         saleTotal={saleTotal}
         remaining={summary.remaining}
         payment={editingPayment}
-        onSuccess={(amountPaid, method) => {
-          setLastPaymentMethod(method);
-          // Recalculate remaining after this payment
-          const newRemaining = summary.remaining - amountPaid;
-          if (newRemaining > 0.01) {
-            // Small delay to let the query invalidate
-            setTimeout(() => setShowScheduleModal(true), 300);
-          }
-        }}
       />
 
       {/* Schedule Remaining Modal */}
@@ -315,7 +322,6 @@ export function SalePaymentsList({
         saleId={saleId}
         organizationId={organizationId}
         remainingAmount={Math.max(0, summary.remaining)}
-        defaultPaymentMethod={lastPaymentMethod}
       />
 
       {/* Delete Confirmation */}
