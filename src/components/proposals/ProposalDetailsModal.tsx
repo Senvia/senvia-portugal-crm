@@ -542,43 +542,32 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
                 </Badge>
               )}
             </div>
+            <p className="text-sm text-muted-foreground">
+              {format(new Date(proposal.proposal_date), "d 'de' MMMM 'de' yyyy", { locale: pt })}
+            </p>
           </DialogHeader>
 
           <div className="space-y-4">
-            {/* 1. Proposta - Código + Data */}
-            <div className="flex items-center justify-between gap-4 p-4 rounded-lg bg-muted/30 border">
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-muted-foreground mb-1">Proposta</p>
-                <p className="font-semibold text-base">
-                  {proposal.code || 'Sem código'}
+            {/* Resumo Telecom */}
+            {orgData?.niche === 'telecom' && (
+              <div className="p-4 rounded-lg bg-muted/30 border space-y-1">
+                <p className="text-sm text-muted-foreground">
+                  Consumo Total: <strong className="text-foreground">{(proposalCpes.reduce((sum, cpe) => sum + (Number(cpe.consumo_anual) || 0), 0) / 1000).toLocaleString('pt-PT', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} MWh</strong>
                 </p>
-                {orgData?.niche === 'telecom' && (
-                  <div className="mt-2 space-y-1">
-                    <p className="text-sm text-muted-foreground">
-                      Consumo Total: <strong className="text-foreground">{(proposalCpes.reduce((sum, cpe) => sum + (Number(cpe.consumo_anual) || 0), 0) / 1000).toLocaleString('pt-PT', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} MWh</strong>
-                    </p>
-                    {proposal.proposal_type === 'energia' && proposalCpes.length > 0 && (
-                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                        <span>Margem Total: <strong className="text-foreground">{formatCurrency(proposalCpes.reduce((sum, cpe) => sum + (Number(cpe.margem) || 0), 0))}</strong></span>
-                        <span>Comissão Total: <strong className="text-foreground">{formatCurrency(proposalCpes.reduce((sum, cpe) => sum + (Number(cpe.comissao) || 0), 0))}</strong></span>
-                      </div>
-                    )}
-                    {proposal.proposal_type === 'servicos' && (
-                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                        {proposal.kwp != null && <span>kWp: <strong className="text-foreground">{Number(proposal.kwp).toLocaleString('pt-PT')}</strong></span>}
-                        {proposal.comissao != null && <span>Comissão: <strong className="text-foreground">{formatCurrency(Number(proposal.comissao))}</strong></span>}
-                      </div>
-                    )}
+                {proposal.proposal_type === 'energia' && proposalCpes.length > 0 && (
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                    <span>Margem Total: <strong className="text-foreground">{formatCurrency(proposalCpes.reduce((sum, cpe) => sum + (Number(cpe.margem) || 0), 0))}</strong></span>
+                    <span>Comissão Total: <strong className="text-foreground">{formatCurrency(proposalCpes.reduce((sum, cpe) => sum + (Number(cpe.comissao) || 0), 0))}</strong></span>
+                  </div>
+                )}
+                {proposal.proposal_type === 'servicos' && (
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                    {proposal.kwp != null && <span>kWp: <strong className="text-foreground">{Number(proposal.kwp).toLocaleString('pt-PT')}</strong></span>}
+                    {proposal.comissao != null && <span>Comissão: <strong className="text-foreground">{formatCurrency(Number(proposal.comissao))}</strong></span>}
                   </div>
                 )}
               </div>
-              <div className="text-right shrink-0">
-                <p className="text-sm text-muted-foreground">Data</p>
-                <p className="font-medium">
-                  {format(new Date(proposal.proposal_date), "d 'de' MMMM 'de' yyyy", { locale: pt })}
-                </p>
-              </div>
-            </div>
+            )}
 
             {/* 2. Cliente */}
             {proposal.client && (
