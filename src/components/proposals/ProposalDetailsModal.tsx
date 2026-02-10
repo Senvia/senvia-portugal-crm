@@ -484,7 +484,10 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
 
   return (
     <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
+      <Dialog open={open} onOpenChange={(isOpen) => {
+        if (!isOpen && showSaleModal) return;
+        onOpenChange(isOpen);
+      }}>
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader className="pr-10">
             <div className="flex items-center gap-3 flex-wrap">
