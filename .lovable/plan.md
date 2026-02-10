@@ -1,63 +1,38 @@
 
 
-## Obrigar agendamento de follow-up ao mover lead para "Perdido"
+## Adicionar hora ao agendamento de recontacto do lead perdido
 
-### Conceito
+### Problema
 
-Quando um lead é movido para a coluna "Perdido" (por drag-and-drop no Kanban, ou pelo select no modal de detalhes), interceptar a acao e abrir um dialog que obriga a agendar um follow-up futuro antes de confirmar a perda. A ideia e: nenhum lead e verdadeiramente perdido -- e sempre possivel recupera-lo com uma chamada ou reuniao daqui a 30, 60 ou 90 dias.
+Atualmente, quando o lead e movido para "Perdido", o dialog pede a data mas nao a hora. O evento e criado sempre as 10:00 por defeito (hardcoded na linha 279 do Leads.tsx).
 
-### Fluxo do utilizador
+### Alteracoes
 
+**1. `src/components/leads/LostLeadDialog.tsx`**
+
+- Adicionar estado `followUpTime` com valor inicial `"10:00"`
+- Adicionar um `<Input type="time">` ao lado do input de data, no mesmo grid
+- Incluir `followUpTime` no objeto passado ao `onConfirm`
+- Atualizar a interface `LostLeadDialogProps.onConfirm` para incluir `followUpTime: string`
+- Atualizar o reset do formulario para limpar o `followUpTime` de volta a `"10:00"`
+- Na preview da data, mostrar tambem a hora selecionada
+
+Layout dos inputs de data/hora:
 ```text
-1. Utilizador arrasta lead para "Perdido"
-2. Abre um dialog: "Agendar Recontacto"
-   - Motivo da perda (select): Preco, Concorrencia, Sem resposta, Timing, Outro
-   - Notas (textarea opcional)
-   - Data de recontacto (obrigatoria): botoes rapidos "30 dias", "60 dias", "90 dias" + input de data
-   - Tipo de evento: Chamada (default) ou Reuniao
-3. Ao confirmar:
-   - O lead move para "Perdido"
-   - O motivo e guardado nas notas/campo do lead
-   - Um evento e criado no calendario para a data de recontacto
-4. Se cancelar: o lead fica onde estava
+[Data de recontacto *]        [Hora *]
+[____/____/____]              [10:00]
 ```
-
-### Alteracoes tecnicas
-
-**1. Novo componente: `src/components/leads/LostLeadDialog.tsx`**
-
-Dialog modal com:
-- Select para "Motivo da perda" (Preco, Concorrencia, Sem resposta, Timing, Outro)
-- Textarea para notas adicionais (opcional)
-- 3 botoes rapidos de data (30d, 60d, 90d) que preenchem automaticamente o date input
-- Input de data obrigatorio
-- Select de tipo de evento (Chamada / Follow-up)
-- Botoes Cancelar e "Confirmar e Agendar"
 
 **2. `src/pages/Leads.tsx`**
 
-- Adicionar funcao `isLostStage(stageKey)` seguindo o padrao existente de `isScheduledStage` e `isProposalStage` (procura por keywords como "perdido", "lost")
-- No `handleStatusChange`, interceptar quando `isLostStage(newStatus)` e true:
-  - Guardar o lead pendente e o status destino
-  - Abrir o `LostLeadDialog`
-- Handler `handleLostConfirm`:
-  - Atualizar o lead com o status "lost" e guardar motivo da perda nas notas
-  - Criar evento no calendario com a data e tipo escolhidos (usando `useCreateEvent`)
-  - Limpar estados
+- Atualizar o tipo do `handleLostConfirm` para incluir `followUpTime: string`
+- Na linha 279, usar `data.followUpTime` em vez do `T10:00:00` hardcoded:
+  ```
+  const followUpDate = new Date(`${data.followUpDate}T${data.followUpTime}:00`);
+  ```
 
-**3. `src/components/leads/LeadDetailsModal.tsx`**
-
-- Interceptar a mudanca de status no Select (linha 292) quando o novo valor corresponde a um "lost stage"
-- Em vez de chamar `onStatusChange` diretamente, delegar para o parent (Leads.tsx) que ja tem a logica de intercecao
-
-### Resultado
-
-- Nenhum lead vai para "Perdido" sem um follow-up agendado
-- O vendedor e obrigado a registar porque perdeu o lead (dados valiosos para analise)
-- O evento aparece automaticamente no calendario, garantindo que o lead sera recontactado
-
-| Ficheiro | Acao |
+| Ficheiro | Alteracao |
 |---|---|
-| `src/components/leads/LostLeadDialog.tsx` | Novo componente - dialog de perda com agendamento |
-| `src/pages/Leads.tsx` | Adicionar intercecao para "lost stages" no handleStatusChange |
-| Nenhuma alteracao necessaria no LeadDetailsModal | O onStatusChange ja delega para o Leads.tsx |
+| `LostLeadDialog.tsx` | Adicionar input de hora + incluir no onConfirm |
+| `Leads.tsx` | Usar hora dinamica em vez de 10:00 hardcoded |
+
