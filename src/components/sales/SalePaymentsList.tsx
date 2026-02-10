@@ -159,26 +159,46 @@ export function SalePaymentsList({
                   )}
                 </div>
 
-                {!readonly && payment.status !== 'paid' && (
-                  <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1">
+                  {!readonly && payment.status !== 'paid' && (
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => setEditingPayment(payment)}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-destructive hover:text-destructive"
+                        onClick={() => setDeletingPayment(payment)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </>
+                  )}
+                  {payment.status === 'paid' && hasInvoiceXpress && !payment.invoice_reference && (
                     <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => setEditingPayment(payment)}
+                      variant="outline"
+                      size="sm"
+                      className="h-8 text-xs"
+                      disabled={issueInvoice.isPending}
+                      onClick={() => {
+                        if (!clientNif) {
+                          toast.error("Cliente sem NIF. Adicione o NIF antes de emitir fatura.");
+                          return;
+                        }
+                        issueInvoice.mutate({ saleId, organizationId });
+                      }}
                     >
-                      <Pencil className="h-3.5 w-3.5" />
+                      <Receipt className="h-3 w-3 mr-1" />
+                      Fatura
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-destructive hover:text-destructive"
-                      onClick={() => setDeletingPayment(payment)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -238,33 +258,6 @@ export function SalePaymentsList({
           </div>
         )}
 
-        {/* Invoice Action */}
-        {hasInvoiceXpress && hasPaidPayments && (
-          <div className="pt-2">
-            {invoicexpressId ? (
-              <Badge className="bg-green-500/20 text-green-500 border-green-500/30 text-xs">
-                <Receipt className="h-3 w-3 mr-1" />
-                Fatura: {invoiceReference || `#${invoicexpressId}`}
-              </Badge>
-            ) : (
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={issueInvoice.isPending}
-                onClick={() => {
-                  if (!clientNif) {
-                    toast.error("Cliente sem NIF. Adicione o NIF antes de emitir fatura.");
-                    return;
-                  }
-                  issueInvoice.mutate({ saleId, organizationId });
-                }}
-              >
-                <Receipt className="h-3.5 w-3.5 mr-1.5" />
-                Emitir Fatura-Recibo
-              </Button>
-            )}
-          </div>
-        )}
       </div>
 
       {/* Add/Edit Modal */}
