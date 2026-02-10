@@ -1,68 +1,96 @@
 
+## Fase 1: Emitir Fatura-Recibo (com logica condicional)
 
-## Integração InvoiceXpress - Emissão de Faturas
+### Comportamento
 
-### O que o utilizador precisa fornecer
+O modal de venda tera **duas experiencias diferentes** na secao de faturacao, dependendo se a organizacao tem uma integracao de faturacao ativa ou nao:
 
-Duas credenciais, ambas disponiveis em **InvoiceXpress -> Conta -> Integrações -> API**:
+**Se InvoiceXpress configurado** (organizacao tem `invoicexpress_account_name` E `invoicexpress_api_key`):
+- Mostra botao "Emitir Fatura-Recibo" para vendas com status `delivered`
+- Apos emissao, mostra Badge verde com referencia da fatura (ex: "FR A/28")
+- Valida NIF do cliente antes de emitir
 
-1. **Account Name** -- o subdominio da conta (ex: `minhaempresa`)
-2. **API Key** -- chave de autenticacao da API
+**Se SEM integracao de faturacao:**
+- Mostra os campos manuais que ja existem ao nivel do pagamento (referencia da fatura + anexar ficheiro)
+- Nenhuma alteracao necessaria aqui -- ja funciona no `AddPaymentModal` via `invoice_reference` e `invoice_file_url`
 
-### Alteracoes necessarias
+### Secao tecnica
 
-#### 1. Base de dados -- nova migracao
+#### 1. Migracao de base de dados
 
-Adicionar 2 colunas a tabela `organizations`:
+Adicionar campos para guardar o ID do documento InvoiceXpress na venda:
+
 ```sql
-ALTER TABLE public.organizations
-  ADD COLUMN invoicexpress_account_name text,
-  ADD COLUMN invoicexpress_api_key text;
+ALTER TABLE public.sales
+  ADD COLUMN invoicexpress_id bigint,
+  ADD COLUMN invoicexpress_type text DEFAULT 'invoice_receipts',
+  ADD COLUMN invoice_reference text;
 ```
 
-#### 2. Tipo TypeScript -- `src/hooks/useOrganization.ts`
+O campo `invoice_reference` guarda o numero sequencial da fatura (ex: "FR A/28").
 
-Adicionar os novos campos ao `UpdateOrganizationData`:
+#### 2. Edge Function `issue-invoice` (novo ficheiro)
+
+`supabase/functions/issue-invoice/index.ts`
+
+Responsabilidades:
+- Recebe `sale_id` e `organization_id` via POST (com auth JWT)
+- Busca a venda com items e dados do cliente
+- Busca credenciais InvoiceXpress da organizacao
+- Valida: cliente tem NIF, credenciais existem, venda nao tem ja fatura emitida
+- Chama API InvoiceXpress:
+  - POST para criar draft do documento
+  - PUT para finalizar (comunicar AT)
+- Guarda `invoicexpress_id` e `invoice_reference` na venda
+- Retorna sucesso com numero da fatura
+
+#### 3. Atualizar tipo `Sale` em `src/types/sales.ts`
+
+Adicionar novos campos:
 ```typescript
-invoicexpress_account_name?: string | null;
-invoicexpress_api_key?: string | null;
+invoicexpress_id: number | null;
+invoicexpress_type: string | null;
+invoice_reference: string | null;  // ja existe na Sale mas confirmar
 ```
 
-#### 3. Pagina Settings -- `src/pages/Settings.tsx`
+#### 4. Hook `useIssueInvoice` (novo ficheiro)
 
-Adicionar estado e handler para InvoiceXpress (seguindo o mesmo padrao do Brevo):
-- `invoiceXpressAccountName` / `setInvoiceXpressAccountName`
-- `invoiceXpressApiKey` / `setInvoiceXpressApiKey`
-- `showInvoiceXpressApiKey` / `setShowInvoiceXpressApiKey`
-- `handleSaveInvoiceXpress()`
-- Carregar os valores da organizacao no `useEffect` existente
+`src/hooks/useIssueInvoice.ts` -- useMutation que chama a edge function, invalida queries `["sales"]` no sucesso, mostra toasts.
 
-#### 4. Componente de Integrações -- `src/components/settings/IntegrationsContent.tsx`
+#### 5. Atualizar `SaleDetailsModal.tsx`
 
-Adicionar nova secao no Accordion (seguindo o padrao do Brevo):
-- Icone: `Receipt` (ja importado no Settings)
-- Titulo: "Faturacao (InvoiceXpress)"
-- Badge de estado: Configurado / Nao configurado
-- Campos:
-  - **Account Name** (input text, visivel)
-  - **API Key** (input password com toggle show/hide)
-- Nota informativa: "Encontre estas credenciais em InvoiceXpress -> Conta -> Integracoes -> API"
-- Botao "Guardar"
+Logica condicional na secao de acoes (footer do modal):
 
-#### 5. Props do componente
-
-Expandir a interface `IntegrationsContentProps` com os novos campos:
-```typescript
-invoiceXpressAccountName: string;
-setInvoiceXpressAccountName: (value: string) => void;
-invoiceXpressApiKey: string;
-setInvoiceXpressApiKey: (value: string) => void;
-showInvoiceXpressApiKey: boolean;
-setShowInvoiceXpressApiKey: (value: boolean) => void;
-handleSaveInvoiceXpress: () => void;
+```text
+const hasInvoiceXpress = organization?.invoicexpress_account_name 
+  && organization?.invoicexpress_api_key;
 ```
 
-### Nota sobre emissao de faturas
+- **Se `hasInvoiceXpress` e `sale.status === 'delivered'`:**
+  - Se `sale.invoicexpress_id` existe: Badge verde "Fatura Emitida: {invoice_reference}"
+  - Se nao: Botao "Emitir Fatura-Recibo" com loading state e validacao de NIF
 
-Esta fase configura apenas as **credenciais** na pagina de integracoes. A emissao efetiva de faturas (botao "Emitir Fatura" no modal de venda, Edge Function para chamar a API do InvoiceXpress) sera um passo seguinte, apos as credenciais estarem guardadas.
+- **Se NAO tem InvoiceXpress:**
+  - Nada muda -- os campos de referencia/anexo de fatura ja existem no `AddPaymentModal` ao nivel de cada pagamento
 
+#### 6. Garantir que `organization` inclui campos InvoiceXpress
+
+Verificar que o `useAuth` / contexto da organizacao ja traz os campos `invoicexpress_account_name` e `invoicexpress_api_key` (adicionados na migracao anterior).
+
+### Ficheiros a criar/alterar
+
+| Ficheiro | Acao |
+|---|---|
+| `supabase/migrations/...` | Nova migracao (3 colunas) |
+| `supabase/functions/issue-invoice/index.ts` | Novo -- Edge Function |
+| `src/types/sales.ts` | Adicionar campos `invoicexpress_id`, `invoicexpress_type` |
+| `src/hooks/useIssueInvoice.ts` | Novo -- hook para chamar a edge function |
+| `src/components/sales/SaleDetailsModal.tsx` | Botao condicional no footer |
+
+### Validacoes e seguranca
+
+- Edge Function valida auth JWT e membership na organizacao
+- Credenciais InvoiceXpress lidas da BD, nunca expostas ao frontend
+- NIF obrigatorio -- toast de aviso se nao existir
+- Protecao contra duplicados: se `invoicexpress_id` ja existe, recusa emitir
+- IVA fixo a 23% (configuravel numa fase futura)
