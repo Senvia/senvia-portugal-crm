@@ -1,39 +1,68 @@
 
-## Mostrar todos os dados do cliente no modal de venda
 
-### Problema
+## Integração InvoiceXpress - Emissão de Faturas
 
-Atualmente, o modal de venda so mostra o nome e codigo do cliente. Para fazer uma fatura na AT, precisas de NIF, morada, email, telefone, empresa -- e tens de ir a ficha do cliente buscar esses dados.
+### O que o utilizador precisa fornecer
 
-### O que muda
+Duas credenciais, ambas disponiveis em **InvoiceXpress -> Conta -> Integrações -> API**:
 
-Expandir a secao "Cliente" no modal para mostrar todos os campos relevantes para faturacao: NIF, empresa, email, telefone e morada completa.
+1. **Account Name** -- o subdominio da conta (ex: `minhaempresa`)
+2. **API Key** -- chave de autenticacao da API
 
-### Secao tecnica
+### Alteracoes necessarias
 
-**3 ficheiros a alterar:**
+#### 1. Base de dados -- nova migracao
 
-**1. `src/types/sales.ts`** -- Expandir o tipo `client` dentro de `SaleWithDetails`:
+Adicionar 2 colunas a tabela `organizations`:
+```sql
+ALTER TABLE public.organizations
+  ADD COLUMN invoicexpress_account_name text,
+  ADD COLUMN invoicexpress_api_key text;
+```
+
+#### 2. Tipo TypeScript -- `src/hooks/useOrganization.ts`
+
+Adicionar os novos campos ao `UpdateOrganizationData`:
 ```typescript
-client?: {
-  id: string;
-  name: string;
-  code?: string;
-  email?: string | null;
-  phone?: string | null;
-  company?: string | null;
-  nif?: string | null;
-  address_line1?: string | null;
-  address_line2?: string | null;
-  city?: string | null;
-  postal_code?: string | null;
-  country?: string | null;
-} | null;
+invoicexpress_account_name?: string | null;
+invoicexpress_api_key?: string | null;
 ```
 
-**2. `src/hooks/useSales.ts`** -- Expandir a query para trazer todos os campos:
-```
-client:crm_clients(id, name, code, email, phone, company, nif, address_line1, address_line2, city, postal_code, country)
+#### 3. Pagina Settings -- `src/pages/Settings.tsx`
+
+Adicionar estado e handler para InvoiceXpress (seguindo o mesmo padrao do Brevo):
+- `invoiceXpressAccountName` / `setInvoiceXpressAccountName`
+- `invoiceXpressApiKey` / `setInvoiceXpressApiKey`
+- `showInvoiceXpressApiKey` / `setShowInvoiceXpressApiKey`
+- `handleSaveInvoiceXpress()`
+- Carregar os valores da organizacao no `useEffect` existente
+
+#### 4. Componente de Integrações -- `src/components/settings/IntegrationsContent.tsx`
+
+Adicionar nova secao no Accordion (seguindo o padrao do Brevo):
+- Icone: `Receipt` (ja importado no Settings)
+- Titulo: "Faturacao (InvoiceXpress)"
+- Badge de estado: Configurado / Nao configurado
+- Campos:
+  - **Account Name** (input text, visivel)
+  - **API Key** (input password com toggle show/hide)
+- Nota informativa: "Encontre estas credenciais em InvoiceXpress -> Conta -> Integracoes -> API"
+- Botao "Guardar"
+
+#### 5. Props do componente
+
+Expandir a interface `IntegrationsContentProps` com os novos campos:
+```typescript
+invoiceXpressAccountName: string;
+setInvoiceXpressAccountName: (value: string) => void;
+invoiceXpressApiKey: string;
+setInvoiceXpressApiKey: (value: string) => void;
+showInvoiceXpressApiKey: boolean;
+setShowInvoiceXpressApiKey: (value: boolean) => void;
+handleSaveInvoiceXpress: () => void;
 ```
 
-**3. `src/components/sales/SaleDetailsModal.tsx`** -- Expandir a secao visual do cliente para mostrar os novos campos (NIF, empresa, email, telefone, morada), dando prioridade ao NIF e empresa por serem os mais importantes para faturacao. O email e telefone do cliente terao prioridade sobre os do lead (fallback para lead se o cliente nao tiver).
+### Nota sobre emissao de faturas
+
+Esta fase configura apenas as **credenciais** na pagina de integracoes. A emissao efetiva de faturas (botao "Emitir Fatura" no modal de venda, Edge Function para chamar a API do InvoiceXpress) sera um passo seguinte, apos as credenciais estarem guardadas.
+
