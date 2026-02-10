@@ -43,6 +43,7 @@ interface LostLeadDialogProps {
     lossReason: string;
     notes: string;
     followUpDate: string;
+    followUpTime: string;
     eventType: "call" | "meeting";
   }) => void;
 }
@@ -56,6 +57,7 @@ export function LostLeadDialog({
   const [lossReason, setLossReason] = useState<string>("");
   const [notes, setNotes] = useState("");
   const [followUpDate, setFollowUpDate] = useState("");
+  const [followUpTime, setFollowUpTime] = useState("10:00");
   const [eventType, setEventType] = useState<"call" | "meeting">("call");
 
   const handleQuickDate = (days: number) => {
@@ -65,11 +67,12 @@ export function LostLeadDialog({
 
   const handleConfirm = () => {
     if (!lossReason || !followUpDate) return;
-    onConfirm({ lossReason, notes, followUpDate, eventType });
+    onConfirm({ lossReason, notes, followUpDate, followUpTime, eventType });
     // Reset
     setLossReason("");
     setNotes("");
     setFollowUpDate("");
+    setFollowUpTime("10:00");
     setEventType("call");
   };
 
@@ -78,6 +81,7 @@ export function LostLeadDialog({
       setLossReason("");
       setNotes("");
       setFollowUpDate("");
+      setFollowUpTime("10:00");
       setEventType("call");
     }
     onOpenChange(open);
@@ -149,15 +153,28 @@ export function LostLeadDialog({
                 </Button>
               ))}
             </div>
-            <Input
-              type="date"
-              value={followUpDate}
-              onChange={(e) => setFollowUpDate(e.target.value)}
-              min={format(addDays(new Date(), 1), "yyyy-MM-dd")}
-            />
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label className="text-xs text-muted-foreground mb-1">Data *</Label>
+                <Input
+                  type="date"
+                  value={followUpDate}
+                  onChange={(e) => setFollowUpDate(e.target.value)}
+                  min={format(addDays(new Date(), 1), "yyyy-MM-dd")}
+                />
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground mb-1">Hora *</Label>
+                <Input
+                  type="time"
+                  value={followUpTime}
+                  onChange={(e) => setFollowUpTime(e.target.value)}
+                />
+              </div>
+            </div>
             {followUpDate && (
               <p className="text-xs text-muted-foreground">
-                Recontacto a {format(new Date(followUpDate + "T12:00:00"), "d 'de' MMMM 'de' yyyy", { locale: pt })}
+                Recontacto a {format(new Date(followUpDate + "T12:00:00"), "d 'de' MMMM 'de' yyyy", { locale: pt })} às {followUpTime}
               </p>
             )}
           </div>

@@ -253,6 +253,7 @@ export default function Leads() {
     lossReason: string;
     notes: string;
     followUpDate: string;
+    followUpTime: string;
     eventType: "call" | "meeting";
   }) => {
     if (!pendingLostStatus || !pendingLead) return;
@@ -276,7 +277,7 @@ export default function Leads() {
     updateLead.mutate({ leadId: pendingLostStatus.leadId, updates: { notes: updatedNotes } });
 
     // Create follow-up calendar event
-    const followUpDate = new Date(data.followUpDate + "T10:00:00");
+    const followUpDate = new Date(`${data.followUpDate}T${data.followUpTime}:00`);
     createEvent.mutate({
       title: `Recontacto: ${pendingLead.name}`,
       description: `Follow-up de lead perdido (${reasonLabel}). ${data.notes || ""}`.trim(),
