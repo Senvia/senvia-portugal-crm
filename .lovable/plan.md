@@ -1,74 +1,38 @@
 
 
-## Modal de Rascunho antes de Emitir Fatura
+## Correcao do Modal de Rascunho e IVA
 
-### Fluxo Atual
-Clicar "Fatura" ou "Fatura-Recibo" -> Chama edge function -> Cria rascunho no InvoiceXpress -> Finaliza automaticamente -> Fatura emitida.
+### Problemas Identificados
 
-### Novo Fluxo
-Clicar "Fatura" ou "Fatura-Recibo" -> Abre modal com preview do rascunho -> Utilizador revê os dados -> Clica "Emitir" -> Chama edge function -> Fatura emitida.
+**1. Campo IVA com nome errado (bug critico)**
+- A base de dados guarda `tax_config.tax_value` (ex: 23 ou 0)
+- O modal de rascunho le `taxConfig.tax_rate` que **nao existe** no objeto
+- Resultado: o modal mostra sempre "Isento" (porque `tax_rate` e `undefined`, default 0), mas a edge function envia IVA a 23% porque le o campo correto `tax_value`
 
-### Alteracoes
+**2. A tua organizacao tem `tax_value: 23` na base de dados**
+- Mesmo que tenhas configurado "Isento" no InvoiceXpress, nas definicoes do Senvia o IVA esta a 23%
+- Tens de ir a Definicoes -> Integracoes -> InvoiceXpress e guardar com taxa 0% e motivo de isencao
 
-**1. Novo componente: `src/components/sales/InvoiceDraftModal.tsx`**
+### Correcoes
 
-Modal que mostra um resumo/preview da fatura antes de emitir:
-- Nome do cliente e NIF
-- Tipo de documento (Fatura ou Fatura-Recibo)
-- Data de emissao (hoje)
-- Valor do pagamento
-- Metodo de pagamento (se disponivel)
-- Configuracao de IVA atual (taxa ou isento + motivo)
-- Botao "Cancelar" e botao "Emitir Fatura" (com loading state)
+**`src/components/sales/InvoiceDraftModal.tsx`**
+- Alterar a interface de props para usar `tax_value` em vez de `tax_rate` (alinhar com o que a DB guarda)
+- Ler `taxConfig?.tax_value` em vez de `taxConfig?.tax_rate`
 
-**2. Alteracao: `src/components/sales/SalePaymentsList.tsx`**
+**`src/components/sales/SalePaymentsList.tsx`**
+- Alterar a interface `taxConfig` de `{ tax_rate?: number; ... }` para `{ tax_value?: number; ... }`
 
-Em vez de chamar `issueInvoice.mutate()` diretamente nos botoes "Fatura" e "Fatura-Recibo":
-- Adicionar estado `draftPayment` para guardar o pagamento selecionado e o tipo de documento
-- Ao clicar no botao, guardar os dados e abrir o `InvoiceDraftModal`
-- O modal recebe os dados e, ao confirmar, chama `issueInvoice.mutate()`
+**`src/components/sales/SaleDetailsModal.tsx`**
+- Alterar o cast de `tax_rate` para `tax_value` na passagem de props
 
-**3. Dados para o preview**
+### Detalhes tecnicos
 
-O modal precisa de:
-- `clientName`, `clientNif` (ja disponiveis via props ou contexto)
-- `documentType` ("invoice" ou "invoice_receipt")
-- `paymentAmount`, `paymentDate`, `paymentMethod` (do pagamento selecionado)
-- `taxConfig` (sera buscado da organizacao via query existente ou passado como prop)
-
-Para obter o `tax_config`, sera adicionada uma query simples no componente ou passado como prop a partir do `SaleDetailsModal` que ja tem acesso a organizacao.
-
-### Detalhe tecnico
-
-| Ficheiro | Alteracao |
+| Ficheiro | O que muda |
 |---|---|
-| `src/components/sales/InvoiceDraftModal.tsx` | Novo componente - modal de preview com dados da fatura |
-| `src/components/sales/SalePaymentsList.tsx` | Substituir chamada direta por abertura do modal de rascunho |
-| `src/hooks/useOrganization.ts` (se necessario) | Verificar se ja expoe `tax_config`; se nao, adicionar |
+| `InvoiceDraftModal.tsx` | Interface: `tax_rate` -> `tax_value`; logica interna usa `tax_value` |
+| `SalePaymentsList.tsx` | Interface de props: `tax_rate` -> `tax_value` |
+| `SaleDetailsModal.tsx` | Cast no JSX: `tax_rate` -> `tax_value` |
 
-### Layout do Modal (mobile-first)
+### Nota importante
+Apos esta correcao, o modal vai mostrar os dados **reais** (IVA 23% se a tua config estiver a 23%). Para emitir sem IVA, tens de ir a Definicoes -> Integracoes -> InvoiceXpress, colocar a taxa a 0% e preencher o motivo de isencao, e guardar.
 
-```text
-+----------------------------------+
-|  Rascunho de Fatura              |
-+----------------------------------+
-|                                  |
-|  Tipo: Fatura-Recibo             |
-|  Data: 10/02/2026                |
-|                                  |
-|  Cliente: Joao Silva             |
-|  NIF: 123456789                  |
-|                                  |
-|  Valor: 500,00 EUR               |
-|  IVA: Isento (Art. 53.o)         |
-|                                  |
-|  Total: 500,00 EUR               |
-|                                  |
-+----------------------------------+
-|  [Cancelar]     [Emitir Fatura]  |
-+----------------------------------+
-```
-
-### Edge function
-
-Nenhuma alteracao necessaria - a edge function ja funciona corretamente. Toda a logica nova e no frontend.
