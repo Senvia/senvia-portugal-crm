@@ -64,15 +64,6 @@ import {
   type ModeloServico
 } from "@/types/sales";
 
-const PROPOSAL_TYPE_LABELS: Record<ProposalType, string> = {
-  energia: 'Energia',
-  servicos: 'Serviços',
-};
-
-const MODELO_SERVICO_LABELS: Record<ModeloServico, string> = {
-  transacional: 'Transacional',
-  saas: 'SAAS',
-};
 
 interface SaleItemDraft {
   id: string;
@@ -816,108 +807,6 @@ export function CreateSaleModal({
                         </div>
                       </div>
                     ))}
-                  </div>
-                </div>
-              </>
-            )}
-
-            {/* Section 2.6: Dados Energia/Serviços */}
-            {proposalType && (
-              <>
-                <Separator />
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                    <Zap className="h-4 w-4" />
-                    Dados {PROPOSAL_TYPE_LABELS[proposalType]}
-                  </div>
-                  
-                  {proposalType === 'energia' && (
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label className="text-xs">Consumo Anual (kWh)</Label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          value={consumoAnual}
-                          onChange={(e) => setConsumoAnual(e.target.value)}
-                          placeholder="Ex: 15000"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label className="text-xs">Margem (€/MWh)</Label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          value={margem}
-                          onChange={(e) => setMargem(e.target.value)}
-                          placeholder="Ex: 5.50"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label className="text-xs">DBL</Label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          value={dbl}
-                          onChange={(e) => setDbl(e.target.value)}
-                          placeholder="Ex: 2.00"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label className="text-xs">Anos Contrato</Label>
-                        <Input
-                          type="number"
-                          step="1"
-                          min="1"
-                          value={anosContrato}
-                          onChange={(e) => setAnosContrato(e.target.value)}
-                          placeholder="Ex: 2"
-                        />
-                      </div>
-                    </div>
-                  )}
-                  
-                  {proposalType === 'servicos' && (
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label className="text-xs">Modelo Serviço</Label>
-                        <Select 
-                          value={modeloServico || "none"} 
-                          onValueChange={(v) => setModeloServico(v === "none" ? null : v as ModeloServico)}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecionar..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none">Não definido</SelectItem>
-                            <SelectItem value="transacional">{MODELO_SERVICO_LABELS.transacional}</SelectItem>
-                            <SelectItem value="saas">{MODELO_SERVICO_LABELS.saas}</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label className="text-xs">kWp</Label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          value={kwp}
-                          onChange={(e) => setKwp(e.target.value)}
-                          placeholder="Ex: 10.5"
-                        />
-                      </div>
-                    </div>
-                  )}
-                  
-                  {/* Comissão - comum a ambos */}
-                  <div className="max-w-[200px] space-y-2">
-                    <Label className="text-xs">Comissão (€)</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={comissao}
-                      onChange={(e) => setComissao(e.target.value)}
-                      placeholder="Ex: 150.00"
-                    />
                   </div>
                 </div>
               </>
