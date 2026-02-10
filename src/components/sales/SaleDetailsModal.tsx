@@ -161,28 +161,7 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
 
           <ScrollArea className="max-h-[calc(90vh-10rem)]">
             <div className="p-6 space-y-6">
-              {/* Status */}
-              <div className="space-y-2">
-                <Label>Estado da Venda</Label>
-                <Select value={status} onValueChange={handleStatusChange}>
-                  <SelectTrigger className={cn('border', SALE_STATUS_COLORS[status])}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {SALE_STATUSES.map((s) => (
-                      <SelectItem key={s} value={s}>
-                        <span className={cn('px-2 py-0.5 rounded text-xs font-medium', SALE_STATUS_COLORS[s])}>
-                          {SALE_STATUS_LABELS[s]}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <Separator />
-
-              {/* Client/Lead Info */}
+              {/* 1. Client/Lead Info */}
               {(sale.client || sale.lead) && (
                 <>
                   <div className="space-y-3">
@@ -191,7 +170,6 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                       <Label className="text-muted-foreground">Cliente</Label>
                     </div>
                     <div className="bg-muted/30 rounded-lg p-3 space-y-3">
-                      {/* Nome + Código */}
                       <div className="flex items-center gap-2">
                         <span className="font-medium">{sale.client?.name || sale.lead?.name}</span>
                         {sale.client?.code && (
@@ -201,7 +179,6 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                         )}
                       </div>
 
-                      {/* NIF & Empresa - prioritários para faturação */}
                       {(sale.client?.nif || sale.client?.company) && (
                         <div className="grid grid-cols-2 gap-2">
                           {sale.client?.nif && (
@@ -219,7 +196,6 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                         </div>
                       )}
 
-                      {/* Email - cliente tem prioridade, fallback para lead */}
                       {(sale.client?.email || sale.lead?.email) && (
                         <div>
                           <p className="text-xs text-muted-foreground">Email</p>
@@ -227,7 +203,6 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                         </div>
                       )}
 
-                      {/* Telefone + WhatsApp - cliente tem prioridade */}
                       {(sale.client?.phone || sale.lead?.phone) && (
                         <div className="flex items-center gap-2">
                           <Phone className="h-3 w-3 text-muted-foreground" />
@@ -244,7 +219,6 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                         </div>
                       )}
 
-                      {/* Morada completa */}
                       {(sale.client?.address_line1 || sale.client?.city || sale.client?.postal_code) && (
                         <div>
                           <p className="text-xs text-muted-foreground">Morada</p>
@@ -268,7 +242,28 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                 </>
               )}
 
-              {/* Energy Data Section */}
+              {/* 2. Status */}
+              <div className="space-y-2">
+                <Label>Estado da Venda</Label>
+                <Select value={status} onValueChange={handleStatusChange}>
+                  <SelectTrigger className={cn('border', SALE_STATUS_COLORS[status])}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SALE_STATUSES.map((s) => (
+                      <SelectItem key={s} value={s}>
+                        <span className={cn('px-2 py-0.5 rounded text-xs font-medium', SALE_STATUS_COLORS[s])}>
+                          {SALE_STATUS_LABELS[s]}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <Separator />
+
+              {/* 3. Telecom: Energy Data */}
               {hasEnergyData && (
                 <>
                   <div className="space-y-3">
@@ -323,7 +318,7 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                 </>
               )}
 
-              {/* Service Data Section */}
+              {/* 3b. Telecom: Service Data */}
               {hasServiceData && (
                 <>
                   <div className="space-y-3">
@@ -362,7 +357,7 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                 </>
               )}
 
-              {/* CPE/CUI Section */}
+              {/* 3c. Telecom: CPEs */}
               {proposalCpes.length > 0 && (
                 <>
                   <div className="space-y-3">
@@ -423,7 +418,7 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                 </>
               )}
 
-              {/* Sale Items */}
+              {/* 4. Sale Items / Products */}
               {saleItems.length > 0 && (
                 <>
                   <div className="space-y-3">
@@ -452,7 +447,15 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                 </>
               )}
 
-              {/* Proposal Info */}
+              {/* 5. Total Value */}
+              <div className="bg-primary/10 border border-primary/20 rounded-lg p-4">
+                <p className="text-sm text-muted-foreground">Valor Total</p>
+                <p className="text-2xl font-bold text-primary">{formatCurrency(sale.total_value)}</p>
+              </div>
+
+              <Separator />
+
+              {/* 6. Proposal Info */}
               {sale.proposal && (
                 <>
                   <div className="space-y-2">
@@ -475,7 +478,7 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                 </>
               )}
 
-              {/* Recurring Section */}
+              {/* 7. Recurring Section */}
               {sale.has_recurring && organization && (
                 <>
                   <RecurringSection
@@ -490,7 +493,7 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                 </>
               )}
 
-              {/* Payments Section */}
+              {/* 8. Payments Section */}
               {organization && (
                 <>
                   <SalePaymentsList
@@ -503,11 +506,11 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                 </>
               )}
 
-              {/* Notes */}
+              {/* 9. Observations */}
               <div className="space-y-2">
-                <Label>Notas</Label>
+                <Label>Observações da Negociação</Label>
                 <Textarea
-                  placeholder="Adicionar notas sobre esta venda..."
+                  placeholder="Adicionar observações sobre esta venda..."
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   onBlur={handleNotesBlur}
