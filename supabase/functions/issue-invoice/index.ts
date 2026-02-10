@@ -5,6 +5,24 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+const COUNTRY_CODE_MAP: Record<string, string> = {
+  PT: 'Portugal', ES: 'Espanha', FR: 'França', DE: 'Alemanha', IT: 'Itália',
+  GB: 'Reino Unido', US: 'Estados Unidos', BR: 'Brasil', AO: 'Angola', MZ: 'Moçambique',
+  CV: 'Cabo Verde', NL: 'Países Baixos', BE: 'Bélgica', CH: 'Suíça', AT: 'Áustria',
+  IE: 'Irlanda', LU: 'Luxemburgo', PL: 'Polónia', SE: 'Suécia', DK: 'Dinamarca',
+}
+
+function mapCountryToInvoiceXpress(country?: string | null): string {
+  if (!country) return 'Portugal'
+  // If it's a 2-letter code, map it
+  const upper = country.trim().toUpperCase()
+  if (upper.length === 2 && COUNTRY_CODE_MAP[upper]) {
+    return COUNTRY_CODE_MAP[upper]
+  }
+  // Already a full name or unmapped code — return as-is
+  return country
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
@@ -189,7 +207,7 @@ Deno.serve(async (req) => {
           address: sale.client?.address_line1 || '',
           city: sale.client?.city || '',
           postal_code: sale.client?.postal_code || '',
-          country: sale.client?.country || 'Portugal',
+          country: mapCountryToInvoiceXpress(sale.client?.country),
         },
         items: items,
       },
