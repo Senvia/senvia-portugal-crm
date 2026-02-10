@@ -1,28 +1,31 @@
 
 
-## Adicionar suporte para tecla "Enter" no ecrã de MFA
+## Corrigir toast "CPEs atualizados" em propostas nao-telecom
 
 ### Problema
 
-O componente `ChallengeMFA` não tem um elemento `<form>` a envolver o input OTP e o botão "Verificar". Sem `<form>`, carregar "Enter" não faz nada.
+Ao editar uma proposta num nicho generico (nao-telecom), aparece a mensagem "CPEs atualizados" e a atualizacao demora mais do que devia. Isto acontece porque:
+
+1. O estado `proposalType` e inicializado como `'energia'` (linha 61 do `EditProposalModal.tsx`)
+2. No `handleSubmit`, a condicao para atualizar CPEs e apenas `proposalType === 'energia'` (linha 263), sem verificar se e telecom
+3. Resultado: mesmo em nichos genericos, o sistema tenta atualizar CPEs (com array vazio), executa queries desnecessarias na base de dados e mostra o toast errado
 
 ### Solucao
 
-Envolver o conteudo do `CardContent` num `<form>` com `onSubmit` que chama `handleVerify` e previne o comportamento padrao do browser.
+Adicionar a verificacao `isTelecom` a condicao no `handleSubmit` para que CPEs so sejam atualizados em organizacoes telecom.
 
 ### Detalhes tecnicos
 
-**Ficheiro: `src/components/auth/ChallengeMFA.tsx`**
+**Ficheiro: `src/components/proposals/EditProposalModal.tsx`**
 
-- Envolver o bloco dentro de `<CardContent>` (linhas 82-123) com `<form onSubmit={(e) => { e.preventDefault(); handleVerify(); }}>` 
-- O botao "Verificar" passa a ter `type="submit"` em vez de `onClick`
-- O botao "Terminar sessao" mantem `type="button"` para nao disparar o submit
+- Linha 263: alterar `if (proposalType === 'energia')` para `if (isTelecom && proposalType === 'energia')`
 
-### Resultado
-
-Ao preencher os 6 digitos e carregar Enter, o codigo e verificado automaticamente -- comportamento esperado pelo utilizador.
+Isto garante que:
+- Nichos genericos nunca executam a logica de CPEs
+- A atualizacao e mais rapida (sem queries desnecessarias)
+- O toast "CPEs atualizados" nunca aparece fora do contexto telecom
 
 | Ficheiro | Alteracao |
 |---|---|
-| `src/components/auth/ChallengeMFA.tsx` | Envolver conteudo em `<form>`, alterar botao para `type="submit"` |
+| `src/components/proposals/EditProposalModal.tsx` | Adicionar `isTelecom &&` na condicao de atualizacao de CPEs (linha 263) |
 
