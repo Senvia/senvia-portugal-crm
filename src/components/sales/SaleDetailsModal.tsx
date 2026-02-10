@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { pt } from "date-fns/locale";
 import { 
@@ -160,13 +161,15 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
               <div className="space-y-2">
                 <Label>Estado da Venda</Label>
                 <Select value={status} onValueChange={handleStatusChange}>
-                  <SelectTrigger>
+                  <SelectTrigger className={cn('border', SALE_STATUS_COLORS[status])}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     {SALE_STATUSES.map((s) => (
                       <SelectItem key={s} value={s}>
-                        {SALE_STATUS_LABELS[s]}
+                        <span className={cn('px-2 py-0.5 rounded text-xs font-medium', SALE_STATUS_COLORS[s])}>
+                          {SALE_STATUS_LABELS[s]}
+                        </span>
                       </SelectItem>
                     ))}
                   </SelectContent>

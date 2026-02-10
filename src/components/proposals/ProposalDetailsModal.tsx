@@ -607,13 +607,15 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
                 onValueChange={(v) => handleStatusChange(v as ProposalStatus)}
                 disabled={hasCompletedSale}
               >
-                <SelectTrigger>
+                <SelectTrigger className={cn('border', PROPOSAL_STATUS_COLORS[status])}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   {PROPOSAL_STATUSES.map((s) => (
                     <SelectItem key={s} value={s}>
-                      {PROPOSAL_STATUS_LABELS[s]}
+                      <span className={cn('px-2 py-0.5 rounded text-xs font-medium', PROPOSAL_STATUS_COLORS[s])}>
+                        {PROPOSAL_STATUS_LABELS[s]}
+                      </span>
                     </SelectItem>
                   ))}
                 </SelectContent>
