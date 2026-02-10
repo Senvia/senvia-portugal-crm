@@ -1,46 +1,28 @@
 
 
-## Melhorias no modal "Acesso Criado com Sucesso"
+## Adicionar suporte para tecla "Enter" no ecrã de MFA
 
-### O que vai mudar
+### Problema
 
-**1. Mostrar o Codigo da Empresa no modal**
+O componente `ChallengeMFA` não tem um elemento `<form>` a envolver o input OTP e o botão "Verificar". Sem `<form>`, carregar "Enter" não faz nada.
 
-Adicionar um novo campo "Codigo da Empresa" no modal de sucesso, entre o "Link de Acesso" e o "Email", mostrando o slug da organizacao (que o colaborador precisa para fazer login). O valor vem do `useAuth()` que ja tem `organization.organization_slug`.
+### Solucao
 
-**2. Botao "Enviar Acesso por Email"**
-
-Adicionar um botao que envia um email ao novo colaborador com todas as credenciais: link de acesso, codigo da empresa, email e password. O email sera enviado via Brevo (ja configurado por organizacao).
-
-**3. Nova Edge Function para enviar o email**
-
-Criar uma edge function `send-access-email` que recebe os dados do novo membro e envia um email formatado via Brevo com as credenciais de acesso.
-
----
+Envolver o conteudo do `CardContent` num `<form>` com `onSubmit` que chama `handleVerify` e previne o comportamento padrao do browser.
 
 ### Detalhes tecnicos
 
-**Ficheiro: `src/components/settings/TeamTab.tsx`**
+**Ficheiro: `src/components/auth/ChallengeMFA.tsx`**
 
-- Obter `organization` do `useAuth()` (ja importado)
-- No bloco do modal de sucesso (linhas 353-411), adicionar:
-  - Campo "Codigo da Empresa" com o valor `organization.organization_slug` e botao de copiar
-  - Botao "Enviar Acesso por Email" com icone `Mail` que invoca a edge function
-  - Estado `sendingEmail` para controlar o loading do botao
+- Envolver o bloco dentro de `<CardContent>` (linhas 82-123) com `<form onSubmit={(e) => { e.preventDefault(); handleVerify(); }}>` 
+- O botao "Verificar" passa a ter `type="submit"` em vez de `onClick`
+- O botao "Terminar sessao" mantem `type="button"` para nao disparar o submit
 
-**Ficheiro novo: `supabase/functions/send-access-email/index.ts`**
+### Resultado
 
-- Recebe: `organizationId`, `recipientEmail`, `recipientName`, `loginUrl`, `companyCode`, `password`
-- Busca a organizacao para obter `brevo_api_key` e `brevo_sender_email`
-- Envia email via Brevo API com template HTML profissional contendo todas as credenciais
-- Retorna sucesso ou erro
+Ao preencher os 6 digitos e carregar Enter, o codigo e verificado automaticamente -- comportamento esperado pelo utilizador.
 
-**Estado do `createdMember`**
+| Ficheiro | Alteracao |
+|---|---|
+| `src/components/auth/ChallengeMFA.tsx` | Envolver conteudo em `<form>`, alterar botao para `type="submit"` |
 
-- Alterar de `{ email: string; password: string }` para incluir tambem `fullName: string` para personalizar o email
-
-### Fluxo
-
-1. Admin cria membro -> modal de sucesso aparece com link, codigo da empresa, email e password
-2. Admin clica "Enviar Acesso por Email" -> edge function envia email via Brevo da organizacao
-3. Colaborador recebe email com todas as informacoes para aceder ao sistema
