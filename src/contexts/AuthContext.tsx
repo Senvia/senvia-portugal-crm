@@ -30,6 +30,7 @@ interface Organization {
   invoicexpress_account_name?: string | null;
   invoicexpress_api_key?: string | null;
   integrations_enabled?: any;
+  tax_config?: any;
 }
 
 interface UserOrganizationMembership {

@@ -21,6 +21,7 @@ import { formatCurrency } from "@/lib/format";
 import { AddPaymentModal } from "./AddPaymentModal";
 import { ScheduleRemainingModal } from "./ScheduleRemainingModal";
 import { PaymentTypeSelector } from "./PaymentTypeSelector";
+import { InvoiceDraftModal } from "./InvoiceDraftModal";
 import type { SalePayment } from "@/types/sales";
 import { 
   PAYMENT_METHOD_LABELS, 
@@ -39,6 +40,8 @@ interface SalePaymentsListProps {
   invoicexpressId?: number | null;
   invoiceReference?: string | null;
   clientNif?: string | null;
+  clientName?: string | null;
+  taxConfig?: { tax_rate?: number; tax_exemption_reason?: string } | null;
 }
 
 export function SalePaymentsList({ 
@@ -50,6 +53,8 @@ export function SalePaymentsList({
   invoicexpressId,
   invoiceReference,
   clientNif,
+  clientName,
+  taxConfig,
 }: SalePaymentsListProps) {
   const { data: payments = [], isLoading } = useSalePayments(saleId);
   const deletePayment = useDeleteSalePayment();
@@ -61,6 +66,10 @@ export function SalePaymentsList({
   const [editingPayment, setEditingPayment] = useState<SalePayment | null>(null);
   const [deletingPayment, setDeletingPayment] = useState<SalePayment | null>(null);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [draftInvoice, setDraftInvoice] = useState<{
+    payment: SalePayment;
+    documentType: "invoice" | "invoice_receipt";
+  } | null>(null);
 
   const summary = calculatePaymentSummary(payments, saleTotal);
 
@@ -186,13 +195,12 @@ export function SalePaymentsList({
                       variant="outline"
                       size="sm"
                       className="h-8 text-xs"
-                      disabled={issueInvoice.isPending}
                       onClick={() => {
                         if (!clientNif) {
                           toast.error("Cliente sem NIF. Adicione o NIF antes de emitir fatura.");
                           return;
                         }
-                        issueInvoice.mutate({ saleId, organizationId, documentType: "invoice_receipt", paymentId: payment.id, paymentAmount: Number(payment.amount) });
+                        setDraftInvoice({ payment, documentType: "invoice_receipt" });
                       }}
                     >
                       <Receipt className="h-3 w-3 mr-1" />
@@ -204,19 +212,12 @@ export function SalePaymentsList({
                       variant="outline"
                       size="sm"
                       className="h-8 text-xs"
-                      disabled={issueInvoice.isPending}
                       onClick={() => {
                         if (!clientNif) {
                           toast.error("Cliente sem NIF. Adicione o NIF antes de emitir fatura.");
                           return;
                         }
-                        issueInvoice.mutate({ 
-                          saleId, 
-                          organizationId, 
-                          documentType: "invoice",
-                          paymentId: payment.id,
-                          paymentAmount: Number(payment.amount),
-                        });
+                        setDraftInvoice({ payment, documentType: "invoice" });
                       }}
                     >
                       <Receipt className="h-3 w-3 mr-1" />
@@ -347,6 +348,33 @@ export function SalePaymentsList({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Invoice Draft Modal */}
+      <InvoiceDraftModal
+        open={!!draftInvoice}
+        onOpenChange={(open) => !open && setDraftInvoice(null)}
+        onConfirm={() => {
+          if (!draftInvoice) return;
+          issueInvoice.mutate(
+            {
+              saleId,
+              organizationId,
+              documentType: draftInvoice.documentType,
+              paymentId: draftInvoice.payment.id,
+              paymentAmount: Number(draftInvoice.payment.amount),
+            },
+            { onSuccess: () => setDraftInvoice(null) }
+          );
+        }}
+        isLoading={issueInvoice.isPending}
+        documentType={draftInvoice?.documentType || "invoice_receipt"}
+        clientName={clientName}
+        clientNif={clientNif}
+        paymentAmount={draftInvoice ? Number(draftInvoice.payment.amount) : 0}
+        paymentDate={draftInvoice?.payment.payment_date || new Date().toISOString()}
+        paymentMethod={draftInvoice?.payment.payment_method}
+        taxConfig={taxConfig}
+      />
     </>
   );
 }
