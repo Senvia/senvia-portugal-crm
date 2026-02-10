@@ -1,44 +1,26 @@
 
 
-## Adicionar cores aos selects de status (Propostas e Vendas)
+## Remover secao "Dados Energia/Servicos" do modal Nova Venda
 
-### Objetivo
+### Problema
 
-Quando o utilizador seleciona um status na proposta ou na venda, o `SelectTrigger` e cada `SelectItem` devem mostrar a cor correspondente ao status (usando as constantes `PROPOSAL_STATUS_COLORS` e `SALE_STATUS_COLORS` ja existentes).
+O modal "Nova Venda" mostra uma secao editavel "Dados Energia" / "Dados Servicos" com campos como Consumo Anual, Margem, DBL, Anos Contrato, kWp, Modelo Servico e Comissao. Estes dados ja vem da proposta e nao devem ser re-editados aqui.
+
+### Solucao
+
+Remover a secao visual (UI) mas manter a logica que copia os dados da proposta para a venda (linhas 489-497 no handleSubmit), para que os dados continuem a ser persistidos na tabela `sales`.
 
 ### Alteracoes
 
-**Ficheiro 1: `src/components/proposals/ProposalDetailsModal.tsx`**
+**Ficheiro: `src/components/sales/CreateSaleModal.tsx`**
 
-- No `SelectTrigger` (~linha 611): adicionar a classe de cor do status atual
-  ```tsx
-  <SelectTrigger className={cn(PROPOSAL_STATUS_COLORS[status])}>
-  ```
-- Em cada `SelectItem` (~linha 615): adicionar badge com cor dentro do item
-  ```tsx
-  <SelectItem key={s} value={s}>
-    <span className={cn('px-2 py-0.5 rounded text-xs font-medium', PROPOSAL_STATUS_COLORS[s])}>
-      {PROPOSAL_STATUS_LABELS[s]}
-    </span>
-  </SelectItem>
-  ```
+1. **Remover o bloco JSX** "Section 2.6: Dados Energia/Servicos" (linhas 824-924) -- toda a secao condicional `{proposalType && (...)}` com os inputs editaveis
 
-**Ficheiro 2: `src/components/sales/SaleDetailsModal.tsx`**
+2. **Manter os states** (`proposalType`, `consumoAnual`, `margem`, etc.) e a logica no `handleSubmit` que os envia para a base de dados -- os valores continuam a ser preenchidos automaticamente a partir da proposta selecionada
 
-- No `SelectTrigger` (~linha 163): adicionar a classe de cor do status atual
-  ```tsx
-  <SelectTrigger className={cn(SALE_STATUS_COLORS[status])}>
-  ```
-- Em cada `SelectItem` (~linha 168): adicionar badge com cor dentro do item
-  ```tsx
-  <SelectItem key={s} value={s}>
-    <span className={cn('px-2 py-0.5 rounded text-xs font-medium', SALE_STATUS_COLORS[s])}>
-      {SALE_STATUS_LABELS[s]}
-    </span>
-  </SelectItem>
-  ```
+3. **Remover imports nao utilizados**: `PROPOSAL_TYPE_LABELS` e `MODELO_SERVICO_LABELS` (linhas 67-75) ja nao sao referenciados no JSX apos a remocao
 
 | Ficheiro | Alteracao |
 |---|---|
-| `src/components/proposals/ProposalDetailsModal.tsx` | Cor no SelectTrigger e SelectItems do status |
-| `src/components/sales/SaleDetailsModal.tsx` | Cor no SelectTrigger e SelectItems do status |
+| `src/components/sales/CreateSaleModal.tsx` | Remover secao UI "Dados Energia/Servicos" (manter persistencia dos dados) |
+
