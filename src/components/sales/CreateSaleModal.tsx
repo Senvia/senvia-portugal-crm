@@ -71,7 +71,7 @@ interface CreateSaleModalProps {
   onOpenChange: (open: boolean) => void;
   prefillProposal?: Proposal | null;
   prefillClientId?: string | null;
-  onSaleCreated?: () => void;
+  onSaleCreated?: (saleId: string) => void;
 }
 
 export function CreateSaleModal({ 
@@ -525,7 +525,7 @@ export function CreateSaleModal({
       }
 
       // Notify parent that sale was created successfully
-      onSaleCreated?.();
+      onSaleCreated?.(sale.id);
 
       onOpenChange(false);
     } catch (error) {
