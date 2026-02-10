@@ -208,7 +208,9 @@ Deno.serve(async (req) => {
     }
 
     // Date
-    const dateSource = invoice_date || sale.sale_date || new Date().toISOString().split('T')[0]
+    const now = new Date()
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    const dateSource = invoice_date || todayStr
     const [y, m, d] = dateSource.split('-')
     const formattedDate = `${d}/${m}/${y}`
 
