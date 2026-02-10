@@ -1,32 +1,38 @@
 
 
-## Adicionar selector de status no modal "Nova Venda"
+## Botao "Emitir Fatura" apos pagamento (manual, nunca automatico)
 
-### Problema
+### Contexto
 
-O modal "Nova Venda" nao tem campo para escolher o status da venda. O status e sempre `pending` (hardcoded no hook `useCreateSale`, linha 98 de `useSales.ts`).
-
-### Solucao
-
-Adicionar um campo Select para o status da venda no modal de criacao, e passar esse valor para a mutation.
+Nem todos os clientes pedem fatura. A emissao deve ser sempre manual, atraves de um botao, e nao deve estar limitada ao status "Concluida".
 
 ### Alteracoes
 
-**Ficheiro: `src/components/sales/CreateSaleModal.tsx`**
+**1. `src/components/sales/SaleDetailsModal.tsx`**
 
-1. Adicionar state: `const [saleStatus, setSaleStatus] = useState<SaleStatus>("pending")`
-2. Importar `SALE_STATUS_LABELS`, `SALE_STATUSES`, `SaleStatus` de `@/types/sales` (alguns ja estao importados)
-3. Adicionar um campo Select na secao de informacao basica (junto ao campo de data e metodo de pagamento) com as opcoes de status
-4. Passar `status: saleStatus` no objecto enviado ao `createSale.mutateAsync`
-5. Reset do `saleStatus` para `"pending"` quando o modal abre
+- Remover a condicao `sale.status === 'delivered'` do botao "Emitir Fatura-Recibo" (linha 519)
+- O botao passa a aparecer sempre que:
+  - InvoiceXpress esta ativo (`hasInvoiceXpress`)
+  - A venda tem pelo menos 1 pagamento registado com status `paid`
+- Para isso, usar os dados de `useSalePayments` (que ja esta disponivel via `SalePaymentsList`) ou adicionar uma query simples para verificar se existem pagamentos pagos
+- Manter toda a logica existente do botao (verificacao de NIF, loading state, badge de fatura ja emitida)
 
-**Ficheiro: `src/hooks/useSales.ts`**
+**2. `src/components/sales/AddDraftPaymentModal.tsx`**
 
-1. Adicionar `status?: SaleStatus` ao tipo do `mutationFn`
-2. Usar `data.status || "pending"` em vez do hardcoded `"pending"` na linha 98
+- Adicionar prop `hideInvoiceReference?: boolean`
+- Quando `true`, esconder o campo "Referencia da Fatura"
+- Mostrar nota informativa: "A fatura pode ser emitida apos criar a venda."
+
+**3. `src/components/sales/CreateSaleModal.tsx`**
+
+- Calcular `hasInvoiceXpress` a partir dos dados da organizacao
+- Passar `hideInvoiceReference={hasInvoiceXpress}` ao `AddDraftPaymentModal`
+
+### Resumo
 
 | Ficheiro | Alteracao |
 |---|---|
-| `src/components/sales/CreateSaleModal.tsx` | Adicionar campo Select para status da venda + passar ao mutation |
-| `src/hooks/useSales.ts` | Aceitar `status` como parametro opcional na mutation |
+| `SaleDetailsModal.tsx` | Botao "Emitir Fatura" visivel apos pagamento pago (sem restricao de status) |
+| `AddDraftPaymentModal.tsx` | Esconder campo fatura manual quando InvoiceXpress ativo + nota informativa |
+| `CreateSaleModal.tsx` | Passar flag `hideInvoiceReference` ao modal de pagamento draft |
 
