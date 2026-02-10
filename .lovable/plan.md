@@ -1,78 +1,46 @@
 
 
-## Agendamento automatico do restante apos pagamento parcial
+## Corrigir tab Faturas no Financeiro para incluir faturas InvoiceXpress
 
-### Conceito
+### Problema atual
 
-Quando o utilizador regista um pagamento com valor inferior ao total da venda, o sistema deteta automaticamente que ha um valor em falta e abre um segundo modal a perguntar como quer tratar o restante. O fluxo e simples e rapido:
+A tab "Faturas" no modulo Financeiro tem dois problemas:
 
-```text
-Registar Pagamento (ex: 400 de 1200)
-         |
-         v
-  "Restam 800. Como quer dividir?"
-         |
-    +---------+---------+
-    |         |         |
-  1 parcela  2 parcelas  3 parcelas
-    |         |         |
-    v         v         v
- [Data]   [Data 1]   [Data 1]
-          [Data 2]   [Data 2]
-                     [Data 3]
-         |
-         v
-   Parcelas criadas automaticamente
-   como pagamentos "Agendado"
-```
-
-### Como funciona
-
-**1. Apos fechar o AddPaymentModal com sucesso:**
-- O `SalePaymentsList` deteta que ainda ha valor em falta (`remaining > 0`)
-- Abre automaticamente um novo modal: `ScheduleRemainingModal`
-
-**2. O ScheduleRemainingModal e simples:**
-- Mostra o valor restante (ex: "Restam 800,00")
-- Selector de numero de parcelas: 1x, 2x, 3x, 4x (botoes simples)
-- O valor e dividido igualmente (ex: 3x = 266,67 + 266,67 + 266,66)
-- Para cada parcela, mostra um campo de data (pre-preenchido com intervalos de 30 dias)
-- Metodo de pagamento opcional (herdado do pagamento original ou seleccionavel)
-- Botao "Agendar Parcelas" e "Ignorar" (caso o cliente nao queira agendar agora)
-
-**3. Ao confirmar:**
-- Cria N registos na tabela `sale_payments` com status `pending` (agendado)
-- O trigger existente `trg_sync_sale_payment_status` atualiza automaticamente o `payment_status` da venda para `partial`
+1. **Filtro de status**: O `useAllPayments` filtra apenas vendas com `status = 'delivered'`, excluindo faturas emitidas em vendas noutros estados
+2. **Fonte de dados incompleta**: A tab so mostra faturas manuais (campo `sale_payments.invoice_reference`), ignorando as faturas emitidas via InvoiceXpress (guardadas em `sales.invoice_reference` + `sales.invoicexpress_id`)
 
 ### Alteracoes
 
-**Novo ficheiro: `src/components/sales/ScheduleRemainingModal.tsx`**
+**1. `src/hooks/useAllPayments.ts`**
 
-- Props: `open`, `onOpenChange`, `saleId`, `organizationId`, `remainingAmount`, `defaultPaymentMethod`
-- State: `installments` (1-4), `dates[]`, `paymentMethod`
-- Logica de divisao: valor total / N parcelas, ultima parcela absorve centimos restantes
-- Datas pre-preenchidas: hoje + 30 dias, + 60 dias, etc.
-- Usa `useCreateSalePayment` para criar cada parcela
+- Remover o filtro `.eq('sales.status', 'delivered')` (linha 30) para incluir pagamentos de vendas em qualquer estado
+- Adicionar `invoice_reference` e `invoicexpress_id` ao select da relacao `sales` para saber se a venda tem fatura InvoiceXpress
 
-**Ficheiro: `src/components/sales/SalePaymentsList.tsx`**
+**2. `src/hooks/useFinanceStats.ts`**
 
-- Adicionar state `showScheduleModal` 
-- Apos o `AddPaymentModal` fechar com sucesso (onOpenChange false + remaining > 0), abrir o `ScheduleRemainingModal`
-- Importar e renderizar o novo modal
+- Remover o filtro `.eq('sales.status', 'delivered')` (linha 38) para manter consistencia com o `useAllPayments`
 
-**Ficheiro: `src/components/sales/AddPaymentModal.tsx`**
+**3. `src/types/finance.ts`**
 
-- Adicionar callback `onSuccess` opcional para notificar o componente pai que o pagamento foi criado com sucesso (e qual o valor pago)
-- Chamar `onSuccess` apos `createPayment.mutate` com sucesso
+- Adicionar campos ao tipo `PaymentWithSale.sale`: `invoice_reference`, `invoicexpress_id`
 
-### Contexto da criacao de venda (CreateSaleModal / AddDraftPaymentModal)
+**4. `src/components/finance/InvoicesContent.tsx`**
 
-O mesmo comportamento aplica-se ao `AddDraftPaymentModal` usado na criacao de vendas:
-- Apos adicionar um draft payment com valor parcial, abrir um modal equivalente para agendar as parcelas restantes como drafts
-- Reutilizar a mesma logica de divisao em parcelas
+- Alterar o filtro de faturas para incluir tambem pagamentos cuja **venda** tem `invoice_reference` ou `invoicexpress_id` (faturas InvoiceXpress)
+- Na coluna "Referencia", mostrar a referencia da fatura do pagamento OU da venda (prioridade: pagamento > venda)
+- Na coluna "Anexo", para faturas InvoiceXpress (sem ficheiro local), construir o link de download do PDF via a API do InvoiceXpress:
+  - Buscar as credenciais da organizacao (account_name)
+  - URL: `https://{account_name}.app.invoicexpress.com/invoice_receipts/{invoicexpress_id}.pdf`
+  - Abrir num novo separador
+- Para faturas manuais com ficheiro anexo, manter o comportamento atual (download do bucket `invoices`)
+- Adicionar uma badge/indicador visual para distinguir faturas manuais de faturas InvoiceXpress (ex: badge "InvoiceXpress" pequena)
+
+### Resumo
 
 | Ficheiro | Alteracao |
 |---|---|
-| `ScheduleRemainingModal.tsx` (novo) | Modal com selector de parcelas (1-4x) e datas |
-| `SalePaymentsList.tsx` | Abrir modal de agendamento apos pagamento parcial |
-| `AddPaymentModal.tsx` | Adicionar callback `onSuccess` |
+| `useAllPayments.ts` | Remover filtro `status = delivered`, adicionar campos InvoiceXpress ao select |
+| `useFinanceStats.ts` | Remover filtro `status = delivered` |
+| `types/finance.ts` | Adicionar `invoice_reference` e `invoicexpress_id` ao tipo `sale` |
+| `InvoicesContent.tsx` | Mostrar faturas InvoiceXpress + manuais, botao download PDF para ambas |
+
