@@ -1,35 +1,46 @@
 
 
-## Corrigir membros em falta na organização Telecom
+## Melhorias no modal "Acesso Criado com Sucesso"
 
-### Problema
+### O que vai mudar
 
-Além do Thiago (já corrigido), há mais 3 utilizadores com perfil na Telecom que não estão na tabela `organization_members`, logo não aparecem na lista da equipa:
+**1. Mostrar o Codigo da Empresa no modal**
 
-- **Filipe Coelho** (salesperson)
-- **Ana Calado** (viewer)
-- **Amt** (salesperson)
+Adicionar um novo campo "Codigo da Empresa" no modal de sucesso, entre o "Link de Acesso" e o "Email", mostrando o slug da organizacao (que o colaborador precisa para fazer login). O valor vem do `useAuth()` que ja tem `organization.organization_slug`.
 
-### Solução
+**2. Botao "Enviar Acesso por Email"**
 
-Executar uma migração SQL para inserir os 3 registos em falta:
+Adicionar um botao que envia um email ao novo colaborador com todas as credenciais: link de acesso, codigo da empresa, email e password. O email sera enviado via Brevo (ja configurado por organizacao).
 
-```sql
-INSERT INTO organization_members (user_id, organization_id, role, is_active, joined_at)
-VALUES 
-  ('76300665-aff2-4b54-be78-b1123356e6ce', '96a3950e-31be-4c6d-abed-b82968c0d7e9', 'salesperson', true, now()),
-  ('f96eca52-5546-45d5-839b-bb2a255f9549', '96a3950e-31be-4c6d-abed-b82968c0d7e9', 'viewer', true, now()),
-  ('f54baad9-0482-4f73-8040-f4d1cf370f84', '96a3950e-31be-4c6d-abed-b82968c0d7e9', 'salesperson', true, now())
-ON CONFLICT DO NOTHING;
-```
+**3. Nova Edge Function para enviar o email**
 
-### Impacto
+Criar uma edge function `send-access-email` que recebe os dados do novo membro e envia um email formatado via Brevo com as credenciais de acesso.
 
-Após a migração, os 3 membros ficam imediatamente visíveis na lista de equipa da Telecom. Não é necessária nenhuma alteração de código -- a edge function já foi corrigida no passo anterior para que futuros membros sejam inseridos automaticamente.
+---
 
-### Ficheiros a alterar
+### Detalhes tecnicos
 
-| Ficheiro | Alteração |
-|---|---|
-| Nova migração SQL | INSERT dos 3 registos em falta em `organization_members` |
+**Ficheiro: `src/components/settings/TeamTab.tsx`**
 
+- Obter `organization` do `useAuth()` (ja importado)
+- No bloco do modal de sucesso (linhas 353-411), adicionar:
+  - Campo "Codigo da Empresa" com o valor `organization.organization_slug` e botao de copiar
+  - Botao "Enviar Acesso por Email" com icone `Mail` que invoca a edge function
+  - Estado `sendingEmail` para controlar o loading do botao
+
+**Ficheiro novo: `supabase/functions/send-access-email/index.ts`**
+
+- Recebe: `organizationId`, `recipientEmail`, `recipientName`, `loginUrl`, `companyCode`, `password`
+- Busca a organizacao para obter `brevo_api_key` e `brevo_sender_email`
+- Envia email via Brevo API com template HTML profissional contendo todas as credenciais
+- Retorna sucesso ou erro
+
+**Estado do `createdMember`**
+
+- Alterar de `{ email: string; password: string }` para incluir tambem `fullName: string` para personalizar o email
+
+### Fluxo
+
+1. Admin cria membro -> modal de sucesso aparece com link, codigo da empresa, email e password
+2. Admin clica "Enviar Acesso por Email" -> edge function envia email via Brevo da organizacao
+3. Colaborador recebe email com todas as informacoes para aceder ao sistema
