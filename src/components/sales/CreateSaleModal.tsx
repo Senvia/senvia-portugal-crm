@@ -24,6 +24,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 // Lead removido - vendas são apenas para clientes
 import { useProposals, useProposalProducts } from "@/hooks/useProposals";
+import { PROPOSAL_STATUS_LABELS, type ProposalStatus } from "@/types/proposals";
 import { useProposalCpes } from "@/hooks/useProposalCpes";
 import { useClients } from "@/hooks/useClients";
 import { useProducts } from "@/hooks/useProducts";
@@ -308,12 +309,7 @@ export function CreateSaleModal({
 
   // Helper to get proposal status label
   const getProposalStatusLabel = (status: string) => {
-    switch (status) {
-      case 'accepted': return 'Aceite';
-      case 'sent': return 'Enviada';
-      case 'pending': return 'Pendente';
-      default: return 'Rascunho';
-    }
+    return PROPOSAL_STATUS_LABELS[status as ProposalStatus] || status;
   };
 
   // Calculate totals
