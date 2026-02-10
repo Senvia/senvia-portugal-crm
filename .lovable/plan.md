@@ -1,50 +1,70 @@
 
 
-## Permitir editar propostas aceites (bloquear apenas com venda concluida)
+## Corrigir produtos/servicos que nao guardam preco editado na proposta
 
 ### Problema
 
-Atualmente, quando uma proposta tem o status "Aceite", o botao "Editar" e o seletor de status ficam `disabled`. Isto e demasiado restritivo -- o utilizador quer poder continuar a editar propostas aceites. A edicao so deve ser bloqueada se ja existir uma **venda concluida** (status `delivered`) associada a proposta.
+Ha dois bugs no `EditProposalModal.tsx` para propostas nao-telecom:
+
+1. **Produtos nunca sao carregados ao editar**: Na linha 105-106, existe um `TODO` e `setSelectedProducts([])` -- os produtos da proposta nunca sao lidos da base de dados quando o modal de edicao abre. Ou seja, ao editar, os produtos aparecem vazios e o utilizador tem de adicionar tudo outra vez.
+
+2. **Produtos nunca sao guardados ao submeter**: O `handleSubmit` (linha 237) atualiza a proposta e os CPEs, mas **nunca chama** `useUpdateProposalProducts` para guardar os produtos editados (com precos alterados) na tabela `proposal_products`. O hook ja existe no codigo mas nao e importado nem usado.
+
+Resultado: mesmo que o total fique correto (porque e calculado localmente), os produtos na base de dados mantem o preco original do catalogo.
 
 ### Solucao
 
-1. Adicionar uma query para verificar se existe uma venda com status `delivered` associada a proposta
-2. Substituir a condicao `status === 'accepted'` pela nova verificacao
+1. Carregar os produtos existentes da proposta quando o modal abre (substituir o `TODO`)
+2. Guardar os produtos editados ao submeter (chamar `useUpdateProposalProducts`)
 
 ### Detalhes tecnicos
 
-**Ficheiro: `src/components/proposals/ProposalDetailsModal.tsx`**
+**Ficheiro: `src/components/proposals/EditProposalModal.tsx`**
 
-1. Adicionar uma query ao Supabase para verificar se existe uma venda concluida:
+1. Importar `useProposalProducts` e `useUpdateProposalProducts` do hook `useProposals`
+
+2. Adicionar query para carregar produtos existentes:
 ```tsx
-const { data: completedSale } = useQuery({
-  queryKey: ['proposal-completed-sale', proposal?.id],
-  queryFn: async () => {
-    const { data } = await supabase
-      .from('sales')
-      .select('id, status')
-      .eq('proposal_id', proposal!.id)
-      .eq('status', 'delivered')
-      .maybeSingle();
-    return data;
-  },
-  enabled: !!proposal?.id,
-});
-
-const hasCompletedSale = !!completedSale;
+const { data: existingProducts = [] } = useProposalProducts(proposal.id);
+const updateProposalProducts = useUpdateProposalProducts();
 ```
 
-2. Linha 593 -- alterar `disabled={status === 'accepted'}` para `disabled={hasCompletedSale}` (seletor de status)
+3. No `useEffect` (linhas 102-107), substituir o `setSelectedProducts([])` por logica que carrega os produtos existentes:
+```tsx
+if (!isTelecom && existingProducts.length > 0) {
+  setSelectedProducts(existingProducts.map(pp => ({
+    product_id: pp.product_id,
+    name: pp.product?.name || 'Produto',
+    quantity: pp.quantity,
+    unit_price: pp.unit_price,
+    discount_type: 'percentage' as const,
+    discount_value: 0,
+  })));
+  setManualValue('');
+} else if (!isTelecom) {
+  setManualValue(proposal.total_value?.toString() || '');
+  setSelectedProducts([]);
+}
+```
 
-3. Linha 813 -- alterar `disabled={status === 'accepted'}` para `disabled={hasCompletedSale}` (botao Editar no dropdown)
+4. No `handleSubmit` (apos linha 260), adicionar chamada para guardar produtos:
+```tsx
+if (!isTelecom && selectedProducts.length > 0) {
+  await updateProposalProducts.mutateAsync({
+    proposalId: proposal.id,
+    products: selectedProducts.map(p => ({
+      product_id: p.product_id,
+      quantity: p.quantity,
+      unit_price: p.unit_price,
+      total: getProductTotal(p),
+    })),
+  });
+}
+```
 
-### Resultado
-
-- Propostas aceites podem ser editadas normalmente
-- Apenas propostas com venda concluida ficam bloqueadas para edicao
-- O seletor de status tambem fica disponivel em propostas aceites (exceto se houver venda concluida)
+5. Atualizar `isSubmitting` para incluir o novo mutation
 
 | Ficheiro | Alteracao |
 |---|---|
-| `src/components/proposals/ProposalDetailsModal.tsx` | Query para venda concluida + substituir condicoes `disabled` |
+| `src/components/proposals/EditProposalModal.tsx` | Importar e usar `useProposalProducts` + `useUpdateProposalProducts`; carregar produtos ao abrir; guardar ao submeter |
 
