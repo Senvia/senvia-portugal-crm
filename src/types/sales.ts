@@ -131,6 +131,10 @@ export interface Sale {
   recurring_status: RecurringStatus | null;
   next_renewal_date: string | null;
   last_renewal_date: string | null;
+
+  // InvoiceXpress
+  invoicexpress_id: number | null;
+  invoicexpress_type: string | null;
 }
 
 export interface SaleWithDetails extends Sale {
