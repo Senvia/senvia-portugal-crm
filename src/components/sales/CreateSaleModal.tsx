@@ -47,19 +47,11 @@ import {
   Package, 
   User,
   FileText,
-  CreditCard,
-  Receipt,
   Router,
   Zap
 } from "lucide-react";
 import type { Proposal } from "@/types/proposals";
 import { 
-  PAYMENT_METHODS, 
-  PAYMENT_METHOD_LABELS, 
-  PAYMENT_STATUSES, 
-  PAYMENT_STATUS_LABELS,
-  type PaymentMethod,
-  type PaymentStatus,
   type ProposalType,
   type ModeloServico
 } from "@/types/sales";
@@ -120,10 +112,6 @@ export function CreateSaleModal({
   const [saleDate, setSaleDate] = useState<Date>(new Date());
   const [items, setItems] = useState<SaleItemDraft[]>([]);
   const [discount, setDiscount] = useState<string>("0");
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | "">("");
-  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>("pending");
-  const [dueDate, setDueDate] = useState<Date | undefined>();
-  const [invoiceReference, setInvoiceReference] = useState("");
   const [notes, setNotes] = useState("");
   
   // Track which proposal we've already initialized items for
@@ -204,10 +192,6 @@ export function CreateSaleModal({
       setSaleDate(new Date());
       setItems([]);
       setDiscount("0");
-      setPaymentMethod("");
-      setPaymentStatus("pending");
-      setDueDate(undefined);
-      setInvoiceReference("");
       if (!prefillProposal?.notes) {
         setNotes("");
       }
@@ -471,10 +455,6 @@ export function CreateSaleModal({
         total_value: total,
         subtotal: subtotal,
         discount: discountValue,
-        payment_method: paymentMethod || undefined,
-        payment_status: paymentStatus,
-        due_date: dueDate ? format(dueDate, 'yyyy-MM-dd') : undefined,
-        invoice_reference: invoiceReference.trim() || undefined,
         sale_date: format(saleDate, 'yyyy-MM-dd'),
         notes: notes.trim() || undefined,
         // Campos específicos de proposta
@@ -560,7 +540,7 @@ export function CreateSaleModal({
       <DialogContent className="max-w-2xl max-h-[90vh] p-0 gap-0">
         <DialogHeader className="px-6 py-4 border-b border-border/50">
           <DialogTitle className="flex items-center gap-2">
-            <Receipt className="h-5 w-5 text-primary" />
+            <FileText className="h-5 w-5 text-primary" />
             Nova Venda
           </DialogTitle>
         </DialogHeader>
@@ -854,93 +834,7 @@ export function CreateSaleModal({
 
             <Separator />
 
-            {/* Section 4: Payment */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                <CreditCard className="h-4 w-4" />
-                Pagamento
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Método de Pagamento</Label>
-                  <Select 
-                    value={paymentMethod || "none"} 
-                    onValueChange={(v) => setPaymentMethod(v === "none" ? "" : v as PaymentMethod)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecionar..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Não definido</SelectItem>
-                      {PAYMENT_METHODS.map((method) => (
-                        <SelectItem key={method} value={method}>
-                          {PAYMENT_METHOD_LABELS[method]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Estado do Pagamento</Label>
-                  <Select 
-                    value={paymentStatus} 
-                    onValueChange={(v) => setPaymentStatus(v as PaymentStatus)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {PAYMENT_STATUSES.map((status) => (
-                        <SelectItem key={status} value={status}>
-                          {PAYMENT_STATUS_LABELS[status]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Data de Vencimento</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          "w-full justify-start text-left font-normal",
-                          !dueDate && "text-muted-foreground"
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {dueDate ? format(dueDate, "PPP", { locale: pt }) : "Opcional"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={dueDate}
-                        onSelect={setDueDate}
-                        locale={pt}
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Referência / Fatura</Label>
-                  <Input
-                    placeholder="Ex: FT 2024/001"
-                    value={invoiceReference}
-                    onChange={(e) => setInvoiceReference(e.target.value)}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <Separator />
-
-            {/* Section 5: Notes */}
+            {/* Section 4: Notes */}
             <div className="space-y-2">
               <Label>Notas</Label>
               <Textarea
