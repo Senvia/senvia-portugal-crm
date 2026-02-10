@@ -383,6 +383,20 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
             <div class="value">${orgData?.niche === 'telecom' 
               ? `${(proposalCpes.reduce((sum, cpe) => sum + (Number(cpe.consumo_anual) || 0), 0) / 1000).toLocaleString('pt-PT', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} MWh`
               : formatCurrency(parseFloat(editValue) || proposal.total_value)}</div>
+            ${orgData?.niche === 'telecom' && proposal.proposal_type === 'energia' && proposalCpes.length > 0 ? `
+              <div style="font-size: 12px; color: #666; margin-top: 6px;">
+                Margem Total: <strong>${formatCurrency(proposalCpes.reduce((sum, cpe) => sum + (Number(cpe.margem) || 0), 0))}</strong>
+                &nbsp;|&nbsp;
+                Comissão Total: <strong>${formatCurrency(proposalCpes.reduce((sum, cpe) => sum + (Number(cpe.comissao) || 0), 0))}</strong>
+              </div>
+            ` : ''}
+            ${orgData?.niche === 'telecom' && proposal.proposal_type === 'servicos' ? `
+              <div style="font-size: 12px; color: #666; margin-top: 6px;">
+                ${proposal.kwp != null ? `kWp: <strong>${Number(proposal.kwp).toLocaleString('pt-PT')}</strong>` : ''}
+                ${proposal.kwp != null && proposal.comissao != null ? '&nbsp;|&nbsp;' : ''}
+                ${proposal.comissao != null ? `Comissão: <strong>${formatCurrency(Number(proposal.comissao))}</strong>` : ''}
+              </div>
+            ` : ''}
           </div>
 
           <!-- CPEs com dados de energia -->
@@ -497,6 +511,18 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
                     <p className="text-2xl font-bold text-primary">
                       {(proposalCpes.reduce((sum, cpe) => sum + (Number(cpe.consumo_anual) || 0), 0) / 1000).toLocaleString('pt-PT', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} MWh
                     </p>
+                    {proposal.proposal_type === 'energia' && proposalCpes.length > 0 && (
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1.5 text-xs text-muted-foreground">
+                        <span>Margem Total: <strong className="text-foreground">{formatCurrency(proposalCpes.reduce((sum, cpe) => sum + (Number(cpe.margem) || 0), 0))}</strong></span>
+                        <span>Comissão Total: <strong className="text-foreground">{formatCurrency(proposalCpes.reduce((sum, cpe) => sum + (Number(cpe.comissao) || 0), 0))}</strong></span>
+                      </div>
+                    )}
+                    {proposal.proposal_type === 'servicos' && (
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1.5 text-xs text-muted-foreground">
+                        {proposal.kwp != null && <span>kWp: <strong className="text-foreground">{Number(proposal.kwp).toLocaleString('pt-PT')}</strong></span>}
+                        {proposal.comissao != null && <span>Comissão: <strong className="text-foreground">{formatCurrency(Number(proposal.comissao))}</strong></span>}
+                      </div>
+                    )}
                   </>
                 ) : (
                   <>
