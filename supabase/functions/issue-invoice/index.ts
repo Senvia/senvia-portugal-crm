@@ -33,13 +33,20 @@ Deno.serve(async (req) => {
       })
     }
 
-    const { sale_id, organization_id } = await req.json()
+    const { sale_id, organization_id, document_type = 'invoice_receipt', invoice_date } = await req.json()
     if (!sale_id || !organization_id) {
       return new Response(JSON.stringify({ error: 'sale_id e organization_id são obrigatórios' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
+
+    // Validate document_type
+    const docType = document_type === 'invoice' ? 'invoice' : 'invoice_receipt'
+    const isInvoice = docType === 'invoice'
+    const endpointName = isInvoice ? 'invoices' : 'invoice_receipts'
+    const docKey = isInvoice ? 'invoice' : 'invoice_receipt'
+    const refPrefix = isInvoice ? 'FT' : 'FR'
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
@@ -66,7 +73,6 @@ Deno.serve(async (req) => {
       .eq('id', organization_id)
       .single()
 
-    // Check if integration is enabled
     const integrationsEnabled = (org?.integrations_enabled as Record<string, boolean> | null) || {}
     if (integrationsEnabled.invoicexpress === false) {
       return new Response(JSON.stringify({ error: 'Integração InvoiceXpress desativada' }), {
@@ -101,7 +107,6 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Check if already issued
     if (sale.invoicexpress_id) {
       return new Response(JSON.stringify({ error: 'Fatura já emitida para esta venda', invoice_reference: sale.invoice_reference }), {
         status: 409,
@@ -109,7 +114,6 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Check NIF
     const clientNif = sale.client?.nif
     if (!clientNif) {
       return new Response(JSON.stringify({ error: 'Cliente sem NIF. Adicione o NIF antes de emitir fatura.' }), {
@@ -129,29 +133,22 @@ Deno.serve(async (req) => {
       description: item.name,
       unit_price: Number(item.unit_price),
       quantity: Number(item.quantity),
-      tax: {
-        name: 'IVA23',
-        value: 23,
-      },
+      tax: { name: 'IVA23', value: 23 },
     }))
 
-    // If no items, create a generic one
     if (items.length === 0) {
       items.push({
         name: 'Serviço',
         description: `Venda ${sale.code || sale_id}`,
         unit_price: Number(sale.total_value),
         quantity: 1,
-        tax: {
-          name: 'IVA23',
-          value: 23,
-        },
+        tax: { name: 'IVA23', value: 23 },
       })
     }
 
-    // Format date as DD/MM/YYYY
-    const saleDate = sale.sale_date || new Date().toISOString().split('T')[0]
-    const [y, m, d] = saleDate.split('-')
+    // Use invoice_date if provided, otherwise sale_date
+    const dateSource = invoice_date || sale.sale_date || new Date().toISOString().split('T')[0]
+    const [y, m, d] = dateSource.split('-')
     const formattedDate = `${d}/${m}/${y}`
 
     const clientName = sale.client?.company || sale.client?.name || sale.lead?.name || 'Cliente'
@@ -159,7 +156,7 @@ Deno.serve(async (req) => {
 
     // Build InvoiceXpress payload
     const invoicePayload = {
-      invoice_receipt: {
+      [docKey]: {
         date: formattedDate,
         due_date: formattedDate,
         client: {
@@ -181,7 +178,7 @@ Deno.serve(async (req) => {
     const baseUrl = `https://${accountName}.app.invoicexpress.com`
 
     // 1. Create draft
-    const createRes = await fetch(`${baseUrl}/invoice_receipts.json?api_key=${apiKey}`, {
+    const createRes = await fetch(`${baseUrl}/${endpointName}.json?api_key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(invoicePayload),
@@ -197,8 +194,8 @@ Deno.serve(async (req) => {
     }
 
     const createData = await createRes.json()
-    const invoiceId = createData.invoice_receipt?.id
-    const sequentialNumber = createData.invoice_receipt?.sequential_number
+    const invoiceId = createData[docKey]?.id
+    const sequentialNumber = createData[docKey]?.sequential_number
 
     if (!invoiceId) {
       return new Response(JSON.stringify({ error: 'InvoiceXpress não retornou ID do documento', details: createData }), {
@@ -207,24 +204,21 @@ Deno.serve(async (req) => {
       })
     }
 
-    // 2. Finalize (communicate to AT)
-    const finalizeRes = await fetch(`${baseUrl}/invoice_receipts/${invoiceId}/change-state.json?api_key=${apiKey}`, {
+    // 2. Finalize
+    const finalizeRes = await fetch(`${baseUrl}/${endpointName}/${invoiceId}/change-state.json?api_key=${apiKey}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        invoice_receipt: {
-          state: 'finalized',
-        },
+        [docKey]: { state: 'finalized' },
       }),
     })
 
     if (!finalizeRes.ok) {
       const errorText = await finalizeRes.text()
       console.error('InvoiceXpress finalize error:', errorText)
-      // Still save the draft ID so we don't create duplicates
       await supabase
         .from('sales')
-        .update({ invoicexpress_id: invoiceId, invoicexpress_type: 'invoice_receipts' })
+        .update({ invoicexpress_id: invoiceId, invoicexpress_type: endpointName })
         .eq('id', sale_id)
 
       return new Response(JSON.stringify({ 
@@ -237,23 +231,22 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Try to get the sequential number from finalize response
-    let invoiceReference = sequentialNumber ? `FR ${sequentialNumber}` : `FR #${invoiceId}`
+    let invoiceReference = sequentialNumber ? `${refPrefix} ${sequentialNumber}` : `${refPrefix} #${invoiceId}`
     try {
       const finalizeData = await finalizeRes.json()
-      if (finalizeData.invoice_receipt?.sequential_number) {
-        invoiceReference = `FR ${finalizeData.invoice_receipt.sequential_number}`
+      if (finalizeData[docKey]?.sequential_number) {
+        invoiceReference = `${refPrefix} ${finalizeData[docKey].sequential_number}`
       }
     } catch {
       // Use default reference
     }
 
-    // 3. Update sale with InvoiceXpress data
+    // 3. Update sale
     await supabase
       .from('sales')
       .update({
         invoicexpress_id: invoiceId,
-        invoicexpress_type: 'invoice_receipts',
+        invoicexpress_type: endpointName,
         invoice_reference: invoiceReference,
       })
       .eq('id', sale_id)
