@@ -38,6 +38,7 @@ import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { format, addMonths } from "date-fns";
 import { pt } from "date-fns/locale";
+import { Progress } from "@/components/ui/progress";
 import { 
   Loader2, 
   CalendarIcon, 
@@ -48,13 +49,21 @@ import {
   User,
   FileText,
   Router,
-  Zap
+  Zap,
+  CreditCard,
+  Trash2
 } from "lucide-react";
 import type { Proposal } from "@/types/proposals";
 import { 
   type ProposalType,
-  type ModeloServico
+  type ModeloServico,
+  type PaymentMethod,
+  PAYMENT_METHOD_LABELS,
+  PAYMENT_RECORD_STATUS_LABELS,
+  PAYMENT_RECORD_STATUS_COLORS,
 } from "@/types/sales";
+import { calculatePaymentSummary } from "@/hooks/useSalePayments";
+import { AddDraftPaymentModal, type DraftPayment } from "./AddDraftPaymentModal";
 
 
 interface SaleItemDraft {
@@ -127,6 +136,10 @@ export function CreateSaleModal({
   const [kwp, setKwp] = useState<string>("");
   const [comissao, setComissao] = useState<string>("");
 
+  // Draft payments state
+  const [draftPayments, setDraftPayments] = useState<DraftPayment[]>([]);
+  const [showDraftPaymentModal, setShowDraftPaymentModal] = useState(false);
+
   // Reset form when modal opens
   useEffect(() => {
     if (open) {
@@ -192,6 +205,8 @@ export function CreateSaleModal({
       setSaleDate(new Date());
       setItems([]);
       setDiscount("0");
+      setDraftPayments([]);
+      setShowDraftPaymentModal(false);
       if (!prefillProposal?.notes) {
         setNotes("");
       }
@@ -524,6 +539,22 @@ export function CreateSaleModal({
         }
       }
 
+      // Create draft payments
+      if (draftPayments.length > 0 && sale?.id && organization?.id) {
+        for (const dp of draftPayments) {
+          await createSalePayment.mutateAsync({
+            sale_id: sale.id,
+            organization_id: organization.id,
+            amount: dp.amount,
+            payment_date: dp.payment_date,
+            payment_method: dp.payment_method,
+            status: dp.status,
+            invoice_reference: dp.invoice_reference,
+            notes: dp.notes,
+          });
+        }
+      }
+
       // Notify parent that sale was created successfully
       onSaleCreated?.(sale.id);
 
@@ -834,6 +865,104 @@ export function CreateSaleModal({
 
             <Separator />
 
+            {/* Section 3.5: Payments */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                  <CreditCard className="h-4 w-4" />
+                  Pagamentos
+                </div>
+                {total > 0 && (() => {
+                  const summary = calculatePaymentSummary(
+                    draftPayments.map(dp => ({ ...dp, id: dp.id, organization_id: '', sale_id: '', invoice_file_url: null, created_at: '', updated_at: '' })),
+                    total
+                  );
+                  return summary.remaining > 0;
+                })() && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowDraftPaymentModal(true)}
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    Adicionar
+                  </Button>
+                )}
+              </div>
+
+              {draftPayments.length > 0 ? (
+                <div className="space-y-2">
+                  {draftPayments.map((dp) => (
+                    <div
+                      key={dp.id}
+                      className="flex items-center justify-between p-3 rounded-lg border border-border/50 bg-muted/30"
+                    >
+                      <div className="flex flex-col gap-0.5">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-sm">{formatCurrency(dp.amount)}</span>
+                          <Badge variant="outline" className={cn("text-xs", PAYMENT_RECORD_STATUS_COLORS[dp.status])}>
+                            {PAYMENT_RECORD_STATUS_LABELS[dp.status]}
+                          </Badge>
+                        </div>
+                        <span className="text-xs text-muted-foreground">
+                          {dp.payment_date}
+                          {dp.payment_method && ` • ${PAYMENT_METHOD_LABELS[dp.payment_method]}`}
+                          {dp.invoice_reference && ` • ${dp.invoice_reference}`}
+                        </span>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                        onClick={() => setDraftPayments(prev => prev.filter(p => p.id !== dp.id))}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+
+                  {/* Payment summary */}
+                  {(() => {
+                    const summary = calculatePaymentSummary(
+                      draftPayments.map(dp => ({ ...dp, organization_id: '', sale_id: '', invoice_file_url: null, created_at: '', updated_at: '' })),
+                      total
+                    );
+                    return (
+                      <div className="p-3 rounded-lg bg-muted/30 border border-border/50 space-y-2">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Total pago</span>
+                          <span className="font-medium text-green-500">{formatCurrency(summary.totalPaid)}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Em falta</span>
+                          <span className="font-medium">{formatCurrency(summary.remaining)}</span>
+                        </div>
+                        <Progress value={summary.percentage} className="h-2" />
+                      </div>
+                    );
+                  })()}
+                </div>
+              ) : total > 0 ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full border-dashed"
+                  onClick={() => setShowDraftPaymentModal(true)}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Adicionar Pagamento
+                </Button>
+              ) : (
+                <p className="text-sm text-muted-foreground text-center py-2">
+                  Adicione produtos para registar pagamentos
+                </p>
+              )}
+            </div>
+
+            <Separator />
+
             {/* Section 4: Notes */}
             <div className="space-y-2">
               <Label>Notas</Label>
@@ -846,6 +975,21 @@ export function CreateSaleModal({
             </div>
           </form>
         </ScrollArea>
+
+        {/* Draft Payment Modal */}
+        <AddDraftPaymentModal
+          open={showDraftPaymentModal}
+          onOpenChange={setShowDraftPaymentModal}
+          saleTotal={total}
+          remaining={(() => {
+            const summary = calculatePaymentSummary(
+              draftPayments.map(dp => ({ ...dp, organization_id: '', sale_id: '', invoice_file_url: null, created_at: '', updated_at: '' })),
+              total
+            );
+            return summary.remaining;
+          })()}
+          onAdd={(payment) => setDraftPayments(prev => [...prev, payment])}
+        />
 
         {/* Footer */}
         <div className="flex justify-end gap-3 p-4 border-t border-border/50 bg-muted/30">
