@@ -54,6 +54,11 @@ export default function Settings() {
   const [brevoSenderEmail, setBrevoSenderEmail] = useState('');
   const [showBrevoApiKey, setShowBrevoApiKey] = useState(false);
   
+  // InvoiceXpress state
+  const [invoiceXpressAccountName, setInvoiceXpressAccountName] = useState('');
+  const [invoiceXpressApiKey, setInvoiceXpressApiKey] = useState('');
+  const [showInvoiceXpressApiKey, setShowInvoiceXpressApiKey] = useState(false);
+
 
   // Form mode state (for dynamic URL)
   const [formMode, setFormMode] = useState<'traditional' | 'conversational'>('traditional');
@@ -92,7 +97,7 @@ export default function Settings() {
       setIsLoadingIntegrations(true);
       const { data, error } = await supabase
         .from('organizations')
-        .select('webhook_url, whatsapp_base_url, whatsapp_instance, whatsapp_api_key, form_settings, brevo_api_key, brevo_sender_email')
+        .select('webhook_url, whatsapp_base_url, whatsapp_instance, whatsapp_api_key, form_settings, brevo_api_key, brevo_sender_email, invoicexpress_account_name, invoicexpress_api_key')
         .eq('id', organization.id)
         .single();
       
@@ -103,6 +108,8 @@ export default function Settings() {
         setWhatsappApiKey(data.whatsapp_api_key || '');
         setBrevoApiKey(data.brevo_api_key || '');
         setBrevoSenderEmail(data.brevo_sender_email || '');
+        setInvoiceXpressAccountName((data as any).invoicexpress_account_name || '');
+        setInvoiceXpressApiKey((data as any).invoicexpress_api_key || '');
         
         // Set form mode from settings
         if (data.form_settings) {
@@ -140,6 +147,13 @@ export default function Settings() {
     updateOrganization.mutate({
       brevo_api_key: brevoApiKey.trim() || null,
       brevo_sender_email: brevoSenderEmail.trim() || null,
+    });
+  };
+
+  const handleSaveInvoiceXpress = () => {
+    updateOrganization.mutate({
+      invoicexpress_account_name: invoiceXpressAccountName.trim() || null,
+      invoicexpress_api_key: invoiceXpressApiKey.trim() || null,
     });
   };
 
@@ -313,6 +327,13 @@ export default function Settings() {
                   showBrevoApiKey={showBrevoApiKey}
                   setShowBrevoApiKey={setShowBrevoApiKey}
                   handleSaveBrevo={handleSaveBrevo}
+                  invoiceXpressAccountName={invoiceXpressAccountName}
+                  setInvoiceXpressAccountName={setInvoiceXpressAccountName}
+                  invoiceXpressApiKey={invoiceXpressApiKey}
+                  setInvoiceXpressApiKey={setInvoiceXpressApiKey}
+                  showInvoiceXpressApiKey={showInvoiceXpressApiKey}
+                  setShowInvoiceXpressApiKey={setShowInvoiceXpressApiKey}
+                  handleSaveInvoiceXpress={handleSaveInvoiceXpress}
                 />
               )}
             </>
@@ -507,6 +528,13 @@ export default function Settings() {
                     showBrevoApiKey={showBrevoApiKey}
                     setShowBrevoApiKey={setShowBrevoApiKey}
                     handleSaveBrevo={handleSaveBrevo}
+                    invoiceXpressAccountName={invoiceXpressAccountName}
+                    setInvoiceXpressAccountName={setInvoiceXpressAccountName}
+                    invoiceXpressApiKey={invoiceXpressApiKey}
+                    setInvoiceXpressApiKey={setInvoiceXpressApiKey}
+                    showInvoiceXpressApiKey={showInvoiceXpressApiKey}
+                    setShowInvoiceXpressApiKey={setShowInvoiceXpressApiKey}
+                    handleSaveInvoiceXpress={handleSaveInvoiceXpress}
                   />
                 </TabsContent>
               )}

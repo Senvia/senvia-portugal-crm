@@ -1420,6 +1420,8 @@ export type Database = {
           fidelization_event_time: string | null
           form_settings: Json | null
           id: string
+          invoicexpress_account_name: string | null
+          invoicexpress_api_key: string | null
           logo_url: string | null
           meta_pixels: Json | null
           msg_template_cold: string | null
@@ -1450,6 +1452,8 @@ export type Database = {
           fidelization_event_time?: string | null
           form_settings?: Json | null
           id?: string
+          invoicexpress_account_name?: string | null
+          invoicexpress_api_key?: string | null
           logo_url?: string | null
           meta_pixels?: Json | null
           msg_template_cold?: string | null
@@ -1480,6 +1484,8 @@ export type Database = {
           fidelization_event_time?: string | null
           form_settings?: Json | null
           id?: string
+          invoicexpress_account_name?: string | null
+          invoicexpress_api_key?: string | null
           logo_url?: string | null
           meta_pixels?: Json | null
           msg_template_cold?: string | null
