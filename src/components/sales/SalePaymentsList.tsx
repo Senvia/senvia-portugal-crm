@@ -18,12 +18,14 @@ import {
 import { useSalePayments, useDeleteSalePayment, calculatePaymentSummary } from "@/hooks/useSalePayments";
 import { formatCurrency } from "@/lib/format";
 import { AddPaymentModal } from "./AddPaymentModal";
+import { ScheduleRemainingModal } from "./ScheduleRemainingModal";
 import type { SalePayment } from "@/types/sales";
 import { 
   PAYMENT_METHOD_LABELS, 
   PAYMENT_RECORD_STATUS_LABELS,
   PAYMENT_RECORD_STATUS_COLORS 
 } from "@/types/sales";
+import type { PaymentMethod } from "@/types/sales";
 
 interface SalePaymentsListProps {
   saleId: string;
@@ -44,6 +46,8 @@ export function SalePaymentsList({
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingPayment, setEditingPayment] = useState<SalePayment | null>(null);
   const [deletingPayment, setDeletingPayment] = useState<SalePayment | null>(null);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [lastPaymentMethod, setLastPaymentMethod] = useState<PaymentMethod | null>(null);
 
   const summary = calculatePaymentSummary(payments, saleTotal);
 
@@ -237,6 +241,25 @@ export function SalePaymentsList({
         saleTotal={saleTotal}
         remaining={summary.remaining}
         payment={editingPayment}
+        onSuccess={(amountPaid, method) => {
+          setLastPaymentMethod(method);
+          // Recalculate remaining after this payment
+          const newRemaining = summary.remaining - amountPaid;
+          if (newRemaining > 0.01) {
+            // Small delay to let the query invalidate
+            setTimeout(() => setShowScheduleModal(true), 300);
+          }
+        }}
+      />
+
+      {/* Schedule Remaining Modal */}
+      <ScheduleRemainingModal
+        open={showScheduleModal}
+        onOpenChange={setShowScheduleModal}
+        saleId={saleId}
+        organizationId={organizationId}
+        remainingAmount={Math.max(0, summary.remaining)}
+        defaultPaymentMethod={lastPaymentMethod}
       />
 
       {/* Delete Confirmation */}

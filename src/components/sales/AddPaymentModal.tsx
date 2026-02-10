@@ -37,6 +37,7 @@ interface AddPaymentModalProps {
   saleTotal: number;
   remaining: number;
   payment?: SalePayment | null; // For editing
+  onSuccess?: (amountPaid: number, paymentMethod: PaymentMethod | null) => void;
 }
 
 export function AddPaymentModal({
@@ -47,6 +48,7 @@ export function AddPaymentModal({
   saleTotal,
   remaining,
   payment,
+  onSuccess,
 }: AddPaymentModalProps) {
   const createPayment = useCreateSalePayment();
   const updatePayment = useUpdateSalePayment();
@@ -112,7 +114,12 @@ export function AddPaymentModal({
     } else {
       createPayment.mutate(
         { ...data, sale_id: saleId, organization_id: organizationId },
-        { onSuccess: () => onOpenChange(false) }
+        {
+          onSuccess: () => {
+            onSuccess?.(amountValue, paymentMethod || null);
+            onOpenChange(false);
+          },
+        }
       );
     }
   };
