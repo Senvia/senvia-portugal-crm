@@ -22,12 +22,13 @@ export function useAllPayments() {
             code,
             status,
             total_value,
+            invoice_reference,
+            invoicexpress_id,
             leads:lead_id (name),
             crm_clients:client_id (name)
           )
         `)
         .eq('organization_id', organizationId)
-        .eq('sales.status', 'delivered')
         .order('payment_date', { ascending: false });
 
       if (error) {
@@ -52,6 +53,8 @@ export function useAllPayments() {
           id: payment.sales?.id || '',
           code: payment.sales?.code || '',
           total_value: Number(payment.sales?.total_value || 0),
+          invoice_reference: (payment.sales as any)?.invoice_reference || null,
+          invoicexpress_id: (payment.sales as any)?.invoicexpress_id || null,
         },
         client_name: payment.sales?.crm_clients?.name || null,
         lead_name: payment.sales?.leads?.name || null,

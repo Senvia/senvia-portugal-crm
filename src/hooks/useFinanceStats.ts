@@ -35,7 +35,6 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
           )
         `)
         .eq('organization_id', organizationId)
-        .eq('sales.status', 'delivered')
         .order('payment_date', { ascending: true });
 
       if (error) {
@@ -60,6 +59,8 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
           id: payment.sales?.id || '',
           code: payment.sales?.code || '',
           total_value: Number(payment.sales?.total_value || 0),
+          invoice_reference: null,
+          invoicexpress_id: null,
         },
         client_name: payment.sales?.crm_clients?.name || null,
         lead_name: payment.sales?.leads?.name || null,

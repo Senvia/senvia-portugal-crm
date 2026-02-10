@@ -2,7 +2,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Download, Search, FileText, Loader2, X } from "lucide-react";
+import { Download, Search, FileText, Loader2, X, ExternalLink } from "lucide-react";
 import { useAllPayments } from "@/hooks/useAllPayments";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -13,18 +13,23 @@ import { toast } from "sonner";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { DateRange } from "react-day-picker";
 import { startOfDay, endOfDay, parseISO } from "date-fns";
+import { Badge } from "@/components/ui/badge";
+import { useAuth } from "@/contexts/AuthContext";
 
 export function InvoicesContent() {
   const { data: payments, isLoading } = useAllPayments();
+  const { organization } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
-  // Filter only payments with invoice reference
+  // Filter payments that have any invoice reference (manual or InvoiceXpress)
   const invoices = useMemo(() => {
     if (!payments) return [];
 
-    const withInvoice = payments.filter(p => p.invoice_reference);
+    const withInvoice = payments.filter(p => 
+      p.invoice_reference || p.sale.invoice_reference || p.sale.invoicexpress_id
+    );
 
     return withInvoice.filter(payment => {
       // Date range filter
@@ -40,7 +45,7 @@ export function InvoicesContent() {
         const clientName = payment.client_name?.toLowerCase() || '';
         const leadName = payment.lead_name?.toLowerCase() || '';
         const saleCode = payment.sale.code?.toLowerCase() || '';
-        const invoiceRef = payment.invoice_reference?.toLowerCase() || '';
+        const invoiceRef = (payment.invoice_reference || payment.sale.invoice_reference || '').toLowerCase();
         
         return invoiceRef.includes(search) ||
                clientName.includes(search) || 
@@ -61,7 +66,8 @@ export function InvoicesContent() {
 
   const handleExport = () => {
     const exportData = invoices.map(p => ({
-      Referência: p.invoice_reference || '-',
+      Referência: p.invoice_reference || p.sale.invoice_reference || '-',
+      Origem: p.sale.invoicexpress_id ? 'InvoiceXpress' : 'Manual',
       Data: formatDate(p.payment_date),
       Venda: `#${p.sale.code}`,
       Cliente: p.client_name || p.lead_name || '-',
@@ -94,6 +100,24 @@ export function InvoicesContent() {
     }
   };
 
+  const handleDownloadInvoiceXpress = (invoicexpressId: number) => {
+    const accountName = (organization as any)?.invoicexpress_account_name;
+    if (!accountName) {
+      toast.error("Conta InvoiceXpress não configurada");
+      return;
+    }
+    const url = `https://${accountName}.app.invoicexpress.com/invoice_receipts/${invoicexpressId}.pdf`;
+    window.open(url, '_blank');
+  };
+
+  const getInvoiceRef = (invoice: typeof invoices[0]) => {
+    return invoice.invoice_reference || invoice.sale.invoice_reference || '-';
+  };
+
+  const isInvoiceXpress = (invoice: typeof invoices[0]) => {
+    return !!invoice.sale.invoicexpress_id;
+  };
+
   return (
     <div className="space-y-6">
       {/* Header with Export */}
@@ -114,7 +138,6 @@ export function InvoicesContent() {
       <Card>
         <CardContent className="pt-6">
           <div className="flex flex-col gap-4">
-            {/* Search */}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -124,8 +147,6 @@ export function InvoicesContent() {
                 className="pl-9"
               />
             </div>
-
-            {/* Date range */}
             <div className="flex flex-wrap gap-3 items-center">
               <DateRangePicker
                 value={dateRange}
@@ -133,14 +154,8 @@ export function InvoicesContent() {
                 placeholder="Período"
                 className="w-full xs:w-auto"
               />
-
               {hasActiveFilters && (
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={clearFilters}
-                  className="gap-1 text-muted-foreground"
-                >
+                <Button variant="ghost" size="sm" onClick={clearFilters} className="gap-1 text-muted-foreground">
                   <X className="h-4 w-4" />
                   Limpar
                 </Button>
@@ -150,7 +165,6 @@ export function InvoicesContent() {
         </CardContent>
       </Card>
 
-      {/* Results count */}
       {hasActiveFilters && !isLoading && (
         <p className="text-sm text-muted-foreground">
           {invoices.length} fatura(s) encontrada(s)
@@ -171,13 +185,7 @@ export function InvoicesContent() {
               <FileText className="h-12 w-12 text-muted-foreground/50 mb-4" />
               <p className="text-muted-foreground">Nenhuma fatura encontrada</p>
               {hasActiveFilters ? (
-                <Button 
-                  variant="link" 
-                  onClick={clearFilters} 
-                  className="mt-2"
-                >
-                  Limpar filtros
-                </Button>
+                <Button variant="link" onClick={clearFilters} className="mt-2">Limpar filtros</Button>
               ) : (
                 <p className="text-xs text-muted-foreground mt-1">
                   As faturas aparecem quando adiciona uma referência ao registar pagamentos
@@ -201,7 +209,14 @@ export function InvoicesContent() {
                   {invoices.map((invoice) => (
                     <TableRow key={invoice.id}>
                       <TableCell>
-                        <span className="font-medium">{invoice.invoice_reference}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{getInvoiceRef(invoice)}</span>
+                          {isInvoiceXpress(invoice) && (
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 whitespace-nowrap">
+                              InvoiceXpress
+                            </Badge>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="whitespace-nowrap">
                         {formatDate(invoice.payment_date)}
@@ -229,6 +244,15 @@ export function InvoicesContent() {
                             ) : (
                               <Download className="h-4 w-4" />
                             )}
+                          </Button>
+                        ) : isInvoiceXpress(invoice) ? (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => handleDownloadInvoiceXpress(invoice.sale.invoicexpress_id!)}
+                          >
+                            <ExternalLink className="h-4 w-4" />
                           </Button>
                         ) : (
                           <span className="text-muted-foreground text-sm">—</span>
