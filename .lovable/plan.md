@@ -1,34 +1,33 @@
 
 
-## Mostrar pagamentos apos criar venda
+## Corrigir abertura automatica do modal de detalhes apos criar venda
 
 ### Problema
 
-Ao remover a secao antiga de pagamento do "Nova Venda", nao ficou nada no seu lugar. O componente `SalePaymentsList` precisa de um `sale.id` que so existe apos a venda ser criada, por isso nao pode ser mostrado durante a criacao.
+O fluxo atual tenta encontrar a venda criada no cache do React Query apos 500ms, mas o `invalidateQueries` (que dispara o refetch) acontece de forma assincrona no `onSuccess` da mutation -- e frequentemente ainda nao terminou quando o `setTimeout` executa. Resultado: `sales?.find(s => s.id === saleId)` retorna `undefined` e o modal de detalhes nunca abre.
 
 ### Solucao
 
-Apos criar a venda com sucesso, **abrir automaticamente o modal de detalhes** da venda criada, onde o `SalePaymentsList` ja esta implementado. Assim o utilizador cria a venda e e imediatamente levado para adicionar pagamentos.
+Usar um state `pendingSaleId` e um `useEffect` que observa quando os dados de `sales` sao atualizados. Assim que a venda aparece no cache, o modal de detalhes abre automaticamente.
 
 ### Alteracoes
 
-**Ficheiro 1: `src/components/sales/CreateSaleModal.tsx`**
+**Ficheiro: `src/pages/Sales.tsx`**
 
-- Alterar o callback `onSaleCreated` para `onSaleCreated?: (saleId: string) => void`
-- Apos criar a venda com sucesso, chamar `onSaleCreated(sale.id)` passando o ID da venda criada
-- O modal fecha normalmente
+1. Adicionar um novo state: `const [pendingSaleId, setPendingSaleId] = useState<string | null>(null)`
 
-**Ficheiro 2: `src/pages/Sales.tsx`**
+2. Adicionar um `useEffect` que observa `sales` e `pendingSaleId`:
+   - Quando `pendingSaleId` existe e `sales` contem uma venda com esse ID, define `selectedSale` com essa venda e limpa `pendingSaleId`
 
-- No `CreateSaleModal`, passar um novo callback `onSaleCreated` que:
-  1. Fecha o modal de criacao
-  2. Define a venda criada como `selectedSale` para abrir automaticamente o `SaleDetailsModal`
-- Buscar a venda completa pelo ID retornado (usando os dados ja em cache do React Query) e definir como `selectedSale`
+3. Alterar o callback `onSaleCreated` para simplesmente:
+   - Fechar o modal de criacao (`setShowCreateModal(false)`)
+   - Definir `setPendingSaleId(saleId)` em vez de usar `setTimeout`
 
-O fluxo fica: **Criar Venda → Modal fecha → Modal de Detalhes abre automaticamente → Utilizador adiciona pagamentos**
+4. Remover o `setTimeout` actual
+
+O `useEffect` ira reagir automaticamente quando o React Query terminar o refetch e atualizar `sales`, garantindo que o modal de detalhes abre sempre.
 
 | Ficheiro | Alteracao |
 |---|---|
-| `src/components/sales/CreateSaleModal.tsx` | Callback `onSaleCreated` passa o `sale.id` |
-| `src/pages/Sales.tsx` | Recebe o ID, fecha criacao e abre detalhes automaticamente |
+| `src/pages/Sales.tsx` | Substituir `setTimeout` por `useEffect` reativo com `pendingSaleId` |
 
