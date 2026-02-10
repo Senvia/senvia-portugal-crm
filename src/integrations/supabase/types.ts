@@ -1433,6 +1433,7 @@ export type Database = {
           plan: string | null
           public_key: string
           slug: string
+          tax_config: Json | null
           webhook_url: string | null
           whatsapp_api_key: string | null
           whatsapp_base_url: string | null
@@ -1466,6 +1467,7 @@ export type Database = {
           plan?: string | null
           public_key?: string
           slug: string
+          tax_config?: Json | null
           webhook_url?: string | null
           whatsapp_api_key?: string | null
           whatsapp_base_url?: string | null
@@ -1499,6 +1501,7 @@ export type Database = {
           plan?: string | null
           public_key?: string
           slug?: string
+          tax_config?: Json | null
           webhook_url?: string | null
           whatsapp_api_key?: string | null
           whatsapp_base_url?: string | null
