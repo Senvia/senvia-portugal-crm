@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import {
   Accordion,
   AccordionContent,
@@ -50,6 +51,8 @@ interface IntegrationsContentProps {
   showInvoiceXpressApiKey: boolean;
   setShowInvoiceXpressApiKey: (value: boolean) => void;
   handleSaveInvoiceXpress: () => void;
+  integrationsEnabled: Record<string, boolean>;
+  onToggleIntegration: (key: string, enabled: boolean) => void;
 }
 
 export const IntegrationsContent = ({
@@ -89,7 +92,20 @@ export const IntegrationsContent = ({
   showInvoiceXpressApiKey,
   setShowInvoiceXpressApiKey,
   handleSaveInvoiceXpress,
-}: IntegrationsContentProps) => (
+  integrationsEnabled,
+  onToggleIntegration,
+}: IntegrationsContentProps) => {
+  const getBadge = (key: string, hasCredentials: boolean) => {
+    if (integrationsEnabled[key] === false) {
+      return <Badge variant="outline" className="bg-muted/50 text-muted-foreground border-border">Desativado</Badge>;
+    }
+    if (hasCredentials) {
+      return <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20">Configurado</Badge>;
+    }
+    return <Badge variant="outline" className="bg-red-500/10 text-red-600 border-red-500/20">Não configurado</Badge>;
+  };
+
+  return (
   <div className="max-w-4xl">
     <div className="mb-4 p-4 rounded-lg bg-muted/50 border">
       <p className="text-sm text-muted-foreground">
@@ -152,14 +168,23 @@ export const IntegrationsContent = ({
       {/* Webhook */}
       <AccordionItem value="webhook">
         <AccordionTrigger className="hover:no-underline">
-          <div className="flex flex-col items-start gap-1">
-            <div className="flex items-center gap-2">
-              <Webhook className="h-5 w-5" />
-              <span className="font-medium">Webhook (n8n / Automações)</span>
+          <div className="flex items-center justify-between w-full pr-2">
+            <div className="flex flex-col items-start gap-1">
+              <div className="flex items-center gap-2">
+                <Webhook className="h-5 w-5" />
+                <span className="font-medium">Webhook (n8n / Automações)</span>
+                {getBadge('webhook', !!webhookUrl)}
+              </div>
+              <span className="text-xs text-muted-foreground font-normal">
+                Receba notificações em tempo real quando um novo lead é criado.
+              </span>
             </div>
-            <span className="text-xs text-muted-foreground font-normal">
-              Receba notificações em tempo real quando um novo lead é criado.
-            </span>
+            <div onClick={(e) => e.stopPropagation()}>
+              <Switch
+                checked={integrationsEnabled.webhook !== false}
+                onCheckedChange={(checked) => onToggleIntegration('webhook', checked)}
+              />
+            </div>
           </div>
         </AccordionTrigger>
         <AccordionContent>
@@ -221,14 +246,23 @@ export const IntegrationsContent = ({
       {/* WhatsApp Business */}
       <AccordionItem value="whatsapp">
         <AccordionTrigger className="hover:no-underline">
-          <div className="flex flex-col items-start gap-1">
-            <div className="flex items-center gap-2">
-              <MessageCircle className="h-5 w-5" />
-              <span className="font-medium">WhatsApp Business</span>
+          <div className="flex items-center justify-between w-full pr-2">
+            <div className="flex flex-col items-start gap-1">
+              <div className="flex items-center gap-2">
+                <MessageCircle className="h-5 w-5" />
+                <span className="font-medium">WhatsApp Business</span>
+                {getBadge('whatsapp', !!(whatsappBaseUrl && whatsappInstance && whatsappApiKey))}
+              </div>
+              <span className="text-xs text-muted-foreground font-normal">
+                Configure a integração com Evolution API.
+              </span>
             </div>
-            <span className="text-xs text-muted-foreground font-normal">
-              Configure a integração com Evolution API.
-            </span>
+            <div onClick={(e) => e.stopPropagation()}>
+              <Switch
+                checked={integrationsEnabled.whatsapp !== false}
+                onCheckedChange={(checked) => onToggleIntegration('whatsapp', checked)}
+              />
+            </div>
           </div>
         </AccordionTrigger>
         <AccordionContent>
@@ -314,23 +348,23 @@ export const IntegrationsContent = ({
       {/* Email (Brevo) */}
       <AccordionItem value="brevo">
         <AccordionTrigger className="hover:no-underline">
-          <div className="flex flex-col items-start gap-1">
-            <div className="flex items-center gap-2">
-              <Mail className="h-5 w-5" />
-              <span className="font-medium">Email (Brevo)</span>
-              {brevoApiKey && brevoSenderEmail ? (
-                <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20">
-                  Configurado
-                </Badge>
-              ) : (
-                <Badge variant="outline" className="bg-red-500/10 text-red-600 border-red-500/20">
-                  Não configurado
-                </Badge>
-              )}
+          <div className="flex items-center justify-between w-full pr-2">
+            <div className="flex flex-col items-start gap-1">
+              <div className="flex items-center gap-2">
+                <Mail className="h-5 w-5" />
+                <span className="font-medium">Email (Brevo)</span>
+                {getBadge('brevo', !!(brevoApiKey && brevoSenderEmail))}
+              </div>
+              <span className="text-xs text-muted-foreground font-normal">
+                Configure o envio de emails com a sua conta Brevo.
+              </span>
             </div>
-            <span className="text-xs text-muted-foreground font-normal">
-              Configure o envio de emails com a sua conta Brevo.
-            </span>
+            <div onClick={(e) => e.stopPropagation()}>
+              <Switch
+                checked={integrationsEnabled.brevo !== false}
+                onCheckedChange={(checked) => onToggleIntegration('brevo', checked)}
+              />
+            </div>
           </div>
         </AccordionTrigger>
         <AccordionContent>
@@ -403,23 +437,23 @@ export const IntegrationsContent = ({
       {/* Faturação (InvoiceXpress) */}
       <AccordionItem value="invoicexpress">
         <AccordionTrigger className="hover:no-underline">
-          <div className="flex flex-col items-start gap-1">
-            <div className="flex items-center gap-2">
-              <Receipt className="h-5 w-5" />
-              <span className="font-medium">Faturação (InvoiceXpress)</span>
-              {invoiceXpressAccountName && invoiceXpressApiKey ? (
-                <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20">
-                  Configurado
-                </Badge>
-              ) : (
-                <Badge variant="outline" className="bg-red-500/10 text-red-600 border-red-500/20">
-                  Não configurado
-                </Badge>
-              )}
+          <div className="flex items-center justify-between w-full pr-2">
+            <div className="flex flex-col items-start gap-1">
+              <div className="flex items-center gap-2">
+                <Receipt className="h-5 w-5" />
+                <span className="font-medium">Faturação (InvoiceXpress)</span>
+                {getBadge('invoicexpress', !!(invoiceXpressAccountName && invoiceXpressApiKey))}
+              </div>
+              <span className="text-xs text-muted-foreground font-normal">
+                Emita faturas diretamente a partir do CRM.
+              </span>
             </div>
-            <span className="text-xs text-muted-foreground font-normal">
-              Emita faturas diretamente a partir do CRM.
-            </span>
+            <div onClick={(e) => e.stopPropagation()}>
+              <Switch
+                checked={integrationsEnabled.invoicexpress !== false}
+                onCheckedChange={(checked) => onToggleIntegration('invoicexpress', checked)}
+              />
+            </div>
           </div>
         </AccordionTrigger>
         <AccordionContent>
@@ -490,3 +524,4 @@ export const IntegrationsContent = ({
     </Accordion>
   </div>
 );
+};

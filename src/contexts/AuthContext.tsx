@@ -29,6 +29,7 @@ interface Organization {
   logo_url?: string | null;
   invoicexpress_account_name?: string | null;
   invoicexpress_api_key?: string | null;
+  integrations_enabled?: any;
 }
 
 interface UserOrganizationMembership {
