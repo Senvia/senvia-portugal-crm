@@ -500,6 +500,8 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                     invoicexpressId={sale.invoicexpress_id}
                     invoiceReference={sale.invoice_reference}
                     clientNif={sale.client?.nif}
+                    clientName={sale.client?.name || sale.lead?.name}
+                    taxConfig={organization?.tax_config as { tax_rate?: number; tax_exemption_reason?: string } | null}
                   />
                   <Separator />
                 </>
