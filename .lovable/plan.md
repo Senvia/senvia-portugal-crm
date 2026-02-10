@@ -1,83 +1,54 @@
 
+## Ajustes no Template Telecom - Propostas
 
-## Botoes de Ativar/Desativar Integracoes
+### Situacao atual
 
-### O que muda
+Verifiquei o codigo e **nenhuma das duas alteracoes esta implementada**:
 
-Cada integracao (Webhook, WhatsApp, Brevo, InvoiceXpress) vai ter um **Switch (toggle)** no header do accordion que permite ativar ou desativar a integracao. Quando desativada, as credenciais ficam guardadas na base de dados mas a integracao nao e utilizada pelo sistema.
+1. **"Valor Total"** -- Aparece como valor monetario (EUR) tanto no modal de detalhes como no documento de impressao. O utilizador quer que no template telecom este campo mostre **"Consumo Total MWh"** com o calculo: soma dos consumos anuais dos CPEs / 1000.
 
-### Comportamento
+2. **Badge "Renovacao"** -- Aparece em dois sitios:
+   - `ProposalCpeSelector.tsx` (formulario de criacao/edicao) -- badge fixo "Renovacao" em todos os CPEs
+   - `ProposalDetailsModal.tsx` (modal de detalhes) -- badge "Renovacao" quando o CPE esta ligado a um CPE existente
 
-- **Switch ON**: A integracao funciona normalmente (webhook dispara, fatura pode ser emitida, emails sao enviados, etc.)
-- **Switch OFF**: Credenciais mantidas, mas o sistema ignora a integracao. O badge muda para "Desativado" (cinzento). Os campos de configuracao continuam visiveis dentro do accordion para que o utilizador possa reconfigurar antes de reativar.
-- O switch guarda automaticamente ao clicar (sem precisar de carregar "Guardar")
-- O `SaleDetailsModal` ja valida se existem credenciais InvoiceXpress -- vai passar a validar tambem se a integracao esta ativa
+### O que vai mudar
+
+**1. Substituir "Valor Total" por "Consumo Total MWh" (apenas telecom)**
+
+- No **modal de detalhes** (`ProposalDetailsModal.tsx`): quando o nicho e telecom, o bloco azul principal mostra "Consumo Total MWh" com o valor calculado (soma de `consumo_anual` de todos os CPEs da proposta / 1000), formatado com casas decimais e unidade "MWh". O valor monetario (margem total) pode manter-se como informacao secundaria.
+- No **documento de impressao** (HTML dentro do mesmo ficheiro): a mesma logica -- "Consumo Total MWh" em vez de "Valor Total" para telecom.
+
+**2. Remover badge "Renovacao" dos quadros de CPE**
+
+- `ProposalCpeSelector.tsx` (linha 189-191): remover o badge "Renovacao" fixo.
+- `ProposalDetailsModal.tsx` (linha 598-600): remover o badge condicional "Renovacao"/"Novo".
 
 ### Secao tecnica
 
-#### 1. Migracao de base de dados
+#### Ficheiros a alterar
 
-Adicionar uma coluna JSONB para guardar o estado de cada integracao:
-
-```sql
-ALTER TABLE public.organizations
-  ADD COLUMN integrations_enabled jsonb 
-  DEFAULT '{"webhook": true, "whatsapp": true, "brevo": true, "invoicexpress": true}'::jsonb;
-```
-
-Usar JSONB permite adicionar novas integracoes no futuro sem novas migracoes.
-
-#### 2. Atualizar `Organization` interface em `AuthContext.tsx`
-
-Adicionar o campo:
-```typescript
-integrations_enabled?: {
-  webhook?: boolean;
-  whatsapp?: boolean;
-  brevo?: boolean;
-  invoicexpress?: boolean;
-};
-```
-
-#### 3. Atualizar `IntegrationsContent.tsx`
-
-- Importar o componente `Switch`
-- Adicionar props: `integrationsEnabled` (objeto com estados) e `onToggleIntegration` (callback que recebe key + novo estado)
-- No `AccordionTrigger` de cada integracao, adicionar um Switch ao lado do nome/badge
-- O Switch faz `e.stopPropagation()` para nao abrir/fechar o accordion ao clicar
-- Badge logica atualizada:
-  - Se desativado: Badge cinzento "Desativado" (independentemente de ter credenciais)
-  - Se ativado + credenciais: Badge verde "Configurado"
-  - Se ativado + sem credenciais: Badge vermelho "Nao configurado"
-
-#### 4. Atualizar componente pai (Settings.tsx ou onde IntegrationsContent e gerido)
-
-- Ler `integrations_enabled` da organizacao
-- Criar handler `onToggleIntegration` que faz update direto na tabela `organizations`
-- Passar como props ao `IntegrationsContent`
-
-#### 5. Atualizar `SaleDetailsModal.tsx`
-
-A logica `hasInvoiceXpress` passa a incluir a verificacao do toggle:
-
-```typescript
-const hasInvoiceXpress = organization?.integrations_enabled?.invoicexpress !== false
-  && organization?.invoicexpress_account_name 
-  && organization?.invoicexpress_api_key;
-```
-
-#### 6. Atualizar edge functions relevantes
-
-A edge function `issue-invoice` deve verificar se `integrations_enabled.invoicexpress` esta ativo antes de processar.
-
-### Ficheiros a criar/alterar
-
-| Ficheiro | Acao |
+| Ficheiro | Alteracao |
 |---|---|
-| `supabase/migrations/...` | Nova migracao (1 coluna JSONB) |
-| `src/contexts/AuthContext.tsx` | Adicionar tipo `integrations_enabled` |
-| `src/components/settings/IntegrationsContent.tsx` | Adicionar Switch + badge logica |
-| Componente pai das integracoes (Settings) | Handler toggle + nova prop |
-| `src/components/sales/SaleDetailsModal.tsx` | Verificar toggle na logica condicional |
-| `supabase/functions/issue-invoice/index.ts` | Verificar toggle antes de emitir |
+| `src/components/proposals/ProposalDetailsModal.tsx` | Condicao telecom no bloco "Valor Total" (modal + HTML de impressao); remover badge Renovacao/Novo dos CPEs |
+| `src/components/proposals/ProposalCpeSelector.tsx` | Remover badge "Renovacao" fixo (linhas 189-191) |
 
+#### Logica do calculo "Consumo Total MWh"
+
+```typescript
+const consumoTotalMwh = proposalCpes.reduce(
+  (sum, cpe) => sum + (Number(cpe.consumo_anual) || 0), 0
+) / 1000;
+```
+
+#### Condicao no modal (pseudo-codigo)
+
+```
+Se nicho === 'telecom':
+  Label: "Consumo Total MWh"
+  Valor: consumoTotalMwh formatado (ex: "12,5 MWh")
+Senao:
+  Label: "Valor Total"
+  Valor: formatCurrency(...)
+```
+
+A mesma logica aplica-se ao template HTML de impressao.
