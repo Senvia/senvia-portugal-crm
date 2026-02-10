@@ -72,7 +72,7 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
   const [status, setStatus] = useState<ProposalStatus>('draft');
   const [notes, setNotes] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [editValue, setEditValue] = useState<string>('0');
+  
   const [showSaleModal, setShowSaleModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
 
@@ -96,7 +96,6 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
   // Sincronizar estado quando proposal muda
   useEffect(() => {
     if (proposal) {
-      setEditValue(proposal.total_value.toString());
       setStatus(proposal.status);
       setNotes(proposal.notes || '');
     }
@@ -148,12 +147,6 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
     }
   };
 
-  const handleValueBlur = () => {
-    const newValue = parseFloat(editValue) || 0;
-    if (newValue !== proposal.total_value) {
-      updateProposal.mutate({ id: proposal.id, total_value: newValue });
-    }
-  };
 
   const handlePrint = () => {
     // Dados do cliente
@@ -401,7 +394,7 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
             <div class="label">${orgData?.niche === 'telecom' ? 'Consumo Total MWh' : 'Valor Total'}</div>
             <div class="value">${orgData?.niche === 'telecom' 
               ? `${(proposalCpes.reduce((sum, cpe) => sum + (Number(cpe.consumo_anual) || 0), 0) / 1000).toLocaleString('pt-PT', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} MWh`
-              : formatCurrency(parseFloat(editValue) || proposal.total_value)}</div>
+              : formatCurrency(proposal.total_value)}</div>
             ${orgData?.niche === 'telecom' && proposal.proposal_type === 'energia' && proposalCpes.length > 0 ? `
               <div style="font-size: 12px; color: #666; margin-top: 6px;">
                 Margem Total: <strong>${formatCurrency(proposalCpes.reduce((sum, cpe) => sum + (Number(cpe.margem) || 0), 0))}</strong>
@@ -512,7 +505,7 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
       clientName: proposal.client.name || 'Cliente',
       proposalCode: proposal.code || '',
       proposalDate: format(new Date(proposal.proposal_date), "d 'de' MMMM 'de' yyyy", { locale: pt }),
-      totalValue: parseFloat(editValue) || proposal.total_value,
+      totalValue: proposal.total_value,
       products: proposalProducts.map(item => ({
         name: item.product?.name || 'Produto',
         quantity: item.quantity,
@@ -552,43 +545,31 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
           </DialogHeader>
 
           <div className="space-y-4">
-            <div className="flex items-center justify-between gap-4 p-4 rounded-lg bg-primary/10 border border-primary/20">
+            {/* 1. Proposta - Código + Data */}
+            <div className="flex items-center justify-between gap-4 p-4 rounded-lg bg-muted/30 border">
               <div className="flex-1 min-w-0">
-                {orgData?.niche === 'telecom' ? (
-                  <>
-                    <p className="text-sm text-muted-foreground mb-1">Consumo Total MWh</p>
-                    <p className="text-2xl font-bold text-primary">
-                      {(proposalCpes.reduce((sum, cpe) => sum + (Number(cpe.consumo_anual) || 0), 0) / 1000).toLocaleString('pt-PT', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} MWh
+                <p className="text-sm text-muted-foreground mb-1">Proposta</p>
+                <p className="font-semibold text-base">
+                  {proposal.code || 'Sem código'}
+                </p>
+                {orgData?.niche === 'telecom' && (
+                  <div className="mt-2 space-y-1">
+                    <p className="text-sm text-muted-foreground">
+                      Consumo Total: <strong className="text-foreground">{(proposalCpes.reduce((sum, cpe) => sum + (Number(cpe.consumo_anual) || 0), 0) / 1000).toLocaleString('pt-PT', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} MWh</strong>
                     </p>
                     {proposal.proposal_type === 'energia' && proposalCpes.length > 0 && (
-                      <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1.5 text-xs text-muted-foreground">
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                         <span>Margem Total: <strong className="text-foreground">{formatCurrency(proposalCpes.reduce((sum, cpe) => sum + (Number(cpe.margem) || 0), 0))}</strong></span>
                         <span>Comissão Total: <strong className="text-foreground">{formatCurrency(proposalCpes.reduce((sum, cpe) => sum + (Number(cpe.comissao) || 0), 0))}</strong></span>
                       </div>
                     )}
                     {proposal.proposal_type === 'servicos' && (
-                      <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1.5 text-xs text-muted-foreground">
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                         {proposal.kwp != null && <span>kWp: <strong className="text-foreground">{Number(proposal.kwp).toLocaleString('pt-PT')}</strong></span>}
                         {proposal.comissao != null && <span>Comissão: <strong className="text-foreground">{formatCurrency(Number(proposal.comissao))}</strong></span>}
                       </div>
                     )}
-                  </>
-                ) : (
-                  <>
-                    <p className="text-sm text-muted-foreground mb-1">Valor Total</p>
-                    <div className="flex items-center gap-1">
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={editValue}
-                        onChange={(e) => setEditValue(e.target.value)}
-                        onBlur={handleValueBlur}
-                        className="text-2xl font-bold text-primary border-none p-0 h-auto bg-transparent focus-visible:ring-1 focus-visible:ring-primary/50 max-w-[180px]"
-                      />
-                      <span className="text-lg text-primary font-medium">€</span>
-                    </div>
-                  </>
+                  </div>
                 )}
               </div>
               <div className="text-right shrink-0">
@@ -599,7 +580,7 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
               </div>
             </div>
 
-            {/* Dados do Cliente */}
+            {/* 2. Cliente */}
             {proposal.client && (
               <div className="p-4 rounded-lg border bg-muted/30">
                 <p className="text-sm text-muted-foreground mb-2">Cliente</p>
@@ -614,8 +595,6 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
                 </div>
               </div>
             )}
-
-            {/* Fallback para Lead (retrocompatibilidade) */}
             {!proposal.client && proposal.lead && (
               <div className="p-4 rounded-lg border bg-muted/30">
                 <p className="text-sm text-muted-foreground mb-2">Lead</p>
@@ -631,6 +610,7 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
               </div>
             )}
 
+            {/* 3. Status */}
             <div className="space-y-2">
               <Label>Status da Proposta</Label>
               <Select 
@@ -641,7 +621,7 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
-              <SelectContent>
+                <SelectContent>
                   {PROPOSAL_STATUSES.map((s) => (
                     <SelectItem key={s} value={s}>
                       {PROPOSAL_STATUS_LABELS[s]}
@@ -651,7 +631,8 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
               </Select>
             </div>
 
-            {/* Tipo de Proposta Badge - Apenas Telecom */}
+            {/* 4. Produtos/Serviços */}
+            {/* Tipo Badge - Telecom only */}
             {orgData?.niche === 'telecom' && proposal.proposal_type && (
               <div className="flex items-center gap-2">
                 <Badge variant="outline" className={cn(
@@ -666,7 +647,7 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
               </div>
             )}
 
-            {/* CPEs com Dados de Energia por CPE - Apenas Telecom */}
+            {/* CPEs - Telecom only */}
             {orgData?.niche === 'telecom' && proposalCpes.length > 0 && (
               <div className="space-y-3">
                 <Label className="flex items-center gap-2">
@@ -685,7 +666,6 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
                           <span className="font-medium text-sm">{cpe.equipment_type}</span>
                         </div>
                       </div>
-                      
                       <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                         <div>
                           <span className="text-muted-foreground text-xs">Comercializador:</span>
@@ -697,8 +677,6 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
                             <p className="font-medium font-mono text-xs">{cpe.serial_number}</p>
                           </div>
                         )}
-                        
-                        {/* Dados de Energia */}
                         {cpe.consumo_anual && (
                           <div>
                             <span className="text-muted-foreground text-xs">Consumo Anual:</span>
@@ -731,8 +709,6 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
                             <p className="font-medium text-primary">{formatCurrency(Number(cpe.comissao))}</p>
                           </div>
                         )}
-                        
-                        {/* Datas de Contrato */}
                         {(cpe.contrato_inicio || cpe.contrato_fim) && (
                           <div className="col-span-2 flex items-center gap-4 pt-2 border-t border-amber-200 dark:border-amber-700 mt-1">
                             <CalendarDays className="h-4 w-4 text-amber-600 dark:text-amber-400" />
@@ -757,7 +733,7 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
               </div>
             )}
 
-            {/* Campos específicos de Serviços - Apenas Telecom */}
+            {/* Serviços telecom */}
             {orgData?.niche === 'telecom' && proposal.proposal_type === 'servicos' && (
               <div className="space-y-3 p-4 rounded-lg border bg-blue-50/50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800">
                 <div className="flex items-center gap-2 text-blue-700 dark:text-blue-400">
@@ -799,6 +775,7 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
               </div>
             )}
 
+            {/* Produtos do catálogo */}
             {proposalProducts.length > 0 && (
               <div className="space-y-2">
                 <Label>Produtos/Serviços</Label>
@@ -821,6 +798,15 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
               </div>
             )}
 
+            {/* 5. Valor Total (read-only) */}
+            <div className="p-4 rounded-lg bg-primary/10 border border-primary/20">
+              <p className="text-sm text-muted-foreground mb-1">Valor Total</p>
+              <p className="text-2xl font-bold text-primary">
+                {formatCurrency(proposal.total_value)}
+              </p>
+            </div>
+
+            {/* 6. Observações */}
             <div className="space-y-2">
               <Label htmlFor="proposal-notes">Observações da Negociação</Label>
               <Textarea
