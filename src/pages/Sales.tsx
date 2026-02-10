@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { ShoppingBag, Search, TrendingUp, Package, CheckCircle, Clock, Plus } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -30,7 +30,18 @@ export default function Sales() {
   const [selectedSale, setSelectedSale] = useState<SaleWithDetails | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [saleToEdit, setSaleToEdit] = useState<SaleWithDetails | null>(null);
+  const [pendingSaleId, setPendingSaleId] = useState<string | null>(null);
 
+  // Reactively open sale details when pendingSaleId matches a sale in cache
+  useEffect(() => {
+    if (pendingSaleId && sales) {
+      const sale = sales.find(s => s.id === pendingSaleId);
+      if (sale) {
+        setSelectedSale(sale);
+        setPendingSaleId(null);
+      }
+    }
+  }, [sales, pendingSaleId]);
   const filteredSales = useMemo(() => {
     if (!sales) return [];
     
@@ -258,13 +269,7 @@ export default function Sales() {
           onOpenChange={setShowCreateModal}
           onSaleCreated={(saleId) => {
             setShowCreateModal(false);
-            // Wait for React Query cache to update, then open details
-            setTimeout(() => {
-              const createdSale = sales?.find(s => s.id === saleId);
-              if (createdSale) {
-                setSelectedSale(createdSale);
-              }
-            }, 500);
+            setPendingSaleId(saleId);
           }}
         />
       </div>
