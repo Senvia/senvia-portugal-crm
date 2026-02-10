@@ -20,7 +20,7 @@ export function useSales() {
           *,
           lead:leads(name, email, phone, assigned_to),
           proposal:proposals(id, code, proposal_date),
-          client:crm_clients(id, name, code)
+          client:crm_clients(id, name, code, email, phone, company, nif, address_line1, address_line2, city, postal_code, country)
         `)
         .eq("organization_id", organization.id)
         .order("created_at", { ascending: false });
