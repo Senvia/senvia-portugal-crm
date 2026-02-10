@@ -214,7 +214,6 @@ export function SalePaymentsList({
                           saleId, 
                           organizationId, 
                           documentType: "invoice",
-                          invoiceDate: payment.payment_date,
                           paymentId: payment.id,
                           paymentAmount: Number(payment.amount),
                         });
