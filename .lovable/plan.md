@@ -1,55 +1,58 @@
 
 
-## Adicionar opcao "Perdido Definitivo" ao dialog de lead perdido
+## Emitir Fatura (sem recibo) para pagamentos agendados
 
-### Problema
+### Contexto
 
-Atualmente, sempre que um lead e movido para "Perdido", o dialog obriga a agendar um follow-up. Isto cria um ciclo infinito: Perdido -> Follow-up -> Perdido -> Follow-up...
-
-Precisa existir uma forma de marcar o lead como **perdido definitivo** sem agendar recontacto.
+Atualmente, o sistema so emite **Fatura-Recibo** (`invoice_receipts`) via InvoiceXpress, e o botao so aparece em pagamentos com status "Pago". Ha empresas que precisam de receber a **Fatura** primeiro para depois fazer o pagamento.
 
 ### Solucao
 
-Adicionar um **switch/checkbox** no `LostLeadDialog` que permite ao utilizador escolher entre:
-- **Agendar recontacto** (comportamento atual, por defeito)
-- **Perdido definitivo** (sem follow-up, apenas motivo e notas)
-
-Quando "Perdido definitivo" esta ativo, os campos de data, hora e tipo de evento ficam escondidos e deixam de ser obrigatorios.
+Permitir emitir dois tipos de documento:
+- **Fatura** (`invoices`): para pagamentos agendados/pendentes -- o cliente paga depois de receber a fatura
+- **Fatura-Recibo** (`invoice_receipts`): para pagamentos ja recebidos (comportamento atual)
 
 ### Fluxo do utilizador
 
 ```text
-1. Lead move para "Perdido"
-2. Dialog abre com switch: "Agendar recontacto" (ON por defeito)
-   - ON: mostra campos de data/hora/tipo (como atualmente)
-   - OFF: esconde esses campos, so pede motivo + notas
-3. Botao muda de texto:
-   - ON: "Confirmar e Agendar"
-   - OFF: "Confirmar Perda Definitiva"
+Pagamento com status "Agendado":
+  -> Botao "Fatura" visivel
+  -> Emite Fatura (documento sem recibo) com a data do agendamento
+  -> Referencia: "FT 123" em vez de "FR 123"
+
+Pagamento com status "Pago":
+  -> Botao "Fatura-Recibo" visivel (como hoje)
+  -> Emite Fatura-Recibo com a data do pagamento
+  -> Referencia: "FR 123"
 ```
 
 ### Alteracoes tecnicas
 
-**1. `src/components/leads/LostLeadDialog.tsx`**
+**1. `supabase/functions/issue-invoice/index.ts`**
 
-- Adicionar estado `scheduleFollowUp` (booleano, `true` por defeito)
-- Adicionar um `Switch` com label "Agendar recontacto futuro"
-- Quando `scheduleFollowUp` e `false`:
-  - Esconder secao de data/hora e tipo de evento
-  - Campos de follow-up deixam de ser obrigatorios
-  - `followUpDate` e `followUpTime` sao enviados como strings vazias
-- Atualizar `onConfirm` para incluir `scheduleFollowUp: boolean`
-- Atualizar validacao: se `scheduleFollowUp` e true, exigir data; se false, so exigir motivo
-- Mudar texto do botao conforme o modo
+- Aceitar novo parametro `document_type`: `"invoice"` ou `"invoice_receipt"` (default: `"invoice_receipt"`)
+- Aceitar parametro opcional `invoice_date` para usar a data do pagamento agendado em vez da data da venda
+- Alterar o endpoint do InvoiceXpress conforme o tipo:
+  - `invoice_receipt` -> `POST /invoice_receipts.json` + finalize em `/invoice_receipts/{id}/change-state.json`
+  - `invoice` -> `POST /invoices.json` + finalize em `/invoices/{id}/change-state.json`
+- Alterar o prefixo da referencia: `"FT"` para faturas, `"FR"` para faturas-recibo
+- Guardar o tipo correto em `invoicexpress_type` na tabela sales
 
-**2. `src/pages/Leads.tsx`**
+**2. `src/components/sales/SalePaymentsList.tsx`**
 
-- No `handleLostConfirm`, verificar `data.scheduleFollowUp`
-- Se `true`: criar evento no calendario (comportamento atual)
-- Se `false`: apenas atualizar status e notas, sem criar evento
+- Mostrar botao "Fatura" tambem em pagamentos com status `pending` (agendados), nao so nos `paid`
+- Ao clicar em pagamento `pending`: chamar `issueInvoice` com `document_type: "invoice"` e `invoice_date` = data do agendamento
+- Ao clicar em pagamento `paid`: manter comportamento atual (`document_type: "invoice_receipt"`)
+- Diferenciar o label do botao: "Fatura" vs "Fatura-Recibo"
+
+**3. `src/hooks/useIssueInvoice.ts`**
+
+- Adicionar `document_type` e `invoice_date` opcionais ao `IssueInvoiceParams`
+- Passar esses campos no body da chamada a edge function
 
 | Ficheiro | Alteracao |
 |---|---|
-| `LostLeadDialog.tsx` | Adicionar switch "Agendar recontacto" + esconder campos quando OFF |
-| `Leads.tsx` | Condicionar criacao de evento ao valor de `scheduleFollowUp` |
+| `supabase/functions/issue-invoice/index.ts` | Suportar tipo `invoice` alem de `invoice_receipt`, usar data do agendamento |
+| `src/hooks/useIssueInvoice.ts` | Aceitar `document_type` e `invoice_date` nos parametros |
+| `src/components/sales/SalePaymentsList.tsx` | Mostrar botao em pagamentos pendentes, passar tipo correto |
 
