@@ -28,7 +28,7 @@ interface InvoiceDraftModalProps {
   paymentDate: string;
   paymentMethod?: PaymentMethod | null;
   taxConfig?: {
-    tax_rate?: number;
+    tax_value?: number;
     tax_exemption_reason?: string;
   } | null;
 }
@@ -52,7 +52,7 @@ export function InvoiceDraftModal({
   taxConfig,
 }: InvoiceDraftModalProps) {
   const today = new Date();
-  const taxRate = taxConfig?.tax_rate ?? 0;
+  const taxRate = taxConfig?.tax_value ?? 0;
   const isExempt = taxRate === 0;
   const exemptionReason = taxConfig?.tax_exemption_reason || "Artigo 53.º do CIVA";
 
