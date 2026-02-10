@@ -9,12 +9,13 @@ import { EventDetailsModal } from "@/components/calendar/EventDetailsModal";
 import { CreateProposalModal } from "@/components/proposals/CreateProposalModal";
 import { ProposalDetailsModal } from "@/components/proposals/ProposalDetailsModal";
 import { CreateClientModal } from "@/components/clients/CreateClientModal";
+import { LostLeadDialog } from "@/components/leads/LostLeadDialog";
 import { TeamMemberFilter } from "@/components/dashboard/TeamMemberFilter";
 import { BulkActionsBar } from "@/components/shared/BulkActionsBar";
 import { AssignTeamMemberModal } from "@/components/shared/AssignTeamMemberModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProposals } from "@/hooks/useProposals";
-import { useCalendarEvents } from "@/hooks/useCalendarEvents";
+import { useCalendarEvents, useCreateEvent } from "@/hooks/useCalendarEvents";
 import { usePipelineStages } from "@/hooks/usePipelineStages";
 import type { Proposal } from "@/types/proposals";
 import type { CalendarEvent } from "@/types/calendar";
@@ -59,6 +60,11 @@ export default function Leads() {
   const [isEventDetailsModalOpen, setIsEventDetailsModalOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [pendingLead, setPendingLead] = useState<Lead | null>(null);
+  
+  // Lost lead dialog state
+  const [isLostDialogOpen, setIsLostDialogOpen] = useState(false);
+  const [pendingLostStatus, setPendingLostStatus] = useState<{ leadId: string; status: string } | null>(null);
+  const createEvent = useCreateEvent();
   
   // New states for the chained client -> proposal flow
   const [isCreateClientModalOpen, setIsCreateClientModalOpen] = useState(false);
@@ -143,9 +149,15 @@ export default function Leads() {
 
   const isProposalStage = (stageKey: string) => {
     const stage = stages.find(s => s.key === stageKey);
-    // Check if the stage name contains keywords that indicate it's a proposal stage
     const proposalKeywords = ['proposta', 'proposal', 'orçamento', 'quote'];
     return stage && proposalKeywords.some(kw => stage.name.toLowerCase().includes(kw));
+  };
+
+  const isLostStage = (stageKey: string) => {
+    const stage = stages.find(s => s.key === stageKey);
+    if (stage?.is_final_negative) return true;
+    const lostKeywords = ['perdido', 'lost', 'cancelado', 'cancelled'];
+    return stage && lostKeywords.some(kw => stage.name.toLowerCase().includes(kw));
   };
 
   const handleStatusChange = (leadId: string, newStatus: string) => {
@@ -217,6 +229,14 @@ export default function Leads() {
       return;
     }
     
+    // Intercept drops on lost stages -> open lost lead dialog
+    if (isLostStage(newStatus)) {
+      setPendingLostStatus({ leadId, status: newStatus });
+      setPendingLead(lead || null);
+      setIsLostDialogOpen(true);
+      return;
+    }
+    
     // For other statuses, update normally
     updateStatus.mutate({ leadId, status: newStatus });
   };
@@ -227,6 +247,48 @@ export default function Leads() {
     setPendingLead(null);
     setSelectedEvent(null);
     setIsCreateEventModalOpen(false);
+  };
+
+  const handleLostConfirm = (data: {
+    lossReason: string;
+    notes: string;
+    followUpDate: string;
+    eventType: "call" | "meeting";
+  }) => {
+    if (!pendingLostStatus || !pendingLead) return;
+
+    const LOSS_REASON_LABELS: Record<string, string> = {
+      price: "Preço",
+      competition: "Concorrência",
+      no_response: "Sem resposta",
+      timing: "Timing",
+      other: "Outro",
+    };
+
+    // Build notes with loss reason
+    const reasonLabel = LOSS_REASON_LABELS[data.lossReason] || data.lossReason;
+    const lossNote = `[Perdido - ${reasonLabel}]${data.notes ? ` ${data.notes}` : ""}`;
+    const existingNotes = pendingLead.notes || "";
+    const updatedNotes = existingNotes ? `${existingNotes}\n${lossNote}` : lossNote;
+
+    // Update lead status and notes
+    updateStatus.mutate({ leadId: pendingLostStatus.leadId, status: pendingLostStatus.status });
+    updateLead.mutate({ leadId: pendingLostStatus.leadId, updates: { notes: updatedNotes } });
+
+    // Create follow-up calendar event
+    const followUpDate = new Date(data.followUpDate + "T10:00:00");
+    createEvent.mutate({
+      title: `Recontacto: ${pendingLead.name}`,
+      description: `Follow-up de lead perdido (${reasonLabel}). ${data.notes || ""}`.trim(),
+      event_type: data.eventType,
+      start_time: followUpDate.toISOString(),
+      lead_id: pendingLead.id,
+    });
+
+    // Cleanup
+    setIsLostDialogOpen(false);
+    setPendingLostStatus(null);
+    setPendingLead(null);
   };
 
   const handleEditEvent = () => {
@@ -594,6 +656,20 @@ export default function Leads() {
           selectedIds={selectedIds}
           entityType="leads"
           onSuccess={handleAssignSuccess}
+        />
+
+        {/* Lost Lead Dialog */}
+        <LostLeadDialog
+          open={isLostDialogOpen}
+          onOpenChange={(open) => {
+            setIsLostDialogOpen(open);
+            if (!open) {
+              setPendingLostStatus(null);
+              setPendingLead(null);
+            }
+          }}
+          leadName={pendingLead?.name || ""}
+          onConfirm={handleLostConfirm}
         />
       </div>
     </AppLayout>
