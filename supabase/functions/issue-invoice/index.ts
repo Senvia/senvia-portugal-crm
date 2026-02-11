@@ -356,6 +356,28 @@ Deno.serve(async (req) => {
       console.warn('PDF generation polling failed (non-blocking):', e)
     }
 
+    // Download and store PDF locally
+    let storedPdfPath: string | null = null
+    if (pdfUrl) {
+      try {
+        const pdfBinaryRes = await fetch(pdfUrl)
+        if (pdfBinaryRes.ok) {
+          const pdfBuffer = await pdfBinaryRes.arrayBuffer()
+          const pdfFileName = `${organization_id}/${sale_id}/FT-${invoiceId}.pdf`
+          const { error: uploadError } = await supabase.storage
+            .from('invoices')
+            .upload(pdfFileName, pdfBuffer, { contentType: 'application/pdf', upsert: true })
+          if (!uploadError) {
+            storedPdfPath = pdfFileName
+          } else {
+            console.warn('PDF upload to storage failed:', uploadError)
+          }
+        }
+      } catch (e) {
+        console.warn('PDF download/upload failed (non-blocking):', e)
+      }
+    }
+
     // 4. QR Code polling
     let qrCodeUrl: string | null = null
     try {
@@ -375,14 +397,15 @@ Deno.serve(async (req) => {
       console.warn('QR Code polling failed (non-blocking):', e)
     }
 
-    // 5. Save reference in sales table
+    // 5. Save reference in sales table - use local path if available
+    const fileUrl = storedPdfPath || pdfUrl || null
     await supabase
       .from('sales')
       .update({
         invoicexpress_id: invoiceId,
         invoicexpress_type: 'invoices',
         invoice_reference: invoiceReference,
-        ...(pdfUrl ? { invoice_pdf_url: pdfUrl } : {}),
+        ...(fileUrl ? { invoice_pdf_url: fileUrl } : {}),
         ...(qrCodeUrl ? { qr_code_url: qrCodeUrl } : {}),
       })
       .eq('id', sale_id)

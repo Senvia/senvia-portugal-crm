@@ -1,6 +1,6 @@
 import { format } from "date-fns";
 import { pt } from "date-fns/locale";
-import { Receipt, FileText, User, Calendar, CreditCard, Loader2 } from "lucide-react";
+import { Receipt, FileText, User, Calendar, CreditCard, Loader2, Info } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -12,9 +12,17 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { formatCurrency } from "@/lib/format";
 import { PAYMENT_METHOD_LABELS } from "@/types/sales";
 import type { PaymentMethod } from "@/types/sales";
+
+export interface DraftSaleItem {
+  name: string;
+  quantity: number;
+  unit_price: number;
+  tax_value?: number | null;
+}
 
 interface InvoiceDraftModalProps {
   open: boolean;
@@ -31,6 +39,8 @@ interface InvoiceDraftModalProps {
     tax_value?: number;
     tax_exemption_reason?: string;
   } | null;
+  saleItems?: DraftSaleItem[];
+  saleTotal?: number;
 }
 
 const MODE_LABELS = {
@@ -51,19 +61,39 @@ export function InvoiceDraftModal({
   paymentDate,
   paymentMethod,
   taxConfig,
+  saleItems = [],
+  saleTotal,
 }: InvoiceDraftModalProps) {
   const today = new Date();
   const labels = MODE_LABELS[mode];
-  const taxRate = taxConfig?.tax_value ?? 0;
-  const isExempt = taxRate === 0;
+  const orgTaxRate = taxConfig?.tax_value ?? 0;
   const exemptionReason = taxConfig?.tax_exemption_reason || "Artigo 53.º do CIVA";
 
-  const taxAmount = isExempt ? 0 : amount * (taxRate / 100);
-  const totalWithTax = amount + taxAmount;
+  // Calculate per-item tax totals
+  const ratio = mode === "invoice_receipt" && saleTotal && saleTotal > 0
+    ? amount / saleTotal
+    : 1;
+
+  const itemsWithTax = saleItems.map((item) => {
+    const effectiveTax = item.tax_value ?? orgTaxRate;
+    const scaledPrice = item.unit_price * ratio;
+    const lineTotal = scaledPrice * item.quantity;
+    const lineTax = lineTotal * (effectiveTax / 100);
+    return { ...item, effectiveTax, scaledPrice, lineTotal, lineTax };
+  });
+
+  const subtotal = itemsWithTax.reduce((s, i) => s + i.lineTotal, 0);
+  const totalTax = itemsWithTax.reduce((s, i) => s + i.lineTax, 0);
+  const totalWithTax = subtotal + totalTax;
+
+  // Fallback if no items
+  const hasItems = itemsWithTax.length > 0;
+  const fallbackTax = hasItems ? totalTax : (orgTaxRate === 0 ? 0 : amount * (orgTaxRate / 100));
+  const fallbackTotal = hasItems ? totalWithTax : amount + fallbackTax;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5 text-primary" />
@@ -75,6 +105,22 @@ export function InvoiceDraftModal({
         </DialogHeader>
 
         <div className="space-y-4">
+          {/* Explanatory Alert */}
+          <Alert variant="default" className="bg-muted/40 border-muted">
+            <Info className="h-4 w-4" />
+            <AlertDescription className="text-xs">
+              {mode === "invoice" && (
+                <>Esta fatura cobre o <strong>valor total</strong> da venda ({formatCurrency(amount)}). Após emissão, gere um <strong>Recibo (RC)</strong> por cada pagamento recebido.</>
+              )}
+              {mode === "invoice_receipt" && (
+                <>Esta fatura-recibo cobre <strong>apenas este pagamento</strong> de {formatCurrency(amount)}.{saleTotal && saleTotal > amount && " Os itens são proporcionais ao valor do pagamento."}</>
+              )}
+              {mode === "receipt" && (
+                <>Este recibo comprova o <strong>pagamento de {formatCurrency(amount)}</strong> associado à fatura já emitida.</>
+              )}
+            </AlertDescription>
+          </Alert>
+
           {/* Document Type & Date */}
           <div className="flex items-center justify-between">
             <Badge variant="secondary" className="text-xs">
@@ -106,6 +152,37 @@ export function InvoiceDraftModal({
 
           <Separator />
 
+          {/* Sale Items */}
+          {hasItems && (mode === "invoice" || mode === "invoice_receipt") && (
+            <>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <FileText className="h-3.5 w-3.5" />
+                  <span>Itens</span>
+                </div>
+                <div className="space-y-1.5">
+                  {itemsWithTax.map((item, idx) => (
+                    <div key={idx} className="flex items-center justify-between p-2 rounded bg-muted/20 text-sm">
+                      <div className="flex-1 min-w-0">
+                        <span className="truncate block">{item.name}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {item.quantity} × {formatCurrency(item.scaledPrice)}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                          {item.effectiveTax === 0 ? "Isento" : `IVA ${item.effectiveTax}%`}
+                        </Badge>
+                        <span className="font-medium text-xs">{formatCurrency(item.lineTotal)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <Separator />
+            </>
+          )}
+
           {/* Payment Details */}
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -117,18 +194,6 @@ export function InvoiceDraftModal({
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Data do pagamento</span>
                   <span>{format(new Date(paymentDate), "d MMM yyyy", { locale: pt })}</span>
-                </div>
-              )}
-              {mode === "invoice" && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Valor total da venda</span>
-                  <span className="font-medium">{formatCurrency(amount)}</span>
-                </div>
-              )}
-              {mode === "invoice_receipt" && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Valor do pagamento</span>
-                  <span className="font-medium">{formatCurrency(amount)}</span>
                 </div>
               )}
               {paymentMethod && (
@@ -145,25 +210,25 @@ export function InvoiceDraftModal({
           {/* Tax & Totals */}
           <div className="p-3 rounded-lg border space-y-2">
             <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Subtotal</span>
-              <span>{formatCurrency(amount)}</span>
+              <span className="text-muted-foreground">Subtotal (s/ IVA)</span>
+              <span>{formatCurrency(hasItems ? subtotal : amount)}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">
-                IVA {isExempt ? "(Isento)" : `(${taxRate}%)`}
+                IVA {!hasItems && orgTaxRate === 0 ? "(Isento)" : ""}
               </span>
               <span>
-                {isExempt ? (
+                {fallbackTax === 0 ? (
                   <span className="text-xs text-muted-foreground">{exemptionReason}</span>
                 ) : (
-                  formatCurrency(taxAmount)
+                  formatCurrency(fallbackTax)
                 )}
               </span>
             </div>
             <Separator />
             <div className="flex justify-between font-semibold">
               <span>Total</span>
-              <span className="text-primary">{formatCurrency(totalWithTax)}</span>
+              <span className="text-primary">{formatCurrency(fallbackTotal)}</span>
             </div>
           </div>
         </div>

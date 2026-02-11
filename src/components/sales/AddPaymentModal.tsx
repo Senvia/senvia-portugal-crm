@@ -38,6 +38,7 @@ interface AddPaymentModalProps {
   remaining: number;
   payment?: SalePayment | null; // For editing
   onSuccess?: (amountPaid: number, paymentMethod: PaymentMethod | null) => void;
+  hasInvoiceXpress?: boolean;
 }
 
 export function AddPaymentModal({
@@ -49,6 +50,7 @@ export function AddPaymentModal({
   remaining,
   payment,
   onSuccess,
+  hasInvoiceXpress = false,
 }: AddPaymentModalProps) {
   const createPayment = useCreateSalePayment();
   const updatePayment = useUpdateSalePayment();
@@ -240,32 +242,36 @@ export function AddPaymentModal({
             </RadioGroup>
           </div>
 
-          {/* Invoice Reference */}
-          <div className="space-y-2">
-            <Label className="flex items-center gap-2">
-              <Receipt className="h-4 w-4 text-muted-foreground" />
-              Referência da Fatura
-            </Label>
-            <Input
-              value={invoiceReference}
-              onChange={(e) => setInvoiceReference(e.target.value)}
-              placeholder="FT 2024/0001"
-            />
-          </div>
+          {/* Invoice Reference - hidden when InvoiceXpress is active */}
+          {!hasInvoiceXpress && (
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <Receipt className="h-4 w-4 text-muted-foreground" />
+                Referência da Fatura
+              </Label>
+              <Input
+                value={invoiceReference}
+                onChange={(e) => setInvoiceReference(e.target.value)}
+                placeholder="FT 2024/0001"
+              />
+            </div>
+          )}
 
-          {/* Invoice File Upload */}
-          <div className="space-y-2">
-            <Label className="flex items-center gap-2">
-              <Paperclip className="h-4 w-4 text-muted-foreground" />
-              Anexar Fatura
-            </Label>
-            <InvoiceUploader
-              value={invoiceFileUrl}
-              onChange={setInvoiceFileUrl}
-              organizationId={organizationId}
-              disabled={isSubmitting}
-            />
-          </div>
+          {/* Invoice File Upload - hidden when InvoiceXpress is active */}
+          {!hasInvoiceXpress && (
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <Paperclip className="h-4 w-4 text-muted-foreground" />
+                Anexar Fatura
+              </Label>
+              <InvoiceUploader
+                value={invoiceFileUrl}
+                onChange={setInvoiceFileUrl}
+                organizationId={organizationId}
+                disabled={isSubmitting}
+              />
+            </div>
+          )}
 
           {/* Notes */}
           <div className="space-y-2">
