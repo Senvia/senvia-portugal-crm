@@ -1,69 +1,66 @@
 
 
-## Separar "Equipa" em "Acessos" e "Equipas"
+## Adicionar "Visibilidade de Dados" aos Perfis
 
 ### Resumo
 
-A tab atual "Equipa" mistura duas coisas diferentes: gestao de acessos (criar utilizadores, mudar passwords/roles) e gestao de equipas hierarquicas. Vamos separa-las em duas tabs independentes.
+Atualmente os perfis controlam **o que** o utilizador pode fazer (ver, editar, eliminar), mas nao **de quem** pode ver os dados. Um CE (Coordenador de Equipa) precisa de ver os dados da sua equipa -- individuais e agregados -- sem ser admin.
 
-### Antes vs Depois
+Vamos adicionar um campo **"Visibilidade de Dados"** aos perfis com 3 niveis:
 
 ```text
-ANTES:                          DEPOIS:
-Equipa (1 tab)                  Acessos (tab 1)
-  - TeamsSection                  - Membros da organizacao
-  - Membros da organizacao        - Convites pendentes
-  - Convites pendentes            - Criar/gerir acessos
-  - Criar/gerir acessos
-                                Equipas (tab 2)
-                                  - Criar equipas hierarquicas
-                                  - Atribuir lider e membros
+Proprio     -> Ve apenas os seus dados
+Equipa      -> Ve os seus + dados dos membros da sua equipa
+Tudo        -> Ve todos os dados da organizacao (nivel admin)
 ```
+
+### O que muda
+
+**1. Base de dados**
+- Adicionar coluna `data_scope` a tabela `organization_profiles` com valores: `own`, `team`, `all` (default: `own`)
+- Os perfis padrao existentes serao atualizados: Administrador -> `all`, Vendedor -> `own`, Visualizador -> `own`
+
+**2. Logica de filtro (`useTeamFilter.ts`)**
+- Hoje: a visibilidade depende de ser admin ou lider de equipa (hardcoded)
+- Depois: a visibilidade depende do `data_scope` do perfil do utilizador
+  - `own` -> ve so os seus dados
+  - `team` -> ve os seus + membros da sua equipa (precisa de estar atribuido como lider)
+  - `all` -> ve tudo (igual a admin)
+
+**3. Hook de permissoes (`usePermissions.ts`)**
+- Expor o `data_scope` do perfil do utilizador
+- O `useTeamFilter` le este valor para decidir a visibilidade
+
+**4. UI dos Perfis (`ProfilesTab.tsx`)**
+- Adicionar um seletor "Visibilidade de Dados" no modal de criar/editar perfil com as 3 opcoes
+- Mostrar o nivel de visibilidade nos cards dos perfis existentes
+
+### Resultado: Perfil "CE"
+
+Ao criar o perfil "CE" (Coordenador de Equipa):
+- **Role Base**: Vendedor (ou Admin, conforme necessidade)
+- **Visibilidade de Dados**: Equipa
+- **Permissoes**: Leads (ver, editar, atribuir), Vendas (ver), Clientes (ver), etc.
+- **Resultado**: O CE ve os seus dados + dados de todos os membros da equipa que lidera, com resultados individuais e agregados
 
 ### Ficheiros a alterar
 
-**1. `src/components/settings/TeamTab.tsx`**
-- Renomear para representar "Acessos" (ou manter o ficheiro mas ajustar o conteudo)
-- Remover o `<TeamsSection />` que esta no topo
-- Atualizar titulos: "Membros da Equipa" -> "Acessos" / "Membros"
+| Ficheiro | Alteracao |
+|----------|-----------|
+| Migracao SQL | Adicionar `data_scope text default 'own'` a `organization_profiles` e atualizar perfis padrao |
+| `src/hooks/useOrganizationProfiles.ts` | Adicionar `data_scope` ao tipo `OrganizationProfile` |
+| `src/hooks/usePermissions.ts` | Ler e expor `data_scope` do perfil do utilizador |
+| `src/hooks/useTeamFilter.ts` | Usar `data_scope` em vez de `isAdmin` para determinar visibilidade |
+| `src/components/settings/ProfilesTab.tsx` | Adicionar seletor de visibilidade no modal e badge nos cards |
 
-**2. `src/pages/Settings.tsx`**
-- Adicionar nova tab "Equipas" com icone `Users` (ou `UsersRound`)
-- A tab "Equipa" passa a chamar-se "Acessos" com icone `KeyRound` ou `UserPlus`
-- Adicionar `TabsContent` para a nova tab que renderiza `<TeamsSection />`
-- Atualizar `sectionTitles` para refletir os novos nomes
+### Fluxo
 
-**3. `src/components/settings/MobileSettingsNav.tsx`**
-- Atualizar o tipo `SettingsSection` para incluir `"teams"` como nova seccao
-- Renomear a seccao `team` para label "Acessos" com descricao "Gerir utilizadores e permissoes"
-- Adicionar nova seccao `teams` com label "Equipas" e descricao "Equipas hierarquicas"
+1. Admin vai a Configuracoes > Perfis
+2. Clica "Criar Perfil" -> nome "CE"
+3. Seleciona "Visibilidade de Dados: Equipa"
+4. Configura permissoes granulares (ver leads, ver vendas, etc.)
+5. Guarda o perfil
+6. Em Configuracoes > Acessos, atribui o perfil "CE" a um membro
+7. Em Configuracoes > Equipas, esse membro e definido como lider
+8. O CE entra e ve automaticamente os dados dele + equipa dele
 
-**4. Permissoes**
-- A tab "Acessos" usa a mesma permissao `canManageTeam`
-- A tab "Equipas" tambem usa `canManageTeam` (so admins gerem equipas)
-
-### Resultado final nas tabs (desktop)
-
-```text
-Geral | Seguranca | Acessos | Perfis | Equipas | Pipeline | Modulos | ...
-```
-
-### Resultado final no mobile
-
-```text
-- Geral
-- Seguranca
-- Acessos (Gerir utilizadores e permissoes)
-- Perfis
-- Equipas (Equipas hierarquicas e lideres)
-- Pipeline
-- ...
-```
-
-### Detalhes tecnicos
-
-- `TeamTab.tsx`: remover import e render de `TeamsSection`, atualizar textos do card header
-- `Settings.tsx`: adicionar `TabsTrigger value="teams"` e `TabsContent value="teams"` com `<TeamsSection />`
-- `MobileSettingsNav.tsx`: adicionar `{ id: "teams", label: "Equipas", icon: UsersRound, description: "Equipas hierarquicas", requiresTeam: true }` e renomear `team` para "Acessos"
-- Atualizar `SettingsSection` type para incluir `"teams"`
-- Atualizar `sectionTitles` em Settings.tsx para incluir `teams: "Equipas"` e mudar `team: "Acessos"`
