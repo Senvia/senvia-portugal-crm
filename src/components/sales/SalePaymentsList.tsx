@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { format } from "date-fns";
 import { pt } from "date-fns/locale";
-import { Plus, Pencil, Trash2, CreditCard, Receipt, AlertCircle, Download, Ban } from "lucide-react";
+import { Plus, Pencil, Trash2, CreditCard, Receipt, AlertCircle, Download, Ban, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useSalePayments, useDeleteSalePayment, calculatePaymentSummary } from "@/hooks/useSalePayments";
 import { useIssueInvoice } from "@/hooks/useIssueInvoice";
+import { useGenerateReceipt } from "@/hooks/useGenerateReceipt";
 import { useCancelInvoice } from "@/hooks/useCancelInvoice";
 import { formatCurrency } from "@/lib/format";
 import { AddPaymentModal } from "./AddPaymentModal";
@@ -61,8 +62,8 @@ export function SalePaymentsList({
   const { data: payments = [], isLoading } = useSalePayments(saleId);
   const deletePayment = useDeleteSalePayment();
   const issueInvoice = useIssueInvoice();
+  const generateReceipt = useGenerateReceipt();
   const cancelInvoice = useCancelInvoice();
-  const hasPaidPayments = payments.some(p => p.status === 'paid');
   
   const [showTypeSelector, setShowTypeSelector] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -70,10 +71,10 @@ export function SalePaymentsList({
   const [deletingPayment, setDeletingPayment] = useState<SalePayment | null>(null);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [cancellingPayment, setCancellingPayment] = useState<SalePayment | null>(null);
-  const [draftInvoice, setDraftInvoice] = useState<{
-    payment: SalePayment;
-    documentType: "invoice" | "invoice_receipt";
-  } | null>(null);
+  
+  // Draft modal state - supports both invoice (sale-level) and receipt (payment-level)
+  const [draftMode, setDraftMode] = useState<"invoice" | "receipt" | null>(null);
+  const [draftPayment, setDraftPayment] = useState<SalePayment | null>(null);
 
   const summary = calculatePaymentSummary(payments, saleTotal);
 
@@ -85,6 +86,11 @@ export function SalePaymentsList({
       { onSuccess: () => setDeletingPayment(null) }
     );
   };
+
+  // Can emit invoice: InvoiceXpress active, no existing invoice, client has NIF
+  const canEmitInvoice = hasInvoiceXpress && !invoicexpressId && !!clientNif;
+  // Has invoice: sale already has invoicexpress_id
+  const hasInvoice = !!invoicexpressId;
 
   if (isLoading) {
     return (
@@ -126,6 +132,52 @@ export function SalePaymentsList({
             </Button>
           )}
         </div>
+
+        {/* Global Invoice Button */}
+        {hasInvoiceXpress && !readonly && (
+          <div className="p-3 rounded-lg border bg-muted/20 space-y-2">
+            {hasInvoice ? (
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm">
+                  <FileText className="h-4 w-4 text-primary" />
+                  <span className="font-medium">Fatura: {invoiceReference}</span>
+                </div>
+                {invoicexpressId && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs text-destructive hover:text-destructive"
+                    onClick={() => {
+                      // Use a fake payment object for the cancel dialog
+                      setCancellingPayment({
+                        id: '__sale__',
+                        invoicexpress_id: invoicexpressId,
+                        invoice_reference: invoiceReference || '',
+                      } as any);
+                    }}
+                  >
+                    <Ban className="h-3 w-3 mr-1" />
+                    Anular
+                  </Button>
+                )}
+              </div>
+            ) : canEmitInvoice ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => setDraftMode("invoice")}
+              >
+                <FileText className="h-4 w-4 mr-1" />
+                Emitir Fatura ({formatCurrency(saleTotal)})
+              </Button>
+            ) : hasInvoiceXpress && !clientNif ? (
+              <p className="text-xs text-muted-foreground text-center">
+                Adicione o NIF do cliente para emitir fatura
+              </p>
+            ) : null}
+          </div>
+        )}
 
         {/* Payments List */}
         {payments.length > 0 ? (
@@ -194,38 +246,19 @@ export function SalePaymentsList({
                       </Button>
                     </>
                   )}
-                  {payment.status === 'paid' && hasInvoiceXpress && !payment.invoice_reference && (
+                  {/* Generate Receipt button: paid + invoice exists + no receipt yet */}
+                  {payment.status === 'paid' && hasInvoice && hasInvoiceXpress && !payment.invoice_reference && !readonly && (
                     <Button
                       variant="outline"
                       size="sm"
                       className="h-8 text-xs"
                       onClick={() => {
-                        if (!clientNif) {
-                          toast.error("Cliente sem NIF. Adicione o NIF antes de emitir fatura.");
-                          return;
-                        }
-                        setDraftInvoice({ payment, documentType: "invoice_receipt" });
+                        setDraftPayment(payment);
+                        setDraftMode("receipt");
                       }}
                     >
                       <Receipt className="h-3 w-3 mr-1" />
-                      Fatura-Recibo
-                    </Button>
-                  )}
-                  {payment.status === 'pending' && hasInvoiceXpress && !payment.invoice_reference && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 text-xs"
-                      onClick={() => {
-                        if (!clientNif) {
-                          toast.error("Cliente sem NIF. Adicione o NIF antes de emitir fatura.");
-                          return;
-                        }
-                        setDraftInvoice({ payment, documentType: "invoice" });
-                      }}
-                    >
-                      <Receipt className="h-3 w-3 mr-1" />
-                      Fatura
+                      Gerar Recibo
                     </Button>
                   )}
                   {payment.invoice_file_url && (
@@ -245,7 +278,7 @@ export function SalePaymentsList({
                       size="icon"
                       className="h-8 w-8 text-destructive hover:text-destructive"
                       onClick={() => setCancellingPayment(payment)}
-                      title="Anular fatura"
+                      title="Anular recibo"
                     >
                       <Ban className="h-3.5 w-3.5" />
                     </Button>
@@ -375,43 +408,62 @@ export function SalePaymentsList({
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Invoice Draft Modal */}
+      {/* Invoice Draft Modal - Invoice mode (sale total) */}
       <InvoiceDraftModal
-        open={!!draftInvoice}
-        onOpenChange={(open) => !open && setDraftInvoice(null)}
+        open={draftMode === "invoice"}
+        onOpenChange={(open) => { if (!open) setDraftMode(null); }}
         onConfirm={() => {
-          if (!draftInvoice) return;
           issueInvoice.mutate(
-            {
-              saleId,
-              organizationId,
-              documentType: draftInvoice.documentType,
-              paymentId: draftInvoice.payment.id,
-              paymentAmount: Number(draftInvoice.payment.amount),
-            },
-            { onSuccess: () => setDraftInvoice(null) }
+            { saleId, organizationId },
+            { onSuccess: () => setDraftMode(null) }
           );
         }}
         isLoading={issueInvoice.isPending}
-        documentType={draftInvoice?.documentType || "invoice_receipt"}
+        mode="invoice"
         clientName={clientName}
         clientNif={clientNif}
-        paymentAmount={draftInvoice ? Number(draftInvoice.payment.amount) : 0}
-        paymentDate={draftInvoice?.payment.payment_date || new Date().toISOString()}
-        paymentMethod={draftInvoice?.payment.payment_method}
+        amount={saleTotal}
+        paymentDate={new Date().toISOString()}
         taxConfig={taxConfig}
       />
 
-      {/* Cancel Invoice Dialog */}
+      {/* Invoice Draft Modal - Receipt mode (payment amount) */}
+      <InvoiceDraftModal
+        open={draftMode === "receipt" && !!draftPayment}
+        onOpenChange={(open) => { 
+          if (!open) { setDraftMode(null); setDraftPayment(null); }
+        }}
+        onConfirm={() => {
+          if (!draftPayment) return;
+          generateReceipt.mutate(
+            { saleId, paymentId: draftPayment.id, organizationId },
+            { onSuccess: () => { setDraftMode(null); setDraftPayment(null); } }
+          );
+        }}
+        isLoading={generateReceipt.isPending}
+        mode="receipt"
+        clientName={clientName}
+        clientNif={clientNif}
+        amount={draftPayment ? Number(draftPayment.amount) : 0}
+        paymentDate={draftPayment?.payment_date || new Date().toISOString()}
+        paymentMethod={draftPayment?.payment_method}
+        taxConfig={taxConfig}
+      />
+
+      {/* Cancel Invoice/Receipt Dialog */}
       <CancelInvoiceDialog
         open={!!cancellingPayment}
         onOpenChange={(open) => !open && setCancellingPayment(null)}
         onConfirm={(reason) => {
           if (!cancellingPayment) return;
-          const docType = cancellingPayment.invoice_reference?.startsWith('FT') ? 'invoice' : 'invoice_receipt';
+          const isSaleInvoice = cancellingPayment.id === '__sale__';
+          const docType = isSaleInvoice ? 'invoice' : 
+            (cancellingPayment.invoice_reference?.startsWith('FT') ? 'invoice' : 'invoice_receipt');
           cancelInvoice.mutate(
             {
-              paymentId: cancellingPayment.id,
+              ...(isSaleInvoice 
+                ? { saleId } 
+                : { paymentId: cancellingPayment.id }),
               organizationId,
               reason,
               invoicexpressId: cancellingPayment.invoicexpress_id!,

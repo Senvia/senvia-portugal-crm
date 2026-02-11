@@ -3,7 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 interface CancelInvoiceParams {
-  paymentId: string;
+  paymentId?: string;
+  saleId?: string;
   organizationId: string;
   reason: string;
   invoicexpressId: number;
@@ -14,13 +15,14 @@ export function useCancelInvoice() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ paymentId, organizationId, reason, invoicexpressId, documentType }: CancelInvoiceParams) => {
+    mutationFn: async ({ paymentId, saleId, organizationId, reason, invoicexpressId, documentType }: CancelInvoiceParams) => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Não autenticado");
 
       const response = await supabase.functions.invoke("cancel-invoice", {
         body: {
-          payment_id: paymentId,
+          payment_id: paymentId || null,
+          sale_id: saleId || null,
           organization_id: organizationId,
           reason,
           invoicexpress_id: invoicexpressId,
@@ -33,12 +35,12 @@ export function useCancelInvoice() {
       return response.data;
     },
     onSuccess: () => {
-      toast.success("Fatura anulada com sucesso");
+      toast.success("Documento anulado com sucesso");
       queryClient.invalidateQueries({ queryKey: ["sale-payments"] });
       queryClient.invalidateQueries({ queryKey: ["sales"] });
     },
     onError: (error: Error) => {
-      toast.error(`Erro ao anular fatura: ${error.message}`);
+      toast.error(`Erro ao anular: ${error.message}`);
     },
   });
 }
