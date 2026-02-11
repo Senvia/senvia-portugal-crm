@@ -1,108 +1,89 @@
 
 
-## Sincronizar Produtos com InvoiceXpress
+## Editar Produtos e Atualizar no InvoiceXpress (Bidirecional)
 
 ### Objetivo
-Permitir importar/sincronizar o catalogo de itens do InvoiceXpress com os produtos do Senvia OS, garantindo que ambos os sistemas estao alinhados.
+Quando um produto com `invoicexpress_id` e editado no Senvia OS, enviar as alteracoes de volta para o InvoiceXpress via `PUT /items/:item-id.json`, mantendo ambos os sistemas sincronizados.
 
 ### Fluxo do Utilizador
 
 ```text
-Definicoes > Produtos & Servicos
+Definicoes > Produtos > Editar Produto (com invoicexpress_id)
     |
     v
-[Botao "Sincronizar com InvoiceXpress"]
+Utilizador altera nome/preco/IVA -> Guardar
     |
     v
-Edge Function GET /items.json (todas as paginas)
+1. Atualiza localmente na BD (como ja funciona)
+2. Se produto tem invoicexpress_id:
+   -> Edge Function PUT /items/:id.json
+   -> Atualiza no InvoiceXpress
     |
     v
-Compara com produtos locais (por invoicexpress_id ou nome)
-    |
-    v
-- Produtos novos no InvoiceXpress -> Cria no Senvia
-- Produtos existentes -> Atualiza preco/descricao/IVA
-- Produtos so no Senvia -> Mantidos (nao apaga)
-    |
-    v
-Toast com resumo: "3 criados, 2 atualizados"
+Toast: "Produto atualizado (Senvia + InvoiceXpress)"
 ```
 
 ### Alteracoes Tecnicas
 
-**1. Migracao de Base de Dados**
+**1. Nova Edge Function `update-invoicexpress-item`**
 
-Adicionar coluna `invoicexpress_id` a tabela `products` para mapear com o InvoiceXpress:
-
-```sql
-ALTER TABLE public.products ADD COLUMN invoicexpress_id integer DEFAULT NULL;
-```
-
-**2. Nova Edge Function `sync-invoicexpress-items`**
-
-Ficheiro: `supabase/functions/sync-invoicexpress-items/index.ts`
+Ficheiro: `supabase/functions/update-invoicexpress-item/index.ts`
 
 Responsabilidades:
-- Receber `organization_id`
+- Receber `organization_id`, `invoicexpress_id`, e dados do produto (`name`, `description`, `unit_price`, `tax`)
 - Verificar autenticacao e membership
 - Buscar credenciais InvoiceXpress da organizacao
-- Paginar `GET /items.json?page=X&per_page=30` ate obter todos os itens
-- Para cada item do InvoiceXpress:
-  - Se ja existe produto local com `invoicexpress_id` igual: atualizar nome, preco, IVA
-  - Se nao existe: criar novo produto com os dados do item
-- Mapear campos: `name`, `description`, `unit_price` -> `price`, `tax.value` -> `tax_value`
-- Retornar resumo: `{ created: N, updated: N, total: N }`
+- Chamar `PUT /items/:invoicexpress_id.json` com o body:
+```json
+{
+  "item": {
+    "name": "Nome do Produto",
+    "description": "Descricao",
+    "unit_price": 100.00,
+    "tax": { "name": "IVA23", "value": 23 }
+  }
+}
+```
+- Mapear `tax_value` para o nome de taxa InvoiceXpress (23 -> "IVA23", 13 -> "IVA13", 6 -> "IVA6", 0 -> "Isento")
+- Retornar sucesso ou erro
 
-**3. Novo Hook `useSyncInvoiceXpressItems`**
+**2. Atualizar `useUpdateProduct` em `src/hooks/useProducts.ts`**
 
-Ficheiro: `src/hooks/useSyncInvoiceXpressItems.ts`
+Apos o update local com sucesso, se o produto tem `invoicexpress_id`:
+- Chamar a edge function `update-invoicexpress-item` para sincronizar
+- Se a sincronizacao com InvoiceXpress falhar, mostrar aviso mas nao reverter o update local (o produto ja foi guardado)
+- Toast diferenciado: "Produto atualizado" vs "Produto atualizado (sincronizado com InvoiceXpress)"
 
-- Mutation que chama a edge function `sync-invoicexpress-items`
-- Invalida query `['products']` apos sucesso
-- Mostra toast com resumo da sincronizacao
+**3. Atualizar `supabase/config.toml`**
 
-**4. Atualizar `ProductsTab.tsx`**
+Registar `update-invoicexpress-item` com `verify_jwt = false`.
 
-- Adicionar botao "Sincronizar" (icone RefreshCw) ao lado do botao "Adicionar"
-- Botao visivel apenas se a integracao InvoiceXpress esta ativa
-- Loading spinner durante a sincronizacao
-- Necessita aceder ao estado da organizacao para verificar credenciais
+### Mapeamento de Taxas (Senvia -> InvoiceXpress)
 
-**5. Atualizar tipo `Product`**
-
-Adicionar `invoicexpress_id?: number | null` a interface `Product` em `src/types/proposals.ts`.
-
-**6. Registar edge function**
-
-Adicionar `sync-invoicexpress-items` ao `supabase/config.toml` com `verify_jwt = false`.
+| `tax_value` Senvia | `tax.name` InvoiceXpress |
+|---|---|
+| 23 | IVA23 |
+| 13 | IVA13 |
+| 6 | IVA6 |
+| 0 | Isento |
+| null | Nao envia (usa default da conta) |
 
 ### Resumo de Ficheiros
 
 | Ficheiro | Acao | Descricao |
 |---|---|---|
-| Migracao SQL | Criar | Adicionar `invoicexpress_id` a `products` |
-| `supabase/functions/sync-invoicexpress-items/index.ts` | Criar | Edge function de sincronizacao |
+| `supabase/functions/update-invoicexpress-item/index.ts` | Criar | Edge function PUT para InvoiceXpress |
 | `supabase/config.toml` | Editar | Registar nova function |
-| `src/hooks/useSyncInvoiceXpressItems.ts` | Criar | Hook com mutation de sync |
-| `src/types/proposals.ts` | Editar | Adicionar `invoicexpress_id` ao tipo Product |
-| `src/components/settings/ProductsTab.tsx` | Editar | Botao "Sincronizar" |
+| `src/hooks/useProducts.ts` | Editar | Adicionar sync apos update local |
 
-### Secao Tecnica - Logica de Sync
+### Secao Tecnica - Edge Function
 
-A edge function percorre todas as paginas de itens do InvoiceXpress:
+A edge function faz:
+1. Valida auth e membership
+2. Busca `invoicexpress_api_key` e `invoicexpress_account_name` da organizacao
+3. Constroi o body com mapeamento de campos Senvia -> InvoiceXpress
+4. `PUT https://{account}.app.invoicexpress.com/items/{id}.json?api_key={key}`
+5. Retorna o item atualizado ou erro
 
-```text
-page = 1
-loop:
-  GET /items.json?page=X&per_page=30
-  processar itens
-  se total_pages > page: page++
-  senao: sair
-```
-
-Para cada item:
-1. Procurar produto local com `invoicexpress_id = item.id`
-2. Se encontrado: `UPDATE products SET name, price, tax_value WHERE invoicexpress_id = item.id`
-3. Se nao encontrado: `INSERT INTO products (name, description, price, tax_value, invoicexpress_id, organization_id)`
-4. O campo `tax_value` e mapeado de `item.tax.value` (ex: 23 para IVA23, 0 para Isento)
+Se o InvoiceXpress retornar 404 (item ja nao existe la), a function retorna aviso mas nao falha criticamente.
 
