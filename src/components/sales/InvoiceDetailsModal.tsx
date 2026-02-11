@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { RefreshCw, ExternalLink, Download, Mail, FileText, Ban, Loader2 } from "lucide-react";
+import { RefreshCw, Download, Mail, FileText, Ban, Loader2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -342,34 +342,6 @@ export function InvoiceDetailsModal({
                     </div>
                   )}
 
-                  {/* PDF Viewer */}
-                  {details.pdf_signed_url ? (
-                    <div className="rounded-lg border border-border/50 overflow-hidden">
-                      <iframe
-                        src={details.pdf_signed_url}
-                        className="w-full h-[500px]"
-                        title="Documento PDF"
-                      />
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center py-8 gap-2 text-muted-foreground">
-                      <Loader2 className="h-5 w-5 animate-spin" />
-                      <p className="text-xs">A preparar documento...</p>
-                    </div>
-                  )}
-
-                  {/* Fallback link */}
-                  {details.permalink && !details.pdf_signed_url && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full"
-                      onClick={() => window.open(details.permalink, '_blank')}
-                    >
-                      <ExternalLink className="h-3.5 w-3.5 mr-2" />
-                      Ver no InvoiceXpress
-                    </Button>
-                  )}
                 </div>
               </ScrollArea>
           ) : null}
