@@ -29,7 +29,7 @@ export function useAllPayments() {
             credit_note_reference,
             invoice_pdf_url,
             leads:lead_id (name),
-            crm_clients:client_id (name, email)
+            crm_clients:client_id (name, email, nif)
           )
         `)
         .eq('organization_id', organizationId)
@@ -70,6 +70,7 @@ export function useAllPayments() {
         client_name: payment.sales?.crm_clients?.name || null,
         lead_name: payment.sales?.leads?.name || null,
         client_email: (payment.sales?.crm_clients as any)?.email || null,
+        client_nif: (payment.sales?.crm_clients as any)?.nif || null,
       }));
     },
     enabled: !!organizationId,

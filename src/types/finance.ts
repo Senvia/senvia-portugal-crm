@@ -30,6 +30,7 @@ export interface PaymentWithSale {
   client_name: string | null;
   lead_name: string | null;
   client_email?: string | null;
+  client_nif?: string | null;
 }
 
 export interface CreditNoteItem {
