@@ -33,9 +33,11 @@ export function CreateProductModal({ open, onOpenChange }: CreateProductModalPro
 
   const selectedTax = TAX_OPTIONS.find(o => o.value === taxOption);
 
+  const isExemptMissingReason = taxOption === '0' && !taxExemptionReason.trim();
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!name.trim() || isExemptMissingReason) return;
 
     createProduct.mutate({
       name: name.trim(),
@@ -147,7 +149,7 @@ export function CreateProductModal({ open, onOpenChange }: CreateProductModalPro
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={createProduct.isPending || !name.trim()}>
+            <Button type="submit" disabled={createProduct.isPending || !name.trim() || isExemptMissingReason}>
               {createProduct.isPending ? 'A criar...' : 'Criar Produto'}
             </Button>
           </DialogFooter>

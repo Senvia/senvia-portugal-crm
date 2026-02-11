@@ -150,7 +150,7 @@ export default function Settings() {
     if (organization?.id) {
       await supabase
         .from('organizations')
-        .update({ integrations_enabled: newState } as any)
+        .update({ integrations_enabled: newState })
         .eq('id', organization.id);
     }
   };
@@ -193,7 +193,7 @@ export default function Settings() {
         tax_value: taxValue,
         tax_exemption_reason: taxValue === 0 ? taxExemptionReason : null,
       },
-    } as any);
+    });
   };
 
   const handleTestWebhook = () => {

@@ -192,11 +192,38 @@ Deno.serve(async (req) => {
     let firstExemptionReason: string | null = null
 
     if (payment_id && payment_amount) {
-      // Per-payment invoice: use the specific payment amount with org tax
-      items.push(buildItem('Serviço', `Pagamento - Venda ${sale.code || sale_id}`, Number(payment_amount), 1))
-      if (orgTaxValue === 0) {
-        hasExemptItem = true
-        firstExemptionReason = orgTaxExemptionReason
+      // Per-payment invoice: fetch sale_items to get product-level tax
+      const { data: saleItemsForPayment } = await supabase
+        .from('sale_items')
+        .select('*, product:products(tax_value, tax_exemption_reason)')
+        .eq('sale_id', sale_id)
+
+      if (saleItemsForPayment && saleItemsForPayment.length > 0) {
+        // Calculate total sale value from items to determine proportions
+        const totalItemsValue = saleItemsForPayment.reduce((sum: number, si: any) => sum + (Number(si.unit_price) * Number(si.quantity)), 0)
+        const paymentRatio = Number(payment_amount) / totalItemsValue
+
+        for (const si of saleItemsForPayment) {
+          const productTaxValue = si.product?.tax_value ?? null
+          const productTaxExemptionReason = si.product?.tax_exemption_reason ?? null
+          const effectiveTax = (productTaxValue !== null && productTaxValue !== undefined) ? productTaxValue : orgTaxValue
+          if (effectiveTax === 0) {
+            hasExemptItem = true
+            if (!firstExemptionReason) {
+              firstExemptionReason = productTaxExemptionReason || orgTaxExemptionReason
+            }
+          }
+          const itemTotal = Number(si.unit_price) * Number(si.quantity)
+          const proportionalValue = Math.round((itemTotal * paymentRatio) * 100) / 100
+          items.push(buildItem(si.name, `Pagamento - ${si.name}`, proportionalValue, 1, productTaxValue, productTaxExemptionReason))
+        }
+      } else {
+        // No sale_items: fallback to generic item with org tax
+        items.push(buildItem('Serviço', `Pagamento - Venda ${sale.code || sale_id}`, Number(payment_amount), 1))
+        if (orgTaxValue === 0) {
+          hasExemptItem = true
+          firstExemptionReason = orgTaxExemptionReason
+        }
       }
     } else {
       // Legacy: full sale invoice using sale_items with product JOIN for per-item tax
