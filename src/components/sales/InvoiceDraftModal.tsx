@@ -21,10 +21,10 @@ interface InvoiceDraftModalProps {
   onOpenChange: (open: boolean) => void;
   onConfirm: () => void;
   isLoading: boolean;
-  documentType: "invoice" | "invoice_receipt";
+  mode: "invoice" | "receipt";
   clientName?: string | null;
   clientNif?: string | null;
-  paymentAmount: number;
+  amount: number;
   paymentDate: string;
   paymentMethod?: PaymentMethod | null;
   taxConfig?: {
@@ -33,9 +33,9 @@ interface InvoiceDraftModalProps {
   } | null;
 }
 
-const DOCUMENT_TYPE_LABELS: Record<string, string> = {
-  invoice: "Fatura",
-  invoice_receipt: "Fatura-Recibo",
+const MODE_LABELS = {
+  invoice: { title: "Fatura", badge: "Fatura (FT)", button: "Emitir Fatura" },
+  receipt: { title: "Recibo", badge: "Recibo", button: "Gerar Recibo" },
 };
 
 export function InvoiceDraftModal({
@@ -43,21 +43,22 @@ export function InvoiceDraftModal({
   onOpenChange,
   onConfirm,
   isLoading,
-  documentType,
+  mode,
   clientName,
   clientNif,
-  paymentAmount,
+  amount,
   paymentDate,
   paymentMethod,
   taxConfig,
 }: InvoiceDraftModalProps) {
   const today = new Date();
+  const labels = MODE_LABELS[mode];
   const taxRate = taxConfig?.tax_value ?? 0;
   const isExempt = taxRate === 0;
   const exemptionReason = taxConfig?.tax_exemption_reason || "Artigo 53.º do CIVA";
 
-  const taxAmount = isExempt ? 0 : paymentAmount * (taxRate / 100);
-  const totalWithTax = paymentAmount + taxAmount;
+  const taxAmount = isExempt ? 0 : amount * (taxRate / 100);
+  const totalWithTax = amount + taxAmount;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -65,10 +66,10 @@ export function InvoiceDraftModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5 text-primary" />
-            Rascunho de {DOCUMENT_TYPE_LABELS[documentType]}
+            Rascunho de {labels.title}
           </DialogTitle>
           <DialogDescription>
-            Reveja os dados antes de emitir o documento.
+            Reveja os dados antes de {mode === "invoice" ? "emitir o documento" : "gerar o recibo"}.
           </DialogDescription>
         </DialogHeader>
 
@@ -76,7 +77,7 @@ export function InvoiceDraftModal({
           {/* Document Type & Date */}
           <div className="flex items-center justify-between">
             <Badge variant="secondary" className="text-xs">
-              {DOCUMENT_TYPE_LABELS[documentType]}
+              {labels.badge}
             </Badge>
             <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
               <Calendar className="h-3.5 w-3.5" />
@@ -108,13 +109,21 @@ export function InvoiceDraftModal({
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <CreditCard className="h-3.5 w-3.5" />
-              <span>Detalhes do Pagamento</span>
+              <span>{mode === "invoice" ? "Detalhes da Fatura" : "Detalhes do Pagamento"}</span>
             </div>
             <div className="p-3 rounded-lg bg-muted/30 space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Data do pagamento</span>
-                <span>{format(new Date(paymentDate), "d MMM yyyy", { locale: pt })}</span>
-              </div>
+              {mode === "receipt" && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Data do pagamento</span>
+                  <span>{format(new Date(paymentDate), "d MMM yyyy", { locale: pt })}</span>
+                </div>
+              )}
+              {mode === "invoice" && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Valor total da venda</span>
+                  <span className="font-medium">{formatCurrency(amount)}</span>
+                </div>
+              )}
               {paymentMethod && (
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Método</span>
@@ -130,7 +139,7 @@ export function InvoiceDraftModal({
           <div className="p-3 rounded-lg border space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Subtotal</span>
-              <span>{formatCurrency(paymentAmount)}</span>
+              <span>{formatCurrency(amount)}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">
@@ -164,12 +173,12 @@ export function InvoiceDraftModal({
             {isLoading ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                A emitir...
+                {mode === "invoice" ? "A emitir..." : "A gerar..."}
               </>
             ) : (
               <>
                 <Receipt className="h-4 w-4 mr-2" />
-                Emitir {DOCUMENT_TYPE_LABELS[documentType]}
+                {labels.button}
               </>
             )}
           </Button>

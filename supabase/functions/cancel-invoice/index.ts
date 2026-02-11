@@ -32,10 +32,17 @@ Deno.serve(async (req) => {
       })
     }
 
-    const { payment_id, organization_id, reason, invoicexpress_id, document_type } = await req.json()
+    const { payment_id, sale_id, organization_id, reason, invoicexpress_id, document_type } = await req.json()
 
-    if (!payment_id || !organization_id || !reason || !invoicexpress_id || !document_type) {
-      return new Response(JSON.stringify({ error: 'Campos obrigatórios: payment_id, organization_id, reason, invoicexpress_id, document_type' }), {
+    if (!organization_id || !reason || !invoicexpress_id || !document_type) {
+      return new Response(JSON.stringify({ error: 'Campos obrigatórios: organization_id, reason, invoicexpress_id, document_type' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    if (!payment_id && !sale_id) {
+      return new Response(JSON.stringify({ error: 'payment_id ou sale_id é obrigatório' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
@@ -105,15 +112,28 @@ Deno.serve(async (req) => {
     // Consume body
     try { await cancelRes.text() } catch {}
 
-    // Clear references in sale_payments
-    await supabase
-      .from('sale_payments')
-      .update({
-        invoice_reference: null,
-        invoice_file_url: null,
-        invoicexpress_id: null,
-      })
-      .eq('id', payment_id)
+    // Clear references
+    if (payment_id) {
+      await supabase
+        .from('sale_payments')
+        .update({
+          invoice_reference: null,
+          invoice_file_url: null,
+          invoicexpress_id: null,
+        })
+        .eq('id', payment_id)
+    }
+    
+    if (sale_id) {
+      await supabase
+        .from('sales')
+        .update({
+          invoicexpress_id: null,
+          invoicexpress_type: null,
+          invoice_reference: null,
+        })
+        .eq('id', sale_id)
+    }
 
     return new Response(JSON.stringify({ success: true }), {
       status: 200,

@@ -49,19 +49,13 @@ Deno.serve(async (req) => {
       })
     }
 
-    const { sale_id, organization_id, document_type = 'invoice_receipt', invoice_date, payment_id, payment_amount } = await req.json()
+    const { sale_id, organization_id } = await req.json()
     if (!sale_id || !organization_id) {
       return new Response(JSON.stringify({ error: 'sale_id e organization_id são obrigatórios' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
-
-    const docType = document_type === 'invoice' ? 'invoice' : 'invoice_receipt'
-    const isInvoice = docType === 'invoice'
-    const endpointName = isInvoice ? 'invoices' : 'invoice_receipts'
-    const docKey = isInvoice ? 'invoice' : 'invoice_receipt'
-    const refPrefix = isInvoice ? 'FT' : 'FR'
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
@@ -103,25 +97,6 @@ Deno.serve(async (req) => {
       })
     }
 
-    // If payment_id provided, check if that payment already has an invoice
-    if (payment_id) {
-      const { data: existingPayment } = await supabase
-        .from('sale_payments')
-        .select('invoice_reference')
-        .eq('id', payment_id)
-        .single()
-
-      if (existingPayment?.invoice_reference) {
-        return new Response(JSON.stringify({ 
-          error: 'Fatura já emitida para este pagamento', 
-          invoice_reference: existingPayment.invoice_reference 
-        }), {
-          status: 409,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        })
-      }
-    }
-
     // Fetch sale with client
     const { data: sale } = await supabase
       .from('sales')
@@ -141,9 +116,13 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Only block if no payment_id and sale already has invoicexpress_id (legacy full-sale invoice)
-    if (!payment_id && sale.invoicexpress_id) {
-      return new Response(JSON.stringify({ error: 'Fatura já emitida para esta venda', invoice_reference: sale.invoice_reference }), {
+    // Check if invoice already exists for this sale
+    if (sale.invoicexpress_id) {
+      return new Response(JSON.stringify({ 
+        error: 'Fatura já emitida para esta venda', 
+        invoice_reference: sale.invoice_reference,
+        invoicexpress_id: sale.invoicexpress_id,
+      }), {
         status: 409,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
@@ -160,12 +139,10 @@ Deno.serve(async (req) => {
     // Tax configuration (org-level fallback)
     const taxConfig = (org as any)?.tax_config || { tax_name: 'IVA23', tax_value: 23, tax_exemption_reason: null }
     const orgTaxValue = taxConfig.tax_value ?? 23
-    const orgTaxName = orgTaxValue === 0 ? 'Isento' : (taxConfig.tax_name || 'IVA23')
     const orgTaxExemptionReason = taxConfig.tax_exemption_reason || null
 
     // Build item with per-item tax support
     const buildItem = (name: string, description: string, unitPrice: number, quantity: number, itemTaxValue?: number | null, itemTaxExemptionReason?: string | null) => {
-      // Use product-level tax if defined, otherwise org-level
       const effectiveTaxValue = (itemTaxValue !== null && itemTaxValue !== undefined) ? itemTaxValue : orgTaxValue
       const effectiveTaxName = effectiveTaxValue === 0 ? 'Isento' : `IVA${effectiveTaxValue}`
       const effectiveExemptionReason = effectiveTaxValue === 0 
@@ -185,76 +162,38 @@ Deno.serve(async (req) => {
       return item
     }
 
-    // Determine the invoice amount
+    // Always emit invoice for the full sale total using sale_items
     let items: any[] = []
-    // Track if any item is exempt for document-level tax_exemption
     let hasExemptItem = false
     let firstExemptionReason: string | null = null
 
-    if (payment_id && payment_amount) {
-      // Per-payment invoice: fetch sale_items to get product-level tax
-      const { data: saleItemsForPayment } = await supabase
-        .from('sale_items')
-        .select('*, product:products(tax_value, tax_exemption_reason)')
-        .eq('sale_id', sale_id)
+    const { data: saleItems } = await supabase
+      .from('sale_items')
+      .select('*, product:products(tax_value, tax_exemption_reason)')
+      .eq('sale_id', sale_id)
 
-      if (saleItemsForPayment && saleItemsForPayment.length > 0) {
-        // Calculate total sale value from items to determine proportions
-        const totalItemsValue = saleItemsForPayment.reduce((sum: number, si: any) => sum + (Number(si.unit_price) * Number(si.quantity)), 0)
-        const paymentRatio = Number(payment_amount) / totalItemsValue
-
-        for (const si of saleItemsForPayment) {
-          const productTaxValue = si.product?.tax_value ?? null
-          const productTaxExemptionReason = si.product?.tax_exemption_reason ?? null
-          const effectiveTax = (productTaxValue !== null && productTaxValue !== undefined) ? productTaxValue : orgTaxValue
-          if (effectiveTax === 0) {
-            hasExemptItem = true
-            if (!firstExemptionReason) {
-              firstExemptionReason = productTaxExemptionReason || orgTaxExemptionReason
-            }
-          }
-          const itemTotal = Number(si.unit_price) * Number(si.quantity)
-          const proportionalValue = Math.round((itemTotal * paymentRatio) * 100) / 100
-          items.push(buildItem(si.name, `Pagamento - ${si.name}`, proportionalValue, 1, productTaxValue, productTaxExemptionReason))
-        }
-      } else {
-        // No sale_items: fallback to generic item with org tax
-        items.push(buildItem('Serviço', `Pagamento - Venda ${sale.code || sale_id}`, Number(payment_amount), 1))
-        if (orgTaxValue === 0) {
-          hasExemptItem = true
-          firstExemptionReason = orgTaxExemptionReason
+    items = (saleItems || []).map((item: any) => {
+      const productTaxValue = item.product?.tax_value ?? null
+      const productTaxExemptionReason = item.product?.tax_exemption_reason ?? null
+      const effectiveTax = (productTaxValue !== null && productTaxValue !== undefined) ? productTaxValue : orgTaxValue
+      if (effectiveTax === 0) {
+        hasExemptItem = true
+        if (!firstExemptionReason) {
+          firstExemptionReason = productTaxExemptionReason || orgTaxExemptionReason
         }
       }
-    } else {
-      // Legacy: full sale invoice using sale_items with product JOIN for per-item tax
-      const { data: saleItems } = await supabase
-        .from('sale_items')
-        .select('*, product:products(tax_value, tax_exemption_reason)')
-        .eq('sale_id', sale_id)
+      return buildItem(item.name, item.name, Number(item.unit_price), Number(item.quantity), productTaxValue, productTaxExemptionReason)
+    })
 
-      items = (saleItems || []).map((item: any) => {
-        const productTaxValue = item.product?.tax_value ?? null
-        const productTaxExemptionReason = item.product?.tax_exemption_reason ?? null
-        const effectiveTax = (productTaxValue !== null && productTaxValue !== undefined) ? productTaxValue : orgTaxValue
-        if (effectiveTax === 0) {
-          hasExemptItem = true
-          if (!firstExemptionReason) {
-            firstExemptionReason = productTaxExemptionReason || orgTaxExemptionReason
-          }
-        }
-        return buildItem(item.name, item.name, Number(item.unit_price), Number(item.quantity), productTaxValue, productTaxExemptionReason)
-      })
-
-      if (items.length === 0) {
-        items.push(buildItem('Serviço', `Venda ${sale.code || sale_id}`, Number(sale.total_value), 1))
-        if (orgTaxValue === 0) {
-          hasExemptItem = true
-          firstExemptionReason = orgTaxExemptionReason
-        }
+    if (items.length === 0) {
+      items.push(buildItem('Serviço', `Venda ${sale.code || sale_id}`, Number(sale.total_value), 1))
+      if (orgTaxValue === 0) {
+        hasExemptItem = true
+        firstExemptionReason = orgTaxExemptionReason
       }
     }
 
-    // Validate: if any exempt item exists, we need an exemption reason
+    // Validate exemption reason
     if (hasExemptItem && !firstExemptionReason) {
       return new Response(JSON.stringify({ 
         error: 'Configure o motivo de isenção de IVA no produto ou nas Definições → Integrações → InvoiceXpress antes de emitir faturas.' 
@@ -264,23 +203,24 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Date - must not be before the last invoice in the series (InvoiceXpress rule)
+    // Date
     const now = new Date()
     const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-    let dateSource = invoice_date || todayStr
+    let dateSource = todayStr
 
     const accountName = org.invoicexpress_account_name
     const apiKey = org.invoicexpress_api_key
     const baseUrl = `https://${accountName}.app.invoicexpress.com`
 
+    // Check last invoice date for chronological order
     try {
-      const listRes = await fetch(`${baseUrl}/${endpointName}.json?api_key=${apiKey}&page=1&per_page=1`, {
+      const listRes = await fetch(`${baseUrl}/invoices.json?api_key=${apiKey}&page=1&per_page=1`, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
       })
       if (listRes.ok) {
         const listData = await listRes.json()
-        const docs = listData[endpointName] || listData.invoices || listData.invoice_receipts || []
+        const docs = listData.invoices || []
         if (Array.isArray(docs) && docs.length > 0) {
           const lastDateStr = docs[0]?.date
           if (lastDateStr) {
@@ -302,13 +242,11 @@ Deno.serve(async (req) => {
 
     const clientName = sale.client?.company || sale.client?.name || sale.lead?.name || 'Cliente'
     const clientCode = sale.client?.code || clientNif
+    const proprietary_uid = `senvia-sale-${sale_id}`
 
-    // Deterministic proprietary_uid for idempotency
-    const proprietary_uid = payment_id ? `senvia-pay-${payment_id}` : `senvia-sale-${sale_id}`
-
-    // Build InvoiceXpress payload
+    // Build InvoiceXpress payload - always invoice type
     const invoicePayload = {
-      [docKey]: {
+      invoice: {
         date: formattedDate,
         due_date: formattedDate,
         ...(hasExemptItem && firstExemptionReason
@@ -330,32 +268,15 @@ Deno.serve(async (req) => {
     }
 
     // 1. Create draft
-    const createRes = await fetch(`${baseUrl}/${endpointName}.json?api_key=${apiKey}`, {
+    const createRes = await fetch(`${baseUrl}/invoices.json?api_key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(invoicePayload),
     })
 
-    // Handle 409 = duplicate (proprietary_uid already used)
+    // Handle 409 = duplicate
     if (createRes.status === 409) {
-      console.warn('InvoiceXpress 409: duplicate proprietary_uid, document already exists')
-      // Try to find existing reference in our DB
-      if (payment_id) {
-        const { data: existingPay } = await supabase
-          .from('sale_payments')
-          .select('invoice_reference, invoice_file_url')
-          .eq('id', payment_id)
-          .single()
-        if (existingPay?.invoice_reference) {
-          return new Response(JSON.stringify({
-            success: true,
-            invoice_reference: existingPay.invoice_reference,
-            ...(existingPay.invoice_file_url ? { pdf_url: existingPay.invoice_file_url } : {}),
-            duplicate: true,
-          }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
-        }
-      }
-      return new Response(JSON.stringify({ error: 'Fatura já foi criada anteriormente para este documento.' }), {
+      return new Response(JSON.stringify({ error: 'Fatura já foi criada anteriormente para esta venda.' }), {
         status: 409,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
@@ -371,9 +292,9 @@ Deno.serve(async (req) => {
     }
 
     const createData = await createRes.json()
-    const invoiceId = createData[docKey]?.id
-    const sequentialNumber = createData[docKey]?.sequential_number
-    const permalink = createData[docKey]?.permalink || null
+    const invoiceId = createData.invoice?.id
+    const sequentialNumber = createData.invoice?.sequential_number
+    const permalink = createData.invoice?.permalink || null
 
     if (!invoiceId) {
       return new Response(JSON.stringify({ error: 'InvoiceXpress não retornou ID do documento', details: createData }), {
@@ -383,18 +304,17 @@ Deno.serve(async (req) => {
     }
 
     // 2. Finalize
-    const finalizeRes = await fetch(`${baseUrl}/${endpointName}/${invoiceId}/change-state.json?api_key=${apiKey}`, {
+    const finalizeRes = await fetch(`${baseUrl}/invoices/${invoiceId}/change-state.json?api_key=${apiKey}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        [docKey]: { state: 'finalized' },
+        invoice: { state: 'finalized' },
       }),
     })
 
     if (!finalizeRes.ok) {
       const errorText = await finalizeRes.text()
       console.error('InvoiceXpress finalize error:', errorText)
-
       return new Response(JSON.stringify({ 
         error: 'Fatura criada mas não finalizada. Finalize manualmente no InvoiceXpress.',
         invoicexpress_id: invoiceId,
@@ -405,17 +325,17 @@ Deno.serve(async (req) => {
       })
     }
 
-    let invoiceReference = sequentialNumber ? `${refPrefix} ${sequentialNumber}` : `${refPrefix} #${invoiceId}`
+    let invoiceReference = sequentialNumber ? `FT ${sequentialNumber}` : `FT #${invoiceId}`
     try {
       const finalizeData = await finalizeRes.json()
-      if (finalizeData[docKey]?.sequential_number) {
-        invoiceReference = `${refPrefix} ${finalizeData[docKey].sequential_number}`
+      if (finalizeData.invoice?.sequential_number) {
+        invoiceReference = `FT ${finalizeData.invoice.sequential_number}`
       }
     } catch {
       // Use default reference
     }
 
-    // 3. Generate PDF (async with polling)
+    // 3. Generate PDF
     let pdfUrl: string | null = null
     try {
       for (let attempt = 0; attempt < 3; attempt++) {
@@ -429,7 +349,6 @@ Deno.serve(async (req) => {
           if (pdfUrl) break
         }
         if (pdfRes.status === 202 || !pdfUrl) {
-          // PDF not ready yet, wait 2s
           await new Promise(r => setTimeout(r, 2000))
         }
       }
@@ -437,27 +356,15 @@ Deno.serve(async (req) => {
       console.warn('PDF generation polling failed (non-blocking):', e)
     }
 
-    // 4. Save reference + PDF URL (or permalink as fallback)
-    const fileUrl = pdfUrl || permalink || null
-    if (payment_id) {
-      await supabase
-        .from('sale_payments')
-        .update({ 
-          invoice_reference: invoiceReference,
-          invoicexpress_id: invoiceId,
-          ...(fileUrl ? { invoice_file_url: fileUrl } : {}),
-        })
-        .eq('id', payment_id)
-    } else {
-      await supabase
-        .from('sales')
-        .update({
-          invoicexpress_id: invoiceId,
-          invoicexpress_type: endpointName,
-          invoice_reference: invoiceReference,
-        })
-        .eq('id', sale_id)
-    }
+    // 4. Save reference in sales table
+    await supabase
+      .from('sales')
+      .update({
+        invoicexpress_id: invoiceId,
+        invoicexpress_type: 'invoices',
+        invoice_reference: invoiceReference,
+      })
+      .eq('id', sale_id)
 
     return new Response(JSON.stringify({
       success: true,
