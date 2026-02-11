@@ -95,7 +95,7 @@ export default function Finance() {
               {/* Card Recebido - Clicável */}
               <Card 
                 className="cursor-pointer hover:bg-muted/50 transition-colors group"
-                onClick={() => navigate('/financeiro/pagamentos')}
+                onClick={() => navigate('/financeiro/pagamentos?status=paid')}
               >
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Recebido</CardTitle>
