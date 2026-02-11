@@ -63,6 +63,27 @@ async function downloadAndUploadPdf(
   }
 }
 
+function buildTaxSummary(items: any[]): Array<{ name: string; rate: number; incidence: number; value: number }> {
+  const taxMap = new Map<string, { name: string; rate: number; incidence: number; value: number }>()
+  for (const item of items) {
+    if (!item.tax) continue
+    const key = `${item.tax.name || 'IVA'}-${item.tax.value || 0}`
+    const existing = taxMap.get(key)
+    if (existing) {
+      existing.incidence += Number(item.subtotal || 0)
+      existing.value += Number(item.tax_amount || 0)
+    } else {
+      taxMap.set(key, {
+        name: item.tax.name || 'IVA',
+        rate: Number(item.tax.value || 0),
+        incidence: Number(item.subtotal || 0),
+        value: Number(item.tax_amount || 0),
+      })
+    }
+  }
+  return Array.from(taxMap.values())
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
@@ -159,6 +180,21 @@ Deno.serve(async (req) => {
       })
     }
 
+    // Fetch QR code URL always (not just on sync)
+    let qrCodeUrl: string | null = null
+    try {
+      const qrRes = await fetch(`${baseUrl}/api/qr_codes/${document_id}.json?api_key=${apiKey}`, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' },
+      })
+      if (qrRes.ok) {
+        const qrData = await qrRes.json()
+        qrCodeUrl = qrData?.qr_code?.url || null
+      }
+    } catch (e) {
+      console.warn('QR code fetch failed:', e)
+    }
+
     // Build response
     const result: any = {
       id: doc.id,
@@ -173,13 +209,33 @@ Deno.serve(async (req) => {
       before_taxes: doc.before_taxes,
       taxes: doc.taxes,
       total: doc.total,
+      retention: doc.retention || 0,
       currency: doc.currency,
       tax_exemption: doc.tax_exemption,
+      observations: doc.observations || null,
+      mb_reference: doc.mb_reference || null,
+      cancel_reason: doc.cancel_reason || null,
+      qr_code_url: qrCodeUrl,
+      owner: doc.owner ? {
+        name: doc.owner.name,
+        fiscal_id: doc.owner.fiscal_id,
+        address: doc.owner.address,
+        postal_code: doc.owner.postal_code,
+        city: doc.owner.city,
+        country: doc.owner.country,
+        email: doc.owner.email,
+        phone: doc.owner.phone,
+      } : null,
       client: doc.client ? {
         id: doc.client.id,
         name: doc.client.name,
         fiscal_id: doc.client.fiscal_id,
         country: doc.client.country,
+        address: doc.client.address || null,
+        postal_code: doc.client.postal_code || null,
+        city: doc.client.city || null,
+        email: doc.client.email || null,
+        phone: doc.client.phone || null,
       } : null,
       items: (doc.items || []).map((item: any) => ({
         name: item.name,
@@ -192,6 +248,12 @@ Deno.serve(async (req) => {
         tax_amount: item.tax_amount,
         total: item.total,
       })),
+      tax_summary: buildTaxSummary(doc.items || []),
+    }
+
+    // Also check for bank info in observations or owner
+    if (doc.bank_info) {
+      result.bank_info = doc.bank_info
     }
 
     // 2. If sync=true, fetch PDF, download it, upload to storage, then update DB

@@ -4,13 +4,43 @@ import { toast } from "sonner";
 
 interface InvoiceDetailsParams {
   documentId: number;
-  documentType: "invoice" | "invoice_receipt" | "receipt";
+  documentType: "invoice" | "invoice_receipt" | "receipt" | "credit_note";
   organizationId: string;
 }
 
 interface SyncInvoiceParams extends InvoiceDetailsParams {
   saleId: string;
   paymentId?: string;
+}
+
+export interface InvoiceOwner {
+  name: string;
+  fiscal_id: string;
+  address: string | null;
+  postal_code: string | null;
+  city: string | null;
+  country: string | null;
+  email: string | null;
+  phone: string | null;
+}
+
+export interface InvoiceClient {
+  id: number;
+  name: string;
+  fiscal_id: string;
+  country: string;
+  address: string | null;
+  postal_code: string | null;
+  city: string | null;
+  email: string | null;
+  phone: string | null;
+}
+
+export interface InvoiceTaxSummary {
+  name: string;
+  rate: number;
+  incidence: number;
+  value: number;
 }
 
 export interface InvoiceDetailsData {
@@ -26,14 +56,15 @@ export interface InvoiceDetailsData {
   before_taxes: number;
   taxes: number;
   total: number;
+  retention: number;
   currency: string;
   tax_exemption: string | null;
-  client: {
-    id: number;
-    name: string;
-    fiscal_id: string;
-    country: string;
-  } | null;
+  observations: string | null;
+  mb_reference: string | null;
+  cancel_reason: string | null;
+  qr_code_url: string | null;
+  owner: InvoiceOwner | null;
+  client: InvoiceClient | null;
   items: Array<{
     name: string;
     description: string;
@@ -45,8 +76,9 @@ export interface InvoiceDetailsData {
     tax_amount: number;
     total: number;
   }>;
+  tax_summary: InvoiceTaxSummary[];
   pdf_url?: string | null;
-  qr_code_url?: string | null;
+  bank_info?: any;
 }
 
 export function useInvoiceDetails({ documentId, documentType, organizationId }: InvoiceDetailsParams, enabled = true) {
