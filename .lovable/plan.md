@@ -1,105 +1,108 @@
 
 
-## Consultar e Sincronizar Documentos InvoiceXpress
+## Sincronizar Produtos com InvoiceXpress
 
 ### Objetivo
-Criar uma edge function que consulta documentos no InvoiceXpress via `GET /:document-type/:document-id.json`, permitindo:
-- Buscar PDF URLs em falta para faturas ja emitidas
-- Ver detalhes completos do documento (valores, itens, estado, ATCUD)
-- Sincronizar dados locais com os dados atuais do InvoiceXpress
+Permitir importar/sincronizar o catalogo de itens do InvoiceXpress com os produtos do Senvia OS, garantindo que ambos os sistemas estao alinhados.
 
 ### Fluxo do Utilizador
 
 ```text
-Venda com Fatura emitida (sem PDF guardado)
+Definicoes > Produtos & Servicos
     |
     v
-[Botao "Sincronizar" ou "Ver Detalhes"] --> Edge Function
-    |                                        GET /invoices/:id.json
-    v                                        GET /api/pdf/:id.json
-Atualiza dados locais (PDF, QR, referencia)
+[Botao "Sincronizar com InvoiceXpress"]
     |
     v
-Exibe detalhes do documento num modal/drawer
+Edge Function GET /items.json (todas as paginas)
+    |
+    v
+Compara com produtos locais (por invoicexpress_id ou nome)
+    |
+    v
+- Produtos novos no InvoiceXpress -> Cria no Senvia
+- Produtos existentes -> Atualiza preco/descricao/IVA
+- Produtos so no Senvia -> Mantidos (nao apaga)
+    |
+    v
+Toast com resumo: "3 criados, 2 atualizados"
 ```
 
 ### Alteracoes Tecnicas
 
-**1. Nova Edge Function `get-invoice-details`**
+**1. Migracao de Base de Dados**
 
-Ficheiro: `supabase/functions/get-invoice-details/index.ts`
+Adicionar coluna `invoicexpress_id` a tabela `products` para mapear com o InvoiceXpress:
+
+```sql
+ALTER TABLE public.products ADD COLUMN invoicexpress_id integer DEFAULT NULL;
+```
+
+**2. Nova Edge Function `sync-invoicexpress-items`**
+
+Ficheiro: `supabase/functions/sync-invoicexpress-items/index.ts`
 
 Responsabilidades:
-- Receber `document_id`, `document_type`, `organization_id` e flag opcional `sync` (boolean)
+- Receber `organization_id`
 - Verificar autenticacao e membership
 - Buscar credenciais InvoiceXpress da organizacao
-- Chamar `GET /:document-type/:document-id.json` para obter detalhes
-- Se `sync=true`, tambem chamar `GET /api/pdf/:document-id.json` para buscar PDF
-- Se `sync=true`, atualizar a tabela correspondente (`sales` ou `sale_payments`) com os dados atualizados (pdf_url, qr_code_url)
-- Retornar os detalhes completos do documento
+- Paginar `GET /items.json?page=X&per_page=30` ate obter todos os itens
+- Para cada item do InvoiceXpress:
+  - Se ja existe produto local com `invoicexpress_id` igual: atualizar nome, preco, IVA
+  - Se nao existe: criar novo produto com os dados do item
+- Mapear campos: `name`, `description`, `unit_price` -> `price`, `tax.value` -> `tax_value`
+- Retornar resumo: `{ created: N, updated: N, total: N }`
 
-Mapeamento de `document_type`:
-- `invoice` -> `invoices` (resposta em `invoice`)
-- `invoice_receipt` -> `invoice_receipts` (resposta em `invoice_receipt`)
-- `receipt` -> `receipts` (resposta em `receipt`)
+**3. Novo Hook `useSyncInvoiceXpressItems`**
 
-Dados retornados:
-- `id`, `status`, `sequence_number`, `atcud`
-- `date`, `due_date`, `permalink`
-- `sum`, `discount`, `before_taxes`, `taxes`, `total`
-- `client` (nome, NIF, pais)
-- `items` (nome, preco, quantidade, taxa)
-- `pdf_url` (se pedido via sync)
+Ficheiro: `src/hooks/useSyncInvoiceXpressItems.ts`
 
-**2. Novo Hook `useInvoiceDetails`**
+- Mutation que chama a edge function `sync-invoicexpress-items`
+- Invalida query `['products']` apos sucesso
+- Mostra toast com resumo da sincronizacao
 
-Ficheiro: `src/hooks/useInvoiceDetails.ts`
+**4. Atualizar `ProductsTab.tsx`**
 
-- Query que chama a edge function `get-invoice-details`
-- Mutation separada `useSyncInvoice` para sincronizar e atualizar dados locais
-- Invalidar queries de `sale-payments` e `sales` apos sync
+- Adicionar botao "Sincronizar" (icone RefreshCw) ao lado do botao "Adicionar"
+- Botao visivel apenas se a integracao InvoiceXpress esta ativa
+- Loading spinner durante a sincronizacao
+- Necessita aceder ao estado da organizacao para verificar credenciais
 
-**3. Novo Modal `InvoiceDetailsModal`**
+**5. Atualizar tipo `Product`**
 
-Ficheiro: `src/components/sales/InvoiceDetailsModal.tsx`
+Adicionar `invoicexpress_id?: number | null` a interface `Product` em `src/types/proposals.ts`.
 
-Exibe informacoes do documento InvoiceXpress:
-- Cabecalho com referencia, estado (badge), ATCUD
-- Dados do cliente (nome, NIF)
-- Tabela de itens (nome, quantidade, preco unitario, IVA, total)
-- Resumo financeiro (subtotal, IVA, total)
-- Link permalink para ver no InvoiceXpress
-- Botao "Sincronizar" que busca o PDF e atualiza dados locais
+**6. Registar edge function**
 
-**4. Atualizar `SalePaymentsList.tsx`**
-
-Adicionar novos botoes:
-- **Fatura global**: icone "Info" (Eye ou FileSearch) que abre o `InvoiceDetailsModal` com os dados da fatura
-- **Recibo por pagamento**: mesmo icone para abrir detalhes do recibo
-- Quando o PDF nao esta disponivel localmente mas existe `invoicexpress_id`, mostrar botao "Buscar PDF" que faz sync automatico
-
-**5. Atualizar `supabase/config.toml`**
-
-Registar `get-invoice-details` com `verify_jwt = false`.
+Adicionar `sync-invoicexpress-items` ao `supabase/config.toml` com `verify_jwt = false`.
 
 ### Resumo de Ficheiros
 
 | Ficheiro | Acao | Descricao |
 |---|---|---|
-| `supabase/functions/get-invoice-details/index.ts` | Criar | Edge function para consultar e sincronizar documentos |
-| `supabase/config.toml` | Editar | Registar `get-invoice-details` |
-| `src/hooks/useInvoiceDetails.ts` | Criar | Hook com query e mutation de sync |
-| `src/components/sales/InvoiceDetailsModal.tsx` | Criar | Modal com detalhes do documento InvoiceXpress |
-| `src/components/sales/SalePaymentsList.tsx` | Editar | Adicionar botoes "Ver Detalhes" e "Buscar PDF" |
+| Migracao SQL | Criar | Adicionar `invoicexpress_id` a `products` |
+| `supabase/functions/sync-invoicexpress-items/index.ts` | Criar | Edge function de sincronizacao |
+| `supabase/config.toml` | Editar | Registar nova function |
+| `src/hooks/useSyncInvoiceXpressItems.ts` | Criar | Hook com mutation de sync |
+| `src/types/proposals.ts` | Editar | Adicionar `invoicexpress_id` ao tipo Product |
+| `src/components/settings/ProductsTab.tsx` | Editar | Botao "Sincronizar" |
 
 ### Secao Tecnica - Logica de Sync
 
-Quando `sync=true`, a edge function:
-1. Chama `GET /:type/:id.json` para obter dados atualizados
-2. Chama `GET /api/pdf/:id.json` com polling (3 tentativas, 2s intervalo)
-3. Chama `GET /api/qr_codes/:id.json` com polling (3 tentativas)
-4. Identifica se o documento pertence a `sales` (fatura global) ou `sale_payments` (recibo individual)
-5. Recebe `sale_id` e opcionalmente `payment_id` no request
-6. Se `payment_id` fornecido: atualiza `sale_payments` com `invoice_file_url` (PDF) e `qr_code_url`
-7. Se apenas `sale_id`: atualiza `sales` com `invoice_pdf_url` e `qr_code_url`
+A edge function percorre todas as paginas de itens do InvoiceXpress:
+
+```text
+page = 1
+loop:
+  GET /items.json?page=X&per_page=30
+  processar itens
+  se total_pages > page: page++
+  senao: sair
+```
+
+Para cada item:
+1. Procurar produto local com `invoicexpress_id = item.id`
+2. Se encontrado: `UPDATE products SET name, price, tax_value WHERE invoicexpress_id = item.id`
+3. Se nao encontrado: `INSERT INTO products (name, description, price, tax_value, invoicexpress_id, organization_id)`
+4. O campo `tax_value` e mapeado de `item.tax.value` (ex: 23 para IVA23, 0 para Isento)
 
