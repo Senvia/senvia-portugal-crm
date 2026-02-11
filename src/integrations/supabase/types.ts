@@ -2200,6 +2200,7 @@ export type Database = {
           due_date: string | null
           has_recurring: boolean | null
           id: string
+          invoice_pdf_url: string | null
           invoice_reference: string | null
           invoicexpress_id: number | null
           invoicexpress_type: string | null
@@ -2238,6 +2239,7 @@ export type Database = {
           due_date?: string | null
           has_recurring?: boolean | null
           id?: string
+          invoice_pdf_url?: string | null
           invoice_reference?: string | null
           invoicexpress_id?: number | null
           invoicexpress_type?: string | null
@@ -2276,6 +2278,7 @@ export type Database = {
           due_date?: string | null
           has_recurring?: boolean | null
           id?: string
+          invoice_pdf_url?: string | null
           invoice_reference?: string | null
           invoicexpress_id?: number | null
           invoicexpress_type?: string | null

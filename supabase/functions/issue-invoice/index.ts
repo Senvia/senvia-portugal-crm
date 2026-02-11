@@ -382,6 +382,7 @@ Deno.serve(async (req) => {
         invoicexpress_id: invoiceId,
         invoicexpress_type: 'invoices',
         invoice_reference: invoiceReference,
+        ...(pdfUrl ? { invoice_pdf_url: pdfUrl } : {}),
         ...(qrCodeUrl ? { qr_code_url: qrCodeUrl } : {}),
       })
       .eq('id', sale_id)

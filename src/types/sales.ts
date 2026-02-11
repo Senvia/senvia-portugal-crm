@@ -138,6 +138,7 @@ export interface Sale {
   invoicexpress_id: number | null;
   invoicexpress_type: string | null;
   qr_code_url?: string | null;
+  invoice_pdf_url?: string | null;
 }
 
 export interface SaleWithDetails extends Sale {
