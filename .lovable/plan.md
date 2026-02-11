@@ -1,75 +1,117 @@
 
 
-## Importar Notas de Credito do InvoiceXpress
+## Corrigir Notas de Credito: Tabela Dedicada para Guardar Todas as NCs
 
-### Problema
+### Problema Raiz
 
-As notas de credito foram emitidas diretamente no InvoiceXpress (fora do Senvia OS). O hook `useCreditNotes` consulta os campos `credit_note_id` e `credit_note_reference` na base de dados local, mas estes estao todos vazios (NULL). Logo, a tab Notas de Credito aparece vazia.
+A sincronizacao encontrou 1 nota de credito no InvoiceXpress mas nao conseguiu associa-la a nenhum registo local porque:
+
+1. Os `sale_payments` nao tem `invoicexpress_id` preenchido (esta sempre NULL) - so tem `invoice_reference` em texto
+2. A correspondencia por nome de cliente falhou (provavel diferenca de formatacao)
+3. O sistema actual so mostra NCs que estejam associadas a vendas/pagamentos. Se a associacao falhar, a NC desaparece completamente
 
 ### Solucao
 
-Criar uma edge function que consulta a API do InvoiceXpress para listar notas de credito, e um botao "Sincronizar" na tab que importa esses documentos para a base de dados local.
+Criar uma tabela dedicada `credit_notes` para guardar TODAS as notas de credito importadas do InvoiceXpress, independentemente de serem associadas ou nao a vendas locais. Assim, nunca se perde uma NC.
 
 ---
 
-### Passo 1: Nova Edge Function `sync-credit-notes`
+### Passo 1: Migracao - Criar tabela `credit_notes`
 
-Cria uma edge function que:
-1. Chama `GET /credit_notes.json?api_key=...&page=1&per_page=50` no InvoiceXpress
-2. Para cada nota de credito encontrada, tenta associar ao documento original (fatura) atraves do campo `related_document` ou `observations`
-3. Procura na tabela `sales` ou `sale_payments` o registo com o `invoicexpress_id` correspondente ao documento original
-4. Atualiza os campos `credit_note_id` e `credit_note_reference` nesses registos
-5. Opcionalmente descarrega o PDF e guarda no bucket `invoices`
+Nova tabela com os campos:
+- `id` (uuid, PK)
+- `organization_id` (referencia a organizations)
+- `invoicexpress_id` (integer, ID no InvoiceXpress)
+- `reference` (text, ex: "NC ATSIRE01NC/1")
+- `status` (text, ex: "final", "settled")
+- `client_name` (text)
+- `total` (numeric)
+- `date` (date)
+- `related_invoice_id` (integer, nullable - ID da fatura original no InvoiceXpress)
+- `sale_id` (uuid, nullable - associacao a venda local se encontrada)
+- `payment_id` (uuid, nullable - associacao a pagamento local se encontrado)
+- `pdf_path` (text, nullable - caminho no storage local)
+- `raw_data` (jsonb - dados completos do InvoiceXpress para referencia)
+- `created_at`, `updated_at`
 
-### Passo 2: Hook `useSyncCreditNotes`
+RLS: membros da organizacao podem ler; service role pode inserir/atualizar.
 
-Mutation hook que chama a edge function e invalida as queries relevantes apos sucesso.
+### Passo 2: Atualizar Edge Function `sync-credit-notes`
 
-### Passo 3: Atualizar `CreditNotesContent.tsx`
+Modificar para:
+1. Continuar a buscar NCs da API InvoiceXpress
+2. Guardar TODAS na tabela `credit_notes` (upsert por `invoicexpress_id` + `organization_id`)
+3. Tentar associar a vendas/pagamentos por:
+   - `invoicexpress_id` na sales
+   - `invoice_reference` na sale_payments (match por texto, ex: "FT #250820014" -> buscar se a NC referencia este documento)
+   - Nome de cliente como fallback
+4. Guardar PDF no storage
+5. Mesmo que nao associe, a NC fica guardada na tabela
 
-Adicionar um botao "Sincronizar com InvoiceXpress" no topo da tab Notas de Credito. Quando clicado, chama o hook de sync e recarrega a lista.
+### Passo 3: Atualizar Hook `useCreditNotes`
 
-### Passo 4: Melhorar o hook `useCreditNotes` (fallback)
+Mudar para consultar a nova tabela `credit_notes` directamente, em vez de derivar dados de sales/sale_payments. Muito mais simples e fiavel.
 
-Caso a sincronizacao nao consiga associar automaticamente todas as notas de credito, adicionar uma tabela auxiliar `credit_notes_cache` para guardar notas de credito importadas que nao foram associadas a vendas locais.
+### Passo 4: Atualizar `CreditNotesContent.tsx`
+
+- Mostrar todas as NCs da tabela (associadas ou nao)
+- Coluna "Estado" indicando se esta associada a uma venda ou nao
+- Download de PDF via signed URL do storage
+- Botao de sync mantido
 
 ---
 
 ### Seccao Tecnica
 
-**Ficheiros a criar:**
+**Migracao SQL:**
 
-| Ficheiro | Descricao |
-|---|---|
-| `supabase/functions/sync-credit-notes/index.ts` | Edge function que lista notas de credito da API InvoiceXpress e atualiza a BD local |
+```text
+CREATE TABLE public.credit_notes (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL REFERENCES organizations(id),
+  invoicexpress_id integer NOT NULL,
+  reference text,
+  status text,
+  client_name text,
+  total numeric DEFAULT 0,
+  date date,
+  related_invoice_id integer,
+  sale_id uuid REFERENCES sales(id),
+  payment_id uuid REFERENCES sale_payments(id),
+  pdf_path text,
+  raw_data jsonb,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now(),
+  UNIQUE(organization_id, invoicexpress_id)
+);
 
-**Ficheiros a modificar:**
+ALTER TABLE public.credit_notes ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Members can view credit notes"
+  ON public.credit_notes FOR SELECT
+  USING (is_org_member(auth.uid(), organization_id));
+```
+
+**Edge Function - Logica melhorada de matching:**
+
+```text
+Para cada NC do InvoiceXpress:
+1. Upsert na tabela credit_notes
+2. Se tem related_documents -> extrair ID do doc original
+3. Matching em cadeia:
+   a. sales.invoicexpress_id = related_doc_id
+   b. sale_payments WHERE invoice_reference ILIKE '%' || related_doc_sequence || '%'
+   c. sales por client_name (fuzzy)
+4. Se encontrar match -> atualizar sale_id ou payment_id na credit_notes
+5. Download PDF -> guardar em invoices/{org_id}/credit_note_{ix_id}.pdf
+```
+
+**Ficheiros a criar/modificar:**
 
 | Ficheiro | Alteracao |
 |---|---|
-| `src/components/finance/CreditNotesContent.tsx` | Adicionar botao "Sincronizar" e estado de loading |
-| `src/hooks/useCreditNotes.ts` | Adicionar mutation `useSyncCreditNotes` |
-
-**Fluxo da Edge Function:**
-
-```text
-1. GET /credit_notes.json (InvoiceXpress API)
-2. Para cada nota de credito:
-   a. Extrair o ID do documento original (fatura/fatura-recibo relacionada)
-   b. Procurar na tabela 'sales' por invoicexpress_id = documento_original_id
-   c. Se encontrar -> UPDATE sales SET credit_note_id = NC.id, credit_note_reference = NC.sequence_number
-   d. Se nao encontrar na sales -> procurar em sale_payments por invoicexpress_id
-   e. Se encontrar -> UPDATE sale_payments SET credit_note_id, credit_note_reference
-   f. Descarregar PDF da NC e guardar no bucket invoices
-3. Retornar contagem de NCs sincronizadas
-```
-
-**API InvoiceXpress - Endpoint usado:**
-
-```text
-GET https://{account}.app.invoicexpress.com/credit_notes.json?api_key={key}&page=1&per_page=50
-Response: { credit_notes: [{ id, status, sequence_number, date, client, total, ... }] }
-```
-
-**Migracao BD:** Nao necessaria - os campos ja existem. Apenas precisamos de preenche-los com dados do InvoiceXpress.
-
+| Migracao SQL | Criar tabela `credit_notes` com RLS |
+| `supabase/functions/sync-credit-notes/index.ts` | Upsert na nova tabela + matching melhorado via `invoice_reference` |
+| `src/hooks/useCreditNotes.ts` | Query directa a tabela `credit_notes` em vez de derivar de sales/payments |
+| `src/components/finance/CreditNotesContent.tsx` | Adaptar colunas e acoes para a nova estrutura |
+| `src/types/finance.ts` | Atualizar `CreditNoteItem` para refletir a nova tabela |
