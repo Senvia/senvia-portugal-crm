@@ -2,7 +2,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Download, FileText, RefreshCw, Loader2 } from "lucide-react";
-import { useCreditNotes } from "@/hooks/useCreditNotes";
+import { useCreditNotes, useSyncCreditNotes } from "@/hooks/useCreditNotes";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useState } from "react";
@@ -14,11 +14,17 @@ export function CreditNotesContent() {
   const { data: creditNotes, isLoading } = useCreditNotes();
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const syncInvoice = useSyncInvoice();
+  const syncCreditNotes = useSyncCreditNotes();
 
   const handleDownload = async (id: string, pdfUrl: string | null) => {
     if (!pdfUrl) return;
     setDownloadingId(id);
     try {
+      // Check if it's a storage path (not a full URL)
+      if (pdfUrl.startsWith('http')) {
+        window.open(pdfUrl, '_blank');
+        return;
+      }
       const { data, error } = await supabase.storage
         .from('invoices')
         .createSignedUrl(pdfUrl, 60);
@@ -49,11 +55,26 @@ export function CreditNotesContent() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-semibold">Notas de Crédito</h2>
-        <p className="text-sm text-muted-foreground">
-          Notas de crédito emitidas via InvoiceXpress
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold">Notas de Crédito</h2>
+          <p className="text-sm text-muted-foreground">
+            Notas de crédito emitidas via InvoiceXpress
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => syncCreditNotes.mutate()}
+          disabled={syncCreditNotes.isPending}
+        >
+          {syncCreditNotes.isPending ? (
+            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+          ) : (
+            <RefreshCw className="h-4 w-4 mr-2" />
+          )}
+          Sincronizar com InvoiceXpress
+        </Button>
       </div>
 
       <Card>
@@ -69,7 +90,7 @@ export function CreditNotesContent() {
               <FileText className="h-12 w-12 text-muted-foreground/50 mb-4" />
               <p className="text-muted-foreground">Nenhuma nota de crédito encontrada</p>
               <p className="text-xs text-muted-foreground mt-1">
-                As notas de crédito aparecem quando emitidas a partir de uma fatura
+                Clique em "Sincronizar com InvoiceXpress" para importar notas de crédito
               </p>
             </div>
           ) : (
