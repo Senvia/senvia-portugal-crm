@@ -26,7 +26,8 @@ import { useClients } from "@/hooks/useClients";
 import { useSendTemplateEmail } from "@/hooks/useSendTemplateEmail";
 import type { EmailTemplate } from "@/types/marketing";
 import type { CrmClient } from "@/types/clients";
-import { CLIENT_STATUS_LABELS, CLIENT_STATUS_STYLES } from "@/types/clients";
+import { CLIENT_STATUS_STYLES } from "@/types/clients";
+import { useClientLabels } from "@/hooks/useClientLabels";
 
 interface SendTemplateModalProps {
   template: EmailTemplate | null;
@@ -44,6 +45,7 @@ export function SendTemplateModal({ template, open, onOpenChange }: SendTemplate
   const [selectionMode, setSelectionMode] = useState<"individual" | "filter">("individual");
   
   const { data: clients = [], isLoading: loadingClients } = useClients();
+  const clientLabels = useClientLabels();
   const sendTemplate = useSendTemplateEmail();
 
   // Filter clients based on search and status
@@ -200,16 +202,16 @@ export function SendTemplateModal({ template, open, onOpenChange }: SendTemplate
 
               <TabsContent value="filter" className="flex-1 overflow-hidden flex flex-col mt-4 space-y-4">
                 <div className="space-y-2">
-                  <Label>Filtrar por estado</Label>
+                  <Label>Filtrar por {clientLabels.statusFieldLabel.toLowerCase()}</Label>
                   <Select value={statusFilter} onValueChange={setStatusFilter}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Selecionar estado" />
+                      <SelectValue placeholder={`Selecionar ${clientLabels.statusFieldLabel.toLowerCase()}`} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">Todos os estados</SelectItem>
-                      {Object.entries(CLIENT_STATUS_LABELS).map(([key, label]) => (
-                        <SelectItem key={key} value={key}>{label}</SelectItem>
-                      ))}
+                      <SelectItem value="all">Todos</SelectItem>
+                      <SelectItem value="active">{clientLabels.statusActive}</SelectItem>
+                      <SelectItem value="inactive">{clientLabels.statusInactive}</SelectItem>
+                      <SelectItem value="vip">{clientLabels.statusVip}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -252,7 +254,7 @@ export function SendTemplateModal({ template, open, onOpenChange }: SendTemplate
                               color: statusStyle?.text 
                             }}
                           >
-                            {CLIENT_STATUS_LABELS[client.status as keyof typeof CLIENT_STATUS_LABELS]}
+                            {{ active: clientLabels.statusActive, inactive: clientLabels.statusInactive, vip: clientLabels.statusVip }[client.status] || client.status}
                           </Badge>
                         </div>
                       );

@@ -118,9 +118,9 @@ export function ClientDetailsDrawer({
   }[client.status] || { bg: 'bg-muted', text: 'text-muted-foreground', border: 'border-muted' };
 
   const statusLabel = {
-    active: 'Ativo',
-    inactive: 'Inativo',
-    vip: 'VIP',
+    active: labels.statusActive,
+    inactive: labels.statusInactive,
+    vip: labels.statusVip,
   }[client.status] || client.status;
 
   const sourceLabel = {
