@@ -52,7 +52,7 @@ export function EditExpenseModal({ expense, open, onOpenChange }: EditExpenseMod
         id: expense.id,
         description: description.trim(),
         amount: numericAmount,
-        category_id: categoryId || null,
+        category_id: categoryId && categoryId !== 'none' ? categoryId : null,
         expense_date: format(date, 'yyyy-MM-dd'),
         is_recurring: isRecurring,
         notes: notes.trim() || null,
@@ -89,7 +89,7 @@ export function EditExpenseModal({ expense, open, onOpenChange }: EditExpenseMod
                   <SelectValue placeholder="Selecionar..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Sem categoria</SelectItem>
+                  <SelectItem value="none">Sem categoria</SelectItem>
                   {categories?.map((cat) => (
                     <SelectItem key={cat.id} value={cat.id}>
                       <div className="flex items-center gap-2">
