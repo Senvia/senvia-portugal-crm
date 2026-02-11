@@ -1728,6 +1728,8 @@ export type Database = {
           slug: string | null
           stock_quantity: number | null
           tags: string[] | null
+          tax_exemption_reason: string | null
+          tax_value: number | null
           track_inventory: boolean | null
           updated_at: string | null
           weight_grams: number | null
@@ -1752,6 +1754,8 @@ export type Database = {
           slug?: string | null
           stock_quantity?: number | null
           tags?: string[] | null
+          tax_exemption_reason?: string | null
+          tax_value?: number | null
           track_inventory?: boolean | null
           updated_at?: string | null
           weight_grams?: number | null
@@ -1776,6 +1780,8 @@ export type Database = {
           slug?: string | null
           stock_quantity?: number | null
           tags?: string[] | null
+          tax_exemption_reason?: string | null
+          tax_value?: number | null
           track_inventory?: boolean | null
           updated_at?: string | null
           weight_grams?: number | null

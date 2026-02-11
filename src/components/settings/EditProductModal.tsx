@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RefreshCw } from 'lucide-react';
 import { useUpdateProduct } from '@/hooks/useProducts';
 import type { Product } from '@/types/proposals';
@@ -15,6 +16,19 @@ interface EditProductModalProps {
   onOpenChange: (open: boolean) => void;
 }
 
+const TAX_OPTIONS = [
+  { value: 'default', label: 'Usar taxa da organização', taxValue: null },
+  { value: '23', label: 'IVA 23%', taxValue: 23 },
+  { value: '13', label: 'IVA 13% (Intermédia)', taxValue: 13 },
+  { value: '6', label: 'IVA 6% (Reduzida)', taxValue: 6 },
+  { value: '0', label: 'Isento (0%)', taxValue: 0 },
+];
+
+function getTaxOptionFromProduct(product: Product): string {
+  if (product.tax_value === null || product.tax_value === undefined) return 'default';
+  return String(product.tax_value);
+}
+
 export function EditProductModal({ product, open, onOpenChange }: EditProductModalProps) {
   const updateProduct = useUpdateProduct();
   const [name, setName] = useState(product.name);
@@ -22,6 +36,8 @@ export function EditProductModal({ product, open, onOpenChange }: EditProductMod
   const [price, setPrice] = useState(product.price?.toString() || '');
   const [isActive, setIsActive] = useState(product.is_active);
   const [isRecurring, setIsRecurring] = useState(product.is_recurring);
+  const [taxOption, setTaxOption] = useState(getTaxOptionFromProduct(product));
+  const [taxExemptionReason, setTaxExemptionReason] = useState(product.tax_exemption_reason || '');
 
   useEffect(() => {
     setName(product.name);
@@ -29,11 +45,14 @@ export function EditProductModal({ product, open, onOpenChange }: EditProductMod
     setPrice(product.price?.toString() || '');
     setIsActive(product.is_active);
     setIsRecurring(product.is_recurring);
+    setTaxOption(getTaxOptionFromProduct(product));
+    setTaxExemptionReason(product.tax_exemption_reason || '');
   }, [product]);
+
+  const selectedTax = TAX_OPTIONS.find(o => o.value === taxOption);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (!name.trim()) return;
 
     updateProduct.mutate({
@@ -43,6 +62,8 @@ export function EditProductModal({ product, open, onOpenChange }: EditProductMod
       price: price ? parseFloat(price) : null,
       is_active: isActive,
       is_recurring: isRecurring,
+      tax_value: selectedTax?.taxValue ?? null,
+      tax_exemption_reason: taxOption === '0' ? taxExemptionReason.trim() || null : null,
     }, {
       onSuccess: () => onOpenChange(false),
     });
@@ -85,6 +106,33 @@ export function EditProductModal({ product, open, onOpenChange }: EditProductMod
               placeholder="0.00"
             />
           </div>
+
+          {/* Tax Selection */}
+          <div className="space-y-2">
+            <Label>Taxa IVA</Label>
+            <Select value={taxOption} onValueChange={setTaxOption}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {TAX_OPTIONS.map(opt => (
+                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {taxOption === '0' && (
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-exemption" className="text-xs text-muted-foreground">Motivo de Isenção *</Label>
+                <Input
+                  id="edit-exemption"
+                  value={taxExemptionReason}
+                  onChange={(e) => setTaxExemptionReason(e.target.value)}
+                  placeholder="Ex: M10 - Artigo 53.º do CIVA"
+                />
+              </div>
+            )}
+          </div>
+
           <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">

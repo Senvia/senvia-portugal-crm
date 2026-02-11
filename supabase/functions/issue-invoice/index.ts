@@ -157,54 +157,84 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Tax configuration
+    // Tax configuration (org-level fallback)
     const taxConfig = (org as any)?.tax_config || { tax_name: 'IVA23', tax_value: 23, tax_exemption_reason: null }
-    const taxName = taxConfig.tax_value === 0 ? 'Isento' : (taxConfig.tax_name || 'IVA23')
-    const taxValue = taxConfig.tax_value ?? 23
+    const orgTaxValue = taxConfig.tax_value ?? 23
+    const orgTaxName = orgTaxValue === 0 ? 'Isento' : (taxConfig.tax_name || 'IVA23')
+    const orgTaxExemptionReason = taxConfig.tax_exemption_reason || null
 
-    if (taxValue === 0 && !taxConfig.tax_exemption_reason) {
-      return new Response(JSON.stringify({ 
-        error: 'Configure o motivo de isenção de IVA nas Definições → Integrações → InvoiceXpress antes de emitir faturas.' 
-      }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
+    // Build item with per-item tax support
+    const buildItem = (name: string, description: string, unitPrice: number, quantity: number, itemTaxValue?: number | null, itemTaxExemptionReason?: string | null) => {
+      // Use product-level tax if defined, otherwise org-level
+      const effectiveTaxValue = (itemTaxValue !== null && itemTaxValue !== undefined) ? itemTaxValue : orgTaxValue
+      const effectiveTaxName = effectiveTaxValue === 0 ? 'Isento' : `IVA${effectiveTaxValue}`
+      const effectiveExemptionReason = effectiveTaxValue === 0 
+        ? (itemTaxExemptionReason || orgTaxExemptionReason) 
+        : null
 
-    const buildItem = (name: string, description: string, unitPrice: number, quantity: number) => {
       const item: any = {
         name,
         description,
         unit_price: unitPrice,
         quantity,
-        tax: { name: taxName, value: taxValue },
+        tax: { name: effectiveTaxName, value: effectiveTaxValue },
       }
-      if (taxValue === 0 && taxConfig.tax_exemption_reason) {
-        item.exemption_reason = taxConfig.tax_exemption_reason
+      if (effectiveTaxValue === 0 && effectiveExemptionReason) {
+        item.exemption_reason = effectiveExemptionReason
       }
       return item
     }
 
     // Determine the invoice amount
     let items: any[] = []
+    // Track if any item is exempt for document-level tax_exemption
+    let hasExemptItem = false
+    let firstExemptionReason: string | null = null
 
     if (payment_id && payment_amount) {
-      // Per-payment invoice: use the specific payment amount
+      // Per-payment invoice: use the specific payment amount with org tax
       items.push(buildItem('Serviço', `Pagamento - Venda ${sale.code || sale_id}`, Number(payment_amount), 1))
+      if (orgTaxValue === 0) {
+        hasExemptItem = true
+        firstExemptionReason = orgTaxExemptionReason
+      }
     } else {
-      // Legacy: full sale invoice using sale_items
+      // Legacy: full sale invoice using sale_items with product JOIN for per-item tax
       const { data: saleItems } = await supabase
         .from('sale_items')
-        .select('*')
+        .select('*, product:products(tax_value, tax_exemption_reason)')
         .eq('sale_id', sale_id)
 
-      items = (saleItems || []).map((item: any) => 
-        buildItem(item.name, item.name, Number(item.unit_price), Number(item.quantity))
-      )
+      items = (saleItems || []).map((item: any) => {
+        const productTaxValue = item.product?.tax_value ?? null
+        const productTaxExemptionReason = item.product?.tax_exemption_reason ?? null
+        const effectiveTax = (productTaxValue !== null && productTaxValue !== undefined) ? productTaxValue : orgTaxValue
+        if (effectiveTax === 0) {
+          hasExemptItem = true
+          if (!firstExemptionReason) {
+            firstExemptionReason = productTaxExemptionReason || orgTaxExemptionReason
+          }
+        }
+        return buildItem(item.name, item.name, Number(item.unit_price), Number(item.quantity), productTaxValue, productTaxExemptionReason)
+      })
 
       if (items.length === 0) {
         items.push(buildItem('Serviço', `Venda ${sale.code || sale_id}`, Number(sale.total_value), 1))
+        if (orgTaxValue === 0) {
+          hasExemptItem = true
+          firstExemptionReason = orgTaxExemptionReason
+        }
       }
+    }
+
+    // Validate: if any exempt item exists, we need an exemption reason
+    if (hasExemptItem && !firstExemptionReason) {
+      return new Response(JSON.stringify({ 
+        error: 'Configure o motivo de isenção de IVA no produto ou nas Definições → Integrações → InvoiceXpress antes de emitir faturas.' 
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
     }
 
     // Date - must not be before the last invoice in the series (InvoiceXpress rule)
@@ -212,7 +242,6 @@ Deno.serve(async (req) => {
     const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
     let dateSource = invoice_date || todayStr
 
-    // Query InvoiceXpress for the last document in this series to avoid date conflicts
     const accountName = org.invoicexpress_account_name
     const apiKey = org.invoicexpress_api_key
     const baseUrl = `https://${accountName}.app.invoicexpress.com`
@@ -224,15 +253,12 @@ Deno.serve(async (req) => {
       })
       if (listRes.ok) {
         const listData = await listRes.json()
-        // InvoiceXpress returns array of docs, find the latest date
         const docs = listData[endpointName] || listData.invoices || listData.invoice_receipts || []
         if (Array.isArray(docs) && docs.length > 0) {
-          // Date format from InvoiceXpress is dd/mm/yyyy
           const lastDateStr = docs[0]?.date
           if (lastDateStr) {
             const [ld, lm, ly] = lastDateStr.split('/')
             const lastDateISO = `${ly}-${lm}-${ld}`
-            // If our date is before the last invoice date, use the last invoice date
             if (dateSource < lastDateISO) {
               console.warn(`Date ${dateSource} is before last invoice date ${lastDateISO}. Adjusting.`)
               dateSource = lastDateISO
@@ -255,8 +281,8 @@ Deno.serve(async (req) => {
       [docKey]: {
         date: formattedDate,
         due_date: formattedDate,
-        ...(taxValue === 0 && taxConfig.tax_exemption_reason
-          ? { tax_exemption: taxConfig.tax_exemption_reason }
+        ...(hasExemptItem && firstExemptionReason
+          ? { tax_exemption: firstExemptionReason }
           : {}),
         client: {
           name: clientName,
@@ -271,8 +297,6 @@ Deno.serve(async (req) => {
         items: items,
       },
     }
-
-    // accountName, apiKey, baseUrl already defined above
 
     // 1. Create draft
     const createRes = await fetch(`${baseUrl}/${endpointName}.json?api_key=${apiKey}`, {
@@ -336,13 +360,11 @@ Deno.serve(async (req) => {
 
     // 3. Save reference
     if (payment_id) {
-      // Per-payment: save on the payment record
       await supabase
         .from('sale_payments')
         .update({ invoice_reference: invoiceReference })
         .eq('id', payment_id)
     } else {
-      // Legacy full-sale: save on the sale record
       await supabase
         .from('sales')
         .update({

@@ -13,6 +13,8 @@ export interface Product {
   price: number | null;
   is_active: boolean;
   is_recurring: boolean;
+  tax_value?: number | null;
+  tax_exemption_reason?: string | null;
   created_at: string;
   updated_at: string;
 }
