@@ -20,11 +20,13 @@ import { useIssueInvoice } from "@/hooks/useIssueInvoice";
 import { useIssueInvoiceReceipt } from "@/hooks/useIssueInvoiceReceipt";
 import { useGenerateReceipt } from "@/hooks/useGenerateReceipt";
 import { useCancelInvoice } from "@/hooks/useCancelInvoice";
+import { useSaleItems } from "@/hooks/useSaleItems";
 import { formatCurrency } from "@/lib/format";
 import { AddPaymentModal } from "./AddPaymentModal";
 import { ScheduleRemainingModal } from "./ScheduleRemainingModal";
 import { PaymentTypeSelector } from "./PaymentTypeSelector";
 import { InvoiceDraftModal } from "./InvoiceDraftModal";
+import type { DraftSaleItem } from "./InvoiceDraftModal";
 import { CancelInvoiceDialog } from "./CancelInvoiceDialog";
 import type { SalePayment } from "@/types/sales";
 import { 
@@ -73,7 +75,16 @@ export function SalePaymentsList({
   taxConfig,
 }: SalePaymentsListProps) {
   const { data: payments = [], isLoading } = useSalePayments(saleId);
+  const { data: saleItemsData = [] } = useSaleItems(saleId);
   const deletePayment = useDeleteSalePayment();
+
+  // Build draft items for InvoiceDraftModal
+  const draftSaleItems: DraftSaleItem[] = saleItemsData.map((item: any) => ({
+    name: item.name,
+    quantity: Number(item.quantity),
+    unit_price: Number(item.unit_price),
+    tax_value: item.product?.tax_value ?? null,
+  }));
   const issueInvoice = useIssueInvoice();
   const issueInvoiceReceipt = useIssueInvoiceReceipt();
   const generateReceipt = useGenerateReceipt();
@@ -556,6 +567,7 @@ export function SalePaymentsList({
         saleTotal={saleTotal}
         remaining={summary.remaining}
         payment={editingPayment}
+        hasInvoiceXpress={hasInvoiceXpress}
       />
 
       {/* Schedule Remaining Modal */}
@@ -607,6 +619,8 @@ export function SalePaymentsList({
         amount={saleTotal}
         paymentDate={new Date().toISOString()}
         taxConfig={taxConfig}
+        saleItems={draftSaleItems}
+        saleTotal={saleTotal}
       />
 
       {/* Invoice Draft Modal - Receipt mode (RC - requires existing FT) */}
@@ -630,6 +644,8 @@ export function SalePaymentsList({
         paymentDate={draftPayment?.payment_date || new Date().toISOString()}
         paymentMethod={draftPayment?.payment_method}
         taxConfig={taxConfig}
+        saleItems={draftSaleItems}
+        saleTotal={saleTotal}
       />
 
       {/* Invoice Draft Modal - Invoice Receipt mode (FR - standalone document) */}
@@ -653,6 +669,8 @@ export function SalePaymentsList({
         paymentDate={draftPayment?.payment_date || new Date().toISOString()}
         paymentMethod={draftPayment?.payment_method}
         taxConfig={taxConfig}
+        saleItems={draftSaleItems}
+        saleTotal={saleTotal}
       />
 
       {/* Cancel Invoice/Receipt Dialog */}

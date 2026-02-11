@@ -12,7 +12,7 @@ export function useSaleItems(saleId: string | undefined) {
         .from("sale_items")
         .select(`
           *,
-          product:products(name, price, is_recurring)
+          product:products(name, price, is_recurring, tax_value, tax_exemption_reason)
         `)
         .eq("sale_id", saleId)
         .order("created_at", { ascending: true });
