@@ -1,24 +1,40 @@
 
 
-## Alterar Botoes de Faturacao para "Ver Rascunho"
+## Adicionar Acoes aos Pagamentos no Financeiro
 
-### Problema
+### Contexto
 
-Os botoes de faturacao dizem "Emitir Fatura" e "Fatura-Recibo (FR)", o que da a impressao de que a emissao e imediata. Na realidade, esses botoes ja abrem o modal de rascunho onde o utilizador revisa e confirma. O texto dos botoes nao reflete esse comportamento.
+A pagina Financeiro > Pagamentos (`src/pages/finance/Payments.tsx`) e atualmente apenas uma tabela de leitura. Quando o utilizador filtra por "Pendentes", ve os pagamentos agendados mas nao consegue fazer nada -- tem de voltar a venda para marcar como pago ou emitir documentos. Isto quebra o fluxo de trabalho.
 
-### Alteracao
+### O que muda
 
-**Ficheiro:** `src/components/sales/SalePaymentsList.tsx`
+Adicionar uma coluna "Acoes" na tabela de pagamentos com:
 
-1. **Botao global de Fatura (linha ~306):**
-   - De: `Emitir Fatura (valor)`
-   - Para: `Ver Rascunho de Fatura`
-   - Icone: trocar `FileText` por `Eye`
+1. **Botao "Marcar como Pago"** -- visivel apenas em pagamentos com estado `pending`
+   - Ao clicar, abre um dialogo de confirmacao simples (para evitar cliques acidentais)
+   - Atualiza o estado do pagamento para `paid` e a data para hoje
+   - O trigger existente na base de dados (`trg_sync_sale_payment_status`) sincroniza automaticamente o estado da venda
 
-2. **Botao por pagamento (linha ~395):**
-   - De: `Gerar Recibo (RC)` / `Fatura-Recibo (FR)`
-   - Para: `Ver Rascunho de Recibo` / `Ver Rascunho de FR`
-   - Icone: trocar `Receipt` por `Eye`
+2. **Botao "Ver Rascunho"** (futuro, opcional) -- para emitir documentos fiscais diretamente do financeiro. Pode ser adicionado num segundo passo.
 
-Nenhuma logica muda -- os botoes ja abrem o `InvoiceDraftModal` onde o utilizador revisa os dados e confirma a emissao. Apenas os labels ficam mais claros.
+### Detalhes tecnicos
 
+**Ficheiro:** `src/pages/finance/Payments.tsx`
+
+- Adicionar uma nova coluna "Acoes" ao `TableHeader` e `TableBody`
+- Para pagamentos `pending`, mostrar um botao com icone `CheckCircle` e texto "Marcar Pago"
+- Ao clicar, abrir um `AlertDialog` de confirmacao com os dados do pagamento (cliente, valor, data)
+- Utilizar o hook `useUpdateSalePayment` de `src/hooks/useSalePayments.ts` para atualizar o estado
+- Apos sucesso, a query `all-payments` e `sales` sao invalidadas automaticamente pelo hook
+
+**Fluxo do utilizador:**
+1. Vai a Financeiro > Pagamentos (filtro "Pendentes" ja aplicado)
+2. Ve a lista de pagamentos agendados
+3. Clica em "Marcar Pago" no pagamento desejado
+4. Confirma no dialogo
+5. O pagamento passa a "Pago" e o estado da venda atualiza-se automaticamente
+
+### Notas
+- Pagamentos ja pagos nao mostram nenhum botao de acao (sao imutaveis, conforme as regras existentes)
+- Em mobile, a coluna de acoes fica sempre visivel para facilitar o uso
+- Nao e necessaria nenhuma alteracao na base de dados -- o hook e o trigger ja existem
