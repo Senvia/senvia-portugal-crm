@@ -21,7 +21,7 @@ interface InvoiceDraftModalProps {
   onOpenChange: (open: boolean) => void;
   onConfirm: () => void;
   isLoading: boolean;
-  mode: "invoice" | "receipt";
+  mode: "invoice" | "receipt" | "invoice_receipt";
   clientName?: string | null;
   clientNif?: string | null;
   amount: number;
@@ -35,7 +35,8 @@ interface InvoiceDraftModalProps {
 
 const MODE_LABELS = {
   invoice: { title: "Fatura", badge: "Fatura (FT)", button: "Emitir Fatura" },
-  receipt: { title: "Recibo", badge: "Recibo", button: "Gerar Recibo" },
+  receipt: { title: "Recibo", badge: "Recibo (RC)", button: "Gerar Recibo" },
+  invoice_receipt: { title: "Fatura-Recibo", badge: "Fatura-Recibo (FR)", button: "Emitir Fatura-Recibo" },
 };
 
 export function InvoiceDraftModal({
@@ -69,7 +70,7 @@ export function InvoiceDraftModal({
             Rascunho de {labels.title}
           </DialogTitle>
           <DialogDescription>
-            Reveja os dados antes de {mode === "invoice" ? "emitir o documento" : "gerar o recibo"}.
+            Reveja os dados antes de {mode === "invoice" ? "emitir a fatura" : mode === "invoice_receipt" ? "emitir a fatura-recibo" : "gerar o recibo"}.
           </DialogDescription>
         </DialogHeader>
 
@@ -109,10 +110,10 @@ export function InvoiceDraftModal({
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <CreditCard className="h-3.5 w-3.5" />
-              <span>{mode === "invoice" ? "Detalhes da Fatura" : "Detalhes do Pagamento"}</span>
+              <span>{mode === "invoice" ? "Detalhes da Fatura" : mode === "invoice_receipt" ? "Detalhes da Fatura-Recibo" : "Detalhes do Pagamento"}</span>
             </div>
             <div className="p-3 rounded-lg bg-muted/30 space-y-2">
-              {mode === "receipt" && (
+              {(mode === "receipt" || mode === "invoice_receipt") && (
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Data do pagamento</span>
                   <span>{format(new Date(paymentDate), "d MMM yyyy", { locale: pt })}</span>
@@ -121,6 +122,12 @@ export function InvoiceDraftModal({
               {mode === "invoice" && (
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Valor total da venda</span>
+                  <span className="font-medium">{formatCurrency(amount)}</span>
+                </div>
+              )}
+              {mode === "invoice_receipt" && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Valor do pagamento</span>
                   <span className="font-medium">{formatCurrency(amount)}</span>
                 </div>
               )}
@@ -173,7 +180,7 @@ export function InvoiceDraftModal({
             {isLoading ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                {mode === "invoice" ? "A emitir..." : "A gerar..."}
+                {mode === "invoice" ? "A emitir..." : mode === "invoice_receipt" ? "A emitir..." : "A gerar..."}
               </>
             ) : (
               <>

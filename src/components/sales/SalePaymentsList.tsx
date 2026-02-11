@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useSalePayments, useDeleteSalePayment, calculatePaymentSummary } from "@/hooks/useSalePayments";
 import { useIssueInvoice } from "@/hooks/useIssueInvoice";
+import { useIssueInvoiceReceipt } from "@/hooks/useIssueInvoiceReceipt";
 import { useGenerateReceipt } from "@/hooks/useGenerateReceipt";
 import { useCancelInvoice } from "@/hooks/useCancelInvoice";
 import { formatCurrency } from "@/lib/format";
@@ -74,6 +75,7 @@ export function SalePaymentsList({
   const { data: payments = [], isLoading } = useSalePayments(saleId);
   const deletePayment = useDeleteSalePayment();
   const issueInvoice = useIssueInvoice();
+  const issueInvoiceReceipt = useIssueInvoiceReceipt();
   const generateReceipt = useGenerateReceipt();
   const cancelInvoice = useCancelInvoice();
   
@@ -84,8 +86,8 @@ export function SalePaymentsList({
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [cancellingPayment, setCancellingPayment] = useState<SalePayment | null>(null);
   
-  // Draft modal state - supports both invoice (sale-level) and receipt (payment-level)
-  const [draftMode, setDraftMode] = useState<"invoice" | "receipt" | null>(null);
+  // Draft modal state - supports invoice (FT), receipt (RC), and invoice_receipt (FR)
+  const [draftMode, setDraftMode] = useState<"invoice" | "receipt" | "invoice_receipt" | null>(null);
   const [draftPayment, setDraftPayment] = useState<SalePayment | null>(null);
   
   // Email modal state
@@ -367,7 +369,7 @@ export function SalePaymentsList({
                       </Button>
                     </>
                   )}
-                  {/* Generate Receipt/FR button: paid + InvoiceXpress active + no receipt yet */}
+                  {/* Generate Receipt (RC) or Invoice-Receipt (FR) button */}
                   {payment.status === 'paid' && hasInvoiceXpress && !payment.invoice_reference && !readonly && (
                     <Button
                       variant="outline"
@@ -375,11 +377,11 @@ export function SalePaymentsList({
                       className="h-8 text-xs"
                       onClick={() => {
                         setDraftPayment(payment);
-                        setDraftMode("receipt");
+                        setDraftMode(hasInvoice ? "receipt" : "invoice_receipt");
                       }}
                     >
                       <Receipt className="h-3 w-3 mr-1" />
-                      {hasInvoice ? "Gerar Recibo" : "Emitir Fatura-Recibo"}
+                      {hasInvoice ? "Gerar Recibo (RC)" : "Fatura-Recibo (FR)"}
                     </Button>
                   )}
                   {payment.qr_code_url && (
@@ -607,7 +609,7 @@ export function SalePaymentsList({
         taxConfig={taxConfig}
       />
 
-      {/* Invoice Draft Modal - Receipt mode (payment amount) */}
+      {/* Invoice Draft Modal - Receipt mode (RC - requires existing FT) */}
       <InvoiceDraftModal
         open={draftMode === "receipt" && !!draftPayment}
         onOpenChange={(open) => { 
@@ -622,6 +624,29 @@ export function SalePaymentsList({
         }}
         isLoading={generateReceipt.isPending}
         mode="receipt"
+        clientName={clientName}
+        clientNif={clientNif}
+        amount={draftPayment ? Number(draftPayment.amount) : 0}
+        paymentDate={draftPayment?.payment_date || new Date().toISOString()}
+        paymentMethod={draftPayment?.payment_method}
+        taxConfig={taxConfig}
+      />
+
+      {/* Invoice Draft Modal - Invoice Receipt mode (FR - standalone document) */}
+      <InvoiceDraftModal
+        open={draftMode === "invoice_receipt" && !!draftPayment}
+        onOpenChange={(open) => { 
+          if (!open) { setDraftMode(null); setDraftPayment(null); }
+        }}
+        onConfirm={() => {
+          if (!draftPayment) return;
+          issueInvoiceReceipt.mutate(
+            { saleId, paymentId: draftPayment.id, organizationId },
+            { onSuccess: () => { setDraftMode(null); setDraftPayment(null); } }
+          );
+        }}
+        isLoading={issueInvoiceReceipt.isPending}
+        mode="invoice_receipt"
         clientName={clientName}
         clientNif={clientNif}
         amount={draftPayment ? Number(draftPayment.amount) : 0}
