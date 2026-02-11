@@ -51,8 +51,27 @@ export default function FinancePayments() {
   const [draftPayment, setDraftPayment] = useState<PaymentWithSale | null>(null);
   const [draftMode, setDraftMode] = useState<"receipt" | "invoice_receipt">("receipt");
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | "">("");
-  const [sortField, setSortField] = useState<SortField>('payment_date');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const SORT_KEY = 'finance-payments-sort-v1';
+  const VALID_FIELDS: SortField[] = ['payment_date', 'sale_code', 'client_name', 'amount', 'payment_method', 'status'];
+
+  const [sortField, setSortField] = useState<SortField>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(SORT_KEY) || '{}');
+      if (VALID_FIELDS.includes(saved.field)) return saved.field;
+    } catch {}
+    return 'payment_date';
+  });
+  const [sortDirection, setSortDirection] = useState<SortDirection>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(SORT_KEY) || '{}');
+      if (saved.direction === 'asc' || saved.direction === 'desc') return saved.direction;
+    } catch {}
+    return 'desc';
+  });
+
+  useEffect(() => {
+    try { localStorage.setItem(SORT_KEY, JSON.stringify({ field: sortField, direction: sortDirection })); } catch {}
+  }, [sortField, sortDirection]);
 
   const hasInvoiceXpress = !!(organization?.invoicexpress_api_key && organization?.invoicexpress_account_name);
   const taxConfig = organization?.tax_config as { tax_value?: number; tax_exemption_reason?: string } | null;
@@ -98,7 +117,7 @@ export default function FinancePayments() {
       setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
     } else {
       setSortField(field);
-      setSortDirection('asc');
+      setSortDirection(field === 'payment_date' ? 'desc' : 'asc');
     }
   };
 

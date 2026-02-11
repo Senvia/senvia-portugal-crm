@@ -53,14 +53,33 @@ export function InvoicesContent() {
   const [searchTerm, setSearchTerm] = useState("");
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
-  const [sortField, setSortField] = useState<SortField>('date');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const SORT_KEY = 'finance-invoices-sort-v1';
+  const VALID_FIELDS: SortField[] = ['reference', 'document_type', 'date', 'client_name', 'status', 'total'];
+
+  const [sortField, setSortField] = useState<SortField>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(SORT_KEY) || '{}');
+      if (VALID_FIELDS.includes(saved.field)) return saved.field;
+    } catch {}
+    return 'date';
+  });
+  const [sortDirection, setSortDirection] = useState<SortDirection>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(SORT_KEY) || '{}');
+      if (saved.direction === 'asc' || saved.direction === 'desc') return saved.direction;
+    } catch {}
+    return 'desc';
+  });
   const [selectedInvoice, setSelectedInvoice] = useState<{
     invoicexpress_id: number;
     document_type: "invoice" | "invoice_receipt" | "receipt" | "credit_note";
     sale_id?: string;
     payment_id?: string;
   } | null>(null);
+
+  useEffect(() => {
+    try { localStorage.setItem(SORT_KEY, JSON.stringify({ field: sortField, direction: sortDirection })); } catch {}
+  }, [sortField, sortDirection]);
 
   const isLoading = loadingInvoices || loadingCreditNotes;
 
