@@ -1,62 +1,135 @@
 
 
-## Renomear "Estado" para "Tipologia" com valores Bronze/Prata/Ouro (apenas Telecom)
+## Sistema de Perfis Personalizados com Permissoes por Modulo
 
-### O que muda
+### Resumo
 
-No nicho **telecom**, o campo "Estado" do cliente passa a chamar-se **"Tipologia"** e os valores mudam de Ativo/Inativo/VIP para **Bronze/Prata/Ouro**. Todos os outros nichos continuam iguais.
+Criar um sistema onde o administrador pode definir perfis customizados (ex: "Diretor Comercial", "CE", ou qualquer outro nome) e, para cada perfil, configurar quais modulos estao acessiveis e que nivel de acesso tem em cada um (ver, editar, gerir).
 
-Os valores internos na base de dados nao mudam (`active`, `inactive`, `vip`) -- apenas as etiquetas visuais sao diferentes no telecom.
+### Como funciona hoje
 
-### Mapeamento telecom
+- Existem 4 roles fixas no enum da BD: `super_admin`, `admin`, `viewer`, `salesperson`
+- As permissoes estao hardcoded no hook `usePermissions.ts`
+- A `TeamTab` so permite criar utilizadores com 3 perfis fixos
 
-| Valor BD | Label generico | Label telecom |
-|----------|---------------|---------------|
-| active   | Ativo         | Bronze        |
-| inactive | Inativo       | Prata         |
-| vip      | VIP           | Ouro          |
+### Como vai funcionar
 
-O campo passa de "Estado" para "Tipologia".
+Os roles internos da BD continuam iguais (admin/viewer/salesperson) -- sao os "perfis base" de permissao. Mas por cima disto, criamos **perfis customizados** que mapeiam para um role base + permissoes granulares por modulo.
 
-### Ficheiros a alterar
+```text
++---------------------------+
+|    Perfil Customizado     |
+|  (nome: "Dir. Comercial") |
+|  (role base: admin)       |
+|  (modulos: {...})         |
++---------------------------+
+         |
+         v
++---------------------------+
+|    Role BD (app_role)     |
+|  admin / viewer / sales   |
++---------------------------+
+```
 
-**1. `src/lib/niche-labels.ts`**
-- Adicionar campos ao `NicheLabels`: `statusFieldLabel`, `statusActive`, `statusInactive`, `statusVip`
-- Valores genericos: `statusFieldLabel: 'Estado'`, `statusActive: 'Ativo'`, `statusInactive: 'Inativo'`, `statusVip: 'VIP'`
-- Valores telecom: `statusFieldLabel: 'Tipologia'`, `statusActive: 'Bronze'`, `statusInactive: 'Prata'`, `statusVip: 'Ouro'`
-- Atualizar os labels dos stats tambem no telecom: `vip: 'Clientes Ouro'`, `active: 'Clientes Bronze'`, `inactive: 'Clientes Prata'`
+### Estrutura de dados
 
-**2. `src/components/clients/CreateClientModal.tsx`**
-- Importar e usar `useClientLabels` para obter os labels
-- Trocar `<Label>Estado</Label>` por `<Label>{labels.statusFieldLabel}</Label>`
-- Trocar `CLIENT_STATUS_LABELS` no Select por mapeamento dinamico usando os labels do niche
+**Nova tabela: `organization_profiles`**
 
-**3. `src/components/clients/EditClientModal.tsx`**
-- Mesma alteracao que o CreateClientModal
+| Coluna | Tipo | Descricao |
+|--------|------|-----------|
+| id | uuid | PK |
+| organization_id | uuid | FK organizations |
+| name | text | Nome do perfil (ex: "Diretor Comercial") |
+| base_role | app_role | Role base (admin, viewer, salesperson) |
+| module_permissions | jsonb | Permissoes por modulo |
+| is_default | boolean | Se e um perfil padrao do sistema |
+| created_at | timestamp | Data de criacao |
 
-**4. `src/components/clients/ClientsTable.tsx`**
-- Usar `useClientLabels` para renderizar o badge com o label correto do niche em vez de `CLIENT_STATUS_LABELS`
+**Formato do `module_permissions`:**
+```text
+{
+  "leads": { "view": true, "edit": true, "delete": false },
+  "clients": { "view": true, "edit": true, "delete": false },
+  "proposals": { "view": true, "edit": false, "delete": false },
+  "sales": { "view": true, "edit": false, "delete": false },
+  "finance": { "view": true, "edit": false, "delete": false },
+  "calendar": { "view": true, "edit": true, "delete": false },
+  "marketing": { "view": false, "edit": false, "delete": false },
+  "ecommerce": { "view": false, "edit": false, "delete": false },
+  "settings": { "view": false, "edit": false, "delete": false }
+}
+```
 
-**5. `src/components/clients/ClientDetailsModal.tsx`**
-- Usar `useClientLabels` para o badge de status
+**Alteracao na tabela `organization_members`:**
+- Adicionar coluna `profile_id uuid REFERENCES organization_profiles(id)` (nullable, para retrocompatibilidade)
 
-**6. `src/components/clients/ClientFilters.tsx`**
-- Ja usa `labels.active`, `labels.vip`, `labels.inactive` -- estes serao automaticamente atualizados quando o niche-labels mudar
+### Perfis padrao criados automaticamente
 
-**7. `src/pages/Clients.tsx`**
-- Os cards de stats ja usam `labels.vip`, `labels.inactive` -- serao atualizados automaticamente
+Quando a organizacao e criada (ou na migracao), criar 3 perfis padrao:
 
-**8. `src/components/marketing/SendTemplateModal.tsx`**
-- Usa `CLIENT_STATUS_LABELS` para filtrar clientes por estado -- substituir pelo hook
+| Nome | Role Base | Descricao |
+|------|-----------|-----------|
+| Administrador | admin | Acesso total a todos os modulos |
+| Visualizador | viewer | Apenas visualizacao em todos os modulos |
+| Vendedor | salesperson | Acesso aos leads atribuidos, clientes, propostas e vendas |
 
-**9. `src/lib/export.ts`**
-- O export de clientes usa labels hardcoded -- aceitar labels como parametro ou manter generico (menor prioridade)
+### Ficheiros a criar/alterar
 
-### Estilos visuais (telecom)
+**1. Migracao SQL**
+- Criar tabela `organization_profiles` com RLS
+- Adicionar coluna `profile_id` a `organization_members`
+- Inserir perfis padrao para organizacoes existentes
+- Politicas RLS: membros da org podem ler, admins podem CRUD
 
-Os estilos dos badges tambem mudam para refletir a hierarquia metalica:
-- **Bronze**: tom castanho/cobre (amber)
-- **Prata**: tom cinzento/neutro (muted)
-- **Ouro**: tom dourado (warning/yellow)
+**2. Novo hook: `src/hooks/useOrganizationProfiles.ts`**
+- CRUD de perfis customizados
+- Query por organization_id
+- Validacao: nao permitir eliminar perfis em uso
 
-Isto sera feito criando um `getClientStatusStyles` que retorna estilos baseados no niche, sem alterar os valores da BD.
+**3. Nova secao em Settings: `src/components/settings/ProfilesTab.tsx`**
+- Lista de perfis com nome, role base e descricao
+- Botao "Criar Perfil"
+- Modal de criacao/edicao com:
+  - Nome do perfil (texto livre)
+  - Role base (select: Admin, Visualizador, Vendedor)
+  - Grelha de permissoes por modulo (checkboxes: Ver, Editar, Eliminar)
+- Botao eliminar (se nao estiver em uso)
+
+**4. Alterar `src/components/settings/TeamTab.tsx`**
+- Na criacao de membro, em vez de escolher admin/viewer/salesperson, escolher um perfil customizado da lista
+- Na alteracao de role, tambem usar os perfis
+
+**5. Alterar `src/hooks/usePermissions.ts`**
+- Ler o `profile_id` do membro atual
+- Carregar as `module_permissions` do perfil
+- Retornar permissoes granulares por modulo em vez de apenas isAdmin/isViewer
+
+**6. Alterar `src/components/layout/AppSidebar.tsx` e `MobileBottomNav.tsx`**
+- Filtrar menu nao so por modulos ativos da org, mas tambem pelas permissoes do perfil do utilizador (se `view: false`, nao mostra o item)
+
+**7. Alterar edge functions**
+- `create-team-member/index.ts`: aceitar `profile_id` em vez de `role` direto, extrair o `base_role` do perfil
+- `manage-team-member/index.ts`: aceitar `profile_id` na acao `change_role`
+
+**8. Alterar `src/pages/Settings.tsx`**
+- Adicionar tab "Perfis" ao menu de configuracoes
+
+### Fluxo do administrador
+
+1. Vai a Configuracoes > Perfis
+2. Ve os perfis padrao (Administrador, Visualizador, Vendedor)
+3. Clica "Criar Perfil"
+4. Preenche nome: "Diretor Comercial"
+5. Escolhe role base: Administrador
+6. Ativa/desativa modulos e niveis de acesso
+7. Guarda
+8. Vai a Equipa > Adicionar Acesso
+9. Escolhe o perfil "Diretor Comercial" da lista
+10. O membro herda as permissoes configuradas
+
+### Seguranca
+
+- RLS na tabela `organization_profiles` garante isolamento entre organizacoes
+- O `base_role` continua a ser escrito na `user_roles` para manter compatibilidade com todas as politicas RLS existentes
+- As permissoes granulares sao verificadas no frontend (controlo de UI) e podem ser expandidas para o backend futuramente
+
