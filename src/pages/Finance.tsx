@@ -107,10 +107,10 @@ export default function Finance() {
                   {isLoading ? (
                     <Skeleton className="h-8 w-24" />
                   ) : (
-                    <div className="text-2xl font-bold text-emerald-600">{formatCurrency(stats.receivedThisMonth)}</div>
+                    <div className="text-2xl font-bold text-emerald-600">{formatCurrency(stats.totalReceived)}</div>
                   )}
                   <p className="text-xs text-muted-foreground">
-                    {hasFilters ? "No período" : "Este mês"}
+                    {hasFilters ? "No período" : "Total recebido"}
                   </p>
                 </CardContent>
               </Card>
@@ -155,7 +155,7 @@ export default function Finance() {
                     <div className="text-2xl font-bold text-destructive">{formatCurrency(stats.totalExpenses)}</div>
                   )}
                   <p className="text-xs text-muted-foreground">
-                    {hasFilters ? "No período" : "Este mês"}
+                    {hasFilters ? "No período" : "Total"}
                   </p>
                 </CardContent>
               </Card>
@@ -173,7 +173,7 @@ export default function Finance() {
                       {formatCurrency(stats.balance)}
                     </div>
                   )}
-                  <p className="text-xs text-muted-foreground">Receitas - Despesas</p>
+                  <p className="text-xs text-muted-foreground">Recebido - Despesas</p>
                 </CardContent>
               </Card>
 
