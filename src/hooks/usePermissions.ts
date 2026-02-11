@@ -17,7 +17,7 @@ export function usePermissions() {
   const isAdmin = roles.includes('admin') || isSuperAdmin;
   const isViewer = roles.includes('viewer') && !isAdmin;
 
-  const { data: modulePermissions } = useQuery({
+  const { data: profileData } = useQuery({
     queryKey: ['user-profile-permissions', user?.id, organization?.id],
     queryFn: async () => {
       if (!user?.id || !organization?.id) return null;
@@ -33,15 +33,23 @@ export function usePermissions() {
 
       const { data: profile } = await supabase
         .from('organization_profiles')
-        .select('module_permissions')
+        .select('module_permissions, data_scope')
         .eq('id', member.profile_id)
         .single();
       
-      if (!profile?.module_permissions) return null;
-      return convertLegacyToGranular(profile.module_permissions);
+      if (!profile) return null;
+      return {
+        permissions: profile.module_permissions ? convertLegacyToGranular(profile.module_permissions) : null,
+        dataScope: (profile as any).data_scope as string | null,
+      };
     },
     enabled: !!user?.id && !!organization?.id && !isSuperAdmin,
   });
+
+  const modulePermissions = profileData?.permissions ?? null;
+  const dataScope: 'own' | 'team' | 'all' = isSuperAdmin || isAdmin
+    ? 'all'
+    : (profileData?.dataScope as 'own' | 'team' | 'all') || 'own';
 
   const effectivePermissions: GranularPermissions = isSuperAdmin
     ? FULL_PERMISSIONS
@@ -82,6 +90,7 @@ export function usePermissions() {
     isAdmin,
     isViewer,
     isSuperAdmin,
+    dataScope,
   };
 }
 

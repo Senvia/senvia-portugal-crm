@@ -123,12 +123,27 @@ export type LegacyModulePermissions = Record<string, LegacyModulePermission>;
 // Union: can be either format from DB
 export type ModulePermissions = GranularPermissions;
 
+export type DataScope = 'own' | 'team' | 'all';
+
+export const DATA_SCOPE_LABELS: Record<DataScope, string> = {
+  own: 'Próprio',
+  team: 'Equipa',
+  all: 'Tudo',
+};
+
+export const DATA_SCOPE_DESCRIPTIONS: Record<DataScope, string> = {
+  own: 'Vê apenas os seus dados',
+  team: 'Vê os seus + dados da equipa',
+  all: 'Vê todos os dados da organização',
+};
+
 export interface OrganizationProfile {
   id: string;
   organization_id: string;
   name: string;
   base_role: 'admin' | 'viewer' | 'salesperson';
   module_permissions: GranularPermissions;
+  data_scope: DataScope;
   is_default: boolean;
   created_at: string;
 }
@@ -265,7 +280,7 @@ export function useOrganizationProfiles() {
   });
 
   const createProfile = useMutation({
-    mutationFn: async (profile: { name: string; base_role: string; module_permissions: GranularPermissions }) => {
+    mutationFn: async (profile: { name: string; base_role: string; module_permissions: GranularPermissions; data_scope?: DataScope }) => {
       if (!organizationId) throw new Error('No organization');
       const { error } = await supabase
         .from('organization_profiles')
@@ -274,6 +289,7 @@ export function useOrganizationProfiles() {
           name: profile.name,
           base_role: profile.base_role,
           module_permissions: profile.module_permissions as any,
+          data_scope: profile.data_scope || 'own',
         }] as any);
       if (error) throw error;
     },
@@ -285,11 +301,12 @@ export function useOrganizationProfiles() {
   });
 
   const updateProfile = useMutation({
-    mutationFn: async ({ id, ...updates }: { id: string; name?: string; base_role?: string; module_permissions?: GranularPermissions }) => {
+    mutationFn: async ({ id, ...updates }: { id: string; name?: string; base_role?: string; module_permissions?: GranularPermissions; data_scope?: DataScope }) => {
       const updateData: any = {};
       if (updates.name !== undefined) updateData.name = updates.name;
       if (updates.base_role !== undefined) updateData.base_role = updates.base_role;
       if (updates.module_permissions !== undefined) updateData.module_permissions = updates.module_permissions;
+      if (updates.data_scope !== undefined) updateData.data_scope = updates.data_scope;
       
       const { error } = await supabase
         .from('organization_profiles')

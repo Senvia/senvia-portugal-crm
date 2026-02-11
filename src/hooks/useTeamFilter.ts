@@ -17,12 +17,14 @@ export const useTeamFilterStore = create<TeamFilterStore>((set) => ({
 
 export function useTeamFilter() {
   const { user } = useAuth();
-  const { isAdmin, isSuperAdmin } = usePermissions();
+  const { isAdmin, isSuperAdmin, dataScope } = usePermissions();
   const { selectedMemberId, setSelectedMemberId } = useTeamFilterStore();
   const { data: teams = [] } = useTeams();
   const { data: allEntries = [] } = useAllTeamMembersEntries();
 
-  const canSeeAll = isAdmin || isSuperAdmin;
+  // Visibility is now driven by the profile's data_scope
+  const canSeeAll = dataScope === 'all';
+  const canSeeTeam = dataScope === 'team';
 
   // Check if current user is a team leader
   const ledTeam = useMemo(() => {
@@ -41,27 +43,26 @@ export function useTeamFilter() {
   // Effective user IDs for data filtering (array)
   const effectiveUserIds: string[] | null = useMemo(() => {
     if (canSeeAll) {
-      // Admin: if filtering by specific member, return [that member], else null (all)
+      // data_scope=all: if filtering by specific member, return [that member], else null (all)
       return selectedMemberId ? [selectedMemberId] : null;
     }
-    if (isTeamLeader && user?.id) {
-      // Leader: if filtering by specific member from their team
+    if (canSeeTeam && isTeamLeader && user?.id) {
+      // data_scope=team + leader: see own + team members
       if (selectedMemberId) return [selectedMemberId];
-      // Otherwise, see own + team members
       return [user.id, ...teamMemberIds];
     }
-    // Regular user: only own data
+    // data_scope=own: only own data
     return user?.id ? [user.id] : null;
-  }, [canSeeAll, isTeamLeader, selectedMemberId, user?.id, teamMemberIds]);
+  }, [canSeeAll, canSeeTeam, isTeamLeader, selectedMemberId, user?.id, teamMemberIds]);
 
   // Legacy single-user compat
   const effectiveUserId = canSeeAll
     ? selectedMemberId
-    : isTeamLeader
-      ? selectedMemberId || null // leader uses effectiveUserIds instead
+    : (canSeeTeam && isTeamLeader)
+      ? selectedMemberId || null
       : user?.id || null;
 
-  const canFilterByTeam = canSeeAll || isTeamLeader;
+  const canFilterByTeam = canSeeAll || (canSeeTeam && isTeamLeader);
 
   return {
     effectiveUserId,
@@ -74,5 +75,6 @@ export function useTeamFilter() {
     ledTeam,
     teamMemberIds,
     currentUserId: user?.id,
+    dataScope,
   };
 }
