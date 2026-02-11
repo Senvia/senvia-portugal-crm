@@ -1,40 +1,36 @@
 
 
-## Corrigir Duplicacao e Linking entre Faturas e Notas de Credito
+## Corrigir Associacao de Faturas Criadas no Senvia OS
 
-### Problemas Identificados
+### Problema
 
-1. **Documento duplicado**: A nota de credito (ID `250819561`) aparece tanto na tabela `invoices` como na tabela `credit_notes`. Isto acontece porque o InvoiceXpress pode devolver o mesmo documento no endpoint de faturas.
+Todas as faturas foram criadas internamente no Senvia, mas aparecem com icone amarelo ("nao associada") porque o sistema de sincronizacao nao consegue fazer o match correcto. Ha 3 causas:
 
-2. **`related_invoice_id` esta `null`**: A edge function `sync-credit-notes` tenta extrair o ID da fatura relacionada via `related_documents` da API, mas neste caso o InvoiceXpress nao esta a devolver essa informacao (o log mostra "no related_documents found").
+1. **Formato de referencia diferente**: O Senvia guarda `FT #250820014` (ID numerico) mas a API do InvoiceXpress devolve `3/2026` (numero sequencial). O ILIKE nao encontra match.
 
-3. **Uma fatura "Liquidada" com nota de credito**: Isto e comportamento normal do InvoiceXpress - uma fatura pode ser liquidada e depois ter uma nota de credito emitida (reembolso). O problema e que esta relacao nao e visivel na UI.
+2. **Match por `invoicexpress_id` falha para invoice_receipts**: As vendas com tipo `invoice_receipts` guardam o ID da fatura-recibo, mas o endpoint de `invoice_receipts` na sync devolve esses mesmos IDs. O match deveria funcionar aqui, mas nao esta a acontecer porque o `generate-receipt` guarda o ID do **recibo** (receipt) no pagamento, nao o ID do documento invoice_receipt.
+
+3. **Nao ha match por `proprietary_uid`**: A `issue-invoice` envia um `proprietary_uid: senvia-sale-{sale_id}` ao criar a fatura, mas a `sync-invoices` nunca verifica esse campo nos `raw_data` importados.
 
 ---
 
 ### Solucao
 
-#### 1. Edge Function `sync-invoices` - Filtrar notas de credito
+#### 1. Melhorar o matching na `sync-invoices` (3 novas estrategias)
 
-Apos importar documentos, verificar se o `invoicexpress_id` ja existe na tabela `credit_notes`. Se existir, nao inserir na tabela `invoices` (evita duplicacao).
+Adicionar ao ficheiro `supabase/functions/sync-invoices/index.ts`:
 
-Alternativamente, adicionar um check na API: se o InvoiceXpress devolver um campo `type` que indique nota de credito, ignorar.
+**Match por `proprietary_uid`**: Verificar se o campo `raw_data` do documento contem `proprietary_uid` no formato `senvia-sale-{uuid}`. Se sim, extrair o `sale_id` directamente.
 
-#### 2. Edge Function `sync-credit-notes` - Melhorar extraccao do `related_invoice_id`
+**Match por `invoicexpress_id` directo**: Comparar o `docId` importado com o `invoicexpress_id` guardado nas `sales` (funciona para faturas emitidas via `issue-invoice`).
 
-Quando `related_documents` esta vazio, tentar estrategias adicionais:
-- Procurar na tabela `invoices` por documentos com o mesmo `client_name` e `total` (match por valor e cliente)
-- Usar o endpoint `/documents/{id}/related_documents.json` da API do InvoiceXpress como fallback
+**Match invertido por referencia**: Em vez de procurar o `seqPart` da referencia importada nos pagamentos, procurar o `docId` numerico nas referencias dos pagamentos (que guardam `FT #DOCID`).
 
-#### 3. Limpar dados existentes
+#### 2. Corrigir dados existentes com migracao SQL
 
-Executar uma migracao para:
-- Remover da tabela `invoices` os registos cujo `invoicexpress_id` tambem existe em `credit_notes`
-- Preencher `related_invoice_id` nas notas de credito existentes fazendo match por `client_name` + `total` na tabela `invoices`
-
-#### 4. Frontend - Ja implementado
-
-As colunas "N. Credito" e "Fatura Origem" ja foram adicionadas na implementacao anterior. Com os dados corrigidos, vao mostrar as referencias corretas automaticamente.
+Executar um UPDATE que:
+- Preencha `sale_id` nas faturas importadas cujo `invoicexpress_id` corresponde ao `invoicexpress_id` de uma venda
+- Preencha `sale_id` para documentos cujo `raw_data->proprietary_uid` contem um `sale_id` valido
 
 ---
 
@@ -42,62 +38,86 @@ As colunas "N. Credito" e "Fatura Origem" ja foram adicionadas na implementacao 
 
 **Ficheiro: `supabase/functions/sync-invoices/index.ts`**
 
-Apos o upsert (linha 197-216), adicionar verificacao:
-```
-// Antes do upsert, verificar se este doc e uma credit note
-const { data: existingCN } = await supabase
-  .from('credit_notes')
-  .select('id')
-  .eq('organization_id', organization_id)
-  .eq('invoicexpress_id', docId)
-  .maybeSingle()
+Adicionar antes dos matches existentes (apos linha ~113):
 
-if (existingCN) {
-  console.log(`Skipping ${docId} - already exists as credit note`)
-  continue
-}
-```
-
-**Ficheiro: `supabase/functions/sync-credit-notes/index.ts`**
-
-Apos a extraccao de `related_documents` (linha 121-133), adicionar fallback:
-```
-// Fallback: match por client_name + total na tabela invoices
-if (!relatedDocId && cnClientName && cnTotal > 0) {
-  const { data: possibleInvoice } = await supabase
-    .from('invoices')
-    .select('invoicexpress_id')
+```typescript
+// Match 0: by proprietary_uid in raw_data
+const proprietaryUid = doc.proprietary_uid || null
+if (!matchedSaleId && proprietaryUid && proprietaryUid.startsWith('senvia-sale-')) {
+  const extractedSaleId = proprietaryUid.replace('senvia-sale-', '')
+  const { data: saleByUid } = await supabase
+    .from('sales')
+    .select('id')
+    .eq('id', extractedSaleId)
     .eq('organization_id', organization_id)
-    .eq('client_name', cnClientName)
-    .eq('total', cnTotal)
-    .neq('invoicexpress_id', cnId)
-    .limit(1)
     .maybeSingle()
-
-  if (possibleInvoice) {
-    relatedDocId = possibleInvoice.invoicexpress_id
+  if (saleByUid) {
+    matchedSaleId = saleByUid.id
   }
 }
 ```
 
-**Migracao SQL** para limpar dados existentes:
-```sql
--- Remover faturas que sao na verdade notas de credito
-DELETE FROM invoices
-WHERE invoicexpress_id IN (
-  SELECT invoicexpress_id FROM credit_notes
-);
+Alterar o Match 1 existente para tambem verificar o inverso (docId nos sales):
 
--- Preencher related_invoice_id nas credit_notes por match client+total
-UPDATE credit_notes cn
-SET related_invoice_id = (
-  SELECT i.invoicexpress_id FROM invoices i
-  WHERE i.organization_id = cn.organization_id
-    AND i.client_name = cn.client_name
-    AND i.total = cn.total
-    AND i.invoicexpress_id != cn.invoicexpress_id
-  LIMIT 1
-)
-WHERE cn.related_invoice_id IS NULL;
+```typescript
+// Match 1: by invoicexpress_id on sales (both directions)
+if (!matchedSaleId) {
+  const { data: sale } = await supabase
+    .from('sales')
+    .select('id')
+    .eq('organization_id', organization_id)
+    .eq('invoicexpress_id', docId)
+    .maybeSingle()
+  if (sale) {
+    matchedSaleId = sale.id
+  }
+}
+```
+
+Adicionar match por docId nas referencias dos pagamentos:
+
+```typescript
+// Match 5: by docId in payment invoice_reference (format "FT #DOCID")
+if (!matchedSaleId && !matchedPaymentId) {
+  const { data: payments } = await supabase
+    .from('sale_payments')
+    .select('id, sale_id')
+    .eq('organization_id', organization_id)
+    .ilike('invoice_reference', `%${docId}%`)
+    .limit(1)
+  if (payments && payments.length > 0) {
+    matchedPaymentId = payments[0].id
+    matchedSaleId = payments[0].sale_id || null
+  }
+}
+```
+
+**Migracao SQL** para corrigir dados existentes:
+
+```sql
+-- Match por invoicexpress_id directo
+UPDATE invoices i
+SET sale_id = s.id
+FROM sales s
+WHERE i.invoicexpress_id = s.invoicexpress_id
+  AND i.organization_id = s.organization_id
+  AND i.sale_id IS NULL;
+
+-- Match por proprietary_uid nos raw_data
+UPDATE invoices i
+SET sale_id = s.id
+FROM sales s
+WHERE i.raw_data->>'proprietary_uid' = 'senvia-sale-' || s.id::text
+  AND i.organization_id = s.organization_id
+  AND i.sale_id IS NULL;
+
+-- Match por docId nos invoice_reference dos pagamentos
+UPDATE invoices i
+SET payment_id = sp.id, sale_id = sp.sale_id
+FROM sale_payments sp
+WHERE sp.invoice_reference ILIKE '%' || i.invoicexpress_id::text || '%'
+  AND sp.organization_id = i.organization_id
+  AND i.sale_id IS NULL
+  AND i.payment_id IS NULL;
 ```
 
