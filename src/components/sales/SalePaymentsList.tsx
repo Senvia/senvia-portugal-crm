@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { format } from "date-fns";
 import { pt } from "date-fns/locale";
-import { Plus, Pencil, Trash2, CreditCard, Receipt, AlertCircle, Download, Ban, FileText, QrCode, Mail } from "lucide-react";
+import { Plus, Pencil, Trash2, CreditCard, Receipt, AlertCircle, Download, Ban, FileText, QrCode, Mail, Eye, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -34,6 +34,8 @@ import {
 
 import { toast } from "sonner";
 import { SendInvoiceEmailModal } from "./SendInvoiceEmailModal";
+import { InvoiceDetailsModal } from "./InvoiceDetailsModal";
+import { useSyncInvoice } from "@/hooks/useInvoiceDetails";
 
 interface SalePaymentsListProps {
   saleId: string;
@@ -91,6 +93,15 @@ export function SalePaymentsList({
     documentType: "invoice" | "invoice_receipt" | "receipt";
     reference: string;
   } | null>(null);
+
+  // Invoice details modal state
+  const [detailsModal, setDetailsModal] = useState<{
+    documentId: number;
+    documentType: "invoice" | "invoice_receipt" | "receipt";
+    paymentId?: string;
+  } | null>(null);
+
+  const syncInvoice = useSyncInvoice();
 
   const summary = calculatePaymentSummary(payments, saleTotal);
 
@@ -167,6 +178,37 @@ export function SalePaymentsList({
                     title="Download PDF"
                   >
                     <Download className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+                {!invoicePdfUrl && invoicexpressId && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => syncInvoice.mutate({
+                      documentId: invoicexpressId,
+                      documentType: (invoicexpressType === 'invoice_receipts' ? 'invoice_receipt' : 'invoice') as any,
+                      organizationId,
+                      saleId,
+                    })}
+                    disabled={syncInvoice.isPending}
+                    title="Buscar PDF"
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 ${syncInvoice.isPending ? 'animate-spin' : ''}`} />
+                  </Button>
+                )}
+                {invoicexpressId && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => setDetailsModal({
+                      documentId: invoicexpressId,
+                      documentType: (invoicexpressType === 'invoice_receipts' ? 'invoice_receipt' : 'invoice') as any,
+                    })}
+                    title="Ver detalhes"
+                  >
+                    <Eye className="h-3.5 w-3.5" />
                   </Button>
                 )}
                 {invoiceQrCodeUrl && (
@@ -333,6 +375,39 @@ export function SalePaymentsList({
                       title="Download PDF"
                     >
                       <Download className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                  {!payment.invoice_file_url && payment.invoicexpress_id && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => syncInvoice.mutate({
+                        documentId: payment.invoicexpress_id!,
+                        documentType: 'receipt',
+                        organizationId,
+                        saleId,
+                        paymentId: payment.id,
+                      })}
+                      disabled={syncInvoice.isPending}
+                      title="Buscar PDF"
+                    >
+                      <RefreshCw className={`h-3.5 w-3.5 ${syncInvoice.isPending ? 'animate-spin' : ''}`} />
+                    </Button>
+                  )}
+                  {payment.invoicexpress_id && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => setDetailsModal({
+                        documentId: payment.invoicexpress_id!,
+                        documentType: 'receipt',
+                        paymentId: payment.id,
+                      })}
+                      title="Ver detalhes"
+                    >
+                      <Eye className="h-3.5 w-3.5" />
                     </Button>
                   )}
                   {payment.invoice_reference && payment.invoicexpress_id && hasInvoiceXpress && !readonly && (
@@ -563,6 +638,19 @@ export function SalePaymentsList({
           organizationId={organizationId}
           reference={emailModal.reference}
           clientEmail={clientEmail}
+        />
+      )}
+
+      {/* Invoice Details Modal */}
+      {detailsModal && (
+        <InvoiceDetailsModal
+          open={!!detailsModal}
+          onOpenChange={(open) => !open && setDetailsModal(null)}
+          documentId={detailsModal.documentId}
+          documentType={detailsModal.documentType}
+          organizationId={organizationId}
+          saleId={saleId}
+          paymentId={detailsModal.paymentId}
         />
       )}
     </>
