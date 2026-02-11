@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { format } from "date-fns";
 import { pt } from "date-fns/locale";
-import { Plus, Pencil, Trash2, CreditCard, Receipt, AlertCircle, Download, Ban, FileText, QrCode } from "lucide-react";
+import { Plus, Pencil, Trash2, CreditCard, Receipt, AlertCircle, Download, Ban, FileText, QrCode, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -33,6 +33,7 @@ import {
 } from "@/types/sales";
 
 import { toast } from "sonner";
+import { SendInvoiceEmailModal } from "./SendInvoiceEmailModal";
 
 interface SalePaymentsListProps {
   saleId: string;
@@ -41,10 +42,12 @@ interface SalePaymentsListProps {
   readonly?: boolean;
   hasInvoiceXpress?: boolean;
   invoicexpressId?: number | null;
+  invoicexpressType?: string | null;
   invoiceReference?: string | null;
   invoiceQrCodeUrl?: string | null;
   clientNif?: string | null;
   clientName?: string | null;
+  clientEmail?: string | null;
   taxConfig?: { tax_value?: number; tax_exemption_reason?: string } | null;
 }
 
@@ -55,10 +58,12 @@ export function SalePaymentsList({
   readonly = false,
   hasInvoiceXpress = false,
   invoicexpressId,
+  invoicexpressType,
   invoiceReference,
   invoiceQrCodeUrl,
   clientNif,
   clientName,
+  clientEmail,
   taxConfig,
 }: SalePaymentsListProps) {
   const { data: payments = [], isLoading } = useSalePayments(saleId);
@@ -77,6 +82,13 @@ export function SalePaymentsList({
   // Draft modal state - supports both invoice (sale-level) and receipt (payment-level)
   const [draftMode, setDraftMode] = useState<"invoice" | "receipt" | null>(null);
   const [draftPayment, setDraftPayment] = useState<SalePayment | null>(null);
+  
+  // Email modal state
+  const [emailModal, setEmailModal] = useState<{
+    documentId: number;
+    documentType: "invoice" | "invoice_receipt" | "receipt";
+    reference: string;
+  } | null>(null);
 
   const summary = calculatePaymentSummary(payments, saleTotal);
 
@@ -153,6 +165,21 @@ export function SalePaymentsList({
                     title="Ver QR Code"
                   >
                     <QrCode className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+                {invoicexpressId && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => setEmailModal({
+                      documentId: invoicexpressId,
+                      documentType: (invoicexpressType === 'invoice_receipt' ? 'invoice_receipt' : 'invoice') as any,
+                      reference: invoiceReference || '',
+                    })}
+                    title="Enviar por email"
+                  >
+                    <Mail className="h-3.5 w-3.5" />
                   </Button>
                 )}
                 {invoicexpressId && (
@@ -296,15 +323,30 @@ export function SalePaymentsList({
                     </Button>
                   )}
                   {payment.invoice_reference && payment.invoicexpress_id && hasInvoiceXpress && !readonly && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-destructive hover:text-destructive"
-                      onClick={() => setCancellingPayment(payment)}
-                      title="Anular recibo"
-                    >
-                      <Ban className="h-3.5 w-3.5" />
-                    </Button>
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => setEmailModal({
+                          documentId: payment.invoicexpress_id!,
+                          documentType: 'receipt',
+                          reference: payment.invoice_reference!,
+                        })}
+                        title="Enviar por email"
+                      >
+                        <Mail className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-destructive hover:text-destructive"
+                        onClick={() => setCancellingPayment(payment)}
+                        title="Anular recibo"
+                      >
+                        <Ban className="h-3.5 w-3.5" />
+                      </Button>
+                    </>
                   )}
                 </div>
               </div>
@@ -497,6 +539,19 @@ export function SalePaymentsList({
         isLoading={cancelInvoice.isPending}
         invoiceReference={cancellingPayment?.invoice_reference || ""}
       />
+
+      {/* Send Invoice Email Modal */}
+      {emailModal && (
+        <SendInvoiceEmailModal
+          open={!!emailModal}
+          onOpenChange={(open) => !open && setEmailModal(null)}
+          documentId={emailModal.documentId}
+          documentType={emailModal.documentType}
+          organizationId={organizationId}
+          reference={emailModal.reference}
+          clientEmail={clientEmail}
+        />
+      )}
     </>
   );
 }
