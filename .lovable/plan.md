@@ -1,89 +1,131 @@
 
+## Auditoria Completa: O que Falta na Integracao InvoiceXpress
 
-## Editar Produtos e Atualizar no InvoiceXpress (Bidirecional)
+Apos analise detalhada de todos os componentes, hooks, e edge functions, aqui esta tudo o que falta ou esta incompleto.
 
-### Objetivo
-Quando um produto com `invoicexpress_id` e editado no Senvia OS, enviar as alteracoes de volta para o InvoiceXpress via `PUT /items/:item-id.json`, mantendo ambos os sistemas sincronizados.
+---
 
-### Fluxo do Utilizador
+### PROBLEMA 1: Tab "Faturas" no Financeiro e Apenas Uma Tabela Basica
 
-```text
-Definicoes > Produtos > Editar Produto (com invoicexpress_id)
-    |
-    v
-Utilizador altera nome/preco/IVA -> Guardar
-    |
-    v
-1. Atualiza localmente na BD (como ja funciona)
-2. Se produto tem invoicexpress_id:
-   -> Edge Function PUT /items/:id.json
-   -> Atualiza no InvoiceXpress
-    |
-    v
-Toast: "Produto atualizado (Senvia + InvoiceXpress)"
-```
+**Situacao atual**: A tab Faturas (`InvoicesContent.tsx`) mostra uma tabela simples com referencia, data, venda, cliente, valor e um botao de download. Mas:
 
-### Alteracoes Tecnicas
+- O download via InvoiceXpress (`handleDownloadInvoiceXpress`) constroi um URL direto para o PDF que requer autenticacao no InvoiceXpress - nao funciona para o utilizador
+- Nao ha botao para **ver detalhes** do documento (o `InvoiceDetailsModal` existe mas nao e usado aqui)
+- Nao ha botao para **anular** faturas a partir desta tab
+- Nao ha botao para **enviar por email** a partir desta tab
+- Nao ha botao para **sincronizar PDF** para download local
+- Nao mostra faturas emitidas a nivel da venda (apenas pagamentos com referencia)
 
-**1. Nova Edge Function `update-invoicexpress-item`**
+**Solucao**: Enriquecer a tabela de faturas com acoes completas:
+- Botao "Ver Detalhes" que abre o `InvoiceDetailsModal`
+- Botao "Sincronizar PDF" usando `useSyncInvoice` (busca o PDF e guarda no storage)
+- Botao "Download" que funciona com signed URL do storage (apos sync)
+- Botao "Enviar Email" usando `SendInvoiceEmailModal`
+- Botao "Anular" usando `CancelInvoiceDialog` + `useCancelInvoice`
+- Incluir tambem faturas a nivel da venda (campo `invoicexpress_id` na tabela `sales`)
 
-Ficheiro: `supabase/functions/update-invoicexpress-item/index.ts`
+---
 
-Responsabilidades:
-- Receber `organization_id`, `invoicexpress_id`, e dados do produto (`name`, `description`, `unit_price`, `tax`)
-- Verificar autenticacao e membership
-- Buscar credenciais InvoiceXpress da organizacao
-- Chamar `PUT /items/:invoicexpress_id.json` com o body:
-```json
-{
-  "item": {
-    "name": "Nome do Produto",
-    "description": "Descricao",
-    "unit_price": 100.00,
-    "tax": { "name": "IVA23", "value": 23 }
-  }
-}
-```
-- Mapear `tax_value` para o nome de taxa InvoiceXpress (23 -> "IVA23", 13 -> "IVA13", 6 -> "IVA6", 0 -> "Isento")
-- Retornar sucesso ou erro
+### PROBLEMA 2: Nota de Credito NAO Existe
 
-**2. Atualizar `useUpdateProduct` em `src/hooks/useProducts.ts`**
+**Situacao atual**: O sistema permite "anular" documentos (mudar estado para "canceled" no InvoiceXpress), mas **nota de credito** e um documento fiscal diferente. Anular != Nota de Credito.
 
-Apos o update local com sucesso, se o produto tem `invoicexpress_id`:
-- Chamar a edge function `update-invoicexpress-item` para sincronizar
-- Se a sincronizacao com InvoiceXpress falhar, mostrar aviso mas nao reverter o update local (o produto ja foi guardado)
-- Toast diferenciado: "Produto atualizado" vs "Produto atualizado (sincronizado com InvoiceXpress)"
+- Anular: Cancela o documento original (so possivel se nao tiver sido enviado ao cliente/AT)
+- Nota de Credito: Documento legal que reverte/corrige uma fatura ja emitida e comunicada
 
-**3. Atualizar `supabase/config.toml`**
+**O que falta**:
+- Nova edge function `create-credit-note` que chama `POST /credit_notes.json` na API InvoiceXpress
+- Hook `useCreateCreditNote` no frontend
+- Modal `CreateCreditNoteModal` para o utilizador preencher motivo e valor
+- Botao "Emitir Nota de Credito" na lista de pagamentos e na tab Faturas
+- Campos na BD para guardar referencia da nota de credito
 
-Registar `update-invoicexpress-item` com `verify_jwt = false`.
+---
 
-### Mapeamento de Taxas (Senvia -> InvoiceXpress)
+### PROBLEMA 3: Cancelar Faturas So Acessivel Dentro do Detalhe da Venda
 
-| `tax_value` Senvia | `tax.name` InvoiceXpress |
-|---|---|
-| 23 | IVA23 |
-| 13 | IVA13 |
-| 6 | IVA6 |
-| 0 | Isento |
-| null | Nao envia (usa default da conta) |
+**Situacao atual**: O botao "Anular" so aparece no `SalePaymentsList` (dentro do modal de detalhes de uma venda). O utilizador precisa:
+1. Ir a Vendas
+2. Abrir uma venda
+3. Encontrar a fatura nos pagamentos
+4. Clicar "Anular"
 
-### Resumo de Ficheiros
+Nao ha forma de anular diretamente a partir da tab "Faturas" no Financeiro.
 
-| Ficheiro | Acao | Descricao |
-|---|---|---|
-| `supabase/functions/update-invoicexpress-item/index.ts` | Criar | Edge function PUT para InvoiceXpress |
-| `supabase/config.toml` | Editar | Registar nova function |
-| `src/hooks/useProducts.ts` | Editar | Adicionar sync apos update local |
+**Solucao**: Adicionar acao "Anular" na tab Faturas com o mesmo `CancelInvoiceDialog` ja existente.
 
-### Secao Tecnica - Edge Function
+---
 
-A edge function faz:
-1. Valida auth e membership
-2. Busca `invoicexpress_api_key` e `invoicexpress_account_name` da organizacao
-3. Constroi o body com mapeamento de campos Senvia -> InvoiceXpress
-4. `PUT https://{account}.app.invoicexpress.com/items/{id}.json?api_key={key}`
-5. Retorna o item atualizado ou erro
+### PROBLEMA 4: Download de PDFs Nao Funciona Corretamente
 
-Se o InvoiceXpress retornar 404 (item ja nao existe la), a function retorna aviso mas nao falha criticamente.
+**Situacao atual**: Na tab Faturas:
+- Se `invoice_file_url` existe (PDF ja sincronizado) -> funciona via signed URL
+- Se nao existe mas tem `invoicexpress_id` -> tenta abrir URL direto do InvoiceXpress que requer autenticacao -> **NAO FUNCIONA**
 
+**Solucao**: Substituir o link direto por um fluxo de sync:
+1. Se nao tem PDF local, mostrar botao "Sincronizar" que chama `useSyncInvoice`
+2. Apos sync, o PDF fica disponivel no storage e pode ser baixado com signed URL
+
+---
+
+### PROBLEMA 5: Emissao de Fatura-Recibo por Pagamento Individual
+
+**Situacao atual**: Na `SalePaymentsList`, o botao "Gerar Recibo" so aparece quando:
+- `payment.status === 'paid'`
+- `hasInvoice` (a venda ja tem uma fatura global)
+- `hasInvoiceXpress` ativo
+- O pagamento nao tem `invoice_reference`
+
+Isto significa que para gerar um recibo, PRIMEIRO tem de existir uma fatura da venda. Mas em muitos casos, o utilizador quer emitir uma **Fatura-Recibo (FR)** diretamente por pagamento, sem fatura global primeiro.
+
+**Solucao**: Adicionar botao "Emitir Fatura-Recibo" nos pagamentos com status "paid" que nao tenham `invoicexpress_id`, independentemente de existir fatura global.
+
+---
+
+### RESUMO: Plano de Implementacao
+
+| Prioridade | Tarefa | Tipo | Ficheiros |
+|---|---|---|---|
+| 1 | Enriquecer tab Faturas com acoes (detalhes, sync, download, anular, email) | Frontend | `InvoicesContent.tsx` |
+| 2 | Corrigir download de PDF (sync antes de download) | Frontend | `InvoicesContent.tsx` |
+| 3 | Incluir faturas da venda (nao so pagamentos) na tab Faturas | Frontend + Hook | `InvoicesContent.tsx`, `useAllPayments.ts` |
+| 4 | Emitir Fatura-Recibo por pagamento sem fatura global | Frontend | `SalePaymentsList.tsx` |
+| 5 | Criar Nota de Credito (novo fluxo completo) | Full Stack | Nova edge function, novo hook, novo modal, migracao BD |
+
+### Secao Tecnica Detalhada
+
+**Prioridade 1-2-3: Tab Faturas Completa**
+
+Modificar `InvoicesContent.tsx` para:
+- Adicionar coluna "Acoes" com menu dropdown (ou botoes inline)
+- Importar e usar `InvoiceDetailsModal`, `CancelInvoiceDialog`, `SendInvoiceEmailModal`, `useSyncInvoice`, `useCancelInvoice`
+- Alterar `useAllPayments` para tambem trazer `invoicexpress_type` da venda
+- Criar query separada ou modificar existente para incluir faturas emitidas a nivel da venda (registos em `sales` com `invoicexpress_id` que nao tenham pagamento associado)
+- Substituir `handleDownloadInvoiceXpress` por fluxo de sync + download
+
+**Prioridade 4: Fatura-Recibo por Pagamento**
+
+Modificar condicao na `SalePaymentsList.tsx` linha 344:
+- De: `payment.status === 'paid' && hasInvoice && hasInvoiceXpress && !payment.invoice_reference`
+- Para: `payment.status === 'paid' && hasInvoiceXpress && !payment.invoicexpress_id`
+- Ajustar o label do botao para "Emitir Fatura-Recibo" quando nao ha fatura global
+
+**Prioridade 5: Nota de Credito**
+
+Nova edge function `create-credit-note`:
+- Endpoint InvoiceXpress: `POST /credit_notes.json`
+- Body similar a uma fatura mas com referencia ao documento original
+- Apos criar, mudar estado para "final" com `PUT /credit_notes/:id/change-state.json`
+
+Novo hook `useCreateCreditNote.ts`
+
+Novo modal `CreateCreditNoteModal.tsx` com campos:
+- Documento original (pre-preenchido)
+- Motivo
+- Valor (parcial ou total)
+- Itens a creditar
+
+Migracao BD:
+- Adicionar campos `credit_note_reference`, `credit_note_id` em `sale_payments` e/ou `sales`
+
+Registar em `supabase/config.toml`
