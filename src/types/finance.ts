@@ -10,6 +10,8 @@ export interface PaymentWithSale {
   invoice_reference: string | null;
   invoice_file_url: string | null;
   invoicexpress_id: number | null;
+  credit_note_id: number | null;
+  credit_note_reference: string | null;
   status: PaymentRecordStatus;
   notes: string | null;
   created_at: string;
@@ -21,10 +23,28 @@ export interface PaymentWithSale {
     invoice_reference: string | null;
     invoicexpress_id: number | null;
     invoicexpress_type: string | null;
+    credit_note_id: number | null;
+    credit_note_reference: string | null;
+    invoice_pdf_url: string | null;
   };
   client_name: string | null;
   lead_name: string | null;
   client_email?: string | null;
+}
+
+export interface CreditNoteItem {
+  id: string;
+  type: 'sale' | 'payment';
+  credit_note_id: number;
+  credit_note_reference: string;
+  original_document_reference: string | null;
+  date: string;
+  sale_code: string;
+  sale_id: string;
+  client_name: string | null;
+  amount: number;
+  organization_id: string;
+  pdf_url: string | null;
 }
 
 export interface CashflowPoint {
@@ -43,7 +63,6 @@ export interface FinanceStats {
   dueSoonCount: number;
   dueSoonPayments: PaymentWithSale[];
   cashflowTrend: CashflowPoint[];
-  // Expenses
   totalExpenses: number;
   expensesThisMonth: number;
   balance: number;

@@ -14,15 +14,16 @@ import { startOfDay, endOfDay, parseISO } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/contexts/AuthContext";
 import { InvoiceActionsMenu } from "./InvoiceActionsMenu";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CreditNotesContent } from "./CreditNotesContent";
 
-export function InvoicesContent() {
+function InvoicesTable() {
   const { data: payments, isLoading } = useAllPayments();
   const { organization } = useAuth();
   const organizationId = organization?.id || '';
   const [searchTerm, setSearchTerm] = useState("");
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
 
-  // Filter payments that have any invoice reference (manual or InvoiceXpress)
   const invoices = useMemo(() => {
     if (!payments) return [];
 
@@ -31,14 +32,12 @@ export function InvoicesContent() {
     );
 
     return withInvoice.filter(payment => {
-      // Date range filter
       if (dateRange?.from) {
         const paymentDate = parseISO(payment.payment_date);
         if (paymentDate < startOfDay(dateRange.from)) return false;
         if (dateRange.to && paymentDate > endOfDay(dateRange.to)) return false;
       }
 
-      // Search filter
       if (searchTerm) {
         const search = searchTerm.toLowerCase();
         const clientName = payment.client_name?.toLowerCase() || '';
@@ -94,9 +93,12 @@ export function InvoicesContent() {
     return invoice.invoicexpress_id || invoice.sale.invoicexpress_id || null;
   };
 
+  const getFileUrl = (invoice: typeof invoices[0]): string | null => {
+    return invoice.invoice_file_url || invoice.sale.invoice_pdf_url || null;
+  };
+
   return (
     <div className="space-y-6">
-      {/* Header with Export */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-lg font-semibold">Referências de Faturas</h2>
@@ -110,7 +112,6 @@ export function InvoicesContent() {
         </Button>
       </div>
 
-      {/* Filters */}
       <Card>
         <CardContent className="pt-6">
           <div className="flex flex-col gap-4">
@@ -147,7 +148,6 @@ export function InvoicesContent() {
         </p>
       )}
 
-      {/* Table */}
       <Card>
         <CardContent className="p-0">
           {isLoading ? (
@@ -212,7 +212,7 @@ export function InvoicesContent() {
                             id: invoice.id,
                             invoicexpressId: getInvoicexpressId(invoice),
                             invoiceReference: getInvoiceRef(invoice),
-                            invoiceFileUrl: invoice.invoice_file_url,
+                            invoiceFileUrl: getFileUrl(invoice),
                             documentType: getDocumentType(invoice),
                             saleId: invoice.sale.id,
                             paymentId: invoice.invoicexpress_id ? invoice.id : undefined,
@@ -230,5 +230,22 @@ export function InvoicesContent() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export function InvoicesContent() {
+  return (
+    <Tabs defaultValue="faturas" className="space-y-6">
+      <TabsList>
+        <TabsTrigger value="faturas">Faturas</TabsTrigger>
+        <TabsTrigger value="notas-credito">Notas de Crédito</TabsTrigger>
+      </TabsList>
+      <TabsContent value="faturas">
+        <InvoicesTable />
+      </TabsContent>
+      <TabsContent value="notas-credito">
+        <CreditNotesContent />
+      </TabsContent>
+    </Tabs>
   );
 }
