@@ -55,14 +55,14 @@ export function useUpdateClientFieldsSettings() {
       queryClient.invalidateQueries({ queryKey: ['organization'] });
       toast({
         title: 'Guardado',
-        description: 'Configurações de campos atualizadas com sucesso.',
+        description: 'Definições de campos atualizadas com sucesso.',
       });
     },
     onError: (error) => {
       console.error('Error updating client fields settings:', error);
       toast({
         title: 'Erro',
-        description: 'Não foi possível atualizar as configurações.',
+        description: 'Não foi possível atualizar as definições.',
         variant: 'destructive',
       });
     },

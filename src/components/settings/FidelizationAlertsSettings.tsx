@@ -55,10 +55,10 @@ export function FidelizationAlertsSettings() {
       fidelization_email: emailEnabled ? alertEmail.trim() : null,
     }, {
       onSuccess: () => {
-        toast.success('Configurações de alertas guardadas');
+        toast.success('Definições de alertas guardadas');
       },
       onError: () => {
-        toast.error('Erro ao guardar configurações');
+        toast.error('Erro ao guardar definições');
       },
     });
   };
@@ -186,7 +186,7 @@ export function FidelizationAlertsSettings() {
             <div className="space-y-0.5">
               <Label>Receber alertas por email</Label>
               <p className="text-xs text-muted-foreground">
-                Usa as configurações Brevo da organização
+                Usa as definições Brevo da organização
               </p>
             </div>
             <Switch
@@ -217,7 +217,7 @@ export function FidelizationAlertsSettings() {
         className="w-full sm:w-auto"
       >
         {updateSettings.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-        Guardar Configurações
+        Guardar Definições
       </Button>
     </div>
   );

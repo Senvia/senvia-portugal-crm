@@ -311,7 +311,7 @@ export function FormCustomizationSection({ onSettingsSaved }: FormCustomizationS
 
                     {settings.mode === 'conversational' && (
                       <p className="text-xs text-muted-foreground bg-amber-500/10 text-amber-700 dark:text-amber-400 p-3 rounded-lg">
-                        💡 O modo conversacional usa um fluxo passo-a-passo otimizado para conversão. As configurações de campos abaixo aplicam-se apenas ao modo tradicional.
+                        💡 O modo conversacional usa um fluxo passo-a-passo otimizado para conversão. As definições de campos abaixo aplicam-se apenas ao modo tradicional.
                       </p>
                     )}
                   </AccordionContent>

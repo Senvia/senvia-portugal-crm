@@ -22,7 +22,7 @@ const allNavItems: NavItem[] = [
   { to: "/calendar", icon: Calendar, label: "Agenda", moduleKey: 'calendar' },
   { to: "/marketing", icon: Mail, label: "Marketing", moduleKey: 'marketing' },
   { to: "/ecommerce", icon: Store, label: "Loja", moduleKey: 'ecommerce' },
-  { to: "/settings", icon: Settings, label: "Config" },
+  { to: "/settings", icon: Settings, label: "Definições" },
 ];
 
 export function MobileBottomNav() {

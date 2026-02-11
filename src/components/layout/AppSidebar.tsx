@@ -25,7 +25,7 @@ const allNavItems: NavItem[] = [
   { to: "/calendar", icon: Calendar, label: "Agenda", moduleKey: 'calendar' },
   { to: "/marketing", icon: Mail, label: "Marketing", moduleKey: 'marketing' },
   { to: "/ecommerce", icon: Store, label: "E-commerce", moduleKey: 'ecommerce' },
-  { to: "/settings", icon: Settings, label: "Configurações" },
+  { to: "/settings", icon: Settings, label: "Definições" },
 ];
 const getRoleLabel = (roles: AppRole[]): string => {
   if (roles.includes('super_admin')) return 'Super Admin';
