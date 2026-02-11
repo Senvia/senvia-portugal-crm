@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { SearchableCombobox, type ComboboxOption } from '@/components/ui/searchable-combobox';
 import { Separator } from '@/components/ui/separator';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { ScrollArea } from '@/components/ui/scroll-area';
+
 import { Checkbox } from '@/components/ui/checkbox';
 import { useUpdateProposal, useProposalProducts, useUpdateProposalProducts } from '@/hooks/useProposals';
 import { useClients } from '@/hooks/useClients';
@@ -323,7 +323,7 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
             <DialogTitle>Editar Proposta {proposal.code}</DialogTitle>
           </DialogHeader>
 
-          <ScrollArea className="flex-1 min-h-0">
+          <div className="flex-1 min-h-0 overflow-y-auto">
             <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4">
               {/* Client Selector */}
               <div className="space-y-2">
@@ -711,7 +711,7 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
               </div>
 
             </form>
-          </ScrollArea>
+          </div>
 
           <DialogFooter className="px-6 py-4 border-t">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
