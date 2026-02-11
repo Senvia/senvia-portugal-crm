@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { format } from "date-fns";
 import { pt } from "date-fns/locale";
-import { Plus, Pencil, Trash2, CreditCard, Receipt, AlertCircle } from "lucide-react";
+import { Plus, Pencil, Trash2, CreditCard, Receipt, AlertCircle, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -222,6 +222,17 @@ export function SalePaymentsList({
                     >
                       <Receipt className="h-3 w-3 mr-1" />
                       Fatura
+                    </Button>
+                  )}
+                  {payment.invoice_file_url && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => window.open(payment.invoice_file_url!, '_blank')}
+                      title="Download PDF"
+                    >
+                      <Download className="h-3.5 w-3.5" />
                     </Button>
                   )}
                 </div>
