@@ -277,6 +277,82 @@ export type Database = {
           },
         ]
       }
+      credit_notes: {
+        Row: {
+          client_name: string | null
+          created_at: string | null
+          date: string | null
+          id: string
+          invoicexpress_id: number
+          organization_id: string
+          payment_id: string | null
+          pdf_path: string | null
+          raw_data: Json | null
+          reference: string | null
+          related_invoice_id: number | null
+          sale_id: string | null
+          status: string | null
+          total: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          client_name?: string | null
+          created_at?: string | null
+          date?: string | null
+          id?: string
+          invoicexpress_id: number
+          organization_id: string
+          payment_id?: string | null
+          pdf_path?: string | null
+          raw_data?: Json | null
+          reference?: string | null
+          related_invoice_id?: number | null
+          sale_id?: string | null
+          status?: string | null
+          total?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          client_name?: string | null
+          created_at?: string | null
+          date?: string | null
+          id?: string
+          invoicexpress_id?: number
+          organization_id?: string
+          payment_id?: string | null
+          pdf_path?: string | null
+          raw_data?: Json | null
+          reference?: string | null
+          related_invoice_id?: number | null
+          sale_id?: string | null
+          status?: string | null
+          total?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_notes_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_notes_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "sale_payments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_notes_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crm_clients: {
         Row: {
           address_line1: string | null

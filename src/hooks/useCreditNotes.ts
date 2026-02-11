@@ -2,7 +2,24 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import type { CreditNoteItem } from '@/types/finance';
+
+export interface CreditNoteRow {
+  id: string;
+  organization_id: string;
+  invoicexpress_id: number;
+  reference: string | null;
+  status: string | null;
+  client_name: string | null;
+  total: number;
+  date: string | null;
+  related_invoice_id: number | null;
+  sale_id: string | null;
+  payment_id: string | null;
+  pdf_path: string | null;
+  raw_data: any;
+  created_at: string;
+  updated_at: string;
+}
 
 export function useCreditNotes() {
   const { organization } = useAuth();
@@ -10,93 +27,37 @@ export function useCreditNotes() {
 
   return useQuery({
     queryKey: ['credit-notes', organizationId],
-    queryFn: async (): Promise<CreditNoteItem[]> => {
+    queryFn: async (): Promise<CreditNoteRow[]> => {
       if (!organizationId) return [];
 
-      const items: CreditNoteItem[] = [];
-
-      // 1. Credit notes from sale_payments
-      const { data: payments } = await supabase
-        .from('sale_payments')
-        .select(`
-          id,
-          amount,
-          payment_date,
-          credit_note_id,
-          credit_note_reference,
-          invoice_reference,
-          invoice_file_url,
-          sales:sale_id!inner (
-            id,
-            code,
-            organization_id,
-            leads:lead_id (name),
-            crm_clients:client_id (name)
-          )
-        `)
+      const { data, error } = await supabase
+        .from('credit_notes')
+        .select('*')
         .eq('organization_id', organizationId)
-        .not('credit_note_id', 'is', null);
+        .order('date', { ascending: false });
 
-      if (payments) {
-        for (const p of payments) {
-          items.push({
-            id: p.id,
-            type: 'payment',
-            credit_note_id: (p as any).credit_note_id,
-            credit_note_reference: (p as any).credit_note_reference || '-',
-            original_document_reference: p.invoice_reference || null,
-            date: p.payment_date,
-            sale_code: (p.sales as any)?.code || '',
-            sale_id: (p.sales as any)?.id || '',
-            client_name: (p.sales as any)?.crm_clients?.name || (p.sales as any)?.leads?.name || null,
-            amount: Number(p.amount),
-            organization_id: organizationId,
-            pdf_url: p.invoice_file_url || null,
-          });
-        }
+      if (error) {
+        console.error('Error fetching credit notes:', error);
+        throw error;
       }
 
-      // 2. Credit notes from sales (sale-level)
-      const { data: sales } = await supabase
-        .from('sales')
-        .select(`
-          id,
-          code,
-          total_value,
-          credit_note_id,
-          credit_note_reference,
-          invoice_reference,
-          invoice_pdf_url,
-          created_at,
-          leads:lead_id (name),
-          crm_clients:client_id (name)
-        `)
-        .eq('organization_id', organizationId)
-        .not('credit_note_id', 'is', null);
-
-      if (sales) {
-        for (const s of sales) {
-          items.push({
-            id: s.id,
-            type: 'sale',
-            credit_note_id: (s as any).credit_note_id,
-            credit_note_reference: (s as any).credit_note_reference || '-',
-            original_document_reference: (s as any).invoice_reference || null,
-            date: s.created_at || '',
-            sale_code: s.code || '',
-            sale_id: s.id,
-            client_name: (s as any).crm_clients?.name || (s as any).leads?.name || null,
-            amount: Number(s.total_value),
-            organization_id: organizationId,
-            pdf_url: (s as any).invoice_pdf_url || null,
-          });
-        }
-      }
-
-      // Sort by date desc
-      items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-      return items;
+      return (data || []).map((row: any) => ({
+        id: row.id,
+        organization_id: row.organization_id,
+        invoicexpress_id: row.invoicexpress_id,
+        reference: row.reference,
+        status: row.status,
+        client_name: row.client_name,
+        total: Number(row.total || 0),
+        date: row.date,
+        related_invoice_id: row.related_invoice_id,
+        sale_id: row.sale_id,
+        payment_id: row.payment_id,
+        pdf_path: row.pdf_path,
+        raw_data: row.raw_data,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+      }));
     },
     enabled: !!organizationId,
   });

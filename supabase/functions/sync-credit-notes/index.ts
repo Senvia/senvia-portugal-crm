@@ -12,23 +12,20 @@ async function downloadAndUploadPdf(
 ): Promise<string | null> {
   try {
     const pdfRes = await fetch(pdfUrl)
-    if (!pdfRes.ok) {
-      console.warn('Failed to download PDF:', pdfRes.status)
-      return null
-    }
+    if (!pdfRes.ok) return null
     const pdfBlob = await pdfRes.blob()
     const arrayBuffer = await pdfBlob.arrayBuffer()
     const uint8 = new Uint8Array(arrayBuffer)
 
-    const { error: uploadError } = await supabase.storage
+    const { error } = await supabase.storage
       .from('invoices')
       .upload(storagePath, uint8, {
         contentType: 'application/pdf',
         upsert: true,
       })
 
-    if (uploadError) {
-      console.error('Upload error:', uploadError)
+    if (error) {
+      console.error('Upload error:', error)
       return null
     }
     return storagePath
@@ -52,7 +49,6 @@ async function pollPdfUrl(baseUrl: string, docId: number, apiKey: string): Promi
       }
       if (i < 2) await new Promise(r => setTimeout(r, 2000))
     } catch (e) {
-      console.warn(`PDF poll attempt ${i + 1} failed:`, e)
       if (i < 2) await new Promise(r => setTimeout(r, 2000))
     }
   }
@@ -153,7 +149,6 @@ Deno.serve(async (req) => {
       } else {
         allCreditNotes = allCreditNotes.concat(notes)
         page++
-        // Safety limit
         if (page > 20) hasMore = false
       }
     }
@@ -162,18 +157,21 @@ Deno.serve(async (req) => {
 
     let synced = 0
     let notMatched = 0
-    const results: any[] = []
 
     for (const cn of allCreditNotes) {
       const cnId = cn.id
       const cnRef = cn.sequence_number || cn.inverted_sequence_number || `NC-${cnId}`
-      
-      // Try to get the related document from the credit note details
-      const detailUrl = `${baseUrl}/credit_notes/${cnId}.json?api_key=${apiKey}`
+      const cnTotal = parseFloat(cn.total || '0')
+      const cnDate = cn.date || null
+      const cnClientName = cn.client?.name || null
+      const cnStatus = cn.status || null
+
+      // Get detailed info for related documents
       let relatedDocId: number | null = null
+      let cnDetailRaw: any = cn
 
       try {
-        const detailRes = await fetch(detailUrl, {
+        const detailRes = await fetch(`${baseUrl}/credit_notes/${cnId}.json?api_key=${apiKey}`, {
           method: 'GET',
           headers: { 'Accept': 'application/json' },
         })
@@ -181,27 +179,26 @@ Deno.serve(async (req) => {
         if (detailRes.ok) {
           const detailData = await detailRes.json()
           const cnDetail = detailData?.credit_note
-          
-          // Check for related documents
+          if (cnDetail) cnDetailRaw = cnDetail
+
           if (cnDetail?.related_documents && cnDetail.related_documents.length > 0) {
             relatedDocId = cnDetail.related_documents[0].id
           }
-          // Also check observations for invoice reference
           if (!relatedDocId && cnDetail?.observations) {
             const match = cnDetail.observations.match(/(?:fatura|invoice|FR|FT)\s*[#:]?\s*(\d+)/i)
-            if (match) {
-              relatedDocId = parseInt(match[1])
-            }
+            if (match) relatedDocId = parseInt(match[1])
           }
         }
       } catch (e) {
         console.warn(`Failed to get details for CN ${cnId}:`, e)
       }
 
-      let matched = false
+      // Try matching to local records
+      let matchedSaleId: string | null = null
+      let matchedPaymentId: string | null = null
 
       if (relatedDocId) {
-        // Try to match in sales table
+        // 1. Match by invoicexpress_id in sales
         const { data: sale } = await supabase
           .from('sales')
           .select('id')
@@ -210,46 +207,94 @@ Deno.serve(async (req) => {
           .maybeSingle()
 
         if (sale) {
-          await supabase
-            .from('sales')
-            .update({
-              credit_note_id: cnId,
-              credit_note_reference: cnRef,
-            })
-            .eq('id', sale.id)
-
-          matched = true
+          matchedSaleId = sale.id
+          // Also update the sales record
+          await supabase.from('sales').update({
+            credit_note_id: cnId,
+            credit_note_reference: cnRef,
+          }).eq('id', sale.id)
         }
 
-        // Try sale_payments
-        if (!matched) {
+        // 2. Match by invoicexpress_id in sale_payments
+        if (!matchedSaleId) {
           const { data: payment } = await supabase
             .from('sale_payments')
-            .select('id')
+            .select('id, sale_id')
             .eq('organization_id', organization_id)
             .eq('invoicexpress_id', relatedDocId)
             .maybeSingle()
 
           if (payment) {
-            await supabase
-              .from('sale_payments')
-              .update({
-                credit_note_id: cnId,
-                credit_note_reference: cnRef,
-              })
-              .eq('id', payment.id)
+            matchedPaymentId = payment.id
+            matchedSaleId = payment.sale_id || null
+            await supabase.from('sale_payments').update({
+              credit_note_id: cnId,
+              credit_note_reference: cnRef,
+            }).eq('id', payment.id)
+          }
+        }
 
-            matched = true
+        // 3. Match by invoice_reference text pattern in sale_payments
+        if (!matchedSaleId && !matchedPaymentId) {
+          // Get the sequence number of the related document to search in text references
+          try {
+            const relDocRes = await fetch(`${baseUrl}/documents/${relatedDocId}.json?api_key=${apiKey}`, {
+              method: 'GET',
+              headers: { 'Accept': 'application/json' },
+            })
+            if (relDocRes.ok) {
+              const relDocData = await relDocRes.json()
+              // Try different document type wrappers
+              const relDoc = relDocData?.invoice_receipt || relDocData?.invoice || relDocData?.simplified_invoice || relDocData?.receipt
+              const relSeq = relDoc?.sequence_number || relDoc?.inverted_sequence_number
+              if (relSeq) {
+                // Search sale_payments by invoice_reference containing the sequence
+                const { data: payments } = await supabase
+                  .from('sale_payments')
+                  .select('id, sale_id')
+                  .eq('organization_id', organization_id)
+                  .ilike('invoice_reference', `%${relSeq}%`)
+                  .limit(1)
+
+                if (payments && payments.length > 0) {
+                  matchedPaymentId = payments[0].id
+                  matchedSaleId = payments[0].sale_id || null
+                  await supabase.from('sale_payments').update({
+                    credit_note_id: cnId,
+                    credit_note_reference: cnRef,
+                  }).eq('id', payments[0].id)
+                }
+
+                // Also try in sales.invoice_reference
+                if (!matchedSaleId) {
+                  const { data: sales } = await supabase
+                    .from('sales')
+                    .select('id')
+                    .eq('organization_id', organization_id)
+                    .ilike('invoice_reference', `%${relSeq}%`)
+                    .limit(1)
+
+                  if (sales && sales.length > 0) {
+                    matchedSaleId = sales[0].id
+                    await supabase.from('sales').update({
+                      credit_note_id: cnId,
+                      credit_note_reference: cnRef,
+                    }).eq('id', sales[0].id)
+                  }
+                }
+              }
+            }
+          } catch (e) {
+            console.warn('Failed to resolve related doc sequence:', e)
           }
         }
       }
 
-      // If no related doc found, try matching by client name in sales
-      if (!matched && cn.client?.name) {
-        // Try finding a sale with matching client that doesn't already have a credit note
+      // 4. Fallback: match by client name
+      if (!matchedSaleId && !matchedPaymentId && cnClientName) {
         const { data: salesByClient } = await supabase
           .from('sales')
-          .select('id, invoicexpress_id, crm_clients:client_id(name), leads:lead_id(name)')
+          .select('id, crm_clients:client_id(name), leads:lead_id(name)')
           .eq('organization_id', organization_id)
           .is('credit_note_id', null)
           .limit(50)
@@ -257,78 +302,60 @@ Deno.serve(async (req) => {
         if (salesByClient) {
           for (const s of salesByClient) {
             const clientName = (s as any).crm_clients?.name || (s as any).leads?.name
-            if (clientName && clientName.toLowerCase().includes(cn.client.name.toLowerCase())) {
-              await supabase
-                .from('sales')
-                .update({
-                  credit_note_id: cnId,
-                  credit_note_reference: cnRef,
-                })
-                .eq('id', s.id)
-
-              matched = true
+            if (clientName && clientName.toLowerCase().includes(cnClientName.toLowerCase())) {
+              matchedSaleId = s.id
+              await supabase.from('sales').update({
+                credit_note_id: cnId,
+                credit_note_reference: cnRef,
+              }).eq('id', s.id)
               break
             }
           }
         }
       }
 
-      // Download and store PDF
-      let storagePath: string | null = null
+      // Download PDF
+      let pdfPath: string | null = null
       try {
         const pdfTempUrl = await pollPdfUrl(baseUrl, cnId, apiKey)
         if (pdfTempUrl) {
           const fileName = `${organization_id}/credit_note_${cnId}.pdf`
-          storagePath = await downloadAndUploadPdf(supabase, pdfTempUrl, fileName)
+          pdfPath = await downloadAndUploadPdf(supabase, pdfTempUrl, fileName)
         }
       } catch (e) {
         console.warn(`Failed to download PDF for CN ${cnId}:`, e)
       }
 
-      // If matched and we have a PDF, update the pdf field too
-      if (matched && storagePath) {
-        // Update the matched record with the PDF path
-        const { data: matchedSale } = await supabase
-          .from('sales')
-          .select('id')
-          .eq('organization_id', organization_id)
-          .eq('credit_note_id', cnId)
-          .maybeSingle()
+      // Upsert into credit_notes table
+      const { error: upsertError } = await supabase
+        .from('credit_notes')
+        .upsert({
+          organization_id,
+          invoicexpress_id: cnId,
+          reference: cnRef,
+          status: cnStatus,
+          client_name: cnClientName,
+          total: cnTotal,
+          date: cnDate,
+          related_invoice_id: relatedDocId,
+          sale_id: matchedSaleId,
+          payment_id: matchedPaymentId,
+          pdf_path: pdfPath,
+          raw_data: cnDetailRaw,
+          updated_at: new Date().toISOString(),
+        }, {
+          onConflict: 'organization_id,invoicexpress_id',
+        })
 
-        if (matchedSale) {
-          // Store CN PDF in a dedicated field - we'll use invoice_pdf_url for now
-          // but prefix check in frontend
-        }
-
-        const { data: matchedPayment } = await supabase
-          .from('sale_payments')
-          .select('id')
-          .eq('organization_id', organization_id)
-          .eq('credit_note_id', cnId)
-          .maybeSingle()
-
-        if (matchedPayment && storagePath) {
-          await supabase
-            .from('sale_payments')
-            .update({ invoice_file_url: storagePath })
-            .eq('id', matchedPayment.id)
-        }
+      if (upsertError) {
+        console.error(`Upsert error for CN ${cnId}:`, upsertError)
       }
 
-      if (matched) {
+      if (matchedSaleId || matchedPaymentId) {
         synced++
       } else {
         notMatched++
       }
-
-      results.push({
-        id: cnId,
-        reference: cnRef,
-        matched,
-        client: cn.client?.name || null,
-        total: cn.total,
-        pdf_stored: !!storagePath,
-      })
     }
 
     console.log(`Sync complete: ${synced} matched, ${notMatched} not matched`)
@@ -337,7 +364,6 @@ Deno.serve(async (req) => {
       total: allCreditNotes.length,
       synced,
       not_matched: notMatched,
-      details: results,
     }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
