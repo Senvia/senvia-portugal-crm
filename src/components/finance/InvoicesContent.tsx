@@ -16,14 +16,23 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CreditNotesContent } from "./CreditNotesContent";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { InvoiceDetailsModal } from "@/components/sales/InvoiceDetailsModal";
+import { useAuth } from "@/contexts/AuthContext";
 
 function InvoicesTable() {
   const { data: invoicesData, isLoading } = useInvoices();
+  const { organization } = useAuth();
   const syncInvoices = useSyncInvoices();
   const hasSynced = useRef(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [selectedInvoice, setSelectedInvoice] = useState<{
+    invoicexpress_id: number;
+    document_type: "invoice" | "invoice_receipt" | "receipt";
+    sale_id?: string;
+    payment_id?: string;
+  } | null>(null);
 
   // Auto-sync on mount (once per session)
   useEffect(() => {
@@ -233,8 +242,17 @@ function InvoicesTable() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {invoices.map((invoice) => (
-                    <TableRow key={invoice.id}>
+                    {invoices.map((invoice) => (
+                      <TableRow
+                        key={invoice.id}
+                        className="cursor-pointer hover:bg-muted/50"
+                        onClick={() => setSelectedInvoice({
+                          invoicexpress_id: invoice.invoicexpress_id,
+                          document_type: (invoice.document_type || 'invoice') as "invoice" | "invoice_receipt" | "receipt",
+                          sale_id: invoice.sale_id || undefined,
+                          payment_id: invoice.payment_id || undefined,
+                        })}
+                      >
                       <TableCell className="font-medium">
                         {invoice.reference || '-'}
                       </TableCell>
@@ -279,7 +297,7 @@ function InvoicesTable() {
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8"
-                            onClick={() => handleDownload(invoice.id, invoice.pdf_path)}
+                            onClick={(e) => { e.stopPropagation(); handleDownload(invoice.id, invoice.pdf_path); }}
                             disabled={downloadingId === invoice.id}
                           >
                             {downloadingId === invoice.id ? (
@@ -300,6 +318,19 @@ function InvoicesTable() {
           )}
         </CardContent>
       </Card>
+
+      {/* Invoice Details Modal */}
+      {selectedInvoice && organization && (
+        <InvoiceDetailsModal
+          open={!!selectedInvoice}
+          onOpenChange={(open) => !open && setSelectedInvoice(null)}
+          documentId={selectedInvoice.invoicexpress_id}
+          documentType={selectedInvoice.document_type}
+          organizationId={organization.id}
+          saleId={selectedInvoice.sale_id}
+          paymentId={selectedInvoice.payment_id}
+        />
+      )}
     </div>
   );
 }
