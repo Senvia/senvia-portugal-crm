@@ -2127,6 +2127,8 @@ export type Database = {
         Row: {
           amount: number
           created_at: string | null
+          credit_note_id: number | null
+          credit_note_reference: string | null
           id: string
           invoice_file_url: string | null
           invoice_reference: string | null
@@ -2143,6 +2145,8 @@ export type Database = {
         Insert: {
           amount: number
           created_at?: string | null
+          credit_note_id?: number | null
+          credit_note_reference?: string | null
           id?: string
           invoice_file_url?: string | null
           invoice_reference?: string | null
@@ -2159,6 +2163,8 @@ export type Database = {
         Update: {
           amount?: number
           created_at?: string | null
+          credit_note_id?: number | null
+          credit_note_reference?: string | null
           id?: string
           invoice_file_url?: string | null
           invoice_reference?: string | null
@@ -2198,6 +2204,8 @@ export type Database = {
           consumo_anual: number | null
           created_at: string | null
           created_by: string | null
+          credit_note_id: number | null
+          credit_note_reference: string | null
           dbl: number | null
           discount: number | null
           due_date: string | null
@@ -2237,6 +2245,8 @@ export type Database = {
           consumo_anual?: number | null
           created_at?: string | null
           created_by?: string | null
+          credit_note_id?: number | null
+          credit_note_reference?: string | null
           dbl?: number | null
           discount?: number | null
           due_date?: string | null
@@ -2276,6 +2286,8 @@ export type Database = {
           consumo_anual?: number | null
           created_at?: string | null
           created_by?: string | null
+          credit_note_id?: number | null
+          credit_note_reference?: string | null
           dbl?: number | null
           discount?: number | null
           due_date?: string | null

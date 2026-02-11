@@ -2,26 +2,25 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Download, Search, FileText, Loader2, X, ExternalLink } from "lucide-react";
+import { Download, Search, FileText, X } from "lucide-react";
 import { useAllPayments } from "@/hooks/useAllPayments";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useState, useMemo } from "react";
 import { exportToExcel } from "@/lib/export";
-import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { DateRange } from "react-day-picker";
 import { startOfDay, endOfDay, parseISO } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/contexts/AuthContext";
+import { InvoiceActionsMenu } from "./InvoiceActionsMenu";
 
 export function InvoicesContent() {
   const { data: payments, isLoading } = useAllPayments();
   const { organization } = useAuth();
+  const organizationId = organization?.id || '';
   const [searchTerm, setSearchTerm] = useState("");
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
-  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   // Filter payments that have any invoice reference (manual or InvoiceXpress)
   const invoices = useMemo(() => {
@@ -76,46 +75,23 @@ export function InvoicesContent() {
     exportToExcel(exportData, 'faturas');
   };
 
-  const handleDownload = async (fileUrl: string, invoiceId: string) => {
-    setDownloadingId(invoiceId);
-    try {
-      const { data, error } = await supabase.storage
-        .from('invoices')
-        .createSignedUrl(fileUrl, 60);
-
-      if (error) {
-        console.error('Error creating signed URL:', error);
-        toast.error("Erro ao obter ficheiro");
-        return;
-      }
-
-      if (data?.signedUrl) {
-        window.open(data.signedUrl, '_blank');
-      }
-    } catch (error) {
-      console.error('Download error:', error);
-      toast.error("Erro ao fazer download");
-    } finally {
-      setDownloadingId(null);
-    }
-  };
-
-  const handleDownloadInvoiceXpress = (invoicexpressId: number) => {
-    const accountName = (organization as any)?.invoicexpress_account_name;
-    if (!accountName) {
-      toast.error("Conta InvoiceXpress não configurada");
-      return;
-    }
-    const url = `https://${accountName}.app.invoicexpress.com/invoice_receipts/${invoicexpressId}.pdf`;
-    window.open(url, '_blank');
-  };
-
   const getInvoiceRef = (invoice: typeof invoices[0]) => {
     return invoice.invoice_reference || invoice.sale.invoice_reference || '-';
   };
 
   const isInvoiceXpress = (invoice: typeof invoices[0]) => {
-    return !!invoice.sale.invoicexpress_id;
+    return !!invoice.sale.invoicexpress_id || !!invoice.invoicexpress_id;
+  };
+
+  const getDocumentType = (invoice: typeof invoices[0]): "invoice" | "invoice_receipt" | "receipt" => {
+    if (invoice.invoicexpress_id) return 'receipt';
+    const saleType = invoice.sale.invoicexpress_type;
+    if (saleType === 'invoice_receipts') return 'invoice_receipt';
+    return 'invoice';
+  };
+
+  const getInvoicexpressId = (invoice: typeof invoices[0]): number | null => {
+    return invoice.invoicexpress_id || invoice.sale.invoicexpress_id || null;
   };
 
   return (
@@ -202,7 +178,7 @@ export function InvoicesContent() {
                     <TableHead>Venda</TableHead>
                     <TableHead>Cliente</TableHead>
                     <TableHead className="text-right">Valor</TableHead>
-                    <TableHead className="text-center w-[60px]">Anexo</TableHead>
+                    <TableHead className="text-center w-[60px]">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -231,32 +207,19 @@ export function InvoicesContent() {
                         {formatCurrency(invoice.amount)}
                       </TableCell>
                       <TableCell className="text-center">
-                        {invoice.invoice_file_url ? (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => handleDownload(invoice.invoice_file_url!, invoice.id)}
-                            disabled={downloadingId === invoice.id}
-                          >
-                            {downloadingId === invoice.id ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Download className="h-4 w-4" />
-                            )}
-                          </Button>
-                        ) : isInvoiceXpress(invoice) ? (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => handleDownloadInvoiceXpress(invoice.sale.invoicexpress_id!)}
-                          >
-                            <ExternalLink className="h-4 w-4" />
-                          </Button>
-                        ) : (
-                          <span className="text-muted-foreground text-sm">—</span>
-                        )}
+                        <InvoiceActionsMenu
+                          invoice={{
+                            id: invoice.id,
+                            invoicexpressId: getInvoicexpressId(invoice),
+                            invoiceReference: getInvoiceRef(invoice),
+                            invoiceFileUrl: invoice.invoice_file_url,
+                            documentType: getDocumentType(invoice),
+                            saleId: invoice.sale.id,
+                            paymentId: invoice.invoicexpress_id ? invoice.id : undefined,
+                            clientEmail: null,
+                            organizationId,
+                          }}
+                        />
                       </TableCell>
                     </TableRow>
                   ))}

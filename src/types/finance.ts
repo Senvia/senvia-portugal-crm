@@ -9,6 +9,7 @@ export interface PaymentWithSale {
   payment_method: PaymentMethod | null;
   invoice_reference: string | null;
   invoice_file_url: string | null;
+  invoicexpress_id: number | null;
   status: PaymentRecordStatus;
   notes: string | null;
   created_at: string;
@@ -19,9 +20,11 @@ export interface PaymentWithSale {
     total_value: number;
     invoice_reference: string | null;
     invoicexpress_id: number | null;
+    invoicexpress_type: string | null;
   };
   client_name: string | null;
   lead_name: string | null;
+  client_email?: string | null;
 }
 
 export interface CashflowPoint {
