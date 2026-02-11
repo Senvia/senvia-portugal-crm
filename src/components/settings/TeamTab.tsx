@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { Users, UserPlus, Copy, X, Check, Clock, Loader2, RefreshCw, Eye, EyeOff, MoreHorizontal, Key, UserCog, Ban, CheckCircle, Mail } from 'lucide-react';
+import { TeamsSection } from './TeamsSection';
 import { formatDistanceToNow } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { getBaseUrl } from '@/lib/constants';
@@ -249,6 +250,7 @@ export function TeamTab() {
 
   return (
     <div className="space-y-6">
+      <TeamsSection />
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <div>

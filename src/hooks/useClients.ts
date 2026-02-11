@@ -1,24 +1,32 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTeamFilter } from '@/hooks/useTeamFilter';
 import { toast } from 'sonner';
 import type { CrmClient, ClientStatus } from '@/types/clients';
 
 export function useClients() {
   const { organization } = useAuth();
+  const { effectiveUserIds } = useTeamFilter();
   const organizationId = organization?.id;
 
   return useQuery({
-    queryKey: ['crm-clients', organizationId],
+    queryKey: ['crm-clients', organizationId, effectiveUserIds],
     queryFn: async () => {
       if (!organizationId) return [];
 
-      const { data, error } = await supabase
+      let query = supabase
         .from('crm_clients')
         .select('*')
         .eq('organization_id', organizationId)
         .order('created_at', { ascending: false });
 
+      // Filter by user IDs if applicable
+      if (effectiveUserIds) {
+        query = query.in('assigned_to', effectiveUserIds);
+      }
+
+      const { data, error } = await query;
       if (error) {
         console.error('Error fetching clients:', error);
         throw error;
