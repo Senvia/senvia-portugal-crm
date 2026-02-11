@@ -55,6 +55,237 @@ async function pollPdfUrl(baseUrl: string, docId: number, apiKey: string): Promi
   return null
 }
 
+async function syncOrganization(supabase: any, organization_id: string, org: any) {
+  const baseUrl = `https://${org.invoicexpress_account_name}.app.invoicexpress.com`
+  const apiKey = org.invoicexpress_api_key
+
+  // Fetch all credit notes from InvoiceXpress (paginated)
+  let allCreditNotes: any[] = []
+  let page = 1
+  let hasMore = true
+
+  while (hasMore) {
+    const url = `${baseUrl}/credit_notes.json?api_key=${apiKey}&page=${page}&per_page=50`
+    console.log(`[${organization_id}] Fetching credit notes page ${page}...`)
+
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+    })
+
+    if (!res.ok) {
+      const errorText = await res.text()
+      console.error('InvoiceXpress error:', res.status, errorText)
+      throw new Error(`Erro InvoiceXpress: ${res.status}`)
+    }
+
+    const data = await res.json()
+    const notes = data?.credit_notes || []
+
+    if (notes.length === 0) {
+      hasMore = false
+    } else {
+      allCreditNotes = allCreditNotes.concat(notes)
+      page++
+      if (page > 20) hasMore = false
+    }
+  }
+
+  console.log(`[${organization_id}] Found ${allCreditNotes.length} credit notes`)
+
+  let synced = 0
+  let notMatched = 0
+
+  for (const cn of allCreditNotes) {
+    const cnId = cn.id
+    const cnRef = cn.sequence_number || cn.inverted_sequence_number || `NC-${cnId}`
+    const cnTotal = parseFloat(cn.total || '0')
+    const cnDate = cn.date || null
+    const cnClientName = cn.client?.name || null
+    const cnStatus = cn.status || null
+
+    let relatedDocId: number | null = null
+    let cnDetailRaw: any = cn
+
+    try {
+      const detailRes = await fetch(`${baseUrl}/credit_notes/${cnId}.json?api_key=${apiKey}`, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' },
+      })
+
+      if (detailRes.ok) {
+        const detailData = await detailRes.json()
+        const cnDetail = detailData?.credit_note
+        if (cnDetail) cnDetailRaw = cnDetail
+
+        if (cnDetail?.related_documents && cnDetail.related_documents.length > 0) {
+          relatedDocId = cnDetail.related_documents[0].id
+        }
+        if (!relatedDocId && cnDetail?.observations) {
+          const match = cnDetail.observations.match(/(?:fatura|invoice|FR|FT)\s*[#:]?\s*(\d+)/i)
+          if (match) relatedDocId = parseInt(match[1])
+        }
+      }
+    } catch (e) {
+      console.warn(`Failed to get details for CN ${cnId}:`, e)
+    }
+
+    let matchedSaleId: string | null = null
+    let matchedPaymentId: string | null = null
+
+    if (relatedDocId) {
+      const { data: sale } = await supabase
+        .from('sales')
+        .select('id')
+        .eq('organization_id', organization_id)
+        .eq('invoicexpress_id', relatedDocId)
+        .maybeSingle()
+
+      if (sale) {
+        matchedSaleId = sale.id
+        await supabase.from('sales').update({
+          credit_note_id: cnId,
+          credit_note_reference: cnRef,
+        }).eq('id', sale.id)
+      }
+
+      if (!matchedSaleId) {
+        const { data: payment } = await supabase
+          .from('sale_payments')
+          .select('id, sale_id')
+          .eq('organization_id', organization_id)
+          .eq('invoicexpress_id', relatedDocId)
+          .maybeSingle()
+
+        if (payment) {
+          matchedPaymentId = payment.id
+          matchedSaleId = payment.sale_id || null
+          await supabase.from('sale_payments').update({
+            credit_note_id: cnId,
+            credit_note_reference: cnRef,
+          }).eq('id', payment.id)
+        }
+      }
+
+      if (!matchedSaleId && !matchedPaymentId) {
+        try {
+          const relDocRes = await fetch(`${baseUrl}/documents/${relatedDocId}.json?api_key=${apiKey}`, {
+            method: 'GET',
+            headers: { 'Accept': 'application/json' },
+          })
+          if (relDocRes.ok) {
+            const relDocData = await relDocRes.json()
+            const relDoc = relDocData?.invoice_receipt || relDocData?.invoice || relDocData?.simplified_invoice || relDocData?.receipt
+            const relSeq = relDoc?.sequence_number || relDoc?.inverted_sequence_number
+            if (relSeq) {
+              const { data: payments } = await supabase
+                .from('sale_payments')
+                .select('id, sale_id')
+                .eq('organization_id', organization_id)
+                .ilike('invoice_reference', `%${relSeq}%`)
+                .limit(1)
+
+              if (payments && payments.length > 0) {
+                matchedPaymentId = payments[0].id
+                matchedSaleId = payments[0].sale_id || null
+                await supabase.from('sale_payments').update({
+                  credit_note_id: cnId,
+                  credit_note_reference: cnRef,
+                }).eq('id', payments[0].id)
+              }
+
+              if (!matchedSaleId) {
+                const { data: sales } = await supabase
+                  .from('sales')
+                  .select('id')
+                  .eq('organization_id', organization_id)
+                  .ilike('invoice_reference', `%${relSeq}%`)
+                  .limit(1)
+
+                if (sales && sales.length > 0) {
+                  matchedSaleId = sales[0].id
+                  await supabase.from('sales').update({
+                    credit_note_id: cnId,
+                    credit_note_reference: cnRef,
+                  }).eq('id', sales[0].id)
+                }
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('Failed to resolve related doc sequence:', e)
+        }
+      }
+    }
+
+    if (!matchedSaleId && !matchedPaymentId && cnClientName) {
+      const { data: salesByClient } = await supabase
+        .from('sales')
+        .select('id, crm_clients:client_id(name), leads:lead_id(name)')
+        .eq('organization_id', organization_id)
+        .is('credit_note_id', null)
+        .limit(50)
+
+      if (salesByClient) {
+        for (const s of salesByClient) {
+          const clientName = (s as any).crm_clients?.name || (s as any).leads?.name
+          if (clientName && clientName.toLowerCase().includes(cnClientName.toLowerCase())) {
+            matchedSaleId = s.id
+            await supabase.from('sales').update({
+              credit_note_id: cnId,
+              credit_note_reference: cnRef,
+            }).eq('id', s.id)
+            break
+          }
+        }
+      }
+    }
+
+    let pdfPath: string | null = null
+    try {
+      const pdfTempUrl = await pollPdfUrl(baseUrl, cnId, apiKey)
+      if (pdfTempUrl) {
+        const fileName = `${organization_id}/credit_note_${cnId}.pdf`
+        pdfPath = await downloadAndUploadPdf(supabase, pdfTempUrl, fileName)
+      }
+    } catch (e) {
+      console.warn(`Failed to download PDF for CN ${cnId}:`, e)
+    }
+
+    const { error: upsertError } = await supabase
+      .from('credit_notes')
+      .upsert({
+        organization_id,
+        invoicexpress_id: cnId,
+        reference: cnRef,
+        status: cnStatus,
+        client_name: cnClientName,
+        total: cnTotal,
+        date: cnDate,
+        related_invoice_id: relatedDocId,
+        sale_id: matchedSaleId,
+        payment_id: matchedPaymentId,
+        pdf_path: pdfPath,
+        raw_data: cnDetailRaw,
+        updated_at: new Date().toISOString(),
+      }, {
+        onConflict: 'organization_id,invoicexpress_id',
+      })
+
+    if (upsertError) {
+      console.error(`Upsert error for CN ${cnId}:`, upsertError)
+    }
+
+    if (matchedSaleId || matchedPaymentId) {
+      synced++
+    } else {
+      notMatched++
+    }
+  }
+
+  return { total: allCreditNotes.length, synced, not_matched: notMatched }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
@@ -63,7 +294,47 @@ Deno.serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
+    const body = await req.json()
+    const { sync_all, organization_id } = body
+
+    // Mode 1: sync_all - internal cron call, iterate all orgs with IX credentials
+    if (sync_all) {
+      console.log('Running sync_all mode for all organizations...')
+      const { data: orgs, error: orgsError } = await supabase
+        .from('organizations')
+        .select('id, invoicexpress_account_name, invoicexpress_api_key')
+        .not('invoicexpress_account_name', 'is', null)
+        .not('invoicexpress_api_key', 'is', null)
+
+      if (orgsError || !orgs?.length) {
+        console.log('No organizations with IX credentials found')
+        return new Response(JSON.stringify({ message: 'No organizations to sync' }), {
+          status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      let totalResults = { total: 0, synced: 0, not_matched: 0, orgs_processed: 0 }
+      for (const org of orgs) {
+        try {
+          const result = await syncOrganization(supabase, org.id, org)
+          totalResults.total += result.total
+          totalResults.synced += result.synced
+          totalResults.not_matched += result.not_matched
+          totalResults.orgs_processed++
+        } catch (e) {
+          console.error(`Error syncing org ${org.id}:`, e)
+        }
+      }
+
+      console.log('sync_all complete:', totalResults)
+      return new Response(JSON.stringify(totalResults), {
+        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    // Mode 2: single org sync (user-triggered)
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
       return new Response(JSON.stringify({ error: 'Não autorizado' }), {
@@ -71,7 +342,6 @@ Deno.serve(async (req) => {
       })
     }
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey)
     const token = authHeader.replace('Bearer ', '')
     const { data: { user }, error: authError } = await supabase.auth.getUser(token)
     if (authError || !user) {
@@ -80,15 +350,12 @@ Deno.serve(async (req) => {
       })
     }
 
-    const { organization_id } = await req.json()
-
     if (!organization_id) {
       return new Response(JSON.stringify({ error: 'organization_id é obrigatório' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
-    // Verify membership
     const { data: membership } = await supabase
       .from('organization_members')
       .select('id')
@@ -103,7 +370,6 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Get org credentials
     const { data: org } = await supabase
       .from('organizations')
       .select('invoicexpress_account_name, invoicexpress_api_key')
@@ -116,263 +382,15 @@ Deno.serve(async (req) => {
       })
     }
 
-    const baseUrl = `https://${org.invoicexpress_account_name}.app.invoicexpress.com`
-    const apiKey = org.invoicexpress_api_key
+    const result = await syncOrganization(supabase, organization_id, org)
 
-    // Fetch all credit notes from InvoiceXpress (paginated)
-    let allCreditNotes: any[] = []
-    let page = 1
-    let hasMore = true
-
-    while (hasMore) {
-      const url = `${baseUrl}/credit_notes.json?api_key=${apiKey}&page=${page}&per_page=50`
-      console.log(`Fetching credit notes page ${page}...`)
-      
-      const res = await fetch(url, {
-        method: 'GET',
-        headers: { 'Accept': 'application/json' },
-      })
-
-      if (!res.ok) {
-        const errorText = await res.text()
-        console.error('InvoiceXpress error:', res.status, errorText)
-        return new Response(JSON.stringify({ error: `Erro InvoiceXpress: ${res.status}` }), {
-          status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        })
-      }
-
-      const data = await res.json()
-      const notes = data?.credit_notes || []
-      
-      if (notes.length === 0) {
-        hasMore = false
-      } else {
-        allCreditNotes = allCreditNotes.concat(notes)
-        page++
-        if (page > 20) hasMore = false
-      }
-    }
-
-    console.log(`Found ${allCreditNotes.length} credit notes in InvoiceXpress`)
-
-    let synced = 0
-    let notMatched = 0
-
-    for (const cn of allCreditNotes) {
-      const cnId = cn.id
-      const cnRef = cn.sequence_number || cn.inverted_sequence_number || `NC-${cnId}`
-      const cnTotal = parseFloat(cn.total || '0')
-      const cnDate = cn.date || null
-      const cnClientName = cn.client?.name || null
-      const cnStatus = cn.status || null
-
-      // Get detailed info for related documents
-      let relatedDocId: number | null = null
-      let cnDetailRaw: any = cn
-
-      try {
-        const detailRes = await fetch(`${baseUrl}/credit_notes/${cnId}.json?api_key=${apiKey}`, {
-          method: 'GET',
-          headers: { 'Accept': 'application/json' },
-        })
-        
-        if (detailRes.ok) {
-          const detailData = await detailRes.json()
-          const cnDetail = detailData?.credit_note
-          if (cnDetail) cnDetailRaw = cnDetail
-
-          if (cnDetail?.related_documents && cnDetail.related_documents.length > 0) {
-            relatedDocId = cnDetail.related_documents[0].id
-          }
-          if (!relatedDocId && cnDetail?.observations) {
-            const match = cnDetail.observations.match(/(?:fatura|invoice|FR|FT)\s*[#:]?\s*(\d+)/i)
-            if (match) relatedDocId = parseInt(match[1])
-          }
-        }
-      } catch (e) {
-        console.warn(`Failed to get details for CN ${cnId}:`, e)
-      }
-
-      // Try matching to local records
-      let matchedSaleId: string | null = null
-      let matchedPaymentId: string | null = null
-
-      if (relatedDocId) {
-        // 1. Match by invoicexpress_id in sales
-        const { data: sale } = await supabase
-          .from('sales')
-          .select('id')
-          .eq('organization_id', organization_id)
-          .eq('invoicexpress_id', relatedDocId)
-          .maybeSingle()
-
-        if (sale) {
-          matchedSaleId = sale.id
-          // Also update the sales record
-          await supabase.from('sales').update({
-            credit_note_id: cnId,
-            credit_note_reference: cnRef,
-          }).eq('id', sale.id)
-        }
-
-        // 2. Match by invoicexpress_id in sale_payments
-        if (!matchedSaleId) {
-          const { data: payment } = await supabase
-            .from('sale_payments')
-            .select('id, sale_id')
-            .eq('organization_id', organization_id)
-            .eq('invoicexpress_id', relatedDocId)
-            .maybeSingle()
-
-          if (payment) {
-            matchedPaymentId = payment.id
-            matchedSaleId = payment.sale_id || null
-            await supabase.from('sale_payments').update({
-              credit_note_id: cnId,
-              credit_note_reference: cnRef,
-            }).eq('id', payment.id)
-          }
-        }
-
-        // 3. Match by invoice_reference text pattern in sale_payments
-        if (!matchedSaleId && !matchedPaymentId) {
-          // Get the sequence number of the related document to search in text references
-          try {
-            const relDocRes = await fetch(`${baseUrl}/documents/${relatedDocId}.json?api_key=${apiKey}`, {
-              method: 'GET',
-              headers: { 'Accept': 'application/json' },
-            })
-            if (relDocRes.ok) {
-              const relDocData = await relDocRes.json()
-              // Try different document type wrappers
-              const relDoc = relDocData?.invoice_receipt || relDocData?.invoice || relDocData?.simplified_invoice || relDocData?.receipt
-              const relSeq = relDoc?.sequence_number || relDoc?.inverted_sequence_number
-              if (relSeq) {
-                // Search sale_payments by invoice_reference containing the sequence
-                const { data: payments } = await supabase
-                  .from('sale_payments')
-                  .select('id, sale_id')
-                  .eq('organization_id', organization_id)
-                  .ilike('invoice_reference', `%${relSeq}%`)
-                  .limit(1)
-
-                if (payments && payments.length > 0) {
-                  matchedPaymentId = payments[0].id
-                  matchedSaleId = payments[0].sale_id || null
-                  await supabase.from('sale_payments').update({
-                    credit_note_id: cnId,
-                    credit_note_reference: cnRef,
-                  }).eq('id', payments[0].id)
-                }
-
-                // Also try in sales.invoice_reference
-                if (!matchedSaleId) {
-                  const { data: sales } = await supabase
-                    .from('sales')
-                    .select('id')
-                    .eq('organization_id', organization_id)
-                    .ilike('invoice_reference', `%${relSeq}%`)
-                    .limit(1)
-
-                  if (sales && sales.length > 0) {
-                    matchedSaleId = sales[0].id
-                    await supabase.from('sales').update({
-                      credit_note_id: cnId,
-                      credit_note_reference: cnRef,
-                    }).eq('id', sales[0].id)
-                  }
-                }
-              }
-            }
-          } catch (e) {
-            console.warn('Failed to resolve related doc sequence:', e)
-          }
-        }
-      }
-
-      // 4. Fallback: match by client name
-      if (!matchedSaleId && !matchedPaymentId && cnClientName) {
-        const { data: salesByClient } = await supabase
-          .from('sales')
-          .select('id, crm_clients:client_id(name), leads:lead_id(name)')
-          .eq('organization_id', organization_id)
-          .is('credit_note_id', null)
-          .limit(50)
-
-        if (salesByClient) {
-          for (const s of salesByClient) {
-            const clientName = (s as any).crm_clients?.name || (s as any).leads?.name
-            if (clientName && clientName.toLowerCase().includes(cnClientName.toLowerCase())) {
-              matchedSaleId = s.id
-              await supabase.from('sales').update({
-                credit_note_id: cnId,
-                credit_note_reference: cnRef,
-              }).eq('id', s.id)
-              break
-            }
-          }
-        }
-      }
-
-      // Download PDF
-      let pdfPath: string | null = null
-      try {
-        const pdfTempUrl = await pollPdfUrl(baseUrl, cnId, apiKey)
-        if (pdfTempUrl) {
-          const fileName = `${organization_id}/credit_note_${cnId}.pdf`
-          pdfPath = await downloadAndUploadPdf(supabase, pdfTempUrl, fileName)
-        }
-      } catch (e) {
-        console.warn(`Failed to download PDF for CN ${cnId}:`, e)
-      }
-
-      // Upsert into credit_notes table
-      const { error: upsertError } = await supabase
-        .from('credit_notes')
-        .upsert({
-          organization_id,
-          invoicexpress_id: cnId,
-          reference: cnRef,
-          status: cnStatus,
-          client_name: cnClientName,
-          total: cnTotal,
-          date: cnDate,
-          related_invoice_id: relatedDocId,
-          sale_id: matchedSaleId,
-          payment_id: matchedPaymentId,
-          pdf_path: pdfPath,
-          raw_data: cnDetailRaw,
-          updated_at: new Date().toISOString(),
-        }, {
-          onConflict: 'organization_id,invoicexpress_id',
-        })
-
-      if (upsertError) {
-        console.error(`Upsert error for CN ${cnId}:`, upsertError)
-      }
-
-      if (matchedSaleId || matchedPaymentId) {
-        synced++
-      } else {
-        notMatched++
-      }
-    }
-
-    console.log(`Sync complete: ${synced} matched, ${notMatched} not matched`)
-
-    return new Response(JSON.stringify({
-      total: allCreditNotes.length,
-      synced,
-      not_matched: notMatched,
-    }), {
-      status: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    return new Response(JSON.stringify(result), {
+      status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   } catch (err) {
     console.error('Unexpected error:', err)
     return new Response(JSON.stringify({ error: 'Erro interno do servidor' }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   }
 })

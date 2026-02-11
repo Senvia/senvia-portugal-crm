@@ -6,7 +6,7 @@ import { useCreditNotes, useSyncCreditNotes } from "@/hooks/useCreditNotes";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -14,6 +14,15 @@ export function CreditNotesContent() {
   const { data: creditNotes, isLoading } = useCreditNotes();
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const syncCreditNotes = useSyncCreditNotes();
+  const hasSynced = useRef(false);
+
+  // Auto-sync on mount (once per session)
+  useEffect(() => {
+    if (!hasSynced.current && !syncCreditNotes.isPending) {
+      hasSynced.current = true;
+      syncCreditNotes.mutate();
+    }
+  }, []);
 
   const handleDownload = async (id: string, pdfPath: string | null) => {
     if (!pdfPath) return;
