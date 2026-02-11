@@ -1,131 +1,89 @@
 
-## Auditoria Completa: O que Falta na Integracao InvoiceXpress
 
-Apos analise detalhada de todos os componentes, hooks, e edge functions, aqui esta tudo o que falta ou esta incompleto.
+## Correcao da Tab Faturas: PDFs e Notas de Credito
 
----
+### Problemas Identificados
 
-### PROBLEMA 1: Tab "Faturas" no Financeiro e Apenas Uma Tabela Basica
+1. **PDFs nao acessiveis**: O sistema guarda URLs temporarios da AWS (expiram em ~7 dias) em vez de guardar os PDFs no storage local. Exemplo: a venda #0005 do Nuno Dias tem um URL expirado no campo `invoice_pdf_url`.
 
-**Situacao atual**: A tab Faturas (`InvoicesContent.tsx`) mostra uma tabela simples com referencia, data, venda, cliente, valor e um botao de download. Mas:
+2. **Notas de Credito nao aparecem**: Apesar de existirem campos `credit_note_id` e `credit_note_reference` na base de dados, as notas de credito nunca sao mostradas na tab Faturas.
 
-- O download via InvoiceXpress (`handleDownloadInvoiceXpress`) constroi um URL direto para o PDF que requer autenticacao no InvoiceXpress - nao funciona para o utilizador
-- Nao ha botao para **ver detalhes** do documento (o `InvoiceDetailsModal` existe mas nao e usado aqui)
-- Nao ha botao para **anular** faturas a partir desta tab
-- Nao ha botao para **enviar por email** a partir desta tab
-- Nao ha botao para **sincronizar PDF** para download local
-- Nao mostra faturas emitidas a nivel da venda (apenas pagamentos com referencia)
-
-**Solucao**: Enriquecer a tabela de faturas com acoes completas:
-- Botao "Ver Detalhes" que abre o `InvoiceDetailsModal`
-- Botao "Sincronizar PDF" usando `useSyncInvoice` (busca o PDF e guarda no storage)
-- Botao "Download" que funciona com signed URL do storage (apos sync)
-- Botao "Enviar Email" usando `SendInvoiceEmailModal`
-- Botao "Anular" usando `CancelInvoiceDialog` + `useCancelInvoice`
-- Incluir tambem faturas a nivel da venda (campo `invoicexpress_id` na tabela `sales`)
+3. **Falta sub-tab de Notas de Credito**: Tudo aparece misturado numa unica tabela.
 
 ---
 
-### PROBLEMA 2: Nota de Credito NAO Existe
+### Plano de Implementacao
 
-**Situacao atual**: O sistema permite "anular" documentos (mudar estado para "canceled" no InvoiceXpress), mas **nota de credito** e um documento fiscal diferente. Anular != Nota de Credito.
+#### 1. Sub-tabs dentro de Faturas
 
-- Anular: Cancela o documento original (so possivel se nao tiver sido enviado ao cliente/AT)
-- Nota de Credito: Documento legal que reverte/corrige uma fatura ja emitida e comunicada
+Dentro da tab "Faturas" no Financeiro, criar duas sub-tabs:
+- **Faturas** - Lista de faturas e faturas-recibo (comportamento atual melhorado)
+- **Notas de Credito** - Lista dedicada de notas de credito emitidas
 
-**O que falta**:
-- Nova edge function `create-credit-note` que chama `POST /credit_notes.json` na API InvoiceXpress
-- Hook `useCreateCreditNote` no frontend
-- Modal `CreateCreditNoteModal` para o utilizador preencher motivo e valor
-- Botao "Emitir Nota de Credito" na lista de pagamentos e na tab Faturas
-- Campos na BD para guardar referencia da nota de credito
+#### 2. Corrigir o fluxo de PDF (Sync para Storage Local)
 
----
+Modificar a edge function `get-invoice-details` para que, quando `sync=true`:
+- Descarregue o PDF do InvoiceXpress
+- Guarde-o no bucket `invoices` do storage local
+- Guarde o **caminho do storage** (nao o URL temporario) na base de dados
 
-### PROBLEMA 3: Cancelar Faturas So Acessivel Dentro do Detalhe da Venda
+No frontend, ao fazer download:
+- Se existe caminho local -> gerar signed URL do storage
+- Se nao existe -> oferecer botao "Sincronizar" que descarrega e guarda localmente
 
-**Situacao atual**: O botao "Anular" so aparece no `SalePaymentsList` (dentro do modal de detalhes de uma venda). O utilizador precisa:
-1. Ir a Vendas
-2. Abrir uma venda
-3. Encontrar a fatura nos pagamentos
-4. Clicar "Anular"
+#### 3. Novo componente CreditNotesContent
 
-Nao ha forma de anular diretamente a partir da tab "Faturas" no Financeiro.
+Criar componente para listar notas de credito, consultando `sales` e `sale_payments` que tenham `credit_note_id` preenchido. Com as mesmas acoes: ver detalhes, sincronizar PDF, download.
 
-**Solucao**: Adicionar acao "Anular" na tab Faturas com o mesmo `CancelInvoiceDialog` ja existente.
+#### 4. Incluir faturas a nivel da venda
 
----
-
-### PROBLEMA 4: Download de PDFs Nao Funciona Corretamente
-
-**Situacao atual**: Na tab Faturas:
-- Se `invoice_file_url` existe (PDF ja sincronizado) -> funciona via signed URL
-- Se nao existe mas tem `invoicexpress_id` -> tenta abrir URL direto do InvoiceXpress que requer autenticacao -> **NAO FUNCIONA**
-
-**Solucao**: Substituir o link direto por um fluxo de sync:
-1. Se nao tem PDF local, mostrar botao "Sincronizar" que chama `useSyncInvoice`
-2. Apos sync, o PDF fica disponivel no storage e pode ser baixado com signed URL
+Actualmente so mostra pagamentos com referencia. Tambem incluir vendas que tenham `invoicexpress_id` mas cujos pagamentos nao tenham referencia individual (fatura global da venda).
 
 ---
 
-### PROBLEMA 5: Emissao de Fatura-Recibo por Pagamento Individual
+### Seccao Tecnica
 
-**Situacao atual**: Na `SalePaymentsList`, o botao "Gerar Recibo" so aparece quando:
-- `payment.status === 'paid'`
-- `hasInvoice` (a venda ja tem uma fatura global)
-- `hasInvoiceXpress` ativo
-- O pagamento nao tem `invoice_reference`
+**Ficheiros a modificar:**
 
-Isto significa que para gerar um recibo, PRIMEIRO tem de existir uma fatura da venda. Mas em muitos casos, o utilizador quer emitir uma **Fatura-Recibo (FR)** diretamente por pagamento, sem fatura global primeiro.
+| Ficheiro | Alteracao |
+|---|---|
+| `supabase/functions/get-invoice-details/index.ts` | Ao sync, descarregar PDF via fetch, fazer upload para bucket `invoices`, guardar caminho relativo (nao URL S3) |
+| `src/components/finance/InvoicesContent.tsx` | Adicionar sub-tabs (Faturas / Notas de Credito), corrigir logica de download para usar signed URLs do storage |
+| `src/components/finance/CreditNotesContent.tsx` | Novo componente - tabela de notas de credito com acoes |
+| `src/hooks/useAllPayments.ts` | Adicionar `credit_note_id`, `credit_note_reference` ao mapeamento |
+| `src/hooks/useCreditNotes.ts` | Novo hook - query dedicada para buscar vendas/pagamentos com notas de credito |
+| `src/components/finance/InvoiceActionsMenu.tsx` | Corrigir download para usar caminho do storage em vez de URL direto |
+| `src/types/finance.ts` | Adicionar `credit_note_id`, `credit_note_reference` ao tipo `PaymentWithSale` |
 
-**Solucao**: Adicionar botao "Emitir Fatura-Recibo" nos pagamentos com status "paid" que nao tenham `invoicexpress_id`, independentemente de existir fatura global.
+**Edge Function - Fluxo de Sync corrigido:**
 
----
+```text
+1. Chamar InvoiceXpress PDF API -> obter URL temporario do PDF
+2. Fetch do PDF (binario) usando esse URL
+3. Upload para bucket 'invoices' com path: {org_id}/{document_type}_{document_id}.pdf
+4. Guardar o PATH (nao URL) no campo invoice_file_url / invoice_pdf_url
+5. Quando o frontend pede download -> gerar signed URL a partir do path guardado
+```
 
-### RESUMO: Plano de Implementacao
+**Hook useCreditNotes:**
 
-| Prioridade | Tarefa | Tipo | Ficheiros |
-|---|---|---|---|
-| 1 | Enriquecer tab Faturas com acoes (detalhes, sync, download, anular, email) | Frontend | `InvoicesContent.tsx` |
-| 2 | Corrigir download de PDF (sync antes de download) | Frontend | `InvoicesContent.tsx` |
-| 3 | Incluir faturas da venda (nao so pagamentos) na tab Faturas | Frontend + Hook | `InvoicesContent.tsx`, `useAllPayments.ts` |
-| 4 | Emitir Fatura-Recibo por pagamento sem fatura global | Frontend | `SalePaymentsList.tsx` |
-| 5 | Criar Nota de Credito (novo fluxo completo) | Full Stack | Nova edge function, novo hook, novo modal, migracao BD |
+```text
+Query 1: sale_payments com credit_note_id IS NOT NULL
+Query 2: sales com credit_note_id IS NOT NULL (notas de credito a nivel da venda)
+Combinar resultados numa lista unica
+```
 
-### Secao Tecnica Detalhada
+**Sub-tabs no InvoicesContent:**
 
-**Prioridade 1-2-3: Tab Faturas Completa**
+```text
+<Tabs defaultValue="faturas">
+  <TabsList>
+    <TabsTrigger value="faturas">Faturas</TabsTrigger>
+    <TabsTrigger value="notas-credito">Notas de Credito</TabsTrigger>
+  </TabsList>
+  <TabsContent value="faturas">  -> tabela actual melhorada
+  <TabsContent value="notas-credito"> -> CreditNotesContent
+</Tabs>
+```
 
-Modificar `InvoicesContent.tsx` para:
-- Adicionar coluna "Acoes" com menu dropdown (ou botoes inline)
-- Importar e usar `InvoiceDetailsModal`, `CancelInvoiceDialog`, `SendInvoiceEmailModal`, `useSyncInvoice`, `useCancelInvoice`
-- Alterar `useAllPayments` para tambem trazer `invoicexpress_type` da venda
-- Criar query separada ou modificar existente para incluir faturas emitidas a nivel da venda (registos em `sales` com `invoicexpress_id` que nao tenham pagamento associado)
-- Substituir `handleDownloadInvoiceXpress` por fluxo de sync + download
-
-**Prioridade 4: Fatura-Recibo por Pagamento**
-
-Modificar condicao na `SalePaymentsList.tsx` linha 344:
-- De: `payment.status === 'paid' && hasInvoice && hasInvoiceXpress && !payment.invoice_reference`
-- Para: `payment.status === 'paid' && hasInvoiceXpress && !payment.invoicexpress_id`
-- Ajustar o label do botao para "Emitir Fatura-Recibo" quando nao ha fatura global
-
-**Prioridade 5: Nota de Credito**
-
-Nova edge function `create-credit-note`:
-- Endpoint InvoiceXpress: `POST /credit_notes.json`
-- Body similar a uma fatura mas com referencia ao documento original
-- Apos criar, mudar estado para "final" com `PUT /credit_notes/:id/change-state.json`
-
-Novo hook `useCreateCreditNote.ts`
-
-Novo modal `CreateCreditNoteModal.tsx` com campos:
-- Documento original (pre-preenchido)
-- Motivo
-- Valor (parcial ou total)
-- Itens a creditar
-
-Migracao BD:
-- Adicionar campos `credit_note_reference`, `credit_note_id` em `sale_payments` e/ou `sales`
-
-Registar em `supabase/config.toml`
+**Migracao BD**: Nao necessaria - os campos `credit_note_id` e `credit_note_reference` ja existem em ambas as tabelas. Apenas e necessario corrigir o formato dos dados guardados em `invoice_file_url` e `invoice_pdf_url` (caminho relativo em vez de URL completo).
