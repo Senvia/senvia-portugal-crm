@@ -35,6 +35,7 @@ import {
 import { toast } from "sonner";
 import { SendInvoiceEmailModal } from "./SendInvoiceEmailModal";
 import { InvoiceDetailsModal } from "./InvoiceDetailsModal";
+import { CreateCreditNoteModal } from "./CreateCreditNoteModal";
 import { useSyncInvoice } from "@/hooks/useInvoiceDetails";
 
 interface SalePaymentsListProps {
@@ -98,6 +99,15 @@ export function SalePaymentsList({
   const [detailsModal, setDetailsModal] = useState<{
     documentId: number;
     documentType: "invoice" | "invoice_receipt" | "receipt";
+    paymentId?: string;
+  } | null>(null);
+
+  // Credit note modal state
+  const [creditNoteModal, setCreditNoteModal] = useState<{
+    documentId: number;
+    documentType: "invoice" | "invoice_receipt" | "receipt";
+    reference: string;
+    saleId?: string;
     paymentId?: string;
   } | null>(null);
 
@@ -241,6 +251,23 @@ export function SalePaymentsList({
                   <Button
                     variant="ghost"
                     size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => setCreditNoteModal({
+                      documentId: invoicexpressId,
+                      documentType: (invoicexpressType === 'invoice_receipts' ? 'invoice_receipt' : 'invoice') as any,
+                      reference: invoiceReference || '',
+                      saleId,
+                    })}
+                    title="Nota de Crédito"
+                  >
+                    <FileText className="h-3 w-3 mr-1" />
+                    NC
+                  </Button>
+                )}
+                {invoicexpressId && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     className="h-7 text-xs text-destructive hover:text-destructive"
                     onClick={() => {
                       setCancellingPayment({
@@ -340,8 +367,8 @@ export function SalePaymentsList({
                       </Button>
                     </>
                   )}
-                  {/* Generate Receipt button: paid + invoice exists + no receipt yet */}
-                  {payment.status === 'paid' && hasInvoice && hasInvoiceXpress && !payment.invoice_reference && !readonly && (
+                  {/* Generate Receipt/FR button: paid + InvoiceXpress active + no receipt yet */}
+                  {payment.status === 'paid' && hasInvoiceXpress && !payment.invoice_reference && !readonly && (
                     <Button
                       variant="outline"
                       size="sm"
@@ -352,7 +379,7 @@ export function SalePaymentsList({
                       }}
                     >
                       <Receipt className="h-3 w-3 mr-1" />
-                      Gerar Recibo
+                      {hasInvoice ? "Gerar Recibo" : "Emitir Fatura-Recibo"}
                     </Button>
                   )}
                   {payment.qr_code_url && (
@@ -651,6 +678,20 @@ export function SalePaymentsList({
           organizationId={organizationId}
           saleId={saleId}
           paymentId={detailsModal.paymentId}
+        />
+      )}
+
+      {/* Credit Note Modal */}
+      {creditNoteModal && (
+        <CreateCreditNoteModal
+          open={!!creditNoteModal}
+          onOpenChange={(open) => !open && setCreditNoteModal(null)}
+          organizationId={organizationId}
+          saleId={creditNoteModal.saleId}
+          paymentId={creditNoteModal.paymentId}
+          documentId={creditNoteModal.documentId}
+          documentType={creditNoteModal.documentType}
+          documentReference={creditNoteModal.reference}
         />
       )}
     </>

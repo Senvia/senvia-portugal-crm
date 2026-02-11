@@ -24,8 +24,9 @@ export function useAllPayments() {
             total_value,
             invoice_reference,
             invoicexpress_id,
+            invoicexpress_type,
             leads:lead_id (name),
-            crm_clients:client_id (name)
+            crm_clients:client_id (name, email)
           )
         `)
         .eq('organization_id', organizationId)
@@ -45,6 +46,7 @@ export function useAllPayments() {
         payment_method: payment.payment_method as PaymentMethod | null,
         invoice_reference: payment.invoice_reference,
         invoice_file_url: payment.invoice_file_url,
+        invoicexpress_id: (payment as any).invoicexpress_id || null,
         status: payment.status as PaymentRecordStatus,
         notes: payment.notes,
         created_at: payment.created_at,
@@ -55,9 +57,11 @@ export function useAllPayments() {
           total_value: Number(payment.sales?.total_value || 0),
           invoice_reference: (payment.sales as any)?.invoice_reference || null,
           invoicexpress_id: (payment.sales as any)?.invoicexpress_id || null,
+          invoicexpress_type: (payment.sales as any)?.invoicexpress_type || null,
         },
         client_name: payment.sales?.crm_clients?.name || null,
         lead_name: payment.sales?.leads?.name || null,
+        client_email: (payment.sales?.crm_clients as any)?.email || null,
       }));
     },
     enabled: !!organizationId,
