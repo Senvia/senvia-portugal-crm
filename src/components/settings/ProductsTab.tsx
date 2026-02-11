@@ -79,12 +79,21 @@ export function ProductsTab() {
                   className="flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-muted/50 transition-colors"
                 >
                   <div className="flex-1 min-w-0 mr-4">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <h4 className="font-medium truncate">{product.name}</h4>
                       {product.is_recurring && (
                         <Badge variant="outline" className="text-xs gap-1 bg-primary/10 text-primary border-primary/30">
                           <RefreshCw className="h-3 w-3" />
                           Mensal
+                        </Badge>
+                      )}
+                      {product.tax_value !== null && product.tax_value !== undefined ? (
+                        <Badge variant="outline" className={`text-xs ${product.tax_value === 0 ? 'bg-amber-500/10 text-amber-600 border-amber-500/30' : 'bg-blue-500/10 text-blue-600 border-blue-500/30'}`}>
+                          {product.tax_value === 0 ? 'Isento' : `IVA ${product.tax_value}%`}
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-xs bg-muted/50 text-muted-foreground">
+                          Org default
                         </Badge>
                       )}
                       {!product.is_active && (
