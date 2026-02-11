@@ -123,16 +123,32 @@ async function syncOrganization(supabase: any, organization_id: string, org: any
       let matchedSaleId: string | null = null
       let matchedPaymentId: string | null = null
 
-      // Match 1: by invoicexpress_id on sales
-      const { data: sale } = await supabase
-        .from('sales')
-        .select('id')
-        .eq('organization_id', organization_id)
-        .eq('invoicexpress_id', docId)
-        .maybeSingle()
+      // Match 0: by proprietary_uid in raw_data
+      const proprietaryUid = doc.proprietary_uid || null
+      if (proprietaryUid && typeof proprietaryUid === 'string' && proprietaryUid.startsWith('senvia-sale-')) {
+        const extractedSaleId = proprietaryUid.replace('senvia-sale-', '')
+        const { data: saleByUid } = await supabase
+          .from('sales')
+          .select('id')
+          .eq('id', extractedSaleId)
+          .eq('organization_id', organization_id)
+          .maybeSingle()
+        if (saleByUid) {
+          matchedSaleId = saleByUid.id
+        }
+      }
 
-      if (sale) {
-        matchedSaleId = sale.id
+      // Match 1: by invoicexpress_id on sales
+      if (!matchedSaleId) {
+        const { data: sale } = await supabase
+          .from('sales')
+          .select('id')
+          .eq('organization_id', organization_id)
+          .eq('invoicexpress_id', docId)
+          .maybeSingle()
+        if (sale) {
+          matchedSaleId = sale.id
+        }
       }
 
       // Match 2: by invoicexpress_id on sale_payments
@@ -178,6 +194,20 @@ async function syncOrganization(supabase: any, organization_id: string, org: any
 
         if (sales && sales.length > 0) {
           matchedSaleId = sales[0].id
+        }
+      }
+
+      // Match 5: by docId in payment invoice_reference (format "FT #DOCID")
+      if (!matchedSaleId && !matchedPaymentId) {
+        const { data: payments } = await supabase
+          .from('sale_payments')
+          .select('id, sale_id')
+          .eq('organization_id', organization_id)
+          .ilike('invoice_reference', `%${docId}%`)
+          .limit(1)
+        if (payments && payments.length > 0) {
+          matchedPaymentId = payments[0].id
+          matchedSaleId = payments[0].sale_id || null
         }
       }
 
