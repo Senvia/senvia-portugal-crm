@@ -1,33 +1,35 @@
 
 
-## Adicionar Seletor de Metodo de Pagamento ao Dialogo "Marcar como Pago"
+## Adicionar Ordenacao com Setas nas Colunas da Tabela de Pagamentos
 
-### Problema
+### O que muda
 
-Quando o utilizador clica em "Marcar Pago", o dialogo de confirmacao nao permite escolher o metodo de pagamento. Se o pagamento foi agendado sem metodo definido (`payment_method = null`), fica marcado como pago sem essa informacao -- o que prejudica os relatorios e a emissao de documentos fiscais.
+As colunas da tabela de pagamentos passam a ter **setas de ordenacao clicaveis** (igual ao que ja existe na tabela de Leads). Ao clicar numa coluna, os dados sao ordenados por essa coluna. Clicar novamente inverte a direcao. A ultima ordenacao escolhida permanece ativa enquanto o utilizador estiver na pagina.
 
-### Solucao
+### Colunas ordenáveis
 
-Adicionar um **seletor de metodo de pagamento** ao dialogo de confirmacao, visivel **apenas quando o pagamento nao tem metodo definido**. Se ja tiver metodo, mostra apenas o valor atual (sem edicao).
+- **Data** (por data do pagamento)
+- **Venda** (por codigo da venda)
+- **Cliente** (por nome do cliente/lead)
+- **Valor** (por montante)
+- **Metodo** (por metodo de pagamento)
+- **Estado** (por estado do pagamento)
+
+A coluna "Fatura" e "Acoes" nao serao ordenaveis.
 
 ### Detalhes tecnicos
 
 **Ficheiro:** `src/pages/finance/Payments.tsx`
 
-1. Adicionar um estado `selectedMethod` (tipo `PaymentMethod | null`) que e inicializado com o `payment_method` do pagamento ao abrir o dialogo.
+Seguir o padrao ja existente em `src/components/leads/LeadsTableView.tsx`:
 
-2. No `AlertDialogDescription`, apos os dados existentes (Cliente, Venda, Valor, Data), adicionar:
-   - Se `confirmPayment.payment_method` for `null`: um `Select` com todas as opcoes de `PAYMENT_METHODS` e labels de `PAYMENT_METHOD_LABELS`
-   - Se ja tiver metodo: mostrar apenas o texto do metodo atual
+1. Adicionar tipos `SortField` e `SortDirection` locais
+2. Adicionar estados `sortField` (default: `'payment_date'`) e `sortDirection` (default: `'desc'`) -- pagamentos mais recentes primeiro por defeito
+3. Criar funcao `handleSort(field)` que alterna a direcao se o campo ja estiver ativo, ou define novo campo com direcao `asc`
+4. Criar componentes `SortIcon` e `SortableHeader` inline (igual ao padrao dos Leads)
+5. Aplicar `.sort()` no array `filteredPayments` dentro de um `useMemo` antes de renderizar
+6. Substituir os `TableHead` estaticos por `SortableHeader` nas colunas ordenaveis
+7. Importar `ArrowUpDown`, `ArrowUp`, `ArrowDown` do `lucide-react`
 
-3. Atualizar `handleMarkAsPaid` para incluir `payment_method: selectedMethod` no objeto `updates`, enviando o metodo escolhido junto com o estado e a data.
+A ordenacao e feita no frontend (client-side) sobre os dados ja filtrados.
 
-4. Resetar `selectedMethod` quando o dialogo fecha.
-
-5. **Nota importante**: O `AlertDialogAction` por defeito fecha o dialogo ao clicar. Para evitar conflitos com o `Select` (dropdown dentro de dialogo), sera necessario substituir o `AlertDialog` por um `Dialog` normal, ou usar `e.preventDefault()` no `AlertDialogAction` e gerir o fecho manualmente. A abordagem mais limpa e converter para `Dialog` simples com botoes normais.
-
-### Resultado esperado
-
-- Pagamento **sem metodo**: aparece dropdown para escolher (MB Way, Transferencia, Dinheiro, Cartao, Cheque, Outro)
-- Pagamento **com metodo**: mostra o metodo atual como texto
-- Ao confirmar, o metodo e gravado junto com o estado "pago"
