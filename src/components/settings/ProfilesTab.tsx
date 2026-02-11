@@ -17,8 +17,11 @@ import {
   ACTION_LABELS,
   buildDefaultPermissions,
   buildAllPermissions,
+  DataScope,
+  DATA_SCOPE_LABELS,
+  DATA_SCOPE_DESCRIPTIONS,
 } from '@/hooks/useOrganizationProfiles';
-import { Shield, Plus, Pencil, Trash2, Loader2 } from 'lucide-react';
+import { Shield, Plus, Pencil, Trash2, Loader2, Eye } from 'lucide-react';
 
 const BASE_ROLE_LABELS: Record<string, string> = {
   admin: 'Administrador',
@@ -33,12 +36,14 @@ export function ProfilesTab() {
 
   const [name, setName] = useState('');
   const [baseRole, setBaseRole] = useState<string>('salesperson');
+  const [dataScope, setDataScope] = useState<DataScope>('own');
   const [permissions, setPermissions] = useState<GranularPermissions>(buildDefaultPermissions('salesperson'));
 
   const openCreate = () => {
     setEditingProfile(null);
     setName('');
     setBaseRole('salesperson');
+    setDataScope('own');
     setPermissions(buildDefaultPermissions('salesperson'));
     setIsOpen(true);
   };
@@ -47,6 +52,7 @@ export function ProfilesTab() {
     setEditingProfile(profile);
     setName(profile.name);
     setBaseRole(profile.base_role);
+    setDataScope(profile.data_scope || 'own');
     setPermissions(profile.module_permissions);
     setIsOpen(true);
   };
@@ -128,11 +134,11 @@ export function ProfilesTab() {
   const handleSave = () => {
     if (!name.trim()) return;
     if (editingProfile) {
-      updateProfile.mutate({ id: editingProfile.id, name: name.trim(), base_role: baseRole, module_permissions: permissions }, {
+      updateProfile.mutate({ id: editingProfile.id, name: name.trim(), base_role: baseRole, module_permissions: permissions, data_scope: dataScope }, {
         onSuccess: () => setIsOpen(false),
       });
     } else {
-      createProfile.mutate({ name: name.trim(), base_role: baseRole, module_permissions: permissions }, {
+      createProfile.mutate({ name: name.trim(), base_role: baseRole, module_permissions: permissions, data_scope: dataScope }, {
         onSuccess: () => setIsOpen(false),
       });
     }
@@ -185,9 +191,14 @@ export function ProfilesTab() {
                     <p className="font-medium">{profile.name}</p>
                     {profile.is_default && <Badge variant="outline" className="text-xs">Padrão</Badge>}
                   </div>
-                  <p className="text-sm text-muted-foreground">
-                    Base: {BASE_ROLE_LABELS[profile.base_role] || profile.base_role}
-                  </p>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <span>Base: {BASE_ROLE_LABELS[profile.base_role] || profile.base_role}</span>
+                    <span>·</span>
+                    <span className="flex items-center gap-1">
+                      <Eye className="h-3 w-3" />
+                      {DATA_SCOPE_LABELS[(profile.data_scope || 'own') as DataScope]}
+                    </span>
+                  </div>
                   <div className="flex flex-wrap gap-1 mt-1">
                     {getActiveModules(profile.module_permissions).map(label => (
                       <Badge key={label} variant="secondary" className="text-xs">{label}</Badge>
@@ -237,6 +248,23 @@ export function ProfilesTab() {
               </Select>
               <p className="text-xs text-muted-foreground">
                 Define as políticas de segurança base.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Visibilidade de Dados</Label>
+              <Select value={dataScope} onValueChange={(v) => setDataScope(v as DataScope)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {(['own', 'team', 'all'] as DataScope[]).map(scope => (
+                    <SelectItem key={scope} value={scope}>
+                      {DATA_SCOPE_LABELS[scope]} — {DATA_SCOPE_DESCRIPTIONS[scope]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Define de quem o utilizador pode ver os dados.
               </p>
             </div>
 
