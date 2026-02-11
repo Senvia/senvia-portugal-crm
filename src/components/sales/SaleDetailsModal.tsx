@@ -501,6 +501,7 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                     invoicexpressType={sale.invoicexpress_type}
                     invoiceReference={sale.invoice_reference}
                     invoiceQrCodeUrl={(sale as any).qr_code_url}
+                    invoicePdfUrl={(sale as any).invoice_pdf_url}
                     clientNif={sale.client?.nif}
                     clientName={sale.client?.name || sale.lead?.name}
                     clientEmail={sale.client?.email || sale.lead?.email}

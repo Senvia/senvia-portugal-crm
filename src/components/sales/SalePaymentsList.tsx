@@ -45,6 +45,7 @@ interface SalePaymentsListProps {
   invoicexpressType?: string | null;
   invoiceReference?: string | null;
   invoiceQrCodeUrl?: string | null;
+  invoicePdfUrl?: string | null;
   clientNif?: string | null;
   clientName?: string | null;
   clientEmail?: string | null;
@@ -61,6 +62,7 @@ export function SalePaymentsList({
   invoicexpressType,
   invoiceReference,
   invoiceQrCodeUrl,
+  invoicePdfUrl,
   clientNif,
   clientName,
   clientEmail,
@@ -156,6 +158,17 @@ export function SalePaymentsList({
                   <FileText className="h-4 w-4 text-primary" />
                   <span className="font-medium">Fatura: {invoiceReference}</span>
                 </div>
+                {invoicePdfUrl && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => window.open(invoicePdfUrl, '_blank')}
+                    title="Download PDF"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                  </Button>
+                )}
                 {invoiceQrCodeUrl && (
                   <Button
                     variant="ghost"
