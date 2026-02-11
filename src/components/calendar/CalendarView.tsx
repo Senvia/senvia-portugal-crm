@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { addMonths, subMonths, addWeeks, subWeeks, addDays, subDays, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay } from 'date-fns';
+import { addMonths, subMonths, addWeeks, subWeeks, addDays, subDays, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay, isSameDay } from 'date-fns';
 import { useCalendarEvents } from '@/hooks/useCalendarEvents';
 import { useTeamMembers } from '@/hooks/useTeam';
 import { useTeamFilter } from '@/hooks/useTeamFilter';
@@ -7,6 +7,7 @@ import { CalendarHeader, type ViewType } from './CalendarHeader';
 import { MonthView } from './MonthView';
 import { WeekView } from './WeekView';
 import { DayView } from './DayView';
+import { DayEventsList } from './DayEventsList';
 import { CreateEventModal } from './CreateEventModal';
 import { EventDetailsModal } from './EventDetailsModal';
 import type { CalendarEvent } from '@/types/calendar';
@@ -19,6 +20,7 @@ export function CalendarView() {
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
+  const [selectedDayForList, setSelectedDayForList] = useState<Date>(new Date());
 
   const { canFilterByTeam, selectedMemberId, setSelectedMemberId } = useTeamFilter();
   const { data: teamMembers = [] } = useTeamMembers();
@@ -93,10 +95,12 @@ export function CalendarView() {
     setCurrentDate(new Date());
   };
 
+  const selectedDayEvents = useMemo(() => {
+    return events.filter(e => isSameDay(new Date(e.start_time), selectedDayForList));
+  }, [events, selectedDayForList]);
+
   const handleDayClick = (date: Date) => {
-    setSelectedDate(date);
-    setSelectedEvent(null);
-    setCreateModalOpen(true);
+    setSelectedDayForList(date);
   };
 
   const handleEventClick = (event: CalendarEvent) => {
@@ -143,6 +147,7 @@ export function CalendarView() {
         <MonthView
           currentDate={currentDate}
           events={events}
+          selectedDay={selectedDayForList}
           onDayClick={handleDayClick}
           onEventClick={handleEventClick}
         />
@@ -152,6 +157,7 @@ export function CalendarView() {
         <WeekView
           currentDate={currentDate}
           events={events}
+          selectedDay={selectedDayForList}
           onDayClick={handleDayClick}
           onEventClick={handleEventClick}
         />
@@ -164,6 +170,17 @@ export function CalendarView() {
           onEventClick={handleEventClick}
         />
       )}
+
+      <DayEventsList
+        selectedDate={selectedDayForList}
+        events={selectedDayEvents}
+        onEventClick={handleEventClick}
+        onCreateEvent={() => {
+          setSelectedDate(selectedDayForList);
+          setSelectedEvent(null);
+          setCreateModalOpen(true);
+        }}
+      />
 
       <CreateEventModal
         open={createModalOpen}

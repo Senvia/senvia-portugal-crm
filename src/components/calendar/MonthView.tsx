@@ -8,11 +8,12 @@ import { EventCard } from './EventCard';
 interface MonthViewProps {
   currentDate: Date;
   events: CalendarEvent[];
+  selectedDay?: Date;
   onDayClick: (date: Date) => void;
   onEventClick: (event: CalendarEvent) => void;
 }
 
-export function MonthView({ currentDate, events, onDayClick, onEventClick }: MonthViewProps) {
+export function MonthView({ currentDate, events, selectedDay, onDayClick, onEventClick }: MonthViewProps) {
   const days = useMemo(() => {
     const monthStart = startOfMonth(currentDate);
     const monthEnd = endOfMonth(currentDate);
@@ -55,7 +56,8 @@ export function MonthView({ currentDate, events, onDayClick, onEventClick }: Mon
               onClick={() => onDayClick(day)}
               className={cn(
                 'min-h-[100px] sm:min-h-[120px] border-b border-r p-1 cursor-pointer transition-colors hover:bg-accent/50',
-                !isCurrentMonth && 'bg-muted/30'
+                !isCurrentMonth && 'bg-muted/30',
+                selectedDay && isSameDay(day, selectedDay) && 'ring-2 ring-primary ring-inset bg-primary/5'
               )}
             >
               <div className="flex items-center justify-center mb-1">
@@ -77,7 +79,7 @@ export function MonthView({ currentDate, events, onDayClick, onEventClick }: Mon
                     compact
                     onClick={(e) => {
                       e.stopPropagation();
-                      onEventClick(event);
+                      onDayClick(day);
                     }}
                   />
                 ))}
