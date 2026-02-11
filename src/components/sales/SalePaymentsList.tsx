@@ -302,8 +302,8 @@ export function SalePaymentsList({
                 className="w-full"
                 onClick={() => setDraftMode("invoice")}
               >
-                <FileText className="h-4 w-4 mr-1" />
-                Emitir Fatura ({formatCurrency(saleTotal)})
+                <Eye className="h-4 w-4 mr-1" />
+                Ver Rascunho de Fatura
               </Button>
             ) : hasInvoiceXpress && !clientNif ? (
               <p className="text-xs text-muted-foreground text-center">
@@ -391,8 +391,8 @@ export function SalePaymentsList({
                         setDraftMode(hasInvoice ? "receipt" : "invoice_receipt");
                       }}
                     >
-                      <Receipt className="h-3 w-3 mr-1" />
-                      {hasInvoice ? "Gerar Recibo (RC)" : "Fatura-Recibo (FR)"}
+                      <Eye className="h-3 w-3 mr-1" />
+                      {hasInvoice ? "Ver Rascunho de Recibo" : "Ver Rascunho de FR"}
                     </Button>
                   )}
                   {payment.qr_code_url && (
