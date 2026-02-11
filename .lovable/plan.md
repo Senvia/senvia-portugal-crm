@@ -1,47 +1,35 @@
 
-
-## Integrar Consumos nos Cards Existentes (Telecom)
+## Adicionar Filtro por Data nas Propostas
 
 ### Resumo
 
-Em vez de um card separado para consumos, os valores de energia sao integrados diretamente nos cards **"Valor Total"** e **"Em Negociacao"**, apenas para o nicho telecom.
+Adicionar um `DateRangePicker` na barra de filtros da pagina de Propostas, permitindo filtrar propostas por periodo (data da proposta). O componente `DateRangePicker` ja existe no projeto (`src/components/ui/date-range-picker.tsx`).
 
-### Layout Final (Telecom)
+### O que muda
 
-```text
-+------------------+  +-------------------------+  +-------------------------+  +------------------+
-| Total Propostas  |  | Valor Total             |  | Em Negociacao           |  | Aceites          |
-| 42               |  | 125.000,00 EUR          |  | 8.500,00 EUR            |  | 12               |
-|                  |  | 245,3 MWh | 128,5 kWp   |  | 102,1 MWh | 45,0 kWp   |  |                  |
-+------------------+  +-------------------------+  +-------------------------+  +------------------+
-```
-
-Para nichos nao-telecom, os cards ficam exatamente como estao (sem linhas de MWh/kWp).
+Na barra de filtros, apos o filtro de status, aparece um seletor de periodo. Ao selecionar um intervalo de datas, apenas as propostas com `proposal_date` dentro desse intervalo sao mostradas. Os cards de resumo tambem refletem os dados filtrados.
 
 ### Alteracoes
 
 **Ficheiro:** `src/pages/Proposals.tsx`
 
-1. Remover o card separado "Consumo / kWp" e reverter o grid para `sm:grid-cols-4` (sempre 4 cards)
-2. No card "Valor Total": adicionar linha secundaria com MWh e kWp totais (quando telecom)
-3. No card "Em Negociacao": adicionar linha secundaria com MWh e kWp filtrados apenas por propostas com status `sent` ou `negotiating`
-
-**Ficheiro:** `src/hooks/useTelecomProposalMetrics.ts`
-
-4. Expandir o hook para tambem retornar as metricas filtradas por propostas em negociacao (`pendingMWh`, `pendingKWp`), adicionando queries com filtro de status `in ('sent', 'negotiating')`
+1. Importar `DateRangePicker` de `@/components/ui/date-range-picker` e o tipo `DateRange` de `react-day-picker`
+2. Adicionar estado `dateRange` (com `usePersistedState`) para guardar o periodo selecionado
+3. Adicionar o componente `DateRangePicker` na barra de filtros (apos o select de status)
+4. Atualizar a logica de `filteredProposals` para tambem filtrar por `proposal_date` dentro do intervalo selecionado
+5. Mover o calculo dos cards de resumo (totalValue, pendingValue, proposalsByStatus) para usar `filteredProposals` em vez de `proposals`, de modo que os totais reflitam os filtros aplicados
 
 ### Secao Tecnica
 
-**Hook atualizado** retorna:
-- `totalMWh`, `totalKWp` -- todas as propostas (para o card Valor Total)
-- `pendingMWh`, `pendingKWp` -- apenas propostas com status `sent` ou `negotiating` (para o card Em Negociacao)
-
-**Renderizacao condicional** nos dois cards:
+**Filtro de data:**
 ```
-{isTelecom && (
-  <p className="text-xs text-muted-foreground mt-1">
-    {totalMWh.toFixed(1)} MWh · {totalKWp.toFixed(1)} kWp
-  </p>
-)}
+const matchesDate =
+  !dateRange?.from ||
+  (new Date(proposal.proposal_date) >= dateRange.from &&
+   (!dateRange.to || new Date(proposal.proposal_date) <= dateRange.to));
 ```
 
+**Estado persistido:**
+```
+const [dateRange, setDateRange] = usePersistedState<DateRange | undefined>('proposals-date-range-v1', undefined);
+```
