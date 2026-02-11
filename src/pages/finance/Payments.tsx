@@ -83,8 +83,8 @@ export default function FinancePayments() {
   // Read status from URL on mount
   useEffect(() => {
     const statusFromUrl = searchParams.get('status');
-    if (statusFromUrl === 'pending') {
-      setStatusFilter('pending');
+    if (statusFromUrl === 'pending' || statusFromUrl === 'paid') {
+      setStatusFilter(statusFromUrl);
     }
   }, [searchParams]);
 
