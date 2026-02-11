@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { usePersistedState } from "@/hooks/usePersistedState";
 import { ShoppingBag, Search, TrendingUp, Package, CheckCircle, Clock, Plus } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -25,8 +26,8 @@ export default function Sales() {
   useSalesRealtime();
   const { profile, organization } = useAuth();
   const { data: sales, isLoading } = useSales();
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<SaleStatus | "all">("all");
+  const [search, setSearch] = usePersistedState("sales-search-v1", "");
+  const [statusFilter, setStatusFilter] = usePersistedState<SaleStatus | "all">("sales-status-v1", "all");
   const [selectedSale, setSelectedSale] = useState<SaleWithDetails | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [saleToEdit, setSaleToEdit] = useState<SaleWithDetails | null>(null);

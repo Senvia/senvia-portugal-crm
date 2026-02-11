@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { usePersistedState } from "@/hooks/usePersistedState";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useAuth } from "@/contexts/AuthContext";
 import { SEO } from "@/components/SEO";
@@ -24,12 +25,12 @@ import { format, isWithinInterval, startOfDay, endOfDay, parseISO } from "date-f
 
 export default function Clients() {
   const { profile, organization } = useAuth();
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = usePersistedState("clients-search-v1", "");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedClient, setSelectedClient] = useState<CrmClient | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDetailsDrawer, setShowDetailsDrawer] = useState(false);
-  const [filters, setFilters] = useState<ClientFiltersState>(defaultFilters);
+  const [filters, setFilters] = usePersistedState<ClientFiltersState>("clients-filters-v1", defaultFilters);
 
   // Bulk selection state
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
