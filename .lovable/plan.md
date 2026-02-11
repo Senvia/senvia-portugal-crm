@@ -1,48 +1,57 @@
 
 
-## Corrigir "Configurações" para "Definições" em toda a aplicação
+## Adicionar metricas telecom aos cards de Vendas (como nas Propostas)
 
-### Problema
-A página de Settings já usa o título correto "Definições", mas os menus de navegação (sidebar, mobile menu, bottom nav) ainda mostram "Configurações" ou "Config". Existem também algumas mensagens toast que usam "configurações" em vez de "definições".
+### Objetivo
+Para organizacoes telecom, mostrar consumo total (MWh) e kWp nos cards de resumo da pagina de Vendas, tal como ja existe na pagina de Propostas.
 
-### Traduções a aplicar
+### Alteracoes
 
-| Atual | Correto (PT-PT) |
-|-------|-----------------|
-| Configurações (nav labels) | Definições |
-| Config (bottom nav) | Definições |
-| Configurações de campos atualizadas | Definições de campos atualizadas |
-| Não foi possível atualizar as configurações | Não foi possível atualizar as definições |
-| As configurações de campos abaixo... | As definições de campos abaixo... |
-| Erro ao guardar configurações | Erro ao guardar definições |
-| Guardar Configurações | Guardar Definições |
-| Usa as configurações Brevo | Usa as definições Brevo |
+**1. Criar `src/hooks/useTelecomSaleMetrics.ts`**
+- Hook semelhante ao `useTelecomProposalMetrics`
+- Calcula a partir da tabela `sales`:
+  - `totalMWh`: soma de `consumo_anual` de todas as vendas / 1000
+  - `totalKWp`: soma de `kwp` das vendas com `proposal_type = 'servicos'`
+  - `deliveredMWh` / `deliveredKWp`: filtrado por `status = 'delivered'`
+- Apenas ativo quando `organization.niche === 'telecom'`
 
-### Ficheiros a editar
+**2. Editar `src/pages/Sales.tsx`**
+- Importar e usar o novo hook `useTelecomSaleMetrics`
+- Verificar `isTelecom = organization?.niche === 'telecom'`
+- No card "Total Vendas" -- adicionar linha secundaria com MWh e kWp totais
+- No card "Entregues" -- adicionar linha secundaria com MWh e kWp entregues
+- Renderizacao condicional: so aparece se `isTelecom`
 
-**1. `src/components/layout/AppSidebar.tsx`**
-- label: "Configurações" -> "Definições"
+### Resultado visual (cards)
 
-**2. `src/components/layout/MobileMenu.tsx`**
-- label: "Configurações" -> "Definições"
+```text
++-------------------+-------------------+
+| Total Vendas      | Entregues         |
+| 12                | 8                 |
+| 45.000,00 EUR     | 32.000,00 EUR     |
+| 125.3 MWh . 45 kWp| 98.1 MWh . 30 kWp| <-- apenas telecom
++-------------------+-------------------+
+```
 
-**3. `src/components/layout/MobileBottomNav.tsx`**
-- label: "Config" -> "Definições"
+### Secao Tecnica
 
-**4. `src/hooks/useClientFieldsSettings.ts`**
-- "Configurações de campos atualizadas com sucesso." -> "Definições de campos atualizadas com sucesso."
-- "Não foi possível atualizar as configurações." -> "Não foi possível atualizar as definições."
+**useTelecomSaleMetrics.ts:**
+```ts
+// Query sales com consumo_anual e kwp
+// totalMWh = sum(consumo_anual) / 1000
+// totalKWp = sum(kwp) where proposal_type = 'servicos'
+// deliveredMWh/deliveredKWp = mesmo filtrado por status='delivered'
+```
 
-**5. `src/components/settings/FormCustomizationSection.tsx`**
-- "As configurações de campos abaixo aplicam-se apenas ao modo tradicional." -> "As definições de campos abaixo aplicam-se apenas ao modo tradicional."
+**Sales.tsx -- cards com metricas telecom:**
+```tsx
+{isTelecom && telecomMetrics && (
+  <p className="text-xs text-muted-foreground mt-1">
+    {telecomMetrics.totalMWh.toFixed(1)} MWh · {telecomMetrics.totalKWp.toFixed(1)} kWp
+  </p>
+)}
+```
 
-**6. `src/components/settings/FidelizationAlertsSettings.tsx`**
-- "Configurações de alertas guardadas" -> "Definições de alertas guardadas"
-- "Erro ao guardar configurações" -> "Erro ao guardar definições"
-- "Guardar Configurações" -> "Guardar Definições"
-- "Usa as configurações Brevo da organização" -> "Usa as definições Brevo da organização"
-
-### Nota
-- A página Settings.tsx já usa "Definições" no titulo -- está correto
-- As referências em edge functions (Supabase) que dizem "Definições → Integrações" já estão corretas
-- Total: 6 ficheiros a editar, todas as alterações são simples substituições de texto
+### Ficheiros
+- **Criar**: `src/hooks/useTelecomSaleMetrics.ts`
+- **Editar**: `src/pages/Sales.tsx`
