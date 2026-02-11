@@ -26,6 +26,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { format, parseISO } from "date-fns";
+import { ClientFiscalCard, VatBadge, useVatCalculation, isInvoiceXpressActive, getOrgTaxValue } from "./SaleFiscalInfo";
 import { supabase } from "@/integrations/supabase/client";
 import { pt } from "date-fns/locale";
 import { toast } from "sonner";
@@ -81,6 +82,10 @@ export function EditSaleModal({
   const createSalePayment = useCreateSalePayment();
 
   const { organization } = useAuth();
+  
+  // Fiscal info
+  const ixActive = isInvoiceXpressActive(organization);
+  const orgTaxValue = getOrgTaxValue(organization);
   
   // Form state
   const [clientId, setClientId] = useState<string>("");
@@ -158,6 +163,17 @@ export function EditSaleModal({
 
   const discountValue = parseFloat(discount) || 0;
   const total = Math.max(0, subtotal - discountValue);
+
+  // VAT calculation (display only, when InvoiceXpress active)
+  const vatCalc = useVatCalculation({
+    items, products, orgTaxValue, discount: discountValue, subtotal,
+  });
+
+  // Selected client fiscal data
+  const selectedClient = useMemo(() => {
+    if (!clientId || !clients) return null;
+    return clients.find(c => c.id === clientId) || null;
+  }, [clientId, clients]);
 
   // Handlers
   const handleAddProduct = (productId: string) => {
@@ -405,6 +421,13 @@ export function EditSaleModal({
                   />
                 </div>
 
+                {/* Client Fiscal Card */}
+                {clientId && (
+                  <div className="col-span-2">
+                    <ClientFiscalCard client={selectedClient} isInvoiceXpressActive={ixActive} />
+                  </div>
+                )}
+
                 <div className="space-y-2">
                   <Label className="flex items-center gap-2">
                     <CalendarIcon className="h-4 w-4 text-muted-foreground" />
@@ -477,11 +500,14 @@ export function EditSaleModal({
                               {/* Linha principal do produto */}
                               <div className="flex items-center gap-2">
                                 <div className="flex-1 min-w-0">
-                                  <Input
-                                    value={item.name}
-                                    onChange={(e) => handleUpdateName(item.id, e.target.value)}
-                                    className="h-8 text-sm font-medium"
-                                  />
+                                  <div className="flex items-center gap-1.5">
+                                    <Input
+                                      value={item.name}
+                                      onChange={(e) => handleUpdateName(item.id, e.target.value)}
+                                      className="h-8 text-sm font-medium"
+                                    />
+                                    {ixActive && <VatBadge taxValue={vatCalc.getItemTaxRate(item.product_id)} />}
+                                  </div>
                                 </div>
                                 
                                 <div className="flex items-center gap-1">
@@ -623,11 +649,25 @@ export function EditSaleModal({
                     </div>
                     
                     <Separator />
+
+                    {ixActive && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">IVA</span>
+                        <span className="font-medium">{formatCurrency(vatCalc.totalVat)}</span>
+                      </div>
+                    )}
                     
                     <div className="flex justify-between text-lg font-semibold">
-                      <span>Total</span>
+                      <span>{ixActive ? 'Total (s/ IVA)' : 'Total'}</span>
                       <span className="text-primary">{formatCurrency(total)}</span>
                     </div>
+
+                    {ixActive && (
+                      <div className="flex justify-between text-sm border-t pt-2">
+                        <span className="text-muted-foreground font-medium">Total c/ IVA</span>
+                        <span className="font-semibold">{formatCurrency(vatCalc.totalWithVat)}</span>
+                      </div>
+                    )}
                   </div>
                   <Separator />
                 </>
