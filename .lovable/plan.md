@@ -1,26 +1,23 @@
 
 
-## Exibir o Documento Real do InvoiceXpress
+## Corrigir Erro do Iframe no Modal de Faturas
 
-### O que muda
+### Problema
 
-Em vez de reconstruir o layout com dados da API, o modal vai mostrar o **documento real do InvoiceXpress** num iframe, exactamente como aparece no site deles. O `permalink` que a API já devolve é um link público para o documento formatado.
+O InvoiceXpress bloqueia o carregamento em iframes externos atraves de `X-Frame-Options`, por isso a tab "Documento" mostra apenas a mensagem "recusou estabelecer ligacao".
 
-O modal fica com duas tabs:
-- **Documento** — iframe com o permalink do InvoiceXpress (o documento real, tal como o vês)
-- **Dados** — a vista actual com os dados estruturados (emitente, cliente, itens, sumário)
+### Solucao
 
-Os botões de acção (Download PDF, Enviar, Nota de Crédito, Anular) mantêm-se no footer.
+Remover o sistema de tabs e o iframe. A vista de dados estruturados (emitente, cliente, itens, impostos, sumario) passa a ser a unica vista, mostrada directamente sem tabs. O botao "Ver no InvoiceXpress" que ja existe no final abre o permalink numa nova janela do browser, permitindo ver o documento original quando necessario.
 
-### Seccao Tecnica
+### Alteracoes
 
 **Ficheiro: `src/components/sales/InvoiceDetailsModal.tsx`**
 
-1. Adicionar `Tabs` do Radix UI com duas tabs: "Documento" e "Dados"
-2. Na tab "Documento": renderizar um `iframe` com `src={details.permalink}` que ocupa toda a altura disponível do modal
-3. Na tab "Dados": mover todo o conteúdo actual (emitente, cliente, itens, sumário, QR code, etc.)
-4. Quando não houver `permalink` disponível, mostrar apenas a tab "Dados"
-5. O modal mantém o mesmo tamanho (`max-w-2xl`) mas a tab do documento pode ser expandida para `max-w-4xl` para melhor visualização
+1. Remover a importacao de `Tabs`, `TabsList`, `TabsTrigger`, `TabsContent`
+2. Remover todo o bloco de tabs (linhas 148-383) e manter apenas o conteudo da tab "dados" (linhas 170-382) directamente no modal
+3. Remover a logica condicional de tamanho do modal baseada no `permalink` - usar sempre `max-w-2xl`
+4. Manter o botao "Ver no InvoiceXpress" que abre o `permalink` numa nova janela
+5. Manter todos os botoes de accao no footer (PDF, Enviar, Nota Credito, Anular)
 
-**Apenas 1 ficheiro a editar:**
-- `src/components/sales/InvoiceDetailsModal.tsx`
+O resultado e um modal limpo com todos os dados estruturados visiveis imediatamente, sem tabs, sem iframe.
