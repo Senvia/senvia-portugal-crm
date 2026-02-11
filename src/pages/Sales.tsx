@@ -20,12 +20,15 @@ import type { SaleWithDetails, SaleStatus } from "@/types/sales";
 import { SALE_STATUS_LABELS, SALE_STATUS_COLORS, SALE_STATUSES } from "@/types/sales";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTelecomSaleMetrics } from "@/hooks/useTelecomSaleMetrics";
 
 export default function Sales() {
   // Subscribe to realtime updates
   useSalesRealtime();
   const { profile, organization } = useAuth();
   const { data: sales, isLoading } = useSales();
+  const isTelecom = organization?.niche === 'telecom';
+  const { data: telecomMetrics } = useTelecomSaleMetrics();
   const [search, setSearch] = usePersistedState("sales-search-v1", "");
   const [statusFilter, setStatusFilter] = usePersistedState<SaleStatus | "all">("sales-status-v1", "all");
   const [selectedSale, setSelectedSale] = useState<SaleWithDetails | null>(null);
@@ -118,6 +121,11 @@ export default function Sales() {
             </div>
             <p className="text-2xl font-bold">{stats.total}</p>
             <p className="text-xs text-muted-foreground">{formatCurrency(stats.totalValue)}</p>
+            {isTelecom && telecomMetrics && (
+              <p className="text-xs text-muted-foreground mt-1">
+                {telecomMetrics.totalMWh.toFixed(1)} MWh · {telecomMetrics.totalKWp.toFixed(1)} kWp
+              </p>
+            )}
           </CardContent>
         </Card>
 
@@ -129,6 +137,11 @@ export default function Sales() {
             </div>
             <p className="text-2xl font-bold text-green-500">{stats.delivered}</p>
             <p className="text-xs text-muted-foreground">{formatCurrency(stats.deliveredValue)}</p>
+            {isTelecom && telecomMetrics && (
+              <p className="text-xs text-muted-foreground mt-1">
+                {telecomMetrics.deliveredMWh.toFixed(1)} MWh · {telecomMetrics.deliveredKWp.toFixed(1)} kWp
+              </p>
+            )}
           </CardContent>
         </Card>
 
