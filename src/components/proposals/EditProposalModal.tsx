@@ -318,7 +318,7 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-3xl max-h-[90vh] flex flex-col p-0">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col p-0">
           <DialogHeader className="px-6 pt-6 pb-4 border-b">
             <DialogTitle>Editar Proposta {proposal.code}</DialogTitle>
           </DialogHeader>

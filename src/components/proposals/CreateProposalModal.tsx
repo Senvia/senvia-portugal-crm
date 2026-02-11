@@ -255,7 +255,7 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-3xl max-h-[90vh] flex flex-col p-0">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col p-0">
           <DialogHeader className="px-6 py-4 border-b">
             <DialogTitle>Nova Proposta</DialogTitle>
           </DialogHeader>
