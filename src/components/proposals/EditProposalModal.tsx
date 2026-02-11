@@ -323,7 +323,7 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
             <DialogTitle>Editar Proposta {proposal.code}</DialogTitle>
           </DialogHeader>
 
-          <ScrollArea className="flex-1">
+          <ScrollArea className="flex-1 min-h-0">
             <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4">
               {/* Client Selector */}
               <div className="space-y-2">
