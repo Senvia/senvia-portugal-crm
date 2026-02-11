@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { X, UserPlus, Zap, Wrench, Package } from 'lucide-react';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -317,14 +317,14 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
 
   return (
     <>
-      <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent side="right" className="w-full sm:max-w-md px-0 pb-0 pt-safe flex flex-col">
-          <SheetHeader className="px-6 pt-6 pb-4 border-b">
-            <SheetTitle>Editar Proposta {proposal.code}</SheetTitle>
-          </SheetHeader>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-3xl max-h-[90vh] flex flex-col p-0">
+          <DialogHeader className="px-6 pt-6 pb-4 border-b">
+            <DialogTitle>Editar Proposta {proposal.code}</DialogTitle>
+          </DialogHeader>
 
-          <ScrollArea className="flex-1">
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <ScrollArea className="flex-1 px-6">
+            <form onSubmit={handleSubmit} className="py-4 space-y-4">
               {/* Client Selector */}
               <div className="space-y-2">
                 <Label>Cliente</Label>
@@ -710,19 +710,19 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
                 />
               </div>
 
-              {/* Footer com botões */}
-              <div className="flex gap-2 pt-2">
-                <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="flex-1">
-                  Cancelar
-                </Button>
-                <Button type="submit" disabled={isSubmitting} className="flex-1">
-                  {isSubmitting ? 'A guardar...' : 'Guardar'}
-                </Button>
-              </div>
             </form>
           </ScrollArea>
-        </SheetContent>
-      </Sheet>
+
+          <DialogFooter className="px-6 py-4 border-t">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSubmit} disabled={isSubmitting}>
+              {isSubmitting ? 'A guardar...' : 'Guardar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <CreateClientModal
         open={isCreateClientOpen}
