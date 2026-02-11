@@ -59,12 +59,10 @@ export interface FinanceStats {
   totalBilled: number;
   totalReceived: number;
   totalPending: number;
-  receivedThisMonth: number;
   dueSoon: number;
   dueSoonCount: number;
   dueSoonPayments: PaymentWithSale[];
   cashflowTrend: CashflowPoint[];
   totalExpenses: number;
-  expensesThisMonth: number;
   balance: number;
 }

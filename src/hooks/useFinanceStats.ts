@@ -16,6 +16,21 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
   const organizationId = organization?.id;
   const dateRange = options?.dateRange;
 
+  // Fetch sales for totalBilled
+  const { data: sales, isLoading: loadingSales } = useQuery({
+    queryKey: ['finance-sales', organizationId],
+    queryFn: async () => {
+      if (!organizationId) return [];
+      const { data, error } = await supabase
+        .from('sales')
+        .select('id, total_value, created_at')
+        .eq('organization_id', organizationId);
+      if (error) throw error;
+      return (data || []).map(s => ({ ...s, total_value: Number(s.total_value || 0) }));
+    },
+    enabled: !!organizationId,
+  });
+
   const { data: payments, isLoading: loadingPayments } = useQuery({
     queryKey: ['finance-stats', organizationId],
     queryFn: async () => {
@@ -101,13 +116,24 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
     enabled: !!organizationId,
   });
 
-  const isLoading = loadingPayments || loadingExpenses;
+  const isLoading = loadingPayments || loadingExpenses || loadingSales;
+
+  // Filter sales by date range
+  const filteredSales = useMemo(() => {
+    if (!sales) return [];
+    if (!dateRange?.from) return sales;
+    return sales.filter(s => {
+      const date = parseISO(s.created_at);
+      if (dateRange.from && date < startOfDay(dateRange.from)) return false;
+      if (dateRange.to && date > endOfDay(dateRange.to)) return false;
+      return true;
+    });
+  }, [sales, dateRange]);
 
   // Filter payments by date range
   const filteredPayments = useMemo(() => {
     if (!payments) return [];
     if (!dateRange?.from) return payments;
-
     return payments.filter(p => {
       const date = parseISO(p.payment_date);
       if (dateRange.from && date < startOfDay(dateRange.from)) return false;
@@ -120,7 +146,6 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
   const filteredExpenses = useMemo(() => {
     if (!expenses) return [];
     if (!dateRange?.from) return expenses;
-
     return expenses.filter(e => {
       const date = parseISO(e.expense_date);
       if (dateRange.from && date < startOfDay(dateRange.from)) return false;
@@ -130,26 +155,27 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
   }, [expenses, dateRange]);
 
   const stats = useMemo((): FinanceStats => {
-    if ((!filteredPayments || filteredPayments.length === 0) && (!filteredExpenses || filteredExpenses.length === 0)) {
-      return {
-        totalBilled: 0,
-        totalReceived: 0,
-        totalPending: 0,
-        receivedThisMonth: 0,
-        dueSoon: 0,
-        dueSoonCount: 0,
-        dueSoonPayments: [],
-        cashflowTrend: [],
-        totalExpenses: 0,
-        expensesThisMonth: 0,
-        balance: 0,
-      };
+    const empty: FinanceStats = {
+      totalBilled: 0,
+      totalReceived: 0,
+      totalPending: 0,
+      dueSoon: 0,
+      dueSoonCount: 0,
+      dueSoonPayments: [],
+      cashflowTrend: [],
+      totalExpenses: 0,
+      balance: 0,
+    };
+
+    if (!filteredSales?.length && !filteredPayments?.length && !filteredExpenses?.length) {
+      return empty;
     }
 
     const now = new Date();
-    const monthStart = startOfMonth(now);
-    const monthEnd = endOfMonth(now);
     const next7Days = addDays(now, 7);
+
+    // Total billed from sales
+    const totalBilled = filteredSales.reduce((sum, s) => sum + s.total_value, 0);
 
     // Totals based on filtered payments
     const totalReceived = filteredPayments
@@ -160,18 +186,7 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
       .filter(p => p.status === 'pending')
       .reduce((sum, p) => sum + p.amount, 0);
 
-    const totalBilled = totalReceived + totalPending;
-
-    // This month received (within filtered payments)
-    const receivedThisMonth = filteredPayments
-      .filter(p => {
-        if (p.status !== 'paid') return false;
-        const date = parseISO(p.payment_date);
-        return isWithinInterval(date, { start: monthStart, end: monthEnd });
-      })
-      .reduce((sum, p) => sum + p.amount, 0);
-
-    // Due in next 7 days (pending payments within filtered)
+    // Due in next 7 days
     const dueSoonPayments = filteredPayments
       .filter(p => {
         if (p.status !== 'pending') return false;
@@ -184,18 +199,11 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
 
     // Expenses totals
     const totalExpenses = filteredExpenses.reduce((sum, e) => sum + e.amount, 0);
-    
-    const expensesThisMonth = filteredExpenses
-      .filter(e => {
-        const date = parseISO(e.expense_date);
-        return isWithinInterval(date, { start: monthStart, end: monthEnd });
-      })
-      .reduce((sum, e) => sum + e.amount, 0);
 
     // Balance
-    const balance = receivedThisMonth - expensesThisMonth;
+    const balance = totalReceived - totalExpenses;
 
-    // Cashflow trend - use date range if provided, otherwise last 30 days + next 7 days
+    // Cashflow trend
     const trendStart = dateRange?.from ? startOfDay(dateRange.from) : subDays(now, 30);
     const trendEnd = dateRange?.to ? endOfDay(dateRange.to) : next7Days;
     const cashflowTrend: CashflowPoint[] = [];
@@ -215,28 +223,21 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
         .filter(e => e.expense_date === dayStr)
         .reduce((sum, e) => sum + e.amount, 0);
 
-      cashflowTrend.push({
-        date: dayStr,
-        received,
-        scheduled,
-        expenses: expensesOnDay,
-      });
+      cashflowTrend.push({ date: dayStr, received, scheduled, expenses: expensesOnDay });
     }
 
     return {
       totalBilled,
       totalReceived,
       totalPending,
-      receivedThisMonth,
       dueSoon,
       dueSoonCount: dueSoonPayments.length,
       dueSoonPayments,
       cashflowTrend,
       totalExpenses,
-      expensesThisMonth,
       balance,
     };
-  }, [filteredPayments, filteredExpenses, dateRange]);
+  }, [filteredSales, filteredPayments, filteredExpenses, dateRange]);
 
   return {
     stats,
