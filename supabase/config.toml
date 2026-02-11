@@ -56,3 +56,6 @@ verify_jwt = false
 
 [functions.create-credit-note]
 verify_jwt = false
+
+[functions.sync-credit-notes]
+verify_jwt = false

@@ -1,6 +1,7 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/use-toast';
 import type { CreditNoteItem } from '@/types/finance';
 
 export function useCreditNotes() {
@@ -98,5 +99,39 @@ export function useCreditNotes() {
       return items;
     },
     enabled: !!organizationId,
+  });
+}
+
+export function useSyncCreditNotes() {
+  const queryClient = useQueryClient();
+  const { organization } = useAuth();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async () => {
+      const res = await supabase.functions.invoke('sync-credit-notes', {
+        body: { organization_id: organization!.id },
+      });
+
+      if (res.error) throw new Error(res.error.message);
+      if (res.data?.error) throw new Error(res.data.error);
+      return res.data as { total: number; synced: number; not_matched: number };
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['credit-notes'] });
+      queryClient.invalidateQueries({ queryKey: ['sales'] });
+      queryClient.invalidateQueries({ queryKey: ['all-payments'] });
+      toast({
+        title: 'Sincronização concluída',
+        description: `${data.total} notas de crédito encontradas, ${data.synced} associadas.${data.not_matched > 0 ? ` ${data.not_matched} não associadas.` : ''}`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Erro na sincronização',
+        description: error.message || 'Não foi possível sincronizar notas de crédito.',
+        variant: 'destructive',
+      });
+    },
   });
 }
