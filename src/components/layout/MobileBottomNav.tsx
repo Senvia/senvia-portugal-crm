@@ -29,14 +29,13 @@ export function MobileBottomNav() {
   const location = useLocation();
   const { isSuperAdmin } = useAuth();
   const { modules } = useModules();
-  const { modulePermissions } = usePermissions();
+  const { canViewModule } = usePermissions();
 
   // Filter nav items based on enabled modules AND user profile permissions
   const navItems = allNavItems.filter(item => {
     if (!item.moduleKey) return true;
     if (!modules[item.moduleKey]) return false;
-    const perm = modulePermissions[item.moduleKey as keyof typeof modulePermissions];
-    if (perm && !perm.view) return false;
+    if (!canViewModule(item.moduleKey)) return false;
     return true;
   });
 

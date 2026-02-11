@@ -3,62 +3,243 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 
+// ── Action labels ──
+export const ACTION_LABELS: Record<string, string> = {
+  view: 'Ver',
+  add: 'Adicionar',
+  edit: 'Editar',
+  delete: 'Eliminar',
+  assign: 'Atribuir',
+  export: 'Exportar',
+  import: 'Importar',
+  create: 'Criar',
+  send: 'Enviar',
+  issue: 'Emitir',
+  cancel: 'Cancelar',
+  submit: 'Submeter',
+  approve: 'Aprovar',
+  manage: 'Gerir',
+};
+
+// ── Schema definition ──
+export interface SubareaSchema {
+  label: string;
+  actions: string[];
+}
+
+export interface ModuleSchema {
+  label: string;
+  subareas: Record<string, SubareaSchema>;
+}
+
+export const MODULE_SCHEMA: Record<string, ModuleSchema> = {
+  leads: {
+    label: 'Leads',
+    subareas: {
+      kanban: { label: 'Kanban / Lista', actions: ['view', 'add', 'edit', 'delete', 'assign'] },
+      export: { label: 'Importar / Exportar', actions: ['export', 'import'] },
+    },
+  },
+  clients: {
+    label: 'Clientes',
+    subareas: {
+      list: { label: 'Lista de Clientes', actions: ['view', 'add', 'edit', 'delete'] },
+      communications: { label: 'Comunicações', actions: ['view', 'add'] },
+      cpes: { label: 'CPEs', actions: ['view', 'add', 'edit', 'delete'] },
+    },
+  },
+  proposals: {
+    label: 'Propostas',
+    subareas: {
+      proposals: { label: 'Propostas', actions: ['view', 'create', 'edit', 'delete', 'send'] },
+    },
+  },
+  sales: {
+    label: 'Vendas',
+    subareas: {
+      sales: { label: 'Vendas', actions: ['view', 'create', 'edit', 'delete'] },
+      payments: { label: 'Pagamentos', actions: ['view', 'add'] },
+    },
+  },
+  finance: {
+    label: 'Finanças',
+    subareas: {
+      summary: { label: 'Resumo', actions: ['view'] },
+      invoices: { label: 'Faturas', actions: ['view', 'issue', 'cancel'] },
+      expenses: { label: 'Despesas', actions: ['view', 'add', 'edit', 'delete'] },
+      payments: { label: 'Pagamentos', actions: ['view'] },
+      requests: { label: 'Pedidos Internos', actions: ['view', 'submit', 'approve'] },
+    },
+  },
+  calendar: {
+    label: 'Agenda',
+    subareas: {
+      events: { label: 'Eventos', actions: ['view', 'create', 'edit', 'delete'] },
+    },
+  },
+  marketing: {
+    label: 'Marketing',
+    subareas: {
+      templates: { label: 'Templates', actions: ['view', 'create', 'edit', 'delete', 'send'] },
+    },
+  },
+  ecommerce: {
+    label: 'E-commerce',
+    subareas: {
+      products: { label: 'Produtos', actions: ['view', 'create', 'edit', 'delete'] },
+      orders: { label: 'Pedidos', actions: ['view', 'edit'] },
+      customers: { label: 'Clientes', actions: ['view', 'create', 'edit'] },
+      inventory: { label: 'Inventário', actions: ['view', 'edit'] },
+      discounts: { label: 'Descontos', actions: ['view', 'create', 'edit', 'delete'] },
+    },
+  },
+  settings: {
+    label: 'Definições',
+    subareas: {
+      general: { label: 'Geral', actions: ['view', 'edit'] },
+      team: { label: 'Equipa', actions: ['view', 'manage'] },
+      pipeline: { label: 'Pipeline', actions: ['view', 'edit'] },
+      profiles: { label: 'Perfis', actions: ['view', 'manage'] },
+      modules: { label: 'Módulos', actions: ['view', 'edit'] },
+    },
+  },
+};
+
+// ── Types ──
+export type SubareaPermissions = Record<string, boolean>;
 export interface ModulePermission {
+  subareas: Record<string, SubareaPermissions>;
+}
+export type GranularPermissions = Record<string, ModulePermission>;
+
+// Legacy flat format for backward compat
+export interface LegacyModulePermission {
   view: boolean;
   edit: boolean;
   delete: boolean;
 }
+export type LegacyModulePermissions = Record<string, LegacyModulePermission>;
 
-export interface ModulePermissions {
-  leads: ModulePermission;
-  clients: ModulePermission;
-  proposals: ModulePermission;
-  sales: ModulePermission;
-  finance: ModulePermission;
-  calendar: ModulePermission;
-  marketing: ModulePermission;
-  ecommerce: ModulePermission;
-  settings: ModulePermission;
-}
+// Union: can be either format from DB
+export type ModulePermissions = GranularPermissions;
 
 export interface OrganizationProfile {
   id: string;
   organization_id: string;
   name: string;
   base_role: 'admin' | 'viewer' | 'salesperson';
-  module_permissions: ModulePermissions;
+  module_permissions: GranularPermissions;
   is_default: boolean;
   created_at: string;
 }
 
-const ALL_TRUE: ModulePermission = { view: true, edit: true, delete: true };
-const VIEW_ONLY: ModulePermission = { view: true, edit: false, delete: false };
-const NONE: ModulePermission = { view: false, edit: false, delete: false };
+// ── Conversion from legacy ──
+function isLegacyFormat(perms: any): boolean {
+  if (!perms || typeof perms !== 'object') return false;
+  const firstKey = Object.keys(perms)[0];
+  if (!firstKey) return false;
+  const val = perms[firstKey];
+  return val && typeof val === 'object' && 'view' in val && !('subareas' in val);
+}
 
-export const DEFAULT_ADMIN_PERMISSIONS: ModulePermissions = {
-  leads: ALL_TRUE, clients: ALL_TRUE, proposals: ALL_TRUE, sales: ALL_TRUE,
-  finance: ALL_TRUE, calendar: ALL_TRUE, marketing: ALL_TRUE, ecommerce: ALL_TRUE,
-  settings: ALL_TRUE,
-};
+export function convertLegacyToGranular(legacy: any): GranularPermissions {
+  if (!legacy || typeof legacy !== 'object') return buildAllPermissions(true);
+  if (!isLegacyFormat(legacy)) return legacy as GranularPermissions;
 
-export const DEFAULT_VIEWER_PERMISSIONS: ModulePermissions = {
-  leads: VIEW_ONLY, clients: VIEW_ONLY, proposals: VIEW_ONLY, sales: VIEW_ONLY,
-  finance: VIEW_ONLY, calendar: VIEW_ONLY, marketing: VIEW_ONLY, ecommerce: VIEW_ONLY,
-  settings: NONE,
-};
+  const result: GranularPermissions = {};
+  for (const [moduleKey, schema] of Object.entries(MODULE_SCHEMA)) {
+    const old = legacy[moduleKey] as LegacyModulePermission | undefined;
+    const canView = old?.view ?? false;
+    const canEdit = old?.edit ?? false;
+    const canDelete = old?.delete ?? false;
 
-export const MODULE_LABELS: Record<keyof ModulePermissions, string> = {
-  leads: 'Leads',
-  clients: 'Clientes',
-  proposals: 'Propostas',
-  sales: 'Vendas',
-  finance: 'Finanças',
-  calendar: 'Agenda',
-  marketing: 'Marketing',
-  ecommerce: 'E-commerce',
-  settings: 'Definições',
-};
+    const subareas: Record<string, SubareaPermissions> = {};
+    for (const [subKey, subSchema] of Object.entries(schema.subareas)) {
+      const actions: SubareaPermissions = {};
+      for (const action of subSchema.actions) {
+        if (action === 'view') actions[action] = canView;
+        else if (action === 'delete') actions[action] = canDelete;
+        else actions[action] = canEdit;
+      }
+      subareas[subKey] = actions;
+    }
+    result[moduleKey] = { subareas };
+  }
+  return result;
+}
 
+// ── Build helpers ──
+export function buildAllPermissions(value: boolean): GranularPermissions {
+  const result: GranularPermissions = {};
+  for (const [moduleKey, schema] of Object.entries(MODULE_SCHEMA)) {
+    const subareas: Record<string, SubareaPermissions> = {};
+    for (const [subKey, subSchema] of Object.entries(schema.subareas)) {
+      const actions: SubareaPermissions = {};
+      for (const action of subSchema.actions) {
+        actions[action] = value;
+      }
+      subareas[subKey] = actions;
+    }
+    result[moduleKey] = { subareas };
+  }
+  return result;
+}
+
+export function buildDefaultPermissions(role: string): GranularPermissions {
+  if (role === 'admin') return buildAllPermissions(true);
+  if (role === 'viewer') {
+    const result: GranularPermissions = {};
+    for (const [moduleKey, schema] of Object.entries(MODULE_SCHEMA)) {
+      if (moduleKey === 'settings') {
+        const subareas: Record<string, SubareaPermissions> = {};
+        for (const [subKey, subSchema] of Object.entries(schema.subareas)) {
+          const actions: SubareaPermissions = {};
+          for (const action of subSchema.actions) actions[action] = false;
+          subareas[subKey] = actions;
+        }
+        result[moduleKey] = { subareas };
+        continue;
+      }
+      const subareas: Record<string, SubareaPermissions> = {};
+      for (const [subKey, subSchema] of Object.entries(schema.subareas)) {
+        const actions: SubareaPermissions = {};
+        for (const action of subSchema.actions) {
+          actions[action] = action === 'view';
+        }
+        subareas[subKey] = actions;
+      }
+      result[moduleKey] = { subareas };
+    }
+    return result;
+  }
+  // salesperson
+  const result: GranularPermissions = {};
+  for (const [moduleKey, schema] of Object.entries(MODULE_SCHEMA)) {
+    const subareas: Record<string, SubareaPermissions> = {};
+    for (const [subKey, subSchema] of Object.entries(schema.subareas)) {
+      const actions: SubareaPermissions = {};
+      for (const action of subSchema.actions) {
+        if (['finance', 'marketing', 'ecommerce', 'settings'].includes(moduleKey)) {
+          actions[action] = false;
+        } else if (action === 'delete') {
+          actions[action] = false;
+        } else {
+          actions[action] = true;
+        }
+      }
+      subareas[subKey] = actions;
+    }
+    result[moduleKey] = { subareas };
+  }
+  return result;
+}
+
+// ── Legacy compat exports ──
+export const MODULE_LABELS: Record<string, string> = Object.fromEntries(
+  Object.entries(MODULE_SCHEMA).map(([k, v]) => [k, v.label])
+);
+
+// ── Hook ──
 export function useOrganizationProfiles() {
   const { organization } = useAuth();
   const organizationId = organization?.id;
@@ -75,13 +256,16 @@ export function useOrganizationProfiles() {
         .order('is_default', { ascending: false })
         .order('created_at', { ascending: true });
       if (error) throw error;
-      return (data || []) as unknown as OrganizationProfile[];
+      return (data || []).map((d: any) => ({
+        ...d,
+        module_permissions: convertLegacyToGranular(d.module_permissions),
+      })) as OrganizationProfile[];
     },
     enabled: !!organizationId,
   });
 
   const createProfile = useMutation({
-    mutationFn: async (profile: { name: string; base_role: string; module_permissions: ModulePermissions }) => {
+    mutationFn: async (profile: { name: string; base_role: string; module_permissions: GranularPermissions }) => {
       if (!organizationId) throw new Error('No organization');
       const { error } = await supabase
         .from('organization_profiles')
@@ -101,7 +285,7 @@ export function useOrganizationProfiles() {
   });
 
   const updateProfile = useMutation({
-    mutationFn: async ({ id, ...updates }: { id: string; name?: string; base_role?: string; module_permissions?: ModulePermissions }) => {
+    mutationFn: async ({ id, ...updates }: { id: string; name?: string; base_role?: string; module_permissions?: GranularPermissions }) => {
       const updateData: any = {};
       if (updates.name !== undefined) updateData.name = updates.name;
       if (updates.base_role !== undefined) updateData.base_role = updates.base_role;
@@ -122,7 +306,6 @@ export function useOrganizationProfiles() {
 
   const deleteProfile = useMutation({
     mutationFn: async (id: string) => {
-      // Check if profile is in use
       const { data: members } = await supabase
         .from('organization_members')
         .select('id')
