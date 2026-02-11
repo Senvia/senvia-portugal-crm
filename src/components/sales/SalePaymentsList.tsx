@@ -296,15 +296,22 @@ export function SalePaymentsList({
                 )}
               </div>
             ) : canEmitInvoice ? (
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full"
-                onClick={() => setDraftMode("invoice")}
-              >
-                <Eye className="h-4 w-4 mr-1" />
-                Ver Rascunho de Fatura
-              </Button>
+              (() => {
+                const allPaid = payments.length > 0 && payments.every(p => p.status === 'paid');
+                const mode = allPaid ? "invoice_receipt" : "invoice";
+                const label = allPaid ? "Ver Rascunho de Fatura-Recibo" : "Ver Rascunho de Fatura";
+                return (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => setDraftMode(mode)}
+                  >
+                    <Eye className="h-4 w-4 mr-1" />
+                    {label}
+                  </Button>
+                );
+              })()
             ) : hasInvoiceXpress && !clientNif ? (
               <p className="text-xs text-muted-foreground text-center">
                 Adicione o NIF do cliente para emitir fatura
@@ -380,19 +387,19 @@ export function SalePaymentsList({
                       </Button>
                     </>
                   )}
-                  {/* Generate Receipt (RC) or Invoice-Receipt (FR) button */}
-                  {payment.status === 'paid' && hasInvoiceXpress && !payment.invoice_reference && !readonly && (
+                  {/* Generate Receipt (RC) button - only when sale already has FT */}
+                  {payment.status === 'paid' && hasInvoiceXpress && hasInvoice && !payment.invoice_reference && !readonly && (
                     <Button
                       variant="outline"
                       size="sm"
                       className="h-8 text-xs"
                       onClick={() => {
                         setDraftPayment(payment);
-                        setDraftMode(hasInvoice ? "receipt" : "invoice_receipt");
+                        setDraftMode("receipt");
                       }}
                     >
                       <Eye className="h-3 w-3 mr-1" />
-                      {hasInvoice ? "Ver Rascunho de Recibo" : "Ver Rascunho de FR"}
+                      Ver Rascunho de Recibo
                     </Button>
                   )}
                   {payment.qr_code_url && (
@@ -606,9 +613,9 @@ export function SalePaymentsList({
       <InvoiceDraftModal
         open={draftMode === "invoice"}
         onOpenChange={(open) => { if (!open) setDraftMode(null); }}
-        onConfirm={() => {
+        onConfirm={(obs) => {
           issueInvoice.mutate(
-            { saleId, organizationId },
+            { saleId, organizationId, observations: obs },
             { onSuccess: () => setDraftMode(null) }
           );
         }}
@@ -621,6 +628,7 @@ export function SalePaymentsList({
         taxConfig={taxConfig}
         saleItems={draftSaleItems}
         saleTotal={saleTotal}
+        payments={payments}
       />
 
       {/* Invoice Draft Modal - Receipt mode (RC - requires existing FT) */}
@@ -629,7 +637,7 @@ export function SalePaymentsList({
         onOpenChange={(open) => { 
           if (!open) { setDraftMode(null); setDraftPayment(null); }
         }}
-        onConfirm={() => {
+        onConfirm={(_obs) => {
           if (!draftPayment) return;
           generateReceipt.mutate(
             { saleId, paymentId: draftPayment.id, organizationId },
@@ -648,29 +656,28 @@ export function SalePaymentsList({
         saleTotal={saleTotal}
       />
 
-      {/* Invoice Draft Modal - Invoice Receipt mode (FR - standalone document) */}
+      {/* Invoice Draft Modal - Invoice Receipt mode (FR - full sale total) */}
       <InvoiceDraftModal
-        open={draftMode === "invoice_receipt" && !!draftPayment}
+        open={draftMode === "invoice_receipt"}
         onOpenChange={(open) => { 
-          if (!open) { setDraftMode(null); setDraftPayment(null); }
+          if (!open) { setDraftMode(null); }
         }}
-        onConfirm={() => {
-          if (!draftPayment) return;
+        onConfirm={(obs) => {
           issueInvoiceReceipt.mutate(
-            { saleId, paymentId: draftPayment.id, organizationId },
-            { onSuccess: () => { setDraftMode(null); setDraftPayment(null); } }
+            { saleId, organizationId, observations: obs },
+            { onSuccess: () => { setDraftMode(null); } }
           );
         }}
         isLoading={issueInvoiceReceipt.isPending}
         mode="invoice_receipt"
         clientName={clientName}
         clientNif={clientNif}
-        amount={draftPayment ? Number(draftPayment.amount) : 0}
-        paymentDate={draftPayment?.payment_date || new Date().toISOString()}
-        paymentMethod={draftPayment?.payment_method}
+        amount={saleTotal}
+        paymentDate={new Date().toISOString()}
         taxConfig={taxConfig}
         saleItems={draftSaleItems}
         saleTotal={saleTotal}
+        payments={payments}
       />
 
       {/* Cancel Invoice/Receipt Dialog */}

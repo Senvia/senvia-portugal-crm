@@ -48,9 +48,9 @@ Deno.serve(async (req) => {
       })
     }
 
-    const { sale_id, payment_id, organization_id } = await req.json()
-    if (!sale_id || !payment_id || !organization_id) {
-      return new Response(JSON.stringify({ error: 'sale_id, payment_id e organization_id são obrigatórios' }), {
+    const { sale_id, organization_id, observations } = await req.json()
+    if (!sale_id || !organization_id) {
+      return new Response(JSON.stringify({ error: 'sale_id e organization_id são obrigatórios' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
@@ -116,34 +116,14 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Fetch payment
-    const { data: payment } = await supabase
-      .from('sale_payments')
-      .select('*')
-      .eq('id', payment_id)
-      .eq('sale_id', sale_id)
-      .single()
-
-    if (!payment) {
-      return new Response(JSON.stringify({ error: 'Pagamento não encontrado' }), {
-        status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
-
-    if (payment.invoice_reference) {
+    // Check if invoice already exists for this sale
+    if (sale.invoicexpress_id) {
       return new Response(JSON.stringify({ 
-        error: 'Já existe documento emitido para este pagamento',
-        invoice_reference: payment.invoice_reference,
+        error: 'Já existe documento emitido para esta venda',
+        invoice_reference: sale.invoice_reference,
+        invoicexpress_id: sale.invoicexpress_id,
       }), {
         status: 409,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
-
-    if (payment.status !== 'paid') {
-      return new Response(JSON.stringify({ error: 'Só é possível emitir fatura-recibo para pagamentos com estado "Pago"' }), {
-        status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
@@ -173,7 +153,7 @@ Deno.serve(async (req) => {
       return item
     }
 
-    // Build items from sale_items, proportionally scaled to payment amount
+    // Build items from sale_items - always full sale total (no ratio)
     let items: any[] = []
     let hasExemptItem = false
     let firstExemptionReason: string | null = null
@@ -183,12 +163,7 @@ Deno.serve(async (req) => {
       .select('*, product:products(tax_value, tax_exemption_reason)')
       .eq('sale_id', sale_id)
 
-    const paymentAmount = Number(payment.amount)
-    const saleTotalValue = Number(sale.total_value)
-    const ratio = saleTotalValue > 0 ? paymentAmount / saleTotalValue : 1
-
     if (saleItems && saleItems.length > 0) {
-      // Scale items proportionally to payment amount
       items = saleItems.map((item: any) => {
         const productTaxValue = item.product?.tax_value ?? null
         const productTaxExemptionReason = item.product?.tax_exemption_reason ?? null
@@ -199,11 +174,10 @@ Deno.serve(async (req) => {
             firstExemptionReason = productTaxExemptionReason || orgTaxExemptionReason
           }
         }
-        const scaledPrice = Number(item.unit_price) * ratio
-        return buildItem(item.name, item.name, scaledPrice, Number(item.quantity), productTaxValue, productTaxExemptionReason)
+        return buildItem(item.name, item.name, Number(item.unit_price), Number(item.quantity), productTaxValue, productTaxExemptionReason)
       })
     } else {
-      items.push(buildItem('Serviço', `Pagamento - Venda ${sale.code || sale_id}`, paymentAmount, 1))
+      items.push(buildItem('Serviço', `Venda ${sale.code || sale_id}`, Number(sale.total_value), 1))
       if (orgTaxValue === 0) {
         hasExemptItem = true
         firstExemptionReason = orgTaxExemptionReason
@@ -259,13 +233,40 @@ Deno.serve(async (req) => {
 
     const clientName = sale.client?.company || sale.client?.name || sale.lead?.name || 'Cliente'
     const clientCode = sale.client?.code || clientNif
-    const proprietary_uid = `senvia-fr-${sale_id}-${payment_id}`
+    const proprietary_uid = `senvia-fr-${sale_id}`
+
+    // Build observations if not provided
+    let finalObservations = observations || ''
+    if (!finalObservations) {
+      const { data: salePayments } = await supabase
+        .from('sale_payments')
+        .select('amount, payment_date, status')
+        .eq('sale_id', sale_id)
+        .order('payment_date', { ascending: true })
+      
+      if (salePayments && salePayments.length > 0) {
+        const paidPayments = salePayments.filter((p: any) => p.status === 'paid')
+        if (paidPayments.length === 1) {
+          const d = new Date(paidPayments[0].payment_date)
+          const dateStr = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
+          finalObservations = `Pagamento recebido em ${dateStr}`
+        } else if (paidPayments.length > 1) {
+          finalObservations = `Pagamentos recebidos:\n` +
+            paidPayments.map((p: any, i: number) => {
+              const d = new Date(p.payment_date)
+              const dateStr = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
+              return `- ${Number(p.amount).toFixed(2)} EUR em ${dateStr}`
+            }).join('\n')
+        }
+      }
+    }
 
     // Build InvoiceXpress payload for invoice_receipt
     const invoiceReceiptPayload = {
       invoice_receipt: {
         date: formattedDate,
         due_date: formattedDate,
+        ...(finalObservations ? { observations: finalObservations } : {}),
         ...(hasExemptItem && firstExemptionReason
           ? { tax_exemption: firstExemptionReason }
           : {}),
@@ -409,17 +410,18 @@ Deno.serve(async (req) => {
       console.warn('QR Code polling failed (non-blocking):', e)
     }
 
-    // 5. Save reference in sale_payments
+    // 5. Save reference in sales table (not per-payment anymore)
     const fileUrl = storedPdfPath || pdfUrl || permalink || null
     await supabase
-      .from('sale_payments')
+      .from('sales')
       .update({
+        invoicexpress_id: docId,
+        invoicexpress_type: 'invoice_receipts',
         invoice_reference: invoiceReference,
-        invoicexpress_id: docId || null,
-        ...(fileUrl ? { invoice_file_url: fileUrl } : {}),
+        ...(fileUrl ? { invoice_pdf_url: fileUrl } : {}),
         ...(qrCodeUrl ? { qr_code_url: qrCodeUrl } : {}),
       })
-      .eq('id', payment_id)
+      .eq('id', sale_id)
 
     return new Response(JSON.stringify({
       success: true,

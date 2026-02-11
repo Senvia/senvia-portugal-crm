@@ -202,7 +202,7 @@ export default function FinancePayments() {
     setDraftPayment(payment);
   };
 
-  const handleConfirmDraft = () => {
+  const handleConfirmDraft = (obs?: string) => {
     if (!draftPayment || !organization) return;
 
     if (draftMode === "receipt") {
@@ -217,7 +217,7 @@ export default function FinancePayments() {
       );
     } else {
       issueInvoiceReceipt.mutate(
-        { saleId: draftPayment.sale_id, paymentId: draftPayment.id, organizationId: organization.id },
+        { saleId: draftPayment.sale_id, organizationId: organization.id, observations: obs },
         {
           onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['all-payments'] });

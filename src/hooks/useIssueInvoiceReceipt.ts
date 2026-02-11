@@ -4,23 +4,23 @@ import { toast } from "sonner";
 
 interface IssueInvoiceReceiptParams {
   saleId: string;
-  paymentId: string;
   organizationId: string;
+  observations?: string;
 }
 
 export function useIssueInvoiceReceipt() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ saleId, paymentId, organizationId }: IssueInvoiceReceiptParams) => {
+    mutationFn: async ({ saleId, organizationId, observations }: IssueInvoiceReceiptParams) => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) throw new Error("Sessão expirada");
 
       const res = await supabase.functions.invoke("issue-invoice-receipt", {
         body: { 
           sale_id: saleId, 
-          payment_id: paymentId,
           organization_id: organizationId,
+          observations: observations || undefined,
         },
       });
 
