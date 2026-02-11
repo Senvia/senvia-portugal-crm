@@ -5,26 +5,33 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Download, Search, CreditCard, X } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { ArrowLeft, Download, Search, CreditCard, X, CheckCircle } from "lucide-react";
 import { useAllPayments } from "@/hooks/useAllPayments";
+import { useUpdateSalePayment } from "@/hooks/useSalePayments";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useState, useMemo, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { PAYMENT_METHOD_LABELS, PAYMENT_RECORD_STATUS_LABELS, PaymentMethod } from "@/types/sales";
 import { exportToExcel } from "@/lib/export";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { DateRange } from "react-day-picker";
-import { startOfDay, endOfDay, parseISO } from "date-fns";
+import { startOfDay, endOfDay, parseISO, format } from "date-fns";
+import type { PaymentWithSale } from "@/types/finance";
 
 export default function FinancePayments() {
   const { data: payments, isLoading } = useAllPayments();
+  const updatePayment = useUpdateSalePayment();
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [methodFilter, setMethodFilter] = useState<string>("all");
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
+  const [confirmPayment, setConfirmPayment] = useState<PaymentWithSale | null>(null);
 
   // Read status from URL on mount
   useEffect(() => {
@@ -101,6 +108,29 @@ export default function FinancePayments() {
     const methods = new Set(payments.map(p => p.payment_method).filter(Boolean));
     return Array.from(methods) as PaymentMethod[];
   }, [payments]);
+
+  const handleMarkAsPaid = () => {
+    if (!confirmPayment) return;
+    updatePayment.mutate(
+      {
+        paymentId: confirmPayment.id,
+        saleId: confirmPayment.sale_id,
+        updates: {
+          status: 'paid',
+          payment_date: format(new Date(), 'yyyy-MM-dd'),
+        },
+      },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: ['all-payments'] });
+          setConfirmPayment(null);
+        },
+        onError: () => {
+          setConfirmPayment(null);
+        },
+      }
+    );
+  };
 
   return (
     <AppLayout>
@@ -235,6 +265,7 @@ export default function FinancePayments() {
                       <TableHead className="hidden sm:table-cell">Método</TableHead>
                       <TableHead className="hidden md:table-cell">Fatura</TableHead>
                       <TableHead>Estado</TableHead>
+                      <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -266,6 +297,19 @@ export default function FinancePayments() {
                             {PAYMENT_RECORD_STATUS_LABELS[payment.status]}
                           </Badge>
                         </TableCell>
+                        <TableCell className="text-right">
+                          {payment.status === 'pending' && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="gap-1.5"
+                              onClick={() => setConfirmPayment(payment)}
+                            >
+                              <CheckCircle className="h-4 w-4" />
+                              <span className="hidden sm:inline">Marcar Pago</span>
+                            </Button>
+                          )}
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -275,6 +319,33 @@ export default function FinancePayments() {
           </CardContent>
         </Card>
       </div>
+
+      <AlertDialog open={!!confirmPayment} onOpenChange={(open) => !open && setConfirmPayment(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Marcar pagamento como pago?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmPayment && (
+                <span className="flex flex-col gap-1 mt-2">
+                  <span><strong>Cliente:</strong> {confirmPayment.client_name || confirmPayment.lead_name || '-'}</span>
+                  <span><strong>Venda:</strong> #{confirmPayment.sale.code}</span>
+                  <span><strong>Valor:</strong> {formatCurrency(confirmPayment.amount)}</span>
+                  <span><strong>Data agendada:</strong> {formatDate(confirmPayment.payment_date)}</span>
+                </span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={updatePayment.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleMarkAsPaid}
+              disabled={updatePayment.isPending}
+            >
+              {updatePayment.isPending ? 'A atualizar...' : 'Confirmar'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppLayout>
   );
 }
