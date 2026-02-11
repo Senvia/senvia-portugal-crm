@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { format } from "date-fns";
 import { pt } from "date-fns/locale";
-import { Plus, Pencil, Trash2, CreditCard, Receipt, AlertCircle, Download } from "lucide-react";
+import { Plus, Pencil, Trash2, CreditCard, Receipt, AlertCircle, Download, Ban } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -17,11 +17,13 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useSalePayments, useDeleteSalePayment, calculatePaymentSummary } from "@/hooks/useSalePayments";
 import { useIssueInvoice } from "@/hooks/useIssueInvoice";
+import { useCancelInvoice } from "@/hooks/useCancelInvoice";
 import { formatCurrency } from "@/lib/format";
 import { AddPaymentModal } from "./AddPaymentModal";
 import { ScheduleRemainingModal } from "./ScheduleRemainingModal";
 import { PaymentTypeSelector } from "./PaymentTypeSelector";
 import { InvoiceDraftModal } from "./InvoiceDraftModal";
+import { CancelInvoiceDialog } from "./CancelInvoiceDialog";
 import type { SalePayment } from "@/types/sales";
 import { 
   PAYMENT_METHOD_LABELS, 
@@ -59,6 +61,7 @@ export function SalePaymentsList({
   const { data: payments = [], isLoading } = useSalePayments(saleId);
   const deletePayment = useDeleteSalePayment();
   const issueInvoice = useIssueInvoice();
+  const cancelInvoice = useCancelInvoice();
   const hasPaidPayments = payments.some(p => p.status === 'paid');
   
   const [showTypeSelector, setShowTypeSelector] = useState(false);
@@ -66,6 +69,7 @@ export function SalePaymentsList({
   const [editingPayment, setEditingPayment] = useState<SalePayment | null>(null);
   const [deletingPayment, setDeletingPayment] = useState<SalePayment | null>(null);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [cancellingPayment, setCancellingPayment] = useState<SalePayment | null>(null);
   const [draftInvoice, setDraftInvoice] = useState<{
     payment: SalePayment;
     documentType: "invoice" | "invoice_receipt";
@@ -235,6 +239,17 @@ export function SalePaymentsList({
                       <Download className="h-3.5 w-3.5" />
                     </Button>
                   )}
+                  {payment.invoice_reference && payment.invoicexpress_id && hasInvoiceXpress && !readonly && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-destructive hover:text-destructive"
+                      onClick={() => setCancellingPayment(payment)}
+                      title="Anular fatura"
+                    >
+                      <Ban className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
                 </div>
               </div>
             ))}
@@ -385,6 +400,28 @@ export function SalePaymentsList({
         paymentDate={draftInvoice?.payment.payment_date || new Date().toISOString()}
         paymentMethod={draftInvoice?.payment.payment_method}
         taxConfig={taxConfig}
+      />
+
+      {/* Cancel Invoice Dialog */}
+      <CancelInvoiceDialog
+        open={!!cancellingPayment}
+        onOpenChange={(open) => !open && setCancellingPayment(null)}
+        onConfirm={(reason) => {
+          if (!cancellingPayment) return;
+          const docType = cancellingPayment.invoice_reference?.startsWith('FT') ? 'invoice' : 'invoice_receipt';
+          cancelInvoice.mutate(
+            {
+              paymentId: cancellingPayment.id,
+              organizationId,
+              reason,
+              invoicexpressId: cancellingPayment.invoicexpress_id!,
+              documentType: docType,
+            },
+            { onSuccess: () => setCancellingPayment(null) }
+          );
+        }}
+        isLoading={cancelInvoice.isPending}
+        invoiceReference={cancellingPayment?.invoice_reference || ""}
       />
     </>
   );

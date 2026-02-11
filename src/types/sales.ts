@@ -55,6 +55,7 @@ export interface SalePayment {
   payment_method: PaymentMethod | null;
   invoice_reference: string | null;
   invoice_file_url: string | null;
+  invoicexpress_id?: number | null;
   status: PaymentRecordStatus;
   notes: string | null;
   created_at: string;

@@ -2127,6 +2127,7 @@ export type Database = {
           id: string
           invoice_file_url: string | null
           invoice_reference: string | null
+          invoicexpress_id: number | null
           notes: string | null
           organization_id: string
           payment_date: string
@@ -2141,6 +2142,7 @@ export type Database = {
           id?: string
           invoice_file_url?: string | null
           invoice_reference?: string | null
+          invoicexpress_id?: number | null
           notes?: string | null
           organization_id: string
           payment_date: string
@@ -2155,6 +2157,7 @@ export type Database = {
           id?: string
           invoice_file_url?: string | null
           invoice_reference?: string | null
+          invoicexpress_id?: number | null
           notes?: string | null
           organization_id?: string
           payment_date?: string

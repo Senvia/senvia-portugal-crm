@@ -444,6 +444,7 @@ Deno.serve(async (req) => {
         .from('sale_payments')
         .update({ 
           invoice_reference: invoiceReference,
+          invoicexpress_id: invoiceId,
           ...(fileUrl ? { invoice_file_url: fileUrl } : {}),
         })
         .eq('id', payment_id)
