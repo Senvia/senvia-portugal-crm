@@ -1,7 +1,7 @@
-import { ChevronRight, Building, Users, Palette, Link2, Package, GitBranch, LayoutGrid, UserCheck, Zap, Receipt, Shield, IdCard } from "lucide-react";
+import { ChevronRight, Building, Users, UsersRound, Palette, Link2, Package, GitBranch, LayoutGrid, UserCheck, Zap, Receipt, Shield, IdCard, KeyRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type SettingsSection = "general" | "security" | "team" | "profiles" | "pipeline" | "modules" | "form" | "products" | "clients" | "integrations" | "alerts" | "expenses";
+export type SettingsSection = "general" | "security" | "team" | "profiles" | "teams" | "pipeline" | "modules" | "form" | "products" | "clients" | "integrations" | "alerts" | "expenses";
 
 interface MobileSettingsNavProps {
   activeSection: SettingsSection | null;
@@ -13,8 +13,9 @@ interface MobileSettingsNavProps {
 const sections = [
   { id: "general" as const, label: "Geral", icon: Building, description: "Organização e conta" },
   { id: "security" as const, label: "Segurança", icon: Shield, description: "Autenticação de dois fatores" },
-  { id: "team" as const, label: "Equipa", icon: Users, description: "Gerir membros", requiresTeam: true },
+  { id: "team" as const, label: "Acessos", icon: KeyRound, description: "Gerir utilizadores e permissões", requiresTeam: true },
   { id: "profiles" as const, label: "Perfis", icon: IdCard, description: "Perfis de acesso", requiresTeam: true },
+  { id: "teams" as const, label: "Equipas", icon: UsersRound, description: "Equipas hierárquicas e líderes", requiresTeam: true },
   { id: "pipeline" as const, label: "Pipeline", icon: GitBranch, description: "Etapas de venda", requiresIntegrations: true },
   { id: "modules" as const, label: "Módulos", icon: LayoutGrid, description: "Funcionalidades ativas", requiresIntegrations: true },
   { id: "form" as const, label: "Formulário", icon: Palette, description: "Personalizar aparência", requiresIntegrations: true },
