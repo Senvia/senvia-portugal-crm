@@ -42,7 +42,10 @@ export function useIssueInvoice() {
       return data;
     },
     onSuccess: (data, variables) => {
-      toast.success(`Fatura emitida: ${data.invoice_reference}`);
+      const msg = data.duplicate 
+        ? `Fatura já existente: ${data.invoice_reference}` 
+        : `Fatura emitida: ${data.invoice_reference}`;
+      toast.success(msg);
       queryClient.invalidateQueries({ queryKey: ["sales"] });
       if (variables.paymentId) {
         queryClient.invalidateQueries({ queryKey: ["sale-payments"] });

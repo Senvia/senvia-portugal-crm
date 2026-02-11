@@ -303,6 +303,9 @@ Deno.serve(async (req) => {
     const clientName = sale.client?.company || sale.client?.name || sale.lead?.name || 'Cliente'
     const clientCode = sale.client?.code || clientNif
 
+    // Deterministic proprietary_uid for idempotency
+    const proprietary_uid = payment_id ? `senvia-pay-${payment_id}` : `senvia-sale-${sale_id}`
+
     // Build InvoiceXpress payload
     const invoicePayload = {
       [docKey]: {
@@ -323,6 +326,7 @@ Deno.serve(async (req) => {
         },
         items: items,
       },
+      proprietary_uid,
     }
 
     // 1. Create draft
@@ -331,6 +335,31 @@ Deno.serve(async (req) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(invoicePayload),
     })
+
+    // Handle 409 = duplicate (proprietary_uid already used)
+    if (createRes.status === 409) {
+      console.warn('InvoiceXpress 409: duplicate proprietary_uid, document already exists')
+      // Try to find existing reference in our DB
+      if (payment_id) {
+        const { data: existingPay } = await supabase
+          .from('sale_payments')
+          .select('invoice_reference, invoice_file_url')
+          .eq('id', payment_id)
+          .single()
+        if (existingPay?.invoice_reference) {
+          return new Response(JSON.stringify({
+            success: true,
+            invoice_reference: existingPay.invoice_reference,
+            ...(existingPay.invoice_file_url ? { pdf_url: existingPay.invoice_file_url } : {}),
+            duplicate: true,
+          }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+        }
+      }
+      return new Response(JSON.stringify({ error: 'Fatura já foi criada anteriormente para este documento.' }), {
+        status: 409,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
 
     if (!createRes.ok) {
       const errorText = await createRes.text()
@@ -344,6 +373,7 @@ Deno.serve(async (req) => {
     const createData = await createRes.json()
     const invoiceId = createData[docKey]?.id
     const sequentialNumber = createData[docKey]?.sequential_number
+    const permalink = createData[docKey]?.permalink || null
 
     if (!invoiceId) {
       return new Response(JSON.stringify({ error: 'InvoiceXpress não retornou ID do documento', details: createData }), {
@@ -407,13 +437,14 @@ Deno.serve(async (req) => {
       console.warn('PDF generation polling failed (non-blocking):', e)
     }
 
-    // 4. Save reference + PDF URL
+    // 4. Save reference + PDF URL (or permalink as fallback)
+    const fileUrl = pdfUrl || permalink || null
     if (payment_id) {
       await supabase
         .from('sale_payments')
         .update({ 
           invoice_reference: invoiceReference,
-          ...(pdfUrl ? { invoice_file_url: pdfUrl } : {}),
+          ...(fileUrl ? { invoice_file_url: fileUrl } : {}),
         })
         .eq('id', payment_id)
     } else {
