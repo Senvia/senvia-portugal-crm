@@ -1,25 +1,22 @@
 
 
-## Corrigir scroll no Editar Proposta (solucao definitiva)
+## Reduzir largura dos modais de Propostas
 
 ### Problema
-O `ScrollArea` do Radix UI nao funciona correctamente dentro de flex containers porque o `Viewport` interno usa `h-full` que depende de uma cadeia de alturas explicitas. Dentro de um flex com `flex-1 min-h-0`, essa cadeia quebra e o scroll nao activa.
+Os modais "Nova Proposta" e "Editar Proposta" estao com `sm:max-w-3xl` (768px), que e demasiado largo para o conteudo.
 
 ### Solucao
-Substituir o `ScrollArea` por um simples `div` com `overflow-y-auto`, que funciona nativamente em flex layouts sem depender de alturas resolvidas.
+Alterar ambos para `sm:max-w-2xl` (672px) -- um meio-termo entre o antigo `lg` (512px) e o actual `3xl` (768px).
 
-### Alteracao
+### Alteracoes
+
+**`src/components/proposals/CreateProposalModal.tsx`**
+- Alterar `sm:max-w-3xl` para `sm:max-w-2xl`
 
 **`src/components/proposals/EditProposalModal.tsx`**
+- Alterar `sm:max-w-3xl` para `sm:max-w-2xl`
 
-Linha 326: Substituir `<ScrollArea className="flex-1 min-h-0">` por `<div className="flex-1 min-h-0 overflow-y-auto">`
+### Ficheiros a editar
+- `src/components/proposals/CreateProposalModal.tsx` (1 linha)
+- `src/components/proposals/EditProposalModal.tsx` (1 linha)
 
-Linha 714: Substituir `</ScrollArea>` por `</div>`
-
-Remover o import do `ScrollArea` (linha 12) se nao for usado noutro local do ficheiro.
-
-### Resultado
-O scroll funciona de forma nativa e fiavel, sem dependencia do componente Radix ScrollArea. Os focus rings dos inputs continuam vissiveis porque o padding esta no `form` interno.
-
-### Ficheiro a editar
-- `src/components/proposals/EditProposalModal.tsx` (3 linhas)
