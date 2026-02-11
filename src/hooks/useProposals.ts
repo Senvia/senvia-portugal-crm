@@ -7,10 +7,10 @@ import type { Proposal, ProposalProduct, ProposalStatus } from '@/types/proposal
 
 export function useProposals() {
   const { organization } = useAuth();
-  const { effectiveUserId } = useTeamFilter();
+  const { effectiveUserIds } = useTeamFilter();
 
   return useQuery({
-    queryKey: ['proposals', organization?.id, effectiveUserId],
+    queryKey: ['proposals', organization?.id, effectiveUserIds],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('proposals')
@@ -26,11 +26,11 @@ export function useProposals() {
       
       let result = data as (Proposal & { lead?: { assigned_to?: string } })[];
       
-      // Se há filtro de utilizador, filtrar por created_by OU lead atribuído
-      if (effectiveUserId) {
+      // Filter by user IDs (admin/leader/single user)
+      if (effectiveUserIds) {
         result = result.filter(proposal => 
-          proposal.created_by === effectiveUserId || 
-          proposal.lead?.assigned_to === effectiveUserId
+          (proposal.created_by && effectiveUserIds.includes(proposal.created_by)) || 
+          (proposal.lead?.assigned_to && effectiveUserIds.includes(proposal.lead.assigned_to))
         );
       }
       

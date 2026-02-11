@@ -7,10 +7,10 @@ import type { SaleStatus, SaleWithDetails, PaymentMethod, PaymentStatus, Proposa
 
 export function useSales() {
   const { organization } = useAuth();
-  const { effectiveUserId } = useTeamFilter();
+  const { effectiveUserIds } = useTeamFilter();
 
   return useQuery({
-    queryKey: ["sales", organization?.id, effectiveUserId],
+    queryKey: ["sales", organization?.id, effectiveUserIds],
     queryFn: async (): Promise<SaleWithDetails[]> => {
       if (!organization?.id) return [];
 
@@ -29,11 +29,11 @@ export function useSales() {
       
       let result = (data as unknown as SaleWithDetails[]) || [];
       
-      // Se há filtro de utilizador, filtrar por created_by OU lead atribuído
-      if (effectiveUserId) {
+      // Filter by user IDs (admin/leader/single user)
+      if (effectiveUserIds) {
         result = result.filter(sale => 
-          sale.created_by === effectiveUserId || 
-          sale.lead?.assigned_to === effectiveUserId
+          (sale.created_by && effectiveUserIds.includes(sale.created_by)) || 
+          (sale.lead?.assigned_to && effectiveUserIds.includes(sale.lead.assigned_to))
         );
       }
       

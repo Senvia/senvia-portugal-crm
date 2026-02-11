@@ -8,10 +8,10 @@ import { Json } from '@/integrations/supabase/types';
 
 export function useLeads() {
   const { organization } = useAuth();
-  const { effectiveUserId } = useTeamFilter();
+  const { effectiveUserIds } = useTeamFilter();
   
   return useQuery({
-    queryKey: ['leads', organization?.id, effectiveUserId],
+    queryKey: ['leads', organization?.id, effectiveUserIds],
     queryFn: async () => {
       if (!organization?.id) return [];
       
@@ -21,10 +21,9 @@ export function useLeads() {
         .eq('organization_id', organization.id)
         .order('created_at', { ascending: false });
       
-      // Se há filtro de utilizador específico (admin com filtro selecionado)
-      if (effectiveUserId) {
-        // Filtrar apenas por leads atribuídos a este user
-        query = query.eq('assigned_to', effectiveUserId);
+      // Filter by user IDs (admin with filter, leader with team, or single user)
+      if (effectiveUserIds) {
+        query = query.in('assigned_to', effectiveUserIds);
       }
       
       const { data, error } = await query;
