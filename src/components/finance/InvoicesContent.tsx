@@ -68,7 +68,7 @@ function InvoicesTable() {
       Tipo: getDocTypeLabel(inv.document_type),
       Data: inv.date ? formatDate(inv.date) : '-',
       Cliente: inv.client_name || '-',
-      Estado: inv.status || '-',
+      Estado: getStatusLabel(inv.status),
       Valor: inv.total,
     }));
     exportToExcel(exportData, 'faturas');
@@ -80,6 +80,27 @@ function InvoicesTable() {
       case 'invoice_receipt': return 'Fatura-Recibo';
       case 'simplified_invoice': return 'Fatura Simplificada';
       default: return type;
+    }
+  };
+
+  const getStatusLabel = (status: string | null) => {
+    const map: Record<string, string> = {
+      settled: 'Liquidada',
+      final: 'Finalizada',
+      draft: 'Rascunho',
+      canceled: 'Anulada',
+      sent: 'Enviada',
+      second_copy: 'Segunda Via',
+    };
+    return map[status || ''] || status || '-';
+  };
+
+  const getStatusVariant = (status: string | null): "default" | "secondary" | "destructive" | "outline" => {
+    switch (status) {
+      case 'settled': return 'default';
+      case 'canceled': return 'destructive';
+      case 'draft': return 'secondary';
+      default: return 'outline';
     }
   };
 
@@ -228,8 +249,8 @@ function InvoicesTable() {
                         {invoice.client_name || '-'}
                       </TableCell>
                       <TableCell className="text-center">
-                        <Badge variant={invoice.status === 'settled' ? 'default' : 'secondary'} className="text-xs">
-                          {invoice.status || '-'}
+                        <Badge variant={getStatusVariant(invoice.status)} className="text-xs">
+                          {getStatusLabel(invoice.status)}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right font-semibold whitespace-nowrap">
