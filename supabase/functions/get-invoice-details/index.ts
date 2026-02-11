@@ -63,6 +63,54 @@ async function downloadAndUploadPdf(
   }
 }
 
+async function ensurePdfInStorage(
+  supabase: any,
+  baseUrl: string,
+  apiKey: string,
+  documentId: number,
+  documentType: string,
+  organizationId: string
+): Promise<{ storagePath: string | null; signedUrl: string | null }> {
+  const fileName = `${organizationId}/${documentType}_${documentId}.pdf`
+
+  // Check if PDF already exists in storage
+  const { data: existing } = await supabase.storage
+    .from('invoices')
+    .list(organizationId, { search: `${documentType}_${documentId}.pdf` })
+
+  const fileExists = existing && existing.length > 0 && existing.some((f: any) => f.name === `${documentType}_${documentId}.pdf`)
+
+  if (fileExists) {
+    // Generate signed URL
+    const { data: signedData } = await supabase.storage
+      .from('invoices')
+      .createSignedUrl(fileName, 3600) // 1 hour
+    return { storagePath: fileName, signedUrl: signedData?.signedUrl || null }
+  }
+
+  // PDF doesn't exist - download from InvoiceXpress
+  const pdfTempUrl = await pollWithRetry(
+    `${baseUrl}/api/pdf/${documentId}.json?api_key=${apiKey}`,
+    (data) => data?.output?.pdfUrl || null
+  )
+
+  if (!pdfTempUrl) {
+    return { storagePath: null, signedUrl: null }
+  }
+
+  const storagePath = await downloadAndUploadPdf(supabase, pdfTempUrl, fileName)
+  if (!storagePath) {
+    return { storagePath: null, signedUrl: null }
+  }
+
+  // Generate signed URL
+  const { data: signedData } = await supabase.storage
+    .from('invoices')
+    .createSignedUrl(storagePath, 3600)
+
+  return { storagePath, signedUrl: signedData?.signedUrl || null }
+}
+
 function buildTaxSummary(items: any[]): Array<{ name: string; rate: number; incidence: number; value: number }> {
   const taxMap = new Map<string, { name: string; rate: number; incidence: number; value: number }>()
   for (const item of items) {
@@ -180,7 +228,7 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Fetch QR code URL always (not just on sync)
+    // Fetch QR code URL
     let qrCodeUrl: string | null = null
     try {
       const qrRes = await fetch(`${baseUrl}/api/qr_codes/${document_id}.json?api_key=${apiKey}`, {
@@ -194,6 +242,11 @@ Deno.serve(async (req) => {
     } catch (e) {
       console.warn('QR code fetch failed:', e)
     }
+
+    // 2. Always ensure PDF is in storage and get signed URL
+    const { storagePath, signedUrl: pdfSignedUrl } = await ensurePdfInStorage(
+      supabase, baseUrl, apiKey, document_id, document_type, organization_id
+    )
 
     // Build response
     const result: any = {
@@ -216,6 +269,8 @@ Deno.serve(async (req) => {
       mb_reference: doc.mb_reference || null,
       cancel_reason: doc.cancel_reason || null,
       qr_code_url: qrCodeUrl,
+      pdf_url: storagePath,
+      pdf_signed_url: pdfSignedUrl,
       owner: doc.owner ? {
         name: doc.owner.name,
         fiscal_id: doc.owner.fiscal_id,
@@ -251,34 +306,12 @@ Deno.serve(async (req) => {
       tax_summary: buildTaxSummary(doc.items || []),
     }
 
-    // Also check for bank info in observations or owner
     if (doc.bank_info) {
       result.bank_info = doc.bank_info
     }
 
-    // 2. If sync=true, fetch PDF, download it, upload to storage, then update DB
+    // 3. If sync=true, update DB with storage path
     if (sync && sale_id) {
-      const pdfTempUrl = await pollWithRetry(
-        `${baseUrl}/api/pdf/${document_id}.json?api_key=${apiKey}`,
-        (data) => data?.output?.pdfUrl || null
-      )
-
-      let storagePath: string | null = null
-      if (pdfTempUrl) {
-        const fileName = `${organization_id}/${document_type}_${document_id}.pdf`
-        storagePath = await downloadAndUploadPdf(supabase, pdfTempUrl, fileName)
-      }
-
-      const qrCodeUrl = await pollWithRetry(
-        `${baseUrl}/api/qr_codes/${document_id}.json?api_key=${apiKey}`,
-        (data) => data?.qr_code?.url || null
-      )
-
-      result.pdf_url = storagePath
-      result.qr_code_url = qrCodeUrl
-      result.storage_path = storagePath
-
-      // Update the appropriate table with storage path (not temp URL)
       if (payment_id) {
         const updateData: any = {}
         if (storagePath) updateData.invoice_file_url = storagePath

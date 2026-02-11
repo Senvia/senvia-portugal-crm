@@ -342,8 +342,24 @@ export function InvoiceDetailsModal({
                     </div>
                   )}
 
-                  {/* Permalink */}
-                  {details.permalink && (
+                  {/* PDF Viewer */}
+                  {details.pdf_signed_url ? (
+                    <div className="rounded-lg border border-border/50 overflow-hidden">
+                      <iframe
+                        src={details.pdf_signed_url}
+                        className="w-full h-[500px]"
+                        title="Documento PDF"
+                      />
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center py-8 gap-2 text-muted-foreground">
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                      <p className="text-xs">A preparar documento...</p>
+                    </div>
+                  )}
+
+                  {/* Fallback link */}
+                  {details.permalink && !details.pdf_signed_url && (
                     <Button
                       variant="outline"
                       size="sm"
