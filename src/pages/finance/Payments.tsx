@@ -6,9 +6,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { ArrowLeft, Download, Search, CreditCard, X, CheckCircle } from "lucide-react";
+import { ArrowLeft, Download, Search, CreditCard, X, CheckCircle, Receipt, FileText } from "lucide-react";
 import { useAllPayments } from "@/hooks/useAllPayments";
 import { useUpdateSalePayment } from "@/hooks/useSalePayments";
+import { useGenerateReceipt } from "@/hooks/useGenerateReceipt";
+import { useIssueInvoiceReceipt } from "@/hooks/useIssueInvoiceReceipt";
+import { useSaleItems } from "@/hooks/useSaleItems";
+import { useAuth } from "@/contexts/AuthContext";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -20,10 +24,14 @@ import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { DateRange } from "react-day-picker";
 import { startOfDay, endOfDay, parseISO, format } from "date-fns";
 import type { PaymentWithSale } from "@/types/finance";
+import { InvoiceDraftModal, type DraftSaleItem } from "@/components/sales/InvoiceDraftModal";
 
 export default function FinancePayments() {
   const { data: payments, isLoading } = useAllPayments();
+  const { organization } = useAuth();
   const updatePayment = useUpdateSalePayment();
+  const generateReceipt = useGenerateReceipt();
+  const issueInvoiceReceipt = useIssueInvoiceReceipt();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -32,6 +40,14 @@ export default function FinancePayments() {
   const [methodFilter, setMethodFilter] = useState<string>("all");
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [confirmPayment, setConfirmPayment] = useState<PaymentWithSale | null>(null);
+  const [draftPayment, setDraftPayment] = useState<PaymentWithSale | null>(null);
+  const [draftMode, setDraftMode] = useState<"receipt" | "invoice_receipt">("receipt");
+
+  const hasInvoiceXpress = !!(organization?.invoicexpress_api_key && organization?.invoicexpress_account_name);
+  const taxConfig = organization?.tax_config as { tax_value?: number; tax_exemption_reason?: string } | null;
+
+  // Load sale items when draft modal is open
+  const { data: saleItems } = useSaleItems(draftPayment?.sale_id);
 
   // Read status from URL on mount
   useEffect(() => {
@@ -45,37 +61,21 @@ export default function FinancePayments() {
     if (!payments) return [];
 
     return payments.filter(payment => {
-      // Date range filter
       if (dateRange?.from) {
         const paymentDate = parseISO(payment.payment_date);
         if (paymentDate < startOfDay(dateRange.from)) return false;
         if (dateRange.to && paymentDate > endOfDay(dateRange.to)) return false;
       }
-
-      // Status filter
-      if (statusFilter !== "all" && payment.status !== statusFilter) {
-        return false;
-      }
-
-      // Method filter
-      if (methodFilter !== "all" && payment.payment_method !== methodFilter) {
-        return false;
-      }
-
-      // Search filter
+      if (statusFilter !== "all" && payment.status !== statusFilter) return false;
+      if (methodFilter !== "all" && payment.payment_method !== methodFilter) return false;
       if (searchTerm) {
         const search = searchTerm.toLowerCase();
         const clientName = payment.client_name?.toLowerCase() || '';
         const leadName = payment.lead_name?.toLowerCase() || '';
         const saleCode = payment.sale.code?.toLowerCase() || '';
         const invoiceRef = payment.invoice_reference?.toLowerCase() || '';
-        
-        return clientName.includes(search) || 
-               leadName.includes(search) || 
-               saleCode.includes(search) ||
-               invoiceRef.includes(search);
+        return clientName.includes(search) || leadName.includes(search) || saleCode.includes(search) || invoiceRef.includes(search);
       }
-
       return true;
     });
   }, [payments, searchTerm, statusFilter, methodFilter, dateRange]);
@@ -102,7 +102,6 @@ export default function FinancePayments() {
     exportToExcel(exportData, 'pagamentos');
   };
 
-  // Get unique payment methods from data
   const availableMethods = useMemo(() => {
     if (!payments) return [];
     const methods = new Set(payments.map(p => p.payment_method).filter(Boolean));
@@ -131,6 +130,57 @@ export default function FinancePayments() {
       }
     );
   };
+
+  const canEmitDocument = (payment: PaymentWithSale) => {
+    if (!hasInvoiceXpress) return false;
+    if (payment.status !== 'paid') return false;
+    if (payment.invoice_reference) return false;
+    return true;
+  };
+
+  const getDocumentMode = (payment: PaymentWithSale): "receipt" | "invoice_receipt" => {
+    // If the sale already has a FT, emit RC; otherwise emit FR
+    return payment.sale.invoicexpress_id ? "receipt" : "invoice_receipt";
+  };
+
+  const handleOpenDraft = (payment: PaymentWithSale) => {
+    const mode = getDocumentMode(payment);
+    setDraftMode(mode);
+    setDraftPayment(payment);
+  };
+
+  const handleConfirmDraft = () => {
+    if (!draftPayment || !organization) return;
+
+    if (draftMode === "receipt") {
+      generateReceipt.mutate(
+        { saleId: draftPayment.sale_id, paymentId: draftPayment.id, organizationId: organization.id },
+        {
+          onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['all-payments'] });
+            setDraftPayment(null);
+          },
+        }
+      );
+    } else {
+      issueInvoiceReceipt.mutate(
+        { saleId: draftPayment.sale_id, paymentId: draftPayment.id, organizationId: organization.id },
+        {
+          onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['all-payments'] });
+            setDraftPayment(null);
+          },
+        }
+      );
+    }
+  };
+
+  const draftSaleItems: DraftSaleItem[] = (saleItems || []).map(item => ({
+    name: item.name,
+    quantity: item.quantity,
+    unit_price: Number(item.unit_price),
+    tax_value: (item.product as any)?.tax_value ?? null,
+  }));
 
   return (
     <AppLayout>
@@ -162,7 +212,6 @@ export default function FinancePayments() {
         <Card>
           <CardContent className="pt-6">
             <div className="flex flex-col gap-4">
-              {/* First row: Search */}
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -172,8 +221,6 @@ export default function FinancePayments() {
                   className="pl-9"
                 />
               </div>
-              
-              {/* Second row: Date range and selects */}
               <div className="flex flex-wrap gap-3">
                 <DateRangePicker
                   value={dateRange}
@@ -181,7 +228,6 @@ export default function FinancePayments() {
                   placeholder="Período"
                   className="w-full xs:w-auto"
                 />
-                
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
                   <SelectTrigger className="w-full xs:w-32">
                     <SelectValue placeholder="Estado" />
@@ -192,7 +238,6 @@ export default function FinancePayments() {
                     <SelectItem value="pending">Agendados</SelectItem>
                   </SelectContent>
                 </Select>
-
                 <Select value={methodFilter} onValueChange={setMethodFilter}>
                   <SelectTrigger className="w-full xs:w-36">
                     <SelectValue placeholder="Método" />
@@ -206,14 +251,8 @@ export default function FinancePayments() {
                     ))}
                   </SelectContent>
                 </Select>
-
                 {hasActiveFilters && (
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    onClick={clearFilters}
-                    className="gap-1 text-muted-foreground"
-                  >
+                  <Button variant="ghost" size="sm" onClick={clearFilters} className="gap-1 text-muted-foreground">
                     <X className="h-4 w-4" />
                     Limpar
                   </Button>
@@ -223,7 +262,6 @@ export default function FinancePayments() {
           </CardContent>
         </Card>
 
-        {/* Results count */}
         {hasActiveFilters && !isLoading && (
           <p className="text-sm text-muted-foreground">
             {filteredPayments.length} pagamento(s) encontrado(s)
@@ -244,11 +282,7 @@ export default function FinancePayments() {
                 <CreditCard className="h-12 w-12 text-muted-foreground/50 mb-4" />
                 <p className="text-muted-foreground">Nenhum pagamento encontrado</p>
                 {hasActiveFilters && (
-                  <Button 
-                    variant="link" 
-                    onClick={clearFilters} 
-                    className="mt-2"
-                  >
+                  <Button variant="link" onClick={clearFilters} className="mt-2">
                     Limpar filtros
                   </Button>
                 )}
@@ -298,17 +332,39 @@ export default function FinancePayments() {
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right">
-                          {payment.status === 'pending' && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="gap-1.5"
-                              onClick={() => setConfirmPayment(payment)}
-                            >
-                              <CheckCircle className="h-4 w-4" />
-                              <span className="hidden sm:inline">Marcar Pago</span>
-                            </Button>
-                          )}
+                          <div className="flex items-center justify-end gap-2">
+                            {payment.status === 'pending' && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="gap-1.5"
+                                onClick={() => setConfirmPayment(payment)}
+                              >
+                                <CheckCircle className="h-4 w-4" />
+                                <span className="hidden sm:inline">Marcar Pago</span>
+                              </Button>
+                            )}
+                            {canEmitDocument(payment) && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="gap-1.5"
+                                onClick={() => handleOpenDraft(payment)}
+                              >
+                                {getDocumentMode(payment) === "receipt" ? (
+                                  <>
+                                    <Receipt className="h-4 w-4" />
+                                    <span className="hidden sm:inline">Emitir Recibo</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <FileText className="h-4 w-4" />
+                                    <span className="hidden sm:inline">Emitir FR</span>
+                                  </>
+                                )}
+                              </Button>
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -320,6 +376,7 @@ export default function FinancePayments() {
         </Card>
       </div>
 
+      {/* Mark as Paid confirmation */}
       <AlertDialog open={!!confirmPayment} onOpenChange={(open) => !open && setConfirmPayment(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -346,6 +403,26 @@ export default function FinancePayments() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Invoice Draft Modal */}
+      {draftPayment && (
+        <InvoiceDraftModal
+          open={!!draftPayment}
+          onOpenChange={(open) => !open && setDraftPayment(null)}
+          onConfirm={handleConfirmDraft}
+          isLoading={generateReceipt.isPending || issueInvoiceReceipt.isPending}
+          mode={draftMode}
+          clientName={draftPayment.client_name || draftPayment.lead_name}
+          clientNif={draftPayment.client_nif}
+          amount={draftPayment.amount}
+          paymentDate={draftPayment.payment_date}
+          paymentMethod={draftPayment.payment_method}
+          taxConfig={taxConfig}
+          saleItems={draftSaleItems}
+          saleTotal={draftPayment.sale.total_value}
+        />
+      )}
     </AppLayout>
   );
 }
+
