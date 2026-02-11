@@ -1,90 +1,125 @@
 
 
-## Anular Faturas no InvoiceXpress
+## Fluxo Fiscal Correto: Fatura + Recibos Parciais
 
-### O que vai ser feito
-Implementar a funcionalidade de anular (cancelar) faturas ja emitidas no InvoiceXpress, com campo obrigatorio de motivo, atualizando o estado tanto no InvoiceXpress como na base de dados local.
+### Contexto
+Atualmente, cada pagamento gera um documento independente (FT ou FR). O fluxo fiscalmente correto para Portugal e:
+1. Emitir **uma unica Fatura (FT)** pelo valor total da venda
+2. A cada pagamento recebido, gerar um **Recibo** vinculado a essa fatura via `partial_payments`
 
-### Fluxo do utilizador
-1. Na lista de pagamentos de uma venda, ao lado de um pagamento que ja tem fatura emitida (`invoice_reference`), aparece um botao "Anular"
-2. Ao clicar, abre um dialog com campo obrigatorio para o motivo de anulacao
-3. Ao confirmar, o sistema cancela a fatura no InvoiceXpress e limpa a referencia na base de dados
-4. O utilizador pode depois emitir uma nova fatura se necessario
+### Novo Fluxo do Utilizador
 
-### Alteracoes
-
-**1. Nova Edge Function `cancel-invoice`**
-
-Ficheiro: `supabase/functions/cancel-invoice/index.ts`
-
-Responsabilidades:
-- Autenticacao e verificacao de membership na organizacao
-- Obter credenciais InvoiceXpress da organizacao
-- Determinar o tipo de documento (invoice ou invoice_receipt) a partir do `invoice_reference` (prefixo FT ou FR)
-- Chamar `PUT /:document-type/:document-id/change-state.json` com `state: "canceled"` e `message: motivo`
-- Para obter o `document-id`, usar o campo `invoicexpress_id` da sale (legacy) ou buscar via referencia
-- Limpar `invoice_reference` e `invoice_file_url` do pagamento na tabela `sale_payments`
-- Retornar sucesso ou erro
-
-Parametros de entrada:
 ```text
-{
-  payment_id: string (obrigatorio)
-  organization_id: string (obrigatorio)
-  reason: string (obrigatorio, motivo de anulacao)
-  invoicexpress_id: number (obrigatorio, ID do documento no InvoiceXpress)
-  document_type: "invoice" | "invoice_receipt" (obrigatorio)
-}
+Venda criada (1.200EUR)
+    |
+    v
+[Emitir Fatura] --> Cria FT pelo total (1.200EUR) no InvoiceXpress
+    |                Guarda invoicexpress_id na tabela sales
+    v
+Pagamento 1 (400EUR) marcado como "Pago"
+    |
+    v
+[Gerar Recibo] --> POST /documents/:invoice-id/partial_payments.json
+    |               Gera Recibo vinculado a FT
+    |               Guarda referencia do recibo no sale_payment
+    v
+Pagamento 2 (400EUR) marcado como "Pago"
+    |
+    v
+[Gerar Recibo] --> Mesmo endpoint, novo recibo parcial
+    |
+    v
+Pagamento 3 (400EUR) -- ultimo pagamento
+    |
+    v
+[Gerar Recibo] --> Recibo final, fatura fica "settled"
 ```
 
-**2. Guardar invoicexpress_id nos pagamentos**
+### Alteracoes Tecnicas
 
-Problema: atualmente o `invoicexpress_id` so e guardado na tabela `sales` (legacy). Para pagamentos individuais, nao temos o ID do documento InvoiceXpress guardado no `sale_payments`.
+**1. Refatorar a Edge Function `issue-invoice`**
 
-Solucao: 
-- Adicionar coluna `invoicexpress_id` (bigint, nullable) a tabela `sale_payments` via migracao
-- Atualizar a edge function `issue-invoice` para guardar o `invoicexpress_id` tambem no pagamento
-- Atualizar a edge function `cancel-invoice` para usar este campo
+O comportamento muda:
+- Passa a emitir **apenas Faturas (FT)** pelo valor total da venda (nao por pagamento)
+- Remove a logica de `payment_id` / `payment_amount` (documento por pagamento)
+- Guarda o `invoicexpress_id` na tabela `sales`
+- O parametro `document_type` deixa de ser necessario (sempre `invoice`)
 
-**3. Hook `useCancelInvoice`**
+**2. Nova Edge Function `generate-receipt`**
 
-Ficheiro: `src/hooks/useCancelInvoice.ts`
+Ficheiro: `supabase/functions/generate-receipt/index.ts`
 
-- Mutation que chama a edge function `cancel-invoice`
-- Toast de sucesso/erro
+Responsabilidades:
+- Receber `sale_id`, `payment_id`, `organization_id`
+- Verificar que a venda ja tem `invoicexpress_id` (fatura emitida)
+- Chamar `POST /documents/:invoicexpress_id/partial_payments.json` com:
+  - `amount`: valor do pagamento
+  - `payment_date`: data do pagamento (formato dd/mm/yyyy)
+  - `payment_mechanism`: mapeamento do metodo de pagamento interno para codigos InvoiceXpress (TB, CC, MB, etc.)
+- Guardar a referencia do recibo gerado no `sale_payment` (campos `invoice_reference`, `invoicexpress_id`, `invoice_file_url`)
+
+Mapeamento de metodos de pagamento:
+```text
+mbway    -> MB
+transfer -> TB
+cash     -> NU
+card     -> CC
+check    -> CH
+other    -> OU
+```
+
+**3. Atualizar a UI - SalePaymentsList**
+
+Mudancas na interface:
+- **Novo botao "Emitir Fatura"** no topo da secao de pagamentos (nivel da venda), visivel quando:
+  - InvoiceXpress esta ativo
+  - A venda ainda nao tem `invoicexpress_id`
+  - O cliente tem NIF
+- **Botao "Gerar Recibo"** por pagamento, visivel quando:
+  - O pagamento esta "Pago"
+  - A venda ja tem `invoicexpress_id` (fatura emitida)
+  - O pagamento ainda nao tem `invoice_reference`
+- **Remover** os botoes antigos "Fatura" e "Fatura-Recibo" por pagamento
+
+**4. Atualizar InvoiceDraftModal**
+
+- Adaptar para dois modos:
+  - Modo "Fatura": mostra valor total da venda, usado ao emitir a fatura global
+  - Modo "Recibo": mostra valor do pagamento especifico, usado ao gerar recibo
+
+**5. Novo Hook `useGenerateReceipt`**
+
+Ficheiro: `src/hooks/useGenerateReceipt.ts`
+
+- Mutation que chama a edge function `generate-receipt`
+- Toast de sucesso com referencia do recibo
 - Invalidar queries `sales` e `sale-payments`
 
-**4. Modal de Anulacao**
+**6. Atualizar Hook `useIssueInvoice`**
 
-Ficheiro: `src/components/sales/CancelInvoiceDialog.tsx`
+- Simplificar: remover parametros `paymentId` e `paymentAmount`
+- Passa a emitir sempre pelo total da venda
 
-- AlertDialog com campo Textarea obrigatorio para o motivo
-- Botao desativado enquanto o motivo esta vazio
-- Loading state durante o pedido
+**7. Atualizar SaleDetailsModal**
 
-**5. Atualizar `SalePaymentsList`**
+- Passar `invoicexpress_id` da venda ao `SalePaymentsList` para controlar a visibilidade dos botoes de recibo
 
-Ficheiro: `src/components/sales/SalePaymentsList.tsx`
+### Resumo de Ficheiros
 
-- Adicionar botao "Anular" ao lado do botao de download, visivel quando o pagamento tem `invoice_reference` e `invoicexpress_id`
-- Ao clicar, abre o `CancelInvoiceDialog`
-
-### Resumo tecnico
-
-| Ficheiro | Tipo | Alteracao |
+| Ficheiro | Acao | Descricao |
 |---|---|---|
-| Migracao SQL | Novo | Adicionar coluna `invoicexpress_id` a `sale_payments` |
-| `supabase/functions/cancel-invoice/index.ts` | Novo | Edge function para anular fatura no InvoiceXpress |
-| `supabase/functions/issue-invoice/index.ts` | Editar | Guardar `invoicexpress_id` no pagamento |
-| `supabase/config.toml` | Editar | Adicionar config para `cancel-invoice` |
-| `src/hooks/useCancelInvoice.ts` | Novo | Hook mutation para anular fatura |
-| `src/components/sales/CancelInvoiceDialog.tsx` | Novo | Dialog com campo de motivo |
-| `src/components/sales/SalePaymentsList.tsx` | Editar | Adicionar botao "Anular" |
-| `src/types/sales.ts` | Editar | Adicionar `invoicexpress_id` ao tipo `SalePayment` |
+| `supabase/functions/issue-invoice/index.ts` | Editar | Simplificar para emitir FT pelo total |
+| `supabase/functions/generate-receipt/index.ts` | Criar | Nova funcao para recibos parciais |
+| `supabase/config.toml` | Editar | Registar `generate-receipt` |
+| `src/hooks/useIssueInvoice.ts` | Editar | Simplificar parametros |
+| `src/hooks/useGenerateReceipt.ts` | Criar | Hook para gerar recibos |
+| `src/components/sales/SalePaymentsList.tsx` | Editar | Novo layout com botao FT global + recibos |
+| `src/components/sales/InvoiceDraftModal.tsx` | Editar | Suportar modo Fatura vs Recibo |
+| `src/components/sales/SaleDetailsModal.tsx` | Editar | Passar invoicexpress_id ao payments list |
 
-### Notas
-- A API do InvoiceXpress exige o campo `message` ao cancelar (motivo obrigatorio)
-- Transicoes validas: `final -> canceled` e `settled -> canceled` (para invoice_receipts)
-- Apos anular, as referencias sao limpas para permitir re-emissao
-- O `proprietary_uid` ja implementado permite re-emitir apos anulacao (o InvoiceXpress gera novo documento)
+### Notas Importantes
+- Faturas existentes (emitidas com o fluxo antigo) continuam a funcionar e podem ser anuladas
+- A funcionalidade de anular faturas ja implementada continua valida para a FT global
+- O endpoint `partial_payments` so funciona com `invoices` e `simplified_invoices` (nao com `invoice_receipts`), o que confirma que a FT global e o ponto de partida correto
+- Quando o ultimo pagamento e registado e o recibo gerado, a fatura transita automaticamente para "settled" no InvoiceXpress
 
