@@ -1,100 +1,53 @@
 
 
-## Enviar Fatura/Recibo por Email via InvoiceXpress
+## Guardar e Exibir PDF da Fatura Global
 
-### Objetivo
-Adicionar a funcionalidade de enviar documentos fiscais (Fatura e Recibos) por email diretamente pelo InvoiceXpress, usando o endpoint `PUT /:document-type/:document-id/email-document.json`.
+### Problema
+A edge function `issue-invoice` ja faz polling do PDF apos finalizar a fatura, mas **nao guarda o URL** na tabela `sales`. O PDF URL e retornado na resposta e perdido. Resultado: nao ha botao "Download PDF" para a fatura global na interface.
 
-### Fluxo do Utilizador
+### Alteracoes
 
-```text
-Fatura emitida (FT 0001)
-    |
-    v
-[Botao "Enviar por Email"] --> Abre modal com:
-    |                          - Email pre-preenchido (do cliente)
-    |                          - Assunto pre-preenchido
-    |                          - Corpo editavel
-    v
-[Confirmar] --> Edge Function --> InvoiceXpress API
-    |
-    v
-Toast de sucesso
+**1. Migracao de Base de Dados**
 
---- Mesmo fluxo para Recibos individuais ---
-```
-
-### Alteracoes Tecnicas
-
-**1. Nova Edge Function `send-invoice-email`**
-
-Ficheiro: `supabase/functions/send-invoice-email/index.ts`
-
-Responsabilidades:
-- Receber `document_id`, `document_type`, `organization_id`, `email`, `subject`, `body`
-- Verificar autenticacao e membership
-- Buscar credenciais InvoiceXpress da organizacao
-- Chamar `PUT /:document-type/:document-id/email-document.json` com:
+Adicionar coluna `invoice_pdf_url` a tabela `sales`:
 
 ```text
-{
-  "message": {
-    "client": { "email": "...", "save": "0" },
-    "subject": "...",
-    "body": "...",
-    "logo": "0"
-  }
-}
+ALTER TABLE public.sales ADD COLUMN invoice_pdf_url text DEFAULT NULL;
 ```
 
-Mapeamento de `document_type`:
-- `invoice` -> `invoices`
-- `receipt` -> `receipts`
+**2. Edge Function `issue-invoice`**
 
-- Retornar sucesso ou erro
+No passo 5 (guardar referencia), incluir o `invoice_pdf_url` no update:
 
-**2. Novo Hook `useSendInvoiceEmail`**
+```text
+.update({
+  invoicexpress_id: invoiceId,
+  invoicexpress_type: 'invoices',
+  invoice_reference: invoiceReference,
+  ...(pdfUrl ? { invoice_pdf_url: pdfUrl } : {}),
+  ...(qrCodeUrl ? { qr_code_url: qrCodeUrl } : {}),
+})
+```
 
-Ficheiro: `src/hooks/useSendInvoiceEmail.ts`
+**3. Tipos - `src/types/sales.ts`**
 
-- Mutation que chama a edge function `send-invoice-email`
-- Toast de sucesso/erro
-- Sem invalidacao de queries necessaria (enviar email nao altera dados)
+Adicionar `invoice_pdf_url?: string | null` a interface `Sale`.
 
-**3. Novo Modal `SendInvoiceEmailModal`**
+**4. Frontend - `SalePaymentsList.tsx`**
 
-Ficheiro: `src/components/sales/SendInvoiceEmailModal.tsx`
+Adicionar nova prop `invoicePdfUrl` e mostrar botao Download (icone Download) ao lado do QR Code na secao da fatura global, quando o URL existir.
 
-Campos do formulario:
-- **Email** (pre-preenchido com email do cliente, editavel)
-- **Assunto** (pre-preenchido com "Fatura {referencia}" ou "Recibo {referencia}")
-- **Corpo** (textarea editavel, com texto padrao em portugues)
-- Botao "Enviar" com estado de loading
+**5. Frontend - `SaleDetailsModal.tsx`**
 
-**4. Atualizar `SalePaymentsList`**
-
-Adicionar botoes de envio por email:
-- **Fatura global**: botao "Enviar Email" ao lado do QR Code e do botao Anular, visivel quando `invoicexpressId` existe
-- **Recibo por pagamento**: botao "Enviar Email" ao lado do PDF/QR Code, visivel quando `payment.invoicexpress_id` existe
-
-**5. Atualizar `supabase/config.toml`**
-
-Registar a nova funcao `send-invoice-email` com `verify_jwt = false`.
+Passar `invoicePdfUrl={sale.invoice_pdf_url}` ao componente `SalePaymentsList`.
 
 ### Resumo de Ficheiros
 
 | Ficheiro | Acao | Descricao |
 |---|---|---|
-| `supabase/functions/send-invoice-email/index.ts` | Criar | Edge function para enviar email via InvoiceXpress |
-| `supabase/config.toml` | Editar | Registar `send-invoice-email` |
-| `src/hooks/useSendInvoiceEmail.ts` | Criar | Hook com mutation para enviar email |
-| `src/components/sales/SendInvoiceEmailModal.tsx` | Criar | Modal com formulario de email |
-| `src/components/sales/SalePaymentsList.tsx` | Editar | Adicionar botoes "Enviar Email" para fatura e recibos |
-
-### Notas
-- O `document-type` no path da API corresponde ao plural: `invoices`, `receipts`
-- O campo `save: "0"` nao atualiza o email do cliente no InvoiceXpress
-- O campo `logo: "0"` envia sem logotipo (depende do plano InvoiceXpress)
-- O email do cliente e obtido dos dados ja disponiveis no `SaleDetailsModal` (via props)
-- Sera necessario passar o email do cliente como nova prop ao `SalePaymentsList`
+| Migracao SQL | Criar | Adicionar `invoice_pdf_url` a `sales` |
+| `supabase/functions/issue-invoice/index.ts` | Editar | Guardar `pdfUrl` no update da tabela |
+| `src/types/sales.ts` | Editar | Adicionar `invoice_pdf_url` ao tipo `Sale` |
+| `src/components/sales/SalePaymentsList.tsx` | Editar | Nova prop + botao Download PDF para fatura |
+| `src/components/sales/SaleDetailsModal.tsx` | Editar | Passar `invoicePdfUrl` ao componente |
 
