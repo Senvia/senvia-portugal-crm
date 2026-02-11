@@ -32,7 +32,7 @@ interface InvoiceDetailsModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   documentId: number;
-  documentType: "invoice" | "invoice_receipt" | "receipt";
+  documentType: "invoice" | "invoice_receipt" | "receipt" | "credit_note";
   organizationId: string;
   saleId?: string;
   paymentId?: string;

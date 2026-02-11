@@ -8,7 +8,7 @@ interface CancelInvoiceParams {
   organizationId: string;
   reason: string;
   invoicexpressId: number;
-  documentType: "invoice" | "invoice_receipt" | "receipt";
+  documentType: "invoice" | "invoice_receipt" | "receipt" | "credit_note";
 }
 
 export function useCancelInvoice() {

@@ -20,7 +20,7 @@ interface CreateCreditNoteModalProps {
   saleId?: string;
   paymentId?: string;
   documentId: number;
-  documentType: "invoice" | "invoice_receipt" | "receipt";
+  documentType: "invoice" | "invoice_receipt" | "receipt" | "credit_note";
   documentReference: string;
 }
 
