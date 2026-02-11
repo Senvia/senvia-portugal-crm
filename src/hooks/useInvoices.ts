@@ -106,14 +106,10 @@ export function useSyncInvoices() {
       if (res.data?.error) throw new Error(res.data.error);
       return res.data as { total: number; matched: number; not_matched: number };
     },
-    onSuccess: (data) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
       queryClient.invalidateQueries({ queryKey: ['sales'] });
       queryClient.invalidateQueries({ queryKey: ['all-payments'] });
-      toast({
-        title: 'Sincronização concluída',
-        description: `${data.total} faturas encontradas, ${data.matched} associadas.${data.not_matched > 0 ? ` ${data.not_matched} não associadas.` : ''}`,
-      });
     },
     onError: (error: Error) => {
       toast({

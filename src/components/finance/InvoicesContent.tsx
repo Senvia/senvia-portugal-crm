@@ -2,7 +2,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Download, Search, FileText, X, RefreshCw, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
+import { Download, Search, FileText, X, Loader2, CheckCircle2, AlertCircle, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { useInvoices, useSyncInvoices } from "@/hooks/useInvoices";
 import { useCreditNotes, useSyncCreditNotes } from "@/hooks/useCreditNotes";
 import { formatCurrency, formatDate } from "@/lib/format";
@@ -33,6 +33,16 @@ interface UnifiedDocument {
   related_doc_reference: string | null;
 }
 
+type SortField = 'reference' | 'document_type' | 'date' | 'client_name' | 'status' | 'total';
+type SortDirection = 'asc' | 'desc';
+
+const SortIcon = ({ field, sortField, sortDirection }: { field: SortField; sortField: SortField; sortDirection: SortDirection }) => {
+  if (field !== sortField) return <ArrowUpDown className="h-3 w-3 ml-1 opacity-40" />;
+  return sortDirection === 'asc'
+    ? <ArrowUp className="h-3 w-3 ml-1" />
+    : <ArrowDown className="h-3 w-3 ml-1" />;
+};
+
 export function InvoicesContent() {
   const { data: invoicesData, isLoading: loadingInvoices } = useInvoices();
   const { data: creditNotesData, isLoading: loadingCreditNotes } = useCreditNotes();
@@ -43,6 +53,8 @@ export function InvoicesContent() {
   const [searchTerm, setSearchTerm] = useState("");
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [sortField, setSortField] = useState<SortField>('date');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [selectedInvoice, setSelectedInvoice] = useState<{
     invoicexpress_id: number;
     document_type: "invoice" | "invoice_receipt" | "receipt" | "credit_note";
@@ -61,12 +73,14 @@ export function InvoicesContent() {
     }
   }, []);
 
-  const handleSync = () => {
-    syncInvoices.mutate();
-    syncCreditNotes.mutate();
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection(field === 'date' ? 'desc' : 'asc');
+    }
   };
-
-  const isSyncing = syncInvoices.isPending || syncCreditNotes.isPending;
 
   // Combine invoices + credit notes into unified list
   const allDocuments = useMemo((): UnifiedDocument[] => {
@@ -100,12 +114,7 @@ export function InvoicesContent() {
       related_doc_reference: cn.related_invoice_reference || null,
     }));
 
-    return [...invoices, ...creditNotes].sort((a, b) => {
-      if (!a.date && !b.date) return 0;
-      if (!a.date) return 1;
-      if (!b.date) return -1;
-      return b.date.localeCompare(a.date);
-    });
+    return [...invoices, ...creditNotes];
   }, [invoicesData, creditNotesData]);
 
   const filteredDocuments = useMemo(() => {
@@ -125,6 +134,31 @@ export function InvoicesContent() {
       return true;
     });
   }, [allDocuments, searchTerm, dateRange]);
+
+  const sortedDocuments = useMemo(() => {
+    return [...filteredDocuments].sort((a, b) => {
+      const dir = sortDirection === 'asc' ? 1 : -1;
+      switch (sortField) {
+        case 'reference':
+          return dir * (a.reference || '').localeCompare(b.reference || '');
+        case 'document_type':
+          return dir * (a.document_type || '').localeCompare(b.document_type || '');
+        case 'date':
+          if (!a.date && !b.date) return 0;
+          if (!a.date) return 1;
+          if (!b.date) return -1;
+          return dir * a.date.localeCompare(b.date);
+        case 'client_name':
+          return dir * (a.client_name || '').localeCompare(b.client_name || '');
+        case 'status':
+          return dir * (a.status || '').localeCompare(b.status || '');
+        case 'total':
+          return dir * (a.total - b.total);
+        default:
+          return 0;
+      }
+    });
+  }, [filteredDocuments, sortField, sortDirection]);
 
   const hasActiveFilters = searchTerm || dateRange?.from;
 
@@ -165,7 +199,7 @@ export function InvoicesContent() {
   };
 
   const handleExport = () => {
-    const exportData = filteredDocuments.map(doc => ({
+    const exportData = sortedDocuments.map(doc => ({
       Referência: doc.reference || '-',
       Tipo: getDocTypeLabel(doc.document_type),
       Data: doc.date ? formatDate(doc.date) : '-',
@@ -211,20 +245,6 @@ export function InvoicesContent() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleSync}
-            disabled={isSyncing}
-            className="gap-2"
-          >
-            {isSyncing ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4" />
-            )}
-            <span className="hidden sm:inline">Sincronizar</span>
-          </Button>
           <Button onClick={handleExport} variant="outline" size="sm" className="gap-2">
             <Download className="h-4 w-4" />
             <span className="hidden sm:inline">Exportar</span>
@@ -264,7 +284,7 @@ export function InvoicesContent() {
 
       {hasActiveFilters && !isLoading && (
         <p className="text-sm text-muted-foreground">
-          {filteredDocuments.length} documento(s) encontrado(s)
+          {sortedDocuments.length} documento(s) encontrado(s)
         </p>
       )}
 
@@ -276,16 +296,12 @@ export function InvoicesContent() {
               <Skeleton className="h-12 w-full" />
               <Skeleton className="h-12 w-full" />
             </div>
-          ) : filteredDocuments.length === 0 ? (
+          ) : sortedDocuments.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <FileText className="h-12 w-12 text-muted-foreground/50 mb-4" />
               <p className="text-muted-foreground">Nenhum documento encontrado</p>
-              {hasActiveFilters ? (
+              {hasActiveFilters && (
                 <Button variant="link" onClick={clearFilters} className="mt-2">Limpar filtros</Button>
-              ) : (
-                <p className="text-xs text-muted-foreground mt-1">
-                  Clique em "Sincronizar" para importar documentos do InvoiceXpress
-                </p>
               )}
             </div>
           ) : (
@@ -293,19 +309,31 @@ export function InvoicesContent() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Referência</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead>Data</TableHead>
-                    <TableHead>Cliente</TableHead>
-                    <TableHead className="text-center">Estado</TableHead>
+                    <TableHead className="cursor-pointer select-none" onClick={() => handleSort('reference')}>
+                      <span className="flex items-center">Referência <SortIcon field="reference" sortField={sortField} sortDirection={sortDirection} /></span>
+                    </TableHead>
+                    <TableHead className="cursor-pointer select-none" onClick={() => handleSort('document_type')}>
+                      <span className="flex items-center">Tipo <SortIcon field="document_type" sortField={sortField} sortDirection={sortDirection} /></span>
+                    </TableHead>
+                    <TableHead className="cursor-pointer select-none" onClick={() => handleSort('date')}>
+                      <span className="flex items-center">Data <SortIcon field="date" sortField={sortField} sortDirection={sortDirection} /></span>
+                    </TableHead>
+                    <TableHead className="cursor-pointer select-none" onClick={() => handleSort('client_name')}>
+                      <span className="flex items-center">Cliente <SortIcon field="client_name" sortField={sortField} sortDirection={sortDirection} /></span>
+                    </TableHead>
+                    <TableHead className="text-center cursor-pointer select-none" onClick={() => handleSort('status')}>
+                      <span className="flex items-center justify-center">Estado <SortIcon field="status" sortField={sortField} sortDirection={sortDirection} /></span>
+                    </TableHead>
                     <TableHead className="text-center">Doc. Relacionado</TableHead>
-                    <TableHead className="text-right">Valor</TableHead>
+                    <TableHead className="text-right cursor-pointer select-none" onClick={() => handleSort('total')}>
+                      <span className="flex items-center justify-end">Valor <SortIcon field="total" sortField={sortField} sortDirection={sortDirection} /></span>
+                    </TableHead>
                     <TableHead className="text-center">Associada</TableHead>
                     <TableHead className="text-center w-[60px]">PDF</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredDocuments.map((doc) => (
+                  {sortedDocuments.map((doc) => (
                     <TableRow
                       key={doc.id}
                       className="cursor-pointer hover:bg-muted/50"
