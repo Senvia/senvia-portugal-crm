@@ -1,73 +1,106 @@
 
-## Remover Pagamentos do Template Telecom
+
+## Lista de Eventos do Dia Selecionado (abaixo do calendario)
 
 ### Objetivo
-No nicho **telecom**, a empresa nao fatura diretamente pelo Senvia -- portanto, toda a secao de pagamentos deve ser ocultada tanto na criacao como nos detalhes da venda.
+Adicionar uma lista de eventos abaixo do calendario (em todas as vistas: mes, semana, dia) que mostra os eventos agendados para o dia selecionado. O clique nos eventos do calendario deixa de abrir detalhes diretamente -- em vez disso, seleciona o dia. O utilizador clica no evento na lista abaixo para ver os detalhes.
+
+### Comportamento esperado
+1. Ao clicar num dia no calendario (mes/semana), esse dia fica "selecionado" (highlight) e a lista abaixo atualiza com os eventos desse dia
+2. Ao clicar num evento compacto dentro do calendario, tambem seleciona o dia (nao abre detalhes)
+3. A lista abaixo usa o componente `EventCard` (versao expandida, nao compacta) para cada evento
+4. Clicar num `EventCard` na lista abre o `EventDetailsModal`
+5. Se nao houver eventos no dia, mostrar mensagem "Sem eventos agendados"
+6. Por defeito, o dia selecionado e "hoje"
 
 ### Alteracoes
 
-**1. `src/components/sales/CreateSaleModal.tsx`**
+**1. `src/components/calendar/CalendarView.tsx`**
 
-- Envolver a secao "Pagamentos" (Section 3.5, linhas ~1084-1180) com a condicao `{!isTelecom && (...)}`
-- Isto oculta:
-  - O botao "Adicionar Pagamento"
-  - A lista de draft payments
-  - O resumo de pagamentos (barra de progresso)
-- O modal do `AddDraftPaymentModal` tambem pode ser condicionado para nao abrir em telecom (seguranca extra)
+- Adicionar state `selectedDayForList` (Date) -- inicializado com `new Date()`
+- Mudar `handleDayClick`: em vez de abrir o `CreateEventModal`, passa a definir `selectedDayForList` para o dia clicado
+- Mudar `handleEventClick` no contexto do calendario (mes/semana): em vez de abrir detalhes, seleciona o dia do evento
+- Adicionar um botao "+" flutuante ou no header da lista para criar evento no dia selecionado
+- Filtrar os eventos do dia selecionado: `selectedDayEvents = events.filter(e => isSameDay(...))`
+- Renderizar abaixo do calendario:
+  - Header com data selecionada + botao criar evento
+  - Lista de `EventCard` (nao compactos)
+  - Se vazio: mensagem "Sem eventos para este dia"
+- O clique no `EventCard` da lista abre `EventDetailsModal`
 
-**2. `src/components/sales/SaleDetailsModal.tsx`**
+**2. `src/components/calendar/MonthView.tsx`**
 
-- Envolver a secao "8. Payments Section" (`SalePaymentsList`) com `{!isTelecom && (...)}`
-- Isto oculta:
-  - A lista de pagamentos registados
-  - Os botoes de adicionar pagamento, emitir fatura, etc.
-- Manter a secao de Recorrencia visivel (se aplicavel) -- ou tambem ocultar se nao se aplica a telecom
+- Receber nova prop `selectedDay?: Date` para highlight visual do dia selecionado
+- O clique no evento compacto (`EventCard compact`) passa a chamar `onDayClick(day)` em vez de `onEventClick`
+- Aplicar estilo de selecao (ex: `ring-2 ring-primary`) ao dia selecionado
 
-**3. `src/components/sales/CreateSaleModal.tsx` (payload)**
+**3. `src/components/calendar/WeekView.tsx`**
 
-- No `handleSubmit`, quando `isTelecom`, nao criar draft payments na base de dados (skip do loop que insere pagamentos)
-- Nao enviar `payment_status` calculado -- deixar o default (`pending`) ou simplesmente ignorar
+- Mesma logica: receber `selectedDay`, highlight, e redirecionar clique de eventos para `onDayClick`
 
-### Resumo das condicoes
+**4. Novo componente: `src/components/calendar/DayEventsList.tsx`**
 
-| Componente | Secao | Telecom | Outros nichos |
-|------------|-------|---------|---------------|
-| CreateSaleModal | Pagamentos (UI) | Oculto | Visivel |
-| CreateSaleModal | Draft payments (submit) | Ignorado | Processado |
-| SaleDetailsModal | SalePaymentsList | Oculto | Visivel |
-
-### Ficheiros a editar
-- `src/components/sales/CreateSaleModal.tsx`
-- `src/components/sales/SaleDetailsModal.tsx`
+- Props: `selectedDate`, `events` (ja filtrados), `onEventClick`, `onCreateEvent`
+- Renderiza:
+  - Header: "Eventos de {data formatada}" + botao "Novo Evento"
+  - Lista de `EventCard` (expandidos) clicaveis
+  - Estado vazio com icone e texto
 
 ### Secao Tecnica
 
-**CreateSaleModal - UI:**
+**CalendarView - novo fluxo:**
 ```tsx
-{!isTelecom && (
-  <>
-    <Separator />
-    {/* Section 3.5: Payments */}
-    <div className="space-y-4">
-      ...toda a secao de pagamentos...
-    </div>
-  </>
-)}
+const [selectedDayForList, setSelectedDayForList] = useState<Date>(new Date());
+
+const selectedDayEvents = useMemo(() => {
+  return events.filter(e => isSameDay(new Date(e.start_time), selectedDayForList));
+}, [events, selectedDayForList]);
+
+const handleDayClick = (date: Date) => {
+  setSelectedDayForList(date);
+};
+
+// Abaixo do calendario:
+<DayEventsList
+  selectedDate={selectedDayForList}
+  events={selectedDayEvents}
+  onEventClick={handleEventClick}  // este abre detalhes
+  onCreateEvent={() => {
+    setSelectedDate(selectedDayForList);
+    setSelectedEvent(null);
+    setCreateModalOpen(true);
+  }}
+/>
 ```
 
-**CreateSaleModal - Submit:**
+**MonthView - highlight + redirect:**
 ```tsx
-// Apenas criar pagamentos se nao for telecom
-if (!isTelecom && draftPayments.length > 0) {
-  for (const dp of draftPayments) {
-    await createPayment.mutateAsync({ ... });
-  }
-}
+// Nova prop
+selectedDay?: Date;
+
+// No dia cell:
+className={cn(
+  ...,
+  selectedDay && isSameDay(day, selectedDay) && 'ring-2 ring-primary ring-inset'
+)}
+
+// EventCard compact click -> seleciona dia em vez de abrir detalhes
+onClick={(e) => {
+  e.stopPropagation();
+  onDayClick(day);  // seleciona o dia
+}}
 ```
 
-**SaleDetailsModal:**
+**DayEventsList component:**
 ```tsx
-{!isTelecom && organization && (
-  <SalePaymentsList ... />
-)}
+// Header com data + botao
+// Lista de EventCard (expandido)
+// Empty state
 ```
+
+### Ficheiros a criar/editar
+- **Criar**: `src/components/calendar/DayEventsList.tsx`
+- **Editar**: `src/components/calendar/CalendarView.tsx`
+- **Editar**: `src/components/calendar/MonthView.tsx`
+- **Editar**: `src/components/calendar/WeekView.tsx`
+
