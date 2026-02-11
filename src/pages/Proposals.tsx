@@ -11,6 +11,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { FileText, Search, Filter, Plus } from 'lucide-react';
+import { DateRangePicker } from '@/components/ui/date-range-picker';
+import type { DateRange } from 'react-day-picker';
 import { ProposalDetailsModal } from '@/components/proposals/ProposalDetailsModal';
 import { CreateProposalModal } from '@/components/proposals/CreateProposalModal';
 import { 
@@ -34,6 +36,7 @@ export default function Proposals() {
   
   const [search, setSearch] = usePersistedState('proposals-search-v1', '');
   const [statusFilter, setStatusFilter] = usePersistedState<ProposalStatus | 'all'>('proposals-status-v1', 'all');
+  const [dateRange, setDateRange] = usePersistedState<DateRange | undefined>('proposals-date-range-v1', undefined);
   const [selectedProposal, setSelectedProposal] = useState<Proposal | null>(null);
   const [createModalOpen, setCreateModalOpen] = useState(false);
 
@@ -45,21 +48,26 @@ export default function Proposals() {
       proposal.code?.toLowerCase().includes(searchLower) ||
       proposal.notes?.toLowerCase().includes(searchLower);
     const matchesStatus = statusFilter === 'all' || proposal.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    const proposalDate = new Date(proposal.proposal_date);
+    const matchesDate = !dateRange?.from || (
+      proposalDate >= dateRange.from &&
+      (!dateRange.to || proposalDate <= dateRange.to)
+    );
+    return matchesSearch && matchesStatus && matchesDate;
   });
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(value);
   };
 
-  // Group proposals by status for summary
+  // Group proposals by status for summary (use filtered)
   const proposalsByStatus = PROPOSAL_STATUSES.reduce((acc, status) => {
-    acc[status] = proposals.filter(p => p.status === status);
+    acc[status] = filteredProposals.filter(p => p.status === status);
     return acc;
   }, {} as Record<ProposalStatus, Proposal[]>);
 
-  const totalValue = proposals.reduce((sum, p) => sum + Number(p.total_value), 0);
-  const pendingValue = proposals
+  const totalValue = filteredProposals.reduce((sum, p) => sum + Number(p.total_value), 0);
+  const pendingValue = filteredProposals
     .filter(p => ['sent', 'negotiating'].includes(p.status))
     .reduce((sum, p) => sum + Number(p.total_value), 0);
 
@@ -86,7 +94,7 @@ export default function Proposals() {
           <Card>
             <CardContent className="pt-4">
               <p className="text-sm text-muted-foreground">Total Propostas</p>
-              <p className="text-2xl font-bold">{proposals.length}</p>
+              <p className="text-2xl font-bold">{filteredProposals.length}</p>
             </CardContent>
           </Card>
           <Card>
@@ -145,6 +153,12 @@ export default function Proposals() {
               ))}
             </SelectContent>
           </Select>
+          <DateRangePicker
+            value={dateRange}
+            onChange={setDateRange}
+            placeholder="Período"
+            className="w-full sm:w-auto"
+          />
         </div>
 
 
