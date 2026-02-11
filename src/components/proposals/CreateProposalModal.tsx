@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Plus, UserPlus, Zap, Wrench, Package } from 'lucide-react';
-import { ScrollArea } from '@/components/ui/scroll-area';
+
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -260,7 +260,7 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
             <DialogTitle>Nova Proposta</DialogTitle>
           </DialogHeader>
 
-          <ScrollArea className="flex-1 min-h-0">
+          <div className="flex-1 min-h-0 overflow-y-auto">
           <form onSubmit={handleSubmit} className="space-y-4 px-6 py-4">
             {/* Client Selector */}
             <div className="space-y-2">
@@ -623,7 +623,7 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
               </Button>
             </DialogFooter>
           </form>
-          </ScrollArea>
+          </div>
         </DialogContent>
       </Dialog>
 
