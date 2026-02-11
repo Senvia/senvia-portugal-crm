@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTeamFilter } from "@/hooks/useTeamFilter";
 import { toast } from "sonner";
-import type { SaleStatus, SaleWithDetails, PaymentMethod, PaymentStatus, ProposalType, ModeloServico } from "@/types/sales";
+import type { SaleStatus, SaleWithDetails, PaymentMethod, PaymentStatus, ProposalType, ModeloServico, NegotiationType } from "@/types/sales";
 
 export function useSales() {
   const { organization } = useAuth();
@@ -71,6 +71,8 @@ export function useCreateSale() {
       modelo_servico?: ModeloServico;
       kwp?: number;
       comissao?: number;
+      negotiation_type?: NegotiationType;
+      servicos_produtos?: string[];
       // Campos de recorrência
       has_recurring?: boolean;
       recurring_value?: number;
@@ -106,6 +108,8 @@ export function useCreateSale() {
           modelo_servico: data.modelo_servico || null,
           kwp: data.kwp || null,
           comissao: data.comissao || null,
+          negotiation_type: data.negotiation_type || null,
+          servicos_produtos: data.servicos_produtos || null,
           // Campos de recorrência
           has_recurring: data.has_recurring || false,
           recurring_value: data.recurring_value || 0,
@@ -237,6 +241,8 @@ export function useUpdateSale() {
         modelo_servico?: ModeloServico | null;
         kwp?: number | null;
         comissao?: number | null;
+        negotiation_type?: string | null;
+        servicos_produtos?: string[] | null;
         // Campos de recorrência
         has_recurring?: boolean;
         recurring_value?: number;
