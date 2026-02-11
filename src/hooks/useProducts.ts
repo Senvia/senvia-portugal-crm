@@ -76,20 +76,51 @@ export function useCreateProduct() {
 
 export function useUpdateProduct() {
   const queryClient = useQueryClient();
+  const { organization } = useAuth();
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async ({ id, ...data }: { id: string; name?: string; description?: string | null; price?: number | null; is_active?: boolean; is_recurring?: boolean; tax_value?: number | null; tax_exemption_reason?: string | null }) => {
+    mutationFn: async ({ id, ...data }: { id: string; name?: string; description?: string | null; price?: number | null; is_active?: boolean; is_recurring?: boolean; tax_value?: number | null; tax_exemption_reason?: string | null; invoicexpress_id?: number | null }) => {
       const { error } = await supabase
         .from('products')
         .update(data)
         .eq('id', id);
       
       if (error) throw error;
+
+      // Sync to InvoiceXpress if product has invoicexpress_id
+      const ixId = data.invoicexpress_id;
+      if (ixId && organization?.id) {
+        try {
+          const response = await supabase.functions.invoke('update-invoicexpress-item', {
+            body: {
+              organization_id: organization.id,
+              invoicexpress_id: ixId,
+              name: data.name,
+              description: data.description,
+              unit_price: data.price,
+              tax_value: data.tax_value,
+            },
+          });
+          if (response.error) throw new Error(response.error.message);
+          return { synced: true, warning: response.data?.warning };
+        } catch (syncErr) {
+          console.warn('InvoiceXpress sync failed:', syncErr);
+          return { synced: false };
+        }
+      }
+      return { synced: null };
     },
-    onSuccess: () => {
+    onSuccess: (_result) => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
-      toast({ title: 'Produto atualizado', description: 'As alterações foram guardadas.' });
+      const result = _result as { synced: boolean | null; warning?: string } | undefined;
+      if (result?.synced === true) {
+        toast({ title: 'Produto atualizado', description: result.warning || 'Sincronizado com InvoiceXpress.' });
+      } else if (result?.synced === false) {
+        toast({ title: 'Produto atualizado', description: 'Guardado localmente, mas falhou a sincronização com InvoiceXpress.', variant: 'destructive' });
+      } else {
+        toast({ title: 'Produto atualizado', description: 'As alterações foram guardadas.' });
+      }
     },
     onError: () => {
       toast({ title: 'Erro', description: 'Não foi possível atualizar o produto.', variant: 'destructive' });

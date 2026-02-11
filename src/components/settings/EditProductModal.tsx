@@ -66,6 +66,7 @@ export function EditProductModal({ product, open, onOpenChange }: EditProductMod
       is_recurring: isRecurring,
       tax_value: selectedTax?.taxValue ?? null,
       tax_exemption_reason: taxOption === '0' ? taxExemptionReason.trim() || null : null,
+      invoicexpress_id: product.invoicexpress_id,
     }, {
       onSuccess: () => onOpenChange(false),
     });
