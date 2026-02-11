@@ -51,9 +51,11 @@ export function EditProductModal({ product, open, onOpenChange }: EditProductMod
 
   const selectedTax = TAX_OPTIONS.find(o => o.value === taxOption);
 
+  const isExemptMissingReason = taxOption === '0' && !taxExemptionReason.trim();
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!name.trim() || isExemptMissingReason) return;
 
     updateProduct.mutate({
       id: product.id,
@@ -165,7 +167,7 @@ export function EditProductModal({ product, open, onOpenChange }: EditProductMod
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={updateProduct.isPending || !name.trim()}>
+            <Button type="submit" disabled={updateProduct.isPending || !name.trim() || isExemptMissingReason}>
               {updateProduct.isPending ? 'A guardar...' : 'Guardar'}
             </Button>
           </DialogFooter>
