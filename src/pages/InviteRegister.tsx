@@ -124,8 +124,8 @@ export default function InviteRegister() {
 
     if (password !== confirmPassword) {
       toast({
-        title: 'Passwords não coincidem',
-        description: 'Verifique se as passwords são iguais.',
+        title: 'Palavras-passe não coincidem',
+        description: 'Verifique se as palavras-passe são iguais.',
         variant: 'destructive',
       });
       return;
@@ -133,8 +133,8 @@ export default function InviteRegister() {
 
     if (password.length < 6) {
       toast({
-        title: 'Password muito curta',
-        description: 'A password deve ter pelo menos 6 caracteres.',
+        title: 'Palavra-passe muito curta',
+        description: 'A palavra-passe deve ter pelo menos 6 caracteres.',
         variant: 'destructive',
       });
       return;
@@ -333,7 +333,7 @@ export default function InviteRegister() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password" className="text-slate-200">Password</Label>
+              <Label htmlFor="password" className="text-slate-200">Palavra-passe</Label>
               <Input
                 id="password"
                 type="password"
@@ -346,11 +346,11 @@ export default function InviteRegister() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="confirmPassword" className="text-slate-200">Confirmar Password</Label>
+              <Label htmlFor="confirmPassword" className="text-slate-200">Confirmar Palavra-passe</Label>
               <Input
                 id="confirmPassword"
                 type="password"
-                placeholder="Repita a password"
+                placeholder="Repita a palavra-passe"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 className="bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500"

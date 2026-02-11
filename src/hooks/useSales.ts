@@ -79,7 +79,7 @@ export function useCreateSale() {
       recurring_status?: 'active' | 'cancelled' | 'paused';
       next_renewal_date?: string;
     }) => {
-      if (!organization?.id) throw new Error("No organization");
+      if (!organization?.id) throw new Error("Sem organização");
 
       const { data: sale, error } = await supabase
         .from("sales")
