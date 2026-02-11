@@ -1,52 +1,60 @@
 
 
-## Criar Perfil "Diretor Comercial" na Perfect2Gether
+## Valor Total com MWh e kWp no separador Propostas (Telecom)
 
 ### Resumo
 
-Inserir via migracao SQL o perfil "Diretor Comercial" apenas na organizacao **Perfect2Gether** (`96a3950e-31be-4c6d-abed-b82968c0d7e9`), com visao total sobre toda a area comercial.
+Substituir o card "Valor Total" (moeda) por dois valores tecnico-energeticos -- **Consumo Total (MWh)** e **kWp Total** -- exclusivamente para organizacoes do nicho `telecom`. Nichos nao-telecom mantem o valor monetario atual.
 
-### Definicao do Perfil
+### O que muda visualmente
 
-| Campo | Valor |
-|-------|-------|
-| Nome | Diretor Comercial |
-| Role Base | salesperson |
-| Visibilidade | all (ve todos os dados da organizacao) |
-| Default | false |
+O card "Valor Total" no topo da pagina de Propostas, para telecom:
 
-### Permissoes Granulares
+```text
+Antes:                    Depois:
++-----------------+       +-------------------+
+| Valor Total     |       | Consumo / kWp     |
+| 12.500,00 EUR   |       | 245,3 MWh         |
++-----------------+       | 128,5 kWp         |
+                          +-------------------+
+```
 
-| Modulo | Sub-area | Acoes |
-|--------|----------|-------|
-| Leads | Kanban | ver, adicionar, editar, eliminar, atribuir |
-| Leads | Exportar | ver, exportar, importar |
-| Clientes | Lista | ver, adicionar, editar, eliminar |
-| Clientes | Comunicacoes | ver, adicionar |
-| Clientes | CPEs | ver, adicionar, editar, eliminar |
-| Propostas | Propostas | ver, criar, editar, eliminar, enviar |
-| Vendas | Vendas | ver, criar, editar, eliminar |
-| Vendas | Pagamentos | ver, adicionar |
-| Financas | Resumo | ver |
-| Financas | Faturas | ver |
-| Financas | Despesas | ver |
-| Financas | Pagamentos | ver |
-| Financas | Pedidos | ver |
-| Agenda | Eventos | ver, criar, editar, eliminar |
-| Marketing | Templates | nao |
-| E-commerce | * | nao |
-| Definicoes | * | nao |
+- Linha principal: Consumo Total em MWh (soma do `consumo_anual` de todos os CPEs de todas as propostas, dividido por 1000)
+- Linha secundaria: kWp Total (soma do `kwp` das propostas do tipo servicos)
 
 ### Implementacao
 
-**1 migracao SQL** que insere o perfil diretamente na organizacao Perfect2Gether com o JSON granular completo e `data_scope = 'all'`.
+**1. Novo hook `useTelecomProposalMetrics`** (ou inline na pagina)
+
+- Query a `proposal_cpes` filtrada por `organization_id` (via join com proposals) para somar `consumo_anual`
+- Query a `proposals` para somar `kwp` (onde `proposal_type = 'servicos'`)
+- Retorna `{ totalMWh: number, totalKWp: number }`
+
+**2. Alteracao em `src/pages/Proposals.tsx`**
+
+- Importar `useAuth` para verificar `organization?.niche === 'telecom'`
+- Renderizacao condicional no card "Valor Total":
+  - Se telecom: mostrar MWh e kWp
+  - Se nao: manter `formatCurrency(totalValue)`
 
 ### Secao Tecnica
 
-A migracao insere um unico registo na tabela `organization_profiles` com:
-- `organization_id`: `96a3950e-31be-4c6d-abed-b82968c0d7e9`
-- `data_scope`: `all` (visao total, sem filtro por equipa)
-- Permissoes completas em leads, clientes, propostas, vendas e agenda
-- Financas apenas em modo leitura
-- Marketing, e-commerce e definicoes desativados
+**Hook de metricas telecom:**
+- Agrega `consumo_anual` diretamente dos `proposal_cpes` ligados a propostas da organizacao (evita carregar todos os CPEs individualmente)
+- Agrega `kwp` das propostas do tipo `servicos`
+- Ambos os valores sao calculados sobre todas as propostas (sem filtro de status), consistente com o card "Total Propostas"
 
+**Renderizacao condicional:**
+```
+isTelecom ? (
+  <>
+    <p className="text-2xl font-bold text-primary">{totalMWh.toFixed(1)} MWh</p>
+    <p className="text-sm text-muted-foreground">{totalKWp.toFixed(1)} kWp</p>
+  </>
+) : (
+  <p className="text-2xl font-bold text-primary">{formatCurrency(totalValue)}</p>
+)
+```
+
+**Ficheiros alterados:**
+1. `src/pages/Proposals.tsx` -- logica condicional + calculo de metricas
