@@ -136,6 +136,24 @@ async function syncOrganization(supabase: any, organization_id: string, org: any
       console.warn(`Failed to get details for CN ${cnId}:`, e)
     }
 
+    // Fallback: match by client_name + total in invoices table
+    if (!relatedDocId && cnClientName && cnTotal > 0) {
+      const { data: possibleInvoice } = await supabase
+        .from('invoices')
+        .select('invoicexpress_id')
+        .eq('organization_id', organization_id)
+        .eq('client_name', cnClientName)
+        .eq('total', cnTotal)
+        .neq('invoicexpress_id', cnId)
+        .limit(1)
+        .maybeSingle()
+
+      if (possibleInvoice) {
+        relatedDocId = possibleInvoice.invoicexpress_id
+        console.log(`[${organization_id}] CN ${cnId}: matched related invoice ${relatedDocId} by client_name + total fallback`)
+      }
+    }
+
     // Also try to match by invoicexpress_id in invoices table
     if (relatedDocId) {
       const { data: matchedInvoice } = await supabase
