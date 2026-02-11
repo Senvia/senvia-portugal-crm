@@ -181,6 +181,19 @@ async function syncOrganization(supabase: any, organization_id: string, org: any
         }
       }
 
+      // Skip if this document already exists as a credit note
+      const { data: existingCN } = await supabase
+        .from('credit_notes')
+        .select('id')
+        .eq('organization_id', organization_id)
+        .eq('invoicexpress_id', docId)
+        .maybeSingle()
+
+      if (existingCN) {
+        console.log(`Skipping ${docId} - already exists as credit note`)
+        continue
+      }
+
       // Download PDF
       let pdfPath: string | null = null
       try {
