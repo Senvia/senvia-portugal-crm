@@ -38,6 +38,7 @@ import { useUpdateLeadStatus } from "@/hooks/useLeads";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { format, addMonths } from "date-fns";
+import { ClientFiscalCard, VatBadge, useVatCalculation, isInvoiceXpressActive, getOrgTaxValue } from "./SaleFiscalInfo";
 import { pt } from "date-fns/locale";
 import { Progress } from "@/components/ui/progress";
 import { 
@@ -106,6 +107,10 @@ export function CreateSaleModal({
   const { finalPositiveStage } = useFinalStages();
   const updateLeadStatus = useUpdateLeadStatus();
   const { organization } = useAuth();
+  
+  // Fiscal info
+  const ixActive = isInvoiceXpressActive(organization);
+  const orgTaxValue = getOrgTaxValue(organization);
   
   // State para proposta selecionada manualmente (para buscar produtos)
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null);
@@ -326,6 +331,17 @@ export function CreateSaleModal({
 
   const discountValue = parseFloat(discount) || 0;
   const total = Math.max(0, subtotal - discountValue);
+
+  // VAT calculation (display only, when InvoiceXpress active)
+  const vatCalc = useVatCalculation({
+    items, products, orgTaxValue, discount: discountValue, subtotal,
+  });
+
+  // Selected client fiscal data
+  const selectedClient = useMemo(() => {
+    if (!clientId || !clients) return null;
+    return clients.find(c => c.id === clientId) || null;
+  }, [clientId, clients]);
 
   // Handlers
   const handleClientSelect = (value: string) => {
@@ -608,6 +624,11 @@ export function CreateSaleModal({
                   />
                 </div>
 
+                {/* Client Fiscal Card (InvoiceXpress only) */}
+                {clientId && (
+                  <ClientFiscalCard client={selectedClient} isInvoiceXpressActive={ixActive} />
+                )}
+
                 {/* Proposal Select */}
                 <div className="space-y-2">
                   <Label>Proposta</Label>
@@ -712,7 +733,10 @@ export function CreateSaleModal({
                         {/* Linha principal do produto */}
                         <div className="flex items-center gap-3">
                           <div className="flex-1 min-w-0">
-                            <p className="font-medium text-sm truncate">{item.name}</p>
+                            <div className="flex items-center gap-1.5">
+                              <p className="font-medium text-sm truncate">{item.name}</p>
+                              {ixActive && <VatBadge taxValue={vatCalc.getItemTaxRate(item.product_id)} />}
+                            </div>
                             <div className="flex items-center gap-2 mt-1">
                               <Button
                                 type="button"
@@ -877,10 +901,24 @@ export function CreateSaleModal({
 
                 <Separator />
 
+                {ixActive && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">IVA</span>
+                    <span className="font-medium">{formatCurrency(vatCalc.totalVat)}</span>
+                  </div>
+                )}
+
                 <div className="flex justify-between">
-                  <span className="font-semibold">Total</span>
+                  <span className="font-semibold">{ixActive ? 'Total (s/ IVA)' : 'Total'}</span>
                   <span className="text-xl font-bold text-primary">{formatCurrency(total)}</span>
                 </div>
+
+                {ixActive && (
+                  <div className="flex justify-between text-sm border-t pt-2">
+                    <span className="text-muted-foreground font-medium">Total c/ IVA</span>
+                    <span className="font-semibold">{formatCurrency(vatCalc.totalWithVat)}</span>
+                  </div>
+                )}
               </div>
             </div>
 

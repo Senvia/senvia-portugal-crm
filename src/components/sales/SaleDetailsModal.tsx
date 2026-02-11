@@ -46,6 +46,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUpdateSale, useDeleteSale } from "@/hooks/useSales";
 import { useSaleItems } from "@/hooks/useSaleItems";
+import { useProducts } from "@/hooks/useProducts";
+import { VatBadge, useVatCalculation, isInvoiceXpressActive as checkIxActive, getOrgTaxValue } from "./SaleFiscalInfo";
 import { useProposalCpes } from "@/hooks/useProposalCpes";
 import { formatCurrency } from "@/lib/format";
 import { MODELO_SERVICO_LABELS } from "@/types/proposals";
@@ -69,6 +71,7 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
 
   const { organization } = useAuth();
   const { data: saleItems = [] } = useSaleItems(sale?.id);
+  const { data: products } = useProducts();
   const { data: proposalCpes = [] } = useProposalCpes(sale?.proposal_id ?? undefined);
   const updateSale = useUpdateSale();
   const deleteSale = useDeleteSale();
@@ -76,8 +79,17 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
   const { data: salePayments = [] } = useSalePayments(sale?.id);
   const hasPaidPayments = salePayments.some(p => p.status === 'paid');
 
-  const hasInvoiceXpress = organization?.integrations_enabled?.invoicexpress !== false
-    && !!(organization?.invoicexpress_account_name && organization?.invoicexpress_api_key);
+  const hasInvoiceXpress = checkIxActive(organization);
+  const orgTaxValue = getOrgTaxValue(organization);
+
+  // VAT calculation for display
+  const vatCalc = useVatCalculation({
+    items: saleItems.map(i => ({ product_id: i.product_id, quantity: i.quantity, unit_price: i.unit_price })),
+    products,
+    orgTaxValue,
+    discount: sale?.discount || 0,
+    subtotal: sale?.subtotal || 0,
+  });
 
   // Conditional labels based on organization niche
   const isTelecom = organization?.niche === 'telecom';
@@ -428,7 +440,10 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                           className="flex items-center justify-between p-3 rounded-lg border bg-muted/30"
                         >
                           <div>
-                            <p className="font-medium text-sm">{item.name}</p>
+                            <div className="flex items-center gap-1.5">
+                              <p className="font-medium text-sm">{item.name}</p>
+                              {hasInvoiceXpress && <VatBadge taxValue={vatCalc.getItemTaxRate(item.product_id)} />}
+                            </div>
                             <p className="text-xs text-muted-foreground">
                               {item.quantity} × {formatCurrency(item.unit_price)}
                             </p>
@@ -444,8 +459,16 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
 
               {/* 5. Total Value */}
               <div className="bg-primary/10 border border-primary/20 rounded-lg p-4">
-                <p className="text-sm text-muted-foreground">Valor Total</p>
+                <p className="text-sm text-muted-foreground">
+                  {hasInvoiceXpress ? 'Valor Total (s/ IVA)' : 'Valor Total'}
+                </p>
                 <p className="text-2xl font-bold text-primary">{formatCurrency(sale.total_value)}</p>
+                {hasInvoiceXpress && (
+                  <div className="flex items-center justify-between mt-2 pt-2 border-t border-primary/10">
+                    <span className="text-xs text-muted-foreground">IVA: {formatCurrency(vatCalc.totalVat)}</span>
+                    <span className="text-sm font-semibold">c/ IVA: {formatCurrency(vatCalc.totalWithVat)}</span>
+                  </div>
+                )}
               </div>
 
               <Separator />
