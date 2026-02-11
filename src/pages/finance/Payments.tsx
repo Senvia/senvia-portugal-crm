@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ArrowLeft, Download, Search, CreditCard, X, CheckCircle, Receipt, FileText } from "lucide-react";
 import { useAllPayments } from "@/hooks/useAllPayments";
 import { useUpdateSalePayment } from "@/hooks/useSalePayments";
@@ -18,7 +18,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useState, useMemo, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { PAYMENT_METHOD_LABELS, PAYMENT_RECORD_STATUS_LABELS, PaymentMethod } from "@/types/sales";
+import { PAYMENT_METHOD_LABELS, PAYMENT_METHODS, PAYMENT_RECORD_STATUS_LABELS, PaymentMethod } from "@/types/sales";
 import { exportToExcel } from "@/lib/export";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { DateRange } from "react-day-picker";
@@ -42,6 +42,7 @@ export default function FinancePayments() {
   const [confirmPayment, setConfirmPayment] = useState<PaymentWithSale | null>(null);
   const [draftPayment, setDraftPayment] = useState<PaymentWithSale | null>(null);
   const [draftMode, setDraftMode] = useState<"receipt" | "invoice_receipt">("receipt");
+  const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | "">("");
 
   const hasInvoiceXpress = !!(organization?.invoicexpress_api_key && organization?.invoicexpress_account_name);
   const taxConfig = organization?.tax_config as { tax_value?: number; tax_exemption_reason?: string } | null;
@@ -108,16 +109,25 @@ export default function FinancePayments() {
     return Array.from(methods) as PaymentMethod[];
   }, [payments]);
 
+  const openConfirmDialog = (payment: PaymentWithSale) => {
+    setSelectedMethod(payment.payment_method || "");
+    setConfirmPayment(payment);
+  };
+
   const handleMarkAsPaid = () => {
     if (!confirmPayment) return;
+    const updates: Record<string, unknown> = {
+      status: 'paid',
+      payment_date: format(new Date(), 'yyyy-MM-dd'),
+    };
+    if (selectedMethod) {
+      updates.payment_method = selectedMethod;
+    }
     updatePayment.mutate(
       {
         paymentId: confirmPayment.id,
         saleId: confirmPayment.sale_id,
-        updates: {
-          status: 'paid',
-          payment_date: format(new Date(), 'yyyy-MM-dd'),
-        },
+        updates,
       },
       {
         onSuccess: () => {
@@ -338,7 +348,7 @@ export default function FinancePayments() {
                                 size="sm"
                                 variant="outline"
                                 className="gap-1.5"
-                                onClick={() => setConfirmPayment(payment)}
+                                onClick={() => openConfirmDialog(payment)}
                               >
                                 <CheckCircle className="h-4 w-4" />
                                 <span className="hidden sm:inline">Marcar Pago</span>
@@ -377,32 +387,53 @@ export default function FinancePayments() {
       </div>
 
       {/* Mark as Paid confirmation */}
-      <AlertDialog open={!!confirmPayment} onOpenChange={(open) => !open && setConfirmPayment(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Marcar pagamento como pago?</AlertDialogTitle>
-            <AlertDialogDescription>
+      <Dialog open={!!confirmPayment} onOpenChange={(open) => !open && setConfirmPayment(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Marcar pagamento como pago?</DialogTitle>
+            <DialogDescription>
               {confirmPayment && (
-                <span className="flex flex-col gap-1 mt-2">
+                <span className="flex flex-col gap-2 mt-2">
                   <span><strong>Cliente:</strong> {confirmPayment.client_name || confirmPayment.lead_name || '-'}</span>
                   <span><strong>Venda:</strong> #{confirmPayment.sale.code}</span>
                   <span><strong>Valor:</strong> {formatCurrency(confirmPayment.amount)}</span>
                   <span><strong>Data agendada:</strong> {formatDate(confirmPayment.payment_date)}</span>
                 </span>
               )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={updatePayment.isPending}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleMarkAsPaid}
-              disabled={updatePayment.isPending}
-            >
+            </DialogDescription>
+          </DialogHeader>
+          {confirmPayment && !confirmPayment.payment_method && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Método de pagamento</label>
+              <Select value={selectedMethod} onValueChange={(v) => setSelectedMethod(v as PaymentMethod)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecionar método..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {PAYMENT_METHODS.map(method => (
+                    <SelectItem key={method} value={method}>
+                      {PAYMENT_METHOD_LABELS[method]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          {confirmPayment?.payment_method && (
+            <div className="text-sm">
+              <strong>Método:</strong> {PAYMENT_METHOD_LABELS[confirmPayment.payment_method]}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmPayment(null)} disabled={updatePayment.isPending}>
+              Cancelar
+            </Button>
+            <Button onClick={handleMarkAsPaid} disabled={updatePayment.isPending}>
               {updatePayment.isPending ? 'A atualizar...' : 'Confirmar'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Invoice Draft Modal */}
       {draftPayment && (
