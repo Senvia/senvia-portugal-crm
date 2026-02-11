@@ -171,7 +171,7 @@ export function SalePaymentsList({
               </Badge>
             )}
           </div>
-          {!readonly && summary.remaining > 0 && (
+          {!readonly && summary.remainingToSchedule > 0 && (
             <Button
               variant="outline"
               size="sm"
@@ -486,7 +486,7 @@ export function SalePaymentsList({
             <p className="text-sm text-muted-foreground mb-3">
               Nenhum pagamento registado
             </p>
-            {!readonly && summary.remaining > 0 && (
+            {!readonly && summary.remainingToSchedule > 0 && (
               <Button
                 variant="outline"
                 size="sm"

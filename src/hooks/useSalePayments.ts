@@ -137,6 +137,7 @@ export function calculatePaymentSummary(payments: SalePayment[], saleTotal: numb
     .reduce((sum, p) => sum + Number(p.amount), 0);
 
   const remaining = Math.max(0, saleTotal - totalPaid);
+  const remainingToSchedule = Math.max(0, saleTotal - totalPaid - totalScheduled);
   const percentage = saleTotal > 0 ? (totalPaid / saleTotal) * 100 : 0;
 
   // Calculate payment status based on payments
@@ -149,6 +150,7 @@ export function calculatePaymentSummary(payments: SalePayment[], saleTotal: numb
     totalPaid,
     totalScheduled,
     remaining,
+    remainingToSchedule,
     percentage: Math.min(100, percentage),
     paymentStatus,
   };
