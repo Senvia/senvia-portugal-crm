@@ -1714,6 +1714,7 @@ export type Database = {
           created_at: string | null
           description: string | null
           id: string
+          invoicexpress_id: number | null
           is_active: boolean | null
           is_digital: boolean | null
           is_ecommerce: boolean | null
@@ -1740,6 +1741,7 @@ export type Database = {
           created_at?: string | null
           description?: string | null
           id?: string
+          invoicexpress_id?: number | null
           is_active?: boolean | null
           is_digital?: boolean | null
           is_ecommerce?: boolean | null
@@ -1766,6 +1768,7 @@ export type Database = {
           created_at?: string | null
           description?: string | null
           id?: string
+          invoicexpress_id?: number | null
           is_active?: boolean | null
           is_digital?: boolean | null
           is_ecommerce?: boolean | null

@@ -1,9 +1,11 @@
 import { useState } from 'react';
-import { Plus, Pencil, Trash2, Package, RefreshCw } from 'lucide-react';
+import { Plus, Pencil, Trash2, Package, RefreshCw, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useProducts, useDeleteProduct } from '@/hooks/useProducts';
+import { useSyncInvoiceXpressItems } from '@/hooks/useSyncInvoiceXpressItems';
+import { useAuth } from '@/contexts/AuthContext';
 import { CreateProductModal } from './CreateProductModal';
 import { EditProductModal } from './EditProductModal';
 import type { Product } from '@/types/proposals';
@@ -21,6 +23,9 @@ import {
 export function ProductsTab() {
   const { data: products = [], isLoading } = useProducts();
   const deleteProduct = useDeleteProduct();
+  const syncItems = useSyncInvoiceXpressItems();
+  const { organization } = useAuth();
+  const hasInvoiceXpress = !!(organization as any)?.invoicexpress_api_key && !!(organization as any)?.invoicexpress_account_name;
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [deletingProduct, setDeletingProduct] = useState<Product | null>(null);
@@ -59,10 +64,27 @@ export function ProductsTab() {
               Gerir o catálogo de produtos e serviços para propostas.
             </CardDescription>
           </div>
-          <Button onClick={() => setCreateModalOpen(true)} size="sm">
-            <Plus className="h-4 w-4 mr-2" />
-            Adicionar
-          </Button>
+          <div className="flex gap-2">
+            {hasInvoiceXpress && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => syncItems.mutate()}
+                disabled={syncItems.isPending}
+              >
+                {syncItems.isPending ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                )}
+                Sincronizar
+              </Button>
+            )}
+            <Button onClick={() => setCreateModalOpen(true)} size="sm">
+              <Plus className="h-4 w-4 mr-2" />
+              Adicionar
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {products.length === 0 ? (
