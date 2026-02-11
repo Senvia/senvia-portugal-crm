@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ArrowLeft, Download, Search, CreditCard, X, CheckCircle, Receipt, FileText } from "lucide-react";
+import { ArrowLeft, Download, Search, CreditCard, X, CheckCircle, Receipt, FileText, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { useAllPayments } from "@/hooks/useAllPayments";
 import { useUpdateSalePayment } from "@/hooks/useSalePayments";
 import { useGenerateReceipt } from "@/hooks/useGenerateReceipt";
@@ -26,6 +26,14 @@ import { startOfDay, endOfDay, parseISO, format } from "date-fns";
 import type { PaymentWithSale } from "@/types/finance";
 import { InvoiceDraftModal, type DraftSaleItem } from "@/components/sales/InvoiceDraftModal";
 
+type SortField = 'payment_date' | 'sale_code' | 'client_name' | 'amount' | 'payment_method' | 'status';
+type SortDirection = 'asc' | 'desc';
+
+const SortIcon = ({ field, sortField, sortDirection }: { field: SortField; sortField: SortField; sortDirection: SortDirection }) => {
+  if (field !== sortField) return <ArrowUpDown className="h-3.5 w-3.5 ml-1 opacity-50" />;
+  return sortDirection === 'asc' ? <ArrowUp className="h-3.5 w-3.5 ml-1" /> : <ArrowDown className="h-3.5 w-3.5 ml-1" />;
+};
+
 export default function FinancePayments() {
   const { data: payments, isLoading } = useAllPayments();
   const { organization } = useAuth();
@@ -43,6 +51,8 @@ export default function FinancePayments() {
   const [draftPayment, setDraftPayment] = useState<PaymentWithSale | null>(null);
   const [draftMode, setDraftMode] = useState<"receipt" | "invoice_receipt">("receipt");
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | "">("");
+  const [sortField, setSortField] = useState<SortField>('payment_date');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
   const hasInvoiceXpress = !!(organization?.invoicexpress_api_key && organization?.invoicexpress_account_name);
   const taxConfig = organization?.tax_config as { tax_value?: number; tax_exemption_reason?: string } | null;
@@ -83,6 +93,39 @@ export default function FinancePayments() {
 
   const hasActiveFilters = searchTerm || statusFilter !== "all" || methodFilter !== "all" || dateRange?.from;
 
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  const sortedPayments = useMemo(() => {
+    return [...filteredPayments].sort((a, b) => {
+      const dir = sortDirection === 'asc' ? 1 : -1;
+      switch (sortField) {
+        case 'payment_date':
+          return dir * (a.payment_date.localeCompare(b.payment_date));
+        case 'sale_code':
+          return dir * ((a.sale.code || '').localeCompare(b.sale.code || ''));
+        case 'client_name': {
+          const nameA = (a.client_name || a.lead_name || '').toLowerCase();
+          const nameB = (b.client_name || b.lead_name || '').toLowerCase();
+          return dir * nameA.localeCompare(nameB);
+        }
+        case 'amount':
+          return dir * (a.amount - b.amount);
+        case 'payment_method':
+          return dir * ((a.payment_method || '').localeCompare(b.payment_method || ''));
+        case 'status':
+          return dir * (a.status.localeCompare(b.status));
+        default:
+          return 0;
+      }
+    });
+  }, [filteredPayments, sortField, sortDirection]);
   const clearFilters = () => {
     setSearchTerm("");
     setStatusFilter("all");
@@ -302,18 +345,30 @@ export default function FinancePayments() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Data</TableHead>
-                      <TableHead>Venda</TableHead>
-                      <TableHead>Cliente</TableHead>
-                      <TableHead className="text-right">Valor</TableHead>
-                      <TableHead className="hidden sm:table-cell">Método</TableHead>
+                      <TableHead className="cursor-pointer select-none" onClick={() => handleSort('payment_date')}>
+                        <span className="flex items-center">Data<SortIcon field="payment_date" sortField={sortField} sortDirection={sortDirection} /></span>
+                      </TableHead>
+                      <TableHead className="cursor-pointer select-none" onClick={() => handleSort('sale_code')}>
+                        <span className="flex items-center">Venda<SortIcon field="sale_code" sortField={sortField} sortDirection={sortDirection} /></span>
+                      </TableHead>
+                      <TableHead className="cursor-pointer select-none" onClick={() => handleSort('client_name')}>
+                        <span className="flex items-center">Cliente<SortIcon field="client_name" sortField={sortField} sortDirection={sortDirection} /></span>
+                      </TableHead>
+                      <TableHead className="text-right cursor-pointer select-none" onClick={() => handleSort('amount')}>
+                        <span className="flex items-center justify-end">Valor<SortIcon field="amount" sortField={sortField} sortDirection={sortDirection} /></span>
+                      </TableHead>
+                      <TableHead className="hidden sm:table-cell cursor-pointer select-none" onClick={() => handleSort('payment_method')}>
+                        <span className="flex items-center">Método<SortIcon field="payment_method" sortField={sortField} sortDirection={sortDirection} /></span>
+                      </TableHead>
                       <TableHead className="hidden md:table-cell">Fatura</TableHead>
-                      <TableHead>Estado</TableHead>
+                      <TableHead className="cursor-pointer select-none" onClick={() => handleSort('status')}>
+                        <span className="flex items-center">Estado<SortIcon field="status" sortField={sortField} sortDirection={sortDirection} /></span>
+                      </TableHead>
                       <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredPayments.map((payment) => (
+                    {sortedPayments.map((payment) => (
                       <TableRow key={payment.id}>
                         <TableCell className="whitespace-nowrap">
                           {formatDate(payment.payment_date)}
