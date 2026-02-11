@@ -1,75 +1,103 @@
 
 
-## Tornar Explicita a Relacao entre Faturas e Notas de Credito
+## Corrigir Duplicacao e Linking entre Faturas e Notas de Credito
 
-### Problema
+### Problemas Identificados
 
-1. A nota de credito nao mostra qual fatura lhe deu origem
-2. A fatura nao mostra se tem uma nota de credito associada
-3. O campo `related_invoice_id` esta a `null` na nota de credito, mesmo quando o InvoiceXpress tem essa informacao nos `related_documents`
-4. Os estados das notas de credito tambem estao em ingles (mesmo problema ja corrigido nas faturas)
+1. **Documento duplicado**: A nota de credito (ID `250819561`) aparece tanto na tabela `invoices` como na tabela `credit_notes`. Isto acontece porque o InvoiceXpress pode devolver o mesmo documento no endpoint de faturas.
+
+2. **`related_invoice_id` esta `null`**: A edge function `sync-credit-notes` tenta extrair o ID da fatura relacionada via `related_documents` da API, mas neste caso o InvoiceXpress nao esta a devolver essa informacao (o log mostra "no related_documents found").
+
+3. **Uma fatura "Liquidada" com nota de credito**: Isto e comportamento normal do InvoiceXpress - uma fatura pode ser liquidada e depois ter uma nota de credito emitida (reembolso). O problema e que esta relacao nao e visivel na UI.
+
+---
 
 ### Solucao
 
-#### 1. Adicionar coluna "Fatura Origem" na tabela de Notas de Credito
+#### 1. Edge Function `sync-invoices` - Filtrar notas de credito
 
-**Ficheiro: `src/components/finance/CreditNotesContent.tsx`**
+Apos importar documentos, verificar se o `invoicexpress_id` ja existe na tabela `credit_notes`. Se existir, nao inserir na tabela `invoices` (evita duplicacao).
 
-- Adicionar coluna "Fatura Origem" que mostra a referencia da fatura relacionada
-- Fazer JOIN com a tabela `invoices` usando `related_invoice_id` para obter a referencia
-- Traduzir estados para portugues (mesmo mapa usado nas faturas)
+Alternativamente, adicionar um check na API: se o InvoiceXpress devolver um campo `type` que indique nota de credito, ignorar.
 
-#### 2. Adicionar coluna "Nota de Credito" na tabela de Faturas
+#### 2. Edge Function `sync-credit-notes` - Melhorar extraccao do `related_invoice_id`
 
-**Ficheiro: `src/components/finance/InvoicesContent.tsx`**
+Quando `related_documents` esta vazio, tentar estrategias adicionais:
+- Procurar na tabela `invoices` por documentos com o mesmo `client_name` e `total` (match por valor e cliente)
+- Usar o endpoint `/documents/{id}/related_documents.json` da API do InvoiceXpress como fallback
 
-- Adicionar coluna "N. Credito" que mostra a referencia da nota de credito associada
-- Fazer query a `credit_notes` onde `related_invoice_id = invoice.invoicexpress_id`
+#### 3. Limpar dados existentes
 
-#### 3. Melhorar matching no sync de notas de credito
+Executar uma migracao para:
+- Remover da tabela `invoices` os registos cujo `invoicexpress_id` tambem existe em `credit_notes`
+- Preencher `related_invoice_id` nas notas de credito existentes fazendo match por `client_name` + `total` na tabela `invoices`
 
-**Ficheiro: `supabase/functions/sync-credit-notes/index.ts`**
+#### 4. Frontend - Ja implementado
 
-- Quando `related_documents` retorna um ID, guardar esse ID em `related_invoice_id`
-- O codigo ja faz isto (linha 122), mas pode estar a falhar se a API nao devolver `related_documents`
-
-#### 4. Criar query para cruzar dados
-
-**Ficheiro: `src/hooks/useCreditNotes.ts`**
-
-- Atualizar a query para incluir a referencia da fatura relacionada via lookup na tabela `invoices`
-
-**Ficheiro: `src/hooks/useInvoices.ts`**
-
-- Atualizar a query para incluir notas de credito associadas via lookup na tabela `credit_notes`
+As colunas "N. Credito" e "Fatura Origem" ja foram adicionadas na implementacao anterior. Com os dados corrigidos, vao mostrar as referencias corretas automaticamente.
 
 ---
 
 ### Seccao Tecnica
 
-**Alteracoes nos hooks:**
+**Ficheiro: `supabase/functions/sync-invoices/index.ts`**
 
-`useCreditNotes.ts`:
-- Apos buscar as notas de credito, fazer uma segunda query para obter as referencias das faturas relacionadas usando os `related_invoice_id` nao-nulos
-- Retornar `related_invoice_reference` em cada item
+Apos o upsert (linha 197-216), adicionar verificacao:
+```
+// Antes do upsert, verificar se este doc e uma credit note
+const { data: existingCN } = await supabase
+  .from('credit_notes')
+  .select('id')
+  .eq('organization_id', organization_id)
+  .eq('invoicexpress_id', docId)
+  .maybeSingle()
 
-`useInvoices.ts`:
-- Apos buscar as faturas, fazer uma segunda query a `credit_notes` onde `related_invoice_id` esta nos `invoicexpress_id` das faturas
-- Retornar `credit_note_reference` em cada item
+if (existingCN) {
+  console.log(`Skipping ${docId} - already exists as credit note`)
+  continue
+}
+```
 
-**Alteracoes na UI:**
+**Ficheiro: `supabase/functions/sync-credit-notes/index.ts`**
 
-`CreditNotesContent.tsx`:
-- Nova coluna "Fatura Origem" com badge clicavel mostrando a referencia (ex: "FT 1/2026")
-- Traduzir estados com funcao `getStatusLabel` identica a das faturas
-- Aplicar `getStatusVariant` para cores nos badges
+Apos a extraccao de `related_documents` (linha 121-133), adicionar fallback:
+```
+// Fallback: match por client_name + total na tabela invoices
+if (!relatedDocId && cnClientName && cnTotal > 0) {
+  const { data: possibleInvoice } = await supabase
+    .from('invoices')
+    .select('invoicexpress_id')
+    .eq('organization_id', organization_id)
+    .eq('client_name', cnClientName)
+    .eq('total', cnTotal)
+    .neq('invoicexpress_id', cnId)
+    .limit(1)
+    .maybeSingle()
 
-`InvoicesContent.tsx`:
-- Nova coluna "N. Credito" apos "Estado"
-- Se existir nota de credito associada, mostrar badge com referencia (ex: "NC 1/2026")
-- Se nao existir, mostrar "-"
+  if (possibleInvoice) {
+    relatedDocId = possibleInvoice.invoicexpress_id
+  }
+}
+```
 
-**Correcao na Edge Function `sync-credit-notes`:**
-- Adicionar log para debug quando `related_documents` esta vazio
-- Tentar match adicional por `invoicexpress_id` na tabela `invoices` quando `related_invoice_id` e encontrado
+**Migracao SQL** para limpar dados existentes:
+```sql
+-- Remover faturas que sao na verdade notas de credito
+DELETE FROM invoices
+WHERE invoicexpress_id IN (
+  SELECT invoicexpress_id FROM credit_notes
+);
+
+-- Preencher related_invoice_id nas credit_notes por match client+total
+UPDATE credit_notes cn
+SET related_invoice_id = (
+  SELECT i.invoicexpress_id FROM invoices i
+  WHERE i.organization_id = cn.organization_id
+    AND i.client_name = cn.client_name
+    AND i.total = cn.total
+    AND i.invoicexpress_id != cn.invoicexpress_id
+  LIMIT 1
+)
+WHERE cn.related_invoice_id IS NULL;
+```
 
