@@ -1,32 +1,47 @@
 
 
-## Corrigir Cards de Resumo - Manter Valor Total + Novo Card Consumos (Telecom)
+## Integrar Consumos nos Cards Existentes (Telecom)
 
-### Problema
+### Resumo
 
-O card "Valor Total" foi substituido pelos valores de energia, mas o correto e **manter** o "Valor Total" monetario e **acrescentar** um novo card com Consumo (MWh) e kWp.
+Em vez de um card separado para consumos, os valores de energia sao integrados diretamente nos cards **"Valor Total"** e **"Em Negociacao"**, apenas para o nicho telecom.
 
 ### Layout Final (Telecom)
 
 ```text
-+------------------+  +------------------+  +------------------+  +------------------+  +------------------+
-| Total Propostas  |  | Valor Total      |  | Consumo / kWp    |  | Em Negociacao    |  | Aceites          |
-| 42               |  | 125.000,00 EUR   |  | 245,3 MWh        |  | 8.500,00 EUR     |  | 12               |
-|                  |  |                  |  | 128,5 kWp        |  |                  |  |                  |
-+------------------+  +------------------+  +------------------+  +------------------+  +------------------+
++------------------+  +-------------------------+  +-------------------------+  +------------------+
+| Total Propostas  |  | Valor Total             |  | Em Negociacao           |  | Aceites          |
+| 42               |  | 125.000,00 EUR          |  | 8.500,00 EUR            |  | 12               |
+|                  |  | 245,3 MWh | 128,5 kWp   |  | 102,1 MWh | 45,0 kWp   |  |                  |
++------------------+  +-------------------------+  +-------------------------+  +------------------+
 ```
 
-Para nichos nao-telecom, o card "Consumo / kWp" simplesmente nao aparece (grid de 4 cards como hoje).
+Para nichos nao-telecom, os cards ficam exatamente como estao (sem linhas de MWh/kWp).
 
-### Alteracao
+### Alteracoes
 
 **Ficheiro:** `src/pages/Proposals.tsx`
 
-1. Reverter o card "Valor Total" para mostrar sempre o valor monetario (`formatCurrency(totalValue)`)
-2. Adicionar um novo card "Consumo / kWp" logo apos o "Valor Total", visivel apenas quando `isTelecom`
-3. Ajustar o grid para `grid-cols-2 sm:grid-cols-5` quando telecom, mantendo `grid-cols-2 sm:grid-cols-4` para os restantes
+1. Remover o card separado "Consumo / kWp" e reverter o grid para `sm:grid-cols-4` (sempre 4 cards)
+2. No card "Valor Total": adicionar linha secundaria com MWh e kWp totais (quando telecom)
+3. No card "Em Negociacao": adicionar linha secundaria com MWh e kWp filtrados apenas por propostas com status `sent` ou `negotiating`
+
+**Ficheiro:** `src/hooks/useTelecomProposalMetrics.ts`
+
+4. Expandir o hook para tambem retornar as metricas filtradas por propostas em negociacao (`pendingMWh`, `pendingKWp`), adicionando queries com filtro de status `in ('sent', 'negotiating')`
 
 ### Secao Tecnica
 
-O hook `useTelecomProposalMetrics` ja existe e continua a ser usado -- apenas muda onde os dados sao renderizados (card proprio em vez de substituir o "Valor Total").
+**Hook atualizado** retorna:
+- `totalMWh`, `totalKWp` -- todas as propostas (para o card Valor Total)
+- `pendingMWh`, `pendingKWp` -- apenas propostas com status `sent` ou `negotiating` (para o card Em Negociacao)
+
+**Renderizacao condicional** nos dois cards:
+```
+{isTelecom && (
+  <p className="text-xs text-muted-foreground mt-1">
+    {totalMWh.toFixed(1)} MWh · {totalKWp.toFixed(1)} kWp
+  </p>
+)}
+```
 
