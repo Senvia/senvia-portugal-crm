@@ -1,45 +1,40 @@
 
 
-## Gerar PDF apos emissao de fatura (InvoiceXpress)
+## Prevenir faturas duplicadas com proprietary_uid
 
-### O que muda
-Apos criar e finalizar a fatura no InvoiceXpress, a edge function vai automaticamente pedir a geracao do PDF e guardar o URL. O utilizador podera fazer download direto do PDF a partir da listagem de pagamentos e da aba de faturas.
+### Contexto
+A documentacao do endpoint de criacao do InvoiceXpress revela o campo `proprietary_uid`, que serve para prevenir pedidos duplicados. Isto resolve o problema identificado na auditoria onde dois pagamentos ficaram com a mesma referencia de fatura.
 
 ### Alteracoes
 
 **1. Edge function `issue-invoice`**
-- Apos finalizar o documento (passo 2 atual), adicionar um passo 3: chamar `GET /api/pdf/:invoiceId.json?api_key=...`
-- Como a API e assincrona (pode devolver 202 antes do PDF estar pronto), fazer polling com retry (maximo 3 tentativas, intervalo de 2 segundos)
-- Se o PDF estiver pronto (status 200), guardar o `pdfUrl` no campo `invoice_file_url` do pagamento ou da venda
-- Se nao ficar pronto a tempo, nao bloquear -- a fatura ja foi emitida com sucesso, o PDF pode ser obtido depois
+
+Adicionar o campo `proprietary_uid` ao payload de criacao do documento. O valor sera um UUID deterministico baseado no `payment_id` (para faturas por pagamento) ou no `sale_id` (para faturas legacy). Isto garante que se a mesma fatura for pedida duas vezes, o InvoiceXpress rejeita a segunda com 409.
+
+Tambem guardar o `permalink` da resposta de criacao como fallback para quando o PDF nao esta disponivel.
 
 Logica:
 ```text
-Apos finalizacao:
-  1. GET /api/pdf/{invoiceId}.json?api_key=...
-  2. Se 200 -> extrair output.pdfUrl -> guardar em invoice_file_url
-  3. Se 202 -> esperar 2s e tentar novamente (max 3x)
-  4. Se falhar -> ignorar (fatura emitida, PDF indisponivel temporariamente)
+1. Gerar proprietary_uid:
+   - Per-payment: "senvia-pay-{payment_id}"
+   - Legacy: "senvia-sale-{sale_id}"
+2. Incluir no payload: { proprietary_uid: "senvia-pay-xxx-xxx" }
+3. Tratar resposta 409 como "fatura ja existe" (nao erro)
+4. Guardar permalink da resposta como fallback
 ```
 
-**2. Guardar o PDF URL na base de dados**
-- No fluxo per-payment: guardar `pdfUrl` no campo `invoice_file_url` do `sale_payments`
-- No fluxo legacy (venda completa): guardar no campo da `sales` (se existir)
-- O campo `invoice_file_url` ja existe na tabela `sale_payments` -- sera reutilizado para guardar o URL do InvoiceXpress
+**2. Guardar permalink na base de dados**
 
-**3. UI - Download direto do PDF**
-- Na `SalePaymentsList`, quando o pagamento tem `invoice_file_url` de um documento InvoiceXpress, mostrar botao de download que abre o URL diretamente
-- Na `InvoicesContent`, o download ja funciona para ficheiros no storage; para URLs externos (InvoiceXpress PDF), abrir diretamente
+Quando o PDF nao esta pronto apos o polling, guardar o `permalink` no campo `invoice_file_url` para que o utilizador tenha sempre acesso ao documento (mesmo que seja via browser do InvoiceXpress).
 
 ### Resumo tecnico
 
 | Ficheiro | Alteracao |
 |---|---|
-| `supabase/functions/issue-invoice/index.ts` | Adicionar passo de geracao de PDF com polling apos finalizacao |
-| `src/components/sales/SalePaymentsList.tsx` | Mostrar botao download PDF quando `invoice_file_url` existe |
+| `supabase/functions/issue-invoice/index.ts` | Adicionar `proprietary_uid` ao payload, tratar 409, guardar `permalink` como fallback |
 
 ### Notas
-- Nao e necessaria migracao de base de dados -- o campo `invoice_file_url` ja existe
-- O PDF URL do InvoiceXpress e temporario (expira), por isso o sistema vai guardar o URL e regenerar se necessario
-- Se o PDF nao estiver pronto nos 3 retries, a fatura continua emitida normalmente -- o utilizador pode aceder ao PDF mais tarde pelo link do InvoiceXpress
+- Nao e necessaria migracao de base de dados
+- O `proprietary_uid` e determinisitco (baseado no ID do pagamento/venda), nao aleatorio, para garantir idempotencia
+- O tratamento do 409 evita erros ao utilizador se clicar duas vezes no botao de emitir
 
