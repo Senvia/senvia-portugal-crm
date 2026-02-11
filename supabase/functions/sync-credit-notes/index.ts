@@ -120,14 +120,36 @@ async function syncOrganization(supabase: any, organization_id: string, org: any
 
         if (cnDetail?.related_documents && cnDetail.related_documents.length > 0) {
           relatedDocId = cnDetail.related_documents[0].id
+          console.log(`[${organization_id}] CN ${cnId}: found related_document ID ${relatedDocId}`)
+        } else {
+          console.log(`[${organization_id}] CN ${cnId}: no related_documents found in API response`)
         }
         if (!relatedDocId && cnDetail?.observations) {
           const match = cnDetail.observations.match(/(?:fatura|invoice|FR|FT)\s*[#:]?\s*(\d+)/i)
-          if (match) relatedDocId = parseInt(match[1])
+          if (match) {
+            relatedDocId = parseInt(match[1])
+            console.log(`[${organization_id}] CN ${cnId}: extracted related doc ${relatedDocId} from observations`)
+          }
         }
       }
     } catch (e) {
       console.warn(`Failed to get details for CN ${cnId}:`, e)
+    }
+
+    // Also try to match by invoicexpress_id in invoices table
+    if (relatedDocId) {
+      const { data: matchedInvoice } = await supabase
+        .from('invoices')
+        .select('invoicexpress_id')
+        .eq('organization_id', organization_id)
+        .eq('invoicexpress_id', relatedDocId)
+        .maybeSingle()
+      
+      if (matchedInvoice) {
+        console.log(`[${organization_id}] CN ${cnId}: confirmed related invoice ${relatedDocId} exists in invoices table`)
+      } else {
+        console.log(`[${organization_id}] CN ${cnId}: related_invoice_id ${relatedDocId} NOT found in invoices table`)
+      }
     }
 
     let matchedSaleId: string | null = null

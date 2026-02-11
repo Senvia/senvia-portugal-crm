@@ -10,6 +10,27 @@ import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
+const getStatusLabel = (status: string | null) => {
+  const map: Record<string, string> = {
+    settled: 'Liquidada',
+    final: 'Finalizada',
+    draft: 'Rascunho',
+    canceled: 'Anulada',
+    sent: 'Enviada',
+    second_copy: 'Segunda Via',
+  };
+  return map[status || ''] || status || '-';
+};
+
+const getStatusVariant = (status: string | null): "default" | "secondary" | "destructive" | "outline" => {
+  switch (status) {
+    case 'settled': return 'default';
+    case 'canceled': return 'destructive';
+    case 'draft': return 'secondary';
+    default: return 'outline';
+  }
+};
+
 export function CreditNotesContent() {
   const { data: creditNotes, isLoading } = useCreditNotes();
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
@@ -100,6 +121,7 @@ export function CreditNotesContent() {
                     <TableHead>Cliente</TableHead>
                     <TableHead className="text-right">Valor</TableHead>
                     <TableHead className="text-center">Estado</TableHead>
+                    <TableHead className="text-center">Fatura Origem</TableHead>
                     <TableHead className="text-center">Associada</TableHead>
                     <TableHead className="text-center w-[80px]">PDF</TableHead>
                   </TableRow>
@@ -120,9 +142,18 @@ export function CreditNotesContent() {
                         {formatCurrency(cn.total)}
                       </TableCell>
                       <TableCell className="text-center">
-                        <Badge variant={cn.status === 'settled' ? 'default' : 'secondary'} className="text-xs">
-                          {cn.status || '-'}
+                        <Badge variant={getStatusVariant(cn.status)} className="text-xs">
+                          {getStatusLabel(cn.status)}
                         </Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {cn.related_invoice_reference ? (
+                          <Badge variant="outline" className="text-xs">
+                            {cn.related_invoice_reference}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">-</span>
+                        )}
                       </TableCell>
                       <TableCell className="text-center">
                         {cn.sale_id || cn.payment_id ? (

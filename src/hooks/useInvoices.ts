@@ -20,6 +20,7 @@ export interface InvoiceRow {
   raw_data: any;
   created_at: string;
   updated_at: string;
+  credit_note_reference: string | null;
 }
 
 export function useInvoices() {
@@ -42,7 +43,7 @@ export function useInvoices() {
         throw error;
       }
 
-      return (data || []).map((row: any) => ({
+      const invoices = (data || []).map((row: any) => ({
         id: row.id,
         organization_id: row.organization_id,
         invoicexpress_id: row.invoicexpress_id,
@@ -59,7 +60,32 @@ export function useInvoices() {
         raw_data: row.raw_data,
         created_at: row.created_at,
         updated_at: row.updated_at,
+        credit_note_reference: null as string | null,
       }));
+
+      // Fetch credit notes that reference these invoices
+      const ixIds = invoices.map((i: InvoiceRow) => i.invoicexpress_id).filter(Boolean);
+      if (ixIds.length > 0) {
+        const { data: cnData } = await (supabase as any)
+          .from('credit_notes')
+          .select('related_invoice_id, reference')
+          .eq('organization_id', organizationId)
+          .in('related_invoice_id', ixIds);
+
+        if (cnData && cnData.length > 0) {
+          const cnMap = new Map<number, string>();
+          for (const cn of cnData) {
+            if (cn.related_invoice_id && cn.reference) {
+              cnMap.set(cn.related_invoice_id, cn.reference);
+            }
+          }
+          for (const inv of invoices) {
+            inv.credit_note_reference = cnMap.get(inv.invoicexpress_id) || null;
+          }
+        }
+      }
+
+      return invoices;
     },
     enabled: !!organizationId,
   });
