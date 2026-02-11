@@ -1,6 +1,7 @@
+import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { pt } from "date-fns/locale";
-import { Receipt, FileText, User, Calendar, CreditCard, Loader2, Info } from "lucide-react";
+import { Receipt, FileText, User, Calendar, CreditCard, Loader2, Info, MessageSquare } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -13,9 +14,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Textarea } from "@/components/ui/textarea";
 import { formatCurrency } from "@/lib/format";
 import { PAYMENT_METHOD_LABELS } from "@/types/sales";
-import type { PaymentMethod } from "@/types/sales";
+import type { PaymentMethod, SalePayment } from "@/types/sales";
 
 export interface DraftSaleItem {
   name: string;
@@ -27,7 +29,7 @@ export interface DraftSaleItem {
 interface InvoiceDraftModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onConfirm: () => void;
+  onConfirm: (observations?: string) => void;
   isLoading: boolean;
   mode: "invoice" | "receipt" | "invoice_receipt";
   clientName?: string | null;
@@ -41,6 +43,7 @@ interface InvoiceDraftModalProps {
   } | null;
   saleItems?: DraftSaleItem[];
   saleTotal?: number;
+  payments?: SalePayment[];
 }
 
 const MODE_LABELS = {
@@ -48,6 +51,39 @@ const MODE_LABELS = {
   receipt: { title: "Recibo", badge: "Recibo (RC)", button: "Gerar Recibo" },
   invoice_receipt: { title: "Fatura-Recibo", badge: "Fatura-Recibo (FR)", button: "Emitir Fatura-Recibo" },
 };
+
+function generateDefaultObservations(mode: string, payments?: SalePayment[]): string {
+  if (!payments || payments.length === 0) return "";
+  
+  if (mode === "invoice") {
+    if (payments.length === 1) {
+      const d = new Date(payments[0].payment_date);
+      return `Data de pagamento: ${format(d, "dd/MM/yyyy")}`;
+    }
+    return `Pagamento em ${payments.length} parcelas:\n` +
+      payments.map((p, i) => {
+        const d = new Date(p.payment_date);
+        return `- ${i + 1}.ª parcela: ${formatCurrency(Number(p.amount))} - ${format(d, "dd/MM/yyyy")}`;
+      }).join("\n");
+  }
+  
+  if (mode === "invoice_receipt") {
+    const paidPayments = payments.filter(p => p.status === "paid");
+    if (paidPayments.length === 1) {
+      const d = new Date(paidPayments[0].payment_date);
+      return `Pagamento recebido em ${format(d, "dd/MM/yyyy")}`;
+    }
+    if (paidPayments.length > 1) {
+      return `Pagamentos recebidos:\n` +
+        paidPayments.map(p => {
+          const d = new Date(p.payment_date);
+          return `- ${formatCurrency(Number(p.amount))} em ${format(d, "dd/MM/yyyy")}`;
+        }).join("\n");
+    }
+  }
+  
+  return "";
+}
 
 export function InvoiceDraftModal({
   open,
@@ -63,23 +99,27 @@ export function InvoiceDraftModal({
   taxConfig,
   saleItems = [],
   saleTotal,
+  payments,
 }: InvoiceDraftModalProps) {
   const today = new Date();
   const labels = MODE_LABELS[mode];
   const orgTaxRate = taxConfig?.tax_value ?? 0;
   const exemptionReason = taxConfig?.tax_exemption_reason || "Artigo 53.º do CIVA";
 
-  // Calculate per-item tax totals
-  const ratio = mode === "invoice_receipt" && saleTotal && saleTotal > 0
-    ? amount / saleTotal
-    : 1;
+  const [observations, setObservations] = useState("");
 
+  useEffect(() => {
+    if (open) {
+      setObservations(generateDefaultObservations(mode, payments));
+    }
+  }, [open, mode, payments]);
+
+  // Always use full sale total - no ratio
   const itemsWithTax = saleItems.map((item) => {
     const effectiveTax = item.tax_value ?? orgTaxRate;
-    const scaledPrice = item.unit_price * ratio;
-    const lineTotal = scaledPrice * item.quantity;
+    const lineTotal = item.unit_price * item.quantity;
     const lineTax = lineTotal * (effectiveTax / 100);
-    return { ...item, effectiveTax, scaledPrice, lineTotal, lineTax };
+    return { ...item, effectiveTax, scaledPrice: item.unit_price, lineTotal, lineTax };
   });
 
   const subtotal = itemsWithTax.reduce((s, i) => s + i.lineTotal, 0);
@@ -231,6 +271,28 @@ export function InvoiceDraftModal({
               <span className="text-primary">{formatCurrency(fallbackTotal)}</span>
             </div>
           </div>
+
+          {/* Observations */}
+          {(mode === "invoice" || mode === "invoice_receipt") && (
+            <>
+              <Separator />
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <MessageSquare className="h-3.5 w-3.5" />
+                  <span>Observações</span>
+                </div>
+                <Textarea
+                  value={observations}
+                  onChange={(e) => setObservations(e.target.value)}
+                  placeholder="Observações a incluir no documento..."
+                  className="min-h-[80px] text-sm"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Este texto será enviado para o documento fiscal.
+                </p>
+              </div>
+            </>
+          )}
         </div>
 
         <DialogFooter className="gap-2 sm:gap-0">
@@ -241,7 +303,7 @@ export function InvoiceDraftModal({
           >
             Cancelar
           </Button>
-          <Button onClick={onConfirm} disabled={isLoading}>
+          <Button onClick={() => onConfirm(observations || undefined)} disabled={isLoading}>
             {isLoading ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />

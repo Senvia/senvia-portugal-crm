@@ -49,7 +49,7 @@ Deno.serve(async (req) => {
       })
     }
 
-    const { sale_id, organization_id } = await req.json()
+    const { sale_id, organization_id, observations } = await req.json()
     if (!sale_id || !organization_id) {
       return new Response(JSON.stringify({ error: 'sale_id e organization_id são obrigatórios' }), {
         status: 400,
@@ -244,11 +244,36 @@ Deno.serve(async (req) => {
     const clientCode = sale.client?.code || clientNif
     const proprietary_uid = `senvia-sale-${sale_id}`
 
+    // Build observations from payments if not provided by frontend
+    let finalObservations = observations || ''
+    if (!finalObservations) {
+      const { data: salePayments } = await supabase
+        .from('sale_payments')
+        .select('amount, payment_date, status')
+        .eq('sale_id', sale_id)
+        .order('payment_date', { ascending: true })
+      
+      if (salePayments && salePayments.length > 1) {
+        finalObservations = `Pagamento em ${salePayments.length} parcelas:\n` +
+          salePayments.map((p: any, i: number) => {
+            const d = new Date(p.payment_date)
+            const dateStr = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
+            return `- ${i + 1}.ª parcela: ${Number(p.amount).toFixed(2)} EUR - ${dateStr}`
+          }).join('\n')
+      } else if (salePayments && salePayments.length === 1) {
+        const p = salePayments[0]
+        const d = new Date(p.payment_date)
+        const dateStr = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
+        finalObservations = `Data de pagamento: ${dateStr}`
+      }
+    }
+
     // Build InvoiceXpress payload - always invoice type
     const invoicePayload = {
       invoice: {
         date: formattedDate,
         due_date: formattedDate,
+        ...(finalObservations ? { observations: finalObservations } : {}),
         ...(hasExemptItem && firstExemptionReason
           ? { tax_exemption: firstExemptionReason }
           : {}),
