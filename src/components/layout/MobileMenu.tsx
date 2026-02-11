@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 const navItems = [
   { to: "/dashboard", icon: LayoutDashboard, label: "Painel" },
   { to: "/leads", icon: Users, label: "Leads" },
-  { to: "/settings", icon: Settings, label: "Configurações" },
+  { to: "/settings", icon: Settings, label: "Definições" },
 ];
 
 const getRoleLabel = (roles: AppRole[]): string => {
