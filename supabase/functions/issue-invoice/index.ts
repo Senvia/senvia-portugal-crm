@@ -356,13 +356,33 @@ Deno.serve(async (req) => {
       console.warn('PDF generation polling failed (non-blocking):', e)
     }
 
-    // 4. Save reference in sales table
+    // 4. QR Code polling
+    let qrCodeUrl: string | null = null
+    try {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const qrRes = await fetch(`${baseUrl}/api/qr_codes/${invoiceId}.json?api_key=${apiKey}`, {
+          method: 'GET',
+          headers: { 'Accept': 'application/json' },
+        })
+        if (qrRes.status === 200) {
+          const qrData = await qrRes.json()
+          qrCodeUrl = qrData?.qr_code?.url || null
+          if (qrCodeUrl) break
+        }
+        await new Promise(r => setTimeout(r, 2000))
+      }
+    } catch (e) {
+      console.warn('QR Code polling failed (non-blocking):', e)
+    }
+
+    // 5. Save reference in sales table
     await supabase
       .from('sales')
       .update({
         invoicexpress_id: invoiceId,
         invoicexpress_type: 'invoices',
         invoice_reference: invoiceReference,
+        ...(qrCodeUrl ? { qr_code_url: qrCodeUrl } : {}),
       })
       .eq('id', sale_id)
 
@@ -371,6 +391,7 @@ Deno.serve(async (req) => {
       invoicexpress_id: invoiceId,
       invoice_reference: invoiceReference,
       ...(pdfUrl ? { pdf_url: pdfUrl } : {}),
+      ...(qrCodeUrl ? { qr_code_url: qrCodeUrl } : {}),
     }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

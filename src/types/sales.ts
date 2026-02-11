@@ -56,6 +56,7 @@ export interface SalePayment {
   invoice_reference: string | null;
   invoice_file_url: string | null;
   invoicexpress_id?: number | null;
+  qr_code_url?: string | null;
   status: PaymentRecordStatus;
   notes: string | null;
   created_at: string;
@@ -136,6 +137,7 @@ export interface Sale {
   // InvoiceXpress
   invoicexpress_id: number | null;
   invoicexpress_type: string | null;
+  qr_code_url?: string | null;
 }
 
 export interface SaleWithDetails extends Sale {

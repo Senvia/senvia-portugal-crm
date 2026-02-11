@@ -499,6 +499,7 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                     hasInvoiceXpress={hasInvoiceXpress}
                     invoicexpressId={sale.invoicexpress_id}
                     invoiceReference={sale.invoice_reference}
+                    invoiceQrCodeUrl={(sale as any).qr_code_url}
                     clientNif={sale.client?.nif}
                     clientName={sale.client?.name || sale.lead?.name}
                     taxConfig={organization?.tax_config as { tax_value?: number; tax_exemption_reason?: string } | null}
