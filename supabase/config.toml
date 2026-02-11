@@ -62,3 +62,6 @@ verify_jwt = false
 
 [functions.sync-invoices]
 verify_jwt = false
+
+[functions.issue-invoice-receipt]
+verify_jwt = false
