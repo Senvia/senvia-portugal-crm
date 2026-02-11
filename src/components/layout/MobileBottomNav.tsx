@@ -3,6 +3,7 @@ import { LayoutDashboard, Users, Settings, Shield, Calendar, FileText, ShoppingB
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useModules, EnabledModules } from "@/hooks/useModules";
+import { usePermissions } from "@/hooks/usePermissions";
 
 interface NavItem {
   to: string;
@@ -28,11 +29,15 @@ export function MobileBottomNav() {
   const location = useLocation();
   const { isSuperAdmin } = useAuth();
   const { modules } = useModules();
+  const { modulePermissions } = usePermissions();
 
-  // Filter nav items based on enabled modules
+  // Filter nav items based on enabled modules AND user profile permissions
   const navItems = allNavItems.filter(item => {
     if (!item.moduleKey) return true;
-    return modules[item.moduleKey];
+    if (!modules[item.moduleKey]) return false;
+    const perm = modulePermissions[item.moduleKey as keyof typeof modulePermissions];
+    if (perm && !perm.view) return false;
+    return true;
   });
 
   const allItems = isSuperAdmin 

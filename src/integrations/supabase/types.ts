@@ -1530,6 +1530,7 @@ export type Database = {
           is_active: boolean
           joined_at: string | null
           organization_id: string
+          profile_id: string | null
           role: Database["public"]["Enums"]["app_role"]
           user_id: string
         }
@@ -1538,6 +1539,7 @@ export type Database = {
           is_active?: boolean
           joined_at?: string | null
           organization_id: string
+          profile_id?: string | null
           role?: Database["public"]["Enums"]["app_role"]
           user_id: string
         }
@@ -1546,12 +1548,58 @@ export type Database = {
           is_active?: boolean
           joined_at?: string | null
           organization_id?: string
+          profile_id?: string | null
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
         }
         Relationships: [
           {
             foreignKeyName: "organization_members_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_members_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "organization_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organization_profiles: {
+        Row: {
+          base_role: Database["public"]["Enums"]["app_role"]
+          created_at: string
+          id: string
+          is_default: boolean
+          module_permissions: Json
+          name: string
+          organization_id: string
+        }
+        Insert: {
+          base_role?: Database["public"]["Enums"]["app_role"]
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          module_permissions?: Json
+          name: string
+          organization_id: string
+        }
+        Update: {
+          base_role?: Database["public"]["Enums"]["app_role"]
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          module_permissions?: Json
+          name?: string
+          organization_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_profiles_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"

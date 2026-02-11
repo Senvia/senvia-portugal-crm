@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTeamMembers, usePendingInvites, useCancelInvite, useResendInvite, useCreateTeamMember, PendingInvite, TeamMember } from '@/hooks/useTeam';
 import { useManageTeamMember } from '@/hooks/useProfile';
 import { useAuth } from '@/contexts/AuthContext';
+import { useOrganizationProfiles } from '@/hooks/useOrganizationProfiles';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -12,6 +13,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { Users, UserPlus, Copy, X, Check, Clock, Loader2, RefreshCw, Eye, EyeOff, MoreHorizontal, Key, UserCog, Ban, CheckCircle, Mail } from 'lucide-react';
@@ -37,6 +39,7 @@ export function TeamTab() {
   const { user, organization } = useAuth();
   const { data: members, isLoading: loadingMembers } = useTeamMembers();
   const { data: invites, isLoading: loadingInvites } = usePendingInvites();
+  const { profiles } = useOrganizationProfiles();
   const cancelInvite = useCancelInvite();
   const resendInvite = useResendInvite();
   const createTeamMember = useCreateTeamMember();
@@ -326,41 +329,47 @@ export function TeamTab() {
                     </div>
                     <div className="space-y-3">
                       <Label>Perfil</Label>
-                      <RadioGroup value={role} onValueChange={(v) => setRole(v as 'admin' | 'viewer' | 'salesperson')}>
-                        <div className="flex items-start space-x-3 rounded-lg border p-3">
-                          <RadioGroupItem value="salesperson" id="role-salesperson" className="mt-1" />
-                          <div className="flex-1">
-                            <Label htmlFor="role-salesperson" className="font-medium cursor-pointer">
-                              Vendedor
-                            </Label>
-                            <p className="text-sm text-muted-foreground">
-                              Vê apenas os leads atribuídos a si. Ideal para comerciais.
-                            </p>
+                      {profiles.length > 0 ? (
+                        <Select value={role} onValueChange={(v) => setRole(v as any)}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecionar perfil..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {profiles.map(p => (
+                              <SelectItem key={p.id} value={p.base_role}>
+                                {p.name}
+                                <span className="text-muted-foreground text-xs ml-2">
+                                  ({ROLE_LABELS[p.base_role] || p.base_role})
+                                </span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <RadioGroup value={role} onValueChange={(v) => setRole(v as 'admin' | 'viewer' | 'salesperson')}>
+                          <div className="flex items-start space-x-3 rounded-lg border p-3">
+                            <RadioGroupItem value="salesperson" id="role-salesperson" className="mt-1" />
+                            <div className="flex-1">
+                              <Label htmlFor="role-salesperson" className="font-medium cursor-pointer">Vendedor</Label>
+                              <p className="text-sm text-muted-foreground">Vê apenas os leads atribuídos.</p>
+                            </div>
                           </div>
-                        </div>
-                        <div className="flex items-start space-x-3 rounded-lg border p-3">
-                          <RadioGroupItem value="viewer" id="role-viewer" className="mt-1" />
-                          <div className="flex-1">
-                            <Label htmlFor="role-viewer" className="font-medium cursor-pointer">
-                              Visualizador
-                            </Label>
-                            <p className="text-sm text-muted-foreground">
-                              Vê todos os leads da organização. Não pode eliminar nem aceder a definições.
-                            </p>
+                          <div className="flex items-start space-x-3 rounded-lg border p-3">
+                            <RadioGroupItem value="viewer" id="role-viewer" className="mt-1" />
+                            <div className="flex-1">
+                              <Label htmlFor="role-viewer" className="font-medium cursor-pointer">Visualizador</Label>
+                              <p className="text-sm text-muted-foreground">Vê todos os leads. Não pode eliminar.</p>
+                            </div>
                           </div>
-                        </div>
-                        <div className="flex items-start space-x-3 rounded-lg border p-3">
-                          <RadioGroupItem value="admin" id="role-admin" className="mt-1" />
-                          <div className="flex-1">
-                            <Label htmlFor="role-admin" className="font-medium cursor-pointer">
-                              Administrador
-                            </Label>
-                            <p className="text-sm text-muted-foreground">
-                              Pode editar tudo: leads, definições e equipa.
-                            </p>
+                          <div className="flex items-start space-x-3 rounded-lg border p-3">
+                            <RadioGroupItem value="admin" id="role-admin" className="mt-1" />
+                            <div className="flex-1">
+                              <Label htmlFor="role-admin" className="font-medium cursor-pointer">Administrador</Label>
+                              <p className="text-sm text-muted-foreground">Acesso total.</p>
+                            </div>
                           </div>
-                        </div>
-                      </RadioGroup>
+                        </RadioGroup>
+                      )}
                     </div>
                   </div>
                   <DialogFooter>
@@ -655,41 +664,47 @@ export function TeamTab() {
                 {selectedMember ? ROLE_LABELS[selectedMember.role] : ''}
               </Badge>
             </div>
-            <RadioGroup value={newRole} onValueChange={(v) => setNewRole(v as 'admin' | 'viewer' | 'salesperson')}>
-              <div className="flex items-start space-x-3 rounded-lg border p-3">
-                <RadioGroupItem value="admin" id="new-role-admin" className="mt-1" />
-                <div className="flex-1">
-                  <Label htmlFor="new-role-admin" className="font-medium cursor-pointer">
-                    Administrador
-                  </Label>
-                  <p className="text-sm text-muted-foreground">
-                    Pode editar tudo: leads, definições e equipa.
-                  </p>
-                </div>
+            {profiles.length > 0 ? (
+              <div className="space-y-2">
+                <Label>Novo Perfil</Label>
+                <Select value={newRole} onValueChange={(v) => setNewRole(v as any)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {profiles.map(p => (
+                      <SelectItem key={p.id} value={p.base_role}>
+                        {p.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-              <div className="flex items-start space-x-3 rounded-lg border p-3">
-                <RadioGroupItem value="salesperson" id="new-role-salesperson" className="mt-1" />
-                <div className="flex-1">
-                  <Label htmlFor="new-role-salesperson" className="font-medium cursor-pointer">
-                    Vendedor
-                  </Label>
-                  <p className="text-sm text-muted-foreground">
-                    Vê apenas os leads atribuídos a si. Ideal para comerciais.
-                  </p>
+            ) : (
+              <RadioGroup value={newRole} onValueChange={(v) => setNewRole(v as 'admin' | 'viewer' | 'salesperson')}>
+                <div className="flex items-start space-x-3 rounded-lg border p-3">
+                  <RadioGroupItem value="admin" id="new-role-admin" className="mt-1" />
+                  <div className="flex-1">
+                    <Label htmlFor="new-role-admin" className="font-medium cursor-pointer">Administrador</Label>
+                    <p className="text-sm text-muted-foreground">Acesso total.</p>
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-start space-x-3 rounded-lg border p-3">
-                <RadioGroupItem value="viewer" id="new-role-viewer" className="mt-1" />
-                <div className="flex-1">
-                  <Label htmlFor="new-role-viewer" className="font-medium cursor-pointer">
-                    Visualizador
-                  </Label>
-                  <p className="text-sm text-muted-foreground">
-                    Só pode ver leads e mudar estados. Não pode eliminar nem aceder a definições.
-                  </p>
+                <div className="flex items-start space-x-3 rounded-lg border p-3">
+                  <RadioGroupItem value="salesperson" id="new-role-salesperson" className="mt-1" />
+                  <div className="flex-1">
+                    <Label htmlFor="new-role-salesperson" className="font-medium cursor-pointer">Vendedor</Label>
+                    <p className="text-sm text-muted-foreground">Vê leads atribuídos.</p>
+                  </div>
                 </div>
-              </div>
-            </RadioGroup>
+                <div className="flex items-start space-x-3 rounded-lg border p-3">
+                  <RadioGroupItem value="viewer" id="new-role-viewer" className="mt-1" />
+                  <div className="flex-1">
+                    <Label htmlFor="new-role-viewer" className="font-medium cursor-pointer">Visualizador</Label>
+                    <p className="text-sm text-muted-foreground">Apenas visualização.</p>
+                  </div>
+                </div>
+              </RadioGroup>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setChangeRoleOpen(false)}>
