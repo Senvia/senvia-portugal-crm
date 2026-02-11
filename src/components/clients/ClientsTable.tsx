@@ -28,7 +28,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { MoreHorizontal, Eye, Pencil, Trash2, Phone, Mail, Building2, MessageCircle, User } from "lucide-react";
-import { CrmClient, CLIENT_STATUS_LABELS, CLIENT_STATUS_STYLES } from "@/types/clients";
+import { CrmClient, CLIENT_STATUS_STYLES } from "@/types/clients";
+import { useClientLabels } from "@/hooks/useClientLabels";
 import { formatDate, getWhatsAppUrl } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -47,6 +48,7 @@ export function ClientsTable({ clients, onEdit, onView, onDelete, selectedIds = 
   const [deleteClientId, setDeleteClientId] = useState<string | null>(null);
   const { canDeleteLeads } = usePermissions();
   const { data: teamMembers = [] } = useTeamMembers();
+  const labels = useClientLabels();
 
   const getTeamMemberName = (userId: string | null | undefined) => {
     if (!userId) return null;
@@ -120,7 +122,7 @@ export function ClientsTable({ clients, onEdit, onView, onDelete, selectedIds = 
               <TableHead className="hidden md:table-cell">Contacto</TableHead>
               <TableHead className="hidden lg:table-cell">Empresa</TableHead>
               <TableHead className="hidden xl:table-cell">Responsável</TableHead>
-              <TableHead>Estado</TableHead>
+              <TableHead>{labels.statusFieldLabel}</TableHead>
               <TableHead className="hidden sm:table-cell">Data</TableHead>
               <TableHead className="w-[60px]"></TableHead>
             </TableRow>
@@ -198,7 +200,7 @@ export function ClientsTable({ clients, onEdit, onView, onDelete, selectedIds = 
                       CLIENT_STATUS_STYLES[client.status].border
                     )}
                   >
-                    {CLIENT_STATUS_LABELS[client.status]}
+                    {{ active: labels.statusActive, inactive: labels.statusInactive, vip: labels.statusVip }[client.status]}
                   </Badge>
                 </TableCell>
                 <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">

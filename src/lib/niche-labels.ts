@@ -10,6 +10,10 @@ export interface NicheLabels {
   active: string;
   inactive: string;
   moduleName: string;
+  statusFieldLabel: string;
+  statusActive: string;
+  statusInactive: string;
+  statusVip: string;
 }
 
 export const NICHE_CLIENT_LABELS: Record<NicheType, NicheLabels> = {
@@ -23,6 +27,10 @@ export const NICHE_CLIENT_LABELS: Record<NicheType, NicheLabels> = {
     active: 'Clientes Ativos',
     inactive: 'Clientes Inativos',
     moduleName: 'Clientes',
+    statusFieldLabel: 'Estado',
+    statusActive: 'Ativo',
+    statusInactive: 'Inativo',
+    statusVip: 'VIP',
   },
   clinic: {
     singular: 'Paciente',
@@ -34,6 +42,10 @@ export const NICHE_CLIENT_LABELS: Record<NicheType, NicheLabels> = {
     active: 'Pacientes Ativos',
     inactive: 'Pacientes Inativos',
     moduleName: 'Pacientes',
+    statusFieldLabel: 'Estado',
+    statusActive: 'Ativo',
+    statusInactive: 'Inativo',
+    statusVip: 'VIP',
   },
   construction: {
     singular: 'Cliente',
@@ -45,17 +57,25 @@ export const NICHE_CLIENT_LABELS: Record<NicheType, NicheLabels> = {
     active: 'Clientes Ativos',
     inactive: 'Clientes Inativos',
     moduleName: 'Clientes',
+    statusFieldLabel: 'Estado',
+    statusActive: 'Ativo',
+    statusInactive: 'Inativo',
+    statusVip: 'VIP',
   },
   telecom: {
     singular: 'Cliente',
     plural: 'Clientes',
     since: 'Cliente desde',
     new: 'Novo Cliente',
-    vip: 'Clientes VIP',
+    vip: 'Clientes Ouro',
     total: 'Total Clientes',
-    active: 'Clientes Ativos',
-    inactive: 'Clientes Inativos',
+    active: 'Clientes Bronze',
+    inactive: 'Clientes Prata',
     moduleName: 'Clientes',
+    statusFieldLabel: 'Tipologia',
+    statusActive: 'Bronze',
+    statusInactive: 'Prata',
+    statusVip: 'Ouro',
   },
   ecommerce: {
     singular: 'Cliente',
@@ -67,6 +87,10 @@ export const NICHE_CLIENT_LABELS: Record<NicheType, NicheLabels> = {
     active: 'Clientes Ativos',
     inactive: 'Clientes Inativos',
     moduleName: 'Clientes',
+    statusFieldLabel: 'Estado',
+    statusActive: 'Ativo',
+    statusInactive: 'Inativo',
+    statusVip: 'VIP',
   },
   real_estate: {
     singular: 'Cliente',
@@ -78,6 +102,10 @@ export const NICHE_CLIENT_LABELS: Record<NicheType, NicheLabels> = {
     active: 'Clientes Ativos',
     inactive: 'Clientes Inativos',
     moduleName: 'Clientes',
+    statusFieldLabel: 'Estado',
+    statusActive: 'Ativo',
+    statusInactive: 'Inativo',
+    statusVip: 'VIP',
   },
 };
 

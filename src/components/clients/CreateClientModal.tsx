@@ -236,17 +236,15 @@ export function CreateClientModal({ open, onOpenChange, onCreated, initialData }
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="status">Estado</Label>
+              <Label htmlFor="status">{labels.statusFieldLabel}</Label>
               <Select value={status} onValueChange={(v) => setStatus(v as ClientStatus)}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {Object.entries(CLIENT_STATUS_LABELS).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>
-                      {label}
-                    </SelectItem>
-                  ))}
+                  <SelectItem value="active">{labels.statusActive}</SelectItem>
+                  <SelectItem value="inactive">{labels.statusInactive}</SelectItem>
+                  <SelectItem value="vip">{labels.statusVip}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
