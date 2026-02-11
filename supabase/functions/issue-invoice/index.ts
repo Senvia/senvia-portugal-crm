@@ -385,11 +385,36 @@ Deno.serve(async (req) => {
       // Use default reference
     }
 
-    // 3. Save reference
+    // 3. Generate PDF (async with polling)
+    let pdfUrl: string | null = null
+    try {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const pdfRes = await fetch(`${baseUrl}/api/pdf/${invoiceId}.json?api_key=${apiKey}`, {
+          method: 'GET',
+          headers: { 'Accept': 'application/json' },
+        })
+        if (pdfRes.status === 200) {
+          const pdfData = await pdfRes.json()
+          pdfUrl = pdfData?.output?.pdfUrl || null
+          if (pdfUrl) break
+        }
+        if (pdfRes.status === 202 || !pdfUrl) {
+          // PDF not ready yet, wait 2s
+          await new Promise(r => setTimeout(r, 2000))
+        }
+      }
+    } catch (e) {
+      console.warn('PDF generation polling failed (non-blocking):', e)
+    }
+
+    // 4. Save reference + PDF URL
     if (payment_id) {
       await supabase
         .from('sale_payments')
-        .update({ invoice_reference: invoiceReference })
+        .update({ 
+          invoice_reference: invoiceReference,
+          ...(pdfUrl ? { invoice_file_url: pdfUrl } : {}),
+        })
         .eq('id', payment_id)
     } else {
       await supabase
@@ -406,6 +431,7 @@ Deno.serve(async (req) => {
       success: true,
       invoicexpress_id: invoiceId,
       invoice_reference: invoiceReference,
+      ...(pdfUrl ? { pdf_url: pdfUrl } : {}),
     }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
