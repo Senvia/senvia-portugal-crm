@@ -5,11 +5,11 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-// Map document_type to InvoiceXpress endpoint and response key
 const TYPE_MAP: Record<string, { endpoint: string; responseKey: string }> = {
   invoice: { endpoint: 'invoices', responseKey: 'invoice' },
   invoice_receipt: { endpoint: 'invoice_receipts', responseKey: 'invoice_receipt' },
   receipt: { endpoint: 'receipts', responseKey: 'receipt' },
+  credit_note: { endpoint: 'credit_notes', responseKey: 'credit_note' },
 }
 
 async function pollWithRetry(url: string, extractor: (data: any) => string | null, attempts = 3, delayMs = 2000): Promise<string | null> {
@@ -30,6 +30,39 @@ async function pollWithRetry(url: string, extractor: (data: any) => string | nul
   return null
 }
 
+async function downloadAndUploadPdf(
+  supabase: any,
+  pdfUrl: string,
+  storagePath: string
+): Promise<string | null> {
+  try {
+    const pdfRes = await fetch(pdfUrl)
+    if (!pdfRes.ok) {
+      console.warn('Failed to download PDF:', pdfRes.status)
+      return null
+    }
+    const pdfBlob = await pdfRes.blob()
+    const arrayBuffer = await pdfBlob.arrayBuffer()
+    const uint8 = new Uint8Array(arrayBuffer)
+
+    const { error: uploadError } = await supabase.storage
+      .from('invoices')
+      .upload(storagePath, uint8, {
+        contentType: 'application/pdf',
+        upsert: true,
+      })
+
+    if (uploadError) {
+      console.error('Upload error:', uploadError)
+      return null
+    }
+    return storagePath
+  } catch (e) {
+    console.error('Download/upload error:', e)
+    return null
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
@@ -39,7 +72,6 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
-    // Auth check
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
       return new Response(JSON.stringify({ error: 'Não autorizado' }), {
@@ -66,7 +98,7 @@ Deno.serve(async (req) => {
 
     const typeConfig = TYPE_MAP[document_type]
     if (!typeConfig) {
-      return new Response(JSON.stringify({ error: `Tipo de documento inválido: ${document_type}. Use: invoice, invoice_receipt, receipt` }), {
+      return new Response(JSON.stringify({ error: `Tipo de documento inválido: ${document_type}` }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
@@ -162,26 +194,32 @@ Deno.serve(async (req) => {
       })),
     }
 
-    // 2. If sync=true, fetch PDF and QR code, then update DB
+    // 2. If sync=true, fetch PDF, download it, upload to storage, then update DB
     if (sync && sale_id) {
-      const pdfUrl = await pollWithRetry(
+      const pdfTempUrl = await pollWithRetry(
         `${baseUrl}/api/pdf/${document_id}.json?api_key=${apiKey}`,
         (data) => data?.output?.pdfUrl || null
       )
+
+      let storagePath: string | null = null
+      if (pdfTempUrl) {
+        const fileName = `${organization_id}/${document_type}_${document_id}.pdf`
+        storagePath = await downloadAndUploadPdf(supabase, pdfTempUrl, fileName)
+      }
 
       const qrCodeUrl = await pollWithRetry(
         `${baseUrl}/api/qr_codes/${document_id}.json?api_key=${apiKey}`,
         (data) => data?.qr_code?.url || null
       )
 
-      result.pdf_url = pdfUrl
+      result.pdf_url = storagePath
       result.qr_code_url = qrCodeUrl
+      result.storage_path = storagePath
 
-      // Update the appropriate table
+      // Update the appropriate table with storage path (not temp URL)
       if (payment_id) {
-        // Update sale_payments
         const updateData: any = {}
-        if (pdfUrl) updateData.invoice_file_url = pdfUrl
+        if (storagePath) updateData.invoice_file_url = storagePath
         if (qrCodeUrl) updateData.qr_code_url = qrCodeUrl
 
         if (Object.keys(updateData).length > 0) {
@@ -192,9 +230,8 @@ Deno.serve(async (req) => {
             .eq('sale_id', sale_id)
         }
       } else {
-        // Update sales
         const updateData: any = {}
-        if (pdfUrl) updateData.invoice_pdf_url = pdfUrl
+        if (storagePath) updateData.invoice_pdf_url = storagePath
         if (qrCodeUrl) updateData.qr_code_url = qrCodeUrl
 
         if (Object.keys(updateData).length > 0) {

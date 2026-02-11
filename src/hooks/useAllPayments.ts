@@ -25,6 +25,9 @@ export function useAllPayments() {
             invoice_reference,
             invoicexpress_id,
             invoicexpress_type,
+            credit_note_id,
+            credit_note_reference,
+            invoice_pdf_url,
             leads:lead_id (name),
             crm_clients:client_id (name, email)
           )
@@ -47,6 +50,8 @@ export function useAllPayments() {
         invoice_reference: payment.invoice_reference,
         invoice_file_url: payment.invoice_file_url,
         invoicexpress_id: (payment as any).invoicexpress_id || null,
+        credit_note_id: (payment as any).credit_note_id || null,
+        credit_note_reference: (payment as any).credit_note_reference || null,
         status: payment.status as PaymentRecordStatus,
         notes: payment.notes,
         created_at: payment.created_at,
@@ -58,6 +63,9 @@ export function useAllPayments() {
           invoice_reference: (payment.sales as any)?.invoice_reference || null,
           invoicexpress_id: (payment.sales as any)?.invoicexpress_id || null,
           invoicexpress_type: (payment.sales as any)?.invoicexpress_type || null,
+          credit_note_id: (payment.sales as any)?.credit_note_id || null,
+          credit_note_reference: (payment.sales as any)?.credit_note_reference || null,
+          invoice_pdf_url: (payment.sales as any)?.invoice_pdf_url || null,
         },
         client_name: payment.sales?.crm_clients?.name || null,
         lead_name: payment.sales?.leads?.name || null,
