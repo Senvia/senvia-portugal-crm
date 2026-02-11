@@ -9,12 +9,13 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
-import { Building, Users, Palette, Link2, ArrowLeft, Package, GitBranch, LayoutGrid, UserCheck, Zap, Receipt, Shield, IdCard } from "lucide-react";
+import { Building, Users, UsersRound, Palette, Link2, ArrowLeft, Package, GitBranch, LayoutGrid, UserCheck, Zap, Receipt, Shield, IdCard, KeyRound } from "lucide-react";
 import { PipelineEditor } from '@/components/settings/PipelineEditor';
 import { ProductsTab } from '@/components/settings/ProductsTab';
 import { ModulesTab } from '@/components/settings/ModulesTab';
 import { supabase } from '@/integrations/supabase/client';
 import { TeamTab } from '@/components/settings/TeamTab';
+import { TeamsSection } from '@/components/settings/TeamsSection';
 import { FormsManager } from '@/components/settings/FormsManager';
 import { GeneralContent } from '@/components/settings/GeneralContent';
 import { IntegrationsContent } from '@/components/settings/IntegrationsContent';
@@ -261,8 +262,9 @@ export default function Settings() {
   const sectionTitles: Record<SettingsSection, string> = {
     general: "Geral",
     security: "Segurança",
-    team: "Equipa",
+    team: "Acessos",
     profiles: "Perfis",
+    teams: "Equipas",
     pipeline: "Pipeline",
     modules: "Módulos",
     form: "Formulário",
@@ -331,6 +333,7 @@ export default function Settings() {
               {mobileSection === "security" && <SecuritySettings />}
               {mobileSection === "team" && canManageTeam && <TeamTab />}
               {mobileSection === "profiles" && canManageTeam && <ProfilesTab />}
+              {mobileSection === "teams" && canManageTeam && <TeamsSection />}
               {mobileSection === "pipeline" && canManageIntegrations && <PipelineEditor />}
               {mobileSection === "modules" && canManageIntegrations && <ModulesTab />}
               {mobileSection === "form" && canManageIntegrations && <FormsManager />}
@@ -404,14 +407,20 @@ export default function Settings() {
                   </TabsTrigger>
                   {canManageTeam && (
                     <TabsTrigger value="team" className="gap-2">
-                      <Users className="h-4 w-4" />
-                      Equipa
+                      <KeyRound className="h-4 w-4" />
+                      Acessos
                     </TabsTrigger>
                   )}
                   {canManageTeam && (
                     <TabsTrigger value="profiles" className="gap-2">
                       <IdCard className="h-4 w-4" />
                       Perfis
+                    </TabsTrigger>
+                  )}
+                  {canManageTeam && (
+                    <TabsTrigger value="teams" className="gap-2">
+                      <UsersRound className="h-4 w-4" />
+                      Equipas
                     </TabsTrigger>
                   )}
                   {canManageIntegrations && (
@@ -511,6 +520,12 @@ export default function Settings() {
               {canManageTeam && (
                 <TabsContent value="profiles" className="max-w-4xl">
                   <ProfilesTab />
+                </TabsContent>
+              )}
+
+              {canManageTeam && (
+                <TabsContent value="teams" className="max-w-4xl">
+                  <TeamsSection />
                 </TabsContent>
               )}
 
