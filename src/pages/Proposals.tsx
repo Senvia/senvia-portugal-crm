@@ -82,7 +82,7 @@ export default function Proposals() {
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className={cn("grid grid-cols-2 gap-4", isTelecom ? "sm:grid-cols-5" : "sm:grid-cols-4")}>
           <Card>
             <CardContent className="pt-4">
               <p className="text-sm text-muted-foreground">Total Propostas</p>
@@ -91,19 +91,19 @@ export default function Proposals() {
           </Card>
           <Card>
             <CardContent className="pt-4">
-              <p className="text-sm text-muted-foreground">
-                {isTelecom ? 'Consumo / kWp' : 'Valor Total'}
-              </p>
-              {isTelecom ? (
-                <>
-                  <p className="text-2xl font-bold text-primary">{(telecomMetrics?.totalMWh ?? 0).toFixed(1)} MWh</p>
-                  <p className="text-sm text-muted-foreground">{(telecomMetrics?.totalKWp ?? 0).toFixed(1)} kWp</p>
-                </>
-              ) : (
-                <p className="text-2xl font-bold text-primary">{formatCurrency(totalValue)}</p>
-              )}
+              <p className="text-sm text-muted-foreground">Valor Total</p>
+              <p className="text-2xl font-bold text-primary">{formatCurrency(totalValue)}</p>
             </CardContent>
           </Card>
+          {isTelecom && (
+            <Card>
+              <CardContent className="pt-4">
+                <p className="text-sm text-muted-foreground">Consumo / kWp</p>
+                <p className="text-2xl font-bold text-primary">{(telecomMetrics?.totalMWh ?? 0).toFixed(1)} MWh</p>
+                <p className="text-sm text-muted-foreground">{(telecomMetrics?.totalKWp ?? 0).toFixed(1)} kWp</p>
+              </CardContent>
+            </Card>
+          )}
           <Card>
             <CardContent className="pt-4">
               <p className="text-sm text-muted-foreground">Em Negociação</p>
