@@ -50,3 +50,6 @@ verify_jwt = false
 
 [functions.sync-invoicexpress-items]
 verify_jwt = false
+
+[functions.update-invoicexpress-item]
+verify_jwt = false
