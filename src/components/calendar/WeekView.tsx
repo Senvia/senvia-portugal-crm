@@ -8,13 +8,14 @@ import { EVENT_TYPE_COLORS } from '@/types/calendar';
 interface WeekViewProps {
   currentDate: Date;
   events: CalendarEvent[];
+  selectedDay?: Date;
   onDayClick: (date: Date) => void;
   onEventClick: (event: CalendarEvent) => void;
 }
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
-export function WeekView({ currentDate, events, onDayClick, onEventClick }: WeekViewProps) {
+export function WeekView({ currentDate, events, selectedDay, onDayClick, onEventClick }: WeekViewProps) {
   const days = useMemo(() => {
     const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
     const weekEnd = endOfWeek(currentDate, { weekStartsOn: 1 });
@@ -57,7 +58,8 @@ export function WeekView({ currentDate, events, onDayClick, onEventClick }: Week
             key={day.toISOString()}
             className={cn(
               'py-3 text-center border-l cursor-pointer hover:bg-accent/50',
-              isToday(day) && 'bg-primary/10'
+              isToday(day) && 'bg-primary/10',
+              selectedDay && isSameDay(day, selectedDay) && 'ring-2 ring-primary ring-inset bg-primary/5'
             )}
             onClick={() => onDayClick(day)}
           >
@@ -97,10 +99,10 @@ export function WeekView({ currentDate, events, onDayClick, onEventClick }: Week
                   return (
                     <button
                       key={event.id}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onEventClick(event);
-                      }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDayClick(day);
+                    }}
                       className={cn(
                         'w-full text-left rounded px-1 py-0.5 text-[10px] text-white font-medium truncate hover:opacity-90',
                         colorClass
@@ -137,10 +139,11 @@ export function WeekView({ currentDate, events, onDayClick, onEventClick }: Week
           return (
             <div
               key={day.toISOString()}
-              className={cn(
-                'relative border-l',
-                isToday(day) && 'bg-primary/5'
-              )}
+            className={cn(
+              'relative border-l',
+              isToday(day) && 'bg-primary/5',
+              selectedDay && isSameDay(day, selectedDay) && 'bg-primary/10'
+            )}
               onClick={() => onDayClick(day)}
             >
               {HOURS.map((hour) => (
@@ -157,7 +160,7 @@ export function WeekView({ currentDate, events, onDayClick, onEventClick }: Week
                     key={event.id}
                     onClick={(e) => {
                       e.stopPropagation();
-                      onEventClick(event);
+                      onDayClick(day);
                     }}
                     className={cn(
                       'absolute left-0.5 right-0.5 rounded px-1 py-0.5 text-[10px] text-white font-medium truncate cursor-pointer hover:opacity-90',
