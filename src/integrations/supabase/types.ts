@@ -1159,6 +1159,85 @@ export type Database = {
           },
         ]
       }
+      invoices: {
+        Row: {
+          client_name: string | null
+          created_at: string | null
+          date: string | null
+          document_type: string | null
+          due_date: string | null
+          id: string
+          invoicexpress_id: number
+          organization_id: string
+          payment_id: string | null
+          pdf_path: string | null
+          raw_data: Json | null
+          reference: string | null
+          sale_id: string | null
+          status: string | null
+          total: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          client_name?: string | null
+          created_at?: string | null
+          date?: string | null
+          document_type?: string | null
+          due_date?: string | null
+          id?: string
+          invoicexpress_id: number
+          organization_id: string
+          payment_id?: string | null
+          pdf_path?: string | null
+          raw_data?: Json | null
+          reference?: string | null
+          sale_id?: string | null
+          status?: string | null
+          total?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          client_name?: string | null
+          created_at?: string | null
+          date?: string | null
+          document_type?: string | null
+          due_date?: string | null
+          id?: string
+          invoicexpress_id?: number
+          organization_id?: string
+          payment_id?: string | null
+          pdf_path?: string | null
+          raw_data?: Json | null
+          reference?: string | null
+          sale_id?: string | null
+          status?: string | null
+          total?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoices_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "sale_payments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       leads: {
         Row: {
           assigned_to: string | null

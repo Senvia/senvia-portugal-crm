@@ -2,58 +2,58 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Download, Search, FileText, X } from "lucide-react";
-import { useAllPayments } from "@/hooks/useAllPayments";
+import { Download, Search, FileText, X, RefreshCw, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
+import { useInvoices, useSyncInvoices } from "@/hooks/useInvoices";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { exportToExcel } from "@/lib/export";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { DateRange } from "react-day-picker";
 import { startOfDay, endOfDay, parseISO } from "date-fns";
 import { Badge } from "@/components/ui/badge";
-import { useAuth } from "@/contexts/AuthContext";
-import { InvoiceActionsMenu } from "./InvoiceActionsMenu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CreditNotesContent } from "./CreditNotesContent";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 function InvoicesTable() {
-  const { data: payments, isLoading } = useAllPayments();
-  const { organization } = useAuth();
-  const organizationId = organization?.id || '';
+  const { data: invoicesData, isLoading } = useInvoices();
+  const syncInvoices = useSyncInvoices();
+  const hasSynced = useRef(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
+  // Auto-sync on mount (once per session)
+  useEffect(() => {
+    if (!hasSynced.current && !syncInvoices.isPending) {
+      hasSynced.current = true;
+      syncInvoices.mutate();
+    }
+  }, []);
 
   const invoices = useMemo(() => {
-    if (!payments) return [];
+    if (!invoicesData) return [];
 
-    const withInvoice = payments.filter(p => 
-      p.invoice_reference || p.sale.invoice_reference || p.sale.invoicexpress_id
-    );
-
-    return withInvoice.filter(payment => {
+    return invoicesData.filter(invoice => {
       if (dateRange?.from) {
-        const paymentDate = parseISO(payment.payment_date);
-        if (paymentDate < startOfDay(dateRange.from)) return false;
-        if (dateRange.to && paymentDate > endOfDay(dateRange.to)) return false;
+        if (!invoice.date) return false;
+        const invoiceDate = parseISO(invoice.date);
+        if (invoiceDate < startOfDay(dateRange.from)) return false;
+        if (dateRange.to && invoiceDate > endOfDay(dateRange.to)) return false;
       }
 
       if (searchTerm) {
         const search = searchTerm.toLowerCase();
-        const clientName = payment.client_name?.toLowerCase() || '';
-        const leadName = payment.lead_name?.toLowerCase() || '';
-        const saleCode = payment.sale.code?.toLowerCase() || '';
-        const invoiceRef = (payment.invoice_reference || payment.sale.invoice_reference || '').toLowerCase();
-        
-        return invoiceRef.includes(search) ||
-               clientName.includes(search) || 
-               leadName.includes(search) || 
-               saleCode.includes(search);
+        const ref = (invoice.reference || '').toLowerCase();
+        const client = (invoice.client_name || '').toLowerCase();
+        return ref.includes(search) || client.includes(search);
       }
 
       return true;
     });
-  }, [payments, searchTerm, dateRange]);
+  }, [invoicesData, searchTerm, dateRange]);
 
   const hasActiveFilters = searchTerm || dateRange?.from;
 
@@ -63,53 +63,80 @@ function InvoicesTable() {
   };
 
   const handleExport = () => {
-    const exportData = invoices.map(p => ({
-      Referência: p.invoice_reference || p.sale.invoice_reference || '-',
-      Origem: p.sale.invoicexpress_id ? 'InvoiceXpress' : 'Manual',
-      Data: formatDate(p.payment_date),
-      Venda: `#${p.sale.code}`,
-      Cliente: p.client_name || p.lead_name || '-',
-      Valor: p.amount,
+    const exportData = invoices.map(inv => ({
+      Referência: inv.reference || '-',
+      Tipo: getDocTypeLabel(inv.document_type),
+      Data: inv.date ? formatDate(inv.date) : '-',
+      Cliente: inv.client_name || '-',
+      Estado: inv.status || '-',
+      Valor: inv.total,
     }));
     exportToExcel(exportData, 'faturas');
   };
 
-  const getInvoiceRef = (invoice: typeof invoices[0]) => {
-    return invoice.invoice_reference || invoice.sale.invoice_reference || '-';
+  const getDocTypeLabel = (type: string) => {
+    switch (type) {
+      case 'invoice': return 'Fatura';
+      case 'invoice_receipt': return 'Fatura-Recibo';
+      case 'simplified_invoice': return 'Fatura Simplificada';
+      default: return type;
+    }
   };
 
-  const isInvoiceXpress = (invoice: typeof invoices[0]) => {
-    return !!invoice.sale.invoicexpress_id || !!invoice.invoicexpress_id;
-  };
-
-  const getDocumentType = (invoice: typeof invoices[0]): "invoice" | "invoice_receipt" | "receipt" => {
-    if (invoice.invoicexpress_id) return 'receipt';
-    const saleType = invoice.sale.invoicexpress_type;
-    if (saleType === 'invoice_receipts') return 'invoice_receipt';
-    return 'invoice';
-  };
-
-  const getInvoicexpressId = (invoice: typeof invoices[0]): number | null => {
-    return invoice.invoicexpress_id || invoice.sale.invoicexpress_id || null;
-  };
-
-  const getFileUrl = (invoice: typeof invoices[0]): string | null => {
-    return invoice.invoice_file_url || invoice.sale.invoice_pdf_url || null;
+  const handleDownload = async (id: string, pdfPath: string | null) => {
+    if (!pdfPath) return;
+    setDownloadingId(id);
+    try {
+      if (pdfPath.startsWith('http')) {
+        window.open(pdfPath, '_blank');
+        return;
+      }
+      const { data, error } = await supabase.storage
+        .from('invoices')
+        .createSignedUrl(pdfPath, 60);
+      if (error) {
+        toast.error("Erro ao obter ficheiro");
+        return;
+      }
+      if (data?.signedUrl) {
+        window.open(data.signedUrl, '_blank');
+      }
+    } catch {
+      toast.error("Erro ao fazer download");
+    } finally {
+      setDownloadingId(null);
+    }
   };
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-lg font-semibold">Referências de Faturas</h2>
+          <h2 className="text-lg font-semibold">Faturas</h2>
           <p className="text-sm text-muted-foreground">
-            Faturas associadas aos pagamentos registados
+            Faturas importadas do InvoiceXpress
           </p>
         </div>
-        <Button onClick={handleExport} variant="outline" size="sm" className="gap-2">
-          <Download className="h-4 w-4" />
-          <span className="hidden sm:inline">Exportar</span>
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => syncInvoices.mutate()}
+            disabled={syncInvoices.isPending}
+            className="gap-2"
+          >
+            {syncInvoices.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4" />
+            )}
+            <span className="hidden sm:inline">Sincronizar</span>
+          </Button>
+          <Button onClick={handleExport} variant="outline" size="sm" className="gap-2">
+            <Download className="h-4 w-4" />
+            <span className="hidden sm:inline">Exportar</span>
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -118,7 +145,7 @@ function InvoicesTable() {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Pesquisar por referência, cliente ou venda..."
+                placeholder="Pesquisar por referência ou cliente..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-9"
@@ -164,7 +191,7 @@ function InvoicesTable() {
                 <Button variant="link" onClick={clearFilters} className="mt-2">Limpar filtros</Button>
               ) : (
                 <p className="text-xs text-muted-foreground mt-1">
-                  As faturas aparecem quando adiciona uma referência ao registar pagamentos
+                  Clique em "Sincronizar" para importar faturas do InvoiceXpress
                 </p>
               )}
             </div>
@@ -174,52 +201,65 @@ function InvoicesTable() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Referência</TableHead>
+                    <TableHead>Tipo</TableHead>
                     <TableHead>Data</TableHead>
-                    <TableHead>Venda</TableHead>
                     <TableHead>Cliente</TableHead>
+                    <TableHead className="text-center">Estado</TableHead>
                     <TableHead className="text-right">Valor</TableHead>
-                    <TableHead className="text-center w-[60px]">Ações</TableHead>
+                    <TableHead className="text-center">Associada</TableHead>
+                    <TableHead className="text-center w-[60px]">PDF</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {invoices.map((invoice) => (
                     <TableRow key={invoice.id}>
+                      <TableCell className="font-medium">
+                        {invoice.reference || '-'}
+                      </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{getInvoiceRef(invoice)}</span>
-                          {isInvoiceXpress(invoice) && (
-                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 whitespace-nowrap">
-                              InvoiceXpress
-                            </Badge>
-                          )}
-                        </div>
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 whitespace-nowrap">
+                          {getDocTypeLabel(invoice.document_type)}
+                        </Badge>
                       </TableCell>
                       <TableCell className="whitespace-nowrap">
-                        {formatDate(invoice.payment_date)}
-                      </TableCell>
-                      <TableCell>
-                        <span className="font-medium">#{invoice.sale.code}</span>
+                        {invoice.date ? formatDate(invoice.date) : '-'}
                       </TableCell>
                       <TableCell className="max-w-[150px] truncate">
-                        {invoice.client_name || invoice.lead_name || '-'}
-                      </TableCell>
-                      <TableCell className="text-right font-semibold whitespace-nowrap">
-                        {formatCurrency(invoice.amount)}
+                        {invoice.client_name || '-'}
                       </TableCell>
                       <TableCell className="text-center">
-                        <InvoiceActionsMenu
-                          invoice={{
-                            id: invoice.id,
-                            invoicexpressId: getInvoicexpressId(invoice),
-                            invoiceReference: getInvoiceRef(invoice),
-                            invoiceFileUrl: getFileUrl(invoice),
-                            documentType: getDocumentType(invoice),
-                            saleId: invoice.sale.id,
-                            paymentId: invoice.invoicexpress_id ? invoice.id : undefined,
-                            clientEmail: null,
-                            organizationId,
-                          }}
-                        />
+                        <Badge variant={invoice.status === 'settled' ? 'default' : 'secondary'} className="text-xs">
+                          {invoice.status || '-'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right font-semibold whitespace-nowrap">
+                        {formatCurrency(invoice.total)}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {invoice.sale_id || invoice.payment_id ? (
+                          <CheckCircle2 className="h-4 w-4 text-green-500 mx-auto" />
+                        ) : (
+                          <AlertCircle className="h-4 w-4 text-yellow-500 mx-auto" />
+                        )}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {invoice.pdf_path ? (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => handleDownload(invoice.id, invoice.pdf_path)}
+                            disabled={downloadingId === invoice.id}
+                          >
+                            {downloadingId === invoice.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Download className="h-4 w-4" />
+                            )}
+                          </Button>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">-</span>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
