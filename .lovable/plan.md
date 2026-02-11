@@ -1,38 +1,76 @@
 
 
-## Correcao do Modal de Rascunho e IVA
+## Taxa IVA por Produto/Serviço
 
-### Problemas Identificados
+### Problema
+Atualmente, todos os itens da fatura usam a taxa IVA global da organizacao (`tax_config`). Se um produto e isento e outro tem 23%, nao ha forma de distinguir -- todos levam a mesma taxa.
 
-**1. Campo IVA com nome errado (bug critico)**
-- A base de dados guarda `tax_config.tax_value` (ex: 23 ou 0)
-- O modal de rascunho le `taxConfig.tax_rate` que **nao existe** no objeto
-- Resultado: o modal mostra sempre "Isento" (porque `tax_rate` e `undefined`, default 0), mas a edge function envia IVA a 23% porque le o campo correto `tax_value`
+### Solucao
+Adicionar campos `tax_value` e `tax_exemption_reason` a cada produto. Quando a fatura e gerada, a edge function usa a taxa do produto em vez da taxa global.
 
-**2. A tua organizacao tem `tax_value: 23` na base de dados**
-- Mesmo que tenhas configurado "Isento" no InvoiceXpress, nas definicoes do Senvia o IVA esta a 23%
-- Tens de ir a Definicoes -> Integracoes -> InvoiceXpress e guardar com taxa 0% e motivo de isencao
+### Alteracoes
 
-### Correcoes
+**1. Migracao de base de dados (tabela `products`)**
+- Adicionar coluna `tax_value NUMERIC DEFAULT NULL` (null = usar taxa global da org)
+- Adicionar coluna `tax_exemption_reason TEXT DEFAULT NULL`
 
-**`src/components/sales/InvoiceDraftModal.tsx`**
-- Alterar a interface de props para usar `tax_value` em vez de `tax_rate` (alinhar com o que a DB guarda)
-- Ler `taxConfig?.tax_value` em vez de `taxConfig?.tax_rate`
+**2. Tipo `Product` (`src/types/proposals.ts`)**
+- Adicionar `tax_value?: number | null` e `tax_exemption_reason?: string | null`
 
-**`src/components/sales/SalePaymentsList.tsx`**
-- Alterar a interface `taxConfig` de `{ tax_rate?: number; ... }` para `{ tax_value?: number; ... }`
+**3. Modal de criacao (`src/components/settings/CreateProductModal.tsx`)**
+- Adicionar Select com opcoes: "Usar taxa da organizacao (padrao)", "IVA 23%", "IVA 6%", "IVA 13%", "Isento (0%)"
+- Quando "Isento" e selecionado, mostrar campo para motivo de isencao (ex: M10)
+- Guardar `tax_value` e `tax_exemption_reason` no produto
 
-**`src/components/sales/SaleDetailsModal.tsx`**
-- Alterar o cast de `tax_rate` para `tax_value` na passagem de props
+**4. Modal de edicao (`src/components/settings/EditProductModal.tsx`)**
+- Mesmo campo Select para taxa IVA
+- Pre-preencher com os valores existentes do produto
+
+**5. Hook `useProducts` (`src/hooks/useProducts.ts`)**
+- Adicionar `tax_value` e `tax_exemption_reason` ao `useCreateProduct` e `useUpdateProduct`
+
+**6. Listagem de produtos (`src/components/settings/ProductsTab.tsx`)**
+- Mostrar badge com taxa IVA ao lado do preco (ex: "23%", "Isento", "Org default")
+
+**7. Edge function `issue-invoice` (`supabase/functions/issue-invoice/index.ts`)**
+- No fluxo legacy (sale_items), fazer JOIN com tabela products para obter `tax_value` e `tax_exemption_reason`
+- Se o produto tem `tax_value` definido, usar essa taxa; senao, usar a taxa global da org
+- Alterar `buildItem` para aceitar taxa por item
+
+**8. Modal de rascunho (`src/components/sales/InvoiceDraftModal.tsx`)**
+- Se pagamento individual, mostrar a taxa global (comportamento atual)
+- Se venda completa com items, mostrar a taxa de cada item
 
 ### Detalhes tecnicos
 
-| Ficheiro | O que muda |
+| Ficheiro | Alteracao |
 |---|---|
-| `InvoiceDraftModal.tsx` | Interface: `tax_rate` -> `tax_value`; logica interna usa `tax_value` |
-| `SalePaymentsList.tsx` | Interface de props: `tax_rate` -> `tax_value` |
-| `SaleDetailsModal.tsx` | Cast no JSX: `tax_rate` -> `tax_value` |
+| Migracao SQL | `ALTER TABLE products ADD COLUMN tax_value NUMERIC DEFAULT NULL, ADD COLUMN tax_exemption_reason TEXT DEFAULT NULL` |
+| `src/types/proposals.ts` | Adicionar campos ao `Product` interface |
+| `src/components/settings/CreateProductModal.tsx` | Campo Select para taxa IVA + campo motivo isencao |
+| `src/components/settings/EditProductModal.tsx` | Mesmo campo Select pre-preenchido |
+| `src/hooks/useProducts.ts` | Incluir novos campos nas mutations |
+| `src/components/settings/ProductsTab.tsx` | Badge com taxa IVA na listagem |
+| `supabase/functions/issue-invoice/index.ts` | Ler taxa do produto via JOIN; usar por item |
+| `src/components/sales/InvoiceDraftModal.tsx` | Mostrar taxa por item quando aplicavel |
 
-### Nota importante
-Apos esta correcao, o modal vai mostrar os dados **reais** (IVA 23% se a tua config estiver a 23%). Para emitir sem IVA, tens de ir a Definicoes -> Integracoes -> InvoiceXpress, colocar a taxa a 0% e preencher o motivo de isencao, e guardar.
+### Logica da taxa por item na edge function
+
+```text
+Para cada sale_item:
+  1. Se sale_item.product_id existe E product.tax_value != null:
+     -> Usar product.tax_value e product.tax_exemption_reason
+  2. Senao:
+     -> Usar org.tax_config (taxa global)
+```
+
+### Opcoes de IVA no Select
+
+| Label | tax_value | tax_exemption_reason |
+|---|---|---|
+| Usar taxa da organizacao | null | null |
+| IVA 23% | 23 | null |
+| IVA 13% (Intermédia) | 13 | null |
+| IVA 6% (Reduzida) | 6 | null |
+| Isento (0%) | 0 | (campo obrigatorio) |
 
