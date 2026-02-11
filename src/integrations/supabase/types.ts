@@ -2132,6 +2132,7 @@ export type Database = {
           organization_id: string
           payment_date: string
           payment_method: string | null
+          qr_code_url: string | null
           sale_id: string
           status: string
           updated_at: string | null
@@ -2147,6 +2148,7 @@ export type Database = {
           organization_id: string
           payment_date: string
           payment_method?: string | null
+          qr_code_url?: string | null
           sale_id: string
           status?: string
           updated_at?: string | null
@@ -2162,6 +2164,7 @@ export type Database = {
           organization_id?: string
           payment_date?: string
           payment_method?: string | null
+          qr_code_url?: string | null
           sale_id?: string
           status?: string
           updated_at?: string | null
@@ -2213,6 +2216,7 @@ export type Database = {
           payment_status: string | null
           proposal_id: string | null
           proposal_type: string | null
+          qr_code_url: string | null
           recurring_status: string | null
           recurring_value: number | null
           sale_date: string | null
@@ -2250,6 +2254,7 @@ export type Database = {
           payment_status?: string | null
           proposal_id?: string | null
           proposal_type?: string | null
+          qr_code_url?: string | null
           recurring_status?: string | null
           recurring_value?: number | null
           sale_date?: string | null
@@ -2287,6 +2292,7 @@ export type Database = {
           payment_status?: string | null
           proposal_id?: string | null
           proposal_type?: string | null
+          qr_code_url?: string | null
           recurring_status?: string | null
           recurring_value?: number | null
           sale_date?: string | null

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { format } from "date-fns";
 import { pt } from "date-fns/locale";
-import { Plus, Pencil, Trash2, CreditCard, Receipt, AlertCircle, Download, Ban, FileText } from "lucide-react";
+import { Plus, Pencil, Trash2, CreditCard, Receipt, AlertCircle, Download, Ban, FileText, QrCode } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -42,6 +42,7 @@ interface SalePaymentsListProps {
   hasInvoiceXpress?: boolean;
   invoicexpressId?: number | null;
   invoiceReference?: string | null;
+  invoiceQrCodeUrl?: string | null;
   clientNif?: string | null;
   clientName?: string | null;
   taxConfig?: { tax_value?: number; tax_exemption_reason?: string } | null;
@@ -55,6 +56,7 @@ export function SalePaymentsList({
   hasInvoiceXpress = false,
   invoicexpressId,
   invoiceReference,
+  invoiceQrCodeUrl,
   clientNif,
   clientName,
   taxConfig,
@@ -142,13 +144,23 @@ export function SalePaymentsList({
                   <FileText className="h-4 w-4 text-primary" />
                   <span className="font-medium">Fatura: {invoiceReference}</span>
                 </div>
+                {invoiceQrCodeUrl && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => window.open(invoiceQrCodeUrl, '_blank')}
+                    title="Ver QR Code"
+                  >
+                    <QrCode className="h-3.5 w-3.5" />
+                  </Button>
+                )}
                 {invoicexpressId && (
                   <Button
                     variant="ghost"
                     size="sm"
                     className="h-7 text-xs text-destructive hover:text-destructive"
                     onClick={() => {
-                      // Use a fake payment object for the cancel dialog
                       setCancellingPayment({
                         id: '__sale__',
                         invoicexpress_id: invoicexpressId,
@@ -259,6 +271,17 @@ export function SalePaymentsList({
                     >
                       <Receipt className="h-3 w-3 mr-1" />
                       Gerar Recibo
+                    </Button>
+                  )}
+                  {payment.qr_code_url && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => window.open(payment.qr_code_url!, '_blank')}
+                      title="Ver QR Code"
+                    >
+                      <QrCode className="h-3.5 w-3.5" />
                     </Button>
                   )}
                   {payment.invoice_file_url && (

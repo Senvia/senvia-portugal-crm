@@ -212,6 +212,27 @@ Deno.serve(async (req) => {
       }
     }
 
+    // QR Code polling for receipt
+    let qrCodeUrl: string | null = null
+    if (receiptId) {
+      try {
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const qrRes = await fetch(`${baseUrl}/api/qr_codes/${receiptId}.json?api_key=${apiKey}`, {
+            method: 'GET',
+            headers: { 'Accept': 'application/json' },
+          })
+          if (qrRes.status === 200) {
+            const qrData = await qrRes.json()
+            qrCodeUrl = qrData?.qr_code?.url || null
+            if (qrCodeUrl) break
+          }
+          await new Promise(r => setTimeout(r, 2000))
+        }
+      } catch (e) {
+        console.warn('QR Code polling failed (non-blocking):', e)
+      }
+    }
+
     // Save receipt reference in sale_payment
     const fileUrl = pdfUrl || receiptPermalink || null
     await supabase
@@ -220,6 +241,7 @@ Deno.serve(async (req) => {
         invoice_reference: receiptReference,
         invoicexpress_id: receiptId || null,
         ...(fileUrl ? { invoice_file_url: fileUrl } : {}),
+        ...(qrCodeUrl ? { qr_code_url: qrCodeUrl } : {}),
       })
       .eq('id', payment_id)
 
@@ -228,6 +250,7 @@ Deno.serve(async (req) => {
       receipt_id: receiptId,
       invoice_reference: receiptReference,
       ...(pdfUrl ? { pdf_url: pdfUrl } : {}),
+      ...(qrCodeUrl ? { qr_code_url: qrCodeUrl } : {}),
     }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
