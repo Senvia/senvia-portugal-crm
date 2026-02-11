@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { usePersistedState } from "@/hooks/usePersistedState";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ResponsiveKanban } from "@/components/leads/ResponsiveKanban";
 import { LeadsTableView } from "@/components/leads/LeadsTableView";
@@ -70,9 +71,9 @@ export default function Leads() {
   const [isCreateClientModalOpen, setIsCreateClientModalOpen] = useState(false);
   const [newlyCreatedClientId, setNewlyCreatedClientId] = useState<string | null>(null);
   const [isChainedFlow, setIsChainedFlow] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string[]>([]);
-  const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({ from: undefined, to: undefined });
+  const [searchQuery, setSearchQuery] = usePersistedState("leads-search-v1", "");
+  const [statusFilter, setStatusFilter] = usePersistedState<string[]>("leads-status-v1", []);
+  const [dateRange, setDateRange] = usePersistedState<{ from: Date | undefined; to: Date | undefined }>("leads-daterange-v1", { from: undefined, to: undefined });
   const [viewMode, setViewMode] = useState<'kanban' | 'table'>(() => {
     const saved = localStorage.getItem('leads-view-mode');
     return (saved === 'table' || saved === 'kanban') ? saved : 'kanban';

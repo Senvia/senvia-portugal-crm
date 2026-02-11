@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { usePersistedState } from "@/hooks/usePersistedState";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProposals, useUpdateProposal } from '@/hooks/useProposals';
@@ -28,8 +29,8 @@ export default function Proposals() {
   const { profile, organization } = useAuth();
   const { data: proposals = [], isLoading } = useProposals();
   
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<ProposalStatus | 'all'>('all');
+  const [search, setSearch] = usePersistedState('proposals-search-v1', '');
+  const [statusFilter, setStatusFilter] = usePersistedState<ProposalStatus | 'all'>('proposals-status-v1', 'all');
   const [selectedProposal, setSelectedProposal] = useState<Proposal | null>(null);
   const [createModalOpen, setCreateModalOpen] = useState(false);
 

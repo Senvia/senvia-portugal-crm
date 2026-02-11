@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { usePersistedState } from "@/hooks/usePersistedState";
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
@@ -10,8 +11,8 @@ import { ReviewRequestModal } from '@/components/finance/ReviewRequestModal';
 import type { InternalRequest, RequestType, RequestStatus } from '@/types/internal-requests';
 
 export default function InternalRequests() {
-  const [filterType, setFilterType] = useState<RequestType | 'all'>('all');
-  const [filterStatus, setFilterStatus] = useState<RequestStatus | 'all'>('all');
+  const [filterType, setFilterType] = usePersistedState<RequestType | 'all'>('requests-type-v1', 'all');
+  const [filterStatus, setFilterStatus] = usePersistedState<RequestStatus | 'all'>('requests-status-v1', 'all');
   const [showSubmit, setShowSubmit] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<InternalRequest | null>(null);
 

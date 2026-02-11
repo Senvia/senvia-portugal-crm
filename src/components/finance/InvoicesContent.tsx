@@ -8,6 +8,7 @@ import { useCreditNotes, useSyncCreditNotes } from "@/hooks/useCreditNotes";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useState, useMemo, useEffect, useRef } from "react";
+import { usePersistedState } from "@/hooks/usePersistedState";
 import { exportToExcel } from "@/lib/export";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { DateRange } from "react-day-picker";
@@ -50,8 +51,8 @@ export function InvoicesContent() {
   const syncInvoices = useSyncInvoices();
   const syncCreditNotes = useSyncCreditNotes();
   const hasSynced = useRef(false);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [dateRange, setDateRange] = useState<DateRange | undefined>();
+  const [searchTerm, setSearchTerm] = usePersistedState("invoices-search-v1", "");
+  const [dateRange, setDateRange] = usePersistedState<DateRange | undefined>("invoices-daterange-v1", undefined);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const SORT_KEY = 'finance-invoices-sort-v1';
   const VALID_FIELDS: SortField[] = ['reference', 'document_type', 'date', 'client_name', 'status', 'total'];

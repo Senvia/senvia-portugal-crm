@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { usePersistedState } from "@/hooks/usePersistedState";
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -40,9 +41,9 @@ export default function Expenses() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   // Filters
-  const [search, setSearch] = useState('');
-  const [dateRange, setDateRange] = useState<DateRange | undefined>();
-  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [search, setSearch] = usePersistedState('expenses-search-v1', '');
+  const [dateRange, setDateRange] = usePersistedState<DateRange | undefined>('expenses-daterange-v1', undefined);
+  const [categoryFilter, setCategoryFilter] = usePersistedState('expenses-category-v1', 'all');
 
   const filteredExpenses = useMemo(() => {
     if (!expenses) return [];

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { usePersistedState } from "@/hooks/usePersistedState";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,7 +19,8 @@ import { InvoicesContent } from "@/components/finance/InvoicesContent";
 import InternalRequests from "@/pages/finance/InternalRequests";
 
 export default function Finance() {
-  const [dateRange, setDateRange] = useState<DateRange | undefined>();
+  const [dateRange, setDateRange] = usePersistedState<DateRange | undefined>('finance-daterange-v1', undefined);
+  const [activeTab, setActiveTab] = usePersistedState('finance-tab-v1', 'resumo');
   const { stats, isLoading } = useFinanceStats({ dateRange });
   const navigate = useNavigate();
 
@@ -44,7 +45,7 @@ export default function Finance() {
         </div>
 
         {/* Tabs */}
-        <Tabs defaultValue="resumo" className="space-y-6">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList>
             <TabsTrigger value="resumo">Resumo</TabsTrigger>
             <TabsTrigger value="faturas">Faturas</TabsTrigger>
