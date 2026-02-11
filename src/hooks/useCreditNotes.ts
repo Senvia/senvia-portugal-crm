@@ -19,6 +19,7 @@ export interface CreditNoteRow {
   raw_data: any;
   created_at: string;
   updated_at: string;
+  related_invoice_reference: string | null;
 }
 
 export function useCreditNotes() {
@@ -41,7 +42,7 @@ export function useCreditNotes() {
         throw error;
       }
 
-      return (data || []).map((row: any) => ({
+      const creditNotes = (data || []).map((row: any) => ({
         id: row.id,
         organization_id: row.organization_id,
         invoicexpress_id: row.invoicexpress_id,
@@ -57,7 +58,37 @@ export function useCreditNotes() {
         raw_data: row.raw_data,
         created_at: row.created_at,
         updated_at: row.updated_at,
+        related_invoice_reference: null as string | null,
       }));
+
+      // Fetch invoice references for related_invoice_id
+      const relatedIds = creditNotes
+        .map((cn: CreditNoteRow) => cn.related_invoice_id)
+        .filter((id): id is number => id !== null);
+
+      if (relatedIds.length > 0) {
+        const { data: invData } = await (supabase as any)
+          .from('invoices')
+          .select('invoicexpress_id, reference')
+          .eq('organization_id', organizationId)
+          .in('invoicexpress_id', relatedIds);
+
+        if (invData && invData.length > 0) {
+          const invMap = new Map<number, string>();
+          for (const inv of invData) {
+            if (inv.invoicexpress_id && inv.reference) {
+              invMap.set(inv.invoicexpress_id, inv.reference);
+            }
+          }
+          for (const cn of creditNotes) {
+            if (cn.related_invoice_id) {
+              cn.related_invoice_reference = invMap.get(cn.related_invoice_id) || null;
+            }
+          }
+        }
+      }
+
+      return creditNotes;
     },
     enabled: !!organizationId,
   });
@@ -80,6 +111,7 @@ export function useSyncCreditNotes() {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['credit-notes'] });
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
       queryClient.invalidateQueries({ queryKey: ['sales'] });
       queryClient.invalidateQueries({ queryKey: ['all-payments'] });
       toast({

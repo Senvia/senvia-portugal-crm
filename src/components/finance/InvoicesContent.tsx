@@ -226,6 +226,7 @@ function InvoicesTable() {
                     <TableHead>Data</TableHead>
                     <TableHead>Cliente</TableHead>
                     <TableHead className="text-center">Estado</TableHead>
+                    <TableHead className="text-center">N. Crédito</TableHead>
                     <TableHead className="text-right">Valor</TableHead>
                     <TableHead className="text-center">Associada</TableHead>
                     <TableHead className="text-center w-[60px]">PDF</TableHead>
@@ -252,6 +253,15 @@ function InvoicesTable() {
                         <Badge variant={getStatusVariant(invoice.status)} className="text-xs">
                           {getStatusLabel(invoice.status)}
                         </Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {invoice.credit_note_reference ? (
+                          <Badge variant="outline" className="text-xs">
+                            {invoice.credit_note_reference}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">-</span>
+                        )}
                       </TableCell>
                       <TableCell className="text-right font-semibold whitespace-nowrap">
                         {formatCurrency(invoice.total)}
