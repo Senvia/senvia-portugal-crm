@@ -78,6 +78,7 @@ export interface InvoiceDetailsData {
   }>;
   tax_summary: InvoiceTaxSummary[];
   pdf_url?: string | null;
+  pdf_signed_url?: string | null;
   bank_info?: any;
 }
 
