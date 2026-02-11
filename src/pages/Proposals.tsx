@@ -21,6 +21,7 @@ import {
 import type { Proposal, ProposalStatus } from '@/types/proposals';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
+import { useTelecomProposalMetrics } from '@/hooks/useTelecomProposalMetrics';
 import { pt } from 'date-fns/locale';
 
 export default function Proposals() {
@@ -28,6 +29,8 @@ export default function Proposals() {
   useProposalsRealtime();
   const { profile, organization } = useAuth();
   const { data: proposals = [], isLoading } = useProposals();
+  const isTelecom = organization?.niche === 'telecom';
+  const { data: telecomMetrics } = useTelecomProposalMetrics();
   
   const [search, setSearch] = usePersistedState('proposals-search-v1', '');
   const [statusFilter, setStatusFilter] = usePersistedState<ProposalStatus | 'all'>('proposals-status-v1', 'all');
@@ -88,8 +91,17 @@ export default function Proposals() {
           </Card>
           <Card>
             <CardContent className="pt-4">
-              <p className="text-sm text-muted-foreground">Valor Total</p>
-              <p className="text-2xl font-bold text-primary">{formatCurrency(totalValue)}</p>
+              <p className="text-sm text-muted-foreground">
+                {isTelecom ? 'Consumo / kWp' : 'Valor Total'}
+              </p>
+              {isTelecom ? (
+                <>
+                  <p className="text-2xl font-bold text-primary">{(telecomMetrics?.totalMWh ?? 0).toFixed(1)} MWh</p>
+                  <p className="text-sm text-muted-foreground">{(telecomMetrics?.totalKWp ?? 0).toFixed(1)} kWp</p>
+                </>
+              ) : (
+                <p className="text-2xl font-bold text-primary">{formatCurrency(totalValue)}</p>
+              )}
             </CardContent>
           </Card>
           <Card>
