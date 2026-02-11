@@ -1,23 +1,41 @@
 
 
-## Corrigir Erro do Iframe no Modal de Faturas
+## Exibir o PDF da Fatura Directamente no Modal
 
-### Problema
+### O que muda
 
-O InvoiceXpress bloqueia o carregamento em iframes externos atraves de `X-Frame-Options`, por isso a tab "Documento" mostra apenas a mensagem "recusou estabelecer ligacao".
+Em vez do botao "Ver no InvoiceXpress", o modal passa a mostrar o PDF real do documento embebido directamente. O PDF e carregado do nosso proprio storage (sem bloqueio de iframe). Se o PDF ainda nao existir no storage, o sistema descarrega-o automaticamente do InvoiceXpress na primeira visualizacao.
 
-### Solucao
+### Como funciona
 
-Remover o sistema de tabs e o iframe. A vista de dados estruturados (emitente, cliente, itens, impostos, sumario) passa a ser a unica vista, mostrada directamente sem tabs. O botao "Ver no InvoiceXpress" que ja existe no final abre o permalink numa nova janela do browser, permitindo ver o documento original quando necessario.
+1. Quando o modal abre, a edge function verifica se o PDF ja existe no storage
+2. Se nao existir, descarrega-o do InvoiceXpress e guarda-o
+3. Devolve um signed URL (link temporario seguro) do PDF
+4. O modal mostra o PDF num iframe/embed que ocupa a area principal
 
 ### Alteracoes
 
-**Ficheiro: `src/components/sales/InvoiceDetailsModal.tsx`**
+**Ficheiro 1: `supabase/functions/get-invoice-details/index.ts`**
 
-1. Remover a importacao de `Tabs`, `TabsList`, `TabsTrigger`, `TabsContent`
-2. Remover todo o bloco de tabs (linhas 148-383) e manter apenas o conteudo da tab "dados" (linhas 170-382) directamente no modal
-3. Remover a logica condicional de tamanho do modal baseada no `permalink` - usar sempre `max-w-2xl`
-4. Manter o botao "Ver no InvoiceXpress" que abre o `permalink` numa nova janela
-5. Manter todos os botoes de accao no footer (PDF, Enviar, Nota Credito, Anular)
+- Sempre que o modal abre (nao apenas no sync), verificar se o PDF ja existe no storage
+- Se existir, gerar um signed URL e devolver no campo `pdf_url`
+- Se nao existir, descarregar do InvoiceXpress via `/api/pdf/{id}.json`, guardar no bucket `invoices`, e devolver o signed URL
+- Novo campo na resposta: `pdf_signed_url` (URL temporario pronto a usar no iframe)
 
-O resultado e um modal limpo com todos os dados estruturados visiveis imediatamente, sem tabs, sem iframe.
+**Ficheiro 2: `src/hooks/useInvoiceDetails.ts`**
+
+- Adicionar `pdf_signed_url: string | null` a interface `InvoiceDetailsData`
+
+**Ficheiro 3: `src/components/sales/InvoiceDetailsModal.tsx`**
+
+- Substituir o botao "Ver no InvoiceXpress" por um bloco de visualizacao do PDF
+- Usar `<iframe src={details.pdf_signed_url} />` para embeber o PDF directamente
+- O iframe ocupa a altura disponivel do modal (cerca de 500px)
+- Se o PDF nao estiver disponivel (a carregar pela primeira vez), mostrar um spinner com mensagem "A preparar documento..."
+- Manter o botao "Ver no InvoiceXpress" como fallback secundario caso o PDF falhe
+- Manter todos os botoes de accao no footer (Download PDF, Enviar, Nota Credito, Anular)
+
+### Resultado
+
+O utilizador clica numa fatura e ve o documento PDF real directamente no modal, sem precisar de abrir outra janela ou tab.
+
