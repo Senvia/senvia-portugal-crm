@@ -1,35 +1,32 @@
 
 
-## Adicionar Ordenacao com Setas nas Colunas da Tabela de Pagamentos
+## Corrigir Botao "Adicionar Pagamento" para Considerar Agendados
 
-### O que muda
+### Problema
 
-As colunas da tabela de pagamentos passam a ter **setas de ordenacao clicaveis** (igual ao que ja existe na tabela de Leads). Ao clicar numa coluna, os dados sao ordenados por essa coluna. Clicar novamente inverte a direcao. A ultima ordenacao escolhida permanece ativa enquanto o utilizador estiver na pagina.
+O calculo de `remaining` em `calculatePaymentSummary` usa apenas o `totalPaid` (pagamentos com status "paid"). Os pagamentos agendados (status "pending") nao sao subtraidos. Resultado: mesmo quando o valor total ja esta coberto por pagamentos agendados + pagos, o botao "Adicionar Pagamento" continua visivel.
 
-### Colunas ordenáveis
+**Codigo atual (linha 139 de `useSalePayments.ts`):**
+```
+const remaining = Math.max(0, saleTotal - totalPaid);
+```
 
-- **Data** (por data do pagamento)
-- **Venda** (por codigo da venda)
-- **Cliente** (por nome do cliente/lead)
-- **Valor** (por montante)
-- **Metodo** (por metodo de pagamento)
-- **Estado** (por estado do pagamento)
+### Solucao
 
-A coluna "Fatura" e "Acoes" nao serao ordenaveis.
+Adicionar uma nova propriedade `remainingToSchedule` ao summary que considera pagos **e** agendados. O botao "Adicionar Pagamento" passa a usar este valor em vez de `remaining`.
 
 ### Detalhes tecnicos
 
-**Ficheiro:** `src/pages/finance/Payments.tsx`
+**Ficheiro 1:** `src/hooks/useSalePayments.ts`
 
-Seguir o padrao ja existente em `src/components/leads/LeadsTableView.tsx`:
+- Adicionar ao retorno de `calculatePaymentSummary`:
+  ```
+  remainingToSchedule = Math.max(0, saleTotal - totalPaid - totalScheduled)
+  ```
+- `remaining` continua igual (saleTotal - totalPaid) para o resumo visual de "Em Falta" -- isto mostra quanto falta **pagar de facto**
+- `remainingToSchedule` indica quanto falta **agendar ou pagar** -- controla a visibilidade do botao
 
-1. Adicionar tipos `SortField` e `SortDirection` locais
-2. Adicionar estados `sortField` (default: `'payment_date'`) e `sortDirection` (default: `'desc'`) -- pagamentos mais recentes primeiro por defeito
-3. Criar funcao `handleSort(field)` que alterna a direcao se o campo ja estiver ativo, ou define novo campo com direcao `asc`
-4. Criar componentes `SortIcon` e `SortableHeader` inline (igual ao padrao dos Leads)
-5. Aplicar `.sort()` no array `filteredPayments` dentro de um `useMemo` antes de renderizar
-6. Substituir os `TableHead` estaticos por `SortableHeader` nas colunas ordenaveis
-7. Importar `ArrowUpDown`, `ArrowUp`, `ArrowDown` do `lucide-react`
+**Ficheiro 2:** `src/components/sales/SalePaymentsList.tsx`
 
-A ordenacao e feita no frontend (client-side) sobre os dados ja filtrados.
-
+- Substituir `summary.remaining > 0` por `summary.remainingToSchedule > 0` nos dois locais onde controla a visibilidade do botao "Adicionar Pagamento" (linhas 174 e 489)
+- Manter `summary.remaining` no resumo visual ("Em Falta") e no `PaymentTypeSelector` / `AddPaymentModal` para o valor pre-preenchido
