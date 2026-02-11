@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { RefreshCw, Download, Mail, FileText, Ban, Loader2 } from "lucide-react";
+import { Download, Mail, FileText, Ban, Loader2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -19,7 +19,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useInvoiceDetails, useSyncInvoice } from "@/hooks/useInvoiceDetails";
+import { useInvoiceDetails } from "@/hooks/useInvoiceDetails";
 import { formatCurrency } from "@/lib/format";
 import { SendInvoiceEmailModal } from "./SendInvoiceEmailModal";
 import { CreateCreditNoteModal } from "./CreateCreditNoteModal";
@@ -68,7 +68,6 @@ export function InvoiceDetailsModal({
     { documentId, documentType, organizationId },
     open
   );
-  const syncInvoice = useSyncInvoice();
   const cancelInvoice = useCancelInvoice();
 
   const [emailOpen, setEmailOpen] = useState(false);
@@ -76,18 +75,13 @@ export function InvoiceDetailsModal({
   const [cancelOpen, setCancelOpen] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
 
-  const handleSync = () => {
-    if (!saleId) return;
-    syncInvoice.mutate({ documentId, documentType, organizationId, saleId, paymentId });
-  };
-
   const handleDownloadPdf = async () => {
+    if (details?.pdf_signed_url) {
+      window.open(details.pdf_signed_url, '_blank');
+      return;
+    }
     if (!details?.pdf_url) {
-      // If no PDF stored, try sync first
-      if (saleId) {
-        handleSync();
-        toast.info("A sincronizar PDF... tente novamente após conclusão.");
-      }
+      toast.error("PDF não disponível");
       return;
     }
     setDownloadingPdf(true);
@@ -371,18 +365,6 @@ export function InvoiceDetailsModal({
                   </>
                 )}
               </div>
-              {saleId && (
-                <Button
-                  variant="default"
-                  size="sm"
-                  className="w-full"
-                  onClick={handleSync}
-                  disabled={syncInvoice.isPending}
-                >
-                  <RefreshCw className={`h-3.5 w-3.5 mr-2 ${syncInvoice.isPending ? 'animate-spin' : ''}`} />
-                  {syncInvoice.isPending ? 'A sincronizar...' : 'Sincronizar'}
-                </Button>
-              )}
             </div>
           )}
         </DialogContent>
