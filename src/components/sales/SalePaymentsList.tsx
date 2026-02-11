@@ -457,8 +457,7 @@ export function SalePaymentsList({
         onConfirm={(reason) => {
           if (!cancellingPayment) return;
           const isSaleInvoice = cancellingPayment.id === '__sale__';
-          const docType = isSaleInvoice ? 'invoice' : 
-            (cancellingPayment.invoice_reference?.startsWith('FT') ? 'invoice' : 'invoice_receipt');
+          const docType = isSaleInvoice ? 'invoice' : 'receipt';
           cancelInvoice.mutate(
             {
               ...(isSaleInvoice 

@@ -78,8 +78,10 @@ Deno.serve(async (req) => {
       })
     }
 
-    const endpointName = document_type === 'invoice' ? 'invoices' : 'invoice_receipts'
-    const docKey = document_type === 'invoice' ? 'invoice' : 'invoice_receipt'
+    const endpointMap: Record<string, string> = { invoice: 'invoices', invoice_receipt: 'invoice_receipts', receipt: 'receipts' }
+    const docKeyMap: Record<string, string> = { invoice: 'invoice', invoice_receipt: 'invoice_receipt', receipt: 'receipt' }
+    const endpointName = endpointMap[document_type] || 'invoices'
+    const docKey = docKeyMap[document_type] || 'invoice'
     const baseUrl = `https://${org.invoicexpress_account_name}.app.invoicexpress.com`
 
     // Cancel document on InvoiceXpress
