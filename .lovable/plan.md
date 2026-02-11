@@ -1,22 +1,19 @@
 
 
-## Reduzir largura dos modais de Propostas
+## Corrigir scroll no modal Nova Proposta
 
 ### Problema
-Os modais "Nova Proposta" e "Editar Proposta" estao com `sm:max-w-3xl` (768px), que e demasiado largo para o conteudo.
+O mesmo problema que existia no Editar Proposta: o `ScrollArea` do Radix nao resolve alturas correctamente dentro de flex containers (`flex-1 min-h-0`), impedindo o scroll.
 
 ### Solucao
-Alterar ambos para `sm:max-w-2xl` (672px) -- um meio-termo entre o antigo `lg` (512px) e o actual `3xl` (768px).
+Substituir `ScrollArea` por `div` com `overflow-y-auto` (mesma correcao aplicada ao EditProposalModal).
 
-### Alteracoes
+### Alteracoes em `src/components/proposals/CreateProposalModal.tsx`
 
-**`src/components/proposals/CreateProposalModal.tsx`**
-- Alterar `sm:max-w-3xl` para `sm:max-w-2xl`
+1. **Linha 263**: Substituir `<ScrollArea className="flex-1 min-h-0">` por `<div className="flex-1 min-h-0 overflow-y-auto">`
+2. **Fecho correspondente**: Substituir `</ScrollArea>` por `</div>`
+3. **Remover import** do `ScrollArea` se nao for usado noutro local do ficheiro
 
-**`src/components/proposals/EditProposalModal.tsx`**
-- Alterar `sm:max-w-3xl` para `sm:max-w-2xl`
-
-### Ficheiros a editar
-- `src/components/proposals/CreateProposalModal.tsx` (1 linha)
-- `src/components/proposals/EditProposalModal.tsx` (1 linha)
+### Ficheiro a editar
+- `src/components/proposals/CreateProposalModal.tsx` (3 linhas)
 
