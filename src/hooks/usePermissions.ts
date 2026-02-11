@@ -1,14 +1,14 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import type { ModulePermissions, ModulePermission } from '@/hooks/useOrganizationProfiles';
+import {
+  GranularPermissions,
+  buildAllPermissions,
+  convertLegacyToGranular,
+  MODULE_SCHEMA,
+} from '@/hooks/useOrganizationProfiles';
 
-const ALL_ACCESS: ModulePermission = { view: true, edit: true, delete: true };
-const FULL_PERMISSIONS: ModulePermissions = {
-  leads: ALL_ACCESS, clients: ALL_ACCESS, proposals: ALL_ACCESS, sales: ALL_ACCESS,
-  finance: ALL_ACCESS, calendar: ALL_ACCESS, marketing: ALL_ACCESS, ecommerce: ALL_ACCESS,
-  settings: ALL_ACCESS,
-};
+const FULL_PERMISSIONS = buildAllPermissions(true);
 
 export function usePermissions() {
   const { roles, user, organization } = useAuth();
@@ -17,7 +17,6 @@ export function usePermissions() {
   const isAdmin = roles.includes('admin') || isSuperAdmin;
   const isViewer = roles.includes('viewer') && !isAdmin;
 
-  // Load the current user's profile permissions from organization_members
   const { data: modulePermissions } = useQuery({
     queryKey: ['user-profile-permissions', user?.id, organization?.id],
     queryFn: async () => {
@@ -38,42 +37,72 @@ export function usePermissions() {
         .eq('id', member.profile_id)
         .single();
       
-      return (profile?.module_permissions as unknown as ModulePermissions) || null;
+      if (!profile?.module_permissions) return null;
+      return convertLegacyToGranular(profile.module_permissions);
     },
     enabled: !!user?.id && !!organization?.id && !isSuperAdmin,
   });
 
-  // If super_admin or no profile assigned, use role-based defaults
-  const effectivePermissions: ModulePermissions = isSuperAdmin
+  const effectivePermissions: GranularPermissions = isSuperAdmin
     ? FULL_PERMISSIONS
-    : modulePermissions || (isAdmin ? FULL_PERMISSIONS : {
-        leads: { view: true, edit: !isViewer, delete: false },
-        clients: { view: true, edit: !isViewer, delete: false },
-        proposals: { view: true, edit: !isViewer, delete: false },
-        sales: { view: true, edit: !isViewer, delete: false },
-        finance: { view: true, edit: false, delete: false },
-        calendar: { view: true, edit: !isViewer, delete: false },
-        marketing: { view: true, edit: false, delete: false },
-        ecommerce: { view: true, edit: false, delete: false },
-        settings: { view: isAdmin, edit: isAdmin, delete: isAdmin },
-      });
+    : modulePermissions || (isAdmin ? FULL_PERMISSIONS : buildDefaultFallback(isViewer));
+
+  // Granular helper: can('finance', 'invoices', 'issue')
+  function can(module: string, subarea: string, action: string): boolean {
+    if (isSuperAdmin) return true;
+    const mod = effectivePermissions[module];
+    if (!mod?.subareas) return isAdmin;
+    const sub = mod.subareas[subarea];
+    if (!sub) return isAdmin;
+    return sub[action] ?? isAdmin;
+  }
+
+  // Check if any subarea in module has view
+  function canViewModule(module: string): boolean {
+    if (isSuperAdmin || isAdmin) return true;
+    const mod = effectivePermissions[module];
+    if (!mod?.subareas) return false;
+    return Object.values(mod.subareas).some(sub => sub.view === true);
+  }
 
   return {
-    // Legacy permissions (backward compat)
-    canEditLeads: effectivePermissions.leads?.edit ?? isAdmin,
-    canDeleteLeads: effectivePermissions.leads?.delete ?? isAdmin,
+    // Granular
+    can,
+    canViewModule,
+    modulePermissions: effectivePermissions,
+
+    // Legacy compat
+    canEditLeads: can('leads', 'kanban', 'edit'),
+    canDeleteLeads: can('leads', 'kanban', 'delete'),
     canChangeLeadStatus: true,
+    canAccessSettings: canViewModule('settings'),
+    canManageTeam: isAdmin,
+    canManageIntegrations: can('settings', 'general', 'edit'),
 
-    canAccessSettings: effectivePermissions.settings?.view ?? isAdmin,
-    canManageTeam: isAdmin, // Team management always requires admin base role
-    canManageIntegrations: effectivePermissions.settings?.edit ?? isAdmin,
-
-    // Role checks
     isAdmin,
     isViewer,
     isSuperAdmin,
-
-    // Granular module permissions
-    modulePermissions: effectivePermissions,
   };
+}
+
+function buildDefaultFallback(isViewer: boolean): GranularPermissions {
+  const result: GranularPermissions = {};
+  for (const [moduleKey, schema] of Object.entries(MODULE_SCHEMA)) {
+    const subareas: Record<string, Record<string, boolean>> = {};
+    for (const [subKey, subSchema] of Object.entries(schema.subareas)) {
+      const actions: Record<string, boolean> = {};
+      for (const action of subSchema.actions) {
+        if (moduleKey === 'settings') {
+          actions[action] = false;
+        } else if (action === 'view') {
+          actions[action] = true;
+        } else {
+          actions[action] = !isViewer;
+        }
+      }
+      subareas[subKey] = actions;
+    }
+    result[moduleKey] = { subareas };
+  }
+  return result;
 }
