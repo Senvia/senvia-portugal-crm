@@ -50,7 +50,7 @@ import { useProducts } from "@/hooks/useProducts";
 import { VatBadge, useVatCalculation, isInvoiceXpressActive as checkIxActive, getOrgTaxValue } from "./SaleFiscalInfo";
 import { useProposalCpes } from "@/hooks/useProposalCpes";
 import { formatCurrency } from "@/lib/format";
-import { MODELO_SERVICO_LABELS } from "@/types/proposals";
+import { MODELO_SERVICO_LABELS, NEGOTIATION_TYPE_LABELS, SERVICOS_PRODUCTS } from "@/types/proposals";
 import type { SaleWithDetails, SaleStatus } from "@/types/sales";
 import { SALE_STATUS_LABELS, SALE_STATUS_COLORS, SALE_STATUSES } from "@/types/sales";
 import { SalePaymentsList } from "./SalePaymentsList";
@@ -135,10 +135,10 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
 
   // Check if has energy or service data
   const hasEnergyData = sale.proposal_type === 'energia' && (
-    sale.consumo_anual || sale.margem || sale.dbl || sale.anos_contrato || sale.comissao
+    sale.consumo_anual || sale.margem || sale.dbl || sale.anos_contrato || sale.comissao || sale.negotiation_type
   );
   const hasServiceData = sale.proposal_type === 'servicos' && (
-    sale.modelo_servico || sale.kwp || sale.comissao
+    sale.modelo_servico || sale.kwp || sale.comissao || (sale.servicos_produtos && sale.servicos_produtos.length > 0)
   );
 
   return (
@@ -279,6 +279,14 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                       <Label className="text-muted-foreground">Dados de Energia</Label>
                     </div>
                     <div className="grid grid-cols-2 gap-3 p-3 rounded-lg bg-muted/30">
+                      {sale.negotiation_type && (
+                        <div className="col-span-2">
+                          <p className="text-xs text-muted-foreground">Tipo de Negociação</p>
+                          <p className="text-sm font-medium">
+                            {NEGOTIATION_TYPE_LABELS[sale.negotiation_type as keyof typeof NEGOTIATION_TYPE_LABELS] || sale.negotiation_type}
+                          </p>
+                        </div>
+                      )}
                       {sale.consumo_anual && (
                         <div>
                           <p className="text-xs text-muted-foreground">Consumo Anual</p>
@@ -334,6 +342,24 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                       <Label className="text-muted-foreground">Dados do Serviço</Label>
                     </div>
                     <div className="grid grid-cols-2 gap-3 p-3 rounded-lg bg-muted/30">
+                      {sale.negotiation_type && (
+                        <div className="col-span-2">
+                          <p className="text-xs text-muted-foreground">Tipo de Negociação</p>
+                          <p className="text-sm font-medium">
+                            {NEGOTIATION_TYPE_LABELS[sale.negotiation_type as keyof typeof NEGOTIATION_TYPE_LABELS] || sale.negotiation_type}
+                          </p>
+                        </div>
+                      )}
+                      {sale.servicos_produtos && sale.servicos_produtos.length > 0 && (
+                        <div className="col-span-2">
+                          <p className="text-xs text-muted-foreground">Serviços/Produtos</p>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {sale.servicos_produtos.map((s) => (
+                              <Badge key={s} variant="secondary" className="text-xs">{s}</Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                       {sale.modelo_servico && (
                         <div>
                           <p className="text-xs text-muted-foreground">Modelo</p>

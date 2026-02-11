@@ -2426,6 +2426,7 @@ export type Database = {
           lead_id: string | null
           margem: number | null
           modelo_servico: string | null
+          negotiation_type: string | null
           next_renewal_date: string | null
           notes: string | null
           organization_id: string
@@ -2438,6 +2439,7 @@ export type Database = {
           recurring_status: string | null
           recurring_value: number | null
           sale_date: string | null
+          servicos_produtos: string[] | null
           status: string
           subtotal: number | null
           total_value: number
@@ -2467,6 +2469,7 @@ export type Database = {
           lead_id?: string | null
           margem?: number | null
           modelo_servico?: string | null
+          negotiation_type?: string | null
           next_renewal_date?: string | null
           notes?: string | null
           organization_id: string
@@ -2479,6 +2482,7 @@ export type Database = {
           recurring_status?: string | null
           recurring_value?: number | null
           sale_date?: string | null
+          servicos_produtos?: string[] | null
           status?: string
           subtotal?: number | null
           total_value?: number
@@ -2508,6 +2512,7 @@ export type Database = {
           lead_id?: string | null
           margem?: number | null
           modelo_servico?: string | null
+          negotiation_type?: string | null
           next_renewal_date?: string | null
           notes?: string | null
           organization_id?: string
@@ -2520,6 +2525,7 @@ export type Database = {
           recurring_status?: string | null
           recurring_value?: number | null
           sale_date?: string | null
+          servicos_produtos?: string[] | null
           status?: string
           subtotal?: number | null
           total_value?: number

@@ -56,9 +56,11 @@ import {
   Trash2
 } from "lucide-react";
 import type { Proposal } from "@/types/proposals";
+import { NEGOTIATION_TYPE_LABELS, SERVICOS_PRODUCTS } from "@/types/proposals";
 import { 
   type ProposalType,
   type ModeloServico,
+  type NegotiationType,
   type PaymentMethod,
   type SaleStatus,
   PAYMENT_METHOD_LABELS,
@@ -144,6 +146,8 @@ export function CreateSaleModal({
   const [modeloServico, setModeloServico] = useState<ModeloServico | null>(null);
   const [kwp, setKwp] = useState<string>("");
   const [comissao, setComissao] = useState<string>("");
+  const [negotiationType, setNegotiationType] = useState<NegotiationType | null>(null);
+  const [servicosProdutos, setServicosProdutos] = useState<string[]>([]);
 
   // Sale status
   const [saleStatus, setSaleStatus] = useState<SaleStatus>("pending");
@@ -187,6 +191,8 @@ export function CreateSaleModal({
         setModeloServico(prefillProposal.modelo_servico || null);
         setKwp(prefillProposal.kwp?.toString() || "");
         setComissao(prefillProposal.comissao?.toString() || "");
+        setNegotiationType(prefillProposal.negotiation_type || null);
+        setServicosProdutos(prefillProposal.servicos_produtos || []);
       } else if (prefillClientId) {
         setClientId(prefillClientId);
         setSelectedProposalId(null);
@@ -199,6 +205,8 @@ export function CreateSaleModal({
         setModeloServico(null);
         setKwp("");
         setComissao("");
+        setNegotiationType(null);
+        setServicosProdutos([]);
       } else {
         setClientId("");
         setProposalId("");
@@ -212,6 +220,8 @@ export function CreateSaleModal({
         setModeloServico(null);
         setKwp("");
         setComissao("");
+        setNegotiationType(null);
+        setServicosProdutos([]);
       }
       
       setSaleDate(new Date());
@@ -402,6 +412,8 @@ export function CreateSaleModal({
       setModeloServico(proposal.modelo_servico || null);
       setKwp(proposal.kwp?.toString() || "");
       setComissao(proposal.comissao?.toString() || "");
+      setNegotiationType(proposal.negotiation_type || null);
+      setServicosProdutos(proposal.servicos_produtos || []);
       
       // Limpar items para serem recarregados pelo useEffect de proposalProducts
       setItems([]);
@@ -501,6 +513,8 @@ export function CreateSaleModal({
         modelo_servico: modeloServico || undefined,
         kwp: parseFloat(kwp) || undefined,
         comissao: parseFloat(comissao) || undefined,
+        negotiation_type: negotiationType || undefined,
+        servicos_produtos: servicosProdutos.length > 0 ? servicosProdutos : undefined,
         // Campos de recorrência
         has_recurring: hasRecurring,
         recurring_value: recurringValue,

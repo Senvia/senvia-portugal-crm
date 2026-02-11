@@ -1,3 +1,4 @@
+export type NegotiationType = 'angariacao' | 'angariacao_indexado' | 'renovacao' | 'sem_volume';
 export type SaleStatus = 'pending' | 'in_progress' | 'delivered' | 'cancelled';
 export type PaymentMethod = 'mbway' | 'transfer' | 'cash' | 'card' | 'check' | 'other';
 export type PaymentStatus = 'pending' | 'partial' | 'paid';
@@ -126,6 +127,10 @@ export interface Sale {
   
   // Comum
   comissao: number | null;
+  
+  // Tipo de Negociação e Serviços/Produtos
+  negotiation_type: NegotiationType | null;
+  servicos_produtos: string[] | null;
   
   // Campos de Recorrência
   has_recurring: boolean;
