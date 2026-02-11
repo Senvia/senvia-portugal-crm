@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Plus, UserPlus, Zap, Wrench, Package } from 'lucide-react';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -254,12 +255,13 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-3xl max-h-[90vh] flex flex-col p-0">
+          <DialogHeader className="px-6 py-4 border-b">
             <DialogTitle>Nova Proposta</DialogTitle>
           </DialogHeader>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <ScrollArea className="flex-1 min-h-0">
+          <form onSubmit={handleSubmit} className="space-y-4 px-6 py-4">
             {/* Client Selector */}
             <div className="space-y-2">
               <Label>Cliente</Label>
@@ -612,7 +614,7 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
               </div>
             )}
 
-            <DialogFooter className="pt-4">
+            <DialogFooter className="px-6 py-4 border-t">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancelar
               </Button>
@@ -621,6 +623,7 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
               </Button>
             </DialogFooter>
           </form>
+          </ScrollArea>
         </DialogContent>
       </Dialog>
 
