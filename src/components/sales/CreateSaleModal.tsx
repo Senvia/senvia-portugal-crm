@@ -587,8 +587,8 @@ export function CreateSaleModal({
         }
       }
 
-      // Create draft payments
-      if (draftPayments.length > 0 && sale?.id && organization?.id) {
+      // Create draft payments (skip for telecom - no billing)
+      if (!isTelecom && draftPayments.length > 0 && sale?.id && organization?.id) {
         for (const dp of draftPayments) {
           await createSalePayment.mutateAsync({
             sale_id: sale.id,
@@ -1081,105 +1081,109 @@ export function CreateSaleModal({
               </div>
             </div>
 
-            <Separator />
+            {!isTelecom && (
+              <>
+                <Separator />
 
-            {/* Section 3.5: Payments */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                  <CreditCard className="h-4 w-4" />
-                  Pagamentos
-                </div>
-                {total > 0 && (() => {
-                  const summary = calculatePaymentSummary(
-                    draftPayments.map(dp => ({ ...dp, id: dp.id, organization_id: '', sale_id: '', invoice_file_url: null, created_at: '', updated_at: '' })),
-                    total
-                  );
-                  return summary.remaining > 0;
-                })() && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowDraftPaymentModal(true)}
-                  >
-                    <Plus className="h-4 w-4 mr-1" />
-                    Adicionar
-                  </Button>
-                )}
-              </div>
-
-              {draftPayments.length > 0 ? (
-                <div className="space-y-2">
-                  {draftPayments.map((dp) => (
-                    <div
-                      key={dp.id}
-                      className="flex items-center justify-between p-3 rounded-lg border border-border/50 bg-muted/30"
-                    >
-                      <div className="flex flex-col gap-0.5">
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold text-sm">{formatCurrency(dp.amount)}</span>
-                          <Badge variant="outline" className={cn("text-xs", PAYMENT_RECORD_STATUS_COLORS[dp.status])}>
-                            {PAYMENT_RECORD_STATUS_LABELS[dp.status]}
-                          </Badge>
-                        </div>
-                        <span className="text-xs text-muted-foreground">
-                          {dp.payment_date}
-                          {dp.payment_method && ` • ${PAYMENT_METHOD_LABELS[dp.payment_method]}`}
-                          {dp.invoice_reference && ` • ${dp.invoice_reference}`}
-                        </span>
-                      </div>
+                {/* Section 3.5: Payments */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                      <CreditCard className="h-4 w-4" />
+                      Pagamentos
+                    </div>
+                    {total > 0 && (() => {
+                      const summary = calculatePaymentSummary(
+                        draftPayments.map(dp => ({ ...dp, id: dp.id, organization_id: '', sale_id: '', invoice_file_url: null, created_at: '', updated_at: '' })),
+                        total
+                      );
+                      return summary.remaining > 0;
+                    })() && (
                       <Button
                         type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                        onClick={() => setDraftPayments(prev => prev.filter(p => p.id !== dp.id))}
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowDraftPaymentModal(true)}
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Plus className="h-4 w-4 mr-1" />
+                        Adicionar
                       </Button>
+                    )}
+                  </div>
+
+                  {draftPayments.length > 0 ? (
+                    <div className="space-y-2">
+                      {draftPayments.map((dp) => (
+                        <div
+                          key={dp.id}
+                          className="flex items-center justify-between p-3 rounded-lg border border-border/50 bg-muted/30"
+                        >
+                          <div className="flex flex-col gap-0.5">
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-sm">{formatCurrency(dp.amount)}</span>
+                              <Badge variant="outline" className={cn("text-xs", PAYMENT_RECORD_STATUS_COLORS[dp.status])}>
+                                {PAYMENT_RECORD_STATUS_LABELS[dp.status]}
+                              </Badge>
+                            </div>
+                            <span className="text-xs text-muted-foreground">
+                              {dp.payment_date}
+                              {dp.payment_method && ` • ${PAYMENT_METHOD_LABELS[dp.payment_method]}`}
+                              {dp.invoice_reference && ` • ${dp.invoice_reference}`}
+                            </span>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                            onClick={() => setDraftPayments(prev => prev.filter(p => p.id !== dp.id))}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+
+                      {/* Payment summary */}
+                      {(() => {
+                        const summary = calculatePaymentSummary(
+                          draftPayments.map(dp => ({ ...dp, organization_id: '', sale_id: '', invoice_file_url: null, created_at: '', updated_at: '' })),
+                          total
+                        );
+                        return (
+                          <div className="p-3 rounded-lg bg-muted/30 border border-border/50 space-y-2">
+                            <div className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">Total pago</span>
+                              <span className="font-medium text-green-500">{formatCurrency(summary.totalPaid)}</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">Em falta</span>
+                              <span className="font-medium">{formatCurrency(summary.remaining)}</span>
+                            </div>
+                            <Progress value={summary.percentage} className="h-2" />
+                          </div>
+                        );
+                      })()}
                     </div>
-                  ))}
-
-                  {/* Payment summary */}
-                  {(() => {
-                    const summary = calculatePaymentSummary(
-                      draftPayments.map(dp => ({ ...dp, organization_id: '', sale_id: '', invoice_file_url: null, created_at: '', updated_at: '' })),
-                      total
-                    );
-                    return (
-                      <div className="p-3 rounded-lg bg-muted/30 border border-border/50 space-y-2">
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">Total pago</span>
-                          <span className="font-medium text-green-500">{formatCurrency(summary.totalPaid)}</span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">Em falta</span>
-                          <span className="font-medium">{formatCurrency(summary.remaining)}</span>
-                        </div>
-                        <Progress value={summary.percentage} className="h-2" />
-                      </div>
-                    );
-                  })()}
+                  ) : total > 0 ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full border-dashed"
+                      onClick={() => setShowDraftPaymentModal(true)}
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Adicionar Pagamento
+                    </Button>
+                  ) : (
+                    <p className="text-sm text-muted-foreground text-center py-2">
+                      Adicione produtos para registar pagamentos
+                    </p>
+                  )}
                 </div>
-              ) : total > 0 ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full border-dashed"
-                  onClick={() => setShowDraftPaymentModal(true)}
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Adicionar Pagamento
-                </Button>
-              ) : (
-                <p className="text-sm text-muted-foreground text-center py-2">
-                  Adicione produtos para registar pagamentos
-                </p>
-              )}
-            </div>
 
-            <Separator />
+                <Separator />
+              </>
+            )}
 
             {/* Section 4: Notes */}
             <div className="space-y-2">

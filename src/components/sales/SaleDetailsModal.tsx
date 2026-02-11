@@ -537,8 +537,8 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                 </>
               )}
 
-              {/* 8. Payments Section */}
-              {organization && (
+              {/* 8. Payments Section (hidden for telecom) */}
+              {!isTelecom && organization && (
                 <>
                   <SalePaymentsList
                     saleId={sale.id}
