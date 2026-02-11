@@ -271,7 +271,7 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
               <Separator />
 
               {/* 3. Telecom: Energy Data */}
-              {hasEnergyData && (
+              {isTelecom && hasEnergyData && (
                 <>
                   <div className="space-y-3">
                     <div className="flex items-center gap-2">
@@ -334,7 +334,7 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
               )}
 
               {/* 3b. Telecom: Service Data */}
-              {hasServiceData && (
+              {isTelecom && hasServiceData && (
                 <>
                   <div className="space-y-3">
                     <div className="flex items-center gap-2">
@@ -391,7 +391,7 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
               )}
 
               {/* 3c. Telecom: CPEs */}
-              {proposalCpes.length > 0 && (
+              {isTelecom && proposalCpes.length > 0 && (
                 <>
                   <div className="space-y-3">
                     <div className="flex items-center gap-2">

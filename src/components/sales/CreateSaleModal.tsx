@@ -109,6 +109,7 @@ export function CreateSaleModal({
   const { finalPositiveStage } = useFinalStages();
   const updateLeadStatus = useUpdateLeadStatus();
   const { organization } = useAuth();
+  const isTelecom = organization?.niche === 'telecom';
   
   // Fiscal info
   const ixActive = isInvoiceXpressActive(organization);
@@ -377,6 +378,17 @@ export function CreateSaleModal({
       setSelectedProposalId(null);
       setItems([]); // Limpar produtos
       setNotes(""); // Limpar notas
+      // Reset telecom fields
+      setProposalType(null);
+      setConsumoAnual("");
+      setMargem("");
+      setDbl("");
+      setAnosContrato("");
+      setModeloServico(null);
+      setKwp("");
+      setComissao("");
+      setNegotiationType(null);
+      setServicosProdutos([]);
       return;
     }
     
@@ -504,17 +516,19 @@ export function CreateSaleModal({
         discount: discountValue,
         sale_date: format(saleDate, 'yyyy-MM-dd'),
         notes: notes.trim() || undefined,
-        // Campos específicos de proposta
-        proposal_type: proposalType || undefined,
-        consumo_anual: parseFloat(consumoAnual) || undefined,
-        margem: parseFloat(margem) || undefined,
-        dbl: parseFloat(dbl) || undefined,
-        anos_contrato: parseInt(anosContrato) || undefined,
-        modelo_servico: modeloServico || undefined,
-        kwp: parseFloat(kwp) || undefined,
-        comissao: parseFloat(comissao) || undefined,
-        negotiation_type: negotiationType || undefined,
-        servicos_produtos: servicosProdutos.length > 0 ? servicosProdutos : undefined,
+        // Campos específicos de proposta (Telecom-only)
+        ...(isTelecom && proposalId ? {
+          proposal_type: proposalType || undefined,
+          consumo_anual: parseFloat(consumoAnual) || undefined,
+          margem: parseFloat(margem) || undefined,
+          dbl: parseFloat(dbl) || undefined,
+          anos_contrato: parseInt(anosContrato) || undefined,
+          modelo_servico: modeloServico || undefined,
+          kwp: parseFloat(kwp) || undefined,
+          comissao: parseFloat(comissao) || undefined,
+          negotiation_type: negotiationType || undefined,
+          servicos_produtos: servicosProdutos.length > 0 ? servicosProdutos : undefined,
+        } : {}),
         // Campos de recorrência
         has_recurring: hasRecurring,
         recurring_value: recurringValue,
@@ -709,6 +723,173 @@ export function CreateSaleModal({
 
             <Separator />
 
+            {/* Telecom Data Section (read-only preview) */}
+            {isTelecom && proposalId && (negotiationType || proposalType) && (
+              <>
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                    <Zap className="h-4 w-4 text-amber-500" />
+                    Dados Telecom (da Proposta)
+                  </div>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-lg bg-muted/30 border border-border/50">
+                    {negotiationType && (
+                      <div className="col-span-1 sm:col-span-2">
+                        <p className="text-xs text-muted-foreground">Tipo de Negociação</p>
+                        <p className="text-sm font-medium">
+                          {NEGOTIATION_TYPE_LABELS[negotiationType] || negotiationType}
+                        </p>
+                      </div>
+                    )}
+
+                    {proposalType === 'servicos' && (
+                      <>
+                        {servicosProdutos.length > 0 && (
+                          <div className="col-span-1 sm:col-span-2">
+                            <p className="text-xs text-muted-foreground">Serviços/Produtos</p>
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {servicosProdutos.map((s) => (
+                                <Badge key={s} variant="secondary" className="text-xs">{s}</Badge>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {modeloServico && (
+                          <div>
+                            <p className="text-xs text-muted-foreground">Modelo de Serviço</p>
+                            <p className="text-sm font-medium">
+                              {modeloServico === 'transacional' ? 'Transacional' : modeloServico === 'saas' ? 'SAAS' : modeloServico}
+                            </p>
+                          </div>
+                        )}
+                        {kwp && (
+                          <div>
+                            <p className="text-xs text-muted-foreground">kWp</p>
+                            <p className="text-sm font-medium">{kwp}</p>
+                          </div>
+                        )}
+                        {comissao && (
+                          <div>
+                            <p className="text-xs text-muted-foreground">Comissão</p>
+                            <p className="text-sm font-medium text-green-500">
+                              {formatCurrency(parseFloat(comissao))}
+                            </p>
+                          </div>
+                        )}
+                      </>
+                    )}
+
+                    {proposalType === 'energia' && proposalCpes.length > 0 && (
+                      <>
+                        <div>
+                          <p className="text-xs text-muted-foreground">Pontos de Consumo</p>
+                          <p className="text-sm font-medium">{proposalCpes.length} CPE(s)</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">Consumo Total</p>
+                          <p className="text-sm font-medium">
+                            {(proposalCpes.reduce((sum, c) => sum + (c.consumo_anual || 0), 0) / 1000).toLocaleString('pt-PT', { minimumFractionDigits: 2 })} MWh
+                          </p>
+                        </div>
+                        {(() => {
+                          const totalComissao = proposalCpes.reduce((sum, c) => sum + (c.comissao || 0), 0);
+                          return totalComissao > 0 ? (
+                            <div>
+                              <p className="text-xs text-muted-foreground">Comissão Total</p>
+                              <p className="text-sm font-medium text-green-500">
+                                {formatCurrency(totalComissao)}
+                              </p>
+                            </div>
+                          ) : null;
+                        })()}
+                      </>
+                    )}
+                  </div>
+                </div>
+                <Separator />
+              </>
+            )}
+
+            {/* Telecom CPE/CUI Details (read-only) */}
+            {isTelecom && proposalCpes.length > 0 && (
+              <>
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                    <Router className="h-4 w-4" />
+                    CPE/CUI (Pontos de Consumo)
+                  </div>
+                  
+                  <div className="space-y-2">
+                    {proposalCpes.map((cpe) => (
+                      <div
+                        key={cpe.id}
+                        className="p-3 rounded-lg border border-border/50 bg-muted/30 space-y-2"
+                      >
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Badge variant="outline" className="text-xs">{cpe.equipment_type}</Badge>
+                          <Badge variant="secondary" className="text-xs">{cpe.comercializador}</Badge>
+                          {cpe.existing_cpe_id ? (
+                            <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-500 border-blue-500/30">Renovação</Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-xs bg-green-500/10 text-green-500 border-green-500/30">Novo</Badge>
+                          )}
+                        </div>
+                        {cpe.serial_number && (
+                          <div>
+                            <p className="text-xs text-muted-foreground">Local de Consumo</p>
+                            <p className="text-sm font-mono">{cpe.serial_number}</p>
+                          </div>
+                        )}
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                          {cpe.consumo_anual != null && (
+                            <div>
+                              <p className="text-xs text-muted-foreground">Consumo Anual</p>
+                              <p className="text-sm font-medium">{cpe.consumo_anual.toLocaleString('pt-PT')} kWh</p>
+                            </div>
+                          )}
+                          {cpe.duracao_contrato != null && (
+                            <div>
+                              <p className="text-xs text-muted-foreground">Duração</p>
+                              <p className="text-sm font-medium">{cpe.duracao_contrato} {cpe.duracao_contrato === 1 ? 'ano' : 'anos'}</p>
+                            </div>
+                          )}
+                          {cpe.dbl != null && (
+                            <div>
+                              <p className="text-xs text-muted-foreground">DBL</p>
+                              <p className="text-sm font-medium">{cpe.dbl.toLocaleString('pt-PT', { minimumFractionDigits: 2 })}</p>
+                            </div>
+                          )}
+                          {cpe.margem != null && (
+                            <div>
+                              <p className="text-xs text-muted-foreground">Margem</p>
+                              <p className="text-sm font-medium">{cpe.margem.toLocaleString('pt-PT', { minimumFractionDigits: 2 })} €/MWh</p>
+                            </div>
+                          )}
+                          {cpe.comissao != null && (
+                            <div>
+                              <p className="text-xs text-muted-foreground">Comissão</p>
+                              <p className="text-sm font-medium text-green-500">{formatCurrency(cpe.comissao)}</p>
+                            </div>
+                          )}
+                        </div>
+                        {(cpe.contrato_inicio || cpe.contrato_fim) && (
+                          <div>
+                            <p className="text-xs text-muted-foreground">Contrato</p>
+                            <p className="text-sm">
+                              {cpe.contrato_inicio ? format(new Date(cpe.contrato_inicio), "dd/MM/yyyy") : '—'}
+                              {' → '}
+                              {cpe.contrato_fim ? format(new Date(cpe.contrato_fim), "dd/MM/yyyy") : '—'}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <Separator />
+              </>
+            )}
+
             {/* Section 2: Products */}
             <div className="space-y-4">
               <div className="flex items-center justify-between">
@@ -844,43 +1025,7 @@ export function CreateSaleModal({
               )}
             </div>
 
-            {/* Section 2.5: CPEs from Proposal */}
-            {proposalCpes.length > 0 && (
-              <>
-                <Separator />
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                    <Router className="h-4 w-4" />
-                    CPEs (serão criados/atualizados)
-                  </div>
-                  
-                  <div className="space-y-2">
-                    {proposalCpes.map((cpe) => (
-                      <div
-                        key={cpe.id}
-                        className="flex items-center justify-between p-3 rounded-lg border border-border/50 bg-muted/30"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="flex flex-col">
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium text-sm">{cpe.equipment_type}</span>
-                              <Badge variant={cpe.existing_cpe_id ? 'secondary' : 'default'} className="text-xs">
-                                {cpe.existing_cpe_id ? 'Renovação' : 'Novo'}
-                              </Badge>
-                            </div>
-                            <span className="text-xs text-muted-foreground">
-                              {cpe.comercializador}
-                              {cpe.serial_number && ` • ${cpe.serial_number}`}
-                              {cpe.fidelizacao_end && ` • Até ${cpe.fidelizacao_end}`}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
+            {/* Old CPE section removed - now handled in Telecom section above */}
 
             <Separator />
 
