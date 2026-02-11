@@ -1,106 +1,78 @@
 
 
-## Lista de Eventos do Dia Selecionado (abaixo do calendario)
+## Traduzir todas as strings em Ingles para Portugues de Portugal (PT-PT)
 
-### Objetivo
-Adicionar uma lista de eventos abaixo do calendario (em todas as vistas: mes, semana, dia) que mostra os eventos agendados para o dia selecionado. O clique nos eventos do calendario deixa de abrir detalhes diretamente -- em vez disso, seleciona o dia. O utilizador clica no evento na lista abaixo para ver os detalhes.
+### Problema identificado
+Existem varias strings em ingles espalhadas pela aplicacao, principalmente em:
+- Labels de formularios ("Password", "Email")
+- Componentes UI base (Pagination: "Previous", "Next", "More pages")
+- Textos de acessibilidade/sr-only ("Close", "Toggle Sidebar")
+- Mensagens de erro internas ("No organization")
+- Pagina Reset Password ("Password Alterada!", "Nova Password")
+- Pagina InviteRegister ("Password")
+- Settings/TeamTab ("Password", "Confirmar Password")
+- Settings/GeneralContent ("Alterar Password", "Nova Password", "Confirmar Password")
 
-### Comportamento esperado
-1. Ao clicar num dia no calendario (mes/semana), esse dia fica "selecionado" (highlight) e a lista abaixo atualiza com os eventos desse dia
-2. Ao clicar num evento compacto dentro do calendario, tambem seleciona o dia (nao abre detalhes)
-3. A lista abaixo usa o componente `EventCard` (versao expandida, nao compacta) para cada evento
-4. Clicar num `EventCard` na lista abre o `EventDetailsModal`
-5. Se nao houver eventos no dia, mostrar mensagem "Sem eventos agendados"
-6. Por defeito, o dia selecionado e "hoje"
+### Traducoes a aplicar
 
-### Alteracoes
+| Ingles | Portugues PT-PT |
+|--------|-----------------|
+| Password | Palavra-passe |
+| Email | Email (mantem-se, e universal) |
+| Previous | Anterior |
+| Next | Seguinte |
+| More pages | Mais paginas |
+| Close | Fechar |
+| Toggle Sidebar | Alternar Menu |
+| Go to previous page | Ir para pagina anterior |
+| Go to next page | Ir para pagina seguinte |
+| No organization | Sem organizacao |
 
-**1. `src/components/calendar/CalendarView.tsx`**
+### Ficheiros a editar
 
-- Adicionar state `selectedDayForList` (Date) -- inicializado com `new Date()`
-- Mudar `handleDayClick`: em vez de abrir o `CreateEventModal`, passa a definir `selectedDayForList` para o dia clicado
-- Mudar `handleEventClick` no contexto do calendario (mes/semana): em vez de abrir detalhes, seleciona o dia do evento
-- Adicionar um botao "+" flutuante ou no header da lista para criar evento no dia selecionado
-- Filtrar os eventos do dia selecionado: `selectedDayEvents = events.filter(e => isSameDay(...))`
-- Renderizar abaixo do calendario:
-  - Header com data selecionada + botao criar evento
-  - Lista de `EventCard` (nao compactos)
-  - Se vazio: mensagem "Sem eventos para este dia"
-- O clique no `EventCard` da lista abre `EventDetailsModal`
+**1. `src/components/ui/pagination.tsx`**
+- "Previous" -> "Anterior"
+- "Next" -> "Seguinte"
+- "More pages" -> "Mais paginas"
+- "Go to previous page" -> "Ir para pagina anterior"
+- "Go to next page" -> "Ir para pagina seguinte"
 
-**2. `src/components/calendar/MonthView.tsx`**
+**2. `src/components/ui/dialog.tsx`**
+- sr-only "Close" -> "Fechar"
 
-- Receber nova prop `selectedDay?: Date` para highlight visual do dia selecionado
-- O clique no evento compacto (`EventCard compact`) passa a chamar `onDayClick(day)` em vez de `onEventClick`
-- Aplicar estilo de selecao (ex: `ring-2 ring-primary`) ao dia selecionado
+**3. `src/components/ui/sheet.tsx`**
+- sr-only "Close" -> "Fechar"
 
-**3. `src/components/calendar/WeekView.tsx`**
+**4. `src/components/ui/sidebar.tsx`**
+- sr-only "Toggle Sidebar" -> "Alternar Menu"
+- Error "useSidebar must be used within a SidebarProvider." (manter em ingles, e tecnico/dev-only)
 
-- Mesma logica: receber `selectedDay`, highlight, e redirecionar clique de eventos para `onDayClick`
+**5. `src/components/settings/GeneralContent.tsx`**
+- "Alterar Password" -> "Alterar Palavra-passe"
+- "Nova Password" -> "Nova Palavra-passe"
+- "Confirmar Password" -> "Confirmar Palavra-passe"
 
-**4. Novo componente: `src/components/calendar/DayEventsList.tsx`**
+**6. `src/components/settings/TeamTab.tsx`**
+- Todas as labels "Password" -> "Palavra-passe"
+- "Confirmar Password" -> "Confirmar Palavra-passe"
+- "Nova Password" -> "Nova Palavra-passe"
+- Toasts "As passwords nao coincidem" -> "As palavras-passe nao coincidem"
+- "A password deve ter pelo menos 6 caracteres" -> "A palavra-passe deve ter pelo menos 6 caracteres"
 
-- Props: `selectedDate`, `events` (ja filtrados), `onEventClick`, `onCreateEvent`
-- Renderiza:
-  - Header: "Eventos de {data formatada}" + botao "Novo Evento"
-  - Lista de `EventCard` (expandidos) clicaveis
-  - Estado vazio com icone e texto
+**7. `src/pages/ResetPassword.tsx`**
+- "Password Alterada!" -> "Palavra-passe Alterada!"
+- "A sua password foi alterada com sucesso" -> "A sua palavra-passe foi alterada com sucesso"
+- "Nova Password" -> "Nova Palavra-passe"
+- "Introduza a sua nova password" -> "Introduza a sua nova palavra-passe"
 
-### Secao Tecnica
+**8. `src/pages/InviteRegister.tsx`**
+- Label "Password" -> "Palavra-passe"
 
-**CalendarView - novo fluxo:**
-```tsx
-const [selectedDayForList, setSelectedDayForList] = useState<Date>(new Date());
+**9. `src/hooks/useSales.ts`**
+- `throw new Error("No organization")` -> `throw new Error("Sem organizacao")`
 
-const selectedDayEvents = useMemo(() => {
-  return events.filter(e => isSameDay(new Date(e.start_time), selectedDayForList));
-}, [events, selectedDayForList]);
-
-const handleDayClick = (date: Date) => {
-  setSelectedDayForList(date);
-};
-
-// Abaixo do calendario:
-<DayEventsList
-  selectedDate={selectedDayForList}
-  events={selectedDayEvents}
-  onEventClick={handleEventClick}  // este abre detalhes
-  onCreateEvent={() => {
-    setSelectedDate(selectedDayForList);
-    setSelectedEvent(null);
-    setCreateModalOpen(true);
-  }}
-/>
-```
-
-**MonthView - highlight + redirect:**
-```tsx
-// Nova prop
-selectedDay?: Date;
-
-// No dia cell:
-className={cn(
-  ...,
-  selectedDay && isSameDay(day, selectedDay) && 'ring-2 ring-primary ring-inset'
-)}
-
-// EventCard compact click -> seleciona dia em vez de abrir detalhes
-onClick={(e) => {
-  e.stopPropagation();
-  onDayClick(day);  // seleciona o dia
-}}
-```
-
-**DayEventsList component:**
-```tsx
-// Header com data + botao
-// Lista de EventCard (expandido)
-// Empty state
-```
-
-### Ficheiros a criar/editar
-- **Criar**: `src/components/calendar/DayEventsList.tsx`
-- **Editar**: `src/components/calendar/CalendarView.tsx`
-- **Editar**: `src/components/calendar/MonthView.tsx`
-- **Editar**: `src/components/calendar/WeekView.tsx`
+### Nota
+- "Email" mantem-se em ingles (e universalmente aceite em PT-PT)
+- Mensagens de erro em componentes UI base (carousel, chart, form) mantemos em ingles pois sao mensagens de desenvolvimento, nunca vistas pelo utilizador final
+- sr-only texts sao para leitores de ecra -- traduzir para acessibilidade em PT-PT
 
