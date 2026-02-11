@@ -1,34 +1,62 @@
 
 
-## Corrigir Navegacao do Card "Recebido"
+## Renomear "Estado" para "Tipologia" com valores Bronze/Prata/Ouro (apenas Telecom)
 
-### Problema
-O card "Recebido" navega para `/financeiro/pagamentos` sem filtro, mostrando todos os pagamentos (incluindo agendados/pendentes). Deveria mostrar apenas os pagamentos com status "paid".
+### O que muda
 
-### Solucao
+No nicho **telecom**, o campo "Estado" do cliente passa a chamar-se **"Tipologia"** e os valores mudam de Ativo/Inativo/VIP para **Bronze/Prata/Ouro**. Todos os outros nichos continuam iguais.
 
-**Ficheiro: `src/pages/Finance.tsx`** (1 linha)
+Os valores internos na base de dados nao mudam (`active`, `inactive`, `vip`) -- apenas as etiquetas visuais sao diferentes no telecom.
 
-Alterar o `onClick` do card "Recebido" de:
-```
-navigate('/financeiro/pagamentos')
-```
-para:
-```
-navigate('/financeiro/pagamentos?status=paid')
-```
+### Mapeamento telecom
 
-**Ficheiro: `src/pages/finance/Payments.tsx`** (1 linha)
+| Valor BD | Label generico | Label telecom |
+|----------|---------------|---------------|
+| active   | Ativo         | Bronze        |
+| inactive | Inativo       | Prata         |
+| vip      | VIP           | Ouro          |
 
-O `useEffect` que le o status da URL so reconhece `pending`. Alterar para aceitar tambem `paid`:
-```
-const statusFromUrl = searchParams.get('status');
-if (statusFromUrl === 'pending' || statusFromUrl === 'paid') {
-  setStatusFilter(statusFromUrl);
-}
-```
+O campo passa de "Estado" para "Tipologia".
 
-### Resultado
-- Clicar em "Recebido" abre a lista filtrada apenas por pagamentos pagos
-- Clicar em "Pendente" continua a funcionar como antes (status=pending)
+### Ficheiros a alterar
 
+**1. `src/lib/niche-labels.ts`**
+- Adicionar campos ao `NicheLabels`: `statusFieldLabel`, `statusActive`, `statusInactive`, `statusVip`
+- Valores genericos: `statusFieldLabel: 'Estado'`, `statusActive: 'Ativo'`, `statusInactive: 'Inativo'`, `statusVip: 'VIP'`
+- Valores telecom: `statusFieldLabel: 'Tipologia'`, `statusActive: 'Bronze'`, `statusInactive: 'Prata'`, `statusVip: 'Ouro'`
+- Atualizar os labels dos stats tambem no telecom: `vip: 'Clientes Ouro'`, `active: 'Clientes Bronze'`, `inactive: 'Clientes Prata'`
+
+**2. `src/components/clients/CreateClientModal.tsx`**
+- Importar e usar `useClientLabels` para obter os labels
+- Trocar `<Label>Estado</Label>` por `<Label>{labels.statusFieldLabel}</Label>`
+- Trocar `CLIENT_STATUS_LABELS` no Select por mapeamento dinamico usando os labels do niche
+
+**3. `src/components/clients/EditClientModal.tsx`**
+- Mesma alteracao que o CreateClientModal
+
+**4. `src/components/clients/ClientsTable.tsx`**
+- Usar `useClientLabels` para renderizar o badge com o label correto do niche em vez de `CLIENT_STATUS_LABELS`
+
+**5. `src/components/clients/ClientDetailsModal.tsx`**
+- Usar `useClientLabels` para o badge de status
+
+**6. `src/components/clients/ClientFilters.tsx`**
+- Ja usa `labels.active`, `labels.vip`, `labels.inactive` -- estes serao automaticamente atualizados quando o niche-labels mudar
+
+**7. `src/pages/Clients.tsx`**
+- Os cards de stats ja usam `labels.vip`, `labels.inactive` -- serao atualizados automaticamente
+
+**8. `src/components/marketing/SendTemplateModal.tsx`**
+- Usa `CLIENT_STATUS_LABELS` para filtrar clientes por estado -- substituir pelo hook
+
+**9. `src/lib/export.ts`**
+- O export de clientes usa labels hardcoded -- aceitar labels como parametro ou manter generico (menor prioridade)
+
+### Estilos visuais (telecom)
+
+Os estilos dos badges tambem mudam para refletir a hierarquia metalica:
+- **Bronze**: tom castanho/cobre (amber)
+- **Prata**: tom cinzento/neutro (muted)
+- **Ouro**: tom dourado (warning/yellow)
+
+Isto sera feito criando um `getClientStatusStyles` que retorna estilos baseados no niche, sem alterar os valores da BD.
