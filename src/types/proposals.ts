@@ -15,6 +15,7 @@ export interface Product {
   is_recurring: boolean;
   tax_value?: number | null;
   tax_exemption_reason?: string | null;
+  invoicexpress_id?: number | null;
   created_at: string;
   updated_at: string;
 }
