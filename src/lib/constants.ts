@@ -1,5 +1,5 @@
 // Versão actual do Senvia OS
-export const APP_VERSION = '1.0.0';
+export const APP_VERSION = '1.26.2';
 
 // URL base da aplicação em produção
 export const PRODUCTION_URL = 'https://app.senvia.pt';
