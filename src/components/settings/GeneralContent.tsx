@@ -181,11 +181,11 @@ export const GeneralContent = ({
           <div className="space-y-4">
             <div className="flex items-center gap-2">
               <Key className="h-4 w-4 text-muted-foreground" />
-              <Label>Alterar Password</Label>
+              <Label>Alterar Palavra-passe</Label>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="new-password" className="text-sm text-muted-foreground">Nova Password</Label>
+                <Label htmlFor="new-password" className="text-sm text-muted-foreground">Nova Palavra-passe</Label>
                 <div className="relative">
                   <Input
                     id="new-password"
@@ -206,13 +206,13 @@ export const GeneralContent = ({
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="confirm-password" className="text-sm text-muted-foreground">Confirmar Password</Label>
+                <Label htmlFor="confirm-password" className="text-sm text-muted-foreground">Confirmar Palavra-passe</Label>
                 <Input
                   id="confirm-password"
                   type={showPassword ? 'text' : 'password'}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Repetir password"
+                  placeholder="Repetir palavra-passe"
                 />
               </div>
             </div>
@@ -221,7 +221,7 @@ export const GeneralContent = ({
               disabled={changePasswordIsPending || !newPassword || !confirmPassword}
             >
               {changePasswordIsPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Alterar Password
+              Alterar Palavra-passe
             </Button>
           </div>
         </CardContent>

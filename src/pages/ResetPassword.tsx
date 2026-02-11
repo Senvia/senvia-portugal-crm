@@ -30,7 +30,7 @@ export default function ResetPassword() {
       if (session) {
         setIsValidSession(true);
       } else {
-        setError('Link de recuperação inválido ou expirado. Por favor, solicite um novo link.');
+      setError('Link de recuperação inválido ou expirado. Por favor, solicite um novo link.');
       }
       setLoading(false);
     };
@@ -68,8 +68,8 @@ export default function ResetPassword() {
 
     if (password.length < 6) {
       toast({
-        title: 'Password muito curta',
-        description: 'A password deve ter pelo menos 6 caracteres.',
+        title: 'Palavra-passe muito curta',
+        description: 'A palavra-passe deve ter pelo menos 6 caracteres.',
         variant: 'destructive',
       });
       return;
@@ -77,8 +77,8 @@ export default function ResetPassword() {
 
     if (password !== confirmPassword) {
       toast({
-        title: 'Passwords não coincidem',
-        description: 'Verifique se as passwords são iguais.',
+        title: 'Palavras-passe não coincidem',
+        description: 'Verifique se as palavras-passe são iguais.',
         variant: 'destructive',
       });
       return;
@@ -95,8 +95,8 @@ export default function ResetPassword() {
 
       setSuccess(true);
       toast({
-        title: 'Password alterada!',
-        description: 'A sua password foi alterada com sucesso.',
+        title: 'Palavra-passe alterada!',
+        description: 'A sua palavra-passe foi alterada com sucesso.',
       });
 
       // Redirect to login after success
@@ -104,7 +104,7 @@ export default function ResetPassword() {
         navigate('/');
       }, 2000);
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Ocorreu um erro ao alterar a password.';
+      const errorMessage = err instanceof Error ? err.message : 'Ocorreu um erro ao alterar a palavra-passe.';
       toast({
         title: 'Erro',
         description: errorMessage,
@@ -154,9 +154,9 @@ export default function ResetPassword() {
             <div className="mx-auto mb-4 w-12 h-12 rounded-full bg-green-500/10 flex items-center justify-center">
               <CheckCircle2 className="h-6 w-6 text-green-500" />
             </div>
-            <CardTitle className="text-white">Password Alterada!</CardTitle>
+            <CardTitle className="text-white">Palavra-passe Alterada!</CardTitle>
             <CardDescription>
-              A sua password foi alterada com sucesso. A redirecionar para o login...
+              A sua palavra-passe foi alterada com sucesso. A redirecionar para o login...
             </CardDescription>
           </CardHeader>
           <CardContent className="text-center">
@@ -174,15 +174,15 @@ export default function ResetPassword() {
           <div className="mx-auto mb-4 w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
             <KeyRound className="h-6 w-6 text-primary" />
           </div>
-          <CardTitle className="text-white">Nova Password</CardTitle>
+          <CardTitle className="text-white">Nova Palavra-passe</CardTitle>
           <CardDescription>
-            Introduza a sua nova password.
+            Introduza a sua nova palavra-passe.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="password" className="text-slate-200">Nova Password</Label>
+              <Label htmlFor="password" className="text-slate-200">Nova Palavra-passe</Label>
               <Input
                 id="password"
                 type="password"
@@ -211,18 +211,18 @@ export default function ResetPassword() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="confirmPassword" className="text-slate-200">Confirmar Password</Label>
+              <Label htmlFor="confirmPassword" className="text-slate-200">Confirmar Palavra-passe</Label>
               <Input
                 id="confirmPassword"
                 type="password"
-                placeholder="Repita a password"
+                placeholder="Repita a palavra-passe"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 className="bg-slate-800/50 border-slate-700 text-white"
                 required
               />
               {confirmPassword && password !== confirmPassword && (
-                <p className="text-xs text-destructive">As passwords não coincidem</p>
+                <p className="text-xs text-destructive">As palavras-passe não coincidem</p>
               )}
             </div>
 
@@ -232,7 +232,7 @@ export default function ResetPassword() {
               disabled={isSubmitting || !isValidSession}
             >
               {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Alterar Password
+              Alterar Palavra-passe
             </Button>
           </form>
         </CardContent>

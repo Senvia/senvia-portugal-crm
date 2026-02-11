@@ -83,12 +83,12 @@ export function TeamTab() {
     }
 
     if (password !== confirmPassword) {
-      toast({ title: 'As passwords não coincidem', variant: 'destructive' });
+      toast({ title: 'As palavras-passe não coincidem', variant: 'destructive' });
       return;
     }
 
     if (password.length < 6) {
-      toast({ title: 'A password deve ter pelo menos 6 caracteres', variant: 'destructive' });
+      toast({ title: 'A palavra-passe deve ter pelo menos 6 caracteres', variant: 'destructive' });
       return;
     }
 
@@ -203,12 +203,12 @@ export function TeamTab() {
     }
 
     if (memberNewPassword.length < 6) {
-      toast({ title: 'A password deve ter pelo menos 6 caracteres', variant: 'destructive' });
+      toast({ title: 'A palavra-passe deve ter pelo menos 6 caracteres', variant: 'destructive' });
       return;
     }
 
     if (memberNewPassword !== memberConfirmPassword) {
-      toast({ title: 'As passwords não coincidem', variant: 'destructive' });
+      toast({ title: 'As palavras-passe não coincidem', variant: 'destructive' });
       return;
     }
 
@@ -298,7 +298,7 @@ export function TeamTab() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="password">Password</Label>
+                      <Label htmlFor="password">Palavra-passe</Label>
                       <div className="relative">
                         <Input
                           id="password"
@@ -319,11 +319,11 @@ export function TeamTab() {
                       </div>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="confirm-password">Confirmar Password</Label>
+                      <Label htmlFor="confirm-password">Confirmar Palavra-passe</Label>
                       <Input
                         id="confirm-password"
                         type={showPassword ? 'text' : 'password'}
-                        placeholder="Repetir password"
+                        placeholder="Repetir palavra-passe"
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
                       />
@@ -438,7 +438,7 @@ export function TeamTab() {
                       </div>
                     </div>
                     <div className="space-y-2">
-                      <Label className="text-muted-foreground">Password</Label>
+                      <Label className="text-muted-foreground">Palavra-passe</Label>
                       <div className="flex gap-2">
                         <Input 
                           value={showPassword ? createdMember.password : '••••••••'} 
@@ -455,15 +455,15 @@ export function TeamTab() {
                         <Button 
                           variant="outline" 
                           size="icon" 
-                          onClick={() => copyToClipboard(createdMember.password, 'Password')}
+                          onClick={() => copyToClipboard(createdMember.password, 'Palavra-passe')}
                         >
-                          {copiedField === 'Password' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                          {copiedField === 'Palavra-passe' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                         </Button>
                       </div>
                     </div>
                     <div className="flex items-start gap-2 p-3 bg-muted/50 rounded-lg text-sm text-muted-foreground">
                       <Clock className="h-4 w-4 mt-0.5 shrink-0" />
-                      <p>Guarde estas informações - a password não poderá ser recuperada por si.</p>
+                      <p>Guarde estas informações - a palavra-passe não poderá ser recuperada por si.</p>
                     </div>
                   </div>
                   <DialogFooter className="flex-col sm:flex-row gap-2">
@@ -540,7 +540,7 @@ export function TeamTab() {
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={() => openChangePasswordModal(member)}>
                             <Key className="mr-2 h-4 w-4" />
-                            Redefinir Password
+                            Redefinir Palavra-passe
                           </DropdownMenuItem>
                           {!isCurrentUser(member) && member.role !== 'super_admin' && (
                             <>
@@ -592,15 +592,15 @@ export function TeamTab() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Key className="h-5 w-5" />
-              Redefinir Password
+              Redefinir Palavra-passe
             </DialogTitle>
             <DialogDescription>
-              Defina uma nova password para {selectedMember?.full_name}.
+              Defina uma nova palavra-passe para {selectedMember?.full_name}.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="member-new-password">Nova Password</Label>
+              <Label htmlFor="member-new-password">Nova Palavra-passe</Label>
               <div className="relative">
                 <Input
                   id="member-new-password"
@@ -621,11 +621,11 @@ export function TeamTab() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="member-confirm-password">Confirmar Password</Label>
+              <Label htmlFor="member-confirm-password">Confirmar Palavra-passe</Label>
               <Input
                 id="member-confirm-password"
                 type={showMemberPassword ? 'text' : 'password'}
-                placeholder="Repetir password"
+                placeholder="Repetir palavra-passe"
                 value={memberConfirmPassword}
                 onChange={(e) => setMemberConfirmPassword(e.target.value)}
               />
