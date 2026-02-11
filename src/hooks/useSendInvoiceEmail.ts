@@ -4,7 +4,7 @@ import { toast } from "sonner";
 
 interface SendInvoiceEmailParams {
   documentId: number;
-  documentType: "invoice" | "invoice_receipt" | "receipt";
+  documentType: "invoice" | "invoice_receipt" | "receipt" | "credit_note";
   organizationId: string;
   email: string;
   subject: string;

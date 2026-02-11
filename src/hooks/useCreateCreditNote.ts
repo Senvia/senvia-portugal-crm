@@ -7,7 +7,7 @@ interface CreateCreditNoteParams {
   saleId?: string;
   paymentId?: string;
   originalDocumentId: number;
-  originalDocumentType: "invoice" | "invoice_receipt" | "receipt";
+  originalDocumentType: "invoice" | "invoice_receipt" | "receipt" | "credit_note";
   reason: string;
   items?: Array<{
     name: string;
