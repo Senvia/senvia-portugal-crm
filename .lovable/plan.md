@@ -1,33 +1,38 @@
 
 
-# Emitir Fatura Direto (Sem Rascunho)
+# Atualizar Detalhes da Venda em Tempo Real
 
 ## Problema
-Os dois botoes ("Ver Rascunho Fatura" e "Emitir Fatura/Fatura-Recibo") executam a mesma acao: abrem o modal de rascunho. O botao "Emitir" deveria chamar diretamente a emissao da fatura, sem passar pelo rascunho.
+Quando a fatura e emitida com sucesso, o `queryClient.invalidateQueries(["sales"])` atualiza a lista de vendas em cache, mas o modal de detalhes continua a mostrar o objeto antigo (onde `invoicexpress_id` e `null`). Os botoes "Emitir Fatura" nao desaparecem porque o estado `selectedSale` no `Sales.tsx` e uma copia estatica que nunca se atualiza.
+
+## Solucao
+Sincronizar o `selectedSale` com os dados mais recentes do cache do React Query. Quando a lista de vendas e re-fetched apos a emissao, o modal deve automaticamente refletir o novo estado.
 
 ## Alteracao
 
-### `src/components/sales/SaleDetailsModal.tsx` (linhas 678-685)
+### `src/pages/Sales.tsx`
 
-Alterar o `onClick` do botao "Emitir Fatura" / "Emitir Fatura-Recibo" para chamar diretamente a mutacao correspondente, em vez de abrir o rascunho:
+Adicionar um `useEffect` que mantem o `selectedSale` sincronizado com os dados frescos da query `sales`:
 
-**De:**
 ```typescript
-onClick={() => setDraftMode(mode)}
-```
-
-**Para:**
-```typescript
-onClick={() => {
-  if (mode === 'invoice_receipt') {
-    issueInvoiceReceipt.mutate({ saleId: sale.id, organizationId: organization?.id || '' });
-  } else {
-    issueInvoice.mutate({ saleId: sale.id, organizationId: organization?.id || '' });
+// Sync selectedSale with fresh data from React Query cache
+useEffect(() => {
+  if (selectedSale && sales) {
+    const fresh = sales.find(s => s.id === selectedSale.id);
+    if (fresh && fresh !== selectedSale) {
+      setSelectedSale(fresh);
+    }
   }
-}}
+}, [sales]);
 ```
 
-Tambem adicionar `disabled={issueInvoice.isPending || issueInvoiceReceipt.isPending}` ao botao e mostrar um spinner durante o loading.
+Isto garante que:
+- Quando a fatura e emitida, o `onSuccess` invalida o cache `["sales"]`
+- O React Query refaz o fetch da lista
+- O `useEffect` detecta dados novos e atualiza o `selectedSale`
+- O modal re-renderiza com `invoicexpress_id` preenchido
+- Os botoes "Emitir" desaparecem e as acoes da fatura ficam disponiveis
 
-O botao "Ver Rascunho Fatura" continua a abrir o modal de rascunho normalmente, para quem quiser rever os dados e adicionar observacoes antes de emitir.
+### Resultado
+Apos emitir uma fatura ou fatura-recibo, o rodape do modal atualiza automaticamente sem precisar fechar e reabrir.
 
