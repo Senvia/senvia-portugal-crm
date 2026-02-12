@@ -302,11 +302,26 @@ async function handleKeyInvoice(supabase: any, org: any, saleId: string, organiz
   }
   console.log('KeyInvoice DocLines:', JSON.stringify(docLines))
 
+  // Determinar DocType com base no estado de pagamento
+  const { data: payments } = await supabase
+    .from('sale_payments')
+    .select('status, amount')
+    .eq('sale_id', saleId)
+
+  const totalPaid = (payments || [])
+    .filter((p: any) => p.status === 'paid')
+    .reduce((sum: number, p: any) => sum + Number(p.amount), 0)
+
+  // DocType 4 = Fatura (FT), DocType 34 = Fatura-Recibo (FR)
+  const docType = totalPaid >= sale.total_value ? '34' : '4'
+  const docLabel = docType === '34' ? 'Fatura-Recibo' : 'Fatura'
+  const docTypeCode = docType === '34' ? 'FR' : 'FT'
+  console.log(`KeyInvoice: Emitting ${docLabel} (DocType ${docType}), totalPaid=${totalPaid}, saleTotal=${sale.total_value}`)
+
   // 1. Create document using real KeyInvoice API: method:"insertDocument"
-  // DocType 34 = Fatura-Recibo (FR)
   const insertPayload: Record<string, any> = {
     method: 'insertDocument',
-    DocType: '34',
+    DocType: docType,
     DocLines: docLines,
   }
   if (keyInvoiceClientId) {
@@ -348,7 +363,7 @@ async function handleKeyInvoice(supabase: any, org: any, saleId: string, organiz
   }
 
   const docNum = createData.Data.DocNum
-  const fullDocNumber = createData.Data.FullDocNumber || `FR ${docNum}`
+  const fullDocNumber = createData.Data.FullDocNumber || `${docTypeCode} ${docNum}`
   const docSeries = createData.Data.DocSeries
 
   // 2. Get PDF via method:"getDocumentPDF" (returns Base64)
@@ -356,7 +371,7 @@ async function handleKeyInvoice(supabase: any, org: any, saleId: string, organiz
   try {
     const pdfPayload: Record<string, string> = {
       method: 'getDocumentPDF',
-      DocType: '34',
+      DocType: docType,
       DocNum: String(docNum),
     }
     if (docSeries) pdfPayload.DocSeries = String(docSeries)
@@ -394,7 +409,7 @@ async function handleKeyInvoice(supabase: any, org: any, saleId: string, organiz
             bytes[i] = binaryStr.charCodeAt(i)
           }
 
-          const pdfFileName = `${organizationId}/${saleId}/FR-${docNum}.pdf`
+          const pdfFileName = `${organizationId}/${saleId}/${docTypeCode}-${docNum}.pdf`
           const { error: uploadError } = await supabase.storage
             .from('invoices')
             .upload(pdfFileName, bytes.buffer, { contentType: 'application/pdf', upsert: true })
@@ -411,7 +426,7 @@ async function handleKeyInvoice(supabase: any, org: any, saleId: string, organiz
     .from('sales')
     .update({
       invoicexpress_id: docNum,
-      invoicexpress_type: 'keyinvoice',
+      invoicexpress_type: docTypeCode,
       invoice_reference: fullDocNumber,
       ...(storedPdfPath ? { invoice_pdf_url: storedPdfPath } : {}),
     })
