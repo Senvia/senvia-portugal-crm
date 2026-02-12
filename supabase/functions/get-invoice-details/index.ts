@@ -435,17 +435,37 @@ Deno.serve(async (req) => {
         pdfSignedUrl = signedData?.signedUrl || null
       }
 
-      const items = (saleData?.sale_items || []).map((item: any) => ({
-        name: item.name,
-        description: '',
-        unit_price: String(item.unit_price),
-        quantity: String(item.quantity),
-        tax: null,
-        discount: 0,
-        subtotal: item.total,
-        tax_amount: 0,
-        total: item.total,
-      }))
+      // For receipts, show payment amount instead of sale items
+      const isReceipt = invoiceRecord.document_type === 'receipt'
+      let items: any[]
+      let displayTotal = invoiceRecord.total
+
+      if (isReceipt) {
+        // Receipt: show a single line with the payment amount
+        items = [{
+          name: 'Liquidação de pagamento',
+          description: invoiceRecord.reference || '',
+          unit_price: String(displayTotal),
+          quantity: '1',
+          tax: null,
+          discount: 0,
+          subtotal: displayTotal,
+          tax_amount: 0,
+          total: displayTotal,
+        }]
+      } else {
+        items = (saleData?.sale_items || []).map((item: any) => ({
+          name: item.name,
+          description: '',
+          unit_price: String(item.unit_price),
+          quantity: String(item.quantity),
+          tax: null,
+          discount: 0,
+          subtotal: item.total,
+          tax_amount: 0,
+          total: item.total,
+        }))
+      }
 
       const result = {
         id: invoiceRecord.invoicexpress_id,
@@ -455,11 +475,11 @@ Deno.serve(async (req) => {
         date: invoiceRecord.date,
         due_date: invoiceRecord.due_date,
         permalink: null,
-        sum: invoiceRecord.total,
+        sum: displayTotal,
         discount: 0,
-        before_taxes: invoiceRecord.total,
+        before_taxes: displayTotal,
         taxes: 0,
-        total: invoiceRecord.total,
+        total: displayTotal,
         retention: 0,
         currency: 'EUR',
         tax_exemption: null,

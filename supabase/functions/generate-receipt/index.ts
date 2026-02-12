@@ -374,12 +374,54 @@ Deno.serve(async (req) => {
         console.warn('KeyInvoice receipt PDF failed (non-blocking):', e)
       }
 
-      // Update sale_payments
+      // Insert receipt record into invoices table
+      const clientData = sale.client as any
+      const clientName = clientData?.company || clientData?.name || 'Cliente'
+      const today = new Date().toISOString().split('T')[0]
+
+      const { data: receiptInvoiceRecord, error: insertError } = await supabase
+        .from('invoices')
+        .insert({
+          organization_id,
+          sale_id,
+          invoicexpress_id: 0, // placeholder, will update below
+          document_type: 'receipt',
+          reference: receiptReference,
+          total: Number(payment.amount),
+          status: 'final',
+          date: today,
+          raw_data: { source: 'keyinvoice', docType: rcDocType, docSeries: rcDocSeries, docNum: rcDocNum },
+          client_name: clientName,
+          pdf_path: storedPdfPath || null,
+          payment_id: payment_id,
+        })
+        .select('id')
+        .single()
+
+      let receiptInvoiceId: string | null = null
+      if (!insertError && receiptInvoiceRecord) {
+        receiptInvoiceId = receiptInvoiceRecord.id
+        // Update invoicexpress_id to a unique number derived from UUID to avoid collisions
+        // Use a negative hash to never collide with real KeyInvoice DocNums
+        const hashNum = Math.abs(receiptInvoiceRecord.id.split('').reduce((a: number, c: string) => ((a << 5) - a) + c.charCodeAt(0), 0))
+        await supabase
+          .from('invoices')
+          .update({ invoicexpress_id: hashNum })
+          .eq('id', receiptInvoiceRecord.id)
+      } else {
+        console.warn('Failed to insert receipt into invoices table:', insertError)
+      }
+
+      // Update sale_payments - use the invoices table UUID-derived ID to avoid collision
+      const paymentInvoicexpressId = receiptInvoiceId
+        ? Math.abs(receiptInvoiceId.split('').reduce((a: number, c: string) => ((a << 5) - a) + c.charCodeAt(0), 0))
+        : (rcDocNum || null)
+
       await supabase
         .from('sale_payments')
         .update({
           invoice_reference: receiptReference,
-          invoicexpress_id: rcDocNum || null,
+          invoicexpress_id: paymentInvoicexpressId,
           status: 'paid',
           ...(storedPdfPath ? { invoice_file_url: storedPdfPath } : {}),
         })
@@ -387,7 +429,7 @@ Deno.serve(async (req) => {
 
       return new Response(JSON.stringify({
         success: true,
-        receipt_id: rcDocNum,
+        receipt_id: paymentInvoicexpressId,
         invoice_reference: receiptReference,
         ...(storedPdfPath ? { pdf_path: storedPdfPath } : {}),
       }), {
