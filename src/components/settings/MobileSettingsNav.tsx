@@ -1,10 +1,10 @@
-import { Building, UsersRound, Package, Link2, Bell, Receipt, Shield, GitBranch, LayoutGrid, FileText, List, KeyRound, UserCog, Network, BellRing, AlertTriangle, Calculator } from "lucide-react";
+import { Building, UsersRound, Package, Link2, Bell, Receipt, Shield, GitBranch, LayoutGrid, FileText, List, KeyRound, UserCog, Network, BellRing, AlertTriangle, Calculator, ShoppingCart } from "lucide-react";
 import { SettingsCard } from "./SettingsCard";
 
 export type SettingsSection = "general" | "security" | "team" | "products" | "finance" | "notifications" | "integrations";
 
 export type SettingsSubSection =
-  | "org-general" | "org-pipeline" | "org-modules" | "org-forms" | "org-fields"
+  | "org-general" | "org-pipeline" | "org-modules" | "org-forms" | "org-fields" | "org-sales"
   | "security"
   | "team-access" | "team-profiles" | "team-teams"
   | "products"
@@ -80,6 +80,7 @@ export const subSectionsMap: Record<SettingsSection, SubSectionItem[]> = {
     { id: "org-modules", label: "Módulos", icon: LayoutGrid, description: "Funcionalidades ativas" },
     { id: "org-forms", label: "Formulário", icon: FileText, description: "Captação de leads" },
     { id: "org-fields", label: "Campos", icon: List, description: "Campos personalizados" },
+    { id: "org-sales", label: "Vendas", icon: ShoppingCart, description: "Regras de vendas" },
   ],
   security: [],
   team: [

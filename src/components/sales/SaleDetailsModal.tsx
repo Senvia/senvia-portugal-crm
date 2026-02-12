@@ -21,6 +21,16 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -35,6 +45,7 @@ import { Separator } from "@/components/ui/separator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUpdateSale } from "@/hooks/useSales";
+import { useOrganization } from "@/hooks/useOrganization";
 import { InvoiceDraftModal } from "./InvoiceDraftModal";
 import type { DraftSaleItem } from "./InvoiceDraftModal";
 import { useIssueInvoice } from "@/hooks/useIssueInvoice";
@@ -63,8 +74,15 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
   const [status, setStatus] = useState<SaleStatus>("in_progress");
   const [notes, setNotes] = useState("");
   const [draftMode, setDraftMode] = useState<"invoice" | "invoice_receipt" | null>(null);
+  const [showDeliveredConfirm, setShowDeliveredConfirm] = useState(false);
 
   const { organization } = useAuth();
+  const { data: orgData } = useOrganization();
+  const salesSettings = (orgData?.sales_settings as { lock_delivered_sales?: boolean; prevent_payment_deletion?: boolean }) || {};
+  const lockDeliveredSales = !!salesSettings.lock_delivered_sales;
+  const preventPaymentDeletion = !!salesSettings.prevent_payment_deletion;
+  const isDeliveredAndLocked = lockDeliveredSales && sale?.status === 'delivered';
+
   const { data: saleItems = [] } = useSaleItems(sale?.id);
   const { data: products } = useProducts();
   const { data: proposalCpes = [] } = useProposalCpes(sale?.proposal_id ?? undefined);
@@ -103,8 +121,18 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
   if (!sale) return null;
 
   const handleStatusChange = (newStatus: SaleStatus) => {
+    if (newStatus === 'delivered' && lockDeliveredSales) {
+      setShowDeliveredConfirm(true);
+      return;
+    }
     setStatus(newStatus);
     updateSale.mutate({ saleId: sale.id, updates: { status: newStatus } });
+  };
+
+  const confirmDelivered = () => {
+    setStatus('delivered');
+    updateSale.mutate({ saleId: sale.id, updates: { status: 'delivered' } });
+    setShowDeliveredConfirm(false);
   };
 
   const handleNotesBlur = () => {
@@ -469,6 +497,7 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                           clientEmail={sale.client?.email || sale.lead?.email}
                           taxConfig={organization?.tax_config as { tax_value?: number; tax_exemption_reason?: string } | null}
                           creditNoteId={sale.credit_note_id}
+                          preventPaymentDeletion={preventPaymentDeletion}
                         />
                       </CardContent>
                     </Card>
@@ -500,7 +529,7 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                         <CardTitle className="text-sm font-medium text-muted-foreground">Estado da Venda</CardTitle>
                       </CardHeader>
                       <CardContent className="p-4 pt-0">
-                        <Select value={status} onValueChange={handleStatusChange}>
+                        <Select value={status} onValueChange={handleStatusChange} disabled={isDeliveredAndLocked}>
                           <SelectTrigger className={cn('border', SALE_STATUS_COLORS[status])}>
                             <SelectValue />
                           </SelectTrigger>
@@ -514,6 +543,11 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                             ))}
                           </SelectContent>
                         </Select>
+                        {isDeliveredAndLocked && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Esta venda está concluída e não pode ser alterada.
+                          </p>
+                        )}
                       </CardContent>
                     </Card>
 
@@ -582,7 +616,7 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
           {/* Footer Actions */}
           <div className="p-4 border-t border-border/50 shrink-0">
             <div className="flex gap-3 max-w-6xl mx-auto">
-              {sale.status !== 'cancelled' && onEdit && (
+              {sale.status !== 'cancelled' && onEdit && !isDeliveredAndLocked && (
                 <Button
                   variant="outline"
                   className="flex-1"
@@ -616,6 +650,24 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Delivered Confirmation Dialog */}
+      <AlertDialog open={showDeliveredConfirm} onOpenChange={setShowDeliveredConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Concluir Venda</AlertDialogTitle>
+            <AlertDialogDescription>
+              Ao concluir esta venda, ela não poderá mais ser editada. Deseja continuar?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelivered}>
+              Confirmar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Invoice Draft Modal */}
       {draftMode && (

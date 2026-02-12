@@ -51,6 +51,7 @@ interface UpdateOrganizationData {
   keyinvoice_api_url?: string | null;
   tax_config?: Json;
   integrations_enabled?: Json;
+  sales_settings?: Json;
 }
 
 export function useUpdateOrganization() {
