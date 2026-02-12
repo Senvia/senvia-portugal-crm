@@ -134,13 +134,34 @@ Deno.serve(async (req) => {
 
       const sid = await getKeyInvoiceSid(supabase, org, organization_id)
       const apiUrl = org.keyinvoice_api_url || DEFAULT_KEYINVOICE_API_URL
-      const docType = KI_DOC_TYPE_MAP[original_document_type] || '4'
+
+      // Try to get the real DocType and DocNum from the invoice reference (e.g. "34 47/1")
+      // or from the sale_payments/sales invoice reference stored in DB
+      let kiDocType = KI_DOC_TYPE_MAP[original_document_type] || '4'
+      let kiDocNum = String(original_document_id)
+
+      // Look up the invoice record to get the real reference
+      const { data: invoiceRecord } = await supabase
+        .from('invoices')
+        .select('reference, document_type, invoicexpress_id')
+        .eq('invoicexpress_id', original_document_id)
+        .eq('organization_id', organization_id)
+        .maybeSingle()
+
+      if (invoiceRecord?.reference) {
+        // Parse reference format: "DocType DocNum" e.g. "34 47/1" or "4 12/1"
+        const refMatch = invoiceRecord.reference.match(/^(\d+)\s+(.+)$/)
+        if (refMatch) {
+          kiDocType = refMatch[1]
+          kiDocNum = refMatch[2]
+        }
+      }
 
       // KeyInvoice uses setDocumentVoid which auto-generates a credit note
       const voidPayload: Record<string, string> = {
         method: 'setDocumentVoid',
-        DocType: docType,
-        DocNum: String(original_document_id),
+        DocType: kiDocType,
+        DocNum: kiDocNum,
         CreditReason: reason,
       }
 
