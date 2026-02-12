@@ -16,6 +16,9 @@ import {
   Eye,
   CreditCard,
   ArrowLeft,
+  FileDown,
+  Mail,
+  Info,
 } from "lucide-react";
 import {
   Dialog,
@@ -65,6 +68,10 @@ import { SALE_STATUS_LABELS, SALE_STATUS_COLORS, SALE_STATUSES } from "@/types/s
 import { SalePaymentsList } from "./SalePaymentsList";
 import { RecurringSection } from "./RecurringSection";
 import { useSalePayments, calculatePaymentSummary } from "@/hooks/useSalePayments";
+import { SendInvoiceEmailModal } from "./SendInvoiceEmailModal";
+import { InvoiceDetailsModal } from "./InvoiceDetailsModal";
+import { CreateCreditNoteModal } from "./CreateCreditNoteModal";
+import { openPdfInNewTab } from "@/lib/download";
 
 interface SaleDetailsModalProps {
   sale: SaleWithDetails | null;
@@ -78,6 +85,9 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
   const [notes, setNotes] = useState("");
   const [draftMode, setDraftMode] = useState<"invoice" | "invoice_receipt" | null>(null);
   const [showDeliveredConfirm, setShowDeliveredConfirm] = useState(false);
+  const [invoiceEmailModal, setInvoiceEmailModal] = useState(false);
+  const [invoiceDetailsModal, setInvoiceDetailsModal] = useState(false);
+  const [invoiceCreditNoteModal, setInvoiceCreditNoteModal] = useState(false);
 
   const { organization } = useAuth();
   const { data: orgData } = useOrganization();
@@ -661,41 +671,91 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
             <div className="flex gap-3 max-w-6xl mx-auto">
               {(() => {
                 const canEmit = hasInvoiceXpress && !sale.invoicexpress_id && !!sale.client?.nif && !sale.credit_note_id;
-                if (!canEmit) return null;
-                const allPaid = salePayments.length > 0 && salePayments.every(p => p.status === 'paid');
-                const mode = allPaid ? "invoice_receipt" as const : "invoice" as const;
-                const emitLabel = allPaid ? "Emitir Fatura-Recibo" : "Emitir Fatura";
-                return (
-                  <>
-                    <Button
-                      variant="secondary"
-                      className="flex-1"
-                      onClick={() => setDraftMode(mode)}
-                    >
-                      <Eye className="h-4 w-4 mr-2" />
-                      Ver Rascunho Fatura
-                    </Button>
-                    <Button
-                      variant="senvia"
-                      className="flex-1"
-                      disabled={issueInvoice.isPending || issueInvoiceReceipt.isPending}
-                      onClick={() => {
-                        if (mode === 'invoice_receipt') {
-                          issueInvoiceReceipt.mutate({ saleId: sale.id, organizationId: organization?.id || '' });
-                        } else {
-                          issueInvoice.mutate({ saleId: sale.id, organizationId: organization?.id || '' });
-                        }
-                      }}
-                    >
-                      {(issueInvoice.isPending || issueInvoiceReceipt.isPending) ? (
-                        <span className="h-4 w-4 mr-2 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                      ) : (
-                        <FileText className="h-4 w-4 mr-2" />
+                if (canEmit) {
+                  const allPaid = salePayments.length > 0 && salePayments.every(p => p.status === 'paid');
+                  const mode = allPaid ? "invoice_receipt" as const : "invoice" as const;
+                  const emitLabel = allPaid ? "Emitir Fatura-Recibo" : "Emitir Fatura";
+                  return (
+                    <>
+                      <Button
+                        variant="secondary"
+                        className="flex-1"
+                        onClick={() => setDraftMode(mode)}
+                      >
+                        <Eye className="h-4 w-4 mr-2" />
+                        Ver Rascunho Fatura
+                      </Button>
+                      <Button
+                        variant="senvia"
+                        className="flex-1"
+                        disabled={issueInvoice.isPending || issueInvoiceReceipt.isPending}
+                        onClick={() => {
+                          if (mode === 'invoice_receipt') {
+                            issueInvoiceReceipt.mutate({ saleId: sale.id, organizationId: organization?.id || '' });
+                          } else {
+                            issueInvoice.mutate({ saleId: sale.id, organizationId: organization?.id || '' });
+                          }
+                        }}
+                      >
+                        {(issueInvoice.isPending || issueInvoiceReceipt.isPending) ? (
+                          <span className="h-4 w-4 mr-2 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                        ) : (
+                          <FileText className="h-4 w-4 mr-2" />
+                        )}
+                        {emitLabel}
+                      </Button>
+                    </>
+                  );
+                }
+
+                // Post-emission actions
+                const hasInvoice = hasInvoiceXpress && !!sale.invoicexpress_id;
+                if (hasInvoice) {
+                  return (
+                    <>
+                      {sale.invoice_pdf_url && (
+                        <Button
+                          variant="outline"
+                          className="flex-1"
+                          onClick={() => openPdfInNewTab(sale.invoice_pdf_url!)}
+                        >
+                          <FileDown className="h-4 w-4 mr-2" />
+                          Ver PDF
+                        </Button>
                       )}
-                      {emitLabel}
-                    </Button>
-                  </>
-                );
+                      {(sale.client?.email || sale.lead?.email) && (
+                        <Button
+                          variant="outline"
+                          className="flex-1"
+                          onClick={() => setInvoiceEmailModal(true)}
+                        >
+                          <Mail className="h-4 w-4 mr-2" />
+                          Enviar Email
+                        </Button>
+                      )}
+                      <Button
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() => setInvoiceDetailsModal(true)}
+                      >
+                        <Info className="h-4 w-4 mr-2" />
+                        Detalhes
+                      </Button>
+                      {!sale.credit_note_id && (
+                        <Button
+                          variant="destructive"
+                          className="flex-1"
+                          onClick={() => setInvoiceCreditNoteModal(true)}
+                        >
+                          <FileText className="h-4 w-4 mr-2" />
+                          Nota de Crédito
+                        </Button>
+                      )}
+                    </>
+                  );
+                }
+
+                return null;
               })()}
               {sale.status !== 'cancelled' && onEdit && !isDeliveredAndLocked && (
                 <Button
@@ -772,6 +832,38 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
             tax_exemption_reason: (organization as any)?.tax_exemption_reason,
           }}
         />
+      )}
+
+      {/* Post-emission modals */}
+      {sale.invoicexpress_id && organization && (
+        <>
+          <SendInvoiceEmailModal
+            open={invoiceEmailModal}
+            onOpenChange={setInvoiceEmailModal}
+            documentId={sale.invoicexpress_id}
+            documentType={(sale.invoicexpress_type === 'FR' ? 'invoice_receipt' : 'invoice') as any}
+            organizationId={organization.id}
+            reference={sale.invoice_reference || `${sale.invoicexpress_type || 'FT'} #${sale.invoicexpress_id}`}
+            clientEmail={sale.client?.email || sale.lead?.email}
+          />
+          <InvoiceDetailsModal
+            open={invoiceDetailsModal}
+            onOpenChange={setInvoiceDetailsModal}
+            documentId={sale.invoicexpress_id}
+            documentType={(sale.invoicexpress_type === 'FR' ? 'invoice_receipt' : 'invoice') as any}
+            organizationId={organization.id}
+            saleId={sale.id}
+          />
+          <CreateCreditNoteModal
+            open={invoiceCreditNoteModal}
+            onOpenChange={setInvoiceCreditNoteModal}
+            organizationId={organization.id}
+            saleId={sale.id}
+            documentId={sale.invoicexpress_id}
+            documentType={(sale.invoicexpress_type === 'FR' ? 'invoice_receipt' : 'invoice') as any}
+            documentReference={sale.invoice_reference || `${sale.invoicexpress_type || 'FT'} #${sale.invoicexpress_id}`}
+          />
+        </>
       )}
     </>
   );
