@@ -8,6 +8,7 @@ export type NegotiationType = 'angariacao' | 'angariacao_indexado' | 'renovacao'
 export interface Product {
   id: string;
   organization_id: string;
+  code?: string | null;
   name: string;
   description?: string | null;
   price: number | null;

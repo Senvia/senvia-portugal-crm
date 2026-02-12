@@ -113,7 +113,7 @@ async function handleKeyInvoice(supabase: any, org: any, saleId: string, organiz
   // Fetch sale items
   const { data: saleItems } = await supabase
     .from('sale_items')
-    .select('*, product:products(tax_value, tax_exemption_reason)')
+    .select('*, product:products(code, tax_value, tax_exemption_reason)')
     .eq('sale_id', saleId)
 
   const clientName = sale.client?.company || sale.client?.name || sale.lead?.name || 'Cliente'
@@ -225,7 +225,7 @@ async function handleKeyInvoice(supabase: any, org: any, saleId: string, organiz
 
     for (const item of itemsToCreate) {
       const itemName = item.name || 'Servico'
-      const itemCode = itemName.replace(/[^a-zA-Z0-9]/g, '').substring(0, 20) || 'SRV001'
+      const itemCode = item.product?.code || itemName.replace(/[^a-zA-Z0-9]/g, '').substring(0, 20) || 'SRV001'
 
       const insertProductPayload: Record<string, any> = {
         method: 'insertProduct',
@@ -294,7 +294,9 @@ async function handleKeyInvoice(supabase: any, org: any, saleId: string, organiz
   const docLines: any[] = []
   {
     for (const item of items) {
-      const productId = findProductId(item.name || 'Serviço')
+      // Use product code from catalog as IdProduct, fallback to name-based matching
+      const itemCode = item.product?.code
+      const productId = itemCode || findProductId(item.name || 'Serviço')
       docLines.push({
         IdProduct: productId,
         Qty: String(Number(item.quantity)),
