@@ -1,19 +1,27 @@
 
 
-## Alinhar filtros na pagina de Propostas
+## Reordenar filtros na pagina de Propostas
 
 ### Problema
-Os filtros (pesquisa, equipa, status, periodo) nao estao alinhados verticalmente porque o contentor flex nao tem `items-center`.
+O filtro "Periodo" (DateRangePicker) aparece depois dos outros filtros. O utilizador quer que apareca antes do campo de pesquisa.
 
 ### Solucao
-Adicionar `items-center` ao contentor dos filtros na linha 131 de `src/pages/Proposals.tsx`.
+Mover o `DateRangePicker` para ser o primeiro elemento dentro do contentor de filtros, antes do campo de pesquisa.
 
-### Alteracao
+### Alteracao em `src/pages/Proposals.tsx`
 
-**`src/pages/Proposals.tsx`** (1 linha)
+Ordem actual dos filtros (linhas 131-152):
+1. Pesquisa (Input)
+2. TeamMemberFilter
+3. Status (Select)
+4. Periodo (DateRangePicker)
 
-Linha 131: Alterar `flex flex-col sm:flex-row gap-3` para `flex flex-col sm:flex-row sm:items-center gap-3`
+Nova ordem:
+1. Periodo (DateRangePicker)
+2. Pesquisa (Input)
+3. TeamMemberFilter
+4. Status (Select)
 
 ### Ficheiro a editar
-- `src/pages/Proposals.tsx` (1 linha)
+- `src/pages/Proposals.tsx` (reordenar elementos dentro do contentor de filtros)
 
