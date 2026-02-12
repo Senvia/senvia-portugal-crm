@@ -24,7 +24,7 @@ import { FidelizationAlertsSettings } from '@/components/settings/FidelizationAl
 import { ExpenseCategoriesTab } from '@/components/settings/ExpenseCategoriesTab';
 import { FiscalSettingsTab } from '@/components/settings/FiscalSettingsTab';
 import { PushNotificationsCard } from '@/components/settings/PushNotificationsCard';
-import { PRODUCTION_URL } from '@/lib/constants';
+
 import { ProfilesTab } from '@/components/settings/ProfilesTab';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { 
@@ -52,7 +52,7 @@ export default function Settings() {
   const [mobileGroup, setMobileGroup] = useState<SettingsSection | null>(null);
   const [mobileSub, setMobileSub] = useState<SettingsSubSection | null>(null);
 
-  const [copied, setCopied] = useState<string | null>(null);
+  
   const [webhookUrl, setWebhookUrl] = useState('');
   const [isLoadingIntegrations, setIsLoadingIntegrations] = useState(true);
   
@@ -84,8 +84,6 @@ export default function Settings() {
     webhook: true, whatsapp: true, brevo: true, invoicexpress: true, keyinvoice: false,
   });
 
-  // Form mode state
-  const [formMode, setFormMode] = useState<'traditional' | 'conversational'>('traditional');
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   // Organization edit state
@@ -99,10 +97,6 @@ export default function Settings() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  // Dynamic form URL
-  const formPrefix = formMode === 'conversational' ? '/c/' : '/f/';
-  const publicFormUrl = organization?.slug ? `${PRODUCTION_URL}${formPrefix}${organization.slug}` : '';
-  const iframeCode = organization?.slug ? `<iframe src="${publicFormUrl}" width="100%" height="500" frameborder="0"></iframe>` : '';
 
   // Initialize editable fields
   useEffect(() => {
@@ -150,10 +144,6 @@ export default function Settings() {
           });
         }
         
-        if (data.form_settings) {
-          const settings = data.form_settings as { mode?: 'traditional' | 'conversational' };
-          setFormMode(settings.mode || 'traditional');
-        }
       }
       setIsLoadingIntegrations(false);
     }
@@ -180,12 +170,6 @@ export default function Settings() {
     }
   };
 
-  const copyToClipboard = (text: string, label: string) => {
-    navigator.clipboard.writeText(text);
-    setCopied(label);
-    toast({ title: "Copiado!", description: `${label} copiado para a área de transferência.` });
-    setTimeout(() => setCopied(null), 2000);
-  };
 
   const handleSaveWebhook = () => {
     updateOrganization.mutate({ webhook_url: webhookUrl.trim() || null });
@@ -284,7 +268,6 @@ export default function Settings() {
   };
 
   const integrationsContentProps = {
-    organization, publicFormUrl, iframeCode, copied, copyToClipboard,
     isLoadingIntegrations, webhookUrl, setWebhookUrl, isValidUrl,
     handleTestWebhook, handleSaveWebhook,
     testWebhookIsPending: testWebhook.isPending,
