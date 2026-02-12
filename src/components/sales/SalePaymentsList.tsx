@@ -274,8 +274,8 @@ export function SalePaymentsList({
                         setDraftMode("receipt");
                       }}
                     >
-                      <Eye className="h-3 w-3 mr-1" />
-                      Ver Rascunho de Recibo
+                      <Receipt className="h-3 w-3 mr-1" />
+                      Emitir Recibo
                     </Button>
                   )}
                   {payment.qr_code_url && (
