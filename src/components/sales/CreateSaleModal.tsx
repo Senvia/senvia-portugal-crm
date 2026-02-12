@@ -72,6 +72,7 @@ import {
 import { calculatePaymentSummary } from "@/hooks/useSalePayments";
 import { AddDraftPaymentModal, type DraftPayment } from "./AddDraftPaymentModal";
 import { PaymentTypeSelector } from "./PaymentTypeSelector";
+import { DraftScheduleModal } from "./DraftScheduleModal";
 
 
 interface SaleItemDraft {
@@ -158,6 +159,7 @@ export function CreateSaleModal({
   const [draftPayments, setDraftPayments] = useState<DraftPayment[]>([]);
   const [showDraftPaymentModal, setShowDraftPaymentModal] = useState(false);
   const [showPaymentTypeSelector, setShowPaymentTypeSelector] = useState(false);
+  const [showDraftScheduleModal, setShowDraftScheduleModal] = useState(false);
 
   // Reset form when modal opens
   useEffect(() => {
@@ -234,6 +236,7 @@ export function CreateSaleModal({
       setDraftPayments([]);
       setShowDraftPaymentModal(false);
       setShowPaymentTypeSelector(false);
+      setShowDraftScheduleModal(false);
       if (!prefillProposal?.notes) {
         setNotes("");
       }
@@ -1220,7 +1223,7 @@ export function CreateSaleModal({
           }}
           onSelectInstallments={() => {
             setShowPaymentTypeSelector(false);
-            setShowDraftPaymentModal(true);
+            setShowDraftScheduleModal(true);
           }}
         />
 
@@ -1241,6 +1244,20 @@ export function CreateSaleModal({
             (organization?.integrations_enabled as any)?.invoicexpress !== false
             && !!(organization?.invoicexpress_account_name && organization?.invoicexpress_api_key)
           }
+        />
+
+        {/* Draft Schedule Modal (Parcelado) */}
+        <DraftScheduleModal
+          open={showDraftScheduleModal}
+          onOpenChange={setShowDraftScheduleModal}
+          remainingAmount={(() => {
+            const summary = calculatePaymentSummary(
+              draftPayments.map(dp => ({ ...dp, organization_id: '', sale_id: '', invoice_file_url: null, created_at: '', updated_at: '' })),
+              total
+            );
+            return summary.remaining;
+          })()}
+          onAdd={(payments) => setDraftPayments(prev => [...prev, ...payments])}
         />
 
         {/* Footer */}
