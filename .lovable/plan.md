@@ -1,31 +1,20 @@
 
 
-# Tornar Data da Venda Read-Only no Modal Editar Venda
+# Reordenar Botoes do Footer - Detalhes da Venda
 
 ## Problema
-No modal "Editar Venda", a data da venda aparece como um date picker editavel, enquanto no "Detalhes da Venda" aparece como texto simples read-only. A data de uma venda nao deve ser editavel.
+No footer do modal "Detalhes da Venda", o botao "Editar Venda" aparece antes dos botoes de faturacao. O utilizador quer que fique entre o botao "Emitir Fatura" e o botao "Voltar".
 
-## O que fazer
+## Alteracao
 
-### `src/components/sales/EditSaleModal.tsx`
+### `src/components/sales/SaleDetailsModal.tsx` (linhas 660-710)
 
-Substituir o Popover/Calendar (linhas 405-431) por texto simples read-only, igualando o estilo do SaleDetailsModal:
+Reordenar os blocos dentro do footer para:
 
-**De** (date picker editavel):
-```text
-<Popover>
-  <PopoverTrigger><Button>...</Button></PopoverTrigger>
-  <PopoverContent><Calendar .../></PopoverContent>
-</Popover>
-```
+1. **Ver Rascunho Fatura** + **Emitir Fatura** (bloco de faturacao - mantem-se primeiro)
+2. **Editar Venda** (movido para aqui)
+3. **Voltar** (mantem-se no final)
 
-**Para** (texto read-only):
-```text
-<p className="text-xs text-muted-foreground">Data da Venda</p>
-<p className="text-sm font-medium">
-  {format(new Date(sale.sale_date), "d MMM yyyy", { locale: pt })}
-</p>
-```
+Ordem final dos botoes: `[ Ver Rascunho | Emitir Fatura | Editar Venda | Voltar ]`
 
-Tambem remover o state `saleDate` e a logica associada do `handleSave`, ja que a data nao sera mais editavel.
-
+Nenhuma logica e alterada, apenas a posicao dos blocos JSX dentro do `<div className="flex gap-3">`.
