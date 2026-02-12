@@ -6,13 +6,13 @@ import {
   User, 
   Calendar, 
   FileText, 
-  Trash2, 
   MessageSquare, 
   Phone,
   Package,
   Zap,
   Wrench,
-  Pencil
+  Pencil,
+  Eye
 } from "lucide-react";
 import {
   Dialog,
@@ -20,16 +20,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import {
   Select,
   SelectContent,
@@ -44,7 +34,12 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
-import { useUpdateSale, useDeleteSale } from "@/hooks/useSales";
+import { useUpdateSale } from "@/hooks/useSales";
+import { InvoiceDraftModal } from "./InvoiceDraftModal";
+import type { DraftSaleItem } from "./InvoiceDraftModal";
+import { useIssueInvoice } from "@/hooks/useIssueInvoice";
+import { useIssueInvoiceReceipt } from "@/hooks/useIssueInvoiceReceipt";
+import { useGenerateReceipt } from "@/hooks/useGenerateReceipt";
 import { useSaleItems } from "@/hooks/useSaleItems";
 import { useProducts } from "@/hooks/useProducts";
 import { VatBadge, useVatCalculation, isInvoiceXpressActive as checkIxActive, getOrgTaxValue } from "./SaleFiscalInfo";
@@ -67,14 +62,16 @@ interface SaleDetailsModalProps {
 export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetailsModalProps) {
   const [status, setStatus] = useState<SaleStatus>("pending");
   const [notes, setNotes] = useState("");
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [draftMode, setDraftMode] = useState<"invoice" | "invoice_receipt" | null>(null);
 
   const { organization } = useAuth();
   const { data: saleItems = [] } = useSaleItems(sale?.id);
   const { data: products } = useProducts();
   const { data: proposalCpes = [] } = useProposalCpes(sale?.proposal_id ?? undefined);
   const updateSale = useUpdateSale();
-  const deleteSale = useDeleteSale();
+  const issueInvoice = useIssueInvoice();
+  const issueInvoiceReceipt = useIssueInvoiceReceipt();
+  const generateReceipt = useGenerateReceipt();
 
   const { data: salePayments = [] } = useSalePayments(sale?.id);
   const hasPaidPayments = salePayments.some(p => p.status === 'paid');
@@ -116,14 +113,6 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
     }
   };
 
-  const handleDelete = () => {
-    deleteSale.mutate(sale.id, {
-      onSuccess: () => {
-        setShowDeleteConfirm(false);
-        onOpenChange(false);
-      },
-    });
-  };
 
   const openWhatsApp = () => {
     const phone = sale.client?.phone || sale.lead?.phone;
@@ -606,36 +595,60 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                   Editar Venda
                 </Button>
               )}
-              <Button
-                variant="destructive"
-                className={sale.status !== 'cancelled' && onEdit ? "flex-1" : "w-full"}
-                onClick={() => setShowDeleteConfirm(true)}
-              >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Eliminar Venda
-              </Button>
+              {(() => {
+                const canEmitInvoice = hasInvoiceXpress && !sale.invoicexpress_id && !!sale.client?.nif && !sale.credit_note_id;
+                if (!canEmitInvoice) return null;
+                const allPaid = salePayments.length > 0 && salePayments.every(p => p.status === 'paid');
+                const mode = allPaid ? "invoice_receipt" as const : "invoice" as const;
+                const label = allPaid ? "Ver Rascunho de Fatura-Recibo" : "Ver Rascunho de Fatura";
+                return (
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => setDraftMode(mode)}
+                  >
+                    <Eye className="h-4 w-4 mr-2" />
+                    {label}
+                  </Button>
+                );
+              })()}
             </div>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation */}
-      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Eliminar Venda</AlertDialogTitle>
-            <AlertDialogDescription>
-              Tem a certeza que deseja eliminar esta venda? Esta ação não pode ser desfeita.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">
-              Eliminar
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Invoice Draft Modal */}
+      {draftMode && (
+        <InvoiceDraftModal
+          open={!!draftMode}
+          onOpenChange={(open) => { if (!open) setDraftMode(null); }}
+          mode={draftMode}
+          onConfirm={(obs) => {
+            if (draftMode === 'invoice_receipt') {
+              issueInvoiceReceipt.mutate({ saleId: sale.id, organizationId: organization?.id || '', observations: obs });
+            } else {
+              issueInvoice.mutate({ saleId: sale.id, organizationId: organization?.id || '', observations: obs });
+            }
+          }}
+          isLoading={issueInvoice.isPending || issueInvoiceReceipt.isPending}
+          clientName={sale.client?.name || sale.lead?.name || ''}
+          clientNif={sale.client?.nif || ''}
+          amount={sale.total_value}
+          paymentDate={sale.sale_date}
+          saleTotal={sale.total_value}
+          saleItems={saleItems.map((item: any) => ({
+            name: item.name,
+            quantity: Number(item.quantity),
+            unit_price: Number(item.unit_price),
+            tax_value: item.product?.tax_value ?? null,
+          }))}
+          payments={salePayments}
+          taxConfig={{
+            tax_value: orgTaxValue,
+            tax_exemption_reason: (organization as any)?.tax_exemption_reason,
+          }}
+        />
+      )}
     </>
   );
 }
