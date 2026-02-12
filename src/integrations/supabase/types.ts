@@ -1630,6 +1630,7 @@ export type Database = {
           integrations_enabled: Json | null
           invoicexpress_account_name: string | null
           invoicexpress_api_key: string | null
+          keyinvoice_api_url: string | null
           keyinvoice_company_code: string | null
           keyinvoice_password: string | null
           keyinvoice_token: string | null
@@ -1670,6 +1671,7 @@ export type Database = {
           integrations_enabled?: Json | null
           invoicexpress_account_name?: string | null
           invoicexpress_api_key?: string | null
+          keyinvoice_api_url?: string | null
           keyinvoice_company_code?: string | null
           keyinvoice_password?: string | null
           keyinvoice_token?: string | null
@@ -1710,6 +1712,7 @@ export type Database = {
           integrations_enabled?: Json | null
           invoicexpress_account_name?: string | null
           invoicexpress_api_key?: string | null
+          keyinvoice_api_url?: string | null
           keyinvoice_company_code?: string | null
           keyinvoice_password?: string | null
           keyinvoice_token?: string | null

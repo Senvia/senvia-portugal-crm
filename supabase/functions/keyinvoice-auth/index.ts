@@ -5,11 +5,11 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-const KEYINVOICE_API_BASE = 'https://api.cloudinvoice.net'
+const DEFAULT_KEYINVOICE_API_URL = 'https://app.keyinvoice.com/API/'
 
 /**
- * KeyInvoice Auth - manages token acquisition and caching.
- * Can be called directly or used as a helper from other edge functions.
+ * KeyInvoice Auth - manages token (Sid) acquisition and caching.
+ * Uses the real KeyInvoice API: POST to base URL with method:"login" in body.
  * 
  * POST body: { organization_id: string }
  * Returns: { token: string }
@@ -35,7 +35,7 @@ Deno.serve(async (req) => {
     // Fetch org credentials
     const { data: org, error: orgError } = await supabase
       .from('organizations')
-      .select('keyinvoice_username, keyinvoice_password, keyinvoice_company_code, keyinvoice_token, keyinvoice_token_expires_at')
+      .select('keyinvoice_username, keyinvoice_password, keyinvoice_company_code, keyinvoice_token, keyinvoice_token_expires_at, keyinvoice_api_url')
       .eq('id', organization_id)
       .single()
 
@@ -53,11 +53,10 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Check if cached token is still valid (we give a 1h buffer)
+    // Check if cached Sid is still valid
     if (org.keyinvoice_token && org.keyinvoice_token_expires_at) {
       const expiresAt = new Date(org.keyinvoice_token_expires_at)
-      const now = new Date()
-      if (expiresAt > now) {
+      if (expiresAt > new Date()) {
         return new Response(JSON.stringify({ token: org.keyinvoice_token }), {
           status: 200,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -65,16 +64,19 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Obtain new token via login
+    const apiUrl = org.keyinvoice_api_url || DEFAULT_KEYINVOICE_API_URL
+
+    // Obtain new Sid via login using the real KeyInvoice API
     const loginPayload: Record<string, string> = {
+      method: 'login',
       username: org.keyinvoice_username,
       password: org.keyinvoice_password,
     }
     if (org.keyinvoice_company_code) {
-      loginPayload.company_code = org.keyinvoice_company_code
+      loginPayload.companyCode = org.keyinvoice_company_code
     }
 
-    const loginRes = await fetch(`${KEYINVOICE_API_BASE}/auth/login/`, {
+    const loginRes = await fetch(apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(loginPayload),
@@ -82,7 +84,7 @@ Deno.serve(async (req) => {
 
     if (!loginRes.ok) {
       const errorText = await loginRes.text()
-      console.error('KeyInvoice login error:', loginRes.status, errorText)
+      console.error('KeyInvoice login HTTP error:', loginRes.status, errorText)
       return new Response(JSON.stringify({ error: `Erro na autenticação KeyInvoice: ${loginRes.status}` }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -90,26 +92,30 @@ Deno.serve(async (req) => {
     }
 
     const loginData = await loginRes.json()
-    const token = loginData.key
-
-    if (!token) {
-      return new Response(JSON.stringify({ error: 'KeyInvoice não retornou token' }), {
-        status: 500,
+    
+    // Real API returns {Status:1,Data:{Sid:"..."}}
+    if (loginData.Status !== 1 || !loginData.Data?.Sid) {
+      const errorMsg = loginData.ErrorMessage || 'Login falhou'
+      console.error('KeyInvoice login failed:', errorMsg)
+      return new Response(JSON.stringify({ error: `KeyInvoice: ${errorMsg}` }), {
+        status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
-    // Cache token with 23h expiry (no documented expiry, we refresh daily)
+    const sid = loginData.Data.Sid
+
+    // Cache Sid with 23h expiry
     const expiresAt = new Date(Date.now() + 23 * 60 * 60 * 1000).toISOString()
     await supabase
       .from('organizations')
       .update({
-        keyinvoice_token: token,
+        keyinvoice_token: sid,
         keyinvoice_token_expires_at: expiresAt,
       })
       .eq('id', organization_id)
 
-    return new Response(JSON.stringify({ token }), {
+    return new Response(JSON.stringify({ token: sid }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })

@@ -48,6 +48,7 @@ interface UpdateOrganizationData {
   keyinvoice_username?: string | null;
   keyinvoice_password?: string | null;
   keyinvoice_company_code?: string | null;
+  keyinvoice_api_url?: string | null;
   tax_config?: Json;
   integrations_enabled?: Json;
 }
