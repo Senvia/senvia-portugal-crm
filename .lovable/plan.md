@@ -1,41 +1,45 @@
 
 
-# Ajuste do Footer do Modal de Detalhes de Venda
+# Remover estado "Pendente" das Vendas
 
-## O que muda
+## Resumo
 
-### 1. Remover o botao "Eliminar Venda"
-- Remover o botao destrutivo e toda a logica associada (AlertDialog de confirmacao, estado `showDeleteConfirm`, funcao `handleDelete`, import do `useDeleteSale`)
-- Isto simplifica o footer e remove uma acao perigosa de acesso facil
+O estado `pending` deixa de existir como estado de venda. Toda venda sera criada com o estado `in_progress` por defeito. O utilizador pode selecionar outro estado (Concluida ou Cancelado) mas "Pendente" desaparece das opcoes.
 
-### 2. Mover botoes de faturacao para o footer
-Os botoes "Ver Rascunho de Fatura" e "Ver Rascunho de Fatura-Recibo" estao atualmente dentro do componente `SalePaymentsList` (coluna esquerda, misturados com a lista de pagamentos). Vao ser extraidos e colocados no footer do modal, onde ficam mais visiveis e acessiveis.
+**Nota importante:** O `pending` continua a existir em `PaymentStatus` e `PaymentRecordStatus` (pagamentos pendentes/agendados) -- essas nao mudam.
 
-O footer ficara assim:
+## Alteracoes
 
-```text
-+----------------------------------------------------------+
-| Footer:                                                    |
-|  [Editar Venda]    [Ver Rascunho de Fatura/Fatura-Recibo] |
-+----------------------------------------------------------+
-```
+### 1. `src/types/sales.ts`
+- Remover `'pending'` do tipo `SaleStatus` (fica: `'in_progress' | 'delivered' | 'cancelled'`)
+- Remover entrada `pending` de `SALE_STATUS_LABELS`, `SALE_STATUS_COLORS`
+- Remover `'pending'` do array `SALE_STATUSES`
 
-- O botao de rascunho de fatura aparece **apenas quando** ha InvoiceXpress ativo, o cliente tem NIF, e nao existe fatura emitida (mesma logica que ja existe no `SalePaymentsList`)
-- O label muda dinamicamente: "Ver Rascunho de Fatura" (se pagamentos pendentes) ou "Ver Rascunho de Fatura-Recibo" (se todos pagos)
+### 2. `src/components/sales/CreateSaleModal.tsx`
+- Alterar o estado inicial de `saleStatus` de `"pending"` para `"in_progress"`
+- Alterar o reset apos criacao de `"pending"` para `"in_progress"`
 
-## Ficheiro alterado
+### 3. `src/components/sales/SaleDetailsModal.tsx`
+- Alterar o estado inicial de `status` de `"pending"` para `"in_progress"` (este valor e substituido pelo `useEffect` com o `sale.status`, serve apenas como fallback)
 
-**`src/components/sales/SaleDetailsModal.tsx`**
+### 4. `src/pages/Sales.tsx`
+- Remover o card de resumo "Pendentes" (o quarto card com icone Clock)
+- Remover a contagem `pending` do calculo de `stats`
+- Os 3 cards restantes ficam: Total Vendas, Entregues, Em Progresso (com grid `grid-cols-2 md:grid-cols-3`)
 
-### Detalhes tecnicos
+### 5. `src/hooks/useWidgetData.ts`
+- No case `'sales_active'`: remover `s.status === 'pending'` do filtro (manter apenas `in_progress`)
+- No case `'active_projects'`: remover `s.status === 'pending'` do filtro
+- No case `'pending_installations'`: alterar para filtrar por `in_progress` em vez de `pending`
 
-1. Remover imports e state de delete: `useDeleteSale`, `showDeleteConfirm`, `handleDelete`, `AlertDialog` de confirmacao, icone `Trash2`
-2. Adicionar estado e logica para o draft mode no `SaleDetailsModal` (mover do `SalePaymentsList`):
-   - States: `draftMode`, `draftPayment`
-   - Imports: `InvoiceDraftModal`, `useIssueInvoice`, `useIssueInvoiceReceipt`, `useGenerateReceipt`, icone `Eye`
-   - Calcular `canEmitInvoice` (hasInvoiceXpress e clientNif e sem fatura existente e sem nota de credito)
-   - Calcular o label e mode com base nos pagamentos (`allPaid`)
-3. Renderizar o botao de rascunho no footer ao lado do "Editar Venda"
-4. Renderizar os `InvoiceDraftModal` (FT e FR) no final do componente
-5. O `SalePaymentsList` continua a mostrar os botoes de recibo individual (RC) por pagamento -- apenas o botao global de FT/FR e que sobe para o footer
+### 6. Migracao de base de dados
+- Atualizar todas as vendas existentes com `status = 'pending'` para `status = 'in_progress'`
+- Alterar o valor default da coluna `status` na tabela `sales` de `'pending'` para `'in_progress'`
+
+## O que NAO muda
+
+- `PaymentStatus` (`pending`, `partial`, `paid`) -- os pagamentos continuam com estado pendente
+- `PaymentRecordStatus` (`pending`, `paid`) -- as parcelas agendadas continuam como pending
+- Qualquer logica de pagamentos, faturacao, recorrencia
+- Eventos de calendario, pedidos internos e CPEs que usam o seu proprio `pending`
 
