@@ -119,6 +119,37 @@ async function handleKeyInvoice(supabase: any, org: any, saleId: string, organiz
   const clientName = sale.client?.company || sale.client?.name || sale.lead?.name || 'Cliente'
   const clientCode = sale.client?.code || clientNif
 
+  // Ensure client exists in KeyInvoice (auto-create if not)
+  try {
+    const insertClientPayload: Record<string, any> = {
+      method: 'insertClient',
+      Name: clientName,
+      TaxId: clientNif,
+    }
+    if (sale.client?.email) insertClientPayload.Email = sale.client.email
+    if (sale.client?.phone) insertClientPayload.Phone = sale.client.phone
+    if (sale.client?.address_line1) insertClientPayload.Address = sale.client.address_line1
+    if (sale.client?.city) insertClientPayload.City = sale.client.city
+    if (sale.client?.postal_code) insertClientPayload.PostalCode = sale.client.postal_code
+
+    const clientRes = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Sid': sid },
+      body: JSON.stringify(insertClientPayload),
+    })
+    if (clientRes.ok) {
+      const clientData = await clientRes.json()
+      // Status 1 = created, or error if already exists (which is fine)
+      if (clientData.Status === 1) {
+        console.log('KeyInvoice client created:', clientData.Data)
+      } else {
+        console.log('KeyInvoice insertClient response (may already exist):', clientData.ErrorMessage)
+      }
+    }
+  } catch (e) {
+    console.warn('KeyInvoice insertClient failed (non-blocking, client may already exist):', e)
+  }
+
   // Build DocLines for KeyInvoice real API
   const docLines = (saleItems || []).map((item: any) => {
     const line: any = {
@@ -142,7 +173,7 @@ async function handleKeyInvoice(supabase: any, org: any, saleId: string, organiz
   const insertPayload: Record<string, any> = {
     method: 'insertDocument',
     DocType: '34',
-    IdClient: clientCode,
+    IdClient: clientNif,
     DocLines: docLines,
   }
   if (observations) {
