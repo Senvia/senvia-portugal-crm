@@ -1943,6 +1943,7 @@ export type Database = {
       products: {
         Row: {
           category_id: string | null
+          code: string | null
           compare_at_price: number | null
           created_at: string | null
           description: string | null
@@ -1970,6 +1971,7 @@ export type Database = {
         }
         Insert: {
           category_id?: string | null
+          code?: string | null
           compare_at_price?: number | null
           created_at?: string | null
           description?: string | null
@@ -1997,6 +1999,7 @@ export type Database = {
         }
         Update: {
           category_id?: string | null
+          code?: string | null
           compare_at_price?: number | null
           created_at?: string | null
           description?: string | null
@@ -2746,6 +2749,7 @@ export type Database = {
       }
       generate_client_code: { Args: { _org_id: string }; Returns: string }
       generate_order_number: { Args: { _org_id: string }; Returns: string }
+      generate_product_code: { Args: { _org_id: string }; Returns: string }
       generate_proposal_code: { Args: { _org_id: string }; Returns: string }
       generate_sale_code: { Args: { _org_id: string }; Returns: string }
       get_all_organizations: {
