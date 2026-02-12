@@ -5,12 +5,12 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+const DEFAULT_KEYINVOICE_API_URL = 'https://login.keyinvoice.com/API5.php'
+
 /**
- * KeyInvoice Auth (API 5.0) - returns the API Key directly as Sid.
- * No login required - the key IS the authentication.
- * 
- * POST body: { organization_id: string }
- * Returns: { token: string }
+ * KeyInvoice Auth (API 5.0) - authenticates and returns a cached Sid session token.
+ * Uses method:"authenticate" with header Apikey to get a Sid (TTL 3600s).
+ * Caches the Sid in the organizations table for reuse.
  */
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -30,10 +30,9 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Fetch org API key (stored in keyinvoice_password field)
     const { data: org, error: orgError } = await supabase
       .from('organizations')
-      .select('keyinvoice_password')
+      .select('keyinvoice_password, keyinvoice_api_url, keyinvoice_sid, keyinvoice_sid_expires_at')
       .eq('id', organization_id)
       .single()
 
@@ -51,8 +50,55 @@ Deno.serve(async (req) => {
       })
     }
 
-    // API 5.0: The key IS the Sid - no login needed
-    return new Response(JSON.stringify({ token: org.keyinvoice_password }), {
+    // Check cached Sid (valid if expires_at > now + 5min margin)
+    const now = new Date()
+    const margin = 5 * 60 * 1000 // 5 minutes
+    if (org.keyinvoice_sid && org.keyinvoice_sid_expires_at) {
+      const expiresAt = new Date(org.keyinvoice_sid_expires_at)
+      if (expiresAt.getTime() > now.getTime() + margin) {
+        return new Response(JSON.stringify({ token: org.keyinvoice_sid }), {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+    }
+
+    // Authenticate to get a new Sid
+    const apiUrl = org.keyinvoice_api_url || DEFAULT_KEYINVOICE_API_URL
+    const authRes = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Apikey': org.keyinvoice_password },
+      body: JSON.stringify({ method: 'authenticate' }),
+    })
+
+    if (!authRes.ok) {
+      const errorText = await authRes.text()
+      console.error('KeyInvoice authenticate HTTP error:', authRes.status, errorText)
+      return new Response(JSON.stringify({ error: `Erro ao autenticar no KeyInvoice: ${authRes.status}` }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    const authData = await authRes.json()
+    if (authData.Status !== 1 || !authData.Sid) {
+      console.error('KeyInvoice authenticate failed:', authData.ErrorMessage)
+      return new Response(JSON.stringify({ error: `KeyInvoice: ${authData.ErrorMessage || 'Erro de autenticação'}` }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    const newSid = authData.Sid
+    const expiresAt = new Date(now.getTime() + 3600 * 1000) // TTL 3600s
+
+    // Cache the Sid
+    await supabase
+      .from('organizations')
+      .update({ keyinvoice_sid: newSid, keyinvoice_sid_expires_at: expiresAt.toISOString() })
+      .eq('id', organization_id)
+
+    return new Response(JSON.stringify({ token: newSid }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
