@@ -1,49 +1,37 @@
 
 
-# Adicionar Pagamentos nas Observacoes da Fatura (KeyInvoice)
+# Formatacao dos Pagamentos nas Observacoes da Fatura
 
 ## Problema
-O caminho do KeyInvoice na funcao `issue-invoice` nao gera automaticamente as observacoes com o cronograma de pagamentos. Apenas usa o parametro `observations` vindo do frontend (que normalmente esta vazio). O caminho do InvoiceXpress ja tem esta logica (linhas 740-761), mas o KeyInvoice nao.
+Os pagamentos nas observacoes da fatura estao a ser separados por `\n` (newline simples), mas podem nao estar a aparecer com quebra de linha visivel no documento final. O utilizador quer cada pagamento claramente separado por uma linha.
 
 ## Alteracao
 
 ### `supabase/functions/issue-invoice/index.ts`
 
-Antes de montar o `insertPayload` (linha ~342), adicionar a mesma logica de auto-geracao de observacoes que ja existe no caminho InvoiceXpress:
+Alterar os dois blocos de geracao de observacoes (KeyInvoice ~linha 351 e InvoiceXpress ~linha 774) para usar `\r\n` (quebra de linha compativel com mais sistemas) ou `\n\n` (linha em branco entre cada pagamento) como separador.
 
-```typescript
-// Antes da linha 342 (insertPayload)
-let finalObservations = observations || ''
-if (!finalObservations) {
-  const { data: salePayments } = await supabase
-    .from('sale_payments')
-    .select('amount, payment_date, status')
-    .eq('sale_id', saleId)
-    .order('payment_date', { ascending: true })
+**KeyInvoice (linha 351-356):**
+```
+Pagamento em 3 parcelas:
 
-  if (salePayments && salePayments.length > 1) {
-    finalObservations = `Pagamento em ${salePayments.length} parcelas:\n` +
-      salePayments.map((p, i) => {
-        const d = new Date(p.payment_date)
-        const dateStr = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`
-        return `${i+1}. ${dateStr} - ${Number(p.amount).toFixed(2)}€`
-      }).join('\n')
-  } else if (salePayments && salePayments.length === 1) {
-    const p = salePayments[0]
-    const d = new Date(p.payment_date)
-    const dateStr = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`
-    finalObservations = `Data de pagamento: ${dateStr}`
-  }
-}
+1. 15/02/2026 - 400.00€
+
+2. 15/03/2026 - 400.00€
+
+3. 15/04/2026 - 400.00€
 ```
 
-Depois, na linha 354, substituir `observations` por `finalObservations`:
+**InvoiceXpress (linha 774-779):**
+```
+Pagamento em 3 parcelas:
 
-```typescript
-if (finalObservations) {
-  insertPayload.Comments = finalObservations
-}
+- 1.ª parcela: 400.00 EUR - 15/02/2026
+
+- 2.ª parcela: 400.00 EUR - 15/03/2026
+
+- 3.ª parcela: 400.00 EUR - 15/04/2026
 ```
 
-Nota: Os pagamentos ja sao buscados na linha 326 para determinar o DocType, mas sem `payment_date`. Esta nova query inclui `payment_date` e ordenacao para gerar as observacoes corretamente.
+Alteracao tecnica: substituir `.join('\n')` por `.join('\n\n')` e adicionar `\n\n` apos a linha de titulo em ambos os caminhos (KeyInvoice e InvoiceXpress).
 
