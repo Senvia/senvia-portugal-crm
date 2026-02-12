@@ -1,59 +1,53 @@
 
+# Descarregar PDF da KeyInvoice para documentos sem PDF
 
-# Corrigir fatura KeyInvoice em falta na aba Faturas
+## Problema
 
-## Diagnóstico
+A fatura migrada (34 47/1) nao tem PDF armazenado (`pdf_path = null`) porque foi inserida manualmente antes do sistema de download automatico. Quando o utilizador abre os detalhes e clica em "PDF", o sistema mostra "PDF nao disponivel".
 
-A fatura da venda 0007 (sale_id: `983dafb3-...`) foi emitida **antes** do deploy que insere registos na tabela `invoices`. Por isso, existe na tabela `sales` mas não na tabela `invoices`.
+## Solucao
 
-Dados actuais na tabela `sales`:
-- `invoice_reference`: "34 47/1"
-- `invoicexpress_type`: "keyinvoice" (valor antigo, antes da correcção FT/FR)
-- `invoicexpress_id`: 1
+Modificar a edge function `get-invoice-details` para que, quando detecta um documento KeyInvoice sem PDF armazenado, tente descarrega-lo automaticamente da API KeyInvoice e guarda-lo no storage.
 
-## Acções
+## Plano de implementacao
 
-### 1. Inserir manualmente o registo na tabela `invoices`
+### 1. Actualizar select da organizacao
 
-Usar o insert tool para adicionar a fatura em falta:
+Na edge function `get-invoice-details`, adicionar os campos `keyinvoice_password`, `keyinvoice_api_url`, `keyinvoice_sid`, `keyinvoice_sid_expires_at` ao select da tabela `organizations`.
 
-```sql
-INSERT INTO invoices (organization_id, invoicexpress_id, reference, document_type, status, client_name, total, date, sale_id, raw_data, updated_at)
-SELECT 
-  s.organization_id,
-  s.invoicexpress_id,
-  s.invoice_reference,
-  'invoice_receipt',
-  'final',
-  COALESCE(c.name, l.name, 'Cliente'),
-  s.total_value,
-  s.created_at::date::text,
-  s.id,
-  '{"source": "keyinvoice", "migrated": true}'::jsonb,
-  NOW()
-FROM sales s
-LEFT JOIN clients c ON c.id = s.client_id
-LEFT JOIN leads l ON l.id = s.lead_id
-WHERE s.id = '983dafb3-9497-4c16-af6c-c12fdba84239';
-```
+### 2. Adicionar logica de download on-demand
 
-### 2. Corrigir o `invoicexpress_type` na tabela `sales`
+Dentro do bloco `if (isKeyInvoiceDoc)`, quando `invoiceRecord.pdf_path` e `null`:
 
-O valor actual é `"keyinvoice"` (formato antigo). Actualizar para `"FR"` (Fatura-Recibo, DocType 34):
+1. Extrair `DocType`, `DocNum` e `DocSeries` do `raw_data` do invoice ou fazer parse da `reference` (formato "34 47/1" -> DocType=34, DocSeries=47, DocNum=1).
+2. Autenticar na API KeyInvoice (reutilizar o Sid em cache ou obter novo via `authenticate`).
+3. Chamar `getDocumentPDF` com os parametros extraidos.
+4. Converter o Base64 recebido em binario e guardar no bucket `invoices`.
+5. Actualizar `invoices.pdf_path` com o caminho do ficheiro.
+6. Gerar signed URL e devolver no response.
 
-```sql
-UPDATE sales 
-SET invoicexpress_type = 'FR' 
-WHERE id = '983dafb3-9497-4c16-af6c-c12fdba84239';
-```
+### 3. Reutilizar logica de autenticacao existente
 
-### 3. Validação
+Copiar a funcao `getKeyInvoiceSid` ja existente em `issue-invoice/index.ts` para `get-invoice-details/index.ts` (mesma logica de cache de Sid com TTL).
 
-Após as inserções, a fatura deverá aparecer imediatamente na aba Faturas do Financeiro. Futuras emissões via KeyInvoice já são registadas automaticamente pelo código deployado.
+## Seccao tecnica
 
-## Secção técnica
+Alteracoes no ficheiro `supabase/functions/get-invoice-details/index.ts`:
 
-- O campo `invoicexpress_id` na venda 0007 é `1` (número do documento no KeyInvoice). Este valor será usado no upsert para evitar duplicados futuros.
-- O `document_type` é `invoice_receipt` porque o DocType original era 34 (Fatura-Recibo).
-- O `raw_data` inclui `"migrated": true` para identificar registos retroactivos.
+- Linha 193: Adicionar campos KeyInvoice ao select:
+  ```
+  .select('invoicexpress_account_name, invoicexpress_api_key, billing_provider, keyinvoice_password, keyinvoice_api_url, keyinvoice_sid, keyinvoice_sid_expires_at')
+  ```
 
+- Adicionar funcao `getKeyInvoiceSid()` (copiada de `issue-invoice`)
+
+- Substituir bloco de PDF (linhas 244-251) por logica expandida:
+  ```
+  if (!invoiceRecord.pdf_path && org?.keyinvoice_password) {
+    // Parse reference "34 47/1" -> DocType=34, DocSeries=47, DocNum=1
+    // Authenticate -> getDocumentPDF -> upload to storage -> update invoices table
+  }
+  // Then generate signed URL if pdf_path exists
+  ```
+
+- O parse da referencia usa: `reference.match(/^(\d+)\s+(\d+)\/(\d+)$/)` onde grupo 1=DocType, grupo 2=DocSeries, grupo 3=DocNum. Fallback para `raw_data.docType/docNum/docSeries` se existirem.
