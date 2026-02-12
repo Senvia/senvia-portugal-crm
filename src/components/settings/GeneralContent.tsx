@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Label } from "@/components/ui/label";
-import { User, Building, Loader2, Eye, EyeOff, Save, Key, Bell, BellOff, Copy, Check } from "lucide-react";
+import { User, Building, Loader2, Save, Bell, BellOff, Copy, Check } from "lucide-react";
 import { PLAN_LABELS, OrganizationPlan } from "@/types";
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from "@/hooks/use-toast";
@@ -25,18 +25,10 @@ interface GeneralContentProps {
   setOrgName: (value: string) => void;
   fullName: string;
   setFullName: (value: string) => void;
-  newPassword: string;
-  setNewPassword: (value: string) => void;
-  confirmPassword: string;
-  setConfirmPassword: (value: string) => void;
-  showPassword: boolean;
-  setShowPassword: (value: boolean) => void;
   handleSaveOrgName: () => void;
   handleSaveProfile: () => void;
-  handleChangePassword: () => void;
   updateOrganizationIsPending: boolean;
   updateProfileIsPending: boolean;
-  changePasswordIsPending: boolean;
   pushNotifications: {
     isSupported: boolean;
     isSubscribed: boolean;
@@ -54,18 +46,10 @@ export const GeneralContent = ({
   setOrgName,
   fullName,
   setFullName,
-  newPassword,
-  setNewPassword,
-  confirmPassword,
-  setConfirmPassword,
-  showPassword,
-  setShowPassword,
   handleSaveOrgName,
   handleSaveProfile,
-  handleChangePassword,
   updateOrganizationIsPending,
   updateProfileIsPending,
-  changePasswordIsPending,
   pushNotifications,
 }: GeneralContentProps) => {
   const { toast } = useToast();
@@ -176,54 +160,6 @@ export const GeneralContent = ({
             </div>
           </div>
 
-          <Separator />
-
-          <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <Key className="h-4 w-4 text-muted-foreground" />
-              <Label>Alterar Palavra-passe</Label>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="new-password" className="text-sm text-muted-foreground">Nova Palavra-passe</Label>
-                <div className="relative">
-                  <Input
-                    id="new-password"
-                    type={showPassword ? 'text' : 'password'}
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="Mínimo 6 caracteres"
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="absolute right-0 top-0 h-full px-3"
-                    onClick={() => setShowPassword(!showPassword)}
-                  >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </Button>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="confirm-password" className="text-sm text-muted-foreground">Confirmar Palavra-passe</Label>
-                <Input
-                  id="confirm-password"
-                  type={showPassword ? 'text' : 'password'}
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Repetir palavra-passe"
-                />
-              </div>
-            </div>
-            <Button
-              onClick={handleChangePassword}
-              disabled={changePasswordIsPending || !newPassword || !confirmPassword}
-            >
-              {changePasswordIsPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Alterar Palavra-passe
-            </Button>
-          </div>
         </CardContent>
       </Card>
 
