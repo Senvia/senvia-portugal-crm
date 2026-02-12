@@ -2,7 +2,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Download, Search, FileText, X, Loader2, CheckCircle2, AlertCircle, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { Download, Search, FileText, X, Loader2, CheckCircle2, AlertCircle, ArrowUpDown, ArrowUp, ArrowDown, Eye } from "lucide-react";
 import { useInvoices, useSyncInvoices } from "@/hooks/useInvoices";
 import { useCreditNotes, useSyncCreditNotes } from "@/hooks/useCreditNotes";
 import { formatCurrency, formatDate } from "@/lib/format";
@@ -16,7 +16,7 @@ import { startOfDay, endOfDay, parseISO } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { downloadFileFromUrl } from "@/lib/download";
+import { openPdfInNewTab } from "@/lib/download";
 import { InvoiceDetailsModal } from "@/components/sales/InvoiceDetailsModal";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -54,7 +54,7 @@ export function InvoicesContent() {
   const hasSynced = useRef(false);
   const [searchTerm, setSearchTerm] = usePersistedState("invoices-search-v1", "");
   const [dateRange, setDateRange] = usePersistedState<DateRange | undefined>("invoices-daterange-v1", undefined);
-  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [viewingId, setViewingId] = useState<string | null>(null);
   const SORT_KEY = 'finance-invoices-sort-v1';
   const VALID_FIELDS: SortField[] = ['reference', 'document_type', 'date', 'client_name', 'status', 'total'];
 
@@ -231,27 +231,15 @@ export function InvoicesContent() {
     exportToExcel(exportData, 'documentos-fiscais');
   };
 
-  const handleDownload = async (id: string, pdfPath: string | null, reference?: string | null) => {
+  const handleViewPdf = async (id: string, pdfPath: string | null) => {
     if (!pdfPath) return;
-    const filename = `${reference || 'documento'}.pdf`;
-    setDownloadingId(id);
+    setViewingId(id);
     try {
-      let url = pdfPath;
-      if (!pdfPath.startsWith('http')) {
-        const { data, error } = await supabase.storage
-          .from('invoices')
-          .createSignedUrl(pdfPath, 60);
-        if (error || !data?.signedUrl) {
-          toast.error("Erro ao obter ficheiro");
-          return;
-        }
-        url = data.signedUrl;
-      }
-      await downloadFileFromUrl(url, filename);
+      await openPdfInNewTab(pdfPath);
     } catch {
-      toast.error("Erro ao fazer download");
+      toast.error("Erro ao abrir PDF");
     } finally {
-      setDownloadingId(null);
+      setViewingId(null);
     }
   };
 
@@ -408,13 +396,13 @@ export function InvoicesContent() {
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8"
-                            onClick={(e) => { e.stopPropagation(); handleDownload(doc.id, doc.pdf_path, doc.reference); }}
-                            disabled={downloadingId === doc.id}
+                            onClick={(e) => { e.stopPropagation(); handleViewPdf(doc.id, doc.pdf_path); }}
+                            disabled={viewingId === doc.id}
                           >
-                            {downloadingId === doc.id ? (
+                            {viewingId === doc.id ? (
                               <Loader2 className="h-4 w-4 animate-spin" />
                             ) : (
-                              <Download className="h-4 w-4" />
+                              <Eye className="h-4 w-4" />
                             )}
                           </Button>
                         ) : (

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Download, Mail, FileText, Ban, Loader2 } from "lucide-react";
+import { Eye, Mail, FileText, Ban, Loader2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -27,7 +27,7 @@ import { CancelInvoiceDialog } from "./CancelInvoiceDialog";
 import { useCancelInvoice } from "@/hooks/useCancelInvoice";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { downloadFileFromUrl } from "@/lib/download";
+import { openPdfInNewTab } from "@/lib/download";
 
 interface InvoiceDetailsModalProps {
   open: boolean;
@@ -76,33 +76,22 @@ export function InvoiceDetailsModal({
   const [emailOpen, setEmailOpen] = useState(false);
   const [creditNoteOpen, setCreditNoteOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
-  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [viewingPdf, setViewingPdf] = useState(false);
 
-  const handleDownloadPdf = async () => {
-    const filename = `${TYPE_LABELS[documentType] || 'documento'}-${details?.sequence_number || documentId}.pdf`;
+  const handleViewPdf = async () => {
     if (details?.pdf_signed_url) {
-      setDownloadingPdf(true);
-      try {
-        await downloadFileFromUrl(details.pdf_signed_url, filename);
-      } catch { toast.error("Erro ao fazer download"); }
-      finally { setDownloadingPdf(false); }
+      window.open(details.pdf_signed_url, '_blank');
       return;
     }
     if (!details?.pdf_url) {
       toast.error("PDF não disponível");
       return;
     }
-    setDownloadingPdf(true);
+    setViewingPdf(true);
     try {
-      let url = details.pdf_url;
-      if (!url.startsWith('http')) {
-        const { data, error } = await supabase.storage.from('invoices').createSignedUrl(url, 60);
-        if (error || !data?.signedUrl) { toast.error("Erro ao obter PDF"); return; }
-        url = data.signedUrl;
-      }
-      await downloadFileFromUrl(url, filename);
-    } catch { toast.error("Erro ao fazer download"); }
-    finally { setDownloadingPdf(false); }
+      await openPdfInNewTab(details.pdf_url);
+    } catch { toast.error("Erro ao abrir PDF"); }
+    finally { setViewingPdf(false); }
   };
 
   const handleCancel = (reason: string) => {
@@ -352,9 +341,9 @@ export function InvoiceDetailsModal({
           {details && !isLoading && (
             <div className="p-4 border-t border-border/50 space-y-2">
               <div className="grid grid-cols-2 gap-2">
-                <Button variant="outline" size="sm" onClick={handleDownloadPdf} disabled={downloadingPdf}>
-                  {downloadingPdf ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Download className="h-3.5 w-3.5 mr-1.5" />}
-                  PDF
+                <Button variant="outline" size="sm" onClick={handleViewPdf} disabled={viewingPdf}>
+                  {viewingPdf ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Eye className="h-3.5 w-3.5 mr-1.5" />}
+                  Ver PDF
                 </Button>
                 <Button variant="outline" size="sm" onClick={() => setEmailOpen(true)}>
                   <Mail className="h-3.5 w-3.5 mr-1.5" />

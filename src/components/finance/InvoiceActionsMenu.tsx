@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { MoreHorizontal, Eye, RefreshCw, Download, Mail, Ban, FileText, Loader2 } from "lucide-react";
+import { MoreHorizontal, Eye, RefreshCw, Mail, Ban, FileText, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -16,7 +16,7 @@ import { InvoiceDetailsModal } from "@/components/sales/InvoiceDetailsModal";
 import { CreateCreditNoteModal } from "@/components/sales/CreateCreditNoteModal";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { downloadFileFromUrl } from "@/lib/download";
+import { openPdfInNewTab } from "@/lib/download";
 
 interface InvoiceActionItem {
   id: string;
@@ -40,7 +40,7 @@ export function InvoiceActionsMenu({ invoice }: InvoiceActionsMenuProps) {
   const [showCancel, setShowCancel] = useState(false);
   const [showEmail, setShowEmail] = useState(false);
   const [showCreditNote, setShowCreditNote] = useState(false);
-  const [downloading, setDownloading] = useState(false);
+  const [viewing, setViewing] = useState(false);
   
   const syncInvoice = useSyncInvoice();
   const cancelInvoice = useCancelInvoice();
@@ -48,23 +48,15 @@ export function InvoiceActionsMenu({ invoice }: InvoiceActionsMenuProps) {
   const hasInvoiceXpress = !!invoice.invoicexpressId;
   const hasLocalPdf = !!invoice.invoiceFileUrl;
 
-  const handleDownload = async () => {
+  const handleView = async () => {
     if (!invoice.invoiceFileUrl) return;
-    const filename = `${invoice.invoiceReference || 'documento'}.pdf`;
-    setDownloading(true);
+    setViewing(true);
     try {
-      const { data, error } = await supabase.storage
-        .from('invoices')
-        .createSignedUrl(invoice.invoiceFileUrl, 60);
-      if (error || !data?.signedUrl) {
-        toast.error("Erro ao obter ficheiro");
-        return;
-      }
-      await downloadFileFromUrl(data.signedUrl, filename);
+      await openPdfInNewTab(invoice.invoiceFileUrl);
     } catch {
-      toast.error("Erro ao fazer download");
+      toast.error("Erro ao abrir PDF");
     } finally {
-      setDownloading(false);
+      setViewing(false);
     }
   };
 
@@ -111,9 +103,9 @@ export function InvoiceActionsMenu({ invoice }: InvoiceActionsMenuProps) {
           )}
 
           {hasLocalPdf ? (
-            <DropdownMenuItem onClick={handleDownload} disabled={downloading}>
-              {downloading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
-              Download PDF
+            <DropdownMenuItem onClick={handleView} disabled={viewing}>
+              {viewing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Eye className="h-4 w-4 mr-2" />}
+              Ver PDF
             </DropdownMenuItem>
           ) : hasInvoiceXpress ? (
             <DropdownMenuItem onClick={handleSync} disabled={syncInvoice.isPending}>
