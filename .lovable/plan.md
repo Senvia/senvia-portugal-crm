@@ -1,51 +1,20 @@
 
 
-# Visualizar PDFs em vez de Descarregar
+# Trocar icone Eye por icone de PDF (FileText)
 
 ## Problema
 
-Atualmente, todos os botoes de PDF (nas vendas e faturas) fazem download do ficheiro. O utilizador prefere visualizar o PDF diretamente no browser.
+O icone de "olho" (Eye) nao comunica visualmente que se trata de um PDF. Um icone de documento (FileText) faz mais sentido.
 
-## Solucao
+## Alteracoes
 
-Criar uma funcao utilitaria `openPdfInNewTab` que gera um signed URL (quando necessario) e abre o PDF numa nova aba do browser usando `window.open`. Substituir todas as chamadas de download por esta nova funcao nos locais relevantes.
+Substituir o icone `Eye` por `FileText` nos 5 ficheiros onde foi alterado:
 
-### Funcao utilitaria
+1. **`src/components/sales/SalePaymentsList.tsx`** -- Trocar `Eye` por `FileText` nos botoes de ver PDF (fatura global e recibo individual)
+2. **`src/components/sales/InvoiceDetailsModal.tsx`** -- Trocar `Eye` por `FileText` no botao "Ver PDF"
+3. **`src/components/finance/InvoiceActionsMenu.tsx`** -- Trocar `Eye` por `FileText` na acao "Ver PDF"
+4. **`src/components/finance/InvoicesContent.tsx`** -- Trocar `Eye` por `FileText` no botao de PDF
+5. **`src/components/finance/CreditNotesContent.tsx`** -- Trocar `Eye` por `FileText` no botao de PDF
 
-**Novo ficheiro ou adicao a `src/lib/download.ts`**:
-
-```typescript
-export async function openPdfInNewTab(path: string) {
-  let url = path;
-  if (!path.startsWith('http')) {
-    const { data, error } = await supabase.storage
-      .from('invoices')
-      .createSignedUrl(path, 300);
-    if (error || !data?.signedUrl) {
-      throw new Error('Erro ao gerar link');
-    }
-    url = data.signedUrl;
-  }
-  window.open(url, '_blank');
-}
-```
-
-### Ficheiros a alterar
-
-1. **`src/components/sales/SalePaymentsList.tsx`** -- Substituir `handlePdfDownload` por `handlePdfView` que abre em nova aba (2 locais: fatura global e recibo individual). Trocar icone de `Download` para `Eye`/`ExternalLink`.
-
-2. **`src/components/sales/InvoiceDetailsModal.tsx`** -- Botao "Download PDF" passa a abrir em nova aba.
-
-3. **`src/components/finance/InvoiceActionsMenu.tsx`** -- Acao "Download PDF" no menu de acoes das faturas passa a abrir em nova aba.
-
-4. **`src/components/finance/CreditNotesContent.tsx`** -- Botao de PDF nas notas de credito passa a abrir em nova aba.
-
-5. **`src/components/finance/InvoicesContent.tsx`** -- Botao de PDF na listagem de faturas passa a abrir em nova aba.
-
-### Notas
-
-- O signed URL tera duracao de 300 segundos (5 minutos) para dar tempo ao utilizador de visualizar
-- O `window.open` abre o PDF no visualizador nativo do browser (Chrome, Firefox, etc. todos suportam)
-- Se um ad blocker bloquear o `window.open`, adicionamos um fallback com `<a>` tag programatico
-- Labels e tooltips serao atualizados de "Download PDF" para "Ver PDF"
+Apenas troca de icone, sem alteracao de logica.
 
