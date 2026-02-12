@@ -436,9 +436,22 @@ Deno.serve(async (req) => {
       }
 
       // For receipts, show payment amount instead of sale items
-      const isReceipt = invoiceRecord.document_type === 'receipt'
+      // Use document_type from REQUEST (not DB record) to handle legacy receipts
+      const isReceipt = document_type === 'receipt'
       let items: any[]
       let displayTotal = invoiceRecord.total
+
+      // If it's a receipt, try to get the actual payment amount
+      if (isReceipt && payment_id) {
+        const { data: paymentRecord } = await supabase
+          .from('sale_payments')
+          .select('amount')
+          .eq('id', payment_id)
+          .maybeSingle()
+        if (paymentRecord?.amount) {
+          displayTotal = paymentRecord.amount
+        }
+      }
 
       if (isReceipt) {
         // Receipt: show a single line with the payment amount
