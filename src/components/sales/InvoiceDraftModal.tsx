@@ -131,6 +131,11 @@ export function InvoiceDraftModal({
   const fallbackTax = hasItems ? totalTax : (orgTaxRate === 0 ? 0 : amount * (orgTaxRate / 100));
   const fallbackTotal = hasItems ? totalWithTax : amount + fallbackTax;
 
+  // For receipt mode, always use the payment amount directly
+  const displaySubtotal = mode === "receipt" ? amount : (hasItems ? subtotal : amount);
+  const displayTax = mode === "receipt" ? 0 : fallbackTax;
+  const displayTotal = mode === "receipt" ? amount : fallbackTotal;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
@@ -251,18 +256,18 @@ export function InvoiceDraftModal({
           <div className="p-3 rounded-lg border space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Subtotal (s/ IVA)</span>
-              <span>{formatCurrency(hasItems ? subtotal : amount)}</span>
+              <span>{formatCurrency(displaySubtotal)}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">
-                IVA {!hasItems && orgTaxRate === 0 ? "(Isento)" : ""}
+                IVA {mode === "receipt" || (!hasItems && orgTaxRate === 0) ? "(Isento)" : ""}
               </span>
-              <span>{formatCurrency(fallbackTax)}</span>
+              <span>{formatCurrency(displayTax)}</span>
             </div>
             <Separator />
             <div className="flex justify-between font-semibold">
               <span>Total</span>
-              <span className="text-primary">{formatCurrency(fallbackTotal)}</span>
+              <span className="text-primary">{formatCurrency(displayTotal)}</span>
             </div>
           </div>
 
