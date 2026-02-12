@@ -659,19 +659,6 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
           {/* Footer Actions */}
           <div className="p-4 border-t border-border/50 shrink-0">
             <div className="flex gap-3 max-w-6xl mx-auto">
-              {sale.status !== 'cancelled' && onEdit && !isDeliveredAndLocked && (
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={() => {
-                    onOpenChange(false);
-                    onEdit(sale);
-                  }}
-                >
-                  <Pencil className="h-4 w-4 mr-2" />
-                  Editar Venda
-                </Button>
-              )}
               {(() => {
                 const canEmit = hasInvoiceXpress && !sale.invoicexpress_id && !!sale.client?.nif && !sale.credit_note_id;
                 if (!canEmit) return null;
@@ -699,6 +686,19 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                   </>
                 );
               })()}
+              {sale.status !== 'cancelled' && onEdit && !isDeliveredAndLocked && (
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => {
+                    onOpenChange(false);
+                    onEdit(sale);
+                  }}
+                >
+                  <Pencil className="h-4 w-4 mr-2" />
+                  Editar Venda
+                </Button>
+              )}
               <Button
                 variant="outline"
                 className="flex-1"
