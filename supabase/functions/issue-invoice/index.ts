@@ -294,9 +294,25 @@ async function handleKeyInvoice(supabase: any, org: any, saleId: string, organiz
   const docLines: any[] = []
   {
     for (const item of items) {
-      // Use product code from catalog as IdProduct, fallback to name-based matching
+      // Try to match product in KeyInvoice: first by code, then by name
       const itemCode = item.product?.code
-      const productId = itemCode || findProductId(item.name || 'Serviço')
+      let productId: string | null = null
+      
+      // Check if the local product code matches any KeyInvoice IdProduct directly
+      if (itemCode) {
+        const codeMatch = keyInvoiceProducts.find((p: any) => 
+          String(p.IdProduct || p.Id) === itemCode
+        )
+        if (codeMatch) {
+          productId = String(codeMatch.IdProduct || codeMatch.Id)
+        }
+      }
+      
+      // Fallback to name-based matching
+      if (!productId) {
+        productId = findProductId(item.name || 'Serviço')
+      }
+      
       docLines.push({
         IdProduct: productId,
         Qty: String(Number(item.quantity)),
