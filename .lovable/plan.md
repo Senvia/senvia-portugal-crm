@@ -1,63 +1,56 @@
 
-# Fix: NC no Financeiro + Esconder botao NC quando ja existe
+# Fix: Inserir NC do KeyInvoice na tabela credit_notes
 
-## Problema 1: Nota de Credito do KeyInvoice nao aparece no Financeiro
+## Problema raiz
 
-O `sync-credit-notes` so sincroniza com o InvoiceXpress. Quando a NC e criada via KeyInvoice (`setDocumentVoid`), o `create-credit-note` guarda apenas `credit_note_id` e `credit_note_reference` na tabela `sales`, mas **nao insere um registo na tabela `credit_notes`**. Por isso, a NC nao aparece na listagem do Financeiro.
-
-## Problema 2: Botao NC visivel mesmo com NC ja emitida
-
-Nos componentes `SalePaymentsList`, `InvoiceDetailsModal` e `InvoiceActionsMenu`, o botao "NC" aparece sempre que existe um `invoicexpress_id`, sem verificar se ja existe `credit_note_id`.
-
----
-
-## Solucao
-
-### 1. `supabase/functions/create-credit-note/index.ts` - Inserir registo na tabela `credit_notes`
-
-Apos o sucesso do `setDocumentVoid` no fluxo KeyInvoice, adicionar um `upsert` na tabela `credit_notes` com:
-- `organization_id`
-- `invoicexpress_id` = creditNoteId retornado
-- `reference` = creditNoteReference
-- `status` = "settled"
-- `client_name` = obtido da fatura original na tabela `invoices`
-- `total` = obtido da fatura original
-- `date` = data actual
-- `related_invoice_id` = original_document_id
-- `sale_id` = sale_id recebido no body
-
-Isto garante que a NC aparece imediatamente no Financeiro sem precisar de sync.
-
-Tambem aplicar a mesma logica ao fluxo InvoiceXpress (ja cria no InvoiceXpress, mas nao insere na tabela local `credit_notes`).
-
-### 2. `src/components/sales/SalePaymentsList.tsx` - Esconder botao NC
-
-Adicionar uma prop `creditNoteId` ao componente. Na secao onde o botao NC e renderizado (linha ~264), adicionar condicao:
-
-```
-{invoicexpressId && !creditNoteId && (
+Apos o `setDocumentVoid` com sucesso, a resposta da API KeyInvoice e apenas:
+```json
+{"Status":1,"Data":{"Voided":1,"Message":"Documento anulado com sucesso"}}
 ```
 
-### 3. `src/components/sales/SaleDetailsModal.tsx` - Passar creditNoteId
+Nao contem ID nem referencia da nota de credito gerada. O edge function usa fallbacks incorretos e nao loga erros do upsert.
 
-Passar `creditNoteId={sale.credit_note_id}` para o `SalePaymentsList`.
+## Alteracoes
 
-### 4. `src/components/sales/InvoiceDetailsModal.tsx` - Esconder botao NC
+### 1. `supabase/functions/create-credit-note/index.ts`
 
-Verificar se o documento ja tem NC associada. Usar o campo `details.status` === 'canceled' ou consultar se existe `credit_note_id` na sale. A forma mais simples: adicionar props `creditNoteId` opcionais e esconder o botao quando preenchido.
+Corrigir o bloco KeyInvoice (apos void com sucesso):
 
-### 5. `src/components/finance/InvoiceActionsMenu.tsx` - Esconder botao NC
+**a) Obter client_name e total da fatura original na tabela `invoices`** em vez de tentar ler do `raw_data` com campo errado:
+```typescript
+// Antes (errado):
+const invoiceClientName = invoiceRecord ? (invoiceRecord.raw_data as any)?.clientName || null : null
+const invoiceTotal = invoiceRecord ? (invoiceRecord.raw_data as any)?.total || null : null
 
-Adicionar prop `creditNoteId` ao `InvoiceActionItem` interface e esconder o item "Nota de Credito" no menu quando ja existe.
+// Depois (correto):
+// Buscar diretamente dos campos da tabela invoices
+const { data: invoiceInfo } = await supabase
+  .from('invoices')
+  .select('client_name, total')
+  .eq('invoicexpress_id', original_document_id)
+  .eq('organization_id', organization_id)
+  .maybeSingle()
+```
 
----
+**b) Gerar um `invoicexpress_id` negativo unico** para NCs do KeyInvoice (que nao retorna ID), evitando conflitos:
+```typescript
+const kiCreditNoteId = -(original_document_id)  // negativo para distinguir
+```
 
-## Resumo de ficheiros
+**c) Adicionar error handling no upsert** com log explicito:
+```typescript
+const { error: upsertError } = await supabase.from('credit_notes').upsert({...})
+if (upsertError) {
+  console.error('Failed to upsert credit note:', upsertError)
+}
+```
+
+**d) Construir uma referencia mais util**: Usar o DocType/DocSeries/DocNum originais para criar algo como `"NC 47/1"` em vez de `"NC #1"`.
+
+### Resumo das alteracoes no ficheiro
 
 | Ficheiro | Alteracao |
 |---|---|
-| `supabase/functions/create-credit-note/index.ts` | Inserir registo na tabela `credit_notes` apos sucesso (KeyInvoice + InvoiceXpress) |
-| `src/components/sales/SalePaymentsList.tsx` | Adicionar prop `creditNoteId`, esconder botao NC |
-| `src/components/sales/SaleDetailsModal.tsx` | Passar `creditNoteId` ao SalePaymentsList |
-| `src/components/sales/InvoiceDetailsModal.tsx` | Esconder botao NC quando creditNoteId existe |
-| `src/components/finance/InvoiceActionsMenu.tsx` | Esconder item NC no menu quando ja existe |
+| `supabase/functions/create-credit-note/index.ts` | Corrigir lookup de client_name/total, gerar ID unico negativo, adicionar error handling, melhorar referencia |
+
+Nenhuma alteracao de schema ou frontend necessaria -- o problema esta inteiramente no edge function.
