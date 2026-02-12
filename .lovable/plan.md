@@ -1,82 +1,87 @@
 
 
-# Reorganizar Definicoes em Sub-Modulos Agrupados
+# Reorganizar Definicoes em Sub-Modulos (Conteudo Agrupado)
 
-## Nova Estrutura
+## Conceito
 
-As seccoes passam de uma lista plana para grupos logicos:
+A navegacao atual tem uma tab individual para cada seccao (Geral, Pipeline, Modulos, etc.). A mudanca e passar para **navegacao ao nivel do grupo**, onde cada tab/botao mostra **todas as sub-seccoes empilhadas** numa unica vista.
 
-| Grupo | Seccoes incluidas |
-|-------|-------------------|
-| Definicoes Gerais | Geral, Seguranca, Pipeline, Modulos, Formulario, Campos |
-| Equipa | Acessos, Perfis, Equipas |
-| Produtos | Produtos |
-| Financeiro | Despesas |
-| Notificacoes | Alertas |
-| Integracoes | Integracoes |
+## Nova Estrutura de Grupos
 
-Nota: "Notificacoes Push" continua dentro do conteudo da seccao Geral (GeneralContent). O grupo "Notificacoes" aqui refere-se aos Alertas de Fidelizacao.
+| Grupo (Tab/Botao) | Conteudo renderizado junto |
+|---|---|
+| Definicoes Gerais | GeneralContent + PipelineEditor + ModulesTab + FormsManager + ClientFieldsEditor |
+| Seguranca | SecuritySettings (password + 2FA) |
+| Equipa e Acessos | TeamTab + ProfilesTab + TeamsSection |
+| Produtos | ProductsTab |
+| Financeiro | ExpenseCategoriesTab |
+| Notificacoes | PushNotifications (extraido do GeneralContent) + FidelizationAlertsSettings |
+| Integracoes | IntegrationsContent |
 
-## Mobile (MobileSettingsNav)
+## Alteracoes Visuais
 
-A lista plana de botoes passa a ter separadores visuais por grupo. Cada grupo tera:
-- Um titulo de grupo (label muted, texto pequeno, tipo "DEFINICOES GERAIS")
-- Os items do grupo por baixo, com o mesmo estilo atual
+### Desktop
+- De ~13 tabs individuais para **7 tabs de grupo**
+- Cabem numa unica linha de TabsList
+- Ao clicar num grupo, todo o conteudo das sub-seccoes aparece empilhado verticalmente
 
-Resultado visual (exemplo):
-
-```text
-DEFINICOES GERAIS
-  [icone] Geral - Organizacao e conta          >
-  [icone] Seguranca - Password e 2FA           >
-  [icone] Pipeline - Etapas de venda           >
-  [icone] Modulos - Funcionalidades ativas     >
-  [icone] Formulario - Personalizar            >
-  [icone] Campos - Visibilidade                >
-
-EQUIPA
-  [icone] Acessos - Utilizadores               >
-  [icone] Perfis - Perfis de acesso            >
-  [icone] Equipas - Hierarquia                 >
-
-PRODUTOS
-  [icone] Produtos - Catalogo                  >
-
-FINANCEIRO
-  [icone] Despesas - Tipos de despesas         >
-
-NOTIFICACOES
-  [icone] Alertas - Fidelizacao                >
-
-INTEGRACOES
-  [icone] Integracoes - Webhook, WhatsApp      >
-```
-
-## Desktop (Tabs)
-
-As duas linhas de tabs existentes passam a ser organizadas por grupo, com separadores visuais entre grupos dentro das TabsLists. Cada grupo tera os seus triggers agrupados com um separador vertical entre grupos.
-
-A disposicao sera em duas linhas:
-- Linha 1: Definicoes Gerais | Equipa
-- Linha 2: Produtos | Financeiro | Notificacoes | Integracoes
-
-Os separadores serao um `Separator` vertical fino ou um pequeno espaco + borda visual para distinguir os grupos.
+### Mobile
+- MobileSettingsNav passa a ter **7 botoes** (um por grupo)
+- Ao clicar num grupo, a vista mostra todas as sub-seccoes empilhadas com separadores visuais entre elas (titulo + conteudo)
 
 ## Detalhes Tecnicos
 
 ### Ficheiros a alterar
 
 | Ficheiro | Alteracao |
-|----------|-----------|
-| `src/components/settings/MobileSettingsNav.tsx` | Reestruturar `sections` para array de grupos com `groupLabel` e `items`. Renderizar label de grupo + items. Atualizar tipo `SettingsSection` (sem mudanca, apenas a renderizacao agrupa). |
-| `src/pages/Settings.tsx` | Reorganizar as `TabsTrigger` nas duas `TabsList` por grupos com separadores visuais. Os `TabsContent` mantem-se iguais (apenas a ordem das tabs muda). |
+|---|---|
+| `src/components/settings/GeneralContent.tsx` | Remover o card de "Notificacoes Push" e a prop `pushNotifications`. O push passa para o grupo Notificacoes. |
+| `src/components/settings/PushNotificationsCard.tsx` | **Novo ficheiro** -- Extrair o card de Notificacoes Push para componente proprio, reutilizavel no grupo Notificacoes. |
+| `src/components/settings/MobileSettingsNav.tsx` | Simplificar para 7 itens de grupo (sem sub-items). Atualizar `SettingsSection` type para: `"general" \| "security" \| "team" \| "products" \| "finance" \| "notifications" \| "integrations"`. |
+| `src/pages/Settings.tsx` | Redesenhar completamente a zona de tabs/conteudo. Cada `TabsContent` (ou mobile section) renderiza multiplos componentes empilhados. |
 
-### Logica de visibilidade por grupo
+### Tipo SettingsSection (novo)
 
-Cada grupo so aparece se tiver pelo menos uma seccao visivel. Exemplo: o grupo "Equipa" so aparece se `canManageTeam` for true. O grupo "Financeiro" so aparece se `canManageIntegrations` for true.
+```text
+"general" | "security" | "team" | "products" | "finance" | "notifications" | "integrations"
+```
+
+### Exemplo de renderizacao do grupo "Definicoes Gerais"
+
+```text
+TabsContent value="general":
+  <GeneralContent ... />         (Organizacao + Conta + GDPR)
+  <Separator />
+  <PipelineEditor />
+  <Separator />
+  <ModulesTab />
+  <Separator />
+  <FormsManager />
+  <Separator />
+  <ClientFieldsEditor />
+```
+
+### Exemplo de renderizacao do grupo "Notificacoes"
+
+```text
+TabsContent value="notifications":
+  <PushNotificationsCard ... />      (extraido do GeneralContent)
+  <Separator />
+  <FidelizationAlertsSettings />
+```
+
+### Visibilidade por grupo
+
+- **Definicoes Gerais**: Sempre visivel (Geral sempre aparece). Pipeline/Modulos/Formulario/Campos so aparecem se `canManageIntegrations`.
+- **Seguranca**: Sempre visivel.
+- **Equipa e Acessos**: Apenas se `canManageTeam`.
+- **Produtos**: Apenas se `canManageIntegrations`.
+- **Financeiro**: Apenas se `canManageIntegrations`.
+- **Notificacoes**: Sempre visivel (Push e sempre acessivel). Alertas so aparece se `canManageIntegrations`.
+- **Integracoes**: Apenas se `canManageIntegrations`.
 
 ### Sem alteracoes em:
-- Nenhum componente de conteudo (GeneralContent, SecuritySettings, etc.)
+- Nenhum componente de conteudo interno (PipelineEditor, ModulesTab, SecuritySettings, etc.)
 - Nenhuma logica de estado ou handlers
-- Apenas a organizacao visual e de navegacao muda
+- Apenas a organizacao de navegacao e composicao de vistas muda
 
