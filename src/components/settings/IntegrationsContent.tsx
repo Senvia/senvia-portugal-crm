@@ -58,8 +58,6 @@ interface IntegrationsContentProps {
   integrationsEnabled: Record<string, boolean>;
   onToggleIntegration: (key: string, enabled: boolean) => void;
   // KeyInvoice props
-  billingProvider: 'invoicexpress' | 'keyinvoice';
-  setBillingProvider: (value: 'invoicexpress' | 'keyinvoice') => void;
   keyinvoiceUsername: string;
   setKeyinvoiceUsername: (value: string) => void;
   keyinvoicePassword: string;
@@ -68,6 +66,7 @@ interface IntegrationsContentProps {
   setKeyinvoiceCompanyCode: (value: string) => void;
   showKeyinvoicePassword: boolean;
   setShowKeyinvoicePassword: (value: boolean) => void;
+  handleSaveKeyInvoice: () => void;
 }
 
 export const IntegrationsContent = ({
@@ -113,8 +112,6 @@ export const IntegrationsContent = ({
   setTaxExemptionReason,
   integrationsEnabled,
   onToggleIntegration,
-  billingProvider,
-  setBillingProvider,
   keyinvoiceUsername,
   setKeyinvoiceUsername,
   keyinvoicePassword,
@@ -123,6 +120,7 @@ export const IntegrationsContent = ({
   setKeyinvoiceCompanyCode,
   showKeyinvoicePassword,
   setShowKeyinvoicePassword,
+  handleSaveKeyInvoice,
 }: IntegrationsContentProps) => {
   const getBadge = (key: string, hasCredentials: boolean) => {
     if (integrationsEnabled[key] === false) {
@@ -463,21 +461,18 @@ export const IntegrationsContent = ({
         </AccordionContent>
       </AccordionItem>
 
-      {/* Faturação */}
+      {/* Faturação (InvoiceXpress) */}
       <AccordionItem value="invoicexpress">
         <AccordionTrigger className="hover:no-underline">
           <div className="flex items-center justify-between w-full pr-2">
             <div className="flex flex-col items-start gap-1">
               <div className="flex items-center gap-2">
                 <Receipt className="h-5 w-5" />
-                <span className="font-medium">Faturação</span>
-                {getBadge('invoicexpress', billingProvider === 'invoicexpress' 
-                  ? !!(invoiceXpressAccountName && invoiceXpressApiKey)
-                  : !!(keyinvoiceUsername && keyinvoicePassword && keyinvoiceCompanyCode)
-                )}
+                <span className="font-medium">Faturação (InvoiceXpress)</span>
+                {getBadge('invoicexpress', !!(invoiceXpressAccountName && invoiceXpressApiKey))}
               </div>
               <span className="text-xs text-muted-foreground font-normal">
-                Emita faturas diretamente a partir do CRM.
+                Emita faturas via InvoiceXpress.
               </span>
             </div>
             <div onClick={(e) => e.stopPropagation()}>
@@ -497,129 +492,53 @@ export const IntegrationsContent = ({
               </div>
             ) : (
               <>
-                {/* Billing Provider Selector */}
+                <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-3">
+                  <p className="text-sm text-amber-600 dark:text-amber-400">
+                    Encontre estas credenciais em InvoiceXpress → Conta → Integrações → API.
+                  </p>
+                </div>
+
                 <div className="space-y-2">
-                  <Label>Fornecedor de Faturação</Label>
-                  <select
-                    value={billingProvider}
-                    onChange={(e) => setBillingProvider(e.target.value as 'invoicexpress' | 'keyinvoice')}
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    <option value="invoicexpress">InvoiceXpress</option>
-                    <option value="keyinvoice">KeyInvoice (CloudInvoice)</option>
-                  </select>
+                  <Label htmlFor="ix-account-name">Account Name</Label>
+                  <Input
+                    id="ix-account-name"
+                    placeholder="minhaempresa"
+                    value={invoiceXpressAccountName}
+                    onChange={(e) => setInvoiceXpressAccountName(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Subdomínio da sua conta InvoiceXpress (ex: minhaempresa.app.invoicexpress.com).
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="ix-api-key">API Key</Label>
+                  <div className="relative">
+                    <Input
+                      id="ix-api-key"
+                      type={showInvoiceXpressApiKey ? 'text' : 'password'}
+                      placeholder="Chave de autenticação"
+                      value={invoiceXpressApiKey}
+                      onChange={(e) => setInvoiceXpressApiKey(e.target.value)}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-0 top-0 h-full px-3"
+                      onClick={() => setShowInvoiceXpressApiKey(!showInvoiceXpressApiKey)}
+                    >
+                      {showInvoiceXpressApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Chave de autenticação da API InvoiceXpress.
+                  </p>
                 </div>
 
                 <Separator />
 
-                {/* InvoiceXpress Fields */}
-                {billingProvider === 'invoicexpress' && (
-                  <>
-                    <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-3">
-                      <p className="text-sm text-amber-600 dark:text-amber-400">
-                        Encontre estas credenciais em InvoiceXpress → Conta → Integrações → API.
-                      </p>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="ix-account-name">Account Name</Label>
-                      <Input
-                        id="ix-account-name"
-                        placeholder="minhaempresa"
-                        value={invoiceXpressAccountName}
-                        onChange={(e) => setInvoiceXpressAccountName(e.target.value)}
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Subdomínio da sua conta InvoiceXpress (ex: minhaempresa.app.invoicexpress.com).
-                      </p>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="ix-api-key">API Key</Label>
-                      <div className="relative">
-                        <Input
-                          id="ix-api-key"
-                          type={showInvoiceXpressApiKey ? 'text' : 'password'}
-                          placeholder="Chave de autenticação"
-                          value={invoiceXpressApiKey}
-                          onChange={(e) => setInvoiceXpressApiKey(e.target.value)}
-                        />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="absolute right-0 top-0 h-full px-3"
-                          onClick={() => setShowInvoiceXpressApiKey(!showInvoiceXpressApiKey)}
-                        >
-                          {showInvoiceXpressApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                        </Button>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        Chave de autenticação da API InvoiceXpress.
-                      </p>
-                    </div>
-                  </>
-                )}
-
-                {/* KeyInvoice Fields */}
-                {billingProvider === 'keyinvoice' && (
-                  <>
-                    <div className="rounded-lg bg-blue-500/10 border border-blue-500/20 p-3">
-                      <p className="text-sm text-blue-600 dark:text-blue-400">
-                        Utilize as credenciais da sua conta KeyInvoice (CloudInvoice).
-                      </p>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="ki-username">Email do Utilizador</Label>
-                      <Input
-                        id="ki-username"
-                        type="email"
-                        placeholder="utilizador@empresa.pt"
-                        value={keyinvoiceUsername}
-                        onChange={(e) => setKeyinvoiceUsername(e.target.value)}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="ki-password">Password</Label>
-                      <div className="relative">
-                        <Input
-                          id="ki-password"
-                          type={showKeyinvoicePassword ? 'text' : 'password'}
-                          placeholder="Password de acesso"
-                          value={keyinvoicePassword}
-                          onChange={(e) => setKeyinvoicePassword(e.target.value)}
-                        />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="absolute right-0 top-0 h-full px-3"
-                          onClick={() => setShowKeyinvoicePassword(!showKeyinvoicePassword)}
-                        >
-                          {showKeyinvoicePassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                        </Button>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="ki-company-code">Código da Empresa</Label>
-                      <Input
-                        id="ki-company-code"
-                        placeholder="EMPRESA001"
-                        value={keyinvoiceCompanyCode}
-                        onChange={(e) => setKeyinvoiceCompanyCode(e.target.value)}
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Código da empresa no KeyInvoice (company_code).
-                      </p>
-                    </div>
-                  </>
-                )}
-
-                <Separator />
-
+                {/* Configuração Fiscal (partilhada) */}
                 <div className="space-y-2">
                   <Label>Taxa de IVA</Label>
                   <select
@@ -669,6 +588,152 @@ export const IntegrationsContent = ({
 
                 <Button
                   onClick={handleSaveInvoiceXpress}
+                  disabled={updateOrganizationIsPending}
+                >
+                  {updateOrganizationIsPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Guardar
+                </Button>
+              </>
+            )}
+          </div>
+        </AccordionContent>
+      </AccordionItem>
+
+      {/* Faturação (KeyInvoice) */}
+      <AccordionItem value="keyinvoice">
+        <AccordionTrigger className="hover:no-underline">
+          <div className="flex items-center justify-between w-full pr-2">
+            <div className="flex flex-col items-start gap-1">
+              <div className="flex items-center gap-2">
+                <Receipt className="h-5 w-5" />
+                <span className="font-medium">Faturação (KeyInvoice)</span>
+                {getBadge('keyinvoice', !!(keyinvoiceUsername && keyinvoicePassword && keyinvoiceCompanyCode))}
+              </div>
+              <span className="text-xs text-muted-foreground font-normal">
+                Emita faturas via KeyInvoice (CloudInvoice).
+              </span>
+            </div>
+            <div onClick={(e) => e.stopPropagation()}>
+              <Switch
+                checked={integrationsEnabled.keyinvoice === true}
+                onCheckedChange={(checked) => onToggleIntegration('keyinvoice', checked)}
+              />
+            </div>
+          </div>
+        </AccordionTrigger>
+        <AccordionContent>
+          <div className="space-y-4 pt-4">
+            {isLoadingIntegrations ? (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className="text-sm">A carregar...</span>
+              </div>
+            ) : (
+              <>
+                <div className="rounded-lg bg-blue-500/10 border border-blue-500/20 p-3">
+                  <p className="text-sm text-blue-600 dark:text-blue-400">
+                    Utilize as credenciais da sua conta KeyInvoice (CloudInvoice).
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="ki-username">Email do Utilizador</Label>
+                  <Input
+                    id="ki-username"
+                    type="email"
+                    placeholder="utilizador@empresa.pt"
+                    value={keyinvoiceUsername}
+                    onChange={(e) => setKeyinvoiceUsername(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="ki-password">Password</Label>
+                  <div className="relative">
+                    <Input
+                      id="ki-password"
+                      type={showKeyinvoicePassword ? 'text' : 'password'}
+                      placeholder="Password de acesso"
+                      value={keyinvoicePassword}
+                      onChange={(e) => setKeyinvoicePassword(e.target.value)}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-0 top-0 h-full px-3"
+                      onClick={() => setShowKeyinvoicePassword(!showKeyinvoicePassword)}
+                    >
+                      {showKeyinvoicePassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="ki-company-code">Código da Empresa</Label>
+                  <Input
+                    id="ki-company-code"
+                    placeholder="EMPRESA001"
+                    value={keyinvoiceCompanyCode}
+                    onChange={(e) => setKeyinvoiceCompanyCode(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Código da empresa no KeyInvoice (company_code).
+                  </p>
+                </div>
+
+                <Separator />
+
+                {/* Configuração Fiscal (partilhada) */}
+                <div className="space-y-2">
+                  <Label>Taxa de IVA</Label>
+                  <select
+                    value={taxRate}
+                    onChange={(e) => setTaxRate(e.target.value)}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <option value="23">IVA 23%</option>
+                    <option value="13">IVA 13%</option>
+                    <option value="6">IVA 6%</option>
+                    <option value="0">Isento de IVA</option>
+                  </select>
+                  <p className="text-xs text-muted-foreground">
+                    Taxa de imposto aplicada nas faturas emitidas.
+                  </p>
+                </div>
+
+                {taxRate === '0' && (
+                  <div className="space-y-2">
+                    <Label>Motivo de Isenção (AT)</Label>
+                    <select
+                      value={taxExemptionReason}
+                      onChange={(e) => setTaxExemptionReason(e.target.value)}
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <option value="">Selecione o motivo...</option>
+                      <option value="M01">M01 - Artigo 16.º n.º 6 do CIVA</option>
+                      <option value="M02">M02 - Artigo 6.º do Decreto-Lei n.º 198/90</option>
+                      <option value="M04">M04 - Isento Artigo 13.º do CIVA</option>
+                      <option value="M05">M05 - Isento Artigo 14.º do CIVA</option>
+                      <option value="M06">M06 - Isento Artigo 15.º do CIVA</option>
+                      <option value="M07">M07 - Isento Artigo 9.º do CIVA</option>
+                      <option value="M09">M09 - IVA não confere direito a dedução</option>
+                      <option value="M10">M10 - IVA regime de isenção (Art. 53.º)</option>
+                      <option value="M11">M11 - Regime particular do tabaco</option>
+                      <option value="M12">M12 - Regime da margem de lucro</option>
+                      <option value="M13">M13 - Regime de IVA de Caixa</option>
+                      <option value="M16">M16 - Isento Artigo 14.º do RITI</option>
+                    </select>
+                    {!taxExemptionReason && (
+                      <p className="text-xs text-destructive">
+                        Obrigatório para emissão de faturas isentas de IVA.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                <Button
+                  onClick={handleSaveKeyInvoice}
                   disabled={updateOrganizationIsPending}
                 >
                   {updateOrganizationIsPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
