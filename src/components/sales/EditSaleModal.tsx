@@ -388,8 +388,8 @@ export function EditSaleModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
-        <DialogHeader className="pl-6 pr-14 py-4 border-b border-border/50">
+      <DialogContent className="fixed inset-0 z-50 w-full h-full max-w-none translate-x-0 translate-y-0 flex flex-col bg-background border-0 rounded-none p-0 gap-0 data-[state=open]:slide-in-from-bottom-0 data-[state=closed]:slide-out-to-bottom-0 data-[state=open]:zoom-in-100 data-[state=closed]:zoom-out-100">
+        <DialogHeader className="pl-6 pr-14 py-4 border-b border-border/50 shrink-0">
           <DialogTitle className="flex items-center gap-2">
             Editar Venda
             {sale.code && (
@@ -401,8 +401,8 @@ export function EditSaleModal({
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0 overflow-hidden">
-          <ScrollArea className="flex-1 min-h-0">
-            <div className="p-6 space-y-6">
+          <div className="flex-1 overflow-y-auto">
+            <div className="max-w-4xl mx-auto p-6 space-y-6">
               {/* Client & Date */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -684,7 +684,7 @@ export function EditSaleModal({
                 />
               </div>
             </div>
-          </ScrollArea>
+          </div>
 
           {/* Actions */}
           <div className="p-4 border-t border-border/50 flex gap-3">

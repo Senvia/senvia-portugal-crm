@@ -622,16 +622,16 @@ export function CreateSaleModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] p-0 gap-0">
-        <DialogHeader className="px-6 py-4 border-b border-border/50">
+      <DialogContent className="fixed inset-0 z-50 w-full h-full max-w-none translate-x-0 translate-y-0 flex flex-col bg-background border-0 rounded-none p-0 gap-0 data-[state=open]:slide-in-from-bottom-0 data-[state=closed]:slide-out-to-bottom-0 data-[state=open]:zoom-in-100 data-[state=closed]:zoom-out-100">
+        <DialogHeader className="px-6 py-4 border-b border-border/50 shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5 text-primary" />
             Nova Venda
           </DialogTitle>
         </DialogHeader>
 
-        <ScrollArea className="max-h-[calc(90vh-8rem)]">
-          <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        <div className="flex-1 overflow-y-auto">
+          <form onSubmit={handleSubmit} className="max-w-4xl mx-auto p-6 space-y-6">
             {/* Section 1: Basic Info */}
             <div className="space-y-4">
               <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
@@ -1204,7 +1204,7 @@ export function CreateSaleModal({
               />
             </div>
           </form>
-        </ScrollArea>
+        </div>
 
         {/* Payment Type Selector */}
         <PaymentTypeSelector

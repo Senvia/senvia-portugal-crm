@@ -144,8 +144,8 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-lg max-h-[90vh] p-0 gap-0">
-          <DialogHeader className="pl-6 pr-14 py-4 border-b border-border/50">
+        <DialogContent className="fixed inset-0 z-50 w-full h-full max-w-none translate-x-0 translate-y-0 flex flex-col bg-background border-0 rounded-none p-0 gap-0 data-[state=open]:slide-in-from-bottom-0 data-[state=closed]:slide-out-to-bottom-0 data-[state=open]:zoom-in-100 data-[state=closed]:zoom-out-100">
+          <DialogHeader className="pl-6 pr-14 py-4 border-b border-border/50 shrink-0">
             <div className="flex items-center justify-between gap-2">
               <DialogTitle className="flex items-center gap-2">
                 {sale.code && (
@@ -166,8 +166,8 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
             </div>
           </DialogHeader>
 
-          <ScrollArea className="max-h-[calc(90vh-10rem)]">
-            <div className="p-6 space-y-6">
+          <div className="flex-1 overflow-y-auto">
+            <div className="max-w-4xl mx-auto p-6 space-y-6">
               {/* 1. Client/Lead Info */}
               {(sale.client || sale.lead) && (
                 <>
@@ -573,7 +573,7 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                 />
               </div>
             </div>
-          </ScrollArea>
+          </div>
 
           {/* Actions */}
           <div className="p-4 border-t border-border/50">
