@@ -1,53 +1,49 @@
 
 
-# Emitir Recibo por Pagamento com Marcacao Automatica como Pago
+# Adicionar Pagamentos nas Observacoes da Fatura (KeyInvoice)
 
-## Contexto
-Atualmente, o botao "Emitir Recibo" so aparece em pagamentos com status "paid". O comportamento correto e:
-- Quando uma Fatura (FT) e emitida na venda, o botao "Emitir Recibo" deve aparecer em **todos os pagamentos** (pendentes, parciais ou pagos) que ainda nao tenham recibo emitido.
-- Ao emitir o recibo, o pagamento e automaticamente marcado como **"Pago"**.
+## Problema
+O caminho do KeyInvoice na funcao `issue-invoice` nao gera automaticamente as observacoes com o cronograma de pagamentos. Apenas usa o parametro `observations` vindo do frontend (que normalmente esta vazio). O caminho do InvoiceXpress ja tem esta logica (linhas 740-761), mas o KeyInvoice nao.
 
-## Alteracoes
+## Alteracao
 
-### 1. `src/components/sales/SalePaymentsList.tsx` (Frontend)
+### `supabase/functions/issue-invoice/index.ts`
 
-Remover a condicao `payment.status === 'paid'` do botao "Emitir Recibo". A nova condicao sera:
-
-```
-hasInvoiceXpress && hasInvoice && invoicexpressType === 'FT' && !payment.invoice_reference && !readonly
-```
-
-Isto faz o botao aparecer em qualquer pagamento que:
-- Pertenca a uma venda com FT emitida
-- Ainda nao tenha recibo emitido (sem `invoice_reference`)
-
-### 2. `supabase/functions/generate-receipt/index.ts` (Backend)
-
-Duas alteracoes:
-
-**a)** Remover a validacao que bloqueia pagamentos que nao estao "paid" (linhas 132-137). Agora aceita pagamentos com qualquer status.
-
-**b)** Apos emitir o recibo com sucesso, atualizar o status do pagamento para `'paid'` automaticamente:
+Antes de montar o `insertPayload` (linha ~342), adicionar a mesma logica de auto-geracao de observacoes que ja existe no caminho InvoiceXpress:
 
 ```typescript
-await supabase
-  .from('sale_payments')
-  .update({
-    invoice_reference: receiptReference,
-    invoicexpress_id: receiptId || null,
-    status: 'paid',  // Marca automaticamente como pago
-    ...(fileUrl ? { invoice_file_url: fileUrl } : {}),
-    ...(qrCodeUrl ? { qr_code_url: qrCodeUrl } : {}),
-  })
-  .eq('id', payment_id)
+// Antes da linha 342 (insertPayload)
+let finalObservations = observations || ''
+if (!finalObservations) {
+  const { data: salePayments } = await supabase
+    .from('sale_payments')
+    .select('amount, payment_date, status')
+    .eq('sale_id', saleId)
+    .order('payment_date', { ascending: true })
+
+  if (salePayments && salePayments.length > 1) {
+    finalObservations = `Pagamento em ${salePayments.length} parcelas:\n` +
+      salePayments.map((p, i) => {
+        const d = new Date(p.payment_date)
+        const dateStr = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`
+        return `${i+1}. ${dateStr} - ${Number(p.amount).toFixed(2)}€`
+      }).join('\n')
+  } else if (salePayments && salePayments.length === 1) {
+    const p = salePayments[0]
+    const d = new Date(p.payment_date)
+    const dateStr = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`
+    finalObservations = `Data de pagamento: ${dateStr}`
+  }
+}
 ```
 
-O trigger existente `trg_sync_sale_payment_status` na base de dados ira automaticamente atualizar o `payment_status` da venda (pending/partial/paid) com base nos pagamentos atualizados.
+Depois, na linha 354, substituir `observations` por `finalObservations`:
 
-## Resultado Final
-1. Utilizador emite uma Fatura (FT) na venda
-2. Botao "Emitir Recibo" aparece em cada pagamento agendado
-3. Utilizador clica "Emitir Recibo" num pagamento
-4. O recibo e emitido no sistema de faturacao
-5. O pagamento e automaticamente marcado como "Pago"
-6. O estado da venda atualiza automaticamente via trigger
+```typescript
+if (finalObservations) {
+  insertPayload.Comments = finalObservations
+}
+```
+
+Nota: Os pagamentos ja sao buscados na linha 326 para determinar o DocType, mas sem `payment_date`. Esta nova query inclui `payment_date` e ordenacao para gerar as observacoes corretamente.
+
