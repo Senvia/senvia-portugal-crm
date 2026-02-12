@@ -59,14 +59,17 @@ interface IntegrationDef {
   title: string;
   description: string;
   toggleKey: string;
+  group: string;
 }
 
+const integrationGroups = ['Automações', 'Comunicações', 'Faturação'] as const;
+
 const integrations: IntegrationDef[] = [
-  { key: 'webhook', icon: Webhook, title: 'n8n / Automações', description: 'Notificações de novos leads', toggleKey: 'webhook' },
-  { key: 'whatsapp', icon: MessageCircle, title: 'WhatsApp Business', description: 'Integração com Evolution API', toggleKey: 'whatsapp' },
-  { key: 'brevo', icon: Mail, title: 'Email (Brevo)', description: 'Envio de emails e propostas', toggleKey: 'brevo' },
-  { key: 'invoicexpress', icon: Receipt, title: 'InvoiceXpress', description: 'Emissão de faturas automática', toggleKey: 'invoicexpress' },
-  { key: 'keyinvoice', icon: Receipt, title: 'KeyInvoice', description: 'Faturação via API 5.0', toggleKey: 'keyinvoice' },
+  { key: 'webhook', icon: Webhook, title: 'n8n / Automações', description: 'Notificações de novos leads', toggleKey: 'webhook', group: 'Automações' },
+  { key: 'whatsapp', icon: MessageCircle, title: 'WhatsApp Business', description: 'Integração com Evolution API', toggleKey: 'whatsapp', group: 'Comunicações' },
+  { key: 'brevo', icon: Mail, title: 'Email (Brevo)', description: 'Envio de emails e propostas', toggleKey: 'brevo', group: 'Comunicações' },
+  { key: 'invoicexpress', icon: Receipt, title: 'InvoiceXpress', description: 'Emissão de faturas automática', toggleKey: 'invoicexpress', group: 'Faturação' },
+  { key: 'keyinvoice', icon: Receipt, title: 'KeyInvoice', description: 'Faturação via API 5.0', toggleKey: 'keyinvoice', group: 'Faturação' },
 ];
 
 function IntegrationCard({ 
@@ -146,17 +149,27 @@ export const IntegrationsContent = (props: IntegrationsContentProps) => {
             💡 <strong>Dica:</strong> Os modelos de mensagem, regras de IA e Meta Pixels são agora configurados individualmente em cada formulário.
           </p>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {integrations.map((item) => (
-            <IntegrationCard
-              key={item.key}
-              icon={item.icon}
-              title={item.title}
-              description={item.description}
-              badge={getBadge(item.toggleKey, isConfigured(item.key))}
-              onClick={() => setActive(item.key)}
-            />
-          ))}
+        <div className="space-y-6">
+          {integrationGroups.map((group) => {
+            const items = integrations.filter(i => i.group === group);
+            return (
+              <div key={group}>
+                <h3 className="text-sm font-medium text-muted-foreground mb-2">{group}</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {items.map((item) => (
+                    <IntegrationCard
+                      key={item.key}
+                      icon={item.icon}
+                      title={item.title}
+                      description={item.description}
+                      badge={getBadge(item.toggleKey, isConfigured(item.key))}
+                      onClick={() => setActive(item.key)}
+                    />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     );
