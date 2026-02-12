@@ -46,6 +46,16 @@ export default function Sales() {
       }
     }
   }, [sales, pendingSaleId]);
+
+  // Sync selectedSale with fresh data from React Query cache
+  useEffect(() => {
+    if (selectedSale && sales) {
+      const fresh = sales.find(s => s.id === selectedSale.id);
+      if (fresh && fresh !== selectedSale) {
+        setSelectedSale(fresh);
+      }
+    }
+  }, [sales]);
   const filteredSales = useMemo(() => {
     if (!sales) return [];
     
