@@ -211,7 +211,7 @@ async function handleKeyInvoice(supabase: any, org: any, saleId: string, organiz
       }
     }
     console.log('KeyInvoice products found:', keyInvoiceProducts.length,
-      keyInvoiceProducts.map((p: any) => `${p.Id}:${p.Description || p.Name}`).join(', '))
+      keyInvoiceProducts.map((p: any) => `${p.IdProduct || p.Id}:${p.Description || p.Name}`).join(', '))
   } catch (e) {
     console.warn('KeyInvoice listProducts failed:', e)
   }
@@ -250,9 +250,9 @@ async function handleKeyInvoice(supabase: any, org: any, saleId: string, organiz
       const prodData = await prodRes.json()
       console.log('KeyInvoice insertProduct response:', JSON.stringify(prodData))
 
-      if (prodData.Status === 1 && prodData.Data?.Id) {
+      if (prodData.Status === 1 && (prodData.Data?.IdProduct || prodData.Data?.Id)) {
         keyInvoiceProducts.push({
-          Id: prodData.Data.Id,
+          IdProduct: prodData.Data.IdProduct || prodData.Data.Id,
           Name: itemName,
           Description: itemName,
         })
@@ -270,19 +270,21 @@ async function handleKeyInvoice(supabase: any, org: any, saleId: string, organiz
   }
 
   function findProductId(name: string): string {
+    const getId = (p: any) => p.IdProduct || p.Id
     const exactMatch = keyInvoiceProducts.find((p: any) => 
       (p.Description || p.Name || '').toLowerCase() === name.toLowerCase()
     )
-    if (exactMatch?.Id) return String(exactMatch.Id)
+    if (exactMatch && getId(exactMatch)) return String(getId(exactMatch))
 
     const partialMatch = keyInvoiceProducts.find((p: any) => 
       (p.Description || p.Name || '').toLowerCase().includes(name.toLowerCase()) ||
       name.toLowerCase().includes((p.Description || p.Name || '').toLowerCase())
     )
-    if (partialMatch?.Id) return String(partialMatch.Id)
+    if (partialMatch && getId(partialMatch)) return String(getId(partialMatch))
 
-    console.log('KeyInvoice: No product match for "' + name + '", using first product:', keyInvoiceProducts[0].Id)
-    return String(keyInvoiceProducts[0].Id)
+    const fallbackId = getId(keyInvoiceProducts[0])
+    console.log('KeyInvoice: No product match for "' + name + '", using first product:', fallbackId)
+    return String(fallbackId)
   }
 
   const items = (saleItems && saleItems.length > 0) 
