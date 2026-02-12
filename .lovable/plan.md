@@ -1,121 +1,116 @@
 
 
-# Regras de Vendas Configuraveis nas Definicoes
+# Reorganizar Layout do Modal de Detalhes da Venda
 
 ## Resumo
 
-Criar duas regras de negocio configuraveis por organizacao:
-1. **Bloquear edicao de vendas Concluidas** -- com dialogo de confirmacao ao concluir
-2. **Impedir exclusao de pagamentos** -- ocultar botao de eliminar pagamento
-
-Ambas as regras sao controladas por checkboxes em **Definicoes > Definicoes Gerais > Vendas** (nova sub-seccao).
+Reestruturar o cabecalho e layout do modal de detalhes da venda para melhorar a legibilidade, mover o progresso de pagamento para a coluna direita e simplificar os botoes de faturacao.
 
 ---
 
-## 1. Nova sub-seccao "Vendas" nas Definicoes Gerais
+## Alteracoes no `SaleDetailsModal.tsx`
 
-### Navegacao
-Adicionar `"org-sales"` ao sub-menu de "general" em `MobileSettingsNav.tsx`:
+### 1. Novo cabecalho compacto
+
+O cabecalho do dialogo passa a ter apenas o titulo "Detalhes da Venda" (sem badges).
+
+Abaixo do cabecalho, antes do grid de colunas, adicionar uma barra de contexto com:
+- **Codigo da venda** (badge mono) - esquerda
+- **Data da venda** (texto) - centro
+- **Estado da venda** (Select com cores) - direita
+
+Isto substitui o codigo e estado que estavam no DialogHeader e o card "Estado da Venda" que estava na coluna direita.
 
 ```text
-Definicoes Gerais
-  - Geral
-  - Pipeline
-  - Modulos
-  - Formulario
-  - Campos
-  - Vendas  <-- NOVO (icone: ShoppingCart)
+[V-00012]     12 Fev 2026     [Em Progresso v]
 ```
 
-### Componente `SalesSettingsTab.tsx` (novo)
-Card com titulo "Regras de Vendas" e duas opcoes com Checkbox:
-- "Bloquear edicao de vendas concluidas" (chave: `lock_delivered_sales`)
-- "Impedir exclusao de pagamentos" (chave: `prevent_payment_deletion`)
+### 2. Remover card "Estado da Venda" da coluna direita
 
-Os valores sao guardados na coluna JSONB `sales_settings` da tabela `organizations`.
+O select de estado move-se para a barra de contexto acima, libertando espaco na coluna direita.
 
----
+### 3. Mover progresso de pagamento para a coluna direita
 
-## 2. Base de dados
+O bloco de resumo de pagamentos (barra de progresso + total pago + em falta) que atualmente esta dentro do `SalePaymentsList` na coluna esquerda sera replicado na coluna direita, entre o bloco "Valor Total" e a "Proposta Associada".
 
-Adicionar coluna `sales_settings` (JSONB, default `{}`) a tabela `organizations`.
+Na coluna direita, adicionar um card "Pagamento" com:
+- Barra de progresso (Progress component)
+- Total Pago / Em Falta (grid 2 cols)
+- Percentagem
 
-```sql
-ALTER TABLE public.organizations 
-ADD COLUMN IF NOT EXISTS sales_settings jsonb DEFAULT '{}'::jsonb;
-```
+Os dados vem do hook `useSalePayments` + `calculatePaymentSummary` que ja esta importado no `SaleDetailsModal`.
 
-Estrutura esperada:
-```json
-{
-  "lock_delivered_sales": true,
-  "prevent_payment_deletion": true
-}
-```
+### 4. Remover "Ver Rascunho de Fatura" dos pagamentos
 
----
+No `SalePaymentsList.tsx`, remover o bloco "Global Invoice Button" (linhas 200-335) que contem o botao "Ver Rascunho de Fatura/Fatura-Recibo" e toda a UI de fatura global. Essa funcionalidade passa para o footer do modal principal.
 
-## 3. Logica de negocio
+Manter os botoes de recibo (RC) individuais por pagamento quando ja existe FT.
 
-### 3a. Confirmacao ao concluir venda (`SaleDetailsModal.tsx`)
+### 5. Botao "Emitir Fatura" dinamico no footer
 
-Quando `lock_delivered_sales` esta ativo e o utilizador muda o status para `delivered`:
-- Interceptar o `handleStatusChange`
-- Exibir um `AlertDialog` com a mensagem: "Ao concluir esta venda, ela nao podera mais ser editada. Deseja continuar?"
-- Se confirmar: muda o status para `delivered`
-- Se cancelar: nao muda nada
+No footer do `SaleDetailsModal`, ao lado do botao "Editar Venda", adicionar um botao dinamico que:
 
-Quando a venda ja esta `delivered` e `lock_delivered_sales` esta ativo:
-- Ocultar o botao "Editar Venda" no footer
-- O select de status fica `disabled`
+- Se **todos os pagamentos estao pagos**: label = "Emitir Fatura-Recibo", abre `InvoiceDraftModal` em modo `invoice_receipt`
+- Se **ha pagamentos agendados/pendentes**: label = "Emitir Fatura", abre `InvoiceDraftModal` em modo `invoice`
+- Condicoes de visibilidade: InvoiceXpress ativo, sem fatura existente, cliente com NIF
 
-### 3b. Impedir exclusao de pagamentos (`SalePaymentsList.tsx`)
-
-Quando `prevent_payment_deletion` esta ativo:
-- Ocultar o botao `Trash2` (eliminar) em cada pagamento
-- Remover toda a logica de `deletingPayment` e o `AlertDialog` de confirmacao de exclusao
-- A edicao de pagamentos pendentes continua disponivel
+Este botao substitui o antigo "Ver Rascunho de Fatura" que estava no footer.
 
 ---
 
 ## Ficheiros a alterar
 
-### Novos:
-1. **`src/components/settings/SalesSettingsTab.tsx`** -- UI com 2 checkboxes para as regras
+### `src/components/sales/SaleDetailsModal.tsx`
+- Simplificar DialogHeader (remover badges de codigo/estado/data)
+- Adicionar barra de contexto com codigo + data + select de estado logo apos o header
+- Remover card "Estado da Venda" da coluna direita
+- Adicionar card "Pagamento" com progresso na coluna direita (entre valor total e proposta)
+- Alterar botao do footer: de "Ver Rascunho" para "Emitir Fatura" / "Emitir Fatura-Recibo" (dinamico)
 
-### Alterados:
-2. **`src/components/settings/MobileSettingsNav.tsx`** -- Adicionar `"org-sales"` ao tipo e ao `subSectionsMap.general`
-3. **`src/pages/Settings.tsx`** -- Adicionar case `"org-sales"` no `renderSubContent`
-4. **`src/components/sales/SaleDetailsModal.tsx`** -- Ler `sales_settings` da org, adicionar AlertDialog de confirmacao ao concluir, ocultar "Editar" se bloqueado
-5. **`src/components/sales/SalePaymentsList.tsx`** -- Receber prop `preventPaymentDeletion`, ocultar botao de eliminar condicionalmente
-6. **`src/hooks/useOrganization.ts`** -- Garantir que `updateOrganization` suporta `sales_settings`
-
-### Migracao:
-7. **SQL** -- Adicionar coluna `sales_settings` a tabela `organizations`
+### `src/components/sales/SalePaymentsList.tsx`
+- Remover o bloco "Global Invoice Button" (linhas 200-335) que contem o botao "Ver Rascunho" e toda a UI de fatura ja emitida a nivel global
+- Manter os botoes individuais de recibo (RC) por pagamento
+- Manter o bloco de resumo (progresso) no final dos pagamentos na coluna esquerda (duplicado na direita para desktop)
 
 ---
 
 ## Detalhes tecnicos
 
-### SalesSettingsTab.tsx
+### Barra de contexto (novo componente inline)
 ```text
-Card "Regras de Vendas"
-  [x] Bloquear edicao de vendas concluidas
-      Descricao: "Vendas com estado 'Concluida' nao podem ser editadas."
-  
-  [x] Impedir exclusao de pagamentos
-      Descricao: "Pagamentos registados nao podem ser eliminados."
-  
-  [Guardar] -- chama updateOrganization({ sales_settings: {...} })
+<div className="px-4 sm:px-6 py-3 border-b border-border/50 flex items-center justify-between gap-3">
+  <!-- Codigo -->
+  <Badge variant="outline" className="font-mono text-xs">{sale.code}</Badge>
+  <!-- Data -->
+  <span className="text-sm text-muted-foreground">{date}</span>
+  <!-- Estado Select -->
+  <Select value={status} onValueChange={handleStatusChange} disabled={isDeliveredAndLocked}>
+    ...
+  </Select>
+</div>
 ```
 
-### SaleDetailsModal - Fluxo de confirmacao
-- Novo estado: `showDeliveredConfirm` (boolean)
-- Novo estado: `pendingDeliveredStatus` (para guardar o status temporariamente)
-- No `handleStatusChange`: se `newStatus === 'delivered'` e `lock_delivered_sales` ativo, abrir AlertDialog em vez de mudar direto
-- No AlertDialog: ao confirmar, executar `updateSale.mutate`
-- Se venda ja esta `delivered` e setting ativo: `onEdit` prop nao e passada/botao fica hidden, select de status fica disabled
+### Card de progresso na coluna direita
+```text
+Card "Pagamento"
+  Progress bar (h-2)
+  Grid 2 cols:
+    Total Pago: formatCurrency(summary.totalPaid)
+    Em Falta: formatCurrency(summary.remaining)
+  Percentagem: {Math.round(summary.percentage)}%
+```
 
-### SalePaymentsList - Nova prop
-- `preventPaymentDeletion?: boolean` -- se true, nao renderiza o botao Trash2
-- O componente pai (`SaleDetailsModal`) le o setting da org e passa a prop
+Os dados `summary` ja estao disponiveis via `useSalePayments` + `calculatePaymentSummary` no componente pai.
+
+### Botao footer dinamico
+A logica existente no footer (linhas 632-648) muda apenas o label:
+- De "Ver Rascunho de Fatura" para "Emitir Fatura"
+- De "Ver Rascunho de Fatura-Recibo" para "Emitir Fatura-Recibo"
+- O icone muda de `Eye` para `FileText`
+
+### O que se remove do SalePaymentsList
+- Bloco `{hasInvoiceXpress && !readonly && (...)}` (linhas 200-335) com toda a UI de fatura global (botao rascunho, referencia de fatura existente, acoes PDF/email/NC/anular)
+- Os `InvoiceDraftModal` de invoice e invoice_receipt dentro do SalePaymentsList (linhas 628-697)
+- Os estados `draftMode` para invoice/invoice_receipt no SalePaymentsList
+- Manter apenas o draft de receipt (RC) individual por pagamento
+
