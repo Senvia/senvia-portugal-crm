@@ -7,9 +7,10 @@ import { useUpdateProfile, useChangePassword } from '@/hooks/useProfile';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
-import { Building, Users, UsersRound, Palette, Link2, ArrowLeft, Package, GitBranch, LayoutGrid, UserCheck, Zap, Receipt, Shield, IdCard, KeyRound } from "lucide-react";
+import { Building, UsersRound, Package, Link2, ArrowLeft, Bell, Receipt, Shield } from "lucide-react";
 import { PipelineEditor } from '@/components/settings/PipelineEditor';
 import { ProductsTab } from '@/components/settings/ProductsTab';
 import { ModulesTab } from '@/components/settings/ModulesTab';
@@ -22,6 +23,7 @@ import { IntegrationsContent } from '@/components/settings/IntegrationsContent';
 import { ClientFieldsEditor } from '@/components/settings/ClientFieldsEditor';
 import { FidelizationAlertsSettings } from '@/components/settings/FidelizationAlertsSettings';
 import { ExpenseCategoriesTab } from '@/components/settings/ExpenseCategoriesTab';
+import { PushNotificationsCard } from '@/components/settings/PushNotificationsCard';
 import { PRODUCTION_URL } from '@/lib/constants';
 import { ProfilesTab } from '@/components/settings/ProfilesTab';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -63,7 +65,7 @@ export default function Settings() {
   const [taxRate, setTaxRate] = useState('23');
   const [taxExemptionReason, setTaxExemptionReason] = useState('');
 
-  // KeyInvoice state (API 5.0 - single API key)
+  // KeyInvoice state
   const [keyinvoiceApiKey, setKeyinvoiceApiKey] = useState('');
   const [keyinvoiceApiUrl, setKeyinvoiceApiUrl] = useState('');
   const [showKeyinvoiceApiKey, setShowKeyinvoiceApiKey] = useState(false);
@@ -73,7 +75,7 @@ export default function Settings() {
     webhook: true, whatsapp: true, brevo: true, invoicexpress: true, keyinvoice: false,
   });
 
-  // Form mode state (for dynamic URL)
+  // Form mode state
   const [formMode, setFormMode] = useState<'traditional' | 'conversational'>('traditional');
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
@@ -88,7 +90,7 @@ export default function Settings() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  // Dynamic form URL based on mode - using slug for friendly URLs
+  // Dynamic form URL
   const formPrefix = formMode === 'conversational' ? '/c/' : '/f/';
   const publicFormUrl = organization?.slug ? `${PRODUCTION_URL}${formPrefix}${organization.slug}` : '';
   const iframeCode = organization?.slug ? `<iframe src="${publicFormUrl}" width="100%" height="500" frameborder="0"></iframe>` : '';
@@ -110,8 +112,8 @@ export default function Settings() {
       setIsLoadingIntegrations(true);
       const { data, error } = await supabase
         .from('organizations')
-      .select('webhook_url, whatsapp_base_url, whatsapp_instance, whatsapp_api_key, form_settings, brevo_api_key, brevo_sender_email, invoicexpress_account_name, invoicexpress_api_key, integrations_enabled, tax_config, billing_provider, keyinvoice_username, keyinvoice_password, keyinvoice_company_code, keyinvoice_api_url')
-      .eq('id', organization.id)
+        .select('webhook_url, whatsapp_base_url, whatsapp_instance, whatsapp_api_key, form_settings, brevo_api_key, brevo_sender_email, invoicexpress_account_name, invoicexpress_api_key, integrations_enabled, tax_config, billing_provider, keyinvoice_username, keyinvoice_password, keyinvoice_company_code, keyinvoice_api_url')
+        .eq('id', organization.id)
         .single();
       
       if (!error && data) {
@@ -126,14 +128,12 @@ export default function Settings() {
         setKeyinvoiceApiKey((data as any).keyinvoice_password || '');
         setKeyinvoiceApiUrl((data as any).keyinvoice_api_url || '');
 
-        // Tax config
         const tc = (data as any).tax_config;
         if (tc) {
           setTaxRate(String(tc.tax_value ?? 23));
           setTaxExemptionReason(tc.tax_exemption_reason || '');
         }
 
-        // Set integrations enabled state
         if ((data as any).integrations_enabled) {
           setIntegrationsEnabled({
             webhook: true, whatsapp: true, brevo: true, invoicexpress: true, keyinvoice: false,
@@ -141,7 +141,6 @@ export default function Settings() {
           });
         }
         
-        // Set form mode from settings
         if (data.form_settings) {
           const settings = data.form_settings as { mode?: 'traditional' | 'conversational' };
           setFormMode(settings.mode || 'traditional');
@@ -155,17 +154,10 @@ export default function Settings() {
 
   const handleToggleIntegration = async (key: string, enabled: boolean) => {
     let newState = { ...integrationsEnabled, [key]: enabled };
-    
-    // Mutual exclusivity: only one billing provider active at a time
-    if (enabled && key === 'invoicexpress') {
-      newState.keyinvoice = false;
-    } else if (enabled && key === 'keyinvoice') {
-      newState.invoicexpress = false;
-    }
-    
+    if (enabled && key === 'invoicexpress') newState.keyinvoice = false;
+    else if (enabled && key === 'keyinvoice') newState.invoicexpress = false;
     setIntegrationsEnabled(newState);
     
-    // Determine billing_provider based on which is active
     let billingProviderValue: string | undefined;
     if (key === 'invoicexpress' || key === 'keyinvoice') {
       if (newState.invoicexpress) billingProviderValue = 'invoicexpress';
@@ -174,13 +166,8 @@ export default function Settings() {
     
     if (organization?.id) {
       const updateData: Record<string, any> = { integrations_enabled: newState };
-      if (billingProviderValue !== undefined) {
-        updateData.billing_provider = billingProviderValue;
-      }
-      await supabase
-        .from('organizations')
-        .update(updateData)
-        .eq('id', organization.id);
+      if (billingProviderValue !== undefined) updateData.billing_provider = billingProviderValue;
+      await supabase.from('organizations').update(updateData).eq('id', organization.id);
     }
   };
 
@@ -192,8 +179,7 @@ export default function Settings() {
   };
 
   const handleSaveWebhook = () => {
-    const urlToSave = webhookUrl.trim() || null;
-    updateOrganization.mutate({ webhook_url: urlToSave });
+    updateOrganization.mutate({ webhook_url: webhookUrl.trim() || null });
   };
 
   const handleSaveWhatsApp = () => {
@@ -217,11 +203,7 @@ export default function Settings() {
     updateOrganization.mutate({
       invoicexpress_account_name: invoiceXpressAccountName.trim() || null,
       invoicexpress_api_key: invoiceXpressApiKey.trim() || null,
-      tax_config: {
-        tax_name: taxName,
-        tax_value: taxValue,
-        tax_exemption_reason: taxValue === 0 ? taxExemptionReason : null,
-      },
+      tax_config: { tax_name: taxName, tax_value: taxValue, tax_exemption_reason: taxValue === 0 ? taxExemptionReason : null },
     });
   };
 
@@ -231,21 +213,13 @@ export default function Settings() {
     updateOrganization.mutate({
       keyinvoice_password: keyinvoiceApiKey.trim() || null,
       keyinvoice_api_url: keyinvoiceApiUrl.trim() || null,
-      tax_config: {
-        tax_name: taxName,
-        tax_value: taxValue,
-        tax_exemption_reason: taxValue === 0 ? taxExemptionReason : null,
-      },
+      tax_config: { tax_name: taxName, tax_value: taxValue, tax_exemption_reason: taxValue === 0 ? taxExemptionReason : null },
     });
   };
 
   const handleTestWebhook = () => {
     if (!webhookUrl.trim()) {
-      toast({
-        title: 'URL em falta',
-        description: 'Introduza um URL de webhook antes de testar.',
-        variant: 'destructive',
-      });
+      toast({ title: 'URL em falta', description: 'Introduza um URL de webhook antes de testar.', variant: 'destructive' });
       return;
     }
     testWebhook.mutate(webhookUrl.trim());
@@ -253,12 +227,7 @@ export default function Settings() {
 
   const isValidUrl = (url: string) => {
     if (!url) return true;
-    try {
-      new URL(url);
-      return true;
-    } catch {
-      return false;
-    }
+    try { new URL(url); return true; } catch { return false; }
   };
 
   const handleSaveOrgName = () => {
@@ -291,35 +260,124 @@ export default function Settings() {
       return;
     }
     changePassword.mutate({ newPassword }, {
-      onSuccess: () => {
-        setNewPassword('');
-        setConfirmPassword('');
-        setShowPassword(false);
-      }
+      onSuccess: () => { setNewPassword(''); setConfirmPassword(''); setShowPassword(false); }
     });
+  };
+
+  // Shared props for GeneralContent
+  const generalContentProps = {
+    organization, profile, isAdmin, orgName, setOrgName, fullName, setFullName,
+    handleSaveOrgName, handleSaveProfile,
+    updateOrganizationIsPending: updateOrganization.isPending,
+    updateProfileIsPending: updateProfile.isPending,
+  };
+
+  // Shared props for IntegrationsContent
+  const integrationsContentProps = {
+    organization, publicFormUrl, iframeCode, copied, copyToClipboard,
+    isLoadingIntegrations, webhookUrl, setWebhookUrl, isValidUrl,
+    handleTestWebhook, handleSaveWebhook,
+    testWebhookIsPending: testWebhook.isPending,
+    updateOrganizationIsPending: updateOrganization.isPending,
+    whatsappBaseUrl, setWhatsappBaseUrl, whatsappInstance, setWhatsappInstance,
+    whatsappApiKey, setWhatsappApiKey, showWhatsappApiKey, setShowWhatsappApiKey,
+    handleSaveWhatsApp, brevoApiKey, setBrevoApiKey, brevoSenderEmail, setBrevoSenderEmail,
+    showBrevoApiKey, setShowBrevoApiKey, handleSaveBrevo,
+    invoiceXpressAccountName, setInvoiceXpressAccountName,
+    invoiceXpressApiKey, setInvoiceXpressApiKey,
+    showInvoiceXpressApiKey, setShowInvoiceXpressApiKey,
+    handleSaveInvoiceXpress, taxRate, setTaxRate, taxExemptionReason, setTaxExemptionReason,
+    integrationsEnabled, onToggleIntegration: handleToggleIntegration,
+    handleSaveKeyInvoice, keyinvoiceApiKey, setKeyinvoiceApiKey,
+    showKeyinvoiceApiKey, setShowKeyinvoiceApiKey, keyinvoiceApiUrl, setKeyinvoiceApiUrl,
   };
 
   // Section titles for mobile header
   const sectionTitles: Record<SettingsSection, string> = {
-    general: "Geral",
+    general: "Definições Gerais",
     security: "Segurança",
-    team: "Acessos",
-    profiles: "Perfis",
-    teams: "Equipas",
-    pipeline: "Pipeline",
-    modules: "Módulos",
-    form: "Formulário",
+    team: "Equipa e Acessos",
     products: "Produtos",
-    clients: "Campos",
-    alerts: "Alertas",
-    expenses: "Despesas",
+    finance: "Financeiro",
+    notifications: "Notificações",
     integrations: "Integrações",
+  };
+
+  // Render grouped content for a section
+  const renderGroupContent = (section: SettingsSection) => {
+    switch (section) {
+      case "general":
+        return (
+          <div className="space-y-8">
+            <GeneralContent {...generalContentProps} />
+            {canManageIntegrations && (
+              <>
+                <Separator />
+                <PipelineEditor />
+                <Separator />
+                <ModulesTab />
+                <Separator />
+                <FormsManager />
+                <Separator />
+                <ClientFieldsEditor />
+              </>
+            )}
+          </div>
+        );
+      case "security":
+        return (
+          <div className="max-w-4xl">
+            <SecuritySettings
+              newPassword={newPassword} setNewPassword={setNewPassword}
+              confirmPassword={confirmPassword} setConfirmPassword={setConfirmPassword}
+              showPassword={showPassword} setShowPassword={setShowPassword}
+              handleChangePassword={handleChangePassword}
+              changePasswordIsPending={changePassword.isPending}
+            />
+          </div>
+        );
+      case "team":
+        return canManageTeam ? (
+          <div className="space-y-8 max-w-4xl">
+            <TeamTab />
+            <Separator />
+            <ProfilesTab />
+            <Separator />
+            <TeamsSection />
+          </div>
+        ) : null;
+      case "products":
+        return canManageIntegrations ? (
+          <div className="max-w-4xl"><ProductsTab /></div>
+        ) : null;
+      case "finance":
+        return canManageIntegrations ? (
+          <div className="max-w-4xl"><ExpenseCategoriesTab /></div>
+        ) : null;
+      case "notifications":
+        return (
+          <div className="space-y-8 max-w-4xl">
+            <PushNotificationsCard organizationId={organization?.id} pushNotifications={pushNotifications} />
+            {canManageIntegrations && (
+              <>
+                <Separator />
+                <FidelizationAlertsSettings />
+              </>
+            )}
+          </div>
+        );
+      case "integrations":
+        return canManageIntegrations ? (
+          <IntegrationsContent {...integrationsContentProps} />
+        ) : null;
+      default:
+        return null;
+    }
   };
 
   return (
     <AppLayout userName={profile?.full_name} organizationName={organization?.name}>
       <div className="p-4 sm:p-6 lg:p-8">
-        {/* Mobile: Navigation List or Section Content */}
         {isMobile ? (
           mobileSection === null ? (
             <>
@@ -337,111 +395,15 @@ export default function Settings() {
           ) : (
             <>
               <div className="flex items-center gap-3 mb-6">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setMobileSection(null)}
-                  className="shrink-0"
-                >
+                <Button variant="ghost" size="icon" onClick={() => setMobileSection(null)} className="shrink-0">
                   <ArrowLeft className="h-5 w-5" />
                 </Button>
                 <h1 className="text-xl font-bold text-foreground">{sectionTitles[mobileSection]}</h1>
               </div>
-              {mobileSection === "general" && (
-                <GeneralContent
-                  organization={organization}
-                  profile={profile}
-                  isAdmin={isAdmin}
-                  orgName={orgName}
-                  setOrgName={setOrgName}
-                  fullName={fullName}
-                  setFullName={setFullName}
-                  handleSaveOrgName={handleSaveOrgName}
-                  handleSaveProfile={handleSaveProfile}
-                  updateOrganizationIsPending={updateOrganization.isPending}
-                  updateProfileIsPending={updateProfile.isPending}
-                  pushNotifications={pushNotifications}
-                />
-              )}
-              {mobileSection === "security" && (
-                <SecuritySettings
-                  newPassword={newPassword}
-                  setNewPassword={setNewPassword}
-                  confirmPassword={confirmPassword}
-                  setConfirmPassword={setConfirmPassword}
-                  showPassword={showPassword}
-                  setShowPassword={setShowPassword}
-                  handleChangePassword={handleChangePassword}
-                  changePasswordIsPending={changePassword.isPending}
-                />
-              )}
-              {mobileSection === "team" && canManageTeam && <TeamTab />}
-              {mobileSection === "profiles" && canManageTeam && <ProfilesTab />}
-              {mobileSection === "teams" && canManageTeam && <TeamsSection />}
-              {mobileSection === "pipeline" && canManageIntegrations && <PipelineEditor />}
-              {mobileSection === "modules" && canManageIntegrations && <ModulesTab />}
-              {mobileSection === "form" && canManageIntegrations && <FormsManager />}
-              {mobileSection === "products" && canManageIntegrations && <ProductsTab />}
-              {mobileSection === "clients" && canManageIntegrations && <ClientFieldsEditor />}
-              {mobileSection === "alerts" && canManageIntegrations && <FidelizationAlertsSettings />}
-              {mobileSection === "expenses" && canManageIntegrations && <ExpenseCategoriesTab />}
-              {mobileSection === "integrations" && canManageIntegrations && (
-                <IntegrationsContent
-                  organization={organization}
-                  publicFormUrl={publicFormUrl}
-                  iframeCode={iframeCode}
-                  copied={copied}
-                  copyToClipboard={copyToClipboard}
-                  isLoadingIntegrations={isLoadingIntegrations}
-                  webhookUrl={webhookUrl}
-                  setWebhookUrl={setWebhookUrl}
-                  isValidUrl={isValidUrl}
-                  handleTestWebhook={handleTestWebhook}
-                  handleSaveWebhook={handleSaveWebhook}
-                  testWebhookIsPending={testWebhook.isPending}
-                  updateOrganizationIsPending={updateOrganization.isPending}
-                  whatsappBaseUrl={whatsappBaseUrl}
-                  setWhatsappBaseUrl={setWhatsappBaseUrl}
-                  whatsappInstance={whatsappInstance}
-                  setWhatsappInstance={setWhatsappInstance}
-                  whatsappApiKey={whatsappApiKey}
-                  setWhatsappApiKey={setWhatsappApiKey}
-                  showWhatsappApiKey={showWhatsappApiKey}
-                  setShowWhatsappApiKey={setShowWhatsappApiKey}
-                  handleSaveWhatsApp={handleSaveWhatsApp}
-                  brevoApiKey={brevoApiKey}
-                  setBrevoApiKey={setBrevoApiKey}
-                  brevoSenderEmail={brevoSenderEmail}
-                  setBrevoSenderEmail={setBrevoSenderEmail}
-                  showBrevoApiKey={showBrevoApiKey}
-                  setShowBrevoApiKey={setShowBrevoApiKey}
-                  handleSaveBrevo={handleSaveBrevo}
-                  invoiceXpressAccountName={invoiceXpressAccountName}
-                  setInvoiceXpressAccountName={setInvoiceXpressAccountName}
-                  invoiceXpressApiKey={invoiceXpressApiKey}
-                  setInvoiceXpressApiKey={setInvoiceXpressApiKey}
-                  showInvoiceXpressApiKey={showInvoiceXpressApiKey}
-                  setShowInvoiceXpressApiKey={setShowInvoiceXpressApiKey}
-                  handleSaveInvoiceXpress={handleSaveInvoiceXpress}
-                  taxRate={taxRate}
-                  setTaxRate={setTaxRate}
-                  taxExemptionReason={taxExemptionReason}
-                  setTaxExemptionReason={setTaxExemptionReason}
-                  integrationsEnabled={integrationsEnabled}
-                  onToggleIntegration={handleToggleIntegration}
-                  handleSaveKeyInvoice={handleSaveKeyInvoice}
-                  keyinvoiceApiKey={keyinvoiceApiKey}
-                  setKeyinvoiceApiKey={setKeyinvoiceApiKey}
-                  showKeyinvoiceApiKey={showKeyinvoiceApiKey}
-                  setShowKeyinvoiceApiKey={setShowKeyinvoiceApiKey}
-                  keyinvoiceApiUrl={keyinvoiceApiUrl}
-                  setKeyinvoiceApiUrl={setKeyinvoiceApiUrl}
-                />
-              )}
+              {renderGroupContent(mobileSection)}
             </>
           )
         ) : (
-          /* Desktop: Traditional Tabs */
           <>
             <div className="mb-8">
               <h1 className="text-2xl font-bold text-foreground">Definições</h1>
@@ -449,251 +411,78 @@ export default function Settings() {
             </div>
 
             <Tabs defaultValue="general" className="space-y-6">
-              <div className="space-y-2">
-                {/* Linha 1: Definições Gerais | Equipa */}
-                <TabsList className="flex-wrap h-auto gap-0">
-                  {/* Definições Gerais */}
-                  <TabsTrigger value="general" className="gap-2">
-                    <Building className="h-4 w-4" />
-                    Geral
+              <TabsList className="flex-wrap h-auto gap-0">
+                <TabsTrigger value="general" className="gap-2">
+                  <Building className="h-4 w-4" />
+                  Definições Gerais
+                </TabsTrigger>
+                <TabsTrigger value="security" className="gap-2">
+                  <Shield className="h-4 w-4" />
+                  Segurança
+                </TabsTrigger>
+                {canManageTeam && (
+                  <TabsTrigger value="team" className="gap-2">
+                    <UsersRound className="h-4 w-4" />
+                    Equipa e Acessos
                   </TabsTrigger>
-                  <TabsTrigger value="security" className="gap-2">
-                    <Shield className="h-4 w-4" />
-                    Segurança
-                  </TabsTrigger>
-                  {canManageIntegrations && (
-                    <TabsTrigger value="pipeline" className="gap-2">
-                      <GitBranch className="h-4 w-4" />
-                      Pipeline
-                    </TabsTrigger>
-                  )}
-                  {canManageIntegrations && (
-                    <TabsTrigger value="modules" className="gap-2">
-                      <LayoutGrid className="h-4 w-4" />
-                      Módulos
-                    </TabsTrigger>
-                  )}
-                  {canManageIntegrations && (
-                    <TabsTrigger value="form" className="gap-2">
-                      <Palette className="h-4 w-4" />
-                      Formulário
-                    </TabsTrigger>
-                  )}
-                  {canManageIntegrations && (
-                    <TabsTrigger value="clients" className="gap-2">
-                      <UserCheck className="h-4 w-4" />
-                      Campos
-                    </TabsTrigger>
-                  )}
-
-                  {/* Separador visual */}
-                  {canManageTeam && (
-                    <div className="w-px h-6 bg-border mx-1 self-center" />
-                  )}
-
-                  {/* Equipa */}
-                  {canManageTeam && (
-                    <TabsTrigger value="team" className="gap-2">
-                      <KeyRound className="h-4 w-4" />
-                      Acessos
-                    </TabsTrigger>
-                  )}
-                  {canManageTeam && (
-                    <TabsTrigger value="profiles" className="gap-2">
-                      <IdCard className="h-4 w-4" />
-                      Perfis
-                    </TabsTrigger>
-                  )}
-                  {canManageTeam && (
-                    <TabsTrigger value="teams" className="gap-2">
-                      <UsersRound className="h-4 w-4" />
-                      Equipas
-                    </TabsTrigger>
-                  )}
-                </TabsList>
-
-                {/* Linha 2: Produtos | Financeiro | Notificações | Integrações */}
-                {canManageIntegrations && (
-                  <TabsList>
-                    {/* Produtos */}
-                    <TabsTrigger value="products" className="gap-2">
-                      <Package className="h-4 w-4" />
-                      Produtos
-                    </TabsTrigger>
-
-                    {/* Separador */}
-                    <div className="w-px h-6 bg-border mx-1 self-center" />
-
-                    {/* Financeiro */}
-                    <TabsTrigger value="expenses" className="gap-2">
-                      <Receipt className="h-4 w-4" />
-                      Despesas
-                    </TabsTrigger>
-
-                    {/* Separador */}
-                    <div className="w-px h-6 bg-border mx-1 self-center" />
-
-                    {/* Notificações */}
-                    <TabsTrigger value="alerts" className="gap-2">
-                      <Zap className="h-4 w-4" />
-                      Alertas
-                    </TabsTrigger>
-
-                    {/* Separador */}
-                    <div className="w-px h-6 bg-border mx-1 self-center" />
-
-                    {/* Integrações */}
-                    <TabsTrigger value="integrations" className="gap-2">
-                      <Link2 className="h-4 w-4" />
-                      Integrações
-                    </TabsTrigger>
-                  </TabsList>
                 )}
-              </div>
+                {canManageIntegrations && (
+                  <TabsTrigger value="products" className="gap-2">
+                    <Package className="h-4 w-4" />
+                    Produtos
+                  </TabsTrigger>
+                )}
+                {canManageIntegrations && (
+                  <TabsTrigger value="finance" className="gap-2">
+                    <Receipt className="h-4 w-4" />
+                    Financeiro
+                  </TabsTrigger>
+                )}
+                <TabsTrigger value="notifications" className="gap-2">
+                  <Bell className="h-4 w-4" />
+                  Notificações
+                </TabsTrigger>
+                {canManageIntegrations && (
+                  <TabsTrigger value="integrations" className="gap-2">
+                    <Link2 className="h-4 w-4" />
+                    Integrações
+                  </TabsTrigger>
+                )}
+              </TabsList>
 
               <TabsContent value="general" className="space-y-6">
-                <GeneralContent
-                  organization={organization}
-                  profile={profile}
-                  isAdmin={isAdmin}
-                  orgName={orgName}
-                  setOrgName={setOrgName}
-                  fullName={fullName}
-                  setFullName={setFullName}
-                  handleSaveOrgName={handleSaveOrgName}
-                  handleSaveProfile={handleSaveProfile}
-                  updateOrganizationIsPending={updateOrganization.isPending}
-                  updateProfileIsPending={updateProfile.isPending}
-                  pushNotifications={pushNotifications}
-                />
+                {renderGroupContent("general")}
               </TabsContent>
 
-              <TabsContent value="security" className="max-w-4xl">
-                <SecuritySettings
-                  newPassword={newPassword}
-                  setNewPassword={setNewPassword}
-                  confirmPassword={confirmPassword}
-                  setConfirmPassword={setConfirmPassword}
-                  showPassword={showPassword}
-                  setShowPassword={setShowPassword}
-                  handleChangePassword={handleChangePassword}
-                  changePasswordIsPending={changePassword.isPending}
-                />
+              <TabsContent value="security">
+                {renderGroupContent("security")}
               </TabsContent>
 
               {canManageTeam && (
-                <TabsContent value="team" className="max-w-4xl">
-                  <TeamTab />
-                </TabsContent>
-              )}
-
-              {canManageTeam && (
-                <TabsContent value="profiles" className="max-w-4xl">
-                  <ProfilesTab />
-                </TabsContent>
-              )}
-
-              {canManageTeam && (
-                <TabsContent value="teams" className="max-w-4xl">
-                  <TeamsSection />
+                <TabsContent value="team">
+                  {renderGroupContent("team")}
                 </TabsContent>
               )}
 
               {canManageIntegrations && (
-                <TabsContent value="pipeline" className="max-w-4xl">
-                  <PipelineEditor />
+                <TabsContent value="products">
+                  {renderGroupContent("products")}
                 </TabsContent>
               )}
 
               {canManageIntegrations && (
-                <TabsContent value="modules" className="max-w-4xl">
-                  <ModulesTab />
+                <TabsContent value="finance">
+                  {renderGroupContent("finance")}
                 </TabsContent>
               )}
 
-              {canManageIntegrations && (
-                <TabsContent value="form" className="w-full max-w-none">
-                  <FormsManager />
-                </TabsContent>
-              )}
-
-              {canManageIntegrations && (
-                <TabsContent value="products" className="max-w-4xl">
-                  <ProductsTab />
-                </TabsContent>
-              )}
-
-              {canManageIntegrations && (
-                <TabsContent value="clients" className="max-w-4xl">
-                  <ClientFieldsEditor />
-                </TabsContent>
-              )}
-
-              {canManageIntegrations && (
-                <TabsContent value="alerts" className="max-w-4xl">
-                  <FidelizationAlertsSettings />
-                </TabsContent>
-              )}
-
-              {canManageIntegrations && (
-                <TabsContent value="expenses" className="max-w-4xl">
-                  <ExpenseCategoriesTab />
-                </TabsContent>
-              )}
+              <TabsContent value="notifications">
+                {renderGroupContent("notifications")}
+              </TabsContent>
 
               {canManageIntegrations && (
                 <TabsContent value="integrations">
-                  <IntegrationsContent
-                    organization={organization}
-                    publicFormUrl={publicFormUrl}
-                    iframeCode={iframeCode}
-                    copied={copied}
-                    copyToClipboard={copyToClipboard}
-                    isLoadingIntegrations={isLoadingIntegrations}
-                    webhookUrl={webhookUrl}
-                    setWebhookUrl={setWebhookUrl}
-                    isValidUrl={isValidUrl}
-                    handleTestWebhook={handleTestWebhook}
-                    handleSaveWebhook={handleSaveWebhook}
-                    testWebhookIsPending={testWebhook.isPending}
-                    updateOrganizationIsPending={updateOrganization.isPending}
-                    whatsappBaseUrl={whatsappBaseUrl}
-                    setWhatsappBaseUrl={setWhatsappBaseUrl}
-                    whatsappInstance={whatsappInstance}
-                    setWhatsappInstance={setWhatsappInstance}
-                    whatsappApiKey={whatsappApiKey}
-                    setWhatsappApiKey={setWhatsappApiKey}
-                    showWhatsappApiKey={showWhatsappApiKey}
-                    setShowWhatsappApiKey={setShowWhatsappApiKey}
-                    handleSaveWhatsApp={handleSaveWhatsApp}
-                    brevoApiKey={brevoApiKey}
-                    setBrevoApiKey={setBrevoApiKey}
-                    brevoSenderEmail={brevoSenderEmail}
-                    setBrevoSenderEmail={setBrevoSenderEmail}
-                    showBrevoApiKey={showBrevoApiKey}
-                    setShowBrevoApiKey={setShowBrevoApiKey}
-                    handleSaveBrevo={handleSaveBrevo}
-                    invoiceXpressAccountName={invoiceXpressAccountName}
-                    setInvoiceXpressAccountName={setInvoiceXpressAccountName}
-                    invoiceXpressApiKey={invoiceXpressApiKey}
-                    setInvoiceXpressApiKey={setInvoiceXpressApiKey}
-                    showInvoiceXpressApiKey={showInvoiceXpressApiKey}
-                    setShowInvoiceXpressApiKey={setShowInvoiceXpressApiKey}
-                    handleSaveInvoiceXpress={handleSaveInvoiceXpress}
-                    taxRate={taxRate}
-                    setTaxRate={setTaxRate}
-                    taxExemptionReason={taxExemptionReason}
-                    setTaxExemptionReason={setTaxExemptionReason}
-                    integrationsEnabled={integrationsEnabled}
-                    onToggleIntegration={handleToggleIntegration}
-                    handleSaveKeyInvoice={handleSaveKeyInvoice}
-                    keyinvoiceApiKey={keyinvoiceApiKey}
-                    setKeyinvoiceApiKey={setKeyinvoiceApiKey}
-                    showKeyinvoiceApiKey={showKeyinvoiceApiKey}
-                    setShowKeyinvoiceApiKey={setShowKeyinvoiceApiKey}
-                    keyinvoiceApiUrl={keyinvoiceApiUrl}
-                    setKeyinvoiceApiUrl={setKeyinvoiceApiUrl}
-                  />
+                  {renderGroupContent("integrations")}
                 </TabsContent>
               )}
             </Tabs>
