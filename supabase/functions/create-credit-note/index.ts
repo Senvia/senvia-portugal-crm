@@ -135,25 +135,34 @@ Deno.serve(async (req) => {
       const sid = await getKeyInvoiceSid(supabase, org, organization_id)
       const apiUrl = org.keyinvoice_api_url || DEFAULT_KEYINVOICE_API_URL
 
-      // Try to get the real DocType and DocNum from the invoice reference (e.g. "34 47/1")
-      // or from the sale_payments/sales invoice reference stored in DB
+      // Parse reference "34 47/1" -> DocType=34, DocSeries=47, DocNum=1
       let kiDocType = KI_DOC_TYPE_MAP[original_document_type] || '4'
       let kiDocNum = String(original_document_id)
+      let kiDocSeries: string | null = null
 
       // Look up the invoice record to get the real reference
       const { data: invoiceRecord } = await supabase
         .from('invoices')
-        .select('reference, document_type, invoicexpress_id')
+        .select('reference, document_type, invoicexpress_id, raw_data')
         .eq('invoicexpress_id', original_document_id)
         .eq('organization_id', organization_id)
         .maybeSingle()
 
-      if (invoiceRecord?.reference) {
-        // Parse reference format: "DocType DocNum" e.g. "34 47/1" or "4 12/1"
-        const refMatch = invoiceRecord.reference.match(/^(\d+)\s+(.+)$/)
-        if (refMatch) {
-          kiDocType = refMatch[1]
-          kiDocNum = refMatch[2]
+      if (invoiceRecord) {
+        // Try raw_data first
+        const raw = invoiceRecord.raw_data as Record<string, any> | null
+        if (raw?.docType) kiDocType = String(raw.docType)
+        if (raw?.docNum) kiDocNum = String(raw.docNum)
+        if (raw?.docSeries) kiDocSeries = String(raw.docSeries)
+
+        // Fallback: parse reference "34 47/1" -> DocType=34, DocSeries=47, DocNum=1
+        if ((!raw?.docNum) && invoiceRecord.reference) {
+          const match = invoiceRecord.reference.match(/^(\d+)\s+(\d+)\/(\d+)$/)
+          if (match) {
+            kiDocType = match[1]
+            kiDocSeries = match[2]
+            kiDocNum = match[3]
+          }
         }
       }
 
@@ -164,6 +173,7 @@ Deno.serve(async (req) => {
         DocNum: kiDocNum,
         CreditReason: reason,
       }
+      if (kiDocSeries) voidPayload.DocSeries = kiDocSeries
 
       console.log('KeyInvoice setDocumentVoid payload:', JSON.stringify(voidPayload))
 
