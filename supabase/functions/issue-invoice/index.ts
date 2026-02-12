@@ -170,41 +170,55 @@ async function handleKeyInvoice(supabase: any, org: any, saleId: string, organiz
       body: JSON.stringify({ method: 'listProducts' }),
     })
     const listData = await listRes.json()
-    console.log('KeyInvoice listProducts status:', listData.Status)
-    if (listData.Status === 1 && listData.Data?.Products) {
-      keyInvoiceProducts = Array.isArray(listData.Data.Products) ? listData.Data.Products : []
-      console.log('KeyInvoice products found:', keyInvoiceProducts.length, 
-        keyInvoiceProducts.map((p: any) => `${p.Id}:${p.Description || p.Name}`).join(', '))
+    console.log('KeyInvoice listProducts FULL response:', JSON.stringify(listData).substring(0, 2000))
+
+    if (listData.Status === 1 && listData.Data) {
+      // Try multiple paths to find the products array
+      if (Array.isArray(listData.Data)) {
+        keyInvoiceProducts = listData.Data
+      } else if (Array.isArray(listData.Data.Products)) {
+        keyInvoiceProducts = listData.Data.Products
+      } else if (Array.isArray(listData.Data.Product)) {
+        keyInvoiceProducts = listData.Data.Product
+      } else if (typeof listData.Data === 'object') {
+        const keys = Object.keys(listData.Data)
+        console.log('KeyInvoice listProducts Data keys:', keys.join(', '))
+        for (const key of keys) {
+          if (Array.isArray(listData.Data[key])) {
+            keyInvoiceProducts = listData.Data[key]
+            console.log('Found products array under key:', key)
+            break
+          }
+        }
+        // If Data itself looks like a product (has Id), wrap it
+        if (keyInvoiceProducts.length === 0 && listData.Data.Id) {
+          keyInvoiceProducts = [listData.Data]
+        }
+      }
     }
+    console.log('KeyInvoice products found:', keyInvoiceProducts.length,
+      keyInvoiceProducts.map((p: any) => `${p.Id}:${p.Description || p.Name}`).join(', '))
   } catch (e) {
     console.warn('KeyInvoice listProducts failed:', e)
   }
 
-  if (keyInvoiceProducts.length === 0) {
-    return new Response(JSON.stringify({ 
-      error: 'Não existem produtos cadastrados na sua conta KeyInvoice. Crie pelo menos um produto (ex: "Serviço") no painel do KeyInvoice antes de emitir faturas via API.',
-    }), {
-      status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
-  }
-
   function findProductId(name: string): string {
-    // Try exact match by Description or Name
     const exactMatch = keyInvoiceProducts.find((p: any) => 
       (p.Description || p.Name || '').toLowerCase() === name.toLowerCase()
     )
     if (exactMatch?.Id) return String(exactMatch.Id)
 
-    // Try partial match
     const partialMatch = keyInvoiceProducts.find((p: any) => 
       (p.Description || p.Name || '').toLowerCase().includes(name.toLowerCase()) ||
       name.toLowerCase().includes((p.Description || p.Name || '').toLowerCase())
     )
     if (partialMatch?.Id) return String(partialMatch.Id)
 
-    // Fallback: use first product
-    console.log('KeyInvoice: No product match for "' + name + '", using first product:', keyInvoiceProducts[0].Id)
-    return String(keyInvoiceProducts[0].Id)
+    if (keyInvoiceProducts.length > 0) {
+      console.log('KeyInvoice: No product match for "' + name + '", using first product:', keyInvoiceProducts[0].Id)
+      return String(keyInvoiceProducts[0].Id)
+    }
+    return ''
   }
 
   const items = (saleItems && saleItems.length > 0) 
@@ -212,13 +226,24 @@ async function handleKeyInvoice(supabase: any, org: any, saleId: string, organiz
     : [{ name: `Venda ${sale.code || saleId}`, quantity: 1, unit_price: sale.total_value }]
 
   const docLines: any[] = []
-  for (const item of items) {
-    const productId = findProductId(item.name || 'Serviço')
-    docLines.push({
-      IdProduct: productId,
-      Qty: String(Number(item.quantity)),
-      Price: String(Number(item.unit_price)),
-    })
+  if (keyInvoiceProducts.length === 0) {
+    console.log('KeyInvoice: 0 products found, using Description-only DocLines as fallback')
+    for (const item of items) {
+      docLines.push({
+        Description: item.name || 'Servico',
+        Qty: String(Number(item.quantity)),
+        Price: String(Number(item.unit_price)),
+      })
+    }
+  } else {
+    for (const item of items) {
+      const productId = findProductId(item.name || 'Serviço')
+      docLines.push({
+        IdProduct: productId,
+        Qty: String(Number(item.quantity)),
+        Price: String(Number(item.unit_price)),
+      })
+    }
   }
   console.log('KeyInvoice DocLines:', JSON.stringify(docLines))
 
