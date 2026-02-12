@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -22,6 +22,7 @@ import {
 import { SearchableCombobox, type ComboboxOption } from "@/components/ui/searchable-combobox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
+import { Progress } from "@/components/ui/progress";
 // Lead removido - vendas são apenas para clientes
 import { useProposals, useProposalProducts } from "@/hooks/useProposals";
 import { PROPOSAL_STATUS_LABELS, type ProposalStatus } from "@/types/proposals";
@@ -40,7 +41,6 @@ import { cn } from "@/lib/utils";
 import { format, addMonths } from "date-fns";
 import { ClientFiscalCard, VatBadge, useVatCalculation, isInvoiceXpressActive, getOrgTaxValue } from "./SaleFiscalInfo";
 import { pt } from "date-fns/locale";
-import { Progress } from "@/components/ui/progress";
 import { 
   Loader2, 
   CalendarIcon, 
@@ -247,7 +247,6 @@ export function CreateSaleModal({
   }, [open, prefillProposal, prefillClientId, clients]);
 
   // Load proposal products/value when available (prefill ou seleção manual)
-  // This runs AFTER the reset effect and only when we have new data
   useEffect(() => {
     if (!open) return;
     
@@ -272,9 +271,7 @@ export function CreateSaleModal({
         setInitializedProposalId(currentProposalId);
       }
     } 
-    // Se não há produtos mas há um prefillProposal com valor, criar item genérico
     else if (prefillProposal && prefillProposal.total_value > 0 && proposalProducts !== undefined) {
-      // proposalProducts !== undefined garante que a query já carregou (não está loading)
       const itemName = prefillProposal.proposal_type === 'energia' 
         ? 'Contrato de Energia' 
         : prefillProposal.proposal_type === 'servicos'
@@ -290,7 +287,6 @@ export function CreateSaleModal({
       }]);
       setInitializedProposalId(prefillProposal.id);
     }
-    // Para seleção manual de proposta (sem prefill), criar item genérico se não há produtos
     else if (selectedProposalId && proposalProducts !== undefined && proposalProducts.length === 0) {
       const selectedProposal = proposals?.find(p => p.id === selectedProposalId);
       if (selectedProposal && selectedProposal.total_value > 0) {
@@ -312,31 +308,27 @@ export function CreateSaleModal({
     }
   }, [open, proposalProducts, prefillProposal, selectedProposalId, initializedProposalId, proposals]);
 
-  // Filter proposals based on selected client - show all except rejected
+  // Filter proposals based on selected client
   const filteredProposals = useMemo(() => {
     if (!proposals) return [];
     
-    // Mostrar todas as propostas exceto as rejeitadas
     let filtered = proposals.filter(p => p.status !== 'rejected');
     
-    // Sempre incluir a proposta pré-selecionada
     if (prefillProposal && !filtered.find(p => p.id === prefillProposal.id)) {
       filtered = [prefillProposal, ...filtered];
     }
     
     if (clientId) {
-      // Filtrar por client_id ou pelo lead associado ao cliente (retrocompatibilidade)
       const client = clients?.find(c => c.id === clientId);
       filtered = filtered.filter(p => 
         p.client_id === clientId || (client?.lead_id && p.lead_id === client.lead_id) ||
-        p.id === prefillProposal?.id // Manter a proposta pré-selecionada visível
+        p.id === prefillProposal?.id
       );
     }
     
     return filtered;
   }, [proposals, clients, clientId, prefillProposal]);
 
-  // Helper to get proposal status label
   const getProposalStatusLabel = (status: string) => {
     return PROPOSAL_STATUS_LABELS[status as ProposalStatus] || status;
   };
@@ -349,7 +341,7 @@ export function CreateSaleModal({
   const discountValue = parseFloat(discount) || 0;
   const total = Math.max(0, subtotal - discountValue);
 
-  // VAT calculation (display only, when InvoiceXpress active)
+  // VAT calculation
   const vatCalc = useVatCalculation({
     items, products, orgTaxValue, discount: discountValue, subtotal,
   });
@@ -367,11 +359,9 @@ export function CreateSaleModal({
       return;
     }
     setClientId(value);
-    // Clear proposal if it doesn't match the new client
     if (proposalId) {
       const proposal = proposals?.find(p => p.id === proposalId);
       const client = clients?.find(c => c.id === value);
-      // Verifica se a proposta pertence ao cliente (por client_id ou lead_id)
       if (proposal && proposal.client_id !== value && proposal.lead_id !== client?.lead_id) {
         setProposalId("");
       }
@@ -382,9 +372,8 @@ export function CreateSaleModal({
     if (value === "none") {
       setProposalId("");
       setSelectedProposalId(null);
-      setItems([]); // Limpar produtos
-      setNotes(""); // Limpar notas
-      // Reset telecom fields
+      setItems([]);
+      setNotes("");
       setProposalType(null);
       setConsumoAnual("");
       setMargem("");
@@ -399,12 +388,10 @@ export function CreateSaleModal({
     }
     
     setProposalId(value);
-    setSelectedProposalId(value); // Trigger para buscar produtos
+    setSelectedProposalId(value);
     
-    // Encontrar a proposta e preencher dados
     const proposal = proposals?.find(p => p.id === value);
     if (proposal) {
-      // Preencher cliente se não estiver preenchido
       if (!clientId) {
         if (proposal.client_id) {
           setClientId(proposal.client_id);
@@ -416,12 +403,10 @@ export function CreateSaleModal({
         }
       }
       
-      // Preencher notas da proposta
       if (proposal.notes) {
         setNotes(proposal.notes);
       }
       
-      // Preencher campos específicos de Energia/Serviços
       setProposalType(proposal.proposal_type || null);
       setConsumoAnual(proposal.consumo_anual?.toString() || "");
       setMargem(proposal.margem?.toString() || "");
@@ -433,7 +418,6 @@ export function CreateSaleModal({
       setNegotiationType(proposal.negotiation_type || null);
       setServicosProdutos(proposal.servicos_produtos || []);
       
-      // Limpar items para serem recarregados pelo useEffect de proposalProducts
       setItems([]);
     }
   };
@@ -442,7 +426,6 @@ export function CreateSaleModal({
     const product = products?.find(p => p.id === productId);
     if (!product) return;
 
-    // Check if already added
     const existing = items.find(i => i.product_id === productId);
     if (existing) {
       setItems(items.map(i => 
@@ -484,7 +467,7 @@ export function CreateSaleModal({
     setItems(items.filter(i => i.id !== itemId));
   };
 
-      const handleUpdateDueDate = (itemId: string, date: Date | undefined) => {
+  const handleUpdateDueDate = (itemId: string, date: Date | undefined) => {
     setItems(items.map(i => 
       i.id === itemId 
         ? { ...i, first_due_date: date || null }
@@ -498,7 +481,6 @@ export function CreateSaleModal({
     if (total <= 0 && items.length === 0) return;
 
     try {
-      // Calculate recurring value from items with recurring products
       const recurringItems = items.filter(item => {
         if (!item.product_id) return false;
         const product = products?.find(p => p.id === item.product_id);
@@ -522,7 +504,6 @@ export function CreateSaleModal({
         discount: discountValue,
         sale_date: format(saleDate, 'yyyy-MM-dd'),
         notes: notes.trim() || undefined,
-        // Campos específicos de proposta (Telecom-only)
         ...(isTelecom && proposalId ? {
           proposal_type: proposalType || undefined,
           consumo_anual: parseFloat(consumoAnual) || undefined,
@@ -535,14 +516,12 @@ export function CreateSaleModal({
           negotiation_type: negotiationType || undefined,
           servicos_produtos: servicosProdutos.length > 0 ? servicosProdutos : undefined,
         } : {}),
-        // Campos de recorrência
         has_recurring: hasRecurring,
         recurring_value: recurringValue,
         recurring_status: hasRecurring ? 'active' : undefined,
         next_renewal_date: nextRenewalDate,
       });
 
-      // Create sale items
       if (items.length > 0 && sale?.id) {
         await createSaleItems.mutateAsync(
           items.map(item => ({
@@ -557,32 +536,25 @@ export function CreateSaleModal({
               : null,
           }))
         );
-        
-        // Create automatic payments for recurring items with due date
-        // Only create payments if sale status would be 'delivered' (it's 'pending' by default)
-        // Payments will be created when sale status changes to 'delivered'
       }
 
-      // Process CPEs - criar novos ou atualizar existentes
-      // Quando proposta é aceite, comercializador é sempre "EDP Comercial"
+      // Process CPEs
       if (proposalCpes.length > 0 && clientId) {
         for (const proposalCpe of proposalCpes) {
           if (proposalCpe.existing_cpe_id) {
-            // Atualizar CPE existente (renovação)
             await updateCpe.mutateAsync({
               id: proposalCpe.existing_cpe_id,
-              comercializador: 'EDP Comercial', // Sempre EDP quando proposta é ganha
+              comercializador: 'EDP Comercial',
               fidelizacao_start: proposalCpe.contrato_inicio || proposalCpe.fidelizacao_start || undefined,
               fidelizacao_end: proposalCpe.contrato_fim || proposalCpe.fidelizacao_end || undefined,
               notes: proposalCpe.notes || undefined,
-              status: 'active', // Reativar se estava inativo
+              status: 'active',
             });
           } else {
-            // Criar novo CPE
             await createCpe.mutateAsync({
               client_id: clientId,
               equipment_type: proposalCpe.equipment_type,
-              comercializador: 'EDP Comercial', // Sempre EDP quando proposta é ganha
+              comercializador: 'EDP Comercial',
               serial_number: proposalCpe.serial_number || undefined,
               fidelizacao_start: proposalCpe.contrato_inicio || proposalCpe.fidelizacao_start || undefined,
               fidelizacao_end: proposalCpe.contrato_fim || proposalCpe.fidelizacao_end || undefined,
@@ -593,7 +565,7 @@ export function CreateSaleModal({
         }
       }
 
-      // Create draft payments (skip for telecom - no billing)
+      // Create draft payments
       if (!isTelecom && draftPayments.length > 0 && sale?.id && organization?.id) {
         for (const dp of draftPayments) {
           await createSalePayment.mutateAsync({
@@ -609,9 +581,7 @@ export function CreateSaleModal({
         }
       }
 
-      // Notify parent that sale was created successfully
       onSaleCreated?.(sale.id);
-
       onOpenChange(false);
     } catch (error) {
       console.error('Error creating sale:', error);
@@ -623,7 +593,7 @@ export function CreateSaleModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent variant="fullScreen" className="flex flex-col p-0 gap-0">
-        <DialogHeader className="px-6 py-4 border-b border-border/50 shrink-0">
+        <DialogHeader className="px-6 pr-14 py-4 border-b border-border/50 shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5 text-primary" />
             Nova Venda
@@ -631,579 +601,569 @@ export function CreateSaleModal({
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto">
-          <form onSubmit={handleSubmit} className="max-w-4xl mx-auto p-6 space-y-6">
-            {/* Section 1: Basic Info */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                <User className="h-4 w-4" />
-                Informação Básica
-              </div>
-              
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Client Select */}
-                <div className="space-y-2">
-                  <Label>Cliente</Label>
-                  <SearchableCombobox
-                    options={(clients || []).map((client): ComboboxOption => ({
-                      value: client.id,
-                      label: client.name,
-                      sublabel: client.code || client.email || undefined,
-                    }))}
-                    value={clientId || null}
-                    onValueChange={(v) => handleClientSelect(v || "none")}
-                    placeholder="Selecionar cliente..."
-                    searchPlaceholder="Pesquisar cliente..."
-                    emptyLabel="Sem cliente"
-                    emptyText="Nenhum cliente encontrado."
-                  />
-                </div>
-
-                {/* Client Fiscal Card (InvoiceXpress only) - spans full width */}
-                {clientId && (
-                  <div className="sm:col-span-2">
-                    <ClientFiscalCard client={selectedClient} isInvoiceXpressActive={ixActive} />
-                  </div>
-                )}
-
-                {/* Proposal Select */}
-                <div className="space-y-2">
-                  <Label>Proposta</Label>
-                <SearchableCombobox
-                    options={filteredProposals.map((proposal): ComboboxOption => ({
-                      value: proposal.id,
-                      label: `${proposal.client?.name || proposal.lead?.name || "Proposta"} - ${formatCurrency(proposal.total_value)} (${getProposalStatusLabel(proposal.status)})`,
-                      sublabel: proposal.code || undefined,
-                    }))}
-                    value={proposalId || null}
-                    onValueChange={(v) => handleProposalSelect(v || "none")}
-                    placeholder="Selecionar proposta..."
-                    searchPlaceholder="Pesquisar proposta..."
-                    emptyLabel="Venda direta"
-                    emptyText="Nenhuma proposta encontrada."
-                  />
-                </div>
-
-                {/* Sale Date */}
-                <div className="space-y-2">
-                  <Label>Data da Venda</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          "w-full justify-start text-left font-normal",
-                          !saleDate && "text-muted-foreground"
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {saleDate ? format(saleDate, "PPP", { locale: pt }) : "Selecionar data"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={saleDate}
-                        onSelect={(date) => date && setSaleDate(date)}
-                        locale={pt}
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-
-                {/* Sale Status */}
-                <div className="space-y-2">
-                  <Label>Estado da Venda</Label>
-                  <Select value={saleStatus} onValueChange={(v) => setSaleStatus(v as SaleStatus)}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {SALE_STATUSES.map(s => (
-                        <SelectItem key={s} value={s}>
-                          {SALE_STATUS_LABELS[s]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </div>
-
-            <Separator />
-
-            {/* Telecom Data Section (read-only preview) */}
-            {isTelecom && proposalId && (negotiationType || proposalType) && (
-              <>
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                    <Zap className="h-4 w-4 text-amber-500" />
-                    Dados Telecom (da Proposta)
-                  </div>
-                  
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-lg bg-muted/30 border border-border/50">
-                    {negotiationType && (
-                      <div className="col-span-1 sm:col-span-2">
-                        <p className="text-xs text-muted-foreground">Tipo de Negociação</p>
-                        <p className="text-sm font-medium">
-                          {NEGOTIATION_TYPE_LABELS[negotiationType] || negotiationType}
-                        </p>
+          <div className="max-w-6xl mx-auto p-4 sm:p-6">
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+              {/* LEFT COLUMN (60%) */}
+              <div className="lg:col-span-3 space-y-4">
+                {/* Client & Proposal */}
+                <Card>
+                  <CardHeader className="pb-2 p-4">
+                    <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
+                      <User className="h-4 w-4" />
+                      Informação Básica
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-4 pt-0 space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Cliente</Label>
+                        <SearchableCombobox
+                          options={(clients || []).map((client): ComboboxOption => ({
+                            value: client.id,
+                            label: client.name,
+                            sublabel: client.code || client.email || undefined,
+                          }))}
+                          value={clientId || null}
+                          onValueChange={(v) => handleClientSelect(v || "none")}
+                          placeholder="Selecionar cliente..."
+                          searchPlaceholder="Pesquisar cliente..."
+                          emptyLabel="Sem cliente"
+                          emptyText="Nenhum cliente encontrado."
+                        />
                       </div>
+
+                      <div className="space-y-2">
+                        <Label>Proposta</Label>
+                        <SearchableCombobox
+                          options={filteredProposals.map((proposal): ComboboxOption => ({
+                            value: proposal.id,
+                            label: `${proposal.client?.name || proposal.lead?.name || "Proposta"} - ${formatCurrency(proposal.total_value)} (${getProposalStatusLabel(proposal.status)})`,
+                            sublabel: proposal.code || undefined,
+                          }))}
+                          value={proposalId || null}
+                          onValueChange={(v) => handleProposalSelect(v || "none")}
+                          placeholder="Selecionar proposta..."
+                          searchPlaceholder="Pesquisar proposta..."
+                          emptyLabel="Venda direta"
+                          emptyText="Nenhuma proposta encontrada."
+                        />
+                      </div>
+                    </div>
+
+                    {/* Client Fiscal Card */}
+                    {clientId && (
+                      <ClientFiscalCard client={selectedClient} isInvoiceXpressActive={ixActive} />
                     )}
 
-                    {proposalType === 'servicos' && (
-                      <>
-                        {servicosProdutos.length > 0 && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Data da Venda</Label>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className={cn(
+                                "w-full justify-start text-left font-normal",
+                                !saleDate && "text-muted-foreground"
+                              )}
+                            >
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {saleDate ? format(saleDate, "PPP", { locale: pt }) : "Selecionar data"}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              mode="single"
+                              selected={saleDate}
+                              onSelect={(date) => date && setSaleDate(date)}
+                              locale={pt}
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Estado da Venda</Label>
+                        <Select value={saleStatus} onValueChange={(v) => setSaleStatus(v as SaleStatus)}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {SALE_STATUSES.map(s => (
+                              <SelectItem key={s} value={s}>
+                                {SALE_STATUS_LABELS[s]}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Telecom Data Section */}
+                {isTelecom && proposalId && (negotiationType || proposalType) && (
+                  <Card>
+                    <CardHeader className="pb-2 p-4">
+                      <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
+                        <Zap className="h-4 w-4 text-amber-500" />
+                        Dados Telecom (da Proposta)
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-4 pt-0">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {negotiationType && (
                           <div className="col-span-1 sm:col-span-2">
-                            <p className="text-xs text-muted-foreground">Serviços/Produtos</p>
-                            <div className="flex flex-wrap gap-1 mt-1">
-                              {servicosProdutos.map((s) => (
-                                <Badge key={s} variant="secondary" className="text-xs">{s}</Badge>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                        {modeloServico && (
-                          <div>
-                            <p className="text-xs text-muted-foreground">Modelo de Serviço</p>
+                            <p className="text-xs text-muted-foreground">Tipo de Negociação</p>
                             <p className="text-sm font-medium">
-                              {modeloServico === 'transacional' ? 'Transacional' : modeloServico === 'saas' ? 'SAAS' : modeloServico}
+                              {NEGOTIATION_TYPE_LABELS[negotiationType] || negotiationType}
                             </p>
                           </div>
                         )}
-                        {kwp && (
-                          <div>
-                            <p className="text-xs text-muted-foreground">kWp</p>
-                            <p className="text-sm font-medium">{kwp}</p>
-                          </div>
-                        )}
-                        {comissao && (
-                          <div>
-                            <p className="text-xs text-muted-foreground">Comissão</p>
-                            <p className="text-sm font-medium text-green-500">
-                              {formatCurrency(parseFloat(comissao))}
-                            </p>
-                          </div>
-                        )}
-                      </>
-                    )}
 
-                    {proposalType === 'energia' && proposalCpes.length > 0 && (
-                      <>
-                        <div>
-                          <p className="text-xs text-muted-foreground">Pontos de Consumo</p>
-                          <p className="text-sm font-medium">{proposalCpes.length} CPE(s)</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground">Consumo Total</p>
-                          <p className="text-sm font-medium">
-                            {(proposalCpes.reduce((sum, c) => sum + (c.consumo_anual || 0), 0) / 1000).toLocaleString('pt-PT', { minimumFractionDigits: 2 })} MWh
-                          </p>
-                        </div>
-                        {(() => {
-                          const totalComissao = proposalCpes.reduce((sum, c) => sum + (c.comissao || 0), 0);
-                          return totalComissao > 0 ? (
+                        {proposalType === 'servicos' && (
+                          <>
+                            {servicosProdutos.length > 0 && (
+                              <div className="col-span-1 sm:col-span-2">
+                                <p className="text-xs text-muted-foreground">Serviços/Produtos</p>
+                                <div className="flex flex-wrap gap-1 mt-1">
+                                  {servicosProdutos.map((s) => (
+                                    <Badge key={s} variant="secondary" className="text-xs">{s}</Badge>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            {modeloServico && (
+                              <div>
+                                <p className="text-xs text-muted-foreground">Modelo de Serviço</p>
+                                <p className="text-sm font-medium">
+                                  {modeloServico === 'transacional' ? 'Transacional' : modeloServico === 'saas' ? 'SAAS' : modeloServico}
+                                </p>
+                              </div>
+                            )}
+                            {kwp && (
+                              <div>
+                                <p className="text-xs text-muted-foreground">kWp</p>
+                                <p className="text-sm font-medium">{kwp}</p>
+                              </div>
+                            )}
+                            {comissao && (
+                              <div>
+                                <p className="text-xs text-muted-foreground">Comissão</p>
+                                <p className="text-sm font-medium text-green-500">
+                                  {formatCurrency(parseFloat(comissao))}
+                                </p>
+                              </div>
+                            )}
+                          </>
+                        )}
+
+                        {proposalType === 'energia' && proposalCpes.length > 0 && (
+                          <>
                             <div>
-                              <p className="text-xs text-muted-foreground">Comissão Total</p>
-                              <p className="text-sm font-medium text-green-500">
-                                {formatCurrency(totalComissao)}
+                              <p className="text-xs text-muted-foreground">Pontos de Consumo</p>
+                              <p className="text-sm font-medium">{proposalCpes.length} CPE(s)</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground">Consumo Total</p>
+                              <p className="text-sm font-medium">
+                                {(proposalCpes.reduce((sum, c) => sum + (c.consumo_anual || 0), 0) / 1000).toLocaleString('pt-PT', { minimumFractionDigits: 2 })} MWh
                               </p>
                             </div>
-                          ) : null;
-                        })()}
-                      </>
-                    )}
-                  </div>
-                </div>
-                <Separator />
-              </>
-            )}
-
-            {/* Telecom CPE/CUI Details (read-only) */}
-            {isTelecom && proposalCpes.length > 0 && (
-              <>
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                    <Router className="h-4 w-4" />
-                    CPE/CUI (Pontos de Consumo)
-                  </div>
-                  
-                  <div className="space-y-2">
-                    {proposalCpes.map((cpe) => (
-                      <div
-                        key={cpe.id}
-                        className="p-3 rounded-lg border border-border/50 bg-muted/30 space-y-2"
-                      >
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <Badge variant="outline" className="text-xs">{cpe.equipment_type}</Badge>
-                          <Badge variant="secondary" className="text-xs">{cpe.comercializador}</Badge>
-                          {cpe.existing_cpe_id ? (
-                            <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-500 border-blue-500/30">Renovação</Badge>
-                          ) : (
-                            <Badge variant="outline" className="text-xs bg-green-500/10 text-green-500 border-green-500/30">Novo</Badge>
-                          )}
-                        </div>
-                        {cpe.serial_number && (
-                          <div>
-                            <p className="text-xs text-muted-foreground">Local de Consumo</p>
-                            <p className="text-sm font-mono">{cpe.serial_number}</p>
-                          </div>
-                        )}
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                          {cpe.consumo_anual != null && (
-                            <div>
-                              <p className="text-xs text-muted-foreground">Consumo Anual</p>
-                              <p className="text-sm font-medium">{cpe.consumo_anual.toLocaleString('pt-PT')} kWh</p>
-                            </div>
-                          )}
-                          {cpe.duracao_contrato != null && (
-                            <div>
-                              <p className="text-xs text-muted-foreground">Duração</p>
-                              <p className="text-sm font-medium">{cpe.duracao_contrato} {cpe.duracao_contrato === 1 ? 'ano' : 'anos'}</p>
-                            </div>
-                          )}
-                          {cpe.dbl != null && (
-                            <div>
-                              <p className="text-xs text-muted-foreground">DBL</p>
-                              <p className="text-sm font-medium">{cpe.dbl.toLocaleString('pt-PT', { minimumFractionDigits: 2 })}</p>
-                            </div>
-                          )}
-                          {cpe.margem != null && (
-                            <div>
-                              <p className="text-xs text-muted-foreground">Margem</p>
-                              <p className="text-sm font-medium">{cpe.margem.toLocaleString('pt-PT', { minimumFractionDigits: 2 })} €/MWh</p>
-                            </div>
-                          )}
-                          {cpe.comissao != null && (
-                            <div>
-                              <p className="text-xs text-muted-foreground">Comissão</p>
-                              <p className="text-sm font-medium text-green-500">{formatCurrency(cpe.comissao)}</p>
-                            </div>
-                          )}
-                        </div>
-                        {(cpe.contrato_inicio || cpe.contrato_fim) && (
-                          <div>
-                            <p className="text-xs text-muted-foreground">Contrato</p>
-                            <p className="text-sm">
-                              {cpe.contrato_inicio ? format(new Date(cpe.contrato_inicio), "dd/MM/yyyy") : '—'}
-                              {' → '}
-                              {cpe.contrato_fim ? format(new Date(cpe.contrato_fim), "dd/MM/yyyy") : '—'}
-                            </p>
-                          </div>
+                            {(() => {
+                              const totalComissao = proposalCpes.reduce((sum, c) => sum + (c.comissao || 0), 0);
+                              return totalComissao > 0 ? (
+                                <div>
+                                  <p className="text-xs text-muted-foreground">Comissão Total</p>
+                                  <p className="text-sm font-medium text-green-500">
+                                    {formatCurrency(totalComissao)}
+                                  </p>
+                                </div>
+                              ) : null;
+                            })()}
+                          </>
                         )}
                       </div>
-                    ))}
-                  </div>
-                </div>
-                <Separator />
-              </>
-            )}
-
-            {/* Section 2: Products */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                  <Package className="h-4 w-4" />
-                  Produtos / Serviços
-                </div>
-              </div>
-
-              {/* Product Selector */}
-              <Select onValueChange={handleAddProduct}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Adicionar produto ou serviço..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {products?.filter(p => p.is_active).map((product) => (
-                    <SelectItem key={product.id} value={product.id}>
-                      {product.name} - {formatCurrency(product.price || 0)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              {/* Items List */}
-              {items.length > 0 && (
-                <div className="space-y-2">
-                  {items.map((item) => {
-                    const product = products?.find(p => p.id === item.product_id);
-                    const isRecurring = product?.is_recurring;
-                    
-                    return (
-                      <div 
-                        key={item.id} 
-                        className="p-3 rounded-lg border border-border/50 bg-muted/30 space-y-2"
-                      >
-                        {/* Linha principal do produto */}
-                        <div className="flex items-center gap-3">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              <p className="font-medium text-sm truncate">{item.name}</p>
-                              {ixActive && <VatBadge taxValue={vatCalc.getItemTaxRate(item.product_id)} />}
-                            </div>
-                            <div className="flex items-center gap-2 mt-1">
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="icon"
-                                className="h-6 w-6"
-                                onClick={() => handleUpdateQuantity(item.id, -1)}
-                              >
-                                <Minus className="h-3 w-3" />
-                              </Button>
-                              <span className="text-sm w-8 text-center">{item.quantity}</span>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="icon"
-                                className="h-6 w-6"
-                                onClick={() => handleUpdateQuantity(item.id, 1)}
-                              >
-                                <Plus className="h-3 w-3" />
-                              </Button>
-                              <span className="text-muted-foreground text-sm">×</span>
-                              <Input
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                value={item.unit_price}
-                                onChange={(e) => handleUpdatePrice(item.id, e.target.value)}
-                                className="w-24 h-7 text-sm"
-                              />
-                              <span className="text-muted-foreground text-sm">€</span>
-                            </div>
-                          </div>
-                          <div className="text-right shrink-0">
-                            <p className="font-semibold">{formatCurrency(item.quantity * item.unit_price)}</p>
-                          </div>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                            onClick={() => handleRemoveItem(item.id)}
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </div>
-                        
-                        {/* Data de vencimento para produtos recorrentes */}
-                        {isRecurring && (
-                          <div className="flex items-center gap-2 pl-2 text-sm border-t border-border/50 pt-2">
-                            <CalendarIcon className="h-4 w-4 text-primary" />
-                            <span className="text-muted-foreground">Vence em:</span>
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <Button 
-                                  type="button"
-                                  variant="outline" 
-                                  size="sm"
-                                  className="h-7 text-xs"
-                                >
-                                  {item.first_due_date 
-                                    ? format(item.first_due_date, "dd/MM/yyyy")
-                                    : "Selecionar data"}
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-auto p-0" align="start">
-                                <Calendar
-                                  mode="single"
-                                  selected={item.first_due_date || undefined}
-                                  onSelect={(date) => handleUpdateDueDate(item.id, date)}
-                                  locale={pt}
-                                  className="pointer-events-auto"
-                                />
-                              </PopoverContent>
-                            </Popover>
-                            <Badge variant="secondary" className="text-xs">
-                              <Zap className="h-3 w-3 mr-1" />
-                              Mensal
-                            </Badge>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {items.length === 0 && (
-                <div className="text-center py-6 text-muted-foreground text-sm border border-dashed border-border/50 rounded-lg">
-                  Adicione produtos ou serviços à venda
-                </div>
-              )}
-            </div>
-
-            {/* Old CPE section removed - now handled in Telecom section above */}
-
-            <Separator />
-
-            {/* Section 3: Totals */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                <FileText className="h-4 w-4" />
-                Valores
-              </div>
-
-              <div className="space-y-3 p-4 rounded-lg bg-muted/30 border border-border/50">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Subtotal</span>
-                  <span className="font-medium">{formatCurrency(subtotal)}</span>
-                </div>
-                
-                <div className="flex items-center justify-between gap-4">
-                  <span className="text-sm text-muted-foreground">Desconto</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground">-</span>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={discount}
-                      onChange={(e) => setDiscount(e.target.value)}
-                      className="w-24 h-8 text-sm"
-                    />
-                    <span className="text-muted-foreground text-sm">€</span>
-                  </div>
-                </div>
-
-                <Separator />
-
-                {ixActive && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">IVA</span>
-                    <span className="font-medium">{formatCurrency(vatCalc.totalVat)}</span>
-                  </div>
+                    </CardContent>
+                  </Card>
                 )}
 
-                <div className="flex justify-between">
-                  <span className="font-semibold">{ixActive ? 'Total (s/ IVA)' : 'Total'}</span>
-                  <span className="text-xl font-bold text-primary">{formatCurrency(total)}</span>
-                </div>
-
-                {ixActive && (
-                  <div className="flex justify-between text-sm border-t pt-2">
-                    <span className="text-muted-foreground font-medium">Total c/ IVA</span>
-                    <span className="font-semibold">{formatCurrency(vatCalc.totalWithVat)}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {!isTelecom && (
-              <>
-                <Separator />
-
-                {/* Section 3.5: Payments */}
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                      <CreditCard className="h-4 w-4" />
-                      Pagamentos
-                    </div>
-                    {total > 0 && (() => {
-                      const summary = calculatePaymentSummary(
-                        draftPayments.map(dp => ({ ...dp, id: dp.id, organization_id: '', sale_id: '', invoice_file_url: null, created_at: '', updated_at: '' })),
-                        total
-                      );
-                      return summary.remaining > 0;
-                    })() && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setShowPaymentTypeSelector(true)}
-                      >
-                        <Plus className="h-4 w-4 mr-1" />
-                        Adicionar
-                      </Button>
-                    )}
-                  </div>
-
-                  {draftPayments.length > 0 ? (
-                    <div className="space-y-2">
-                      {draftPayments.map((dp) => (
+                {/* Telecom CPE/CUI Details */}
+                {isTelecom && proposalCpes.length > 0 && (
+                  <Card>
+                    <CardHeader className="pb-2 p-4">
+                      <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
+                        <Router className="h-4 w-4" />
+                        CPE/CUI (Pontos de Consumo)
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-4 pt-0 space-y-2">
+                      {proposalCpes.map((cpe) => (
                         <div
-                          key={dp.id}
-                          className="flex items-center justify-between p-3 rounded-lg border border-border/50 bg-muted/30"
+                          key={cpe.id}
+                          className="p-3 rounded-lg border border-border/50 bg-muted/30 space-y-2"
                         >
-                          <div className="flex flex-col gap-0.5">
-                            <div className="flex items-center gap-2">
-                              <span className="font-semibold text-sm">{formatCurrency(dp.amount)}</span>
-                              <Badge variant="outline" className={cn("text-xs", PAYMENT_RECORD_STATUS_COLORS[dp.status])}>
-                                {PAYMENT_RECORD_STATUS_LABELS[dp.status]}
-                              </Badge>
-                            </div>
-                            <span className="text-xs text-muted-foreground">
-                              {dp.payment_date}
-                              {dp.payment_method && ` • ${PAYMENT_METHOD_LABELS[dp.payment_method]}`}
-                              {dp.invoice_reference && ` • ${dp.invoice_reference}`}
-                            </span>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Badge variant="outline" className="text-xs">{cpe.equipment_type}</Badge>
+                            <Badge variant="secondary" className="text-xs">{cpe.comercializador}</Badge>
+                            {cpe.existing_cpe_id ? (
+                              <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-500 border-blue-500/30">Renovação</Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-xs bg-green-500/10 text-green-500 border-green-500/30">Novo</Badge>
+                            )}
                           </div>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                            onClick={() => setDraftPayments(prev => prev.filter(p => p.id !== dp.id))}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          {cpe.serial_number && (
+                            <div>
+                              <p className="text-xs text-muted-foreground">Local de Consumo</p>
+                              <p className="text-sm font-mono">{cpe.serial_number}</p>
+                            </div>
+                          )}
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                            {cpe.consumo_anual != null && (
+                              <div>
+                                <p className="text-xs text-muted-foreground">Consumo Anual</p>
+                                <p className="text-sm font-medium">{cpe.consumo_anual.toLocaleString('pt-PT')} kWh</p>
+                              </div>
+                            )}
+                            {cpe.duracao_contrato != null && (
+                              <div>
+                                <p className="text-xs text-muted-foreground">Duração</p>
+                                <p className="text-sm font-medium">{cpe.duracao_contrato} {cpe.duracao_contrato === 1 ? 'ano' : 'anos'}</p>
+                              </div>
+                            )}
+                            {cpe.dbl != null && (
+                              <div>
+                                <p className="text-xs text-muted-foreground">DBL</p>
+                                <p className="text-sm font-medium">{cpe.dbl.toLocaleString('pt-PT', { minimumFractionDigits: 2 })}</p>
+                              </div>
+                            )}
+                            {cpe.margem != null && (
+                              <div>
+                                <p className="text-xs text-muted-foreground">Margem</p>
+                                <p className="text-sm font-medium">{cpe.margem.toLocaleString('pt-PT', { minimumFractionDigits: 2 })} €/MWh</p>
+                              </div>
+                            )}
+                            {cpe.comissao != null && (
+                              <div>
+                                <p className="text-xs text-muted-foreground">Comissão</p>
+                                <p className="text-sm font-medium text-green-500">{formatCurrency(cpe.comissao)}</p>
+                              </div>
+                            )}
+                          </div>
+                          {(cpe.contrato_inicio || cpe.contrato_fim) && (
+                            <div>
+                              <p className="text-xs text-muted-foreground">Contrato</p>
+                              <p className="text-sm">
+                                {cpe.contrato_inicio ? format(new Date(cpe.contrato_inicio), "dd/MM/yyyy") : '—'}
+                                {' → '}
+                                {cpe.contrato_fim ? format(new Date(cpe.contrato_fim), "dd/MM/yyyy") : '—'}
+                              </p>
+                            </div>
+                          )}
                         </div>
                       ))}
+                    </CardContent>
+                  </Card>
+                )}
 
-                      {/* Payment summary */}
-                      {(() => {
-                        const summary = calculatePaymentSummary(
-                          draftPayments.map(dp => ({ ...dp, organization_id: '', sale_id: '', invoice_file_url: null, created_at: '', updated_at: '' })),
-                          total
-                        );
-                        return (
-                          <div className="p-3 rounded-lg bg-muted/30 border border-border/50 space-y-2">
-                            <div className="flex justify-between text-sm">
-                              <span className="text-muted-foreground">Total pago</span>
-                              <span className="font-medium text-green-500">{formatCurrency(summary.totalPaid)}</span>
+                {/* Products/Services */}
+                <Card>
+                  <CardHeader className="pb-2 p-4">
+                    <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
+                      <Package className="h-4 w-4" />
+                      Produtos / Serviços
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-4 pt-0 space-y-3">
+                    <Select onValueChange={handleAddProduct}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Adicionar produto ou serviço..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {products?.filter(p => p.is_active).map((product) => (
+                          <SelectItem key={product.id} value={product.id}>
+                            {product.name} - {formatCurrency(product.price || 0)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    {items.length > 0 ? (
+                      <div className="space-y-2">
+                        {items.map((item) => {
+                          const product = products?.find(p => p.id === item.product_id);
+                          const isRecurring = product?.is_recurring;
+                          
+                          return (
+                            <div 
+                              key={item.id} 
+                              className="p-3 rounded-lg border border-border/50 bg-muted/30 space-y-2"
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-1.5">
+                                    <p className="font-medium text-sm truncate">{item.name}</p>
+                                    {ixActive && <VatBadge taxValue={vatCalc.getItemTaxRate(item.product_id)} />}
+                                  </div>
+                                  <div className="flex items-center gap-2 mt-1">
+                                    <Button type="button" variant="outline" size="icon" className="h-6 w-6" onClick={() => handleUpdateQuantity(item.id, -1)}>
+                                      <Minus className="h-3 w-3" />
+                                    </Button>
+                                    <span className="text-sm w-8 text-center">{item.quantity}</span>
+                                    <Button type="button" variant="outline" size="icon" className="h-6 w-6" onClick={() => handleUpdateQuantity(item.id, 1)}>
+                                      <Plus className="h-3 w-3" />
+                                    </Button>
+                                    <span className="text-muted-foreground text-sm">×</span>
+                                    <Input
+                                      type="number"
+                                      step="0.01"
+                                      min="0"
+                                      value={item.unit_price}
+                                      onChange={(e) => handleUpdatePrice(item.id, e.target.value)}
+                                      className="w-24 h-7 text-sm"
+                                    />
+                                    <span className="text-muted-foreground text-sm">€</span>
+                                  </div>
+                                </div>
+                                <div className="text-right shrink-0">
+                                  <p className="font-semibold">{formatCurrency(item.quantity * item.unit_price)}</p>
+                                </div>
+                                <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => handleRemoveItem(item.id)}>
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </div>
+                              
+                              {isRecurring && (
+                                <div className="flex items-center gap-2 pl-2 text-sm border-t border-border/50 pt-2">
+                                  <CalendarIcon className="h-4 w-4 text-primary" />
+                                  <span className="text-muted-foreground">Vence em:</span>
+                                  <Popover>
+                                    <PopoverTrigger asChild>
+                                      <Button type="button" variant="outline" size="sm" className="h-7 text-xs">
+                                        {item.first_due_date ? format(item.first_due_date, "dd/MM/yyyy") : "Selecionar data"}
+                                      </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0" align="start">
+                                      <Calendar
+                                        mode="single"
+                                        selected={item.first_due_date || undefined}
+                                        onSelect={(date) => handleUpdateDueDate(item.id, date)}
+                                        locale={pt}
+                                        className="pointer-events-auto"
+                                      />
+                                    </PopoverContent>
+                                  </Popover>
+                                  <Badge variant="secondary" className="text-xs">
+                                    <Zap className="h-3 w-3 mr-1" />
+                                    Mensal
+                                  </Badge>
+                                </div>
+                              )}
                             </div>
-                            <div className="flex justify-between text-sm">
-                              <span className="text-muted-foreground">Em falta</span>
-                              <span className="font-medium">{formatCurrency(summary.remaining)}</span>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="text-center py-6 text-muted-foreground text-sm border border-dashed border-border/50 rounded-lg">
+                        Adicione produtos ou serviços à venda
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Payments (non-telecom) */}
+                {!isTelecom && (
+                  <Card>
+                    <CardHeader className="pb-2 p-4">
+                      <CardTitle className="text-sm font-medium flex items-center justify-between text-muted-foreground">
+                        <div className="flex items-center gap-2">
+                          <CreditCard className="h-4 w-4" />
+                          Pagamentos
+                        </div>
+                        {total > 0 && (() => {
+                          const summary = calculatePaymentSummary(
+                            draftPayments.map(dp => ({ ...dp, id: dp.id, organization_id: '', sale_id: '', invoice_file_url: null, created_at: '', updated_at: '' })),
+                            total
+                          );
+                          return summary.remaining > 0;
+                        })() && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setShowPaymentTypeSelector(true)}
+                          >
+                            <Plus className="h-4 w-4 mr-1" />
+                            Adicionar
+                          </Button>
+                        )}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-4 pt-0">
+                      {draftPayments.length > 0 ? (
+                        <div className="space-y-2">
+                          {draftPayments.map((dp) => (
+                            <div
+                              key={dp.id}
+                              className="flex items-center justify-between p-3 rounded-lg border border-border/50 bg-muted/30"
+                            >
+                              <div className="flex flex-col gap-0.5">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-semibold text-sm">{formatCurrency(dp.amount)}</span>
+                                  <Badge variant="outline" className={cn("text-xs", PAYMENT_RECORD_STATUS_COLORS[dp.status])}>
+                                    {PAYMENT_RECORD_STATUS_LABELS[dp.status]}
+                                  </Badge>
+                                </div>
+                                <span className="text-xs text-muted-foreground">
+                                  {dp.payment_date}
+                                  {dp.payment_method && ` • ${PAYMENT_METHOD_LABELS[dp.payment_method]}`}
+                                  {dp.invoice_reference && ` • ${dp.invoice_reference}`}
+                                </span>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                onClick={() => setDraftPayments(prev => prev.filter(p => p.id !== dp.id))}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
                             </div>
-                            <Progress value={summary.percentage} className="h-2" />
-                          </div>
-                        );
-                      })()}
-                    </div>
-                  ) : total > 0 ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="w-full border-dashed"
-                      onClick={() => setShowPaymentTypeSelector(true)}
-                    >
-                      <Plus className="h-4 w-4 mr-2" />
-                      Adicionar Pagamento
-                    </Button>
-                  ) : (
-                    <p className="text-sm text-muted-foreground text-center py-2">
-                      Adicione produtos para registar pagamentos
-                    </p>
-                  )}
+                          ))}
+
+                          {(() => {
+                            const summary = calculatePaymentSummary(
+                              draftPayments.map(dp => ({ ...dp, organization_id: '', sale_id: '', invoice_file_url: null, created_at: '', updated_at: '' })),
+                              total
+                            );
+                            return (
+                              <div className="p-3 rounded-lg bg-muted/30 border border-border/50 space-y-2">
+                                <div className="flex justify-between text-sm">
+                                  <span className="text-muted-foreground">Total pago</span>
+                                  <span className="font-medium text-green-500">{formatCurrency(summary.totalPaid)}</span>
+                                </div>
+                                <div className="flex justify-between text-sm">
+                                  <span className="text-muted-foreground">Em falta</span>
+                                  <span className="font-medium">{formatCurrency(summary.remaining)}</span>
+                                </div>
+                                <Progress value={summary.percentage} className="h-2" />
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      ) : total > 0 ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full border-dashed"
+                          onClick={() => setShowPaymentTypeSelector(true)}
+                        >
+                          <Plus className="h-4 w-4 mr-2" />
+                          Adicionar Pagamento
+                        </Button>
+                      ) : (
+                        <p className="text-sm text-muted-foreground text-center py-2">
+                          Adicione produtos para registar pagamentos
+                        </p>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+
+              {/* RIGHT COLUMN (40%) - Sticky summary */}
+              <div className="lg:col-span-2">
+                <div className="lg:sticky lg:top-6 space-y-4">
+                  {/* Summary Card */}
+                  <Card>
+                    <CardHeader className="pb-2 p-4">
+                      <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
+                        <FileText className="h-4 w-4" />
+                        Resumo
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-4 pt-0 space-y-3">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Subtotal</span>
+                        <span className="font-medium">{formatCurrency(subtotal)}</span>
+                      </div>
+                      
+                      <div className="flex items-center justify-between gap-4">
+                        <span className="text-sm text-muted-foreground">Desconto</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground">-</span>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={discount}
+                            onChange={(e) => setDiscount(e.target.value)}
+                            className="w-24 h-8 text-sm"
+                          />
+                          <span className="text-muted-foreground text-sm">€</span>
+                        </div>
+                      </div>
+
+                      <Separator />
+
+                      {ixActive && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">IVA</span>
+                          <span className="font-medium">{formatCurrency(vatCalc.totalVat)}</span>
+                        </div>
+                      )}
+
+                      <div className="flex justify-between">
+                        <span className="font-semibold">{ixActive ? 'Total (s/ IVA)' : 'Total'}</span>
+                        <span className="text-xl font-bold text-primary">{formatCurrency(total)}</span>
+                      </div>
+
+                      {ixActive && (
+                        <div className="flex justify-between text-sm border-t pt-2">
+                          <span className="text-muted-foreground font-medium">Total c/ IVA</span>
+                          <span className="font-semibold">{formatCurrency(vatCalc.totalWithVat)}</span>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* Notes */}
+                  <Card>
+                    <CardHeader className="pb-2 p-4">
+                      <CardTitle className="text-sm font-medium text-muted-foreground">Notas</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-4 pt-0">
+                      <Textarea
+                        placeholder="Observações sobre a venda..."
+                        value={notes}
+                        onChange={(e) => setNotes(e.target.value)}
+                        rows={3}
+                        className="min-h-[60px]"
+                      />
+                    </CardContent>
+                  </Card>
+
+                  {/* Action Button */}
+                  <Button
+                    onClick={handleSubmit}
+                    disabled={!isValid || createSale.isPending}
+                    className="w-full"
+                    size="lg"
+                  >
+                    {createSale.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        A criar...
+                      </>
+                    ) : (
+                      "Criar Venda"
+                    )}
+                  </Button>
                 </div>
-
-                <Separator />
-              </>
-            )}
-
-            {/* Section 4: Notes */}
-            <div className="space-y-2">
-              <Label>Notas</Label>
-              <Textarea
-                placeholder="Observações sobre a venda..."
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                rows={3}
-              />
+              </div>
             </div>
-          </form>
+          </div>
         </div>
 
         {/* Payment Type Selector */}
@@ -1246,7 +1206,7 @@ export function CreateSaleModal({
           }
         />
 
-        {/* Draft Schedule Modal (Parcelado) */}
+        {/* Draft Schedule Modal */}
         <DraftScheduleModal
           open={showDraftScheduleModal}
           onOpenChange={setShowDraftScheduleModal}
@@ -1259,26 +1219,6 @@ export function CreateSaleModal({
           })()}
           onAdd={(payments) => setDraftPayments(prev => [...prev, ...payments])}
         />
-
-        {/* Footer */}
-        <div className="flex justify-end gap-3 p-4 border-t border-border/50 bg-muted/30">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Cancelar
-          </Button>
-          <Button
-            onClick={handleSubmit}
-            disabled={!isValid || createSale.isPending}
-          >
-            {createSale.isPending ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                A criar...
-              </>
-            ) : (
-              "Criar Venda"
-            )}
-          </Button>
-        </div>
       </DialogContent>
     </Dialog>
   );
