@@ -338,6 +338,30 @@ async function handleKeyInvoice(supabase: any, org: any, saleId: string, organiz
   const docTypeCode = docType === '34' ? 'FR' : 'FT'
   console.log(`KeyInvoice: Emitting ${docLabel} (DocType ${docType}), totalPaid=${totalPaid}, saleTotal=${sale.total_value}`)
 
+  // Auto-generate observations from payment schedule if not provided
+  let finalObservations = observations || ''
+  if (!finalObservations) {
+    const { data: salePaymentsForObs } = await supabase
+      .from('sale_payments')
+      .select('amount, payment_date, status')
+      .eq('sale_id', saleId)
+      .order('payment_date', { ascending: true })
+
+    if (salePaymentsForObs && salePaymentsForObs.length > 1) {
+      finalObservations = `Pagamento em ${salePaymentsForObs.length} parcelas:\n` +
+        salePaymentsForObs.map((p: any, i: number) => {
+          const d = new Date(p.payment_date)
+          const dateStr = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`
+          return `${i+1}. ${dateStr} - ${Number(p.amount).toFixed(2)}€`
+        }).join('\n')
+    } else if (salePaymentsForObs && salePaymentsForObs.length === 1) {
+      const p = salePaymentsForObs[0]
+      const d = new Date(p.payment_date)
+      const dateStr = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`
+      finalObservations = `Data de pagamento: ${dateStr}`
+    }
+  }
+
   // 1. Create document using real KeyInvoice API: method:"insertDocument"
   const insertPayload: Record<string, any> = {
     method: 'insertDocument',
@@ -351,8 +375,8 @@ async function handleKeyInvoice(supabase: any, org: any, saleId: string, organiz
     insertPayload.ClientVATIN = clientNif
     insertPayload.ClientName = clientName
   }
-  if (observations) {
-    insertPayload.Comments = observations
+  if (finalObservations) {
+    insertPayload.Comments = finalObservations
   }
   console.log('KeyInvoice insertDocument FULL payload:', JSON.stringify(insertPayload).substring(0, 2000))
 
