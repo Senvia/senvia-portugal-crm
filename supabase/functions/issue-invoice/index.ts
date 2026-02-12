@@ -300,7 +300,9 @@ Deno.serve(async (req) => {
     const billingProvider = (org as any)?.billing_provider || 'invoicexpress'
     const integrationsEnabled = (org?.integrations_enabled as Record<string, boolean> | null) || {}
     
-    if (integrationsEnabled.invoicexpress === false) {
+    // Check if the ACTIVE billing provider is enabled
+    const activeBillingToggle = billingProvider === 'keyinvoice' ? 'keyinvoice' : 'invoicexpress'
+    if (integrationsEnabled[activeBillingToggle] === false) {
       return new Response(JSON.stringify({ error: 'Integração de faturação desativada' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
