@@ -1,49 +1,34 @@
 
 
-# Uniformizar Layout dos Modais de Venda
+# Adicionar "Dados da Venda" ao Modal Editar Venda
 
 ## Problema
-Os modais "Criar Venda" e "Editar Venda" tem os botoes de acao dentro da coluna direita (inline no scroll), enquanto o "Detalhes da Venda" tem um footer fixo no fundo. Isto cria uma experiencia inconsistente.
+O modal "Editar Venda" nao tem a secao "Dados da Venda" (Codigo, Data, Estado) que existe no modal "Detalhes da Venda". O utilizador quer consistencia visual entre os dois modais.
 
 ## O que fazer
 
-### 1. `src/components/sales/CreateSaleModal.tsx`
+### `src/components/sales/EditSaleModal.tsx`
 
-**Mover o botao "Criar Venda" para um footer fixo no fundo do modal**, igual ao SaleDetailsModal:
+Adicionar um Card "Dados da Venda" no topo da coluna esquerda (antes do card "Informacao Basica"), com layout identico ao do SaleDetailsModal:
 
-- Remover o botao `<Button>Criar Venda</Button>` da coluna direita (linhas 1148-1162)
-- Adicionar um `<div>` de footer fixo apos o `</div>` do conteudo scrollavel, com a mesma estrutura do SaleDetailsModal:
-  - Botao "Criar Venda" com `variant="senvia"` (acao principal)
-  - Botao "Cancelar" com `variant="outline"`
+- **Codigo** (read-only, font-mono)
+- **Data da Venda** (mover o date picker que ja existe no card "Informacao Basica" para aqui)
+- **Estado** (read-only badge com as cores do status atual - nao editavel neste modal)
 
-Layout do footer:
-```text
-[ Criar Venda (senvia) ] [ Cancelar (outline) ]
-```
+O card "Informacao Basica" fica apenas com o campo **Cliente** (e o ClientFiscalCard se aplicavel).
 
-### 2. `src/components/sales/EditSaleModal.tsx`
-
-**Mover os botoes "Guardar Alteracoes" e "Cancelar" para um footer fixo no fundo**:
-
-- Remover os botoes da coluna direita (linhas 658-684)
-- Adicionar um `<div>` de footer fixo igual ao SaleDetailsModal:
-  - Botao "Guardar Alteracoes" com `variant="senvia"` (acao principal)
-  - Botao "Cancelar" com `variant="outline"`
-
-Layout do footer:
-```text
-[ Guardar Alteracoes (senvia) ] [ Cancelar (outline) ]
-```
-
-### Estrutura do footer (igual nos dois modais)
+### Estrutura do novo card
 
 ```text
-<div className="p-4 border-t border-border/50 shrink-0">
-  <div className="flex gap-3 max-w-6xl mx-auto">
-    ... botoes ...
-  </div>
-</div>
+Card: "Dados da Venda" (icone FileText)
+  Grid 3 colunas:
+    - Codigo: sale.code (read-only, font-mono)
+    - Data da Venda: date picker (movido do card abaixo)
+    - Estado: Badge com SALE_STATUS_COLORS (read-only)
 ```
 
-Isto garante que os 3 modais de venda (Criar, Editar, Detalhes) tenham o mesmo padrao visual: conteudo scrollavel + footer fixo com acoes.
+### Resumo das alteracoes
 
+1. Adicionar novo Card "Dados da Venda" antes do card "Informacao Basica"
+2. Mover o campo "Data da Venda" para o novo card
+3. O card "Informacao Basica" fica simplificado (apenas Cliente)
