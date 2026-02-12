@@ -6,10 +6,9 @@ import { SecuritySettings } from '@/components/settings/SecuritySettings';
 import { useUpdateProfile, useChangePassword } from '@/hooks/useProfile';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
-import { Building, UsersRound, Package, Link2, ArrowLeft, Bell, Receipt, Shield } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { PipelineEditor } from '@/components/settings/PipelineEditor';
 import { ProductsTab } from '@/components/settings/ProductsTab';
 import { ModulesTab } from '@/components/settings/ModulesTab';
@@ -26,7 +25,6 @@ import { FiscalSettingsTab } from '@/components/settings/FiscalSettingsTab';
 import { PushNotificationsCard } from '@/components/settings/PushNotificationsCard';
 
 import { ProfilesTab } from '@/components/settings/ProfilesTab';
-import { useIsMobile } from '@/hooks/use-mobile';
 import { 
   MobileSettingsNav, 
   MobileSubSectionNav, 
@@ -45,12 +43,11 @@ export default function Settings() {
   const updateProfile = useUpdateProfile();
   const changePassword = useChangePassword();
   const { canManageTeam, canManageIntegrations, isAdmin } = usePermissions();
-  const isMobile = useIsMobile();
   const pushNotifications = usePushNotifications();
 
-  // Mobile navigation state (3 levels)
-  const [mobileGroup, setMobileGroup] = useState<SettingsSection | null>(null);
-  const [mobileSub, setMobileSub] = useState<SettingsSubSection | null>(null);
+  // Unified navigation state (3 levels) for both mobile and desktop
+  const [activeGroup, setActiveGroup] = useState<SettingsSection | null>(null);
+  const [activeSub, setActiveSub] = useState<SettingsSubSection | null>(null);
 
   
   const [webhookUrl, setWebhookUrl] = useState('');
@@ -335,170 +332,81 @@ export default function Settings() {
     }
   };
 
-  // Mobile: handle group selection (direct or drill-down)
-  const handleMobileGroupSelect = (group: SettingsSection) => {
-    setMobileGroup(group);
+  // Handle group selection (direct or drill-down)
+  const handleGroupSelect = (group: SettingsSection) => {
+    setActiveGroup(group);
     if (directContentGroups.includes(group)) {
-      setMobileSub(getDirectSub(group));
+      setActiveSub(getDirectSub(group));
     } else {
-      setMobileSub(null);
+      setActiveSub(null);
     }
   };
 
-  // Mobile: back navigation
-  const handleMobileBack = () => {
-    if (mobileSub !== null && !directContentGroups.includes(mobileGroup!)) {
-      // Go back to sub-section list
-      setMobileSub(null);
+  // Back navigation
+  const handleBack = () => {
+    if (activeSub !== null && !directContentGroups.includes(activeGroup!)) {
+      setActiveSub(null);
     } else {
-      // Go back to group list
-      setMobileGroup(null);
-      setMobileSub(null);
+      setActiveGroup(null);
+      setActiveSub(null);
     }
   };
 
-  // Mobile breadcrumb title
-  const getMobileTitle = () => {
-    if (!mobileGroup) return "Definições";
-    const groupTitle = sectionTitles[mobileGroup];
-    if (mobileSub && !directContentGroups.includes(mobileGroup)) {
-      const subItems = subSectionsMap[mobileGroup];
-      const subItem = subItems.find(s => s.id === mobileSub);
+  // Breadcrumb title
+  const getTitle = () => {
+    if (!activeGroup) return "Definições";
+    const groupTitle = sectionTitles[activeGroup];
+    if (activeSub && !directContentGroups.includes(activeGroup)) {
+      const subItems = subSectionsMap[activeGroup];
+      const subItem = subItems.find(s => s.id === activeSub);
       return subItem?.label || groupTitle;
     }
     return groupTitle;
   };
 
-  // Desktop: render content for a group tab
-  const renderDesktopGroupContent = (group: SettingsSection) => {
-    const subs = subSectionsMap[group];
-    
-    // Direct content groups (no sub-tabs)
-    if (directContentGroups.includes(group)) {
-      return <div className="max-w-4xl">{renderSubContent(getDirectSub(group))}</div>;
-    }
-
-    // Groups with sub-tabs
-    const defaultSub = subs[0]?.id;
-    return (
-      <Tabs defaultValue={defaultSub} className="space-y-4">
-        <TabsList className="h-auto gap-1 bg-muted/50 p-1">
-          {subs.map(sub => (
-            <TabsTrigger key={sub.id} value={sub.id} className="gap-2 text-sm">
-              <sub.icon className="h-4 w-4" />
-              {sub.label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-        {subs.map(sub => (
-          <TabsContent key={sub.id} value={sub.id}>
-            <div className="max-w-4xl">{renderSubContent(sub.id)}</div>
-          </TabsContent>
-        ))}
-      </Tabs>
-    );
-  };
-
   return (
     <AppLayout userName={profile?.full_name} organizationName={organization?.name}>
       <div className="p-4 sm:p-6 lg:p-8">
-        {isMobile ? (
-          mobileGroup === null ? (
-            // Level 1: Group list
-            <>
-              <div className="mb-6">
-                <h1 className="text-2xl font-bold text-foreground">Definições</h1>
-                <p className="text-muted-foreground">Configure a sua organização e integrações.</p>
-              </div>
-              <MobileSettingsNav
-                activeSection={null}
-                onSelectSection={handleMobileGroupSelect}
-                canManageTeam={canManageTeam}
-                canManageIntegrations={canManageIntegrations}
-              />
-            </>
-          ) : mobileSub === null ? (
-            // Level 2: Sub-section list within group
-            <>
-              <div className="flex items-center gap-3 mb-6">
-                <Button variant="ghost" size="icon" onClick={handleMobileBack} className="shrink-0">
-                  <ArrowLeft className="h-5 w-5" />
-                </Button>
-                <h1 className="text-xl font-bold text-foreground">{sectionTitles[mobileGroup]}</h1>
-              </div>
-              <MobileSubSectionNav
-                group={mobileGroup}
-                onSelectSubSection={(sub) => setMobileSub(sub)}
-              />
-            </>
-          ) : (
-            // Level 3: Sub-section content
-            <>
-              <div className="flex items-center gap-3 mb-6">
-                <Button variant="ghost" size="icon" onClick={handleMobileBack} className="shrink-0">
-                  <ArrowLeft className="h-5 w-5" />
-                </Button>
-                <h1 className="text-xl font-bold text-foreground">{getMobileTitle()}</h1>
-              </div>
-              {renderSubContent(mobileSub)}
-            </>
-          )
-        ) : (
-          // Desktop: Two-level tabs
+        {activeGroup === null ? (
+          // Level 1: Group cards grid
           <>
-            <div className="mb-8">
+            <div className="mb-6 sm:mb-8">
               <h1 className="text-2xl font-bold text-foreground">Definições</h1>
               <p className="text-muted-foreground">Configure a sua organização e integrações.</p>
             </div>
-
-            <Tabs defaultValue="general" className="space-y-6">
-              <TabsList className="flex-wrap h-auto gap-0">
-                <TabsTrigger value="general" className="gap-2">
-                  <Building className="h-4 w-4" />
-                  Definições Gerais
-                </TabsTrigger>
-                <TabsTrigger value="security" className="gap-2">
-                  <Shield className="h-4 w-4" />
-                  Segurança
-                </TabsTrigger>
-                {canManageTeam && (
-                  <TabsTrigger value="team" className="gap-2">
-                    <UsersRound className="h-4 w-4" />
-                    Equipa e Acessos
-                  </TabsTrigger>
-                )}
-                {canManageIntegrations && (
-                  <TabsTrigger value="products" className="gap-2">
-                    <Package className="h-4 w-4" />
-                    Produtos
-                  </TabsTrigger>
-                )}
-                {canManageIntegrations && (
-                  <TabsTrigger value="finance" className="gap-2">
-                    <Receipt className="h-4 w-4" />
-                    Financeiro
-                  </TabsTrigger>
-                )}
-                <TabsTrigger value="notifications" className="gap-2">
-                  <Bell className="h-4 w-4" />
-                  Notificações
-                </TabsTrigger>
-                {canManageIntegrations && (
-                  <TabsTrigger value="integrations" className="gap-2">
-                    <Link2 className="h-4 w-4" />
-                    Integrações
-                  </TabsTrigger>
-                )}
-              </TabsList>
-
-              <TabsContent value="general">{renderDesktopGroupContent("general")}</TabsContent>
-              <TabsContent value="security">{renderDesktopGroupContent("security")}</TabsContent>
-              {canManageTeam && <TabsContent value="team">{renderDesktopGroupContent("team")}</TabsContent>}
-              {canManageIntegrations && <TabsContent value="products">{renderDesktopGroupContent("products")}</TabsContent>}
-              {canManageIntegrations && <TabsContent value="finance">{renderDesktopGroupContent("finance")}</TabsContent>}
-              <TabsContent value="notifications">{renderDesktopGroupContent("notifications")}</TabsContent>
-              {canManageIntegrations && <TabsContent value="integrations">{renderDesktopGroupContent("integrations")}</TabsContent>}
-            </Tabs>
+            <MobileSettingsNav
+              activeSection={null}
+              onSelectSection={handleGroupSelect}
+              canManageTeam={canManageTeam}
+              canManageIntegrations={canManageIntegrations}
+            />
+          </>
+        ) : activeSub === null ? (
+          // Level 2: Sub-section cards grid
+          <>
+            <div className="flex items-center gap-3 mb-6">
+              <Button variant="ghost" size="icon" onClick={handleBack} className="shrink-0">
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
+              <h1 className="text-xl sm:text-2xl font-bold text-foreground">{sectionTitles[activeGroup]}</h1>
+            </div>
+            <MobileSubSectionNav
+              group={activeGroup}
+              onSelectSubSection={(sub) => setActiveSub(sub)}
+            />
+          </>
+        ) : (
+          // Level 3: Content
+          <>
+            <div className="flex items-center gap-3 mb-6">
+              <Button variant="ghost" size="icon" onClick={handleBack} className="shrink-0">
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
+              <h1 className="text-xl sm:text-2xl font-bold text-foreground">{getTitle()}</h1>
+            </div>
+            <div className="max-w-4xl">
+              {renderSubContent(activeSub)}
+            </div>
           </>
         )}
       </div>

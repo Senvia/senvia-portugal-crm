@@ -1,5 +1,5 @@
-import { ChevronRight, Building, Users, UsersRound, Package, Link2, Bell, Receipt, Shield, Settings, GitBranch, LayoutGrid, FileText, List, KeyRound, UserCog, Network, BellRing, AlertTriangle, Calculator } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Building, UsersRound, Package, Link2, Bell, Receipt, Shield, GitBranch, LayoutGrid, FileText, List, KeyRound, UserCog, Network, BellRing, AlertTriangle, Calculator } from "lucide-react";
+import { SettingsCard } from "./SettingsCard";
 
 export type SettingsSection = "general" | "security" | "team" | "products" | "finance" | "notifications" | "integrations";
 
@@ -29,13 +29,13 @@ interface SectionItem {
 }
 
 const sections: SectionItem[] = [
-  { id: "general", label: "Definições Gerais", icon: Building, description: "Organização, pipeline, módulos e formulário" },
-  { id: "security", label: "Segurança", icon: Shield, description: "Password e autenticação 2FA" },
-  { id: "team", label: "Equipa e Acessos", icon: UsersRound, description: "Utilizadores, perfis e equipas", requiresTeam: true },
-  { id: "products", label: "Produtos", icon: Package, description: "Catálogo para propostas", requiresIntegrations: true },
+  { id: "general", label: "Definições Gerais", icon: Building, description: "Organização, pipeline e formulários" },
+  { id: "security", label: "Segurança", icon: Shield, description: "Password e autenticação" },
+  { id: "team", label: "Equipa e Acessos", icon: UsersRound, description: "Membros, perfis e equipas", requiresTeam: true },
+  { id: "products", label: "Produtos", icon: Package, description: "Catálogo de produtos", requiresIntegrations: true },
   { id: "finance", label: "Financeiro", icon: Receipt, description: "Despesas e configuração fiscal", requiresIntegrations: true },
-  { id: "notifications", label: "Notificações", icon: Bell, description: "Push e alertas de fidelização" },
-  { id: "integrations", label: "Integrações", icon: Link2, description: "Webhook, WhatsApp, IA", requiresIntegrations: true },
+  { id: "notifications", label: "Notificações", icon: Bell, description: "Push e alertas automáticos" },
+  { id: "integrations", label: "Integrações", icon: Link2, description: "WhatsApp, email e faturação", requiresIntegrations: true },
 ];
 
 export function MobileSettingsNav({ 
@@ -51,30 +51,15 @@ export function MobileSettingsNav({
   });
 
   return (
-    <div className="space-y-2">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
       {visibleSections.map((section) => (
-        <button
+        <SettingsCard
           key={section.id}
+          icon={section.icon}
+          title={section.label}
+          description={section.description}
           onClick={() => onSelectSection(section.id)}
-          className={cn(
-            "w-full flex items-center gap-4 p-4 rounded-xl transition-colors text-left",
-            activeSection === section.id
-              ? "bg-primary/10 text-primary"
-              : "bg-muted/50 hover:bg-muted"
-          )}
-        >
-          <div className={cn(
-            "flex items-center justify-center h-10 w-10 rounded-lg",
-            activeSection === section.id ? "bg-primary/20" : "bg-background"
-          )}>
-            <section.icon className="h-5 w-5" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-medium">{section.label}</p>
-            <p className="text-xs text-muted-foreground truncate">{section.description}</p>
-          </div>
-          <ChevronRight className="h-5 w-5 text-muted-foreground" />
-        </button>
+        />
       ))}
     </div>
   );
@@ -90,28 +75,28 @@ export interface SubSectionItem {
 
 export const subSectionsMap: Record<SettingsSection, SubSectionItem[]> = {
   general: [
-    { id: "org-general", label: "Geral", icon: Building, description: "Organização e conta" },
+    { id: "org-general", label: "Geral", icon: Building, description: "Nome, logotipo e dados" },
     { id: "org-pipeline", label: "Pipeline", icon: GitBranch, description: "Etapas do funil de vendas" },
-    { id: "org-modules", label: "Módulos", icon: LayoutGrid, description: "Ativar e desativar módulos" },
-    { id: "org-forms", label: "Formulário", icon: FileText, description: "Formulários de captura de leads" },
-    { id: "org-fields", label: "Campos", icon: List, description: "Campos personalizados de clientes" },
+    { id: "org-modules", label: "Módulos", icon: LayoutGrid, description: "Funcionalidades ativas" },
+    { id: "org-forms", label: "Formulário", icon: FileText, description: "Captação de leads" },
+    { id: "org-fields", label: "Campos", icon: List, description: "Campos personalizados" },
   ],
-  security: [], // direct content
+  security: [],
   team: [
-    { id: "team-access", label: "Acessos", icon: KeyRound, description: "Utilizadores e convites" },
-    { id: "team-profiles", label: "Perfis", icon: UserCog, description: "Perfis de permissões" },
-    { id: "team-teams", label: "Equipas", icon: Network, description: "Hierarquia e liderança" },
+    { id: "team-access", label: "Acessos", icon: KeyRound, description: "Convites e permissões" },
+    { id: "team-profiles", label: "Perfis", icon: UserCog, description: "Níveis de acesso" },
+    { id: "team-teams", label: "Equipas", icon: Network, description: "Hierarquia e líderes" },
   ],
-  products: [], // direct content
+  products: [],
   finance: [
     { id: "finance-expenses", label: "Tipos de Despesas", icon: Receipt, description: "Categorias de despesas" },
     { id: "finance-fiscal", label: "Fiscal", icon: Calculator, description: "IVA e configuração fiscal" },
   ],
   notifications: [
-    { id: "notif-push", label: "Push", icon: BellRing, description: "Notificações push no browser" },
-    { id: "notif-alerts", label: "Alertas", icon: AlertTriangle, description: "Alertas de fidelização" },
+    { id: "notif-push", label: "Push", icon: BellRing, description: "Notificações no telemóvel" },
+    { id: "notif-alerts", label: "Alertas", icon: AlertTriangle, description: "Lembretes automáticos" },
   ],
-  integrations: [], // direct content
+  integrations: [],
 };
 
 interface MobileSubSectionNavProps {
@@ -123,22 +108,15 @@ export function MobileSubSectionNav({ group, onSelectSubSection }: MobileSubSect
   const items = subSectionsMap[group];
 
   return (
-    <div className="space-y-2">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
       {items.map((item) => (
-        <button
+        <SettingsCard
           key={item.id}
+          icon={item.icon}
+          title={item.label}
+          description={item.description}
           onClick={() => onSelectSubSection(item.id)}
-          className="w-full flex items-center gap-4 p-4 rounded-xl transition-colors text-left bg-muted/50 hover:bg-muted"
-        >
-          <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-background">
-            <item.icon className="h-5 w-5" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-medium">{item.label}</p>
-            <p className="text-xs text-muted-foreground truncate">{item.description}</p>
-          </div>
-          <ChevronRight className="h-5 w-5 text-muted-foreground" />
-        </button>
+        />
       ))}
     </div>
   );
