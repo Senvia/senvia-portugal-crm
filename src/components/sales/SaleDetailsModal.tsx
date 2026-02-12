@@ -659,14 +659,6 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
           {/* Footer Actions */}
           <div className="p-4 border-t border-border/50 shrink-0">
             <div className="flex gap-3 max-w-6xl mx-auto">
-              <Button
-                variant="ghost"
-                className="flex-1"
-                onClick={() => onOpenChange(false)}
-              >
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Voltar
-              </Button>
               {sale.status !== 'cancelled' && onEdit && !isDeliveredAndLocked && (
                 <Button
                   variant="outline"
@@ -689,7 +681,7 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                 return (
                   <>
                     <Button
-                      variant="outline"
+                      variant="secondary"
                       className="flex-1"
                       onClick={() => setDraftMode(mode)}
                     >
@@ -697,6 +689,7 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                       Ver Rascunho Fatura
                     </Button>
                     <Button
+                      variant="senvia"
                       className="flex-1"
                       onClick={() => setDraftMode(mode)}
                     >
@@ -706,6 +699,14 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                   </>
                 );
               })()}
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => onOpenChange(false)}
+              >
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Voltar
+              </Button>
             </div>
           </div>
         </DialogContent>
