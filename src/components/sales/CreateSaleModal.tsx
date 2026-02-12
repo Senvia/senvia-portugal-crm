@@ -484,7 +484,7 @@ export function CreateSaleModal({
     setItems(items.filter(i => i.id !== itemId));
   };
 
-  const handleUpdateDueDate = (itemId: string, date: Date | undefined) => {
+      const handleUpdateDueDate = (itemId: string, date: Date | undefined) => {
     setItems(items.map(i => 
       i.id === itemId 
         ? { ...i, first_due_date: date || null }
@@ -622,7 +622,7 @@ export function CreateSaleModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="fixed inset-0 z-50 w-full h-full max-w-none translate-x-0 translate-y-0 flex flex-col bg-background border-0 rounded-none p-0 gap-0 data-[state=open]:slide-in-from-bottom-0 data-[state=closed]:slide-out-to-bottom-0 data-[state=open]:zoom-in-100 data-[state=closed]:zoom-out-100">
+      <DialogContent variant="fullScreen" className="flex flex-col p-0 gap-0">
         <DialogHeader className="px-6 py-4 border-b border-border/50 shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5 text-primary" />
