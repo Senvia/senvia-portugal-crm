@@ -1,76 +1,56 @@
 
 
-# Integrações: Cards em vez de Accordion
+# Agrupar Integrações por Categoria
 
 ## Resumo
 
-Substituir o layout de Accordion (sanfonas empilhadas) por um **grid de cards** idêntico ao das Definições. Cada integração passa a ser um card com ícone, nome, descrição curta e badge de estado. Clicar no card abre o formulário de configuração com botão de voltar.
+Organizar os 5 cards de integrações em 3 grupos visuais com headers de secção, em vez de uma lista plana.
 
 ## Layout
 
 ```text
-<- Integrações
-
-+-----------------------------------+  +-----------------------------------+
-| [Webhook]  n8n / Automações       |  | [MessageCircle]  WhatsApp Business|
-| Notificações de novos leads  [OK] |  | Evolution API               [OK] |
-+-----------------------------------+  +-----------------------------------+
-+-----------------------------------+  +-----------------------------------+
-| [Mail]  Email (Brevo)             |  | [Receipt]  InvoiceXpress          |
-| Envio de emails            [---]  |  | Emissão de faturas         [OK]  |
-+-----------------------------------+  +-----------------------------------+
+Automações
 +-----------------------------------+
-| [Receipt]  KeyInvoice             |
-| Faturação API 5.0          [---]  |
+| [Webhook]  n8n / Automações       |
+| Notificações de novos leads  [OK] |
 +-----------------------------------+
 
-Clica "WhatsApp Business" -->
+Comunicações
++-----------------------------------+  +-----------------------------------+
+| [MessageCircle]  WhatsApp Business|  | [Mail]  Email (Brevo)             |
+| Evolution API               [OK] |  | Envio de emails            [---]  |
++-----------------------------------+  +-----------------------------------+
 
-<- Integrações
-[Switch ativo/inativo]
-(formulário de credenciais do WhatsApp)
-[Guardar]
+Faturação
++-----------------------------------+  +-----------------------------------+
+| [Receipt]  InvoiceXpress          |  | [Receipt]  KeyInvoice             |
+| Emissão de faturas         [OK]   |  | Faturação API 5.0          [---]  |
++-----------------------------------+  +-----------------------------------+
 ```
 
-## Detalhes técnicos
+## Alteração
 
-### Componente `IntegrationCard`
+### `src/components/settings/IntegrationsContent.tsx`
 
-Reutilizar o `SettingsCard` existente mas com uma variação: incluir o **Badge** de estado (Configurado / Não configurado / Desativado) e o **Switch** de ativação no próprio card.
+Adicionar um campo `group` a cada item do array `integrations` e agrupar na renderização:
 
-Criar um componente wrapper `IntegrationCard` que estende o `SettingsCard` com:
-- Badge de estado (à direita, antes do chevron)
-- Switch de ativar/desativar (no canto, com `stopPropagation`)
+```text
+Grupos:
+- "Automações" -> webhook
+- "Comunicações" -> whatsapp, brevo
+- "Faturação" -> invoicexpress, keyinvoice
+```
 
-### Estado de navegação
+Na grid view (quando `active === null`), em vez de renderizar todos os cards numa única grid, iterar pelos grupos e renderizar:
 
-Adicionar estado local no `IntegrationsContent`:
-- `activeIntegration: string | null` (valores: `'webhook'`, `'whatsapp'`, `'brevo'`, `'invoicexpress'`, `'keyinvoice'`, ou `null`)
-- `null` = grid de cards
-- Valor = formulário da integração com botão voltar
+1. Um `<h3>` com o nome do grupo (texto pequeno, `text-sm font-medium text-muted-foreground mb-2`)
+2. Uma grid de cards apenas desse grupo
+3. Espaçamento entre grupos (`space-y-6`)
 
-### Alterações nos ficheiros
-
-| Ficheiro | Tipo | Alteração |
-|---|---|---|
-| `src/components/settings/IntegrationsContent.tsx` | Editar | Substituir `Accordion` por grid de cards + estado de drill-down. Extrair cada formulário para renderização condicional. Manter toda a lógica de props/handlers. |
-
-### Dados dos cards
-
-| Integração | Ícone | Título | Descrição | Badge baseado em |
-|---|---|---|---|---|
-| Webhook | Webhook | n8n / Automações | Notificações de novos leads | `!!webhookUrl` |
-| WhatsApp | MessageCircle | WhatsApp Business | Integração com Evolution API | `!!(baseUrl && instance && apiKey)` |
-| Brevo | Mail | Email (Brevo) | Envio de emails e propostas | `!!(apiKey && senderEmail)` |
-| InvoiceXpress | Receipt | InvoiceXpress | Emissão de faturas automática | `!!(accountName && apiKey)` |
-| KeyInvoice | Receipt | KeyInvoice | Faturação via API 5.0 | `!!apiKey` |
-
-### Comportamento do Switch
-
-O switch de ativar/desativar fica visível **no ecrã de detalhe** (formulário), não no card do grid. No card aparece apenas o badge de estado. Isto simplifica o layout e evita cliques acidentais.
+O resto do componente (detail view, forms, badges, switch) mantém-se inalterado.
 
 ### Sem alterações em
-
-- `Settings.tsx` (as props passadas mantêm-se iguais)
-- Nenhum handler ou lógica de save
+- Nenhum outro ficheiro
+- Nenhuma lógica de save/toggle
 - Base de dados
+
