@@ -1,75 +1,39 @@
 
 
-# Redesign dos Modais de Vendas para Layout Full-Page
+# Fix: Modais de Vendas Full-Page nao estao a funcionar
 
 ## Problema
 
-Os tres modais de vendas (Nova Venda, Editar Venda, Visualizar Venda) usam dialogos centrados com largura maxima limitada (`max-w-lg` / `max-w-2xl`) e altura maxima de `90vh`. Em ecras maiores, o espaco disponivel e desperdicado e o conteudo fica apertado com scroll excessivo.
+O componente `DialogContent` base (em `dialog.tsx`) tem classes CSS hardcoded como `left-[50%] top-[50%] translate-x-[-50%] translate-y-[-50%] max-w-lg grid` que conflitam com as classes full-screen passadas pelos modais de vendas. O `tailwind-merge` nao consegue resolver todos os conflitos (por exemplo, `inset-0` nao anula `left-[50%]` e `top-[50%]` separadamente), resultando no modal a aparecer pequeno e centrado.
 
 ## Solucao
 
-Converter os tres modais de `Dialog` centrado para um layout **full-screen overlay** que ocupa toda a viewport, adaptando-se ao ecra:
+Criar uma variante `fullScreen` no componente `DialogContent` que substitui completamente as classes de posicionamento. Isto evita conflitos de merge e mantem o componente base intacto para os outros modais do sistema.
 
-- **Mobile**: Ocupa 100% da largura e altura (como uma pagina nativa)
-- **Desktop**: Ocupa toda a viewport com padding lateral minimo, e o conteudo interno fica centrado com largura maxima confortavel (`max-w-4xl`)
+## Alteracoes
 
-A abordagem mantem o componente `Dialog` do Radix (para manter compatibilidade com modais aninhados como `PaymentTypeSelector` e `AlertDialog`), mas altera as classes CSS do `DialogContent` para ocupar a tela toda.
+### 1. `src/components/ui/dialog.tsx`
 
-## Alteracoes por ficheiro
+Adicionar uma prop `variant` ao `DialogContent` que aceita `"default"` ou `"fullScreen"`. Quando `fullScreen`:
+- Usa `inset-0 w-full h-full max-w-none` sem `left-[50%]`, `top-[50%]`, `translate`, `max-w-lg` ou `grid`
+- Remove animacoes de zoom/slide centradas
+- Mantem o overlay e o botao de fechar
 
-### 1. `src/components/sales/CreateSaleModal.tsx`
+### 2. `src/components/sales/CreateSaleModal.tsx`
 
-- Alterar `DialogContent` de `max-w-2xl max-h-[90vh]` para classes full-screen: `w-screen h-screen max-w-none max-h-none rounded-none sm:rounded-none inset-0 translate-x-0 translate-y-0 top-0 left-0`
-- O conteudo interno (form) recebe `max-w-4xl mx-auto` para centralizar em ecras largos
-- O `ScrollArea` passa a usar `h-[calc(100vh-header-footer)]` em vez de `max-h`
-- Header e footer ficam fixos (sticky) no topo e fundo
+Simplificar: trocar as classes longas por `variant="fullScreen"` no `DialogContent`, mantendo apenas as classes adicionais de layout (`flex flex-col p-0 gap-0`).
 
-### 2. `src/components/sales/EditSaleModal.tsx`
+### 3. `src/components/sales/EditSaleModal.tsx`
 
-- Mesma transformacao: `DialogContent` passa a full-screen
-- O conteudo do form recebe `max-w-4xl mx-auto`
-- Layout ja usa `flex flex-col` com `flex-1` para o scroll, basta ajustar as dimensoes
+Mesma simplificacao: usar `variant="fullScreen"`.
 
-### 3. `src/components/sales/SaleDetailsModal.tsx`
+### 4. `src/components/sales/SaleDetailsModal.tsx`
 
-- Mesma transformacao: `DialogContent` passa a full-screen
-- O conteudo interno recebe `max-w-4xl mx-auto`
-- Em desktop, os campos podem aproveitar melhor o espaco com grids de 2-3 colunas onde fizer sentido (ex: dados do cliente lado a lado com status)
+Mesma simplificacao: usar `variant="fullScreen"`.
 
-### Classe CSS reutilizavel
+## Notas tecnicas
 
-Para evitar duplicacao, a classe sera aplicada diretamente no `DialogContent` com uma combinacao consistente:
-
-```text
-fixed inset-0 z-50 w-full h-full max-w-none translate-x-0 translate-y-0
-flex flex-col bg-background border-0 rounded-none
-data-[state=open]:animate-in data-[state=closed]:animate-out
-data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0
-```
-
-### Estrutura interna (comum aos 3)
-
-```text
-+--------------------------------------------------+
-| Header (sticky, border-bottom)                    |
-|   [Icone] Titulo        [Codigo] [Data]     [X]  |
-+--------------------------------------------------+
-|                                                    |
-|   <div max-w-4xl mx-auto>                         |
-|     Conteudo scrollavel                            |
-|     (formulario ou detalhes)                       |
-|   </div>                                          |
-|                                                    |
-+--------------------------------------------------+
-| Footer (sticky, border-top)                       |
-|   [Cancelar]                    [Guardar/Acao]    |
-+--------------------------------------------------+
-```
-
-### Notas tecnicas
-
-- O botao de fechar (X) do Radix `DialogClose` continua a funcionar normalmente
-- Os modais aninhados (`PaymentTypeSelector` com `AlertDialog`, `AlertDialog` de confirmacao de delete) nao sao afetados pois usam componentes separados
-- A animacao de entrada muda de `zoom-in` + `slide-from-center` para `fade-in` simples (mais adequado para full-screen)
-- Toda a logica de negocio, state e handlers permanece inalterada -- apenas o layout CSS muda
+- A variante `fullScreen` aplica um conjunto de classes base completamente diferente, eliminando qualquer conflito de `tailwind-merge`
+- Os restantes modais do sistema (leads, clientes, propostas, etc.) continuam inalterados pois usam a variante `default` implicita
+- Os modais aninhados (AlertDialog, PaymentTypeSelector) nao sao afetados
 
