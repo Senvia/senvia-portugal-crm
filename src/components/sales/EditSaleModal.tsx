@@ -28,6 +28,7 @@ import { format, parseISO } from "date-fns";
 import { ClientFiscalCard, VatBadge, useVatCalculation, isInvoiceXpressActive, getOrgTaxValue } from "./SaleFiscalInfo";
 import { supabase } from "@/integrations/supabase/client";
 import { pt } from "date-fns/locale";
+import { SALE_STATUS_LABELS, SALE_STATUS_COLORS } from "@/types/sales";
 import { toast } from "sonner";
 import { 
   Loader2, 
@@ -386,41 +387,35 @@ export function EditSaleModal({
               <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
                 {/* LEFT COLUMN (60%) */}
                 <div className="lg:col-span-3 space-y-4">
-                  {/* Client & Date */}
+                  {/* Dados da Venda */}
                   <Card>
                     <CardHeader className="pb-2 p-4">
                       <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
-                        <User className="h-4 w-4" />
-                        Informação Básica
+                        <FileText className="h-4 w-4" />
+                        Dados da Venda
                       </CardTitle>
                     </CardHeader>
-                    <CardContent className="p-4 pt-0 space-y-4">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label>Cliente</Label>
-                          <SearchableCombobox
-                            options={clientOptions}
-                            value={clientId}
-                            onValueChange={setClientId}
-                            placeholder="Selecionar cliente..."
-                            searchPlaceholder="Pesquisar cliente..."
-                            emptyText="Nenhum cliente encontrado"
-                            disabled={!canFullEdit}
-                          />
+                    <CardContent className="p-4 pt-0">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs text-muted-foreground">Código</Label>
+                          <p className="font-mono text-sm font-medium">{sale.code || '—'}</p>
                         </div>
 
-                        <div className="space-y-2">
-                          <Label>Data da Venda</Label>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs text-muted-foreground">Data da Venda</Label>
                           <Popover>
                             <PopoverTrigger asChild>
                               <Button
                                 variant="outline"
+                                size="sm"
                                 className={cn(
                                   "w-full justify-start text-left font-normal",
                                   !saleDate && "text-muted-foreground"
                                 )}
                                 disabled={!canFullEdit}
                               >
+                                <CalendarIcon className="mr-2 h-3.5 w-3.5" />
                                 {saleDate ? format(saleDate, "PPP", { locale: pt }) : "Selecionar..."}
                               </Button>
                             </PopoverTrigger>
@@ -434,6 +429,39 @@ export function EditSaleModal({
                             </PopoverContent>
                           </Popover>
                         </div>
+
+                        <div className="space-y-1.5">
+                          <Label className="text-xs text-muted-foreground">Estado</Label>
+                          <div>
+                            <Badge className={cn("text-xs", SALE_STATUS_COLORS[sale.status])}>
+                              {SALE_STATUS_LABELS[sale.status]}
+                            </Badge>
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Client */}
+                  <Card>
+                    <CardHeader className="pb-2 p-4">
+                      <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
+                        <User className="h-4 w-4" />
+                        Informação Básica
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-4 pt-0 space-y-4">
+                      <div className="space-y-2">
+                        <Label>Cliente</Label>
+                        <SearchableCombobox
+                          options={clientOptions}
+                          value={clientId}
+                          onValueChange={setClientId}
+                          placeholder="Selecionar cliente..."
+                          searchPlaceholder="Pesquisar cliente..."
+                          emptyText="Nenhum cliente encontrado"
+                          disabled={!canFullEdit}
+                        />
                       </div>
 
                       {/* Client Fiscal Card */}
