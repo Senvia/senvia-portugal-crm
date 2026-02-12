@@ -1,39 +1,24 @@
 
 
-# Mover Progresso de Pagamento para a Coluna Direita
+# Remover Progresso de Pagamento da Lista de Pagamentos
 
-## O que aconteceu
-O card de progresso de pagamento foi removido por engano. O utilizador quer que ele seja **movido** para a coluna direita, logo abaixo do card "Valor Total".
+## Problema
+O bloco de progresso de pagamento (barra de progresso, total pago, em falta, agendado) aparece duplicado: uma vez dentro da lista de pagamentos (coluna esquerda) e outra na coluna direita onde acabamos de o colocar. O utilizador quer manter apenas o da coluna direita.
 
 ## O que fazer
 
-### `src/components/sales/SaleDetailsModal.tsx`
+### `src/components/sales/SalePaymentsList.tsx`
 
-1. **Adicionar o import do `Progress`** de volta (foi removido)
-2. **Adicionar o bloco de progresso de pagamento** na coluna direita (`lg:col-span-2`), logo apos o card "Valor Total" (depois da linha 556), antes do "Proposta Associada"
+Remover o bloco "Summary" (linhas 385-419) que contem:
+- Barra de progresso com percentagem
+- Grid com "Total Pago" e "Em Falta"
+- Bloco condicional "Agendado"
 
-O bloco a adicionar e o mesmo que existia antes, com a barra de progresso, total pago, em falta e agendado:
+Tambem remover os imports que deixam de ser necessarios:
+- `Progress` (se nao for usado noutro sitio do ficheiro)
+- `calculatePaymentSummary` (se a variavel `summary` deixar de ser usada)
 
-```text
-Coluna Direita:
-+---------------------------+
-| Valor Total               |
-| 397,00 EUR                |
-+---------------------------+
-+---------------------------+   <-- NOVO: aqui
-| Pagamento                 |
-| Progresso          0%     |
-| [========barr========]    |
-| Total Pago    Em Falta    |
-| 0,00 EUR      397,00 EUR  |
-| Agendado                  |
-| 397,00 EUR                |
-+---------------------------+
-+---------------------------+
-| Proposta Associada        |
-+---------------------------+
-```
+Verificar se `summary` e usado noutro ponto do componente antes de remover o import.
 
-Condicao de visibilidade: `!isTelecom && salePayments.length > 0`
+Resultado: a secao de pagamentos mostra apenas a lista de parcelas (cartoes individuais) e os botoes de acao, sem o resumo financeiro duplicado.
 
-O card usa `Progress`, `CreditCard` icon, e os valores de `paymentSummary` (percentage, totalPaid, remaining, totalScheduled).
