@@ -1,26 +1,70 @@
 
 
-# Corrigir: IVA mostra "M10" em vez do valor
+# Adicionar campo `code` auto-gerado aos Produtos
 
-## Problema
+## Contexto
 
-No modal de rascunho da fatura (`InvoiceDraftModal`), quando o IVA e 0%, a linha de IVA mostra o codigo de isencao da AT (ex: "M10") em vez do valor formatado "0,00 EUR". O codigo de isencao e informacao tecnica fiscal que nao faz sentido para o utilizador neste contexto.
+Clientes, Propostas e Vendas ja possuem um campo `code` com formato sequencial `0001`, `0002`, etc., gerado automaticamente por triggers na base de dados. Os Produtos nao possuem este campo, o que causa problemas na integracao com o KeyInvoice (que exige um `IdProduct` valido). Atualmente, o `IdProduct` e gerado ad-hoc no edge function a partir do nome do produto, o que e fragil e inconsistente.
 
-## Alteracao
+## Plano
 
-**Ficheiro: `src/components/sales/InvoiceDraftModal.tsx`** (linhas 256-266)
+### 1. Migracao de base de dados
 
-Substituir a logica condicional que mostra `exemptionReason` quando o IVA e 0 por simplesmente mostrar o valor formatado (`formatCurrency(0)`), mantendo a indicacao "(Isento)" na label da linha.
+- Adicionar coluna `code TEXT` a tabela `products`
+- Criar funcao `generate_product_code(org_id UUID)` seguindo o padrao existente (sequencial `0001`, `0002`, por organizacao)
+- Criar trigger `set_product_code` que preenche automaticamente o `code` no INSERT (mesmo padrao de `set_client_code`, `set_sale_code`, etc.)
+- Criar indice unico composto `(organization_id, code)` para garantir unicidade por tenant
+- Preencher codigos nos produtos existentes (backfill)
 
-Antes:
+### 2. Atualizar tipo TypeScript
+
+- Adicionar `code?: string | null` ao interface `Product` em `src/types/proposals.ts`
+
+### 3. Atualizar edge function `issue-invoice`
+
+- Usar `product.code` (do produto do catalogo) como `IdProduct` ao criar/procurar produtos no KeyInvoice, em vez de gerar um codigo ad-hoc a partir do nome
+- Fallback: se o produto nao tiver `code`, manter a logica atual baseada no nome
+
+### 4. Mostrar o codigo na UI (opcional mas util)
+
+- Exibir o codigo do produto na listagem do tab Produtos (`ProductsTab.tsx`) como referencia visual
+
+## Detalhes tecnicos
+
+**Funcao SQL (seguindo o padrao existente):**
+```sql
+CREATE OR REPLACE FUNCTION generate_product_code(_org_id UUID)
+RETURNS TEXT AS $$
+DECLARE _count INTEGER;
+BEGIN
+  SELECT COALESCE(MAX(
+    CAST(NULLIF(regexp_replace(code, '[^0-9]', '', 'g'), '') AS INTEGER)
+  ), 0) + 1
+  INTO _count
+  FROM products
+  WHERE organization_id = _org_id AND code IS NOT NULL;
+  RETURN LPAD(_count::TEXT, 4, '0');
+END;
+$$ LANGUAGE plpgsql;
 ```
-IVA (Isento)          M10
+
+**Trigger (mesmo padrao):**
+```sql
+CREATE TRIGGER set_product_code
+BEFORE INSERT ON products
+FOR EACH ROW
+WHEN (NEW.code IS NULL)
+EXECUTE FUNCTION set_product_code_trigger();
 ```
 
-Depois:
-```
-IVA (Isento)          0,00 €
+**Edge function -- uso do code como IdProduct:**
+```typescript
+const itemCode = product?.code || itemName.replace(/[^a-zA-Z0-9]/g, '').substring(0, 20) || 'SRV001'
 ```
 
-Alteracao de apenas uma linha: remover o branch que renderiza `exemptionReason` e usar sempre `formatCurrency(fallbackTax)`.
+**Ficheiros a alterar:**
+- Nova migracao SQL (schema + backfill)
+- `src/types/proposals.ts` -- adicionar campo `code`
+- `supabase/functions/issue-invoice/index.ts` -- usar `code` como `IdProduct`
+- `src/components/settings/ProductsTab.tsx` -- mostrar codigo na listagem
 
