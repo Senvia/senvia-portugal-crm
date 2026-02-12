@@ -158,9 +158,10 @@ async function handleKeyInvoice(supabase: any, org: any, saleId: string, organiz
   }
 
   // Build DocLines for KeyInvoice real API
+  // Use Description instead of IdProduct (which requires a numeric product ID)
   const docLines = (saleItems || []).map((item: any) => {
     const line: any = {
-      IdProduct: item.name, // Use product name as identifier
+      Description: item.name || 'Serviço',
       Qty: String(Number(item.quantity)),
       Price: String(Number(item.unit_price)),
     }
@@ -169,11 +170,12 @@ async function handleKeyInvoice(supabase: any, org: any, saleId: string, organiz
 
   if (docLines.length === 0) {
     docLines.push({
-      IdProduct: `Venda ${sale.code || saleId}`,
+      Description: `Venda ${sale.code || saleId}`,
       Qty: '1',
       Price: String(Number(sale.total_value)),
     })
   }
+  console.log('KeyInvoice DocLines:', JSON.stringify(docLines))
 
   // 1. Create document using real KeyInvoice API: method:"insertDocument"
   // DocType 34 = Fatura-Recibo (FR)
