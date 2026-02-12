@@ -678,9 +678,20 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                     <Button
                       variant="senvia"
                       className="flex-1"
-                      onClick={() => setDraftMode(mode)}
+                      disabled={issueInvoice.isPending || issueInvoiceReceipt.isPending}
+                      onClick={() => {
+                        if (mode === 'invoice_receipt') {
+                          issueInvoiceReceipt.mutate({ saleId: sale.id, organizationId: organization?.id || '' });
+                        } else {
+                          issueInvoice.mutate({ saleId: sale.id, organizationId: organization?.id || '' });
+                        }
+                      }}
                     >
-                      <FileText className="h-4 w-4 mr-2" />
+                      {(issueInvoice.isPending || issueInvoiceReceipt.isPending) ? (
+                        <span className="h-4 w-4 mr-2 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                      ) : (
+                        <FileText className="h-4 w-4 mr-2" />
+                      )}
                       {emitLabel}
                     </Button>
                   </>
