@@ -12,7 +12,8 @@ import {
   Zap,
   Wrench,
   Pencil,
-  Eye
+  Eye,
+  CreditCard
 } from "lucide-react";
 import {
   Dialog,
@@ -43,6 +44,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUpdateSale } from "@/hooks/useSales";
 import { useOrganization } from "@/hooks/useOrganization";
@@ -61,7 +63,7 @@ import type { SaleWithDetails, SaleStatus } from "@/types/sales";
 import { SALE_STATUS_LABELS, SALE_STATUS_COLORS, SALE_STATUSES } from "@/types/sales";
 import { SalePaymentsList } from "./SalePaymentsList";
 import { RecurringSection } from "./RecurringSection";
-import { useSalePayments } from "@/hooks/useSalePayments";
+import { useSalePayments, calculatePaymentSummary } from "@/hooks/useSalePayments";
 
 interface SaleDetailsModalProps {
   sale: SaleWithDetails | null;
@@ -93,6 +95,7 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
 
   const { data: salePayments = [] } = useSalePayments(sale?.id);
   const hasPaidPayments = salePayments.some(p => p.status === 'paid');
+  const paymentSummary = calculatePaymentSummary(salePayments, sale?.total_value || 0);
 
   const hasInvoiceXpress = checkIxActive(organization);
   const orgTaxValue = getOrgTaxValue(organization);
@@ -164,25 +167,41 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
         <DialogContent variant="fullScreen" className="flex flex-col p-0 gap-0">
           {/* Header */}
           <DialogHeader className="pl-6 pr-14 py-4 border-b border-border/50 shrink-0">
-            <div className="flex items-center justify-between gap-2">
-              <DialogTitle className="flex items-center gap-2">
-                {sale.code && (
-                  <Badge variant="outline" className="font-mono text-xs">
-                    {sale.code}
-                  </Badge>
-                )}
-                <Badge 
-                  variant="outline" 
-                  className={`${SALE_STATUS_COLORS[status]}`}
-                >
-                  {SALE_STATUS_LABELS[status]}
-                </Badge>
-              </DialogTitle>
-              <span className="text-muted-foreground font-normal text-sm">
-                {format(new Date(sale.created_at), "d MMM yyyy", { locale: pt })}
-              </span>
-            </div>
+            <DialogTitle className="text-base font-semibold">Detalhes da Venda</DialogTitle>
           </DialogHeader>
+
+          {/* Context Bar */}
+          <div className="px-4 sm:px-6 py-3 border-b border-border/50 flex items-center justify-between gap-3">
+            {sale.code && (
+              <Badge variant="outline" className="font-mono text-xs shrink-0">
+                {sale.code}
+              </Badge>
+            )}
+            <span className="text-sm text-muted-foreground">
+              {format(new Date(sale.sale_date), "d MMM yyyy", { locale: pt })}
+            </span>
+            <Select value={status} onValueChange={handleStatusChange} disabled={isDeliveredAndLocked}>
+              <SelectTrigger className={cn('w-auto min-w-[140px] h-8 text-xs border', SALE_STATUS_COLORS[status])}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {SALE_STATUSES.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    <span className={cn('px-2 py-0.5 rounded text-xs font-medium', SALE_STATUS_COLORS[s])}>
+                      {SALE_STATUS_LABELS[s]}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {isDeliveredAndLocked && (
+            <div className="px-4 sm:px-6">
+              <p className="text-xs text-muted-foreground">
+                Esta venda está concluída e não pode ser alterada.
+              </p>
+            </div>
+          )}
 
           {/* Content - 2 column layout */}
           <div className="flex-1 overflow-y-auto">
@@ -523,33 +542,38 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                       </div>
                     </div>
 
-                    {/* Status */}
-                    <Card>
-                      <CardHeader className="pb-2 p-4">
-                        <CardTitle className="text-sm font-medium text-muted-foreground">Estado da Venda</CardTitle>
-                      </CardHeader>
-                      <CardContent className="p-4 pt-0">
-                        <Select value={status} onValueChange={handleStatusChange} disabled={isDeliveredAndLocked}>
-                          <SelectTrigger className={cn('border', SALE_STATUS_COLORS[status])}>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {SALE_STATUSES.map((s) => (
-                              <SelectItem key={s} value={s}>
-                                <span className={cn('px-2 py-0.5 rounded text-xs font-medium', SALE_STATUS_COLORS[s])}>
-                                  {SALE_STATUS_LABELS[s]}
-                                </span>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        {isDeliveredAndLocked && (
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Esta venda está concluída e não pode ser alterada.
-                          </p>
-                        )}
-                      </CardContent>
-                    </Card>
+                    {/* Payment Progress */}
+                    {!isTelecom && salePayments.length > 0 && (
+                      <Card>
+                        <CardHeader className="pb-2 p-4">
+                          <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
+                            <CreditCard className="h-4 w-4" />
+                            Pagamento
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-4 pt-0 space-y-3">
+                          <div className="space-y-1">
+                            <div className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">Progresso</span>
+                              <span className="font-medium">{Math.round(paymentSummary.percentage)}%</span>
+                            </div>
+                            <Progress value={paymentSummary.percentage} className="h-2" />
+                          </div>
+                          <div className="grid grid-cols-2 gap-3 text-sm">
+                            <div>
+                              <p className="text-xs text-muted-foreground">Total Pago</p>
+                              <p className="font-semibold text-primary">{formatCurrency(paymentSummary.totalPaid)}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground">Em Falta</p>
+                              <p className={cn('font-semibold', paymentSummary.remaining > 0 ? 'text-destructive' : 'text-primary')}>
+                                {formatCurrency(paymentSummary.remaining)}
+                              </p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
 
                     {/* Proposal Info */}
                     {sale.proposal && (
@@ -630,18 +654,18 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                 </Button>
               )}
               {(() => {
-                const canEmitInvoice = hasInvoiceXpress && !sale.invoicexpress_id && !!sale.client?.nif && !sale.credit_note_id;
-                if (!canEmitInvoice) return null;
+                const canEmit = hasInvoiceXpress && !sale.invoicexpress_id && !!sale.client?.nif && !sale.credit_note_id;
+                if (!canEmit) return null;
                 const allPaid = salePayments.length > 0 && salePayments.every(p => p.status === 'paid');
                 const mode = allPaid ? "invoice_receipt" as const : "invoice" as const;
-                const label = allPaid ? "Ver Rascunho de Fatura-Recibo" : "Ver Rascunho de Fatura";
+                const label = allPaid ? "Emitir Fatura-Recibo" : "Emitir Fatura";
                 return (
                   <Button
                     variant="outline"
                     className="flex-1"
                     onClick={() => setDraftMode(mode)}
                   >
-                    <Eye className="h-4 w-4 mr-2" />
+                    <FileText className="h-4 w-4 mr-2" />
                     {label}
                   </Button>
                 );
