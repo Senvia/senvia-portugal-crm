@@ -256,10 +256,82 @@ Deno.serve(async (req) => {
         console.error('Failed to upsert credit note:', JSON.stringify(upsertError))
       }
 
+      // Try to download credit note PDF from KeyInvoice
+      let pdfPath: string | null = null
+      try {
+        const sid2 = await getKeyInvoiceSid(supabase, org, organization_id)
+        const pdfPayload: Record<string, string> = {
+          method: 'getDocumentPDF',
+          DocType: '8',
+          DocNum: kiDocNum,
+        }
+        if (kiDocSeries) pdfPayload.DocSeries = kiDocSeries
+
+        console.log('KeyInvoice getDocumentPDF payload:', JSON.stringify(pdfPayload))
+
+        const pdfRes = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Sid': sid2 },
+          body: JSON.stringify(pdfPayload),
+        })
+
+        if (pdfRes.ok) {
+          const pdfData = await pdfRes.json()
+          console.log('KeyInvoice getDocumentPDF status:', pdfData.Status)
+
+          if (pdfData.Status === 1 && pdfData.Data) {
+            let base64Pdf = ''
+            if (typeof pdfData.Data === 'string') {
+              base64Pdf = pdfData.Data
+            } else if (typeof pdfData.Data === 'object') {
+              const knownKeys = ['PDF','pdf','Content','content','File','file','Base64','base64','FileContent','Document','document','PDFContent']
+              for (const key of knownKeys) {
+                if (pdfData.Data[key] && typeof pdfData.Data[key] === 'string') {
+                  base64Pdf = pdfData.Data[key]; break
+                }
+              }
+              if (!base64Pdf) {
+                for (const [, val] of Object.entries(pdfData.Data)) {
+                  if (typeof val === 'string' && (val as string).length > 100) {
+                    base64Pdf = val as string; break
+                  }
+                }
+              }
+            }
+
+            if (base64Pdf) {
+              base64Pdf = base64Pdf.replace(/^data:[^;]+;base64,/, '')
+              const binaryStr = atob(base64Pdf)
+              const bytes = new Uint8Array(binaryStr.length)
+              for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i)
+
+              const pdfFileName = `${organization_id}/credit_note_ki_${kiDocSeries || '0'}_${kiDocNum}.pdf`
+              const { error: uploadError } = await supabase.storage.from('invoices').upload(pdfFileName, bytes.buffer, {
+                contentType: 'application/pdf', upsert: true
+              })
+
+              if (!uploadError) {
+                pdfPath = pdfFileName
+                await supabase.from('credit_notes')
+                  .update({ pdf_path: pdfFileName })
+                  .eq('invoicexpress_id', kiCreditNoteId)
+                  .eq('organization_id', organization_id)
+                console.log('Credit note PDF saved:', pdfFileName)
+              } else {
+                console.error('PDF upload error:', JSON.stringify(uploadError))
+              }
+            }
+          }
+        }
+      } catch (pdfErr) {
+        console.error('KeyInvoice credit note PDF download failed:', pdfErr)
+      }
+
       return new Response(JSON.stringify({
         success: true,
         credit_note_id: kiCreditNoteId,
         credit_note_reference: creditNoteReference,
+        pdf_path: pdfPath,
       }), {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
