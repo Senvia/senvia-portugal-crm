@@ -1,56 +1,59 @@
 
 
-# Mostrar faturas KeyInvoice na aba Faturas
+# Corrigir fatura KeyInvoice em falta na aba Faturas
 
-## Problema
+## Diagnóstico
 
-A aba "Faturas" no Financeiro le dados da tabela `invoices`. Essa tabela so e populada pelo `sync-invoices`, que funciona exclusivamente com a API do InvoiceXpress. O `issue-invoice` para KeyInvoice atualiza a tabela `sales` mas nunca insere na tabela `invoices`, por isso as faturas KeyInvoice nao aparecem.
+A fatura da venda 0007 (sale_id: `983dafb3-...`) foi emitida **antes** do deploy que insere registos na tabela `invoices`. Por isso, existe na tabela `sales` mas não na tabela `invoices`.
 
-## Solucao
+Dados actuais na tabela `sales`:
+- `invoice_reference`: "34 47/1"
+- `invoicexpress_type`: "keyinvoice" (valor antigo, antes da correcção FT/FR)
+- `invoicexpress_id`: 1
 
-Adicionar um INSERT na tabela `invoices` dentro do fluxo KeyInvoice do `issue-invoice`, imediatamente apos a emissao bem-sucedida.
+## Acções
 
-## Alteracao
+### 1. Inserir manualmente o registo na tabela `invoices`
 
-**Ficheiro:** `supabase/functions/issue-invoice/index.ts`
+Usar o insert tool para adicionar a fatura em falta:
 
-Apos o update da tabela `sales` (que ja existe), adicionar um upsert na tabela `invoices`:
-
-```typescript
-// Insert into invoices table so it appears in Faturas tab
-const invoiceDocType = docTypeCode === 'FR' ? 'invoice_receipt' : 'invoice';
-await supabase
-  .from('invoices')
-  .upsert({
-    organization_id: organizationId,
-    invoicexpress_id: docNum,
-    reference: fullDocNumber,
-    document_type: invoiceDocType,
-    status: 'final',
-    client_name: clientName,
-    total: sale.total_value,
-    date: new Date().toISOString().split('T')[0],
-    due_date: null,
-    sale_id: saleId,
-    payment_id: null,
-    pdf_path: storedPdfPath || null,
-    raw_data: { source: 'keyinvoice', docType, docNum, docSeries },
-    updated_at: new Date().toISOString(),
-  }, {
-    onConflict: 'organization_id,invoicexpress_id',
-  });
+```sql
+INSERT INTO invoices (organization_id, invoicexpress_id, reference, document_type, status, client_name, total, date, sale_id, raw_data, updated_at)
+SELECT 
+  s.organization_id,
+  s.invoicexpress_id,
+  s.invoice_reference,
+  'invoice_receipt',
+  'final',
+  COALESCE(c.name, l.name, 'Cliente'),
+  s.total_value,
+  s.created_at::date::text,
+  s.id,
+  '{"source": "keyinvoice", "migrated": true}'::jsonb,
+  NOW()
+FROM sales s
+LEFT JOIN clients c ON c.id = s.client_id
+LEFT JOIN leads l ON l.id = s.lead_id
+WHERE s.id = '983dafb3-9497-4c16-af6c-c12fdba84239';
 ```
 
-### Mapeamento de document_type
+### 2. Corrigir o `invoicexpress_type` na tabela `sales`
 
-- DocType 4 (FT) -> `'invoice'` (para corresponder ao label "Fatura" no frontend)
-- DocType 34 (FR) -> `'invoice_receipt'` (para corresponder ao label "Fatura-Recibo")
+O valor actual é `"keyinvoice"` (formato antigo). Actualizar para `"FR"` (Fatura-Recibo, DocType 34):
 
-### Detalhes
+```sql
+UPDATE sales 
+SET invoicexpress_type = 'FR' 
+WHERE id = '983dafb3-9497-4c16-af6c-c12fdba84239';
+```
 
-- Usa `upsert` com `onConflict` para evitar duplicados se a fatura for re-emitida
-- Guarda `raw_data` com `source: 'keyinvoice'` para distinguir de faturas InvoiceXpress
-- O `client_name` ja esta disponivel no fluxo (da venda associada)
-- O `pdf_path` e preenchido se o PDF foi guardado com sucesso
-- Apos o deploy, as faturas KeyInvoice aparecerao imediatamente na aba Faturas
+### 3. Validação
+
+Após as inserções, a fatura deverá aparecer imediatamente na aba Faturas do Financeiro. Futuras emissões via KeyInvoice já são registadas automaticamente pelo código deployado.
+
+## Secção técnica
+
+- O campo `invoicexpress_id` na venda 0007 é `1` (número do documento no KeyInvoice). Este valor será usado no upsert para evitar duplicados futuros.
+- O `document_type` é `invoice_receipt` porque o DocType original era 34 (Fatura-Recibo).
+- O `raw_data` inclui `"migrated": true` para identificar registos retroactivos.
 
