@@ -1,18 +1,26 @@
 
 
-# Adicionar Botao "Voltar" no Footer
+# Corrigir Botoes do Footer - Ordem e Cores
+
+## Problemas
+1. O botao "Voltar" esta no inicio, mas deve ficar no final (depois de "Emitir Fatura")
+2. Todos os botoes tem cores muito similares ao fundo, nao se distinguem visualmente
 
 ## O que fazer
 
-### `src/components/sales/SaleDetailsModal.tsx`
+### `src/components/sales/SaleDetailsModal.tsx` (Footer, linhas 660-710)
 
-Adicionar um botao "Voltar" no inicio do footer (linha 660) que fecha o modal. Fica como o primeiro botao da linha, antes dos outros 3.
+1. **Mover "Voltar" para o fim** da linha de botoes (depois do botao "Emitir Fatura")
+2. **Aplicar cores distintas a cada botao**:
+   - **Editar Venda** - `variant="outline"` (bordas visiveis, mantemos)
+   - **Ver Rascunho Fatura** - `variant="secondary"` (fundo cinza visivel)
+   - **Emitir Fatura / Fatura-Recibo** - `variant="senvia"` (gradiente azul, botao principal)
+   - **Voltar** - `variant="outline"` com estilo subtil mas visivel
 
-Layout final:
+Ordem final:
 
 ```text
-[ Voltar ]  [ Editar Venda ]  [ Ver Rascunho Fatura ]  [ Emitir Fatura ]
+[ Editar Venda (outline) ] [ Ver Rascunho (secondary) ] [ Emitir Fatura (senvia/primary) ] [ Voltar (outline) ]
 ```
 
-O botao "Voltar" chama `onOpenChange(false)` para fechar o modal. Usa o icone `ArrowLeft` e variante `ghost` para se distinguir visualmente dos botoes de acao.
-
+Assim cada botao tem uma cor diferente e destaca-se claramente do fundo.
