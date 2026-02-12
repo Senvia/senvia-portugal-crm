@@ -1,70 +1,56 @@
 
 
-# Adicionar campo `code` auto-gerado aos Produtos
+# Corrigir: Download de PDF da fatura nao abre (path vs URL)
 
-## Contexto
+## Problema
 
-Clientes, Propostas e Vendas ja possuem um campo `code` com formato sequencial `0001`, `0002`, etc., gerado automaticamente por triggers na base de dados. Os Produtos nao possuem este campo, o que causa problemas na integracao com o KeyInvoice (que exige um `IdProduct` valido). Atualmente, o `IdProduct` e gerado ad-hoc no edge function a partir do nome do produto, o que e fragil e inconsistente.
+O botao de download de PDF na lista de pagamentos (`SalePaymentsList`) passa um **caminho de storage** (ex: `orgId/keyinvoice_FR-47-1.pdf`) diretamente ao `downloadFileFromUrl`, que tenta fazer `fetch` desse caminho como se fosse uma URL completa. Isso resulta num ficheiro corrompido ou erro.
 
-## Plano
+O `InvoiceDetailsModal` ja resolve isto corretamente -- gera um signed URL a partir do path antes de fazer download. Mas o `SalePaymentsList` nao faz essa conversao.
 
-### 1. Migracao de base de dados
+## Locais afetados
 
-- Adicionar coluna `code TEXT` a tabela `products`
-- Criar funcao `generate_product_code(org_id UUID)` seguindo o padrao existente (sequencial `0001`, `0002`, por organizacao)
-- Criar trigger `set_product_code` que preenche automaticamente o `code` no INSERT (mesmo padrao de `set_client_code`, `set_sale_code`, etc.)
-- Criar indice unico composto `(organization_id, code)` para garantir unicidade por tenant
-- Preencher codigos nos produtos existentes (backfill)
+Dois pontos no ficheiro `src/components/sales/SalePaymentsList.tsx`:
 
-### 2. Atualizar tipo TypeScript
+1. **Linha ~203** -- Download do PDF da fatura global da venda (`invoicePdfUrl`)
+2. **Linha ~424** -- Download do PDF do recibo individual (`payment.invoice_file_url`)
 
-- Adicionar `code?: string | null` ao interface `Product` em `src/types/proposals.ts`
+## Solucao
 
-### 3. Atualizar edge function `issue-invoice`
+Criar uma funcao helper dentro do componente (ou importar como utilitario) que:
+1. Verifica se o valor e um path de storage (nao comeca com `http`)
+2. Se for path, gera um signed URL via `supabase.storage.from('invoices').createSignedUrl(path, 60)`
+3. Usa o signed URL resultante para fazer o download via `downloadFileFromUrl`
+4. Se ja for uma URL completa, usa diretamente
 
-- Usar `product.code` (do produto do catalogo) como `IdProduct` ao criar/procurar produtos no KeyInvoice, em vez de gerar um codigo ad-hoc a partir do nome
-- Fallback: se o produto nao tiver `code`, manter a logica atual baseada no nome
+### Alteracao no ficheiro
 
-### 4. Mostrar o codigo na UI (opcional mas util)
+**`src/components/sales/SalePaymentsList.tsx`**:
 
-- Exibir o codigo do produto na listagem do tab Produtos (`ProductsTab.tsx`) como referencia visual
+- Adicionar import do cliente Supabase
+- Criar funcao `handlePdfDownload(storagePath: string, filename: string)` que converte path em signed URL antes de descarregar
+- Substituir as duas chamadas diretas a `downloadFileFromUrl` por chamadas a `handlePdfDownload`
 
-## Detalhes tecnicos
-
-**Funcao SQL (seguindo o padrao existente):**
-```sql
-CREATE OR REPLACE FUNCTION generate_product_code(_org_id UUID)
-RETURNS TEXT AS $$
-DECLARE _count INTEGER;
-BEGIN
-  SELECT COALESCE(MAX(
-    CAST(NULLIF(regexp_replace(code, '[^0-9]', '', 'g'), '') AS INTEGER)
-  ), 0) + 1
-  INTO _count
-  FROM products
-  WHERE organization_id = _org_id AND code IS NOT NULL;
-  RETURN LPAD(_count::TEXT, 4, '0');
-END;
-$$ LANGUAGE plpgsql;
-```
-
-**Trigger (mesmo padrao):**
-```sql
-CREATE TRIGGER set_product_code
-BEFORE INSERT ON products
-FOR EACH ROW
-WHEN (NEW.code IS NULL)
-EXECUTE FUNCTION set_product_code_trigger();
-```
-
-**Edge function -- uso do code como IdProduct:**
+Exemplo da logica:
 ```typescript
-const itemCode = product?.code || itemName.replace(/[^a-zA-Z0-9]/g, '').substring(0, 20) || 'SRV001'
+const handlePdfDownload = async (path: string, filename: string) => {
+  try {
+    let url = path;
+    if (!path.startsWith('http')) {
+      const { data, error } = await supabase.storage
+        .from('invoices')
+        .createSignedUrl(path, 60);
+      if (error || !data?.signedUrl) {
+        toast.error('Erro ao gerar link de download');
+        return;
+      }
+      url = data.signedUrl;
+    }
+    await downloadFileFromUrl(url, filename);
+  } catch {
+    toast.error('Erro ao fazer download');
+  }
+};
 ```
 
-**Ficheiros a alterar:**
-- Nova migracao SQL (schema + backfill)
-- `src/types/proposals.ts` -- adicionar campo `code`
-- `supabase/functions/issue-invoice/index.ts` -- usar `code` como `IdProduct`
-- `src/components/settings/ProductsTab.tsx` -- mostrar codigo na listagem
-
+Nenhuma alteracao de base de dados ou edge functions necessaria.
