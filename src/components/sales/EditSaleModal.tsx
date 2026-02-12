@@ -655,36 +655,41 @@ export function EditSaleModal({
                       </CardContent>
                     </Card>
 
-                    {/* Actions */}
-                    <div className="flex flex-col gap-2">
-                      <Button
-                        type="submit"
-                        className="w-full"
-                        size="lg"
-                        disabled={isSubmitting}
-                      >
-                        {isSubmitting ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            A guardar...
-                          </>
-                        ) : (
-                          "Guardar Alterações"
-                        )}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="w-full"
-                        onClick={() => onOpenChange(false)}
-                        disabled={isSubmitting}
-                      >
-                        Cancelar
-                      </Button>
-                    </div>
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+
+          {/* Fixed Footer */}
+          <div className="p-4 border-t border-border/50 shrink-0">
+            <div className="flex gap-3 max-w-6xl mx-auto">
+              <Button
+                type="submit"
+                variant="senvia"
+                className="flex-1"
+                size="lg"
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    A guardar...
+                  </>
+                ) : (
+                  "Guardar Alterações"
+                )}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1"
+                size="lg"
+                onClick={() => onOpenChange(false)}
+                disabled={isSubmitting}
+              >
+                Cancelar
+              </Button>
             </div>
           </div>
         </form>
