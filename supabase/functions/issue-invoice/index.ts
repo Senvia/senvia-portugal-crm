@@ -152,61 +152,9 @@ async function handleKeyInvoice(supabase: any, org: any, saleId: string, organiz
     console.warn('KeyInvoice insertClient failed (non-blocking, client may already exist):', e)
   }
 
-  // If client already existed and we didn't get the Id, try to look it up
+  // If insertClient didn't return an Id, log and continue - we'll use VATIN in insertDocument
   if (!keyInvoiceClientId) {
-    try {
-      // Try searching by NIF/VATIN
-      const searchPayload = { method: 'getClients', SearchText: clientNif }
-      console.log('KeyInvoice getClients payload:', JSON.stringify(searchPayload))
-      const searchRes = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Sid': sid },
-        body: JSON.stringify(searchPayload),
-      })
-      const searchData = await searchRes.json()
-      console.log('KeyInvoice getClients response status:', searchData.Status, 'DataLength:', Array.isArray(searchData.Data) ? searchData.Data.length : 'not-array', 'ErrorMessage:', searchData.ErrorMessage || 'none')
-      
-      if (searchData.Status === 1 && Array.isArray(searchData.Data) && searchData.Data.length > 0) {
-        // Find the client whose VATIN matches exactly
-        const match = searchData.Data.find((c: any) => c.VATIN === clientNif || c.TaxId === clientNif || c.Nif === clientNif)
-        keyInvoiceClientId = String((match || searchData.Data[0]).Id)
-        console.log('KeyInvoice client found by search, Id:', keyInvoiceClientId)
-      } else if (searchData.Status === 1 && searchData.Data && !Array.isArray(searchData.Data) && searchData.Data.Id) {
-        // Some APIs return a single object instead of array
-        keyInvoiceClientId = String(searchData.Data.Id)
-        console.log('KeyInvoice client found (single object), Id:', keyInvoiceClientId)
-      }
-    } catch (e) {
-      console.warn('KeyInvoice getClients lookup failed:', e)
-    }
-  }
-
-  // Final fallback: try getClientByVATIN if available
-  if (!keyInvoiceClientId) {
-    try {
-      const vatinPayload = { method: 'getClientByVATIN', VATIN: clientNif }
-      console.log('KeyInvoice getClientByVATIN payload:', JSON.stringify(vatinPayload))
-      const vatinRes = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Sid': sid },
-        body: JSON.stringify(vatinPayload),
-      })
-      const vatinData = await vatinRes.json()
-      console.log('KeyInvoice getClientByVATIN response:', JSON.stringify(vatinData).substring(0, 500))
-      if (vatinData.Status === 1 && vatinData.Data?.Id) {
-        keyInvoiceClientId = String(vatinData.Data.Id)
-        console.log('KeyInvoice client found by VATIN method, Id:', keyInvoiceClientId)
-      }
-    } catch (e) {
-      console.warn('KeyInvoice getClientByVATIN failed:', e)
-    }
-  }
-
-  if (!keyInvoiceClientId) {
-    console.error('KeyInvoice: Could not resolve client Id for NIF:', clientNif)
-    return new Response(JSON.stringify({ error: 'Não foi possível encontrar ou criar o cliente no KeyInvoice. Verifique o NIF.' }), {
-      status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+    console.log('KeyInvoice: No client Id obtained. Will pass VATIN directly to insertDocument.')
   }
 
   // Build DocLines for KeyInvoice real API
@@ -232,12 +180,19 @@ async function handleKeyInvoice(supabase: any, org: any, saleId: string, organiz
   const insertPayload: Record<string, any> = {
     method: 'insertDocument',
     DocType: '34',
-    IdClient: keyInvoiceClientId || clientNif,
     DocLines: docLines,
+  }
+  if (keyInvoiceClientId) {
+    insertPayload.IdClient = keyInvoiceClientId
+  } else {
+    // Pass VATIN so the API can resolve the client internally
+    insertPayload.ClientVATIN = clientNif
+    insertPayload.ClientName = clientName
   }
   if (observations) {
     insertPayload.Comments = observations
   }
+  console.log('KeyInvoice insertDocument payload keys:', Object.keys(insertPayload).join(', '), 'IdClient:', insertPayload.IdClient || 'N/A', 'ClientVATIN:', insertPayload.ClientVATIN || 'N/A')
 
   const createRes = await fetch(apiUrl, {
     method: 'POST',
