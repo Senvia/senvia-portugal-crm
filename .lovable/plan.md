@@ -1,83 +1,67 @@
 
 
-# Criar produto automaticamente no KeyInvoice quando nao existe
+# Diagnosticar e corrigir emissao de fatura KeyInvoice
 
 ## Problema
 
-O erro `IdProduct invalido` ocorre porque a conta KeyInvoice nao tem produtos cadastrados. O codigo atual bloqueia com erro 400 pedindo ao utilizador para criar manualmente. Agora que temos a documentacao do `insertProduct`, podemos criar automaticamente.
+Os logs mostram que:
+1. O produto foi criado com sucesso (`insertProduct` retornou `Status:1`)
+2. O `insertDocument` foi chamado, mas **nao ha log da resposta** - nao sabemos o que a API devolveu
+3. O PDF falhou com `Failed to decode base64` - indica que a resposta do `getDocumentPDF` nao e base64 puro (pode estar dentro de um objeto)
+4. O sistema reportou sucesso ao utilizador, mas a fatura pode nao ter sido criada no KeyInvoice
 
 ## Solucao
 
-No ficheiro `supabase/functions/issue-invoice/index.ts`, substituir o bloco de erro quando `keyInvoiceProducts.length === 0` (linhas 220-226) por logica que cria o produto automaticamente via `insertProduct`.
+### Passo 1: Adicionar log completo da resposta do insertDocument
 
-## Detalhes tecnicos
+**Ficheiro:** `supabase/functions/issue-invoice/index.ts` (linha 338)
 
-**Ficheiro:** `supabase/functions/issue-invoice/index.ts`
-
-### Alteracao 1: Criar produto automaticamente (linhas 219-226)
-
-Substituir o return de erro por uma funcao que cria o produto no KeyInvoice usando os campos da documentacao:
+Adicionar um `console.log` imediatamente apos o `createRes.json()` para ver a resposta completa:
 
 ```typescript
-// Se nao existem produtos, criar automaticamente para cada item da venda
-if (keyInvoiceProducts.length === 0) {
-  console.log('KeyInvoice: 0 products, creating automatically via insertProduct')
-  for (const item of items) {
-    const itemName = item.name || 'Servico'
-    const itemCode = itemName.replace(/[^a-zA-Z0-9]/g, '').substring(0, 20) || 'SRV001'
-    
-    const insertProductPayload: Record<string, any> = {
-      method: 'insertProduct',
-      IdProduct: itemCode,
-      Name: itemName,
-      TaxValue: String(orgTaxValue),
-      IsService: '1',
-      HasStocks: '0',
-      Active: '1',
-      Price: String(Number(item.unit_price)),
-    }
+const createData = await createRes.json()
+console.log('KeyInvoice insertDocument FULL response:', JSON.stringify(createData).substring(0, 2000))
+```
 
-    // Se IVA = 0, adicionar codigo de isencao
-    if (orgTaxValue === 0) {
-      insertProductPayload.TaxExemptionReasonCode = 'M10'
-    }
+Isto vai permitir ver nos logs o que a API realmente devolveu.
 
-    const prodRes = await fetch(apiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Sid': sid },
-      body: JSON.stringify(insertProductPayload),
-    })
-    const prodData = await prodRes.json()
-    console.log('KeyInvoice insertProduct response:', JSON.stringify(prodData))
+### Passo 2: Corrigir o parsing do PDF
 
-    if (prodData.Status === 1 && prodData.Data?.Id) {
-      keyInvoiceProducts.push({
-        Id: prodData.Data.Id,
-        Name: itemName,
-        Description: itemName,
-      })
-    } else {
-      console.error('KeyInvoice insertProduct failed:', prodData.ErrorMessage)
-      return new Response(JSON.stringify({
-        error: `Erro ao criar produto "${itemName}" no KeyInvoice: ${prodData.ErrorMessage || 'Erro desconhecido'}`,
-      }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
+**Ficheiro:** `supabase/functions/issue-invoice/index.ts` (linhas 370-374)
+
+O `getDocumentPDF` provavelmente retorna o base64 dentro de `pdfData.Data.PDF` ou `pdfData.Data.Content` em vez de `pdfData.Data` diretamente. Corrigir para tentar multiplos caminhos:
+
+```typescript
+if (pdfData.Status === 1 && pdfData.Data) {
+  console.log('KeyInvoice getDocumentPDF Data type:', typeof pdfData.Data, 
+    typeof pdfData.Data === 'object' ? Object.keys(pdfData.Data).join(',') : 'string')
+  
+  // Try multiple paths for the base64 content
+  let base64Pdf = typeof pdfData.Data === 'string' 
+    ? pdfData.Data 
+    : (pdfData.Data.PDF || pdfData.Data.Content || pdfData.Data.File || '')
+  
+  if (base64Pdf) {
+    // Remove potential data:application/pdf;base64, prefix
+    base64Pdf = base64Pdf.replace(/^data:[^;]+;base64,/, '')
+    const binaryStr = atob(base64Pdf)
+    // ... rest of PDF handling
   }
 }
 ```
 
-### Alteracao 2: Melhorar findProductId (linhas 228-242)
+### Passo 3: Logar tambem o payload completo do insertDocument
 
-Manter a funcao `findProductId` como esta - ela ja faz match por nome e fallback para o primeiro produto. Agora com os produtos criados automaticamente, o match por nome vai funcionar diretamente.
+Adicionar log do payload completo (nao so as keys) para debug:
+
+```typescript
+console.log('KeyInvoice insertDocument FULL payload:', JSON.stringify(insertPayload))
+```
 
 ### Resultado esperado
 
-1. `listProducts` retorna 0 produtos
-2. Para cada item da venda, chama `insertProduct` com `IdProduct` (codigo), `Name`, `TaxValue`, `IsService:1`, `HasStocks:0`, `Price`
-3. Se `insertProduct` retorna `Status:1` com `Data.Id`, adiciona ao array local
-4. O `findProductId` faz match pelo nome e usa o Id retornado
-5. O `insertDocument` recebe os IdProduct validos e a fatura e emitida
+Apos o deploy, quando o utilizador emitir uma fatura:
+1. Os logs vao mostrar a resposta completa do `insertDocument` - sabemos se a fatura foi criada
+2. Os logs vao mostrar a estrutura do PDF - podemos corrigir o parsing
+3. Se a fatura nao estiver a ser criada, o erro real sera visivel nos logs para corrigir
 
