@@ -5,6 +5,52 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+const DEFAULT_KEYINVOICE_API_URL = 'https://app.keyinvoice.com/API/'
+
+// KeyInvoice DocType mapping
+const KI_DOC_TYPE_MAP: Record<string, string> = {
+  invoice: '4',
+  invoice_receipt: '34',
+  receipt: '34',
+  credit_note: '7',
+}
+
+async function getKeyInvoiceSid(supabase: any, org: any, organizationId: string): Promise<string> {
+  if (org.keyinvoice_token && org.keyinvoice_token_expires_at) {
+    const expiresAt = new Date(org.keyinvoice_token_expires_at)
+    if (expiresAt > new Date()) return org.keyinvoice_token
+  }
+
+  const apiUrl = org.keyinvoice_api_url || DEFAULT_KEYINVOICE_API_URL
+  const loginPayload: Record<string, string> = {
+    method: 'login',
+    username: org.keyinvoice_username,
+    password: org.keyinvoice_password,
+  }
+  if (org.keyinvoice_company_code) loginPayload.companyCode = org.keyinvoice_company_code
+
+  const res = await fetch(apiUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(loginPayload),
+  })
+
+  if (!res.ok) {
+    const err = await res.text()
+    throw new Error(`KeyInvoice auth failed: ${res.status} ${err}`)
+  }
+
+  const data = await res.json()
+  if (data.Status !== 1 || !data.Data?.Sid) {
+    throw new Error(`KeyInvoice login failed: ${data.ErrorMessage || 'Unknown error'}`)
+  }
+
+  const sid = data.Data.Sid
+  const expiresAt = new Date(Date.now() + 23 * 60 * 60 * 1000).toISOString()
+  await supabase.from('organizations').update({ keyinvoice_token: sid, keyinvoice_token_expires_at: expiresAt }).eq('id', organizationId)
+  return sid
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
@@ -67,57 +113,55 @@ Deno.serve(async (req) => {
     // Fetch org credentials
     const { data: org } = await supabase
       .from('organizations')
-      .select('invoicexpress_account_name, invoicexpress_api_key, billing_provider, keyinvoice_username, keyinvoice_password, keyinvoice_company_code, keyinvoice_token, keyinvoice_token_expires_at')
+      .select('invoicexpress_account_name, invoicexpress_api_key, billing_provider, keyinvoice_username, keyinvoice_password, keyinvoice_company_code, keyinvoice_token, keyinvoice_token_expires_at, keyinvoice_api_url')
       .eq('id', organization_id)
       .single()
 
     const billingProvider = (org as any)?.billing_provider || 'invoicexpress'
 
     if (billingProvider === 'keyinvoice') {
-      // KeyInvoice cancel flow
+      // KeyInvoice cancel flow using real API: method:"setDocumentVoid"
       if (!org?.keyinvoice_username || !org?.keyinvoice_password) {
         return new Response(JSON.stringify({ error: 'Credenciais KeyInvoice não configuradas' }), {
           status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
       }
 
-      // Get token (inline logic)
-      let kiToken = org.keyinvoice_token
-      if (!kiToken || !org.keyinvoice_token_expires_at || new Date(org.keyinvoice_token_expires_at) <= new Date()) {
-        const loginPayload: Record<string, string> = { username: org.keyinvoice_username, password: org.keyinvoice_password }
-        if (org.keyinvoice_company_code) loginPayload.company_code = org.keyinvoice_company_code
-        const loginRes = await fetch('https://api.cloudinvoice.net/auth/login/', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(loginPayload),
-        })
-        if (!loginRes.ok) {
-          const err = await loginRes.text()
-          return new Response(JSON.stringify({ error: `Erro autenticação KeyInvoice: ${loginRes.status}` }), {
-            status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          })
-        }
-        const { key } = await loginRes.json()
-        kiToken = key
-        await supabase.from('organizations').update({
-          keyinvoice_token: key,
-          keyinvoice_token_expires_at: new Date(Date.now() + 23 * 3600000).toISOString(),
-        }).eq('id', organization_id)
+      const sid = await getKeyInvoiceSid(supabase, org, organization_id)
+      const apiUrl = org.keyinvoice_api_url || DEFAULT_KEYINVOICE_API_URL
+      const docType = KI_DOC_TYPE_MAP[document_type] || '4'
+
+      const voidPayload: Record<string, string> = {
+        method: 'setDocumentVoid',
+        DocType: docType,
+        DocNum: String(invoicexpress_id),
+        CreditReason: reason,
       }
 
-      // Annul document on KeyInvoice
-      const annulRes = await fetch(`https://api.cloudinvoice.net/documents/${invoicexpress_id}/annul/`, {
+      const annulRes = await fetch(apiUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Token ${kiToken}` },
-        body: JSON.stringify({ reason }),
+        headers: { 'Content-Type': 'application/json', 'Sid': sid },
+        body: JSON.stringify(voidPayload),
       })
 
       if (!annulRes.ok) {
         const errorText = await annulRes.text()
-        console.error('KeyInvoice annul error:', annulRes.status, errorText)
+        console.error('KeyInvoice setDocumentVoid HTTP error:', annulRes.status, errorText)
         return new Response(JSON.stringify({ error: `Erro ao anular documento no KeyInvoice (${annulRes.status})`, details: errorText }), {
           status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
       }
-      await annulRes.text()
+
+      const annulData = await annulRes.json()
+      if (annulData.Status !== 1) {
+        console.error('KeyInvoice setDocumentVoid failed:', annulData.ErrorMessage)
+        return new Response(JSON.stringify({ error: `KeyInvoice: ${annulData.ErrorMessage || 'Erro ao anular'}` }), {
+          status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      // annulData.Data may contain {Voided,Message} or {DocType,DocSeries,DocNum,FullDocNumber} (credit note)
+      console.log('KeyInvoice void result:', JSON.stringify(annulData.Data))
     } else {
       // InvoiceXpress cancel flow
       if (!org?.invoicexpress_account_name || !org?.invoicexpress_api_key) {

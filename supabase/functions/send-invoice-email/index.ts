@@ -11,6 +11,54 @@ const DOC_TYPE_MAP: Record<string, string> = {
   receipt: 'receipts',
 }
 
+const DEFAULT_KEYINVOICE_API_URL = 'https://app.keyinvoice.com/API/'
+
+// KeyInvoice DocType mapping
+const KI_DOC_TYPE_MAP: Record<string, string> = {
+  invoice: '4',
+  invoice_receipt: '34',
+  receipt: '34',
+  credit_note: '7',
+}
+
+async function getKeyInvoiceSid(supabase: any, org: any, organizationId: string): Promise<string> {
+  // Check cached Sid
+  if (org.keyinvoice_token && org.keyinvoice_token_expires_at) {
+    const expiresAt = new Date(org.keyinvoice_token_expires_at)
+    if (expiresAt > new Date()) return org.keyinvoice_token
+  }
+
+  const apiUrl = org.keyinvoice_api_url || DEFAULT_KEYINVOICE_API_URL
+
+  const loginPayload: Record<string, string> = {
+    method: 'login',
+    username: org.keyinvoice_username,
+    password: org.keyinvoice_password,
+  }
+  if (org.keyinvoice_company_code) loginPayload.companyCode = org.keyinvoice_company_code
+
+  const res = await fetch(apiUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(loginPayload),
+  })
+
+  if (!res.ok) {
+    const err = await res.text()
+    throw new Error(`KeyInvoice auth failed: ${res.status} ${err}`)
+  }
+
+  const data = await res.json()
+  if (data.Status !== 1 || !data.Data?.Sid) {
+    throw new Error(`KeyInvoice login failed: ${data.ErrorMessage || 'Unknown error'}`)
+  }
+
+  const sid = data.Data.Sid
+  const expiresAt = new Date(Date.now() + 23 * 60 * 60 * 1000).toISOString()
+  await supabase.from('organizations').update({ keyinvoice_token: sid, keyinvoice_token_expires_at: expiresAt }).eq('id', organizationId)
+  return sid
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
@@ -64,54 +112,54 @@ Deno.serve(async (req) => {
     // Get organization credentials
     const { data: org } = await supabase
       .from('organizations')
-      .select('invoicexpress_account_name, invoicexpress_api_key, billing_provider, keyinvoice_username, keyinvoice_password, keyinvoice_company_code, keyinvoice_token, keyinvoice_token_expires_at')
+      .select('invoicexpress_account_name, invoicexpress_api_key, billing_provider, keyinvoice_username, keyinvoice_password, keyinvoice_company_code, keyinvoice_token, keyinvoice_token_expires_at, keyinvoice_api_url')
       .eq('id', organization_id)
       .single()
 
     const billingProvider = (org as any)?.billing_provider || 'invoicexpress'
 
     if (billingProvider === 'keyinvoice') {
-      // KeyInvoice email flow
+      // KeyInvoice email flow using real API: method:"sendDocumentPDF2Email"
       if (!org?.keyinvoice_username || !org?.keyinvoice_password) {
         return new Response(JSON.stringify({ error: 'Credenciais KeyInvoice não configuradas' }), {
           status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
       }
 
-      let kiToken = org.keyinvoice_token
-      if (!kiToken || !org.keyinvoice_token_expires_at || new Date(org.keyinvoice_token_expires_at) <= new Date()) {
-        const loginPayload: Record<string, string> = { username: org.keyinvoice_username, password: org.keyinvoice_password }
-        if (org.keyinvoice_company_code) loginPayload.company_code = org.keyinvoice_company_code
-        const loginRes = await fetch('https://api.cloudinvoice.net/auth/login/', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(loginPayload),
-        })
-        if (!loginRes.ok) {
-          return new Response(JSON.stringify({ error: 'Erro autenticação KeyInvoice' }), {
-            status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          })
-        }
-        const { key } = await loginRes.json()
-        kiToken = key
-        await supabase.from('organizations').update({
-          keyinvoice_token: key,
-          keyinvoice_token_expires_at: new Date(Date.now() + 23 * 3600000).toISOString(),
-        }).eq('id', organization_id)
+      const sid = await getKeyInvoiceSid(supabase, org, organization_id)
+      const apiUrl = org.keyinvoice_api_url || DEFAULT_KEYINVOICE_API_URL
+      const docType = KI_DOC_TYPE_MAP[document_type] || '4'
+
+      const emailPayload = {
+        method: 'sendDocumentPDF2Email',
+        DocType: docType,
+        DocNum: String(document_id),
+        EmailDestinations: email,
+        EmailSubject: subject || 'Documento',
+        EmailBody: body || '',
       }
 
-      const emailRes = await fetch(`https://api.cloudinvoice.net/documents/${document_id}/email/`, {
+      const emailRes = await fetch(apiUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Token ${kiToken}` },
-        body: JSON.stringify({ email, subject: subject || '', body: body || '' }),
+        headers: { 'Content-Type': 'application/json', 'Sid': sid },
+        body: JSON.stringify(emailPayload),
       })
 
       if (!emailRes.ok) {
         const errorText = await emailRes.text()
-        console.error('KeyInvoice email error:', emailRes.status, errorText)
+        console.error('KeyInvoice email HTTP error:', emailRes.status, errorText)
         return new Response(JSON.stringify({ error: `KeyInvoice email error: ${emailRes.status}` }), {
           status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
       }
-      await emailRes.text()
+
+      const emailData = await emailRes.json()
+      if (emailData.Status !== 1) {
+        console.error('KeyInvoice email failed:', emailData.ErrorMessage)
+        return new Response(JSON.stringify({ error: `KeyInvoice: ${emailData.ErrorMessage || 'Erro ao enviar email'}` }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
     } else {
       // InvoiceXpress email flow
       if (!org?.invoicexpress_account_name || !org?.invoicexpress_api_key) {

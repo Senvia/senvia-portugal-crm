@@ -67,6 +67,7 @@ export default function Settings() {
   const [keyinvoiceUsername, setKeyinvoiceUsername] = useState('');
   const [keyinvoicePassword, setKeyinvoicePassword] = useState('');
   const [keyinvoiceCompanyCode, setKeyinvoiceCompanyCode] = useState('');
+  const [keyinvoiceApiUrl, setKeyinvoiceApiUrl] = useState('');
   const [showKeyinvoicePassword, setShowKeyinvoicePassword] = useState(false);
 
   // Integrations enabled state
@@ -111,8 +112,8 @@ export default function Settings() {
       setIsLoadingIntegrations(true);
       const { data, error } = await supabase
         .from('organizations')
-        .select('webhook_url, whatsapp_base_url, whatsapp_instance, whatsapp_api_key, form_settings, brevo_api_key, brevo_sender_email, invoicexpress_account_name, invoicexpress_api_key, integrations_enabled, tax_config, billing_provider, keyinvoice_username, keyinvoice_password, keyinvoice_company_code')
-        .eq('id', organization.id)
+      .select('webhook_url, whatsapp_base_url, whatsapp_instance, whatsapp_api_key, form_settings, brevo_api_key, brevo_sender_email, invoicexpress_account_name, invoicexpress_api_key, integrations_enabled, tax_config, billing_provider, keyinvoice_username, keyinvoice_password, keyinvoice_company_code, keyinvoice_api_url')
+      .eq('id', organization.id)
         .single();
       
       if (!error && data) {
@@ -127,6 +128,7 @@ export default function Settings() {
         setKeyinvoiceUsername((data as any).keyinvoice_username || '');
         setKeyinvoicePassword((data as any).keyinvoice_password || '');
         setKeyinvoiceCompanyCode((data as any).keyinvoice_company_code || '');
+        setKeyinvoiceApiUrl((data as any).keyinvoice_api_url || '');
 
         // Tax config
         const tc = (data as any).tax_config;
@@ -234,6 +236,7 @@ export default function Settings() {
       keyinvoice_username: keyinvoiceUsername.trim() || null,
       keyinvoice_password: keyinvoicePassword.trim() || null,
       keyinvoice_company_code: keyinvoiceCompanyCode.trim() || null,
+      keyinvoice_api_url: keyinvoiceApiUrl.trim() || null,
       tax_config: {
         tax_name: taxName,
         tax_value: taxValue,
@@ -438,6 +441,8 @@ export default function Settings() {
                   setKeyinvoiceCompanyCode={setKeyinvoiceCompanyCode}
                   showKeyinvoicePassword={showKeyinvoicePassword}
                   setShowKeyinvoicePassword={setShowKeyinvoicePassword}
+                  keyinvoiceApiUrl={keyinvoiceApiUrl}
+                  setKeyinvoiceApiUrl={setKeyinvoiceApiUrl}
                 />
               )}
             </>
@@ -678,6 +683,8 @@ export default function Settings() {
                     setKeyinvoiceCompanyCode={setKeyinvoiceCompanyCode}
                     showKeyinvoicePassword={showKeyinvoicePassword}
                     setShowKeyinvoicePassword={setShowKeyinvoicePassword}
+                    keyinvoiceApiUrl={keyinvoiceApiUrl}
+                    setKeyinvoiceApiUrl={setKeyinvoiceApiUrl}
                   />
                 </TabsContent>
               )}

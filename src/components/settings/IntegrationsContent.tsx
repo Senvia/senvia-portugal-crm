@@ -64,6 +64,8 @@ interface IntegrationsContentProps {
   setKeyinvoicePassword: (value: string) => void;
   keyinvoiceCompanyCode: string;
   setKeyinvoiceCompanyCode: (value: string) => void;
+  keyinvoiceApiUrl: string;
+  setKeyinvoiceApiUrl: (value: string) => void;
   showKeyinvoicePassword: boolean;
   setShowKeyinvoicePassword: (value: boolean) => void;
   handleSaveKeyInvoice: () => void;
@@ -118,6 +120,8 @@ export const IntegrationsContent = ({
   setKeyinvoicePassword,
   keyinvoiceCompanyCode,
   setKeyinvoiceCompanyCode,
+  keyinvoiceApiUrl,
+  setKeyinvoiceApiUrl,
   showKeyinvoicePassword,
   setShowKeyinvoicePassword,
   handleSaveKeyInvoice,
@@ -679,6 +683,20 @@ export const IntegrationsContent = ({
                   />
                   <p className="text-xs text-muted-foreground">
                     Código da empresa no KeyInvoice (company_code).
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="ki-api-url">URL da API</Label>
+                  <Input
+                    id="ki-api-url"
+                    type="url"
+                    placeholder="https://app.keyinvoice.com/API/"
+                    value={keyinvoiceApiUrl}
+                    onChange={(e) => setKeyinvoiceApiUrl(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Endereço base da API KeyInvoice. Deixe em branco para usar o valor padrão.
                   </p>
                 </div>
 
