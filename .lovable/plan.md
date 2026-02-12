@@ -1,52 +1,18 @@
 
-# Fix: "Parcelado" abre o modal errado na criacao de venda
 
-## Problema
+# Corrigir labels em PT-PT no tab de Produtos
 
-Ao clicar "Parcelado" no seletor de tipo de pagamento, abre o mesmo modal de pagamento unico ("Adicionar Pagamento") em vez do assistente de parcelas. Isto acontece porque ambas as opcoes (`onSelectTotal` e `onSelectInstallments`) executam a mesma acao: abrir o `AddDraftPaymentModal`.
+## Problemas identificados
 
-## Solucao
+1. **"Org default"** (linha 118) -- label em ingles misturado com a interface em portugues
+2. **Descricao do card** (linha 80) -- diz "para propostas" mas os produtos sao usados em vendas, faturas e propostas
 
-### 1. Criar componente `DraftScheduleModal`
+## Alteracoes
 
-Criar um novo componente baseado no `ScheduleRemainingModal`, mas adaptado para o fluxo de criacao (draft). Em vez de gravar diretamente na base de dados, devolve um array de `DraftPayment[]` ao componente pai.
+**Ficheiro: `src/components/settings/ProductsTab.tsx`**
 
-**Ficheiro: `src/components/sales/DraftScheduleModal.tsx`**
+- Linha 118: Alterar `"Org default"` para `"IVA da Org"` (claro e conciso em PT-PT)
+- Linha 80 (CardDescription): Alterar de `"Gerir o catálogo de produtos e serviços para propostas."` para `"Gerir o catálogo de produtos e serviços da organização."`
 
-- Recebe `remainingAmount` e callback `onAdd(payments: DraftPayment[])`
-- Interface identica ao `ScheduleRemainingModal`: selector 1-4 parcelas, datas individuais, metodo de pagamento
-- Ao confirmar, gera os `DraftPayment` objects com `status: 'pending'` e chama `onAdd`
-- Usa `AlertDialog` (em vez de `Dialog`) para evitar conflitos de focus-trap com o modal pai de criacao
+Alteracao minima, apenas duas strings de texto.
 
-### 2. Integrar no `CreateSaleModal`
-
-**Ficheiro: `src/components/sales/CreateSaleModal.tsx`**
-
-- Adicionar estado `showDraftScheduleModal`
-- `onSelectInstallments` abre o `DraftScheduleModal` em vez do `AddDraftPaymentModal`
-- `onSelectTotal` continua a abrir o `AddDraftPaymentModal` (comportamento atual, correto)
-- O callback `onAdd` do `DraftScheduleModal` faz `setDraftPayments(prev => [...prev, ...newPayments])`
-
-## Detalhe tecnico
-
-```text
-Clique "Adicionar Pagamento"
-       |
-  PaymentTypeSelector
-       |
-  +----+----+
-  |         |
-Total    Parcelado
-  |         |
-AddDraft  DraftSchedule  (NOVO)
-Modal     Modal
-  |         |
-  +----+----+
-       |
-  draftPayments[]
-```
-
-| Ficheiro | Alteracao |
-|---|---|
-| `src/components/sales/DraftScheduleModal.tsx` | Novo componente (baseado no ScheduleRemainingModal, mas gera DraftPayment[] sem gravar na DB) |
-| `src/components/sales/CreateSaleModal.tsx` | Adicionar estado + ligar onSelectInstallments ao novo modal |
