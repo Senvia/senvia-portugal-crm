@@ -120,6 +120,7 @@ async function handleKeyInvoice(supabase: any, org: any, saleId: string, organiz
   const clientCode = sale.client?.code || clientNif
 
   // Ensure client exists in KeyInvoice (auto-create if not)
+  let keyInvoiceClientId: string | null = null
   try {
     const insertClientPayload: Record<string, any> = {
       method: 'insertClient',
@@ -140,15 +141,35 @@ async function handleKeyInvoice(supabase: any, org: any, saleId: string, organiz
     })
     if (clientRes.ok) {
       const clientData = await clientRes.json()
-      // Status 1 = created, or error if already exists (which is fine)
-      if (clientData.Status === 1) {
-        console.log('KeyInvoice client created:', clientData.Data)
+      if (clientData.Status === 1 && clientData.Data?.Id) {
+        keyInvoiceClientId = String(clientData.Data.Id)
+        console.log('KeyInvoice client created, Id:', keyInvoiceClientId)
       } else {
         console.log('KeyInvoice insertClient response (may already exist):', clientData.ErrorMessage)
       }
     }
   } catch (e) {
     console.warn('KeyInvoice insertClient failed (non-blocking, client may already exist):', e)
+  }
+
+  // If client already existed and we didn't get the Id, try to look it up by VATIN
+  if (!keyInvoiceClientId) {
+    try {
+      const searchRes = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Sid': sid },
+        body: JSON.stringify({ method: 'getClients', SearchText: clientNif }),
+      })
+      if (searchRes.ok) {
+        const searchData = await searchRes.json()
+        if (searchData.Status === 1 && searchData.Data?.length > 0) {
+          keyInvoiceClientId = String(searchData.Data[0].Id)
+          console.log('KeyInvoice client found by VATIN, Id:', keyInvoiceClientId)
+        }
+      }
+    } catch (e) {
+      console.warn('KeyInvoice getClients lookup failed:', e)
+    }
   }
 
   // Build DocLines for KeyInvoice real API
@@ -174,7 +195,7 @@ async function handleKeyInvoice(supabase: any, org: any, saleId: string, organiz
   const insertPayload: Record<string, any> = {
     method: 'insertDocument',
     DocType: '34',
-    IdClient: clientNif,
+    IdClient: keyInvoiceClientId || clientNif,
     DocLines: docLines,
   }
   if (observations) {
