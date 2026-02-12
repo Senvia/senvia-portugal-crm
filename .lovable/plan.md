@@ -1,56 +1,31 @@
 
 
-# Agrupar Integrações por Categoria
+# Corrigir campos do insertClient para KeyInvoice
 
-## Resumo
+## Problema
 
-Organizar os 5 cards de integrações em 3 grupos visuais com headers de secção, em vez de uma lista plana.
+O método `insertClient` usa nomes de campos errados (`TaxId`, `City`), causando "Parâmetro(s) inválido(s)", o que faz o cliente nunca ser criado. Depois, o `insertDocument` falha com "Cliente não existente".
 
-## Layout
+## Correções em `supabase/functions/issue-invoice/index.ts`
 
-```text
-Automações
-+-----------------------------------+
-| [Webhook]  n8n / Automações       |
-| Notificações de novos leads  [OK] |
-+-----------------------------------+
-
-Comunicações
-+-----------------------------------+  +-----------------------------------+
-| [MessageCircle]  WhatsApp Business|  | [Mail]  Email (Brevo)             |
-| Evolution API               [OK] |  | Envio de emails            [---]  |
-+-----------------------------------+  +-----------------------------------+
-
-Faturação
-+-----------------------------------+  +-----------------------------------+
-| [Receipt]  InvoiceXpress          |  | [Receipt]  KeyInvoice             |
-| Emissão de faturas         [OK]   |  | Faturação API 5.0          [---]  |
-+-----------------------------------+  +-----------------------------------+
-```
-
-## Alteração
-
-### `src/components/settings/IntegrationsContent.tsx`
-
-Adicionar um campo `group` a cada item do array `integrations` e agrupar na renderização:
+Linha 127: `TaxId` passa a `VATIN` (campo obrigatório segundo a documentação)
+Linha 132: `City` passa a `Locality`
+Adicionar `CountryCode: 'PT'` como valor por defeito no payload
 
 ```text
-Grupos:
-- "Automações" -> webhook
-- "Comunicações" -> whatsapp, brevo
-- "Faturação" -> invoicexpress, keyinvoice
+Antes:
+  Name: clientName,
+  TaxId: clientNif,
+  ...
+  City: sale.client?.city
+
+Depois:
+  Name: clientName,
+  VATIN: clientNif,
+  CountryCode: 'PT',
+  ...
+  Locality: sale.client?.city
 ```
 
-Na grid view (quando `active === null`), em vez de renderizar todos os cards numa única grid, iterar pelos grupos e renderizar:
-
-1. Um `<h3>` com o nome do grupo (texto pequeno, `text-sm font-medium text-muted-foreground mb-2`)
-2. Uma grid de cards apenas desse grupo
-3. Espaçamento entre grupos (`space-y-6`)
-
-O resto do componente (detail view, forms, badges, switch) mantém-se inalterado.
-
-### Sem alterações em
-- Nenhum outro ficheiro
-- Nenhuma lógica de save/toggle
-- Base de dados
+Nenhum outro ficheiro precisa de ser alterado.
 
