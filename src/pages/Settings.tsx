@@ -7,7 +7,6 @@ import { useUpdateProfile, useChangePassword } from '@/hooks/useProfile';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { Building, UsersRound, Package, Link2, ArrowLeft, Bell, Receipt, Shield } from "lucide-react";
@@ -27,7 +26,15 @@ import { PushNotificationsCard } from '@/components/settings/PushNotificationsCa
 import { PRODUCTION_URL } from '@/lib/constants';
 import { ProfilesTab } from '@/components/settings/ProfilesTab';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { MobileSettingsNav, SettingsSection } from '@/components/settings/MobileSettingsNav';
+import { 
+  MobileSettingsNav, 
+  MobileSubSectionNav, 
+  SettingsSection, 
+  SettingsSubSection,
+  subSectionsMap,
+  directContentGroups,
+  sectionTitles 
+} from '@/components/settings/MobileSettingsNav';
 
 export default function Settings() {
   const { profile, organization } = useAuth();
@@ -40,8 +47,9 @@ export default function Settings() {
   const isMobile = useIsMobile();
   const pushNotifications = usePushNotifications();
 
-  // Mobile navigation state
-  const [mobileSection, setMobileSection] = useState<SettingsSection | null>(null);
+  // Mobile navigation state (3 levels)
+  const [mobileGroup, setMobileGroup] = useState<SettingsSection | null>(null);
+  const [mobileSub, setMobileSub] = useState<SettingsSubSection | null>(null);
 
   const [copied, setCopied] = useState<string | null>(null);
   const [webhookUrl, setWebhookUrl] = useState('');
@@ -264,7 +272,7 @@ export default function Settings() {
     });
   };
 
-  // Shared props for GeneralContent
+  // Shared props
   const generalContentProps = {
     organization, profile, isAdmin, orgName, setOrgName, fullName, setFullName,
     handleSaveOrgName, handleSaveProfile,
@@ -272,7 +280,6 @@ export default function Settings() {
     updateProfileIsPending: updateProfile.isPending,
   };
 
-  // Shared props for IntegrationsContent
   const integrationsContentProps = {
     organization, publicFormUrl, iframeCode, copied, copyToClipboard,
     isLoadingIntegrations, webhookUrl, setWebhookUrl, isValidUrl,
@@ -292,118 +299,156 @@ export default function Settings() {
     showKeyinvoiceApiKey, setShowKeyinvoiceApiKey, keyinvoiceApiUrl, setKeyinvoiceApiUrl,
   };
 
-  // Section titles for mobile header
-  const sectionTitles: Record<SettingsSection, string> = {
-    general: "Definições Gerais",
-    security: "Segurança",
-    team: "Equipa e Acessos",
-    products: "Produtos",
-    finance: "Financeiro",
-    notifications: "Notificações",
-    integrations: "Integrações",
+  // Render individual sub-section content
+  const renderSubContent = (sub: SettingsSubSection) => {
+    switch (sub) {
+      case "org-general": return <GeneralContent {...generalContentProps} />;
+      case "org-pipeline": return <PipelineEditor />;
+      case "org-modules": return <ModulesTab />;
+      case "org-forms": return <FormsManager />;
+      case "org-fields": return <ClientFieldsEditor />;
+      case "security": return (
+        <SecuritySettings
+          newPassword={newPassword} setNewPassword={setNewPassword}
+          confirmPassword={confirmPassword} setConfirmPassword={setConfirmPassword}
+          showPassword={showPassword} setShowPassword={setShowPassword}
+          handleChangePassword={handleChangePassword}
+          changePasswordIsPending={changePassword.isPending}
+        />
+      );
+      case "team-access": return <TeamTab />;
+      case "team-profiles": return <ProfilesTab />;
+      case "team-teams": return <TeamsSection />;
+      case "products": return <ProductsTab />;
+      case "finance-expenses": return <ExpenseCategoriesTab />;
+      case "notif-push": return <PushNotificationsCard organizationId={organization?.id} pushNotifications={pushNotifications} />;
+      case "notif-alerts": return <FidelizationAlertsSettings />;
+      case "integrations": return <IntegrationsContent {...integrationsContentProps} />;
+      default: return null;
+    }
   };
 
-  // Render grouped content for a section
-  const renderGroupContent = (section: SettingsSection) => {
-    switch (section) {
-      case "general":
-        return (
-          <div className="space-y-8">
-            <GeneralContent {...generalContentProps} />
-            {canManageIntegrations && (
-              <>
-                <Separator />
-                <PipelineEditor />
-                <Separator />
-                <ModulesTab />
-                <Separator />
-                <FormsManager />
-                <Separator />
-                <ClientFieldsEditor />
-              </>
-            )}
-          </div>
-        );
-      case "security":
-        return (
-          <div className="max-w-4xl">
-            <SecuritySettings
-              newPassword={newPassword} setNewPassword={setNewPassword}
-              confirmPassword={confirmPassword} setConfirmPassword={setConfirmPassword}
-              showPassword={showPassword} setShowPassword={setShowPassword}
-              handleChangePassword={handleChangePassword}
-              changePasswordIsPending={changePassword.isPending}
-            />
-          </div>
-        );
-      case "team":
-        return canManageTeam ? (
-          <div className="space-y-8 max-w-4xl">
-            <TeamTab />
-            <Separator />
-            <ProfilesTab />
-            <Separator />
-            <TeamsSection />
-          </div>
-        ) : null;
-      case "products":
-        return canManageIntegrations ? (
-          <div className="max-w-4xl"><ProductsTab /></div>
-        ) : null;
-      case "finance":
-        return canManageIntegrations ? (
-          <div className="max-w-4xl"><ExpenseCategoriesTab /></div>
-        ) : null;
-      case "notifications":
-        return (
-          <div className="space-y-8 max-w-4xl">
-            <PushNotificationsCard organizationId={organization?.id} pushNotifications={pushNotifications} />
-            {canManageIntegrations && (
-              <>
-                <Separator />
-                <FidelizationAlertsSettings />
-              </>
-            )}
-          </div>
-        );
-      case "integrations":
-        return canManageIntegrations ? (
-          <IntegrationsContent {...integrationsContentProps} />
-        ) : null;
-      default:
-        return null;
+  // Get the direct sub-section for groups with no sub-nav
+  const getDirectSub = (group: SettingsSection): SettingsSubSection => {
+    switch (group) {
+      case "security": return "security";
+      case "products": return "products";
+      case "finance": return "finance-expenses";
+      case "integrations": return "integrations";
+      default: return "security"; // fallback
     }
+  };
+
+  // Mobile: handle group selection (direct or drill-down)
+  const handleMobileGroupSelect = (group: SettingsSection) => {
+    setMobileGroup(group);
+    if (directContentGroups.includes(group)) {
+      setMobileSub(getDirectSub(group));
+    } else {
+      setMobileSub(null);
+    }
+  };
+
+  // Mobile: back navigation
+  const handleMobileBack = () => {
+    if (mobileSub !== null && !directContentGroups.includes(mobileGroup!)) {
+      // Go back to sub-section list
+      setMobileSub(null);
+    } else {
+      // Go back to group list
+      setMobileGroup(null);
+      setMobileSub(null);
+    }
+  };
+
+  // Mobile breadcrumb title
+  const getMobileTitle = () => {
+    if (!mobileGroup) return "Definições";
+    const groupTitle = sectionTitles[mobileGroup];
+    if (mobileSub && !directContentGroups.includes(mobileGroup)) {
+      const subItems = subSectionsMap[mobileGroup];
+      const subItem = subItems.find(s => s.id === mobileSub);
+      return subItem?.label || groupTitle;
+    }
+    return groupTitle;
+  };
+
+  // Desktop: render content for a group tab
+  const renderDesktopGroupContent = (group: SettingsSection) => {
+    const subs = subSectionsMap[group];
+    
+    // Direct content groups (no sub-tabs)
+    if (directContentGroups.includes(group)) {
+      return <div className="max-w-4xl">{renderSubContent(getDirectSub(group))}</div>;
+    }
+
+    // Groups with sub-tabs
+    const defaultSub = subs[0]?.id;
+    return (
+      <Tabs defaultValue={defaultSub} className="space-y-4">
+        <TabsList className="h-auto gap-1 bg-muted/50 p-1">
+          {subs.map(sub => (
+            <TabsTrigger key={sub.id} value={sub.id} className="gap-2 text-sm">
+              <sub.icon className="h-4 w-4" />
+              {sub.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+        {subs.map(sub => (
+          <TabsContent key={sub.id} value={sub.id}>
+            <div className="max-w-4xl">{renderSubContent(sub.id)}</div>
+          </TabsContent>
+        ))}
+      </Tabs>
+    );
   };
 
   return (
     <AppLayout userName={profile?.full_name} organizationName={organization?.name}>
       <div className="p-4 sm:p-6 lg:p-8">
         {isMobile ? (
-          mobileSection === null ? (
+          mobileGroup === null ? (
+            // Level 1: Group list
             <>
               <div className="mb-6">
                 <h1 className="text-2xl font-bold text-foreground">Definições</h1>
                 <p className="text-muted-foreground">Configure a sua organização e integrações.</p>
               </div>
               <MobileSettingsNav
-                activeSection={mobileSection}
-                onSelectSection={setMobileSection}
+                activeSection={null}
+                onSelectSection={handleMobileGroupSelect}
                 canManageTeam={canManageTeam}
                 canManageIntegrations={canManageIntegrations}
               />
             </>
-          ) : (
+          ) : mobileSub === null ? (
+            // Level 2: Sub-section list within group
             <>
               <div className="flex items-center gap-3 mb-6">
-                <Button variant="ghost" size="icon" onClick={() => setMobileSection(null)} className="shrink-0">
+                <Button variant="ghost" size="icon" onClick={handleMobileBack} className="shrink-0">
                   <ArrowLeft className="h-5 w-5" />
                 </Button>
-                <h1 className="text-xl font-bold text-foreground">{sectionTitles[mobileSection]}</h1>
+                <h1 className="text-xl font-bold text-foreground">{sectionTitles[mobileGroup]}</h1>
               </div>
-              {renderGroupContent(mobileSection)}
+              <MobileSubSectionNav
+                group={mobileGroup}
+                onSelectSubSection={(sub) => setMobileSub(sub)}
+              />
+            </>
+          ) : (
+            // Level 3: Sub-section content
+            <>
+              <div className="flex items-center gap-3 mb-6">
+                <Button variant="ghost" size="icon" onClick={handleMobileBack} className="shrink-0">
+                  <ArrowLeft className="h-5 w-5" />
+                </Button>
+                <h1 className="text-xl font-bold text-foreground">{getMobileTitle()}</h1>
+              </div>
+              {renderSubContent(mobileSub)}
             </>
           )
         ) : (
+          // Desktop: Two-level tabs
           <>
             <div className="mb-8">
               <h1 className="text-2xl font-bold text-foreground">Definições</h1>
@@ -450,41 +495,13 @@ export default function Settings() {
                 )}
               </TabsList>
 
-              <TabsContent value="general" className="space-y-6">
-                {renderGroupContent("general")}
-              </TabsContent>
-
-              <TabsContent value="security">
-                {renderGroupContent("security")}
-              </TabsContent>
-
-              {canManageTeam && (
-                <TabsContent value="team">
-                  {renderGroupContent("team")}
-                </TabsContent>
-              )}
-
-              {canManageIntegrations && (
-                <TabsContent value="products">
-                  {renderGroupContent("products")}
-                </TabsContent>
-              )}
-
-              {canManageIntegrations && (
-                <TabsContent value="finance">
-                  {renderGroupContent("finance")}
-                </TabsContent>
-              )}
-
-              <TabsContent value="notifications">
-                {renderGroupContent("notifications")}
-              </TabsContent>
-
-              {canManageIntegrations && (
-                <TabsContent value="integrations">
-                  {renderGroupContent("integrations")}
-                </TabsContent>
-              )}
+              <TabsContent value="general">{renderDesktopGroupContent("general")}</TabsContent>
+              <TabsContent value="security">{renderDesktopGroupContent("security")}</TabsContent>
+              {canManageTeam && <TabsContent value="team">{renderDesktopGroupContent("team")}</TabsContent>}
+              {canManageIntegrations && <TabsContent value="products">{renderDesktopGroupContent("products")}</TabsContent>}
+              {canManageIntegrations && <TabsContent value="finance">{renderDesktopGroupContent("finance")}</TabsContent>}
+              <TabsContent value="notifications">{renderDesktopGroupContent("notifications")}</TabsContent>
+              {canManageIntegrations && <TabsContent value="integrations">{renderDesktopGroupContent("integrations")}</TabsContent>}
             </Tabs>
           </>
         )}
