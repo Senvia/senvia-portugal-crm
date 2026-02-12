@@ -1647,6 +1647,7 @@ export type Database = {
           niche: string | null
           plan: string | null
           public_key: string
+          sales_settings: Json | null
           slug: string
           tax_config: Json | null
           webhook_url: string | null
@@ -1690,6 +1691,7 @@ export type Database = {
           niche?: string | null
           plan?: string | null
           public_key?: string
+          sales_settings?: Json | null
           slug: string
           tax_config?: Json | null
           webhook_url?: string | null
@@ -1733,6 +1735,7 @@ export type Database = {
           niche?: string | null
           plan?: string | null
           public_key?: string
+          sales_settings?: Json | null
           slug?: string
           tax_config?: Json | null
           webhook_url?: string | null
