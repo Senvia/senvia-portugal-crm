@@ -7,6 +7,13 @@ const corsHeaders = {
 
 const DEFAULT_KEYINVOICE_API_URL = 'https://login.keyinvoice.com/API5.php'
 
+const KI_DOC_TYPE_MAP: Record<string, string> = {
+  invoice: '4',
+  invoice_receipt: '20',
+  receipt: '6',
+  credit_note: '8',
+}
+
 // API 5.0: Authenticate with Apikey header, get session Sid, cache it
 async function getKeyInvoiceSid(supabase: any, org: any, orgId: string): Promise<string> {
   if (!org.keyinvoice_password) {
