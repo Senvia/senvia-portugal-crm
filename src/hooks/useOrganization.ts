@@ -44,6 +44,10 @@ interface UpdateOrganizationData {
   brevo_sender_email?: string | null;
   invoicexpress_account_name?: string | null;
   invoicexpress_api_key?: string | null;
+  billing_provider?: string;
+  keyinvoice_username?: string | null;
+  keyinvoice_password?: string | null;
+  keyinvoice_company_code?: string | null;
   tax_config?: Json;
   integrations_enabled?: Json;
 }

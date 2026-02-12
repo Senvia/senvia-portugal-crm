@@ -47,7 +47,7 @@ export function CancelInvoiceDialog({
           <AlertDialogTitle>Anular Fatura</AlertDialogTitle>
           <AlertDialogDescription>
             Tem a certeza que deseja anular a fatura <strong>{invoiceReference}</strong>?
-            Esta ação será refletida no InvoiceXpress e não pode ser desfeita.
+            Esta ação será refletida no sistema de faturação e não pode ser desfeita.
           </AlertDialogDescription>
         </AlertDialogHeader>
 

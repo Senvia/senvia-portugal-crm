@@ -152,11 +152,20 @@ export function useVatCalculation({ items, products, orgTaxValue, discount, subt
  * Helper to check if InvoiceXpress is active for the organization.
  */
 export function isInvoiceXpressActive(organization: any): boolean {
+  const billingProvider = organization?.billing_provider || 'invoicexpress';
+  if (billingProvider === 'keyinvoice') {
+    return !!(organization?.keyinvoice_username && organization?.keyinvoice_password && organization?.keyinvoice_company_code);
+  }
   return (
     organization?.integrations_enabled?.invoicexpress !== false &&
     !!(organization?.invoicexpress_account_name && organization?.invoicexpress_api_key)
   );
 }
+
+/**
+ * Alias for backward compatibility - checks if any billing provider is active.
+ */
+export const isBillingActive = isInvoiceXpressActive;
 
 /**
  * Get the org tax value from tax_config.

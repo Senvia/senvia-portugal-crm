@@ -67,52 +67,89 @@ Deno.serve(async (req) => {
     // Fetch org credentials
     const { data: org } = await supabase
       .from('organizations')
-      .select('invoicexpress_account_name, invoicexpress_api_key')
+      .select('invoicexpress_account_name, invoicexpress_api_key, billing_provider, keyinvoice_username, keyinvoice_password, keyinvoice_company_code, keyinvoice_token, keyinvoice_token_expires_at')
       .eq('id', organization_id)
       .single()
 
-    if (!org?.invoicexpress_account_name || !org?.invoicexpress_api_key) {
-      return new Response(JSON.stringify({ error: 'Credenciais InvoiceXpress não configuradas' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
+    const billingProvider = (org as any)?.billing_provider || 'invoicexpress'
 
-    const endpointMap: Record<string, string> = { invoice: 'invoices', invoice_receipt: 'invoice_receipts', receipt: 'receipts' }
-    const docKeyMap: Record<string, string> = { invoice: 'invoice', invoice_receipt: 'invoice_receipt', receipt: 'receipt' }
-    const endpointName = endpointMap[document_type] || 'invoices'
-    const docKey = docKeyMap[document_type] || 'invoice'
-    const baseUrl = `https://${org.invoicexpress_account_name}.app.invoicexpress.com`
-
-    // Cancel document on InvoiceXpress
-    const cancelRes = await fetch(
-      `${baseUrl}/${endpointName}/${invoicexpress_id}/change-state.json?api_key=${org.invoicexpress_api_key}`,
-      {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-        body: JSON.stringify({
-          [docKey]: {
-            state: 'canceled',
-            message: reason,
-          },
-        }),
+    if (billingProvider === 'keyinvoice') {
+      // KeyInvoice cancel flow
+      if (!org?.keyinvoice_username || !org?.keyinvoice_password) {
+        return new Response(JSON.stringify({ error: 'Credenciais KeyInvoice não configuradas' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
       }
-    )
 
-    if (!cancelRes.ok) {
-      const errorText = await cancelRes.text()
-      console.error('InvoiceXpress cancel error:', cancelRes.status, errorText)
-      return new Response(JSON.stringify({ 
-        error: `Erro ao anular fatura no InvoiceXpress (${cancelRes.status})`,
-        details: errorText,
-      }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      // Get token (inline logic)
+      let kiToken = org.keyinvoice_token
+      if (!kiToken || !org.keyinvoice_token_expires_at || new Date(org.keyinvoice_token_expires_at) <= new Date()) {
+        const loginPayload: Record<string, string> = { username: org.keyinvoice_username, password: org.keyinvoice_password }
+        if (org.keyinvoice_company_code) loginPayload.company_code = org.keyinvoice_company_code
+        const loginRes = await fetch('https://api.cloudinvoice.net/auth/login/', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(loginPayload),
+        })
+        if (!loginRes.ok) {
+          const err = await loginRes.text()
+          return new Response(JSON.stringify({ error: `Erro autenticação KeyInvoice: ${loginRes.status}` }), {
+            status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          })
+        }
+        const { key } = await loginRes.json()
+        kiToken = key
+        await supabase.from('organizations').update({
+          keyinvoice_token: key,
+          keyinvoice_token_expires_at: new Date(Date.now() + 23 * 3600000).toISOString(),
+        }).eq('id', organization_id)
+      }
+
+      // Annul document on KeyInvoice
+      const annulRes = await fetch(`https://api.cloudinvoice.net/documents/${invoicexpress_id}/annul/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Token ${kiToken}` },
+        body: JSON.stringify({ reason }),
       })
-    }
 
-    // Consume body
-    try { await cancelRes.text() } catch {}
+      if (!annulRes.ok) {
+        const errorText = await annulRes.text()
+        console.error('KeyInvoice annul error:', annulRes.status, errorText)
+        return new Response(JSON.stringify({ error: `Erro ao anular documento no KeyInvoice (${annulRes.status})`, details: errorText }), {
+          status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+      await annulRes.text()
+    } else {
+      // InvoiceXpress cancel flow
+      if (!org?.invoicexpress_account_name || !org?.invoicexpress_api_key) {
+        return new Response(JSON.stringify({ error: 'Credenciais InvoiceXpress não configuradas' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      const endpointMap: Record<string, string> = { invoice: 'invoices', invoice_receipt: 'invoice_receipts', receipt: 'receipts' }
+      const docKeyMap: Record<string, string> = { invoice: 'invoice', invoice_receipt: 'invoice_receipt', receipt: 'receipt' }
+      const endpointName = endpointMap[document_type] || 'invoices'
+      const docKey = docKeyMap[document_type] || 'invoice'
+      const baseUrl = `https://${org.invoicexpress_account_name}.app.invoicexpress.com`
+
+      const cancelRes = await fetch(
+        `${baseUrl}/${endpointName}/${invoicexpress_id}/change-state.json?api_key=${org.invoicexpress_api_key}`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify({ [docKey]: { state: 'canceled', message: reason } }),
+        }
+      )
+
+      if (!cancelRes.ok) {
+        const errorText = await cancelRes.text()
+        console.error('InvoiceXpress cancel error:', cancelRes.status, errorText)
+        return new Response(JSON.stringify({ error: `Erro ao anular fatura no InvoiceXpress (${cancelRes.status})`, details: errorText }), {
+          status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+      try { await cancelRes.text() } catch {}
+    }
 
     // Clear references
     if (payment_id) {

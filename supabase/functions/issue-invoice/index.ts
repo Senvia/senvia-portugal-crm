@@ -21,6 +21,223 @@ function mapCountryToInvoiceXpress(country?: string | null): string {
   return country
 }
 
+const KEYINVOICE_API_BASE = 'https://api.cloudinvoice.net'
+
+async function getKeyInvoiceToken(supabase: any, org: any, organizationId: string): Promise<string> {
+  // Check cached token
+  if (org.keyinvoice_token && org.keyinvoice_token_expires_at) {
+    const expiresAt = new Date(org.keyinvoice_token_expires_at)
+    if (expiresAt > new Date()) return org.keyinvoice_token
+  }
+
+  // Login to get new token
+  const loginPayload: Record<string, string> = {
+    username: org.keyinvoice_username,
+    password: org.keyinvoice_password,
+  }
+  if (org.keyinvoice_company_code) loginPayload.company_code = org.keyinvoice_company_code
+
+  const res = await fetch(`${KEYINVOICE_API_BASE}/auth/login/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(loginPayload),
+  })
+
+  if (!res.ok) {
+    const err = await res.text()
+    throw new Error(`KeyInvoice auth failed: ${res.status} ${err}`)
+  }
+
+  const { key } = await res.json()
+  const expiresAt = new Date(Date.now() + 23 * 60 * 60 * 1000).toISOString()
+  await supabase.from('organizations').update({ keyinvoice_token: key, keyinvoice_token_expires_at: expiresAt }).eq('id', organizationId)
+  return key
+}
+
+async function handleKeyInvoice(supabase: any, org: any, saleId: string, organizationId: string, observations: string | undefined, corsHeaders: Record<string, string>) {
+  if (!org?.keyinvoice_username || !org?.keyinvoice_password) {
+    return new Response(JSON.stringify({ error: 'Credenciais KeyInvoice não configuradas' }), {
+      status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
+  }
+
+  // Fetch sale with client
+  const { data: sale } = await supabase
+    .from('sales')
+    .select(`*, client:crm_clients(name, code, email, nif, phone, address_line1, city, postal_code, country, company), lead:leads(name, email, phone)`)
+    .eq('id', saleId)
+    .eq('organization_id', organizationId)
+    .single()
+
+  if (!sale) {
+    return new Response(JSON.stringify({ error: 'Venda não encontrada' }), {
+      status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
+  }
+
+  if (sale.invoicexpress_id) {
+    return new Response(JSON.stringify({ error: 'Fatura já emitida para esta venda', invoice_reference: sale.invoice_reference }), {
+      status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
+  }
+
+  const clientNif = sale.client?.nif
+  if (!clientNif) {
+    return new Response(JSON.stringify({ error: 'Cliente sem NIF. Adicione o NIF antes de emitir fatura.' }), {
+      status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
+  }
+
+  const token = await getKeyInvoiceToken(supabase, org, organizationId)
+  const authHeaders = { 'Content-Type': 'application/json', 'Authorization': `Token ${token}` }
+
+  // Tax config
+  const taxConfig = org?.tax_config || { tax_value: 23 }
+  const orgTaxValue = taxConfig.tax_value ?? 23
+
+  // Map tax value to KeyInvoice tax_code
+  function getTaxCode(taxValue: number) {
+    if (taxValue === 0) return 'ISE'
+    if (taxValue === 6) return 'RED'
+    if (taxValue === 13) return 'INT'
+    return 'NOR'
+  }
+
+  // Fetch sale items
+  const { data: saleItems } = await supabase
+    .from('sale_items')
+    .select('*, product:products(tax_value, tax_exemption_reason)')
+    .eq('sale_id', saleId)
+
+  const clientName = sale.client?.company || sale.client?.name || sale.lead?.name || 'Cliente'
+
+  // Build document lines
+  const lines = (saleItems || []).map((item: any) => {
+    const taxValue = item.product?.tax_value ?? orgTaxValue
+    const line: any = {
+      description: item.name,
+      quantity: Number(item.quantity),
+      unit_price: Number(item.unit_price),
+      tax_code: getTaxCode(taxValue),
+      tax_type: taxValue === 0 ? 'NS' : 'IVA',
+    }
+    if (taxValue === 0) {
+      const exemption = item.product?.tax_exemption_reason || taxConfig.tax_exemption_reason
+      if (exemption) line.tax_exemption = exemption
+    }
+    return line
+  })
+
+  if (lines.length === 0) {
+    lines.push({
+      description: `Venda ${sale.code || saleId}`,
+      quantity: 1,
+      unit_price: Number(sale.total_value),
+      tax_code: getTaxCode(orgTaxValue),
+      tax_type: orgTaxValue === 0 ? 'NS' : 'IVA',
+    })
+  }
+
+  // 1. Create document (Fatura-Recibo by default = FR)
+  const docPayload = {
+    document_nature: 'FR',
+    customer_name: clientName,
+    customer_tax_id: clientNif,
+    lines,
+    ...(observations ? { observations } : {}),
+  }
+
+  const createRes = await fetch(`${KEYINVOICE_API_BASE}/documents/new/`, {
+    method: 'POST',
+    headers: authHeaders,
+    body: JSON.stringify(docPayload),
+  })
+
+  if (!createRes.ok) {
+    const errorText = await createRes.text()
+    console.error('KeyInvoice create error:', createRes.status, errorText)
+    return new Response(JSON.stringify({ error: `Erro ao criar documento no KeyInvoice: ${createRes.status}`, details: errorText }), {
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
+  }
+
+  const createData = await createRes.json()
+  const docId = createData.id
+  const seqNumber = createData.sequence_number
+
+  if (!docId) {
+    return new Response(JSON.stringify({ error: 'KeyInvoice não retornou ID do documento' }), {
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
+  }
+
+  // 2. Finalize
+  const finalizeRes = await fetch(`${KEYINVOICE_API_BASE}/documents/${docId}/finalize/`, {
+    method: 'POST',
+    headers: authHeaders,
+  })
+
+  if (!finalizeRes.ok) {
+    const errorText = await finalizeRes.text()
+    console.error('KeyInvoice finalize error:', errorText)
+    return new Response(JSON.stringify({ error: 'Documento criado mas não finalizado.', details: errorText }), {
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
+  }
+  await finalizeRes.text() // consume body
+
+  const invoiceReference = seqNumber ? `FR ${seqNumber}` : `FR #${docId}`
+
+  // 3. Generate PDF
+  let pdfUrl: string | null = null
+  let storedPdfPath: string | null = null
+  try {
+    const printRes = await fetch(`${KEYINVOICE_API_BASE}/documents/${docId}/print/`, {
+      method: 'POST',
+      headers: authHeaders,
+    })
+    if (printRes.ok) {
+      const printData = await printRes.json()
+      pdfUrl = printData.url || printData.pdf_url || null
+
+      if (pdfUrl) {
+        const pdfBinaryRes = await fetch(pdfUrl)
+        if (pdfBinaryRes.ok) {
+          const pdfBuffer = await pdfBinaryRes.arrayBuffer()
+          const pdfFileName = `${organizationId}/${saleId}/FR-${docId}.pdf`
+          const { error: uploadError } = await supabase.storage
+            .from('invoices')
+            .upload(pdfFileName, pdfBuffer, { contentType: 'application/pdf', upsert: true })
+          if (!uploadError) storedPdfPath = pdfFileName
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('KeyInvoice PDF generation failed (non-blocking):', e)
+  }
+
+  // 4. Save reference
+  const fileUrl = storedPdfPath || pdfUrl || null
+  await supabase
+    .from('sales')
+    .update({
+      invoicexpress_id: docId,
+      invoicexpress_type: 'keyinvoice',
+      invoice_reference: invoiceReference,
+      ...(fileUrl ? { invoice_pdf_url: fileUrl } : {}),
+    })
+    .eq('id', saleId)
+
+  return new Response(JSON.stringify({
+    success: true,
+    invoicexpress_id: docId,
+    invoice_reference: invoiceReference,
+    ...(pdfUrl ? { pdf_url: pdfUrl } : {}),
+  }), {
+    status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  })
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
@@ -78,16 +295,23 @@ Deno.serve(async (req) => {
     // Fetch organization credentials
     const { data: org } = await supabase
       .from('organizations')
-      .select('invoicexpress_account_name, invoicexpress_api_key, integrations_enabled, tax_config')
+      .select('invoicexpress_account_name, invoicexpress_api_key, integrations_enabled, tax_config, billing_provider, keyinvoice_username, keyinvoice_password, keyinvoice_company_code, keyinvoice_token, keyinvoice_token_expires_at')
       .eq('id', organization_id)
       .single()
 
+    const billingProvider = (org as any)?.billing_provider || 'invoicexpress'
     const integrationsEnabled = (org?.integrations_enabled as Record<string, boolean> | null) || {}
+    
     if (integrationsEnabled.invoicexpress === false) {
-      return new Response(JSON.stringify({ error: 'Integração InvoiceXpress desativada' }), {
+      return new Response(JSON.stringify({ error: 'Integração de faturação desativada' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
+    }
+
+    // Route to KeyInvoice if selected
+    if (billingProvider === 'keyinvoice') {
+      return await handleKeyInvoice(supabase, org, sale_id, organization_id, observations, corsHeaders)
     }
 
     if (!org?.invoicexpress_account_name || !org?.invoicexpress_api_key) {
