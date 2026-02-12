@@ -22,6 +22,7 @@ import { IntegrationsContent } from '@/components/settings/IntegrationsContent';
 import { ClientFieldsEditor } from '@/components/settings/ClientFieldsEditor';
 import { FidelizationAlertsSettings } from '@/components/settings/FidelizationAlertsSettings';
 import { ExpenseCategoriesTab } from '@/components/settings/ExpenseCategoriesTab';
+import { FiscalSettingsTab } from '@/components/settings/FiscalSettingsTab';
 import { PushNotificationsCard } from '@/components/settings/PushNotificationsCard';
 import { PRODUCTION_URL } from '@/lib/constants';
 import { ProfilesTab } from '@/components/settings/ProfilesTab';
@@ -206,21 +207,23 @@ export default function Settings() {
   };
 
   const handleSaveInvoiceXpress = () => {
-    const taxValue = Number(taxRate);
-    const taxName = taxValue === 0 ? 'Isento' : `IVA${taxValue}`;
     updateOrganization.mutate({
       invoicexpress_account_name: invoiceXpressAccountName.trim() || null,
       invoicexpress_api_key: invoiceXpressApiKey.trim() || null,
-      tax_config: { tax_name: taxName, tax_value: taxValue, tax_exemption_reason: taxValue === 0 ? taxExemptionReason : null },
     });
   };
 
   const handleSaveKeyInvoice = () => {
-    const taxValue = Number(taxRate);
-    const taxName = taxValue === 0 ? 'Isento' : `IVA${taxValue}`;
     updateOrganization.mutate({
       keyinvoice_password: keyinvoiceApiKey.trim() || null,
       keyinvoice_api_url: keyinvoiceApiUrl.trim() || null,
+    });
+  };
+
+  const handleSaveFiscal = () => {
+    const taxValue = Number(taxRate);
+    const taxName = taxValue === 0 ? 'Isento' : `IVA${taxValue}`;
+    updateOrganization.mutate({
       tax_config: { tax_name: taxName, tax_value: taxValue, tax_exemption_reason: taxValue === 0 ? taxExemptionReason : null },
     });
   };
@@ -293,7 +296,7 @@ export default function Settings() {
     invoiceXpressAccountName, setInvoiceXpressAccountName,
     invoiceXpressApiKey, setInvoiceXpressApiKey,
     showInvoiceXpressApiKey, setShowInvoiceXpressApiKey,
-    handleSaveInvoiceXpress, taxRate, setTaxRate, taxExemptionReason, setTaxExemptionReason,
+    handleSaveInvoiceXpress,
     integrationsEnabled, onToggleIntegration: handleToggleIntegration,
     handleSaveKeyInvoice, keyinvoiceApiKey, setKeyinvoiceApiKey,
     showKeyinvoiceApiKey, setShowKeyinvoiceApiKey, keyinvoiceApiUrl, setKeyinvoiceApiUrl,
@@ -321,6 +324,16 @@ export default function Settings() {
       case "team-teams": return <TeamsSection />;
       case "products": return <ProductsTab />;
       case "finance-expenses": return <ExpenseCategoriesTab />;
+      case "finance-fiscal": return (
+        <FiscalSettingsTab
+          taxRate={taxRate}
+          setTaxRate={setTaxRate}
+          taxExemptionReason={taxExemptionReason}
+          setTaxExemptionReason={setTaxExemptionReason}
+          onSave={handleSaveFiscal}
+          isPending={updateOrganization.isPending}
+        />
+      );
       case "notif-push": return <PushNotificationsCard organizationId={organization?.id} pushNotifications={pushNotifications} />;
       case "notif-alerts": return <FidelizationAlertsSettings />;
       case "integrations": return <IntegrationsContent {...integrationsContentProps} />;
@@ -333,7 +346,7 @@ export default function Settings() {
     switch (group) {
       case "security": return "security";
       case "products": return "products";
-      case "finance": return "finance-expenses";
+      case "integrations": return "integrations";
       case "integrations": return "integrations";
       default: return "security"; // fallback
     }
