@@ -10,16 +10,9 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { Copy, ExternalLink, Code, Webhook, Send, Loader2, Check, Eye, EyeOff, MessageCircle, Mail, Receipt } from "lucide-react";
+import { Webhook, Send, Loader2, Eye, EyeOff, MessageCircle, Mail, Receipt } from "lucide-react";
 
 interface IntegrationsContentProps {
-  organization: {
-    public_key: string;
-  } | null;
-  publicFormUrl: string;
-  iframeCode: string;
-  copied: string | null;
-  copyToClipboard: (text: string, label: string) => void;
   isLoadingIntegrations: boolean;
   webhookUrl: string;
   setWebhookUrl: (value: string) => void;
@@ -64,11 +57,6 @@ interface IntegrationsContentProps {
 }
 
 export const IntegrationsContent = ({
-  organization,
-  publicFormUrl,
-  iframeCode,
-  copied,
-  copyToClipboard,
   isLoadingIntegrations,
   webhookUrl,
   setWebhookUrl,
@@ -129,57 +117,6 @@ export const IntegrationsContent = ({
     </div>
     
     <Accordion type="multiple" className="w-full">
-      {/* Formulário Público */}
-      {organization && (
-        <AccordionItem value="form">
-          <AccordionTrigger className="hover:no-underline">
-            <div className="flex flex-col items-start gap-1">
-              <div className="flex items-center gap-2">
-                <Code className="h-5 w-5" />
-                <span className="font-medium">Formulário Público</span>
-              </div>
-              <span className="text-xs text-muted-foreground font-normal">
-                Use este link para capturar leads.
-              </span>
-            </div>
-          </AccordionTrigger>
-          <AccordionContent>
-            <div className="space-y-6 pt-4">
-              <div className="space-y-2">
-                <Label>Link Direto</Label>
-                <div className="flex gap-2">
-                  <Input value={publicFormUrl} readOnly className="font-mono text-sm" />
-                  <Button variant="outline" size="icon" onClick={() => copyToClipboard(publicFormUrl, 'Link')}>
-                    {copied === 'Link' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                  </Button>
-                  <Button variant="outline" size="icon" onClick={() => window.open(publicFormUrl, '_blank')}><ExternalLink className="h-4 w-4" /></Button>
-                </div>
-              </div>
-              <Separator />
-              <div className="space-y-2">
-                <Label>Código iframe</Label>
-                <div className="flex gap-2">
-                  <Input value={iframeCode} readOnly className="font-mono text-xs" />
-                  <Button variant="outline" size="icon" onClick={() => copyToClipboard(iframeCode, 'Código')}>
-                    {copied === 'Código' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                  </Button>
-                </div>
-              </div>
-              <Separator />
-              <div className="space-y-2">
-                <Label>Chave Pública</Label>
-                <div className="flex gap-2">
-                  <Input value={organization.public_key} readOnly className="font-mono text-sm" />
-                  <Button variant="outline" size="icon" onClick={() => copyToClipboard(organization.public_key, 'API Key')}>
-                    {copied === 'API Key' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </AccordionContent>
-        </AccordionItem>
-      )}
-
       {/* Webhook */}
       <AccordionItem value="webhook">
         <AccordionTrigger className="hover:no-underline">
