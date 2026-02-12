@@ -124,12 +124,13 @@ async function handleKeyInvoice(supabase: any, org: any, saleId: string, organiz
     const insertClientPayload: Record<string, any> = {
       method: 'insertClient',
       Name: clientName,
-      TaxId: clientNif,
+      VATIN: clientNif,
+      CountryCode: 'PT',
     }
     if (sale.client?.email) insertClientPayload.Email = sale.client.email
     if (sale.client?.phone) insertClientPayload.Phone = sale.client.phone
     if (sale.client?.address_line1) insertClientPayload.Address = sale.client.address_line1
-    if (sale.client?.city) insertClientPayload.City = sale.client.city
+    if (sale.client?.city) insertClientPayload.Locality = sale.client.city
     if (sale.client?.postal_code) insertClientPayload.PostalCode = sale.client.postal_code
 
     const clientRes = await fetch(apiUrl, {
