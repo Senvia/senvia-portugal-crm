@@ -1,34 +1,75 @@
 
-# Atualizar estado da fatura na tabela `invoices` ao anular (KeyInvoice)
+
+# Redesign dos Modais de Vendas para Layout Full-Page
 
 ## Problema
 
-Quando se anula uma fatura via KeyInvoice, a edge function `cancel-invoice` limpa as referências nas tabelas `sales` e `sale_payments`, mas nao atualiza o registo correspondente na tabela `invoices`. O resultado e que a fatura desaparece da listagem (porque perde o `sale_id`) ou fica com status desatualizado.
-
-## Causa raiz
-
-No fluxo de emissao (`issue-invoice`), o sistema insere/atualiza corretamente a tabela `invoices` (linha 462). Mas no fluxo de anulacao (`cancel-invoice`), essa tabela e ignorada.
+Os tres modais de vendas (Nova Venda, Editar Venda, Visualizar Venda) usam dialogos centrados com largura maxima limitada (`max-w-lg` / `max-w-2xl`) e altura maxima de `90vh`. Em ecras maiores, o espaco disponivel e desperdicado e o conteudo fica apertado com scroll excessivo.
 
 ## Solucao
 
-Alterar a edge function `cancel-invoice` para, apos a anulacao com sucesso (tanto InvoiceXpress como KeyInvoice), atualizar o registo na tabela `invoices` com `status: 'canceled'`, em vez de apenas limpar as referências nas tabelas `sales` e `sale_payments`.
+Converter os tres modais de `Dialog` centrado para um layout **full-screen overlay** que ocupa toda a viewport, adaptando-se ao ecra:
 
-### Alteracao no ficheiro
+- **Mobile**: Ocupa 100% da largura e altura (como uma pagina nativa)
+- **Desktop**: Ocupa toda a viewport com padding lateral minimo, e o conteudo interno fica centrado com largura maxima confortavel (`max-w-4xl`)
 
-**`supabase/functions/cancel-invoice/index.ts`**
+A abordagem mantem o componente `Dialog` do Radix (para manter compatibilidade com modais aninhados como `PaymentTypeSelector` e `AlertDialog`), mas altera as classes CSS do `DialogContent` para ocupar a tela toda.
 
-Apos o bloco de sucesso da anulacao (depois do `if/else` do provider) e antes de limpar as referências, adicionar:
+## Alteracoes por ficheiro
 
-```typescript
-// Update invoice status in invoices table
-await supabase
-  .from('invoices')
-  .update({ status: 'canceled', updated_at: new Date().toISOString() })
-  .eq('organization_id', organization_id)
-  .eq('invoicexpress_id', invoicexpress_id)
+### 1. `src/components/sales/CreateSaleModal.tsx`
+
+- Alterar `DialogContent` de `max-w-2xl max-h-[90vh]` para classes full-screen: `w-screen h-screen max-w-none max-h-none rounded-none sm:rounded-none inset-0 translate-x-0 translate-y-0 top-0 left-0`
+- O conteudo interno (form) recebe `max-w-4xl mx-auto` para centralizar em ecras largos
+- O `ScrollArea` passa a usar `h-[calc(100vh-header-footer)]` em vez de `max-h`
+- Header e footer ficam fixos (sticky) no topo e fundo
+
+### 2. `src/components/sales/EditSaleModal.tsx`
+
+- Mesma transformacao: `DialogContent` passa a full-screen
+- O conteudo do form recebe `max-w-4xl mx-auto`
+- Layout ja usa `flex flex-col` com `flex-1` para o scroll, basta ajustar as dimensoes
+
+### 3. `src/components/sales/SaleDetailsModal.tsx`
+
+- Mesma transformacao: `DialogContent` passa a full-screen
+- O conteudo interno recebe `max-w-4xl mx-auto`
+- Em desktop, os campos podem aproveitar melhor o espaco com grids de 2-3 colunas onde fizer sentido (ex: dados do cliente lado a lado com status)
+
+### Classe CSS reutilizavel
+
+Para evitar duplicacao, a classe sera aplicada diretamente no `DialogContent` com uma combinacao consistente:
+
+```text
+fixed inset-0 z-50 w-full h-full max-w-none translate-x-0 translate-y-0
+flex flex-col bg-background border-0 rounded-none
+data-[state=open]:animate-in data-[state=closed]:animate-out
+data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0
 ```
 
-Esta alteracao garante que:
-1. A fatura continua visivel na listagem de Faturas
-2. O status aparece como "canceled" (anulada)
-3. Funciona tanto para InvoiceXpress como para KeyInvoice
+### Estrutura interna (comum aos 3)
+
+```text
++--------------------------------------------------+
+| Header (sticky, border-bottom)                    |
+|   [Icone] Titulo        [Codigo] [Data]     [X]  |
++--------------------------------------------------+
+|                                                    |
+|   <div max-w-4xl mx-auto>                         |
+|     Conteudo scrollavel                            |
+|     (formulario ou detalhes)                       |
+|   </div>                                          |
+|                                                    |
++--------------------------------------------------+
+| Footer (sticky, border-top)                       |
+|   [Cancelar]                    [Guardar/Acao]    |
++--------------------------------------------------+
+```
+
+### Notas tecnicas
+
+- O botao de fechar (X) do Radix `DialogClose` continua a funcionar normalmente
+- Os modais aninhados (`PaymentTypeSelector` com `AlertDialog`, `AlertDialog` de confirmacao de delete) nao sao afetados pois usam componentes separados
+- A animacao de entrada muda de `zoom-in` + `slide-from-center` para `fade-in` simples (mais adequado para full-screen)
+- Toda a logica de negocio, state e handlers permanece inalterada -- apenas o layout CSS muda
+
