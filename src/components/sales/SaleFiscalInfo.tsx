@@ -149,17 +149,22 @@ export function useVatCalculation({ items, products, orgTaxValue, discount, subt
 }
 
 /**
- * Helper to check if InvoiceXpress is active for the organization.
+ * Helper to check if any billing integration is active for the organization.
  */
 export function isInvoiceXpressActive(organization: any): boolean {
-  const billingProvider = organization?.billing_provider || 'invoicexpress';
-  if (billingProvider === 'keyinvoice') {
-    return !!(organization?.keyinvoice_username && organization?.keyinvoice_password && organization?.keyinvoice_company_code);
+  const enabled = organization?.integrations_enabled as Record<string, boolean> | null;
+  
+  // Check if InvoiceXpress is enabled and has credentials
+  if (enabled?.invoicexpress !== false && organization?.invoicexpress_account_name && organization?.invoicexpress_api_key) {
+    return true;
   }
-  return (
-    organization?.integrations_enabled?.invoicexpress !== false &&
-    !!(organization?.invoicexpress_account_name && organization?.invoicexpress_api_key)
-  );
+  
+  // Check if KeyInvoice is enabled and has credentials
+  if (enabled?.keyinvoice === true && organization?.keyinvoice_username && organization?.keyinvoice_password && organization?.keyinvoice_company_code) {
+    return true;
+  }
+  
+  return false;
 }
 
 /**

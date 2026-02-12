@@ -63,9 +63,6 @@ export default function Settings() {
   const [taxRate, setTaxRate] = useState('23');
   const [taxExemptionReason, setTaxExemptionReason] = useState('');
 
-  // Billing provider state
-  const [billingProvider, setBillingProvider] = useState<'invoicexpress' | 'keyinvoice'>('invoicexpress');
-
   // KeyInvoice state
   const [keyinvoiceUsername, setKeyinvoiceUsername] = useState('');
   const [keyinvoicePassword, setKeyinvoicePassword] = useState('');
@@ -74,7 +71,7 @@ export default function Settings() {
 
   // Integrations enabled state
   const [integrationsEnabled, setIntegrationsEnabled] = useState<Record<string, boolean>>({
-    webhook: true, whatsapp: true, brevo: true, invoicexpress: true,
+    webhook: true, whatsapp: true, brevo: true, invoicexpress: true, keyinvoice: false,
   });
 
   // Form mode state (for dynamic URL)
@@ -127,7 +124,6 @@ export default function Settings() {
         setBrevoSenderEmail(data.brevo_sender_email || '');
         setInvoiceXpressAccountName((data as any).invoicexpress_account_name || '');
         setInvoiceXpressApiKey((data as any).invoicexpress_api_key || '');
-        setBillingProvider(((data as any).billing_provider as 'invoicexpress' | 'keyinvoice') || 'invoicexpress');
         setKeyinvoiceUsername((data as any).keyinvoice_username || '');
         setKeyinvoicePassword((data as any).keyinvoice_password || '');
         setKeyinvoiceCompanyCode((data as any).keyinvoice_company_code || '');
@@ -142,7 +138,7 @@ export default function Settings() {
         // Set integrations enabled state
         if ((data as any).integrations_enabled) {
           setIntegrationsEnabled({
-            webhook: true, whatsapp: true, brevo: true, invoicexpress: true,
+            webhook: true, whatsapp: true, brevo: true, invoicexpress: true, keyinvoice: false,
             ...((data as any).integrations_enabled as Record<string, boolean>),
           });
         }
@@ -160,12 +156,32 @@ export default function Settings() {
   }, [organization?.id, refreshTrigger]);
 
   const handleToggleIntegration = async (key: string, enabled: boolean) => {
-    const newState = { ...integrationsEnabled, [key]: enabled };
+    let newState = { ...integrationsEnabled, [key]: enabled };
+    
+    // Mutual exclusivity: only one billing provider active at a time
+    if (enabled && key === 'invoicexpress') {
+      newState.keyinvoice = false;
+    } else if (enabled && key === 'keyinvoice') {
+      newState.invoicexpress = false;
+    }
+    
     setIntegrationsEnabled(newState);
+    
+    // Determine billing_provider based on which is active
+    let billingProviderValue: string | undefined;
+    if (key === 'invoicexpress' || key === 'keyinvoice') {
+      if (newState.invoicexpress) billingProviderValue = 'invoicexpress';
+      else if (newState.keyinvoice) billingProviderValue = 'keyinvoice';
+    }
+    
     if (organization?.id) {
+      const updateData: Record<string, any> = { integrations_enabled: newState };
+      if (billingProviderValue !== undefined) {
+        updateData.billing_provider = billingProviderValue;
+      }
       await supabase
         .from('organizations')
-        .update({ integrations_enabled: newState })
+        .update(updateData)
         .eq('id', organization.id);
     }
   };
@@ -201,9 +217,20 @@ export default function Settings() {
     const taxValue = Number(taxRate);
     const taxName = taxValue === 0 ? 'Isento' : `IVA${taxValue}`;
     updateOrganization.mutate({
-      billing_provider: billingProvider,
       invoicexpress_account_name: invoiceXpressAccountName.trim() || null,
       invoicexpress_api_key: invoiceXpressApiKey.trim() || null,
+      tax_config: {
+        tax_name: taxName,
+        tax_value: taxValue,
+        tax_exemption_reason: taxValue === 0 ? taxExemptionReason : null,
+      },
+    });
+  };
+
+  const handleSaveKeyInvoice = () => {
+    const taxValue = Number(taxRate);
+    const taxName = taxValue === 0 ? 'Isento' : `IVA${taxValue}`;
+    updateOrganization.mutate({
       keyinvoice_username: keyinvoiceUsername.trim() || null,
       keyinvoice_password: keyinvoicePassword.trim() || null,
       keyinvoice_company_code: keyinvoiceCompanyCode.trim() || null,
@@ -402,8 +429,7 @@ export default function Settings() {
                   setTaxExemptionReason={setTaxExemptionReason}
                   integrationsEnabled={integrationsEnabled}
                   onToggleIntegration={handleToggleIntegration}
-                  billingProvider={billingProvider}
-                  setBillingProvider={setBillingProvider}
+                  handleSaveKeyInvoice={handleSaveKeyInvoice}
                   keyinvoiceUsername={keyinvoiceUsername}
                   setKeyinvoiceUsername={setKeyinvoiceUsername}
                   keyinvoicePassword={keyinvoicePassword}
@@ -643,8 +669,7 @@ export default function Settings() {
                     setTaxExemptionReason={setTaxExemptionReason}
                     integrationsEnabled={integrationsEnabled}
                     onToggleIntegration={handleToggleIntegration}
-                    billingProvider={billingProvider}
-                    setBillingProvider={setBillingProvider}
+                    handleSaveKeyInvoice={handleSaveKeyInvoice}
                     keyinvoiceUsername={keyinvoiceUsername}
                     setKeyinvoiceUsername={setKeyinvoiceUsername}
                     keyinvoicePassword={keyinvoicePassword}
