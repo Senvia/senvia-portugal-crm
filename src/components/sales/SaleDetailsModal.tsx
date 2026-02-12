@@ -60,7 +60,7 @@ interface SaleDetailsModalProps {
 }
 
 export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetailsModalProps) {
-  const [status, setStatus] = useState<SaleStatus>("pending");
+  const [status, setStatus] = useState<SaleStatus>("in_progress");
   const [notes, setNotes] = useState("");
   const [draftMode, setDraftMode] = useState<"invoice" | "invoice_receipt" | null>(null);
 

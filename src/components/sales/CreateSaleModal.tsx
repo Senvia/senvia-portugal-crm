@@ -153,7 +153,7 @@ export function CreateSaleModal({
   const [servicosProdutos, setServicosProdutos] = useState<string[]>([]);
 
   // Sale status
-  const [saleStatus, setSaleStatus] = useState<SaleStatus>("pending");
+  const [saleStatus, setSaleStatus] = useState<SaleStatus>("in_progress");
 
   // Draft payments state
   const [draftPayments, setDraftPayments] = useState<DraftPayment[]>([]);
@@ -230,7 +230,7 @@ export function CreateSaleModal({
       }
       
       setSaleDate(new Date());
-      setSaleStatus("pending");
+      setSaleStatus("in_progress");
       setItems([]);
       setDiscount("0");
       setDraftPayments([]);

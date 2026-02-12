@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { usePersistedState } from "@/hooks/usePersistedState";
-import { ShoppingBag, Search, TrendingUp, Package, CheckCircle, Clock, Plus } from "lucide-react";
+import { ShoppingBag, Search, TrendingUp, Package, CheckCircle, Plus } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -72,10 +72,9 @@ export default function Sales() {
 
   // Summary stats
   const stats = useMemo(() => {
-    if (!sales) return { total: 0, totalValue: 0, delivered: 0, deliveredValue: 0, pending: 0, inProgress: 0 };
+    if (!sales) return { total: 0, totalValue: 0, delivered: 0, deliveredValue: 0, inProgress: 0 };
     
     const delivered = sales.filter(s => s.status === 'delivered');
-    const pending = sales.filter(s => s.status === 'pending');
     const inProgress = sales.filter(s => s.status === 'in_progress');
     
     return {
@@ -83,7 +82,6 @@ export default function Sales() {
       totalValue: sales.reduce((acc, s) => acc + (s.total_value || 0), 0),
       delivered: delivered.length,
       deliveredValue: delivered.reduce((acc, s) => acc + (s.total_value || 0), 0),
-      pending: pending.length,
       inProgress: inProgress.length,
     };
   }, [sales]);
@@ -112,7 +110,7 @@ export default function Sales() {
       </div>
 
       {/* Summary Cards */}
-      <div className="p-4 md:p-6 grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+      <div className="p-4 md:p-6 grid grid-cols-3 gap-3 md:gap-4">
         <Card className="bg-card/50 border-border/50">
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-2">
@@ -152,16 +150,6 @@ export default function Sales() {
               <span className="text-xs text-muted-foreground">Em Progresso</span>
             </div>
             <p className="text-2xl font-bold text-blue-500">{stats.inProgress}</p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-card/50 border-border/50">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Clock className="h-4 w-4 text-amber-500" />
-              <span className="text-xs text-muted-foreground">Pendentes</span>
-            </div>
-            <p className="text-2xl font-bold text-amber-500">{stats.pending}</p>
           </CardContent>
         </Card>
       </div>
