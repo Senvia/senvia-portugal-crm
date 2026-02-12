@@ -4,7 +4,7 @@ import { pt } from "date-fns/locale";
 import { Plus, Pencil, Trash2, CreditCard, Receipt, AlertCircle, Ban, FileText, QrCode, Mail, Eye, RefreshCw, FileDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
+
 import {
   AlertDialog,
   AlertDialogAction,
@@ -382,42 +382,6 @@ export function SalePaymentsList({
           </div>
         )}
 
-        {/* Summary */}
-        {saleTotal > 0 && (
-          <div className="space-y-3 p-4 rounded-lg bg-muted/30 border">
-            <div className="space-y-1">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Progresso</span>
-                <span className="font-medium">{Math.round(summary.percentage)}%</span>
-              </div>
-              <Progress value={summary.percentage} className="h-2" />
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <p className="text-muted-foreground">Total Pago</p>
-                <p className="font-semibold text-primary">
-                  {formatCurrency(summary.totalPaid)}
-                </p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Em Falta</p>
-                <p className={`font-semibold ${summary.remaining > 0 ? 'text-destructive' : 'text-primary'}`}>
-                  {formatCurrency(summary.remaining)}
-                </p>
-              </div>
-            </div>
-
-            {summary.totalScheduled > 0 && (
-              <div className="pt-2 border-t text-sm">
-                <p className="text-muted-foreground">Agendado</p>
-                <p className="font-medium text-secondary-foreground">
-                  {formatCurrency(summary.totalScheduled)}
-                </p>
-              </div>
-            )}
-          </div>
-        )}
 
       </div>
 
