@@ -1,50 +1,33 @@
 
-# Mostrar Botoes de Acao da Fatura Apos Emissao
+# Esconder Botao "Ver Rascunho de Recibo" Quando a Fatura-Recibo (FR) Ja Foi Emitida
 
 ## Problema
-Quando a fatura e emitida com sucesso, o `invoicexpress_id` e preenchido na venda. Nesse momento, a condicao `canEmit` no rodape torna-se `false` e o bloco inteiro retorna `null` -- ou seja, nao aparece NENHUM botao de faturacao. Faltam os botoes de acao pos-emissao (ver PDF, enviar por email, ver detalhes, nota de credito).
+Quando uma Fatura-Recibo (FR) e emitida, ela ja inclui o recibo no proprio documento. No entanto, o botao "Ver Rascunho de Recibo" continua a aparecer nos pagamentos porque a condicao apenas verifica se existe um `invoicexpress_id` na venda (indicando que ha um documento emitido) e se o pagamento nao tem `invoice_reference` propria.
+
+O Recibo (RC) so faz sentido quando existe uma Fatura simples (FT) -- nesse caso, e necessario emitir recibos individuais para cada pagamento. Quando o documento e uma Fatura-Recibo (FR), o recibo ja esta incluido e nao deve ser emitido separadamente.
 
 ## Solucao
-Adicionar um segundo bloco condicional no rodape do `SaleDetailsModal.tsx` que aparece quando a fatura JA foi emitida (`sale.invoicexpress_id` existe). Este bloco mostrara:
+Adicionar uma verificacao do tipo de documento (`invoicexpress_type`) na condicao do botao de recibo. O botao so deve aparecer quando o documento emitido e uma Fatura (FT), nunca quando e uma Fatura-Recibo (FR).
 
-1. **Download/Ver PDF** - Abre o PDF da fatura (usando `invoice_pdf_url`)
-2. **Enviar por Email** - Abre o modal de envio de email com os dados do documento
-3. **Ver Detalhes** - Abre o modal de detalhes da fatura
-4. **Nota de Credito** - Permite emitir nota de credito (se nao existir ja uma)
+## Alteracao Tecnica
 
-## Alteracoes Tecnicas
+### `src/components/sales/SalePaymentsList.tsx`
 
-### `src/components/sales/SaleDetailsModal.tsx`
-
-**1. Adicionar estados para os modais de acao (junto dos outros estados existentes):**
-- `invoiceEmailModal` - para o modal de envio de email
-- `invoiceDetailsModal` - para o modal de detalhes
-- `invoiceCreditNoteModal` - para o modal de nota de credito
-
-**2. Adicionar imports necessarios:**
-- `SendInvoiceEmailModal` de `./SendInvoiceEmailModal`
-- `InvoiceDetailsModal` de `./InvoiceDetailsModal`
-- `CreateCreditNoteModal` de `./CreateCreditNoteModal`
-- `openPdfInNewTab` de `@/lib/download`
-- Icones: `FileDown`, `Mail`
-
-**3. Adicionar bloco de botoes pos-emissao no rodape (apos o bloco `canEmit`):**
-
-```text
-Logica condicional:
-- Se hasInvoiceXpress E sale.invoicexpress_id existe E NAO tem credit_note_id:
-  - Botao "Ver PDF" (se invoice_pdf_url existe)
-  - Botao "Enviar Email" (se cliente tem email)
-  - Botao "Ver Detalhes"
-  - Botao "Nota de Credito"
+Na linha 267, a condicao atual e:
+```
+payment.status === 'paid' && hasInvoiceXpress && hasInvoice && !payment.invoice_reference && !readonly
 ```
 
-**4. Renderizar os modais correspondentes (antes do fecho do fragmento `<>`):**
-- `SendInvoiceEmailModal`
-- `InvoiceDetailsModal`
-- `CreateCreditNoteModal`
+Deve ser alterada para incluir a verificacao do tipo de documento:
+```
+payment.status === 'paid' && hasInvoiceXpress && hasInvoice && invoicexpressType === 'FT' && !payment.invoice_reference && !readonly
+```
+
+Isto garante que:
+- O botao "Ver Rascunho de Recibo" so aparece quando a venda tem uma Fatura (FT) emitida
+- Quando a venda tem uma Fatura-Recibo (FR) emitida, o botao nao aparece (porque o recibo ja esta incluido no documento)
+- A alteracao e minima e cirurgica, afetando apenas uma condicao
 
 ### Resultado
-- Antes da emissao: aparecem os botoes "Ver Rascunho" e "Emitir Fatura/Fatura-Recibo"
-- Apos a emissao: aparecem os botoes "Ver PDF", "Enviar Email", "Detalhes" e "Nota de Credito"
-- A transicao e automatica gracas ao `useEffect` de sincronizacao que ja foi implementado
+- Venda com FT emitida: botao de recibo aparece nos pagamentos pagos (comportamento correto para emitir RC)
+- Venda com FR emitida: botao de recibo NAO aparece (o recibo ja esta incluido na FR)
