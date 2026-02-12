@@ -1633,6 +1633,8 @@ export type Database = {
           keyinvoice_api_url: string | null
           keyinvoice_company_code: string | null
           keyinvoice_password: string | null
+          keyinvoice_sid: string | null
+          keyinvoice_sid_expires_at: string | null
           keyinvoice_token: string | null
           keyinvoice_token_expires_at: string | null
           keyinvoice_username: string | null
@@ -1674,6 +1676,8 @@ export type Database = {
           keyinvoice_api_url?: string | null
           keyinvoice_company_code?: string | null
           keyinvoice_password?: string | null
+          keyinvoice_sid?: string | null
+          keyinvoice_sid_expires_at?: string | null
           keyinvoice_token?: string | null
           keyinvoice_token_expires_at?: string | null
           keyinvoice_username?: string | null
@@ -1715,6 +1719,8 @@ export type Database = {
           keyinvoice_api_url?: string | null
           keyinvoice_company_code?: string | null
           keyinvoice_password?: string | null
+          keyinvoice_sid?: string | null
+          keyinvoice_sid_expires_at?: string | null
           keyinvoice_token?: string | null
           keyinvoice_token_expires_at?: string | null
           keyinvoice_username?: string | null

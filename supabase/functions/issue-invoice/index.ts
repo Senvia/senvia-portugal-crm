@@ -23,12 +23,50 @@ function mapCountryToInvoiceXpress(country?: string | null): string {
 
 const DEFAULT_KEYINVOICE_API_URL = 'https://login.keyinvoice.com/API5.php'
 
-// API 5.0: The API key IS the Sid - no login needed
-function getKeyInvoiceApiKey(org: any): string {
+// API 5.0: Authenticate with Apikey header, get session Sid, cache it
+async function getKeyInvoiceSid(supabase: any, org: any, orgId: string): Promise<string> {
   if (!org.keyinvoice_password) {
     throw new Error('Chave da API KeyInvoice não configurada')
   }
-  return org.keyinvoice_password
+
+  // Check cached Sid (valid if expires_at > now + 5min margin)
+  const now = new Date()
+  const margin = 5 * 60 * 1000
+  if (org.keyinvoice_sid && org.keyinvoice_sid_expires_at) {
+    const expiresAt = new Date(org.keyinvoice_sid_expires_at)
+    if (expiresAt.getTime() > now.getTime() + margin) {
+      return org.keyinvoice_sid
+    }
+  }
+
+  // Authenticate to get a new Sid
+  const apiUrl = org.keyinvoice_api_url || DEFAULT_KEYINVOICE_API_URL
+  const authRes = await fetch(apiUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Apikey': org.keyinvoice_password },
+    body: JSON.stringify({ method: 'authenticate' }),
+  })
+
+  if (!authRes.ok) {
+    const errorText = await authRes.text()
+    throw new Error(`Erro ao autenticar no KeyInvoice: ${authRes.status} - ${errorText}`)
+  }
+
+  const authData = await authRes.json()
+  if (authData.Status !== 1 || !authData.Sid) {
+    throw new Error(`KeyInvoice auth: ${authData.ErrorMessage || 'Erro de autenticação'}`)
+  }
+
+  const newSid = authData.Sid
+  const expiresAt = new Date(now.getTime() + 3600 * 1000)
+
+  // Cache the Sid
+  await supabase
+    .from('organizations')
+    .update({ keyinvoice_sid: newSid, keyinvoice_sid_expires_at: expiresAt.toISOString() })
+    .eq('id', orgId)
+
+  return newSid
 }
 
 async function handleKeyInvoice(supabase: any, org: any, saleId: string, organizationId: string, observations: string | undefined, corsHeaders: Record<string, string>) {
@@ -65,7 +103,7 @@ async function handleKeyInvoice(supabase: any, org: any, saleId: string, organiz
     })
   }
 
-  const sid = getKeyInvoiceApiKey(org)
+  const sid = await getKeyInvoiceSid(supabase, org, organizationId)
   const apiUrl = org.keyinvoice_api_url || DEFAULT_KEYINVOICE_API_URL
 
   // Tax config
@@ -255,7 +293,7 @@ Deno.serve(async (req) => {
     // Fetch organization credentials
     const { data: org } = await supabase
       .from('organizations')
-      .select('invoicexpress_account_name, invoicexpress_api_key, integrations_enabled, tax_config, billing_provider, keyinvoice_password, keyinvoice_api_url')
+      .select('invoicexpress_account_name, invoicexpress_api_key, integrations_enabled, tax_config, billing_provider, keyinvoice_password, keyinvoice_api_url, keyinvoice_sid, keyinvoice_sid_expires_at')
       .eq('id', organization_id)
       .single()
 
