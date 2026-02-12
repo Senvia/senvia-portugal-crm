@@ -1,71 +1,113 @@
 
+# Reescrita da Integração KeyInvoice -- API Correta
 
-# Separar Integrações de Faturação: InvoiceXpress e KeyInvoice
+## Contexto
 
-## Problema Atual
-Existe um único accordion "Faturação" com um dropdown para escolher entre InvoiceXpress e KeyInvoice. Isto obriga a trocar de fornecedor para ver/editar credenciais, podendo perder dados. O utilizador quer manter ambas as configurações visíveis e independentes.
+A implementação atual do KeyInvoice utiliza endpoints REST inventados (`/auth/login/`, `/documents/new/`, `/documents/{id}/finalize/`, etc.) que **nao existem na API real**. A API KeyInvoice real funciona de forma completamente diferente:
 
-## Solução
+- **Endpoint unico**: POST para o endpoint base da API
+- **Metodo no body**: `{"method":"insertDocument",...}`  
+- **Autenticacao**: Header `Sid` com o identificador de sessao (nao `Authorization: Token`)
+- **Login**: `{"method":"login","username":"...","password":"..."}`
 
-Criar **dois AccordionItems separados** -- um para InvoiceXpress e outro para KeyInvoice -- cada um com o seu proprio switch de ativacao. Quando um e ativado, o outro e automaticamente desativado (mutuamente exclusivos).
+## O que muda
 
-### Alterações em `IntegrationsContent.tsx`
+### 1. Reescrever `keyinvoice-auth` (Edge Function)
 
-1. **Remover** o dropdown "Fornecedor de Faturação" (`billingProvider` / `setBillingProvider`)
-2. **Dividir** o accordion "Faturação" em dois:
-   - **"Faturação (InvoiceXpress)"** -- com switch `integrationsEnabled.invoicexpress`, campos Account Name + API Key
-   - **"Faturação (KeyInvoice)"** -- com switch `integrationsEnabled.keyinvoice`, campos Email + Password + Company Code
-3. **Configuração fiscal** (Taxa IVA + Motivo Isenção) aparece em **ambos** os accordions (partilhada, mesmos campos)
-4. **Lógica de exclusividade**: quando o utilizador ativa um switch, o outro e automaticamente desativado. O `billing_provider` na BD e atualizado automaticamente com base em qual esta ativo
+Corrigir o login para usar a API real:
+- Endpoint: POST para URL base da API (o endpoint exato do KeyInvoice, ex: `https://app.keyinvoice.com/API/`)
+- Body: `{"method":"login","username":"...","password":"...","companyCode":"..."}`
+- Resposta: `{Status:1,Data:{Sid:"..."}}` -- o `Sid` e o token de sessao
+- Guardar `Sid` como `keyinvoice_token` na BD
+- **Nota**: O endpoint base deve ser configuravel na organizacao (novo campo `keyinvoice_api_url`)
 
-### Alterações em `Settings.tsx`
+### 2. Reescrever `issue-invoice` -- bloco KeyInvoice
 
-1. Adicionar estado `integrationsEnabled.keyinvoice`
-2. Modificar `onToggleIntegration` para:
-   - Se ativar `invoicexpress` -> desativar `keyinvoice` + set `billing_provider = 'invoicexpress'`
-   - Se ativar `keyinvoice` -> desativar `invoicexpress` + set `billing_provider = 'keyinvoice'`
-   - Se desativar qualquer um -> apenas desativa (ambos podem estar desativados)
-3. Adicionar handler `handleSaveKeyInvoice` separado do `handleSaveInvoiceXpress`
+Substituir a logica de criacao de documento:
+- Usar `method: "insertDocument"` com `DocType: "34"` (Fatura-Recibo) ou `DocType: "4"` (Fatura)
+- Header: `Sid: <token>` em vez de `Authorization: Token`
+- Body inclui `IdClient`, `DocLines` com `IdProduct`, `Qty`, `Price`, `IdTax`
+- Resposta: `{Status:1,Data:{DocType,DocSeries,DocNum,FullDocNumber}}`
+- Guardar `DocNum` + `FullDocNumber` como referencia
+- Obter PDF via `method: "getDocumentPDF"` (retorna Base64, converter e guardar no Storage)
 
-### Alterações em `SaleFiscalInfo.tsx`
+### 3. Reescrever `cancel-invoice` -- bloco KeyInvoice
 
-Atualizar `isInvoiceXpressActive` / `isBillingActive` para verificar qual integração está ativa via `integrations_enabled` em vez de apenas `billing_provider`:
+Substituir anulacao:
+- Usar `method: "setDocumentVoid"` com `DocType`, `DocNum`, `CreditReason`
+- Se documento tem mais de 5 dias, a API emite nota de credito automaticamente
+- Resposta pode ser `{Voided,...}` ou `{DocType,DocSeries,DocNum,...}` (nota de credito)
 
-```
-Se integrations_enabled.invoicexpress === true E tem credenciais IX -> ativo
-Se integrations_enabled.keyinvoice === true E tem credenciais KI -> ativo
-```
+### 4. Reescrever `send-invoice-email` -- bloco KeyInvoice
 
-### Alterações nas props de `IntegrationsContent`
+Substituir envio de email:
+- Usar `method: "sendDocumentPDF2Email"` com `DocType`, `DocNum`, `EmailDestinations`, `EmailSubject`, `EmailBody`
 
-- Remover: `billingProvider`, `setBillingProvider`
-- Adicionar: `handleSaveKeyInvoice` (handler separado para guardar credenciais KeyInvoice)
+### 5. Adicionar campo `keyinvoice_api_url` a tabela `organizations`
 
----
+A documentacao usa "ENDERECO_API" como URL base -- cada conta KeyInvoice pode ter URL diferente. Adicionar:
+- Nova coluna `keyinvoice_api_url` (text, nullable)
+- Valor por defeito: `https://app.keyinvoice.com/API/` (a confirmar)
+- Campo editavel nas Definicoes -> Integracoes -> KeyInvoice
+
+### 6. Atualizar UI nas Definicoes
+
+Adicionar campo "URL da API" no accordion do KeyInvoice para que o utilizador possa configurar o endpoint.
 
 ## Detalhes Tecnicos
 
-### Fluxo de Exclusividade
+### Arquitetura da chamada KeyInvoice (padrao para todas as funcoes)
 
 ```text
-Utilizador ativa KeyInvoice
-  -> integrationsEnabled.keyinvoice = true
-  -> integrationsEnabled.invoicexpress = false
-  -> billing_provider = 'keyinvoice'
-  -> Guardar na BD (integrations_enabled + billing_provider)
+POST {keyinvoice_api_url}
+Headers:
+  Sid: {token_sessao}
+  Content-Type: application/json
+Body:
+  {"method":"insertDocument","DocType":"34","IdClient":"C001","DocLines":[...]}
+Resposta:
+  {"Status":1,"Data":{"DocType":"34","DocSeries":"1","DocNum":"101","FullDocNumber":"FR 1/101"}}
+```
 
-Utilizador desativa KeyInvoice
-  -> integrationsEnabled.keyinvoice = false
-  -> billing_provider permanece (nenhum ativo)
-  -> Guardar na BD
+### Mapeamento de tipos de documento
+
+```text
+4  = Fatura (FT)
+7  = Nota de Credito (NC)
+32 = Fatura Simplificada (FS)
+34 = Fatura-Recibo (FR)
+```
+
+### Helper de autenticacao reutilizavel
+
+Criar funcao helper `getKeyInvoiceSid()` que:
+1. Verifica token em cache na BD
+2. Se expirado, faz `method: "login"` para obter novo `Sid`
+3. Guarda novo `Sid` com expiracao de 23h
+4. Retorna `Sid` pronto a usar
+
+### Fluxo de emissao de fatura (corrigido)
+
+```text
+1. getKeyInvoiceSid() -> Sid
+2. method: "insertDocument" (DocType=34, IdClient, DocLines) -> DocNum, FullDocNumber
+3. method: "getDocumentPDF" (DocType=34, DocNum) -> Base64
+4. Converter Base64 -> Buffer -> Upload Supabase Storage
+5. Guardar referencia na tabela sales
 ```
 
 ### Ficheiros a modificar
 
-| Ficheiro | Alteração |
+| Ficheiro | Alteracao |
 |----------|-----------|
-| `IntegrationsContent.tsx` | Dividir accordion, remover dropdown, dois blocos independentes |
-| `Settings.tsx` | Logica de exclusividade nos switches, handler separado para KeyInvoice |
-| `SaleFiscalInfo.tsx` | Verificar `integrations_enabled` para determinar provider ativo |
-| `useOrganization.ts` | Sem alterações (já suporta todos os campos) |
+| `supabase/functions/keyinvoice-auth/index.ts` | Reescrever login para usar `method:"login"` + `Sid` |
+| `supabase/functions/issue-invoice/index.ts` | Reescrever `handleKeyInvoice()` + `getKeyInvoiceToken()` |
+| `supabase/functions/cancel-invoice/index.ts` | Reescrever bloco KeyInvoice para `method:"setDocumentVoid"` |
+| `supabase/functions/send-invoice-email/index.ts` | Reescrever bloco KeyInvoice para `method:"sendDocumentPDF2Email"` |
+| `src/components/settings/IntegrationsContent.tsx` | Adicionar campo URL da API |
+| `src/pages/Settings.tsx` | Adicionar estado + handler para `keyinvoice_api_url` |
+| **Migracao BD** | Adicionar coluna `keyinvoice_api_url` a `organizations` |
 
+### Questao em aberto
+
+O endpoint base da API KeyInvoice (ex: `https://app.keyinvoice.com/API/`) -- precisas de confirmar qual e o URL exato que utilizas. Se for sempre o mesmo para todos os clientes, posso usar um valor fixo em vez de campo configuravel.
