@@ -1,34 +1,31 @@
 
 
-# Adicionar "Dados da Venda" ao Modal Editar Venda
+# Tornar Data da Venda Read-Only no Modal Editar Venda
 
 ## Problema
-O modal "Editar Venda" nao tem a secao "Dados da Venda" (Codigo, Data, Estado) que existe no modal "Detalhes da Venda". O utilizador quer consistencia visual entre os dois modais.
+No modal "Editar Venda", a data da venda aparece como um date picker editavel, enquanto no "Detalhes da Venda" aparece como texto simples read-only. A data de uma venda nao deve ser editavel.
 
 ## O que fazer
 
 ### `src/components/sales/EditSaleModal.tsx`
 
-Adicionar um Card "Dados da Venda" no topo da coluna esquerda (antes do card "Informacao Basica"), com layout identico ao do SaleDetailsModal:
+Substituir o Popover/Calendar (linhas 405-431) por texto simples read-only, igualando o estilo do SaleDetailsModal:
 
-- **Codigo** (read-only, font-mono)
-- **Data da Venda** (mover o date picker que ja existe no card "Informacao Basica" para aqui)
-- **Estado** (read-only badge com as cores do status atual - nao editavel neste modal)
-
-O card "Informacao Basica" fica apenas com o campo **Cliente** (e o ClientFiscalCard se aplicavel).
-
-### Estrutura do novo card
-
+**De** (date picker editavel):
 ```text
-Card: "Dados da Venda" (icone FileText)
-  Grid 3 colunas:
-    - Codigo: sale.code (read-only, font-mono)
-    - Data da Venda: date picker (movido do card abaixo)
-    - Estado: Badge com SALE_STATUS_COLORS (read-only)
+<Popover>
+  <PopoverTrigger><Button>...</Button></PopoverTrigger>
+  <PopoverContent><Calendar .../></PopoverContent>
+</Popover>
 ```
 
-### Resumo das alteracoes
+**Para** (texto read-only):
+```text
+<p className="text-xs text-muted-foreground">Data da Venda</p>
+<p className="text-sm font-medium">
+  {format(new Date(sale.sale_date), "d MMM yyyy", { locale: pt })}
+</p>
+```
 
-1. Adicionar novo Card "Dados da Venda" antes do card "Informacao Basica"
-2. Mover o campo "Data da Venda" para o novo card
-3. O card "Informacao Basica" fica simplificado (apenas Cliente)
+Tambem remover o state `saleDate` e a logica associada do `handleSave`, ja que a data nao sera mais editavel.
+
