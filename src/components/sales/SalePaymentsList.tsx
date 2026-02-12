@@ -278,17 +278,7 @@ export function SalePaymentsList({
                       Emitir Recibo
                     </Button>
                   )}
-                  {payment.qr_code_url && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => window.open(payment.qr_code_url!, '_blank')}
-                      title="Ver QR Code"
-                    >
-                      <QrCode className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
+                  {/* Buttons shown after receipt is issued (invoice_reference exists) */}
                   {payment.invoice_file_url && (
                     <Button
                       variant="ghost"
@@ -300,7 +290,7 @@ export function SalePaymentsList({
                        <FileDown className="h-3.5 w-3.5" />
                     </Button>
                   )}
-                  {!payment.invoice_file_url && payment.invoicexpress_id && (
+                  {!payment.invoice_file_url && payment.invoice_reference && payment.invoicexpress_id && (
                     <Button
                       variant="ghost"
                       size="icon"
@@ -318,7 +308,18 @@ export function SalePaymentsList({
                       <RefreshCw className={`h-3.5 w-3.5 ${syncInvoice.isPending ? 'animate-spin' : ''}`} />
                     </Button>
                   )}
-                  {payment.invoicexpress_id && (
+                  {payment.qr_code_url && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => window.open(payment.qr_code_url!, '_blank')}
+                      title="Ver QR Code"
+                    >
+                      <QrCode className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                  {payment.invoice_reference && payment.invoicexpress_id && (
                     <Button
                       variant="ghost"
                       size="icon"
@@ -333,21 +334,23 @@ export function SalePaymentsList({
                       <Eye className="h-3.5 w-3.5" />
                     </Button>
                   )}
-                  {payment.invoice_reference && payment.invoicexpress_id && hasInvoiceXpress && !readonly && (
+                  {payment.invoice_reference && hasInvoiceXpress && !readonly && (
                     <>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => setEmailModal({
-                          documentId: payment.invoicexpress_id!,
-                          documentType: 'receipt',
-                          reference: payment.invoice_reference!,
-                        })}
-                        title="Enviar por email"
-                      >
-                        <Mail className="h-3.5 w-3.5" />
-                      </Button>
+                      {payment.invoicexpress_id && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => setEmailModal({
+                            documentId: payment.invoicexpress_id!,
+                            documentType: 'receipt',
+                            reference: payment.invoice_reference!,
+                          })}
+                          title="Enviar por email"
+                        >
+                          <Mail className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="icon"
