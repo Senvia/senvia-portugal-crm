@@ -1,67 +1,55 @@
 
 
-# Diagnosticar e corrigir emissao de fatura KeyInvoice
+# Corrigir tipo de documento: FT vs FR com base no estado do pagamento
 
 ## Problema
 
-Os logs mostram que:
-1. O produto foi criado com sucesso (`insertProduct` retornou `Status:1`)
-2. O `insertDocument` foi chamado, mas **nao ha log da resposta** - nao sabemos o que a API devolveu
-3. O PDF falhou com `Failed to decode base64` - indica que a resposta do `getDocumentPDF` nao e base64 puro (pode estar dentro de um objeto)
-4. O sistema reportou sucesso ao utilizador, mas a fatura pode nao ter sido criada no KeyInvoice
+O sistema emite sempre **Fatura-Recibo (DocType 34)** independentemente do estado do pagamento. Quando o pagamento esta agendado/pendente, deveria emitir uma **Fatura simples (DocType 4)**.
 
-## Solucao
+## Regras de negocio
 
-### Passo 1: Adicionar log completo da resposta do insertDocument
+- Pagamento **pendente** (agendado, ainda nao pago) -> **Fatura (FT)** = DocType `4`
+- Pagamento **pago** (ja recebido) -> **Fatura-Recibo (FR)** = DocType `34`
 
-**Ficheiro:** `supabase/functions/issue-invoice/index.ts` (linha 338)
+## Alteracao
 
-Adicionar um `console.log` imediatamente apos o `createRes.json()` para ver a resposta completa:
+**Ficheiro:** `supabase/functions/issue-invoice/index.ts`
 
-```typescript
-const createData = await createRes.json()
-console.log('KeyInvoice insertDocument FULL response:', JSON.stringify(createData).substring(0, 2000))
-```
+### 1. Determinar o tipo de documento dinamicamente (antes da linha 307)
 
-Isto vai permitir ver nos logs o que a API realmente devolveu.
-
-### Passo 2: Corrigir o parsing do PDF
-
-**Ficheiro:** `supabase/functions/issue-invoice/index.ts` (linhas 370-374)
-
-O `getDocumentPDF` provavelmente retorna o base64 dentro de `pdfData.Data.PDF` ou `pdfData.Data.Content` em vez de `pdfData.Data` diretamente. Corrigir para tentar multiplos caminhos:
+Consultar os pagamentos da venda para determinar se ha pagamentos com status `paid`:
 
 ```typescript
-if (pdfData.Status === 1 && pdfData.Data) {
-  console.log('KeyInvoice getDocumentPDF Data type:', typeof pdfData.Data, 
-    typeof pdfData.Data === 'object' ? Object.keys(pdfData.Data).join(',') : 'string')
-  
-  // Try multiple paths for the base64 content
-  let base64Pdf = typeof pdfData.Data === 'string' 
-    ? pdfData.Data 
-    : (pdfData.Data.PDF || pdfData.Data.Content || pdfData.Data.File || '')
-  
-  if (base64Pdf) {
-    // Remove potential data:application/pdf;base64, prefix
-    base64Pdf = base64Pdf.replace(/^data:[^;]+;base64,/, '')
-    const binaryStr = atob(base64Pdf)
-    // ... rest of PDF handling
-  }
-}
+// Determinar DocType com base no estado de pagamento
+const { data: payments } = await supabase
+  .from('sale_payments')
+  .select('status, amount')
+  .eq('sale_id', saleId)
+
+const totalPaid = (payments || [])
+  .filter((p: any) => p.status === 'paid')
+  .reduce((sum: number, p: any) => sum + Number(p.amount), 0)
+
+// DocType 4 = Fatura (FT), DocType 34 = Fatura-Recibo (FR)
+const docType = totalPaid >= sale.total_value ? '34' : '4'
+const docLabel = docType === '34' ? 'Fatura-Recibo' : 'Fatura'
+console.log(`KeyInvoice: Emitting ${docLabel} (DocType ${docType}), totalPaid=${totalPaid}, saleTotal=${sale.total_value}`)
 ```
 
-### Passo 3: Logar tambem o payload completo do insertDocument
+### 2. Usar docType dinamico no payload (linha 309)
 
-Adicionar log do payload completo (nao so as keys) para debug:
+Substituir `DocType: '34'` por `DocType: docType`
 
-```typescript
-console.log('KeyInvoice insertDocument FULL payload:', JSON.stringify(insertPayload))
-```
+### 3. Atualizar label na resposta e nos logs
 
-### Resultado esperado
+Ajustar as mensagens de sucesso para usar `docLabel` em vez de "Fatura-Recibo" hardcoded.
 
-Apos o deploy, quando o utilizador emitir uma fatura:
-1. Os logs vao mostrar a resposta completa do `insertDocument` - sabemos se a fatura foi criada
-2. Os logs vao mostrar a estrutura do PDF - podemos corrigir o parsing
-3. Se a fatura nao estiver a ser criada, o erro real sera visivel nos logs para corrigir
+### 4. Atualizar o invoicexpress_type guardado na BD
 
+O campo `invoicexpress_type` na tabela `sales` deve guardar `'FT'` ou `'FR'` conforme o tipo emitido.
+
+## Resultado
+
+- Pagamento agendado -> emite **Fatura (FT)** no KeyInvoice
+- Pagamento ja pago -> emite **Fatura-Recibo (FR)** no KeyInvoice
+- Logs indicam claramente o tipo de documento emitido
