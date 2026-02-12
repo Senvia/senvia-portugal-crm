@@ -119,7 +119,7 @@ async function handleKeyInvoice(supabase: any, org: any, saleId: string, organiz
   const clientName = sale.client?.company || sale.client?.name || sale.lead?.name || 'Cliente'
   const clientCode = sale.client?.code || clientNif
 
-  // Ensure client exists in KeyInvoice (auto-create if not)
+  // Resolve client in KeyInvoice: try insertClient first, then fallback to listClients by VATIN
   let keyInvoiceClientId: string | null = null
   try {
     const insertClientPayload: Record<string, any> = {
@@ -149,19 +149,36 @@ async function handleKeyInvoice(supabase: any, org: any, saleId: string, organiz
       }
     }
   } catch (e) {
-    console.warn('KeyInvoice insertClient failed (non-blocking, client may already exist):', e)
+    console.warn('KeyInvoice insertClient failed (non-blocking):', e)
   }
 
-  // If insertClient didn't return an Id, log and continue - we'll use VATIN in insertDocument
+  // If insertClient didn't return Id, search in listClients by VATIN
+  if (!keyInvoiceClientId) {
+    try {
+      const listClientsRes = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Sid': sid },
+        body: JSON.stringify({ method: 'listClients' }),
+      })
+      const listClientsData = await listClientsRes.json()
+      if (listClientsData.Status === 1 && listClientsData.Data?.Clients) {
+        const clients = Array.isArray(listClientsData.Data.Clients) ? listClientsData.Data.Clients : []
+        const match = clients.find((c: any) => c.VATIN === clientNif)
+        if (match?.IdClient) {
+          keyInvoiceClientId = String(match.IdClient)
+          console.log('KeyInvoice client found via listClients, IdClient:', keyInvoiceClientId)
+        }
+      }
+    } catch (e) {
+      console.warn('KeyInvoice listClients failed:', e)
+    }
+  }
+
   if (!keyInvoiceClientId) {
     console.log('KeyInvoice: No client Id obtained. Will pass VATIN directly to insertDocument.')
   }
 
-  // Build DocLines for KeyInvoice real API
-  // KeyInvoice requires a valid numeric IdProduct for each line
-  // Use listProducts to find existing products, match by name or use first available
-
-  // Fetch all products from KeyInvoice once
+  // Fetch all products from KeyInvoice
   let keyInvoiceProducts: any[] = []
   try {
     const listRes = await fetch(apiUrl, {
@@ -173,7 +190,6 @@ async function handleKeyInvoice(supabase: any, org: any, saleId: string, organiz
     console.log('KeyInvoice listProducts FULL response:', JSON.stringify(listData).substring(0, 2000))
 
     if (listData.Status === 1 && listData.Data) {
-      // Try multiple paths to find the products array
       if (Array.isArray(listData.Data)) {
         keyInvoiceProducts = listData.Data
       } else if (Array.isArray(listData.Data.Products)) {
@@ -186,11 +202,9 @@ async function handleKeyInvoice(supabase: any, org: any, saleId: string, organiz
         for (const key of keys) {
           if (Array.isArray(listData.Data[key])) {
             keyInvoiceProducts = listData.Data[key]
-            console.log('Found products array under key:', key)
             break
           }
         }
-        // If Data itself looks like a product (has Id), wrap it
         if (keyInvoiceProducts.length === 0 && listData.Data.Id) {
           keyInvoiceProducts = [listData.Data]
         }
@@ -200,6 +214,15 @@ async function handleKeyInvoice(supabase: any, org: any, saleId: string, organiz
       keyInvoiceProducts.map((p: any) => `${p.Id}:${p.Description || p.Name}`).join(', '))
   } catch (e) {
     console.warn('KeyInvoice listProducts failed:', e)
+  }
+
+  // IdProduct is MANDATORY in KeyInvoice - cannot use Description-only DocLines
+  if (keyInvoiceProducts.length === 0) {
+    return new Response(JSON.stringify({ 
+      error: 'Não existem produtos no KeyInvoice. Aceda ao painel do KeyInvoice e crie pelo menos um produto/serviço (ex: "Serviço"). A API requer um IdProduct válido para cada linha da fatura.',
+    }), {
+      status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
   }
 
   function findProductId(name: string): string {
@@ -214,11 +237,8 @@ async function handleKeyInvoice(supabase: any, org: any, saleId: string, organiz
     )
     if (partialMatch?.Id) return String(partialMatch.Id)
 
-    if (keyInvoiceProducts.length > 0) {
-      console.log('KeyInvoice: No product match for "' + name + '", using first product:', keyInvoiceProducts[0].Id)
-      return String(keyInvoiceProducts[0].Id)
-    }
-    return ''
+    console.log('KeyInvoice: No product match for "' + name + '", using first product:', keyInvoiceProducts[0].Id)
+    return String(keyInvoiceProducts[0].Id)
   }
 
   const items = (saleItems && saleItems.length > 0) 
@@ -226,16 +246,7 @@ async function handleKeyInvoice(supabase: any, org: any, saleId: string, organiz
     : [{ name: `Venda ${sale.code || saleId}`, quantity: 1, unit_price: sale.total_value }]
 
   const docLines: any[] = []
-  if (keyInvoiceProducts.length === 0) {
-    console.log('KeyInvoice: 0 products found, using Description-only DocLines as fallback')
-    for (const item of items) {
-      docLines.push({
-        Description: item.name || 'Servico',
-        Qty: String(Number(item.quantity)),
-        Price: String(Number(item.unit_price)),
-      })
-    }
-  } else {
+  {
     for (const item of items) {
       const productId = findProductId(item.name || 'Serviço')
       docLines.push({
