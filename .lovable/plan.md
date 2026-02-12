@@ -1,20 +1,34 @@
 
 
-# Reordenar Botoes do Footer - Detalhes da Venda
+# Adicionar Progresso de Pagamento ao Modal Editar Venda
 
 ## Problema
-No footer do modal "Detalhes da Venda", o botao "Editar Venda" aparece antes dos botoes de faturacao. O utilizador quer que fique entre o botao "Emitir Fatura" e o botao "Voltar".
+O modal "Detalhes da Venda" tem um card "Pagamento" na coluna direita com barra de progresso, total pago e valor em falta. O modal "Editar Venda" nao tem essa informacao.
 
 ## Alteracao
 
-### `src/components/sales/SaleDetailsModal.tsx` (linhas 660-710)
+### `src/components/sales/EditSaleModal.tsx`
 
-Reordenar os blocos dentro do footer para:
+Adicionar um card "Pagamento" (read-only) na coluna direita, entre o card "Resumo" e o card "Notas" (linha ~648), replicando o layout do SaleDetailsModal:
 
-1. **Ver Rascunho Fatura** + **Emitir Fatura** (bloco de faturacao - mantem-se primeiro)
-2. **Editar Venda** (movido para aqui)
-3. **Voltar** (mantem-se no final)
+1. **Importar** `Progress` de `@/components/ui/progress`, `CreditCard` de `lucide-react`, e `useSalePayments` + `calculatePaymentSummary` de `@/hooks/useSalePayments`
+2. **Buscar dados**: Chamar `useSalePayments(sale.id)` e calcular o resumo com `calculatePaymentSummary`
+3. **Renderizar** o card com:
+   - Barra de progresso com percentagem
+   - Grid 2 colunas: Total Pago (verde) e Em Falta (amber)
+   - Valor Agendado (se existir)
+4. **Condicao**: Mostrar apenas quando `!isTelecom` e existam pagamentos (mesmo comportamento do SaleDetailsModal)
 
-Ordem final dos botoes: `[ Ver Rascunho | Emitir Fatura | Editar Venda | Voltar ]`
+### Estrutura do card
 
-Nenhuma logica e alterada, apenas a posicao dos blocos JSX dentro do `<div className="flex gap-3">`.
+```text
+Card: "Pagamento" (icone CreditCard)
+  - Progresso: barra + percentagem
+  - Grid 2 cols:
+    - Total Pago (verde)
+    - Em Falta (amber)
+  - Agendado (se > 0)
+```
+
+Nenhuma logica de edicao -- e apenas informacao visual read-only para contexto durante a edicao.
+
