@@ -216,13 +216,57 @@ async function handleKeyInvoice(supabase: any, org: any, saleId: string, organiz
     console.warn('KeyInvoice listProducts failed:', e)
   }
 
-  // IdProduct is MANDATORY in KeyInvoice - cannot use Description-only DocLines
+  // If no products exist, create them automatically via insertProduct
   if (keyInvoiceProducts.length === 0) {
-    return new Response(JSON.stringify({ 
-      error: 'Não existem produtos no KeyInvoice. Aceda ao painel do KeyInvoice e crie pelo menos um produto/serviço (ex: "Serviço"). A API requer um IdProduct válido para cada linha da fatura.',
-    }), {
-      status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+    console.log('KeyInvoice: 0 products found, creating automatically via insertProduct')
+    const itemsToCreate = (saleItems && saleItems.length > 0)
+      ? saleItems
+      : [{ name: `Venda ${sale.code || saleId}`, quantity: 1, unit_price: sale.total_value }]
+
+    for (const item of itemsToCreate) {
+      const itemName = item.name || 'Servico'
+      const itemCode = itemName.replace(/[^a-zA-Z0-9]/g, '').substring(0, 20) || 'SRV001'
+
+      const insertProductPayload: Record<string, any> = {
+        method: 'insertProduct',
+        IdProduct: itemCode,
+        Name: itemName,
+        TaxValue: String(orgTaxValue),
+        IsService: '1',
+        HasStocks: '0',
+        Active: '1',
+        Price: String(Number(item.unit_price)),
+      }
+
+      if (orgTaxValue === 0) {
+        insertProductPayload.TaxExemptionReasonCode = 'M10'
+      }
+
+      const prodRes = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Sid': sid },
+        body: JSON.stringify(insertProductPayload),
+      })
+      const prodData = await prodRes.json()
+      console.log('KeyInvoice insertProduct response:', JSON.stringify(prodData))
+
+      if (prodData.Status === 1 && prodData.Data?.Id) {
+        keyInvoiceProducts.push({
+          Id: prodData.Data.Id,
+          Name: itemName,
+          Description: itemName,
+        })
+      } else {
+        console.error('KeyInvoice insertProduct failed:', prodData.ErrorMessage)
+        return new Response(JSON.stringify({
+          error: `Erro ao criar produto "${itemName}" no KeyInvoice: ${prodData.ErrorMessage || 'Erro desconhecido'}`,
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+    }
+    console.log('KeyInvoice: Created', keyInvoiceProducts.length, 'products automatically')
   }
 
   function findProductId(name: string): string {
