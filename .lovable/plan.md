@@ -1,31 +1,24 @@
 
 
-# Corrigir campos do insertClient para KeyInvoice
+# Corrigir PaymentTypeSelector (Seletor Único/Parcelado) que não aparece
 
 ## Problema
 
-O método `insertClient` usa nomes de campos errados (`TaxId`, `City`), causando "Parâmetro(s) inválido(s)", o que faz o cliente nunca ser criado. Depois, o `insertDocument` falha com "Cliente não existente".
+O seletor "Pagamento Total vs Parcelado" usa um componente `Dialog` que está **aninhado dentro** do modal de detalhes da venda (que também é um `Dialog`). Dialogs aninhados no Radix UI causam conflitos de foco e portal -- o seletor abre atrás do modal pai ou fecha imediatamente.
 
-## Correções em `supabase/functions/issue-invoice/index.ts`
+## Solucao
 
-Linha 127: `TaxId` passa a `VATIN` (campo obrigatório segundo a documentação)
-Linha 132: `City` passa a `Locality`
-Adicionar `CountryCode: 'PT'` como valor por defeito no payload
+Converter o `PaymentTypeSelector` de `Dialog` para `AlertDialog` (que funciona melhor quando aninhado dentro de outro Dialog), ou em alternativa, substituir por um bloco inline dentro do proprio componente `SalePaymentsList` em vez de abrir um modal separado.
 
-```text
-Antes:
-  Name: clientName,
-  TaxId: clientNif,
-  ...
-  City: sale.client?.city
+A abordagem mais simples e robusta: substituir o Dialog por AlertDialog no `PaymentTypeSelector.tsx`.
 
-Depois:
-  Name: clientName,
-  VATIN: clientNif,
-  CountryCode: 'PT',
-  ...
-  Locality: sale.client?.city
-```
+## Detalhes Tecnicos
+
+**Ficheiro:** `src/components/sales/PaymentTypeSelector.tsx`
+
+- Trocar os imports de `Dialog`, `DialogContent`, `DialogHeader`, `DialogTitle`, `DialogDescription` para `AlertDialog`, `AlertDialogContent`, `AlertDialogHeader`, `AlertDialogTitle`, `AlertDialogDescription`
+- Manter toda a logica e layout interno identicos
+- O `AlertDialog` funciona correctamente quando aninhado dentro de um `Dialog` porque usa um portal separado e nao conflitua com o focus trap do Dialog pai
 
 Nenhum outro ficheiro precisa de ser alterado.
 
