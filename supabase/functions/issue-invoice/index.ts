@@ -348,12 +348,12 @@ async function handleKeyInvoice(supabase: any, org: any, saleId: string, organiz
       .order('payment_date', { ascending: true })
 
     if (salePaymentsForObs && salePaymentsForObs.length > 1) {
-      finalObservations = `Pagamento em ${salePaymentsForObs.length} parcelas:\n` +
+      finalObservations = `Pagamento em ${salePaymentsForObs.length} parcelas:\n\n` +
         salePaymentsForObs.map((p: any, i: number) => {
           const d = new Date(p.payment_date)
           const dateStr = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`
           return `${i+1}. ${dateStr} - ${Number(p.amount).toFixed(2)}€`
-        }).join('\n')
+        }).join('\n\n')
     } else if (salePaymentsForObs && salePaymentsForObs.length === 1) {
       const p = salePaymentsForObs[0]
       const d = new Date(p.payment_date)
@@ -771,12 +771,12 @@ Deno.serve(async (req) => {
         .order('payment_date', { ascending: true })
       
       if (salePayments && salePayments.length > 1) {
-        finalObservations = `Pagamento em ${salePayments.length} parcelas:\n` +
+        finalObservations = `Pagamento em ${salePayments.length} parcelas:\n\n` +
           salePayments.map((p: any, i: number) => {
             const d = new Date(p.payment_date)
             const dateStr = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
             return `- ${i + 1}.ª parcela: ${Number(p.amount).toFixed(2)} EUR - ${dateStr}`
-          }).join('\n')
+          }).join('\n\n')
       } else if (salePayments && salePayments.length === 1) {
         const p = salePayments[0]
         const d = new Date(p.payment_date)
