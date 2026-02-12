@@ -20,7 +20,7 @@ import { useClients } from "@/hooks/useClients";
 import { useProducts } from "@/hooks/useProducts";
 import { useUpdateSale } from "@/hooks/useSales";
 import { useSaleItems, useCreateSaleItems, useUpdateSaleItem, useDeleteSaleItem } from "@/hooks/useSaleItems";
-import { useCreateSalePayment } from "@/hooks/useSalePayments";
+import { useCreateSalePayment, useSalePayments, calculatePaymentSummary } from "@/hooks/useSalePayments";
 import { useAuth } from "@/contexts/AuthContext";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -40,11 +40,13 @@ import {
   User,
   FileText,
   AlertCircle,
-  RefreshCw
+  RefreshCw,
+  CreditCard
 } from "lucide-react";
 
 import type { SaleWithDetails } from "@/types/sales";
 import { SalePaymentsList } from "./SalePaymentsList";
+import { Progress } from "@/components/ui/progress";
 
 interface SaleItemDraft {
   id: string;
@@ -86,6 +88,10 @@ export function EditSaleModal({
   // Fiscal info
   const ixActive = isInvoiceXpressActive(organization);
   const orgTaxValue = getOrgTaxValue(organization);
+
+  // Payment progress
+  const { data: salePayments = [] } = useSalePayments(sale?.id);
+  const paymentSummary = calculatePaymentSummary(salePayments, sale?.total_value || 0);
   
   // Form state
   const [clientId, setClientId] = useState<string>("");
@@ -640,6 +646,43 @@ export function EditSaleModal({
                             <div className="flex justify-between text-sm border-t pt-2">
                               <span className="text-muted-foreground font-medium">Total c/ IVA</span>
                               <span className="font-semibold">{formatCurrency(vatCalc.totalWithVat)}</span>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {/* Payment Progress */}
+                    {organization?.niche !== 'telecom' && salePayments.length > 0 && (
+                      <Card>
+                        <CardHeader className="pb-2 p-4">
+                          <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
+                            <CreditCard className="h-4 w-4" />
+                            Pagamento
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-4 pt-0 space-y-4">
+                          <div className="space-y-2">
+                            <div className="flex justify-between text-xs text-muted-foreground">
+                              <span>Progresso</span>
+                              <span>{Math.round(paymentSummary.percentage)}%</span>
+                            </div>
+                            <Progress value={paymentSummary.percentage} className="h-2" />
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <p className="text-xs text-muted-foreground">Total Pago</p>
+                              <p className="text-sm font-semibold text-green-500">{formatCurrency(paymentSummary.totalPaid)}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground">Em Falta</p>
+                              <p className="text-sm font-semibold text-amber-500">{formatCurrency(paymentSummary.remaining)}</p>
+                            </div>
+                          </div>
+                          {paymentSummary.totalScheduled > 0 && (
+                            <div>
+                              <p className="text-xs text-muted-foreground">Agendado</p>
+                              <p className="text-sm font-semibold">{formatCurrency(paymentSummary.totalScheduled)}</p>
                             </div>
                           )}
                         </CardContent>
