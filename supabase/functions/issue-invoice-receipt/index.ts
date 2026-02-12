@@ -357,6 +357,7 @@ async function handleKeyInvoiceReceipt(supabase: any, org: any, saleId: string, 
     invoicexpress_id: docNum,
     invoicexpress_type: docTypeCode,
     invoice_reference: fullDocNumber,
+    status: 'delivered',
     ...(storedPdfPath ? { invoice_pdf_url: storedPdfPath } : {}),
   }).eq('id', saleId)
 

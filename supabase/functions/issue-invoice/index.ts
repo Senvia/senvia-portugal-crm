@@ -468,6 +468,7 @@ async function handleKeyInvoice(supabase: any, org: any, saleId: string, organiz
       invoicexpress_id: docNum,
       invoicexpress_type: docTypeCode,
       invoice_reference: fullDocNumber,
+      status: 'delivered',
       ...(storedPdfPath ? { invoice_pdf_url: storedPdfPath } : {}),
     })
     .eq('id', saleId)
@@ -922,6 +923,7 @@ Deno.serve(async (req) => {
         invoicexpress_id: invoiceId,
         invoicexpress_type: 'invoices',
         invoice_reference: invoiceReference,
+        status: 'delivered',
         ...(fileUrl ? { invoice_pdf_url: fileUrl } : {}),
         ...(qrCodeUrl ? { qr_code_url: qrCodeUrl } : {}),
       })
