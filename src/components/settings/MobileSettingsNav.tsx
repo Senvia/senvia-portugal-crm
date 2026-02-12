@@ -1,4 +1,4 @@
-import { ChevronRight, Building, Users, UsersRound, Package, Link2, Bell, Receipt, Shield, Settings, GitBranch, LayoutGrid, FileText, List, KeyRound, UserCog, Network, BellRing, AlertTriangle } from "lucide-react";
+import { ChevronRight, Building, Users, UsersRound, Package, Link2, Bell, Receipt, Shield, Settings, GitBranch, LayoutGrid, FileText, List, KeyRound, UserCog, Network, BellRing, AlertTriangle, Calculator } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type SettingsSection = "general" | "security" | "team" | "products" | "finance" | "notifications" | "integrations";
@@ -8,7 +8,7 @@ export type SettingsSubSection =
   | "security"
   | "team-access" | "team-profiles" | "team-teams"
   | "products"
-  | "finance-expenses"
+  | "finance-expenses" | "finance-fiscal"
   | "notif-push" | "notif-alerts"
   | "integrations";
 
@@ -33,7 +33,7 @@ const sections: SectionItem[] = [
   { id: "security", label: "Segurança", icon: Shield, description: "Password e autenticação 2FA" },
   { id: "team", label: "Equipa e Acessos", icon: UsersRound, description: "Utilizadores, perfis e equipas", requiresTeam: true },
   { id: "products", label: "Produtos", icon: Package, description: "Catálogo para propostas", requiresIntegrations: true },
-  { id: "finance", label: "Financeiro", icon: Receipt, description: "Tipos de despesas", requiresIntegrations: true },
+  { id: "finance", label: "Financeiro", icon: Receipt, description: "Despesas e configuração fiscal", requiresIntegrations: true },
   { id: "notifications", label: "Notificações", icon: Bell, description: "Push e alertas de fidelização" },
   { id: "integrations", label: "Integrações", icon: Link2, description: "Webhook, WhatsApp, IA", requiresIntegrations: true },
 ];
@@ -103,7 +103,10 @@ export const subSectionsMap: Record<SettingsSection, SubSectionItem[]> = {
     { id: "team-teams", label: "Equipas", icon: Network, description: "Hierarquia e liderança" },
   ],
   products: [], // direct content
-  finance: [], // direct content
+  finance: [
+    { id: "finance-expenses", label: "Tipos de Despesas", icon: Receipt, description: "Categorias de despesas" },
+    { id: "finance-fiscal", label: "Fiscal", icon: Calculator, description: "IVA e configuração fiscal" },
+  ],
   notifications: [
     { id: "notif-push", label: "Push", icon: BellRing, description: "Notificações push no browser" },
     { id: "notif-alerts", label: "Alertas", icon: AlertTriangle, description: "Alertas de fidelização" },
@@ -142,7 +145,7 @@ export function MobileSubSectionNav({ group, onSelectSubSection }: MobileSubSect
 }
 
 // Groups that go directly to content (no sub-sections)
-export const directContentGroups: SettingsSection[] = ["security", "products", "finance", "integrations"];
+export const directContentGroups: SettingsSection[] = ["security", "products", "integrations"];
 
 // Section titles
 export const sectionTitles: Record<SettingsSection, string> = {
