@@ -170,38 +170,6 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
             <DialogTitle className="text-base font-semibold">Detalhes da Venda</DialogTitle>
           </DialogHeader>
 
-          {/* Context Bar */}
-          <div className="px-4 sm:px-6 py-3 border-b border-border/50 flex items-center justify-between gap-3">
-            {sale.code && (
-              <Badge variant="outline" className="font-mono text-xs shrink-0">
-                {sale.code}
-              </Badge>
-            )}
-            <span className="text-sm text-muted-foreground">
-              {format(new Date(sale.sale_date), "d MMM yyyy", { locale: pt })}
-            </span>
-            <Select value={status} onValueChange={handleStatusChange} disabled={isDeliveredAndLocked}>
-              <SelectTrigger className={cn('w-auto min-w-[140px] h-8 text-xs border', SALE_STATUS_COLORS[status])}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {SALE_STATUSES.map((s) => (
-                  <SelectItem key={s} value={s}>
-                    <span className={cn('px-2 py-0.5 rounded text-xs font-medium', SALE_STATUS_COLORS[s])}>
-                      {SALE_STATUS_LABELS[s]}
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          {isDeliveredAndLocked && (
-            <div className="px-4 sm:px-6">
-              <p className="text-xs text-muted-foreground">
-                Esta venda está concluída e não pode ser alterada.
-              </p>
-            </div>
-          )}
 
           {/* Content - 2 column layout */}
           <div className="flex-1 overflow-y-auto">
@@ -225,6 +193,52 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
               <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
                 {/* LEFT COLUMN (60%) */}
                 <div className="lg:col-span-3 space-y-4">
+                  {/* Sale Data Card */}
+                  <Card>
+                    <CardHeader className="pb-2 p-4">
+                      <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
+                        <FileText className="h-4 w-4" />
+                        Dados da Venda
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-4 pt-0">
+                      <div className="grid grid-cols-3 gap-4">
+                        <div>
+                          <p className="text-xs text-muted-foreground">Código</p>
+                          <p className="text-sm font-medium font-mono">{sale.code}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">Data da Venda</p>
+                          <p className="text-sm font-medium">
+                            {format(new Date(sale.sale_date), "d MMM yyyy", { locale: pt })}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">Estado</p>
+                          <Select value={status} onValueChange={handleStatusChange} disabled={isDeliveredAndLocked}>
+                            <SelectTrigger className={cn('w-full h-8 text-xs border mt-0.5', SALE_STATUS_COLORS[status])}>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {SALE_STATUSES.map((s) => (
+                                <SelectItem key={s} value={s}>
+                                  <span className={cn('px-2 py-0.5 rounded text-xs font-medium', SALE_STATUS_COLORS[s])}>
+                                    {SALE_STATUS_LABELS[s]}
+                                  </span>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      {isDeliveredAndLocked && (
+                        <p className="text-xs text-muted-foreground mt-3">
+                          Esta venda está concluída e não pode ser alterada.
+                        </p>
+                      )}
+                    </CardContent>
+                  </Card>
+
                   {/* Client Card */}
                   {(sale.client || sale.lead) && (
                     <Card>
