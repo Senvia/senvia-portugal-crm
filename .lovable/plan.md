@@ -1,24 +1,24 @@
 
 
-# Corrigir PaymentTypeSelector (Seletor Único/Parcelado) que não aparece
+# Corrigir erro "Identifier 'apiUrl' has already been declared"
 
 ## Problema
 
-O seletor "Pagamento Total vs Parcelado" usa um componente `Dialog` que está **aninhado dentro** do modal de detalhes da venda (que também é um `Dialog`). Dialogs aninhados no Radix UI causam conflitos de foco e portal -- o seletor abre atrás do modal pai ou fecha imediatamente.
+A function `handleKeyInvoice` declara `const apiUrl` na linha 107 e depois declara novamente `const apiUrl` na linha 162. Isto causa um erro de sintaxe que impede a edge function de iniciar.
 
 ## Solucao
 
-Converter o `PaymentTypeSelector` de `Dialog` para `AlertDialog` (que funciona melhor quando aninhado dentro de outro Dialog), ou em alternativa, substituir por um bloco inline dentro do proprio componente `SalePaymentsList` em vez de abrir um modal separado.
+Remover a segunda declaracao duplicada na linha 162:
 
-A abordagem mais simples e robusta: substituir o Dialog por AlertDialog no `PaymentTypeSelector.tsx`.
+```
+const apiUrl = org.keyinvoice_api_url || DEFAULT_KEYINVOICE_API_URL
+```
+
+Esta linha e identica a da linha 107 e foi adicionada acidentalmente na ultima edicao. A variavel `apiUrl` ja esta disponivel no scope da funcao, e a funcao interna `getOrCreateProduct` ja a utiliza correctamente.
 
 ## Detalhes Tecnicos
 
-**Ficheiro:** `src/components/sales/PaymentTypeSelector.tsx`
-
-- Trocar os imports de `Dialog`, `DialogContent`, `DialogHeader`, `DialogTitle`, `DialogDescription` para `AlertDialog`, `AlertDialogContent`, `AlertDialogHeader`, `AlertDialogTitle`, `AlertDialogDescription`
-- Manter toda a logica e layout interno identicos
-- O `AlertDialog` funciona correctamente quando aninhado dentro de um `Dialog` porque usa um portal separado e nao conflitua com o focus trap do Dialog pai
-
-Nenhum outro ficheiro precisa de ser alterado.
+**Ficheiro:** `supabase/functions/issue-invoice/index.ts`
+- Linha 162: remover `const apiUrl = org.keyinvoice_api_url || DEFAULT_KEYINVOICE_API_URL`
+- Nenhuma outra alteracao necessaria
 
