@@ -1,26 +1,27 @@
 
 
-# Corrigir Botoes do Footer - Ordem e Cores
+# Corrigir Visibilidade dos Botoes em Toda a App
 
-## Problemas
-1. O botao "Voltar" esta no inicio, mas deve ficar no final (depois de "Emitir Fatura")
-2. Todos os botoes tem cores muito similares ao fundo, nao se distinguem visualmente
+## Problema
+Os variantes `outline`, `secondary` e `ghost` do componente Button usam cores praticamente iguais ao fundo da pagina, tornando os botoes invisiveis.
 
-## O que fazer
+## Solucao
 
-### `src/components/sales/SaleDetailsModal.tsx` (Footer, linhas 660-710)
+### `src/components/ui/button.tsx`
 
-1. **Mover "Voltar" para o fim** da linha de botoes (depois do botao "Emitir Fatura")
-2. **Aplicar cores distintas a cada botao**:
-   - **Editar Venda** - `variant="outline"` (bordas visiveis, mantemos)
-   - **Ver Rascunho Fatura** - `variant="secondary"` (fundo cinza visivel)
-   - **Emitir Fatura / Fatura-Recibo** - `variant="senvia"` (gradiente azul, botao principal)
-   - **Voltar** - `variant="outline"` com estilo subtil mas visivel
+Atualizar os estilos dos 3 variantes problematicos:
 
-Ordem final:
+- **outline**: Adicionar borda mais forte e fundo subtil para se destacar do background
+  - De: `border border-input bg-background hover:bg-accent`
+  - Para: `border-2 border-border bg-background hover:bg-accent hover:text-accent-foreground shadow-sm`
 
-```text
-[ Editar Venda (outline) ] [ Ver Rascunho (secondary) ] [ Emitir Fatura (senvia/primary) ] [ Voltar (outline) ]
-```
+- **secondary**: Usar um fundo mais escuro/contrastante
+  - De: `bg-secondary text-secondary-foreground hover:bg-secondary/80`
+  - Para: `bg-muted text-foreground border border-border hover:bg-accent shadow-sm`
 
-Assim cada botao tem uma cor diferente e destaca-se claramente do fundo.
+- **ghost**: Adicionar borda subtil para que o botao seja pelo menos reconhecivel como botao
+  - De: `hover:bg-accent hover:text-accent-foreground`
+  - Para: `text-muted-foreground hover:bg-accent hover:text-accent-foreground border border-transparent hover:border-border`
+
+Estas alteracoes sao globais - afetam todos os botoes da aplicacao de uma vez, corrigindo o problema em todas as paginas (Vendas, Leads, Clientes, Financas, etc.).
+
