@@ -61,7 +61,7 @@ export function ProductsTab() {
               Produtos & Serviços
             </CardTitle>
             <CardDescription>
-              Gerir o catálogo de produtos e serviços para propostas.
+              Gerir o catálogo de produtos e serviços da organização.
             </CardDescription>
           </div>
           <div className="flex gap-2">
@@ -115,7 +115,7 @@ export function ProductsTab() {
                         </Badge>
                       ) : (
                         <Badge variant="outline" className="text-xs bg-muted/50 text-muted-foreground">
-                          Org default
+                          IVA da Org
                         </Badge>
                       )}
                       {!product.is_active && (
