@@ -1,134 +1,76 @@
 
+# Financeiro: 2 Sub-modulos (Tipos de Despesas + Fiscal)
 
-# Navegacao em Dois Niveis nas Definicoes
+## Resumo
 
-## Conceito
+O grupo "Financeiro" passa de conteudo direto (apenas ExpenseCategoriesTab) para ter **2 sub-modulos**:
 
-A navegacao passa a ter **dois niveis hierarquicos**:
-
-1. **Nivel 1 (Grupo)**: Definicoes Gerais, Seguranca, Equipa e Acessos, Produtos, Financeiro, Notificacoes, Integracoes
-2. **Nivel 2 (Sub-modulo)**: Dentro de cada grupo, cada sub-modulo e um item individual com o seu proprio conteudo
-
-Quando um grupo tem apenas 1 sub-modulo, mostra o conteudo diretamente.
-
-## Estrutura Completa
-
-| Grupo | Sub-modulos |
+| Sub-modulo | Conteudo |
 |---|---|
-| Definicoes Gerais | Geral, Pipeline, Modulos, Formulario, Campos |
-| Seguranca | (conteudo direto - Password e 2FA) |
-| Equipa e Acessos | Acessos, Perfis, Equipas |
-| Produtos | (conteudo direto - Catalogo) |
-| Financeiro | (conteudo direto - Despesas) |
-| Notificacoes | Push, Alertas |
-| Integracoes | (conteudo direto - todas as integracoes) |
+| Tipos de Despesas | `ExpenseCategoriesTab` (sem alteracoes) |
+| Fiscal | Novo componente `FiscalSettingsTab` com: taxa de IVA global da organizacao, motivo de isencao, e taxa de IVA por defeito para produtos |
 
-## Comportamento
+## O que muda
 
-### Mobile (3 niveis de drill-down)
+### 1. Remover configuracao fiscal das Integracoes
 
-```text
-Pagina 1: Lista de Grupos
-  [Definicoes Gerais]  >
-  [Seguranca]          >
-  [Equipa e Acessos]   >
-  ...
+Nas seccoes InvoiceXpress e KeyInvoice do `IntegrationsContent.tsx`, remover os campos de "Taxa de IVA" e "Motivo de Isencao" (linhas 535-583 e 674-722). Estas integracoes passam a guardar **apenas credenciais** (account name, API key, URL). A `tax_config` passa a ser guardada exclusivamente pelo novo componente Fiscal.
 
-Clica "Definicoes Gerais" -->
+Os handlers `handleSaveInvoiceXpress` e `handleSaveKeyInvoice` no `Settings.tsx` deixam de incluir `tax_config` no mutate -- apenas guardam credenciais.
 
-Pagina 2: Sub-modulos do grupo
-  <- Definicoes Gerais
-  [Geral]        >
-  [Pipeline]     >
-  [Modulos]      >
-  [Formulario]   >
-  [Campos]       >
+### 2. Remover selecao de IVA por produto dos modais de Produto
 
-Clica "Pipeline" -->
+Nos ficheiros `CreateProductModal.tsx` e `EditProductModal.tsx`, remover o campo "Taxa IVA" (select com opcoes "Usar taxa da organizacao", "IVA 23%", etc.) e o campo de motivo de isencao. Os produtos passam a usar **sempre** a taxa global da organizacao (definida no novo sub-modulo Fiscal). Os campos `tax_value` e `tax_exemption_reason` ficam como `null` ao criar/editar.
 
-Pagina 3: Conteudo do sub-modulo
-  <- Definicoes Gerais > Pipeline
-  (PipelineEditor renderiza aqui)
-```
+### 3. Novo componente `FiscalSettingsTab`
 
-Para grupos com 1 unico sub-modulo (Seguranca, Produtos, Financeiro, Integracoes), clicar no grupo vai direto para o conteudo (salta o nivel 2).
+Ficheiro: `src/components/settings/FiscalSettingsTab.tsx`
 
-### Desktop (Tabs em dois niveis)
+Conteudo:
+- Card "Configuracao Fiscal"
+  - Select de Taxa de IVA global (23%, 13%, 6%, Isento)
+  - Campo de Motivo de Isencao (condicional, visivel quando taxa = 0)
+  - Nota informativa: "Esta taxa sera aplicada a todos os produtos e faturas por defeito"
+  - Botao "Guardar" que persiste em `organizations.tax_config`
 
-```text
-Nivel 1 (TabsList principal):
-  [Def. Gerais] [Seguranca] [Equipa] [Produtos] [Financeiro] [Notificacoes] [Integracoes]
+O componente recebe como props: `taxRate`, `setTaxRate`, `taxExemptionReason`, `setTaxExemptionReason`, `onSave`, `isPending`.
 
-Nivel 2 (Sub-tabs dentro do conteudo, quando ha mais que 1 sub-modulo):
-  Ao selecionar "Definicoes Gerais":
-    [Geral] [Pipeline] [Modulos] [Formulario] [Campos]
-    (conteudo do sub-modulo selecionado)
+### 4. Atualizar navegacao
 
-  Ao selecionar "Seguranca":
-    (conteudo direto, sem sub-tabs)
-```
+**`MobileSettingsNav.tsx`:**
+- Remover `"finance"` do array `directContentGroups` (ja nao e conteudo direto)
+- Adicionar sub-seccoes ao `subSectionsMap.finance`:
+  - `{ id: "finance-expenses", label: "Tipos de Despesas", icon: Receipt, description: "Categorias de despesas" }`
+  - `{ id: "finance-fiscal", label: "Fiscal", icon: Calculator, description: "IVA e configuracao fiscal" }`
+- Adicionar `"finance-fiscal"` ao tipo `SettingsSubSection`
+- Atualizar descricao do grupo finance para "Despesas e configuracao fiscal"
 
-## Detalhes Tecnicos
+**`Settings.tsx`:**
+- Adicionar caso `"finance-fiscal"` no `renderSubContent` que renderiza `<FiscalSettingsTab />`
+- Remover `"finance"` do `getDirectSub` (ja nao e caso direto)
+- Criar handler `handleSaveFiscal` dedicado que guarda apenas `tax_config` na organizacao
 
-### Novo tipo de dados
+### 5. Props do `IntegrationsContent` simplificadas
 
-Sera necessario um novo tipo `SettingsSubSection` que mapeia cada sub-modulo:
+Remover as seguintes props da interface `IntegrationsContentProps`:
+- `taxRate`, `setTaxRate`
+- `taxExemptionReason`, `setTaxExemptionReason`
 
-```text
-type SettingsSubSection =
-  | "org-general" | "org-pipeline" | "org-modules" | "org-forms" | "org-fields"
-  | "security"
-  | "team-access" | "team-profiles" | "team-teams"
-  | "products"
-  | "finance-expenses"
-  | "notif-push" | "notif-alerts"
-  | "integrations"
-```
+E remover a passagem destas props no `Settings.tsx` para o `integrationsContentProps`.
 
-### Ficheiros a alterar
+## Ficheiros alterados
 
-| Ficheiro | Alteracao |
-|---|---|
-| `src/components/settings/MobileSettingsNav.tsx` | Exportar novos tipos. Adicionar componente `MobileSubSectionNav` para renderizar a lista de sub-modulos de um grupo. Manter `MobileSettingsNav` para o nivel 1. |
-| `src/pages/Settings.tsx` | Adicionar estado `activeSubSection`. No desktop, usar `Tabs` aninhados (tabs principais + sub-tabs dentro de cada TabsContent que tenha multiplos sub-modulos). No mobile, gerir 3 niveis de drill-down (null -> grupo -> sub-modulo). Mapear cada sub-modulo ao seu componente de conteudo individual. |
+| Ficheiro | Tipo | Alteracao |
+|---|---|---|
+| `src/components/settings/FiscalSettingsTab.tsx` | Novo | Componente de configuracao fiscal |
+| `src/components/settings/MobileSettingsNav.tsx` | Editar | Adicionar sub-seccoes ao finance, remover de directContentGroups |
+| `src/pages/Settings.tsx` | Editar | Adicionar renderSubContent para finance-fiscal, handler handleSaveFiscal, remover tax props das integracoes |
+| `src/components/settings/IntegrationsContent.tsx` | Editar | Remover campos de IVA do InvoiceXpress e KeyInvoice |
+| `src/components/settings/CreateProductModal.tsx` | Editar | Remover selecao de taxa IVA por produto |
+| `src/components/settings/EditProductModal.tsx` | Editar | Remover selecao de taxa IVA por produto |
 
-### Mapeamento sub-modulo para componente
+## Sem alteracoes
 
-| Sub-modulo | Componente |
-|---|---|
-| org-general | `GeneralContent` |
-| org-pipeline | `PipelineEditor` |
-| org-modules | `ModulesTab` |
-| org-forms | `FormsManager` |
-| org-fields | `ClientFieldsEditor` |
-| security | `SecuritySettings` |
-| team-access | `TeamTab` |
-| team-profiles | `ProfilesTab` |
-| team-teams | `TeamsSection` |
-| products | `ProductsTab` |
-| finance-expenses | `ExpenseCategoriesTab` |
-| notif-push | `PushNotificationsCard` |
-| notif-alerts | `FidelizationAlertsSettings` |
-| integrations | `IntegrationsContent` |
-
-### Logica de estado no mobile
-
-```text
-Estado: { group: SettingsSection | null, sub: SettingsSubSection | null }
-
-- group=null, sub=null -> Lista de grupos
-- group="general", sub=null -> Lista de sub-modulos de "Definicoes Gerais"
-- group="general", sub="org-pipeline" -> Conteudo do PipelineEditor
-- group="security", sub=null -> (grupo com 1 item) -> Conteudo direto do SecuritySettings
-```
-
-### Logica no desktop
-
-Tabs principais normais. Para grupos com multiplos sub-modulos, dentro do `TabsContent` renderiza-se um segundo `Tabs` (sub-tabs) com estilo mais discreto (por exemplo, variant outline ou pills menores). Para grupos com 1 sub-modulo, renderiza-se o conteudo diretamente.
-
-### Sem alteracoes em
-
-- Nenhum componente de conteudo (GeneralContent, PipelineEditor, SecuritySettings, etc.)
-- Nenhuma logica de estado dos formularios ou handlers
-- Apenas a navegacao e composicao de vistas muda
-
+- Logica de emissao de faturas (edge functions) -- continua a ler `tax_config` da organizacao
+- Logica de override por produto nas edge functions -- como `tax_value` sera null, usara sempre o global
+- Tabelas da base de dados -- nenhuma migracao necessaria
