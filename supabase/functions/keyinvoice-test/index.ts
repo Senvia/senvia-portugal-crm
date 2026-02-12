@@ -19,7 +19,7 @@ Deno.serve(async (req) => {
 
     const { data: org } = await supabase
       .from('organizations')
-      .select('keyinvoice_password, keyinvoice_api_url')
+      .select('keyinvoice_password, keyinvoice_api_url, keyinvoice_username, keyinvoice_company_code')
       .eq('id', organization_id)
       .single()
 
@@ -29,52 +29,65 @@ Deno.serve(async (req) => {
       })
     }
 
-    const apiUrl = org.keyinvoice_api_url || 'https://login.keyinvoice.com/API5.php'
-    const sid = org.keyinvoice_password
-    const results: Record<string, any> = { api_url: apiUrl, sid_length: sid.length }
+    const apiKey = org.keyinvoice_password
+    const apiUrl = 'https://login.keyinvoice.com/API5.php'
+    const results: Record<string, any> = { apiKey_length: apiKey.length, apiKey_preview: apiKey.substring(0, 8) + '...' }
 
-    // Test A: Sid in JSON body with getCompanyInfo
+    // Maybe API 5.0 still needs login first but with the API key as password?
+    // Test 1: login method with API key as Sid
     try {
       const res = await fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ Sid: sid, method: 'getCompanyInfo' }),
+        body: JSON.stringify({ method: 'login', ApiKey: apiKey }),
       })
       const text = await res.text()
-      results.test_a_body_json = text.substring(0, 1000)
-    } catch (e) { results.test_a_error = String(e) }
+      results.test_login_apikey = text.substring(0, 500)
+    } catch (e) { results.test_login_apikey_err = String(e) }
 
-    // Test B: form-urlencoded with Sid in body
-    try {
-      const params = new URLSearchParams({ Sid: sid, method: 'getCompanyInfo' })
-      const res = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: params.toString(),
-      })
-      const text = await res.text()
-      results.test_b_form = text.substring(0, 1000)
-    } catch (e) { results.test_b_error = String(e) }
-
-    // Test C: GET request with query params
-    try {
-      const res = await fetch(`${apiUrl}?Sid=${encodeURIComponent(sid)}&method=getCompanyInfo`, {
-        method: 'GET',
-      })
-      const text = await res.text()
-      results.test_c_get = text.substring(0, 1000)
-    } catch (e) { results.test_c_error = String(e) }
-
-    // Test D: Sid in header + form body
+    // Test 2: Just send method with ApiKey field in body
     try {
       const res = await fetch(apiUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Sid': sid },
-        body: JSON.stringify({ Sid: sid, method: 'getCompanyInfo' }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ method: 'getCompanyInfo', ApiKey: apiKey }),
       })
       const text = await res.text()
-      results.test_d_both = text.substring(0, 1000)
-    } catch (e) { results.test_d_error = String(e) }
+      results.test_apikey_body = text.substring(0, 500)
+    } catch (e) { results.test_apikey_body_err = String(e) }
+
+    // Test 3: Send with "Key" field
+    try {
+      const res = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ method: 'getCompanyInfo', Key: apiKey }),
+      })
+      const text = await res.text()
+      results.test_key_body = text.substring(0, 500)
+    } catch (e) { results.test_key_body_err = String(e) }
+
+    // Test 4: "Token" field
+    try {
+      const res = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ method: 'getCompanyInfo', Token: apiKey }),
+      })
+      const text = await res.text()
+      results.test_token_body = text.substring(0, 500)
+    } catch (e) { results.test_token_body_err = String(e) }
+
+    // Test 5: Authorization header
+    try {
+      const res = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+        body: JSON.stringify({ method: 'getCompanyInfo' }),
+      })
+      const text = await res.text()
+      results.test_bearer = text.substring(0, 500)
+    } catch (e) { results.test_bearer_err = String(e) }
 
     return new Response(JSON.stringify(results), {
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
