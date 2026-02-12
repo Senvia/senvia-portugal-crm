@@ -14,6 +14,50 @@ const PAYMENT_METHOD_MAP: Record<string, string> = {
   other: 'OU',
 }
 
+const DEFAULT_KEYINVOICE_API_URL = 'https://login.keyinvoice.com/API5.php'
+
+async function getKeyInvoiceSid(supabase: any, org: any, orgId: string): Promise<string> {
+  if (!org.keyinvoice_password) {
+    throw new Error('Chave da API KeyInvoice não configurada')
+  }
+
+  const now = new Date()
+  const margin = 5 * 60 * 1000
+  if (org.keyinvoice_sid && org.keyinvoice_sid_expires_at) {
+    const expiresAt = new Date(org.keyinvoice_sid_expires_at)
+    if (expiresAt.getTime() > now.getTime() + margin) {
+      return org.keyinvoice_sid
+    }
+  }
+
+  const apiUrl = org.keyinvoice_api_url || DEFAULT_KEYINVOICE_API_URL
+  const authRes = await fetch(apiUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Apikey': org.keyinvoice_password },
+    body: JSON.stringify({ method: 'authenticate' }),
+  })
+
+  if (!authRes.ok) {
+    const errorText = await authRes.text()
+    throw new Error(`Erro ao autenticar no KeyInvoice: ${authRes.status} - ${errorText}`)
+  }
+
+  const authData = await authRes.json()
+  if (authData.Status !== 1 || !authData.Sid) {
+    throw new Error(`KeyInvoice auth: ${authData.ErrorMessage || 'Erro de autenticação'}`)
+  }
+
+  const newSid = authData.Sid
+  const expiresAt = new Date(now.getTime() + 3600 * 1000)
+
+  await supabase
+    .from('organizations')
+    .update({ keyinvoice_sid: newSid, keyinvoice_sid_expires_at: expiresAt.toISOString() })
+    .eq('id', orgId)
+
+  return newSid
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
@@ -67,25 +111,20 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Fetch org credentials
+    // Fetch org credentials (including billing_provider and KeyInvoice fields)
     const { data: org } = await supabase
       .from('organizations')
-      .select('invoicexpress_account_name, invoicexpress_api_key, integrations_enabled')
+      .select('invoicexpress_account_name, invoicexpress_api_key, integrations_enabled, billing_provider, keyinvoice_password, keyinvoice_api_url, keyinvoice_sid, keyinvoice_sid_expires_at, tax_config')
       .eq('id', organization_id)
       .single()
 
+    const billingProvider = org?.billing_provider || 'invoicexpress'
     const integrationsEnabled = (org?.integrations_enabled as Record<string, boolean> | null) || {}
-    if (integrationsEnabled.invoicexpress === false || !org?.invoicexpress_account_name || !org?.invoicexpress_api_key) {
-      return new Response(JSON.stringify({ error: 'Integração InvoiceXpress não configurada' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
 
     // Fetch sale to get invoicexpress_id
     const { data: sale } = await supabase
       .from('sales')
-      .select('id, invoicexpress_id, invoice_reference')
+      .select('id, invoicexpress_id, invoice_reference, total_value, client:crm_clients(name, nif, email, phone, address_line1, city, postal_code, country, company, code)')
       .eq('id', sale_id)
       .eq('organization_id', organization_id)
       .single()
@@ -129,8 +168,280 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Status check removed: receipt can be issued for any payment status
-    // Payment will be automatically marked as 'paid' after successful receipt generation
+    // ========== KeyInvoice Flow ==========
+    if (billingProvider === 'keyinvoice') {
+      if (integrationsEnabled.keyinvoice === false || !org?.keyinvoice_password) {
+        return new Response(JSON.stringify({ error: 'Integração KeyInvoice não configurada' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      const clientNif = (sale.client as any)?.nif
+      if (!clientNif) {
+        return new Response(JSON.stringify({ error: 'Cliente sem NIF. Adicione o NIF antes de gerar recibo.' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      const sid = await getKeyInvoiceSid(supabase, org, organization_id)
+      const apiUrl = org.keyinvoice_api_url || DEFAULT_KEYINVOICE_API_URL
+
+      // Resolve client in KeyInvoice
+      const clientData = sale.client as any
+      const clientName = clientData?.company || clientData?.name || 'Cliente'
+      let keyInvoiceClientId: string | null = null
+
+      // Try insertClient first
+      try {
+        const insertClientPayload: Record<string, any> = {
+          method: 'insertClient',
+          Name: clientName,
+          VATIN: clientNif,
+          CountryCode: 'PT',
+        }
+        if (clientData?.email) insertClientPayload.Email = clientData.email
+        if (clientData?.phone) insertClientPayload.Phone = clientData.phone
+        if (clientData?.address_line1) insertClientPayload.Address = clientData.address_line1
+        if (clientData?.city) insertClientPayload.Locality = clientData.city
+        if (clientData?.postal_code) insertClientPayload.PostalCode = clientData.postal_code
+
+        const clientRes = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Sid': sid },
+          body: JSON.stringify(insertClientPayload),
+        })
+        if (clientRes.ok) {
+          const cData = await clientRes.json()
+          if (cData.Status === 1 && cData.Data?.Id) {
+            keyInvoiceClientId = String(cData.Data.Id)
+          }
+        }
+      } catch (e) {
+        console.warn('KeyInvoice insertClient failed (non-blocking):', e)
+      }
+
+      // Fallback: search by VATIN
+      if (!keyInvoiceClientId) {
+        try {
+          const listRes = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Sid': sid },
+            body: JSON.stringify({ method: 'listClients' }),
+          })
+          const listData = await listRes.json()
+          if (listData.Status === 1 && listData.Data?.Clients) {
+            const clients = Array.isArray(listData.Data.Clients) ? listData.Data.Clients : []
+            const match = clients.find((c: any) => c.VATIN === clientNif)
+            if (match?.IdClient) keyInvoiceClientId = String(match.IdClient)
+          }
+        } catch (e) {
+          console.warn('KeyInvoice listClients failed:', e)
+        }
+      }
+
+      // We need a product for the receipt line - find or create one
+      const taxConfig = org?.tax_config || { tax_value: 23 }
+      const orgTaxValue = (taxConfig as any).tax_value ?? 23
+
+      let receiptProductId: string | null = null
+      try {
+        const listRes = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Sid': sid },
+          body: JSON.stringify({ method: 'listProducts' }),
+        })
+        const listData = await listRes.json()
+        if (listData.Status === 1 && listData.Data) {
+          let products: any[] = []
+          if (Array.isArray(listData.Data)) products = listData.Data
+          else if (Array.isArray(listData.Data.Products)) products = listData.Data.Products
+          else if (Array.isArray(listData.Data.Product)) products = listData.Data.Product
+          else if (typeof listData.Data === 'object') {
+            for (const key of Object.keys(listData.Data)) {
+              if (Array.isArray(listData.Data[key])) { products = listData.Data[key]; break }
+            }
+            if (products.length === 0 && listData.Data.Id) products = [listData.Data]
+          }
+          if (products.length > 0) {
+            receiptProductId = String(products[0].IdProduct || products[0].Id)
+          }
+        }
+      } catch (e) {
+        console.warn('KeyInvoice listProducts failed:', e)
+      }
+
+      // If no product exists, create one
+      if (!receiptProductId) {
+        const insertProd: Record<string, any> = {
+          method: 'insertProduct',
+          IdProduct: 'RECB',
+          Name: 'Recibo',
+          TaxValue: String(orgTaxValue),
+          IsService: '1',
+          HasStocks: '0',
+          Active: '1',
+          Price: '0',
+        }
+        if (orgTaxValue === 0) insertProd.TaxExemptionReasonCode = 'M10'
+
+        const prodRes = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Sid': sid },
+          body: JSON.stringify(insertProd),
+        })
+        const prodData = await prodRes.json()
+        if (prodData.Status === 1 && (prodData.Data?.IdProduct || prodData.Data?.Id)) {
+          receiptProductId = String(prodData.Data.IdProduct || prodData.Data.Id)
+        } else {
+          console.error('KeyInvoice insertProduct failed:', prodData.ErrorMessage)
+          return new Response(JSON.stringify({ error: `Erro ao criar produto no KeyInvoice: ${prodData.ErrorMessage || 'Erro'}` }), {
+            status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          })
+        }
+      }
+
+      // Format payment date
+      const paymentDate = new Date(payment.payment_date)
+      const formattedDate = `${String(paymentDate.getDate()).padStart(2, '0')}/${String(paymentDate.getMonth() + 1).padStart(2, '0')}/${paymentDate.getFullYear()}`
+
+      // Build receipt document (DocType 10 = RC)
+      const comments = payment.notes || `Recibo de pagamento - ${formattedDate} - ${Number(payment.amount).toFixed(2)}€`
+
+      const insertPayload: Record<string, any> = {
+        method: 'insertDocument',
+        DocType: '10',
+        DocLines: [{
+          IdProduct: receiptProductId,
+          Qty: '1',
+          Price: String(Number(payment.amount)),
+        }],
+        Comments: comments,
+      }
+
+      if (keyInvoiceClientId) {
+        insertPayload.IdClient = keyInvoiceClientId
+      } else {
+        insertPayload.ClientVATIN = clientNif
+        insertPayload.ClientName = clientName
+      }
+
+      console.log('KeyInvoice insertDocument (RC) payload:', JSON.stringify(insertPayload).substring(0, 2000))
+
+      const createRes = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Sid': sid },
+        body: JSON.stringify(insertPayload),
+      })
+
+      if (!createRes.ok) {
+        const errorText = await createRes.text()
+        console.error('KeyInvoice insertDocument (RC) HTTP error:', createRes.status, errorText)
+        return new Response(JSON.stringify({ error: `Erro ao criar recibo no KeyInvoice: ${createRes.status}`, details: errorText }), {
+          status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      const createData = await createRes.json()
+      console.log('KeyInvoice insertDocument (RC) response:', JSON.stringify(createData).substring(0, 2000))
+
+      if (createData.Status !== 1 || !createData.Data) {
+        return new Response(JSON.stringify({ error: `KeyInvoice: ${createData.ErrorMessage || 'Erro ao criar recibo'}` }), {
+          status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      const docNum = createData.Data.DocNum
+      const docSeries = createData.Data.DocSeries
+      const fullDocNumber = createData.Data.FullDocNumber || `RC ${docNum}`
+      const receiptReference = fullDocNumber
+
+      // Get PDF
+      let storedPdfPath: string | null = null
+      try {
+        const pdfPayload: Record<string, string> = {
+          method: 'getDocumentPDF',
+          DocType: '10',
+          DocNum: String(docNum),
+        }
+        if (docSeries) pdfPayload.DocSeries = String(docSeries)
+
+        const pdfRes = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Sid': sid },
+          body: JSON.stringify(pdfPayload),
+        })
+
+        if (pdfRes.ok) {
+          const pdfData = await pdfRes.json()
+          if (pdfData.Status === 1 && pdfData.Data) {
+            let base64Pdf = ''
+            if (typeof pdfData.Data === 'string') {
+              base64Pdf = pdfData.Data
+            } else if (typeof pdfData.Data === 'object' && pdfData.Data !== null) {
+              const knownKeys = ['PDF', 'pdf', 'Content', 'content', 'File', 'file', 'Base64', 'base64', 'FileContent', 'Document', 'document', 'PDFContent']
+              for (const key of knownKeys) {
+                if (pdfData.Data[key] && typeof pdfData.Data[key] === 'string') {
+                  base64Pdf = pdfData.Data[key]; break
+                }
+              }
+              if (!base64Pdf) {
+                for (const [, val] of Object.entries(pdfData.Data)) {
+                  if (typeof val === 'string' && (val as string).length > 100) {
+                    base64Pdf = val as string; break
+                  }
+                }
+              }
+            }
+
+            if (base64Pdf) {
+              base64Pdf = base64Pdf.replace(/^data:[^;]+;base64,/, '')
+              const binaryStr = atob(base64Pdf)
+              const bytes = new Uint8Array(binaryStr.length)
+              for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i)
+
+              const pdfFileName = `${organization_id}/${sale_id}/RC-${docNum}.pdf`
+              const { error: uploadError } = await supabase.storage
+                .from('invoices')
+                .upload(pdfFileName, bytes.buffer, { contentType: 'application/pdf', upsert: true })
+              if (!uploadError) storedPdfPath = pdfFileName
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('KeyInvoice receipt PDF failed (non-blocking):', e)
+      }
+
+      // Update sale_payments
+      await supabase
+        .from('sale_payments')
+        .update({
+          invoice_reference: receiptReference,
+          invoicexpress_id: docNum || null,
+          status: 'paid',
+          ...(storedPdfPath ? { invoice_file_url: storedPdfPath } : {}),
+        })
+        .eq('id', payment_id)
+
+      return new Response(JSON.stringify({
+        success: true,
+        receipt_id: docNum,
+        invoice_reference: receiptReference,
+        ...(storedPdfPath ? { pdf_path: storedPdfPath } : {}),
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    // ========== InvoiceXpress Flow (existing) ==========
+    if (integrationsEnabled.invoicexpress === false || !org?.invoicexpress_account_name || !org?.invoicexpress_api_key) {
+      return new Response(JSON.stringify({ error: 'Integração InvoiceXpress não configurada' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
 
     // Format payment_date as dd/mm/yyyy
     const paymentDate = new Date(payment.payment_date)
