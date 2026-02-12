@@ -1,11 +1,11 @@
 import { CheckCircle2, CalendarClock } from "lucide-react";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+} from "@/components/ui/alert-dialog";
 import { formatCurrency } from "@/lib/format";
 
 interface PaymentTypeSelectorProps {
@@ -24,14 +24,14 @@ export function PaymentTypeSelector({
   onSelectInstallments,
 }: PaymentTypeSelectorProps) {
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Tipo de Pagamento</DialogTitle>
-          <DialogDescription>
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      <AlertDialogContent className="max-w-sm sm:max-w-md">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Tipo de Pagamento</AlertDialogTitle>
+          <AlertDialogDescription>
             Como deseja registar o pagamento?
-          </DialogDescription>
-        </DialogHeader>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
           {/* Total */}
@@ -68,7 +68,7 @@ export function PaymentTypeSelector({
             </div>
           </button>
         </div>
-      </DialogContent>
-    </Dialog>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
