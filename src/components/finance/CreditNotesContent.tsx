@@ -1,7 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Download, FileText, RefreshCw, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
+import { Eye, FileText, RefreshCw, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { useCreditNotes, useSyncCreditNotes } from "@/hooks/useCreditNotes";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { downloadFileFromUrl } from "@/lib/download";
+import { openPdfInNewTab } from "@/lib/download";
 
 const getStatusLabel = (status: string | null) => {
   const map: Record<string, string> = {
@@ -34,7 +34,7 @@ const getStatusVariant = (status: string | null): "default" | "secondary" | "des
 
 export function CreditNotesContent() {
   const { data: creditNotes, isLoading } = useCreditNotes();
-  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [viewingId, setViewingId] = useState<string | null>(null);
   const syncCreditNotes = useSyncCreditNotes();
   const hasSynced = useRef(false);
 
@@ -46,27 +46,15 @@ export function CreditNotesContent() {
     }
   }, []);
 
-  const handleDownload = async (id: string, pdfPath: string | null, reference?: string | null) => {
+  const handleViewPdf = async (id: string, pdfPath: string | null) => {
     if (!pdfPath) return;
-    const filename = `${reference || 'nota-credito'}.pdf`;
-    setDownloadingId(id);
+    setViewingId(id);
     try {
-      let url = pdfPath;
-      if (!pdfPath.startsWith('http')) {
-        const { data, error } = await supabase.storage
-          .from('invoices')
-          .createSignedUrl(pdfPath, 60);
-        if (error || !data?.signedUrl) {
-          toast.error("Erro ao obter ficheiro");
-          return;
-        }
-        url = data.signedUrl;
-      }
-      await downloadFileFromUrl(url, filename);
+      await openPdfInNewTab(pdfPath);
     } catch {
-      toast.error("Erro ao fazer download");
+      toast.error("Erro ao abrir PDF");
     } finally {
-      setDownloadingId(null);
+      setViewingId(null);
     }
   };
 
@@ -167,13 +155,13 @@ export function CreditNotesContent() {
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8"
-                            onClick={() => handleDownload(cn.id, cn.pdf_path, cn.reference)}
-                            disabled={downloadingId === cn.id}
+                            onClick={() => handleViewPdf(cn.id, cn.pdf_path)}
+                            disabled={viewingId === cn.id}
                           >
-                            {downloadingId === cn.id ? (
+                            {viewingId === cn.id ? (
                               <Loader2 className="h-4 w-4 animate-spin" />
                             ) : (
-                              <Download className="h-4 w-4" />
+                              <Eye className="h-4 w-4" />
                             )}
                           </Button>
                         ) : (

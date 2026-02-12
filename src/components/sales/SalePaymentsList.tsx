@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { format } from "date-fns";
 import { pt } from "date-fns/locale";
-import { Plus, Pencil, Trash2, CreditCard, Receipt, AlertCircle, Download, Ban, FileText, QrCode, Mail, Eye, RefreshCw } from "lucide-react";
+import { Plus, Pencil, Trash2, CreditCard, Receipt, AlertCircle, Ban, FileText, QrCode, Mail, Eye, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -36,8 +36,8 @@ import {
 } from "@/types/sales";
 
 import { toast } from "sonner";
-import { downloadFileFromUrl } from "@/lib/download";
-import { supabase } from "@/integrations/supabase/client";
+import { openPdfInNewTab } from "@/lib/download";
+
 import { SendInvoiceEmailModal } from "./SendInvoiceEmailModal";
 import { InvoiceDetailsModal } from "./InvoiceDetailsModal";
 import { CreateCreditNoteModal } from "./CreateCreditNoteModal";
@@ -132,22 +132,11 @@ export function SalePaymentsList({
 
   const summary = calculatePaymentSummary(payments, saleTotal);
 
-  const handlePdfDownload = async (path: string, filename: string) => {
+  const handlePdfView = async (path: string) => {
     try {
-      let url = path;
-      if (!path.startsWith('http')) {
-        const { data, error } = await supabase.storage
-          .from('invoices')
-          .createSignedUrl(path, 60);
-        if (error || !data?.signedUrl) {
-          toast.error('Erro ao gerar link de download');
-          return;
-        }
-        url = data.signedUrl;
-      }
-      await downloadFileFromUrl(url, filename);
+      await openPdfInNewTab(path);
     } catch {
-      toast.error('Erro ao fazer download');
+      toast.error('Erro ao abrir PDF');
     }
   };
 
@@ -220,10 +209,10 @@ export function SalePaymentsList({
                     variant="ghost"
                     size="icon"
                     className="h-7 w-7"
-                    onClick={() => handlePdfDownload(invoicePdfUrl!, `${invoiceReference || 'fatura'}.pdf`)}
-                    title="Download PDF"
+                    onClick={() => handlePdfView(invoicePdfUrl!)}
+                    title="Ver PDF"
                   >
-                    <Download className="h-3.5 w-3.5" />
+                    <Eye className="h-3.5 w-3.5" />
                   </Button>
                 )}
                 {!invoicePdfUrl && invoicexpressId && (
@@ -441,10 +430,10 @@ export function SalePaymentsList({
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8"
-                      onClick={() => handlePdfDownload(payment.invoice_file_url!, `${payment.invoice_reference || 'recibo'}.pdf`)}
-                      title="Download PDF"
+                      onClick={() => handlePdfView(payment.invoice_file_url!)}
+                      title="Ver PDF"
                     >
-                      <Download className="h-3.5 w-3.5" />
+                      <Eye className="h-3.5 w-3.5" />
                     </Button>
                   )}
                   {!payment.invoice_file_url && payment.invoicexpress_id && (
