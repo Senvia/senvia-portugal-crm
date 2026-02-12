@@ -5,6 +5,57 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 }
 
+const DEFAULT_KEYINVOICE_API_URL = 'https://login.keyinvoice.com/API5.php'
+
+const KI_DOC_TYPE_MAP: Record<string, string> = {
+  invoice: '4',
+  invoice_receipt: '34',
+  receipt: '10',
+  credit_note: '8',
+}
+
+async function getKeyInvoiceSid(supabase: any, org: any, orgId: string): Promise<string> {
+  if (!org.keyinvoice_password) {
+    throw new Error('Chave da API KeyInvoice não configurada')
+  }
+
+  const now = new Date()
+  const margin = 5 * 60 * 1000
+  if (org.keyinvoice_sid && org.keyinvoice_sid_expires_at) {
+    const expiresAt = new Date(org.keyinvoice_sid_expires_at)
+    if (expiresAt.getTime() > now.getTime() + margin) {
+      return org.keyinvoice_sid
+    }
+  }
+
+  const apiUrl = org.keyinvoice_api_url || DEFAULT_KEYINVOICE_API_URL
+  const authRes = await fetch(apiUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Apikey': org.keyinvoice_password },
+    body: JSON.stringify({ method: 'authenticate' }),
+  })
+
+  if (!authRes.ok) {
+    const errorText = await authRes.text()
+    throw new Error(`Erro ao autenticar no KeyInvoice: ${authRes.status} - ${errorText}`)
+  }
+
+  const authData = await authRes.json()
+  if (authData.Status !== 1 || !authData.Sid) {
+    throw new Error(`KeyInvoice auth: ${authData.ErrorMessage || 'Erro de autenticação'}`)
+  }
+
+  const newSid = authData.Sid
+  const expiresAt = new Date(now.getTime() + 3600 * 1000)
+
+  await supabase
+    .from('organizations')
+    .update({ keyinvoice_sid: newSid, keyinvoice_sid_expires_at: expiresAt.toISOString() })
+    .eq('id', orgId)
+
+  return newSid
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
@@ -65,13 +116,102 @@ Deno.serve(async (req) => {
     // Fetch org credentials
     const { data: org } = await supabase
       .from('organizations')
-      .select('invoicexpress_account_name, invoicexpress_api_key, integrations_enabled, tax_config')
+      .select('invoicexpress_account_name, invoicexpress_api_key, integrations_enabled, tax_config, billing_provider, keyinvoice_password, keyinvoice_api_url, keyinvoice_sid, keyinvoice_sid_expires_at')
       .eq('id', organization_id)
       .single()
 
+    const billingProvider = org?.billing_provider || 'invoicexpress'
     const integrationsEnabled = (org?.integrations_enabled as Record<string, boolean> | null) || {}
+
+    // ========== KeyInvoice Flow ==========
+    if (billingProvider === 'keyinvoice') {
+      if (integrationsEnabled.keyinvoice === false || !org?.keyinvoice_password) {
+        return new Response(JSON.stringify({ error: 'Integração KeyInvoice não configurada' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      const sid = await getKeyInvoiceSid(supabase, org, organization_id)
+      const apiUrl = org.keyinvoice_api_url || DEFAULT_KEYINVOICE_API_URL
+      const docType = KI_DOC_TYPE_MAP[original_document_type] || '4'
+
+      // KeyInvoice uses setDocumentVoid which auto-generates a credit note
+      const voidPayload: Record<string, string> = {
+        method: 'setDocumentVoid',
+        DocType: docType,
+        DocNum: String(original_document_id),
+        CreditReason: reason,
+      }
+
+      console.log('KeyInvoice setDocumentVoid payload:', JSON.stringify(voidPayload))
+
+      const voidRes = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Sid': sid },
+        body: JSON.stringify(voidPayload),
+      })
+
+      if (!voidRes.ok) {
+        const errorText = await voidRes.text()
+        console.error('KeyInvoice setDocumentVoid HTTP error:', voidRes.status, errorText)
+        return new Response(JSON.stringify({ error: `Erro ao criar nota de crédito no KeyInvoice (${voidRes.status})`, details: errorText }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      const voidData = await voidRes.json()
+      console.log('KeyInvoice setDocumentVoid response:', JSON.stringify(voidData))
+
+      if (voidData.Status !== 1) {
+        console.error('KeyInvoice setDocumentVoid failed:', voidData.ErrorMessage)
+        return new Response(JSON.stringify({ error: `KeyInvoice: ${voidData.ErrorMessage || 'Erro ao criar nota de crédito'}` }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      // Extract credit note reference from response
+      const data = voidData.Data || {}
+      const creditNoteReference = data.FullDocNumber || 
+        (data.DocNum ? `NC ${data.DocNum}` : `NC #${original_document_id}`)
+      const creditNoteId = data.DocNum || original_document_id
+
+      // Save reference in database
+      if (payment_id) {
+        await supabase
+          .from('sale_payments')
+          .update({
+            credit_note_id: creditNoteId,
+            credit_note_reference: creditNoteReference,
+          })
+          .eq('id', payment_id)
+      }
+      
+      if (sale_id) {
+        await supabase
+          .from('sales')
+          .update({
+            credit_note_id: creditNoteId,
+            credit_note_reference: creditNoteReference,
+          })
+          .eq('id', sale_id)
+      }
+
+      return new Response(JSON.stringify({
+        success: true,
+        credit_note_id: creditNoteId,
+        credit_note_reference: creditNoteReference,
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    // ========== InvoiceXpress Flow ==========
     if (integrationsEnabled.invoicexpress === false || !org?.invoicexpress_account_name || !org?.invoicexpress_api_key) {
-      return new Response(JSON.stringify({ error: 'Integração InvoiceXpress não configurada' }), {
+      return new Response(JSON.stringify({ error: 'Integração de faturação não configurada' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
@@ -108,7 +248,6 @@ Deno.serve(async (req) => {
     let creditNoteItems: any[] = []
     
     if (items && items.length > 0) {
-      // Custom items provided by user
       creditNoteItems = items.map((item: any) => ({
         name: item.name,
         description: item.description || item.name,
@@ -117,7 +256,6 @@ Deno.serve(async (req) => {
         ...(item.tax ? { tax: item.tax } : {}),
       }))
     } else if (originalDoc.items) {
-      // Copy items from original document
       const rawItems = Array.isArray(originalDoc.items) ? originalDoc.items : (originalDoc.items?.item ? [originalDoc.items.item] : [])
       creditNoteItems = rawItems.map((item: any) => ({
         name: item.name,
@@ -135,14 +273,11 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Date
     const now = new Date()
     const todayStr = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`
 
-    // Tax exemption from original document
     const taxExemption = originalDoc.tax_exemption || null
 
-    // Build credit note payload
     const creditNotePayload = {
       credit_note: {
         date: todayStr,
@@ -217,7 +352,6 @@ Deno.serve(async (req) => {
     } else {
       const errorText = await finalizeRes.text()
       console.error('InvoiceXpress finalize credit note error:', errorText)
-      // Still save the draft reference
     }
 
     // 3. Save reference in database
