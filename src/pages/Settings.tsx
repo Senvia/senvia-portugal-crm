@@ -63,12 +63,10 @@ export default function Settings() {
   const [taxRate, setTaxRate] = useState('23');
   const [taxExemptionReason, setTaxExemptionReason] = useState('');
 
-  // KeyInvoice state
-  const [keyinvoiceUsername, setKeyinvoiceUsername] = useState('');
-  const [keyinvoicePassword, setKeyinvoicePassword] = useState('');
-  const [keyinvoiceCompanyCode, setKeyinvoiceCompanyCode] = useState('');
+  // KeyInvoice state (API 5.0 - single API key)
+  const [keyinvoiceApiKey, setKeyinvoiceApiKey] = useState('');
   const [keyinvoiceApiUrl, setKeyinvoiceApiUrl] = useState('');
-  const [showKeyinvoicePassword, setShowKeyinvoicePassword] = useState(false);
+  const [showKeyinvoiceApiKey, setShowKeyinvoiceApiKey] = useState(false);
 
   // Integrations enabled state
   const [integrationsEnabled, setIntegrationsEnabled] = useState<Record<string, boolean>>({
@@ -125,9 +123,7 @@ export default function Settings() {
         setBrevoSenderEmail(data.brevo_sender_email || '');
         setInvoiceXpressAccountName((data as any).invoicexpress_account_name || '');
         setInvoiceXpressApiKey((data as any).invoicexpress_api_key || '');
-        setKeyinvoiceUsername((data as any).keyinvoice_username || '');
-        setKeyinvoicePassword((data as any).keyinvoice_password || '');
-        setKeyinvoiceCompanyCode((data as any).keyinvoice_company_code || '');
+        setKeyinvoiceApiKey((data as any).keyinvoice_password || '');
         setKeyinvoiceApiUrl((data as any).keyinvoice_api_url || '');
 
         // Tax config
@@ -233,9 +229,7 @@ export default function Settings() {
     const taxValue = Number(taxRate);
     const taxName = taxValue === 0 ? 'Isento' : `IVA${taxValue}`;
     updateOrganization.mutate({
-      keyinvoice_username: keyinvoiceUsername.trim() || null,
-      keyinvoice_password: keyinvoicePassword.trim() || null,
-      keyinvoice_company_code: keyinvoiceCompanyCode.trim() || null,
+      keyinvoice_password: keyinvoiceApiKey.trim() || null,
       keyinvoice_api_url: keyinvoiceApiUrl.trim() || null,
       tax_config: {
         tax_name: taxName,
@@ -433,14 +427,10 @@ export default function Settings() {
                   integrationsEnabled={integrationsEnabled}
                   onToggleIntegration={handleToggleIntegration}
                   handleSaveKeyInvoice={handleSaveKeyInvoice}
-                  keyinvoiceUsername={keyinvoiceUsername}
-                  setKeyinvoiceUsername={setKeyinvoiceUsername}
-                  keyinvoicePassword={keyinvoicePassword}
-                  setKeyinvoicePassword={setKeyinvoicePassword}
-                  keyinvoiceCompanyCode={keyinvoiceCompanyCode}
-                  setKeyinvoiceCompanyCode={setKeyinvoiceCompanyCode}
-                  showKeyinvoicePassword={showKeyinvoicePassword}
-                  setShowKeyinvoicePassword={setShowKeyinvoicePassword}
+                  keyinvoiceApiKey={keyinvoiceApiKey}
+                  setKeyinvoiceApiKey={setKeyinvoiceApiKey}
+                  showKeyinvoiceApiKey={showKeyinvoiceApiKey}
+                  setShowKeyinvoiceApiKey={setShowKeyinvoiceApiKey}
                   keyinvoiceApiUrl={keyinvoiceApiUrl}
                   setKeyinvoiceApiUrl={setKeyinvoiceApiUrl}
                 />
@@ -675,14 +665,10 @@ export default function Settings() {
                     integrationsEnabled={integrationsEnabled}
                     onToggleIntegration={handleToggleIntegration}
                     handleSaveKeyInvoice={handleSaveKeyInvoice}
-                    keyinvoiceUsername={keyinvoiceUsername}
-                    setKeyinvoiceUsername={setKeyinvoiceUsername}
-                    keyinvoicePassword={keyinvoicePassword}
-                    setKeyinvoicePassword={setKeyinvoicePassword}
-                    keyinvoiceCompanyCode={keyinvoiceCompanyCode}
-                    setKeyinvoiceCompanyCode={setKeyinvoiceCompanyCode}
-                    showKeyinvoicePassword={showKeyinvoicePassword}
-                    setShowKeyinvoicePassword={setShowKeyinvoicePassword}
+                    keyinvoiceApiKey={keyinvoiceApiKey}
+                    setKeyinvoiceApiKey={setKeyinvoiceApiKey}
+                    showKeyinvoiceApiKey={showKeyinvoiceApiKey}
+                    setShowKeyinvoiceApiKey={setShowKeyinvoiceApiKey}
                     keyinvoiceApiUrl={keyinvoiceApiUrl}
                     setKeyinvoiceApiUrl={setKeyinvoiceApiUrl}
                   />

@@ -57,17 +57,13 @@ interface IntegrationsContentProps {
   setTaxExemptionReason: (value: string) => void;
   integrationsEnabled: Record<string, boolean>;
   onToggleIntegration: (key: string, enabled: boolean) => void;
-  // KeyInvoice props
-  keyinvoiceUsername: string;
-  setKeyinvoiceUsername: (value: string) => void;
-  keyinvoicePassword: string;
-  setKeyinvoicePassword: (value: string) => void;
-  keyinvoiceCompanyCode: string;
-  setKeyinvoiceCompanyCode: (value: string) => void;
+  // KeyInvoice props (API 5.0 - single API key)
+  keyinvoiceApiKey: string;
+  setKeyinvoiceApiKey: (value: string) => void;
   keyinvoiceApiUrl: string;
   setKeyinvoiceApiUrl: (value: string) => void;
-  showKeyinvoicePassword: boolean;
-  setShowKeyinvoicePassword: (value: boolean) => void;
+  showKeyinvoiceApiKey: boolean;
+  setShowKeyinvoiceApiKey: (value: boolean) => void;
   handleSaveKeyInvoice: () => void;
 }
 
@@ -114,16 +110,12 @@ export const IntegrationsContent = ({
   setTaxExemptionReason,
   integrationsEnabled,
   onToggleIntegration,
-  keyinvoiceUsername,
-  setKeyinvoiceUsername,
-  keyinvoicePassword,
-  setKeyinvoicePassword,
-  keyinvoiceCompanyCode,
-  setKeyinvoiceCompanyCode,
+  keyinvoiceApiKey,
+  setKeyinvoiceApiKey,
   keyinvoiceApiUrl,
   setKeyinvoiceApiUrl,
-  showKeyinvoicePassword,
-  setShowKeyinvoicePassword,
+  showKeyinvoiceApiKey,
+  setShowKeyinvoiceApiKey,
   handleSaveKeyInvoice,
 }: IntegrationsContentProps) => {
   const getBadge = (key: string, hasCredentials: boolean) => {
@@ -611,10 +603,10 @@ export const IntegrationsContent = ({
               <div className="flex items-center gap-2">
                 <Receipt className="h-5 w-5" />
                 <span className="font-medium">Faturação (KeyInvoice)</span>
-                {getBadge('keyinvoice', !!(keyinvoiceUsername && keyinvoicePassword && keyinvoiceCompanyCode))}
+                {getBadge('keyinvoice', !!keyinvoiceApiKey)}
               </div>
               <span className="text-xs text-muted-foreground font-normal">
-                Emita faturas via KeyInvoice (CloudInvoice).
+                Emita faturas via KeyInvoice (API 5.0).
               </span>
             </div>
             <div onClick={(e) => e.stopPropagation()}>
@@ -636,53 +628,32 @@ export const IntegrationsContent = ({
               <>
                 <div className="rounded-lg bg-blue-500/10 border border-blue-500/20 p-3">
                   <p className="text-sm text-blue-600 dark:text-blue-400">
-                    Utilize as credenciais da sua conta KeyInvoice (CloudInvoice).
+                    Introduza a Chave da API 5.0 do seu painel KeyInvoice.
                   </p>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="ki-username">Email do Utilizador</Label>
-                  <Input
-                    id="ki-username"
-                    type="email"
-                    placeholder="utilizador@empresa.pt"
-                    value={keyinvoiceUsername}
-                    onChange={(e) => setKeyinvoiceUsername(e.target.value)}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="ki-password">Password</Label>
+                  <Label htmlFor="ki-api-key">Chave da API</Label>
                   <div className="relative">
                     <Input
-                      id="ki-password"
-                      type={showKeyinvoicePassword ? 'text' : 'password'}
-                      placeholder="Password de acesso"
-                      value={keyinvoicePassword}
-                      onChange={(e) => setKeyinvoicePassword(e.target.value)}
+                      id="ki-api-key"
+                      type={showKeyinvoiceApiKey ? 'text' : 'password'}
+                      placeholder="Chave da API KeyInvoice"
+                      value={keyinvoiceApiKey}
+                      onChange={(e) => setKeyinvoiceApiKey(e.target.value)}
                     />
                     <Button
                       type="button"
                       variant="ghost"
                       size="icon"
                       className="absolute right-0 top-0 h-full px-3"
-                      onClick={() => setShowKeyinvoicePassword(!showKeyinvoicePassword)}
+                      onClick={() => setShowKeyinvoiceApiKey(!showKeyinvoiceApiKey)}
                     >
-                      {showKeyinvoicePassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      {showKeyinvoiceApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </Button>
                   </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="ki-company-code">Código da Empresa</Label>
-                  <Input
-                    id="ki-company-code"
-                    placeholder="EMPRESA001"
-                    value={keyinvoiceCompanyCode}
-                    onChange={(e) => setKeyinvoiceCompanyCode(e.target.value)}
-                  />
                   <p className="text-xs text-muted-foreground">
-                    Código da empresa no KeyInvoice (company_code).
+                    Encontre a sua Chave em KeyInvoice → Painel → API 5.0 REST.
                   </p>
                 </div>
 
@@ -691,7 +662,7 @@ export const IntegrationsContent = ({
                   <Input
                     id="ki-api-url"
                     type="url"
-                    placeholder="https://app.keyinvoice.com/API/"
+                    placeholder="https://login.keyinvoice.com/API5.php"
                     value={keyinvoiceApiUrl}
                     onChange={(e) => setKeyinvoiceApiUrl(e.target.value)}
                   />

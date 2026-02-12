@@ -21,50 +21,19 @@ function mapCountryToInvoiceXpress(country?: string | null): string {
   return country
 }
 
-const DEFAULT_KEYINVOICE_API_URL = 'https://app.keyinvoice.com/API/'
+const DEFAULT_KEYINVOICE_API_URL = 'https://login.keyinvoice.com/API5.php'
 
-async function getKeyInvoiceSid(supabase: any, org: any, organizationId: string): Promise<string> {
-  // Check cached Sid
-  if (org.keyinvoice_token && org.keyinvoice_token_expires_at) {
-    const expiresAt = new Date(org.keyinvoice_token_expires_at)
-    if (expiresAt > new Date()) return org.keyinvoice_token
+// API 5.0: The API key IS the Sid - no login needed
+function getKeyInvoiceApiKey(org: any): string {
+  if (!org.keyinvoice_password) {
+    throw new Error('Chave da API KeyInvoice não configurada')
   }
-
-  const apiUrl = org.keyinvoice_api_url || DEFAULT_KEYINVOICE_API_URL
-
-  // Login using real KeyInvoice API
-  const loginPayload: Record<string, string> = {
-    method: 'login',
-    username: org.keyinvoice_username,
-    password: org.keyinvoice_password,
-  }
-  if (org.keyinvoice_company_code) loginPayload.companyCode = org.keyinvoice_company_code
-
-  const res = await fetch(apiUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(loginPayload),
-  })
-
-  if (!res.ok) {
-    const err = await res.text()
-    throw new Error(`KeyInvoice auth failed: ${res.status} ${err}`)
-  }
-
-  const data = await res.json()
-  if (data.Status !== 1 || !data.Data?.Sid) {
-    throw new Error(`KeyInvoice login failed: ${data.ErrorMessage || 'Unknown error'}`)
-  }
-
-  const sid = data.Data.Sid
-  const expiresAt = new Date(Date.now() + 23 * 60 * 60 * 1000).toISOString()
-  await supabase.from('organizations').update({ keyinvoice_token: sid, keyinvoice_token_expires_at: expiresAt }).eq('id', organizationId)
-  return sid
+  return org.keyinvoice_password
 }
 
 async function handleKeyInvoice(supabase: any, org: any, saleId: string, organizationId: string, observations: string | undefined, corsHeaders: Record<string, string>) {
-  if (!org?.keyinvoice_username || !org?.keyinvoice_password) {
-    return new Response(JSON.stringify({ error: 'Credenciais KeyInvoice não configuradas' }), {
+  if (!org?.keyinvoice_password) {
+    return new Response(JSON.stringify({ error: 'Chave da API KeyInvoice não configurada' }), {
       status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   }
@@ -96,7 +65,7 @@ async function handleKeyInvoice(supabase: any, org: any, saleId: string, organiz
     })
   }
 
-  const sid = await getKeyInvoiceSid(supabase, org, organizationId)
+  const sid = getKeyInvoiceApiKey(org)
   const apiUrl = org.keyinvoice_api_url || DEFAULT_KEYINVOICE_API_URL
 
   // Tax config
@@ -286,7 +255,7 @@ Deno.serve(async (req) => {
     // Fetch organization credentials
     const { data: org } = await supabase
       .from('organizations')
-      .select('invoicexpress_account_name, invoicexpress_api_key, integrations_enabled, tax_config, billing_provider, keyinvoice_username, keyinvoice_password, keyinvoice_company_code, keyinvoice_token, keyinvoice_token_expires_at, keyinvoice_api_url')
+      .select('invoicexpress_account_name, invoicexpress_api_key, integrations_enabled, tax_config, billing_provider, keyinvoice_password, keyinvoice_api_url')
       .eq('id', organization_id)
       .single()
 

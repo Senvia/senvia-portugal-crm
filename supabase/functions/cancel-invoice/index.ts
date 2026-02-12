@@ -5,50 +5,14 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-const DEFAULT_KEYINVOICE_API_URL = 'https://app.keyinvoice.com/API/'
+const DEFAULT_KEYINVOICE_API_URL = 'https://login.keyinvoice.com/API5.php'
 
-// KeyInvoice DocType mapping
-const KI_DOC_TYPE_MAP: Record<string, string> = {
-  invoice: '4',
-  invoice_receipt: '34',
-  receipt: '34',
-  credit_note: '7',
-}
-
-async function getKeyInvoiceSid(supabase: any, org: any, organizationId: string): Promise<string> {
-  if (org.keyinvoice_token && org.keyinvoice_token_expires_at) {
-    const expiresAt = new Date(org.keyinvoice_token_expires_at)
-    if (expiresAt > new Date()) return org.keyinvoice_token
+// API 5.0: The API key IS the Sid - no login needed
+function getKeyInvoiceApiKey(org: any): string {
+  if (!org.keyinvoice_password) {
+    throw new Error('Chave da API KeyInvoice não configurada')
   }
-
-  const apiUrl = org.keyinvoice_api_url || DEFAULT_KEYINVOICE_API_URL
-  const loginPayload: Record<string, string> = {
-    method: 'login',
-    username: org.keyinvoice_username,
-    password: org.keyinvoice_password,
-  }
-  if (org.keyinvoice_company_code) loginPayload.companyCode = org.keyinvoice_company_code
-
-  const res = await fetch(apiUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(loginPayload),
-  })
-
-  if (!res.ok) {
-    const err = await res.text()
-    throw new Error(`KeyInvoice auth failed: ${res.status} ${err}`)
-  }
-
-  const data = await res.json()
-  if (data.Status !== 1 || !data.Data?.Sid) {
-    throw new Error(`KeyInvoice login failed: ${data.ErrorMessage || 'Unknown error'}`)
-  }
-
-  const sid = data.Data.Sid
-  const expiresAt = new Date(Date.now() + 23 * 60 * 60 * 1000).toISOString()
-  await supabase.from('organizations').update({ keyinvoice_token: sid, keyinvoice_token_expires_at: expiresAt }).eq('id', organizationId)
-  return sid
+  return org.keyinvoice_password
 }
 
 Deno.serve(async (req) => {
@@ -113,21 +77,21 @@ Deno.serve(async (req) => {
     // Fetch org credentials
     const { data: org } = await supabase
       .from('organizations')
-      .select('invoicexpress_account_name, invoicexpress_api_key, billing_provider, keyinvoice_username, keyinvoice_password, keyinvoice_company_code, keyinvoice_token, keyinvoice_token_expires_at, keyinvoice_api_url')
+      .select('invoicexpress_account_name, invoicexpress_api_key, billing_provider, keyinvoice_password, keyinvoice_api_url')
       .eq('id', organization_id)
       .single()
 
     const billingProvider = (org as any)?.billing_provider || 'invoicexpress'
 
     if (billingProvider === 'keyinvoice') {
-      // KeyInvoice cancel flow using real API: method:"setDocumentVoid"
-      if (!org?.keyinvoice_username || !org?.keyinvoice_password) {
-        return new Response(JSON.stringify({ error: 'Credenciais KeyInvoice não configuradas' }), {
+      // KeyInvoice cancel flow using API 5.0: method:"setDocumentVoid"
+      if (!org?.keyinvoice_password) {
+        return new Response(JSON.stringify({ error: 'Chave da API KeyInvoice não configurada' }), {
           status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
       }
 
-      const sid = await getKeyInvoiceSid(supabase, org, organization_id)
+      const sid = getKeyInvoiceApiKey(org)
       const apiUrl = org.keyinvoice_api_url || DEFAULT_KEYINVOICE_API_URL
       const docType = KI_DOC_TYPE_MAP[document_type] || '4'
 

@@ -159,8 +159,8 @@ export function isInvoiceXpressActive(organization: any): boolean {
     return true;
   }
   
-  // Check if KeyInvoice is enabled and has credentials
-  if (enabled?.keyinvoice === true && organization?.keyinvoice_username && organization?.keyinvoice_password && organization?.keyinvoice_company_code) {
+  // Check if KeyInvoice is enabled and has API key
+  if (enabled?.keyinvoice === true && organization?.keyinvoice_password) {
     return true;
   }
   
