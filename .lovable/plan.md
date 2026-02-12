@@ -1,56 +1,48 @@
 
-# Fix: Inserir NC do KeyInvoice na tabela credit_notes
+# Fix: NC do KeyInvoice em falta na tabela credit_notes
 
-## Problema raiz
+## Problema
 
-Apos o `setDocumentVoid` com sucesso, a resposta da API KeyInvoice e apenas:
-```json
-{"Status":1,"Data":{"Voided":1,"Message":"Documento anulado com sucesso"}}
+A nota de credito do KeyInvoice (sale `983dafb3`, `credit_note_id: 1`, referencia "NC #1") foi emitida por uma versao anterior do edge function que nao fazia o `upsert` na tabela `credit_notes`. O registo nunca foi criado, por isso nao aparece na pagina de Faturas.
+
+A versao actual do edge function ja faz o upsert, mas a NC antiga continua em falta.
+
+## Solucao
+
+### 1. Inserir o registo em falta via migracao SQL
+
+Inserir diretamente na tabela `credit_notes` o registo correspondente a NC ja emitida:
+
+```sql
+INSERT INTO credit_notes (organization_id, invoicexpress_id, reference, status, client_name, total, date, related_invoice_id, sale_id)
+VALUES (
+  '06fe9e1d-9670-45b0-8717-c5a6e90be380',
+  -1,
+  'NC 47/1',
+  'settled',
+  'Geovane Felix',
+  100,
+  CURRENT_DATE,
+  1,
+  '983dafb3-9497-4c16-af6c-c12fdba84239'
+)
+ON CONFLICT (invoicexpress_id, organization_id) DO NOTHING;
 ```
 
-Nao contem ID nem referencia da nota de credito gerada. O edge function usa fallbacks incorretos e nao loga erros do upsert.
+Tambem atualizar a referencia na tabela `sales` de "NC #1" para "NC 47/1":
 
-## Alteracoes
-
-### 1. `supabase/functions/create-credit-note/index.ts`
-
-Corrigir o bloco KeyInvoice (apos void com sucesso):
-
-**a) Obter client_name e total da fatura original na tabela `invoices`** em vez de tentar ler do `raw_data` com campo errado:
-```typescript
-// Antes (errado):
-const invoiceClientName = invoiceRecord ? (invoiceRecord.raw_data as any)?.clientName || null : null
-const invoiceTotal = invoiceRecord ? (invoiceRecord.raw_data as any)?.total || null : null
-
-// Depois (correto):
-// Buscar diretamente dos campos da tabela invoices
-const { data: invoiceInfo } = await supabase
-  .from('invoices')
-  .select('client_name, total')
-  .eq('invoicexpress_id', original_document_id)
-  .eq('organization_id', organization_id)
-  .maybeSingle()
+```sql
+UPDATE sales SET credit_note_reference = 'NC 47/1', credit_note_id = -1 WHERE id = '983dafb3-9497-4c16-af6c-c12fdba84239';
 ```
 
-**b) Gerar um `invoicexpress_id` negativo unico** para NCs do KeyInvoice (que nao retorna ID), evitando conflitos:
-```typescript
-const kiCreditNoteId = -(original_document_id)  // negativo para distinguir
-```
+### 2. Nenhuma alteracao de codigo necessaria
 
-**c) Adicionar error handling no upsert** com log explicito:
-```typescript
-const { error: upsertError } = await supabase.from('credit_notes').upsert({...})
-if (upsertError) {
-  console.error('Failed to upsert credit note:', upsertError)
-}
-```
+O edge function `create-credit-note` ja tem o upsert correto com ID negativo e lookup de `client_name`/`total` na tabela `invoices`. Futuras NCs do KeyInvoice serao registadas automaticamente.
 
-**d) Construir uma referencia mais util**: Usar o DocType/DocSeries/DocNum originais para criar algo como `"NC 47/1"` em vez de `"NC #1"`.
+## Resumo
 
-### Resumo das alteracoes no ficheiro
-
-| Ficheiro | Alteracao |
+| Alteracao | Detalhe |
 |---|---|
-| `supabase/functions/create-credit-note/index.ts` | Corrigir lookup de client_name/total, gerar ID unico negativo, adicionar error handling, melhorar referencia |
-
-Nenhuma alteracao de schema ou frontend necessaria -- o problema esta inteiramente no edge function.
+| Migracao SQL | Inserir registo NC em falta + corrigir referencia na sale |
+| Edge function | Sem alteracao (ja corrigido) |
+| Frontend | Sem alteracao |
