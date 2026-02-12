@@ -65,3 +65,6 @@ verify_jwt = false
 
 [functions.issue-invoice-receipt]
 verify_jwt = false
+
+[functions.keyinvoice-auth]
+verify_jwt = false

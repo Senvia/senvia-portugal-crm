@@ -63,6 +63,15 @@ export default function Settings() {
   const [taxRate, setTaxRate] = useState('23');
   const [taxExemptionReason, setTaxExemptionReason] = useState('');
 
+  // Billing provider state
+  const [billingProvider, setBillingProvider] = useState<'invoicexpress' | 'keyinvoice'>('invoicexpress');
+
+  // KeyInvoice state
+  const [keyinvoiceUsername, setKeyinvoiceUsername] = useState('');
+  const [keyinvoicePassword, setKeyinvoicePassword] = useState('');
+  const [keyinvoiceCompanyCode, setKeyinvoiceCompanyCode] = useState('');
+  const [showKeyinvoicePassword, setShowKeyinvoicePassword] = useState(false);
+
   // Integrations enabled state
   const [integrationsEnabled, setIntegrationsEnabled] = useState<Record<string, boolean>>({
     webhook: true, whatsapp: true, brevo: true, invoicexpress: true,
@@ -105,7 +114,7 @@ export default function Settings() {
       setIsLoadingIntegrations(true);
       const { data, error } = await supabase
         .from('organizations')
-        .select('webhook_url, whatsapp_base_url, whatsapp_instance, whatsapp_api_key, form_settings, brevo_api_key, brevo_sender_email, invoicexpress_account_name, invoicexpress_api_key, integrations_enabled, tax_config')
+        .select('webhook_url, whatsapp_base_url, whatsapp_instance, whatsapp_api_key, form_settings, brevo_api_key, brevo_sender_email, invoicexpress_account_name, invoicexpress_api_key, integrations_enabled, tax_config, billing_provider, keyinvoice_username, keyinvoice_password, keyinvoice_company_code')
         .eq('id', organization.id)
         .single();
       
@@ -118,6 +127,10 @@ export default function Settings() {
         setBrevoSenderEmail(data.brevo_sender_email || '');
         setInvoiceXpressAccountName((data as any).invoicexpress_account_name || '');
         setInvoiceXpressApiKey((data as any).invoicexpress_api_key || '');
+        setBillingProvider(((data as any).billing_provider as 'invoicexpress' | 'keyinvoice') || 'invoicexpress');
+        setKeyinvoiceUsername((data as any).keyinvoice_username || '');
+        setKeyinvoicePassword((data as any).keyinvoice_password || '');
+        setKeyinvoiceCompanyCode((data as any).keyinvoice_company_code || '');
 
         // Tax config
         const tc = (data as any).tax_config;
@@ -188,8 +201,12 @@ export default function Settings() {
     const taxValue = Number(taxRate);
     const taxName = taxValue === 0 ? 'Isento' : `IVA${taxValue}`;
     updateOrganization.mutate({
+      billing_provider: billingProvider,
       invoicexpress_account_name: invoiceXpressAccountName.trim() || null,
       invoicexpress_api_key: invoiceXpressApiKey.trim() || null,
+      keyinvoice_username: keyinvoiceUsername.trim() || null,
+      keyinvoice_password: keyinvoicePassword.trim() || null,
+      keyinvoice_company_code: keyinvoiceCompanyCode.trim() || null,
       tax_config: {
         tax_name: taxName,
         tax_value: taxValue,
@@ -385,6 +402,16 @@ export default function Settings() {
                   setTaxExemptionReason={setTaxExemptionReason}
                   integrationsEnabled={integrationsEnabled}
                   onToggleIntegration={handleToggleIntegration}
+                  billingProvider={billingProvider}
+                  setBillingProvider={setBillingProvider}
+                  keyinvoiceUsername={keyinvoiceUsername}
+                  setKeyinvoiceUsername={setKeyinvoiceUsername}
+                  keyinvoicePassword={keyinvoicePassword}
+                  setKeyinvoicePassword={setKeyinvoicePassword}
+                  keyinvoiceCompanyCode={keyinvoiceCompanyCode}
+                  setKeyinvoiceCompanyCode={setKeyinvoiceCompanyCode}
+                  showKeyinvoicePassword={showKeyinvoicePassword}
+                  setShowKeyinvoicePassword={setShowKeyinvoicePassword}
                 />
               )}
             </>
@@ -616,6 +643,16 @@ export default function Settings() {
                     setTaxExemptionReason={setTaxExemptionReason}
                     integrationsEnabled={integrationsEnabled}
                     onToggleIntegration={handleToggleIntegration}
+                    billingProvider={billingProvider}
+                    setBillingProvider={setBillingProvider}
+                    keyinvoiceUsername={keyinvoiceUsername}
+                    setKeyinvoiceUsername={setKeyinvoiceUsername}
+                    keyinvoicePassword={keyinvoicePassword}
+                    setKeyinvoicePassword={setKeyinvoicePassword}
+                    keyinvoiceCompanyCode={keyinvoiceCompanyCode}
+                    setKeyinvoiceCompanyCode={setKeyinvoiceCompanyCode}
+                    showKeyinvoicePassword={showKeyinvoicePassword}
+                    setShowKeyinvoicePassword={setShowKeyinvoicePassword}
                   />
                 </TabsContent>
               )}
