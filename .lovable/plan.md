@@ -1,37 +1,46 @@
 
 
-# Formatacao dos Pagamentos nas Observacoes da Fatura
+# Gerar Recibos Parciais - Suporte KeyInvoice + Validacao InvoiceXpress
 
-## Problema
-Os pagamentos nas observacoes da fatura estao a ser separados por `\n` (newline simples), mas podem nao estar a aparecer com quebra de linha visivel no documento final. O utilizador quer cada pagamento claramente separado por uma linha.
+## Problema Atual
+A funcao `generate-receipt` so suporta InvoiceXpress (via `partial_payments`). Organizacoes que usam KeyInvoice nao conseguem gerar recibos. Alem disso, e necessario garantir que o recibo e sempre relativo ao valor do pagamento individual, nao ao valor total da venda.
 
-## Alteracao
+## Analise
 
-### `supabase/functions/issue-invoice/index.ts`
+- **InvoiceXpress**: Ja esta correto. Usa o endpoint `partial_payments` com `payment.amount` (valor do pagamento individual). Nao precisa de alteracao funcional.
+- **KeyInvoice**: Nao tem suporte na funcao atual. Precisa de um caminho novo usando `insertDocument` com DocType 10 (Recibo - RC) e o valor do pagamento como linha do documento.
 
-Alterar os dois blocos de geracao de observacoes (KeyInvoice ~linha 351 e InvoiceXpress ~linha 774) para usar `\r\n` (quebra de linha compativel com mais sistemas) ou `\n\n` (linha em branco entre cada pagamento) como separador.
+## Alteracoes
 
-**KeyInvoice (linha 351-356):**
+### `supabase/functions/generate-receipt/index.ts`
+
+1. **Buscar `billing_provider` da organizacao** - Alterar a query de org para incluir `billing_provider, keyinvoice_password, keyinvoice_api_url, keyinvoice_sid, keyinvoice_sid_expires_at`
+
+2. **Routing por provider** - Se `billing_provider === 'keyinvoice'`, seguir caminho KeyInvoice; caso contrario, manter o caminho InvoiceXpress atual
+
+3. **Caminho KeyInvoice (novo)**:
+   - Autenticar via `getKeyInvoiceSid` (reutilizar a mesma logica de sessao com cache)
+   - Verificar que a venda tem fatura emitida (`invoicexpress_id` na tabela sales)
+   - Criar documento RC (DocType 10) via `insertDocument` com:
+     - Uma unica DocLine com o valor do pagamento (`payment.amount`)
+     - `IdClient` resolvido pelo NIF do cliente
+     - `Comments` com nota do pagamento
+   - Obter PDF via `getDocumentPDF` e armazenar no bucket `invoices`
+   - Atualizar `sale_payments` com a referencia do recibo, PDF e status `paid`
+
+4. **Caminho InvoiceXpress (existente)** - Sem alteracoes funcionais, ja usa `payment.amount` corretamente
+
+### Detalhes Tecnicos
+
+```text
+Fluxo KeyInvoice:
+  1. Authenticate (get Sid)
+  2. insertDocument(DocType: '10', DocLines: [{amount}])
+  3. getDocumentPDF(DocType: '10', DocNum)
+  4. Upload PDF to storage
+  5. Update sale_payments record
 ```
-Pagamento em 3 parcelas:
 
-1. 15/02/2026 - 400.00€
+O DocType 10 (RC - Recibo) e o tipo correto no KeyInvoice para recibos, conforme ja mapeado no ficheiro `create-credit-note/index.ts`.
 
-2. 15/03/2026 - 400.00€
-
-3. 15/04/2026 - 400.00€
-```
-
-**InvoiceXpress (linha 774-779):**
-```
-Pagamento em 3 parcelas:
-
-- 1.ª parcela: 400.00 EUR - 15/02/2026
-
-- 2.ª parcela: 400.00 EUR - 15/03/2026
-
-- 3.ª parcela: 400.00 EUR - 15/04/2026
-```
-
-Alteracao tecnica: substituir `.join('\n')` por `.join('\n\n')` e adicionar `\n\n` apos a linha de titulo em ambos os caminhos (KeyInvoice e InvoiceXpress).
-
+A funcao vai seguir o mesmo padrao das outras Edge Functions (issue-invoice, cancel-invoice, etc.) para detecao do provider e autenticacao KeyInvoice.
