@@ -159,7 +159,7 @@ async function handleKeyInvoice(supabase: any, org: any, saleId: string, organiz
 
   // Build DocLines for KeyInvoice real API
   // KeyInvoice requires a numeric IdProduct - create products via insertProduct first
-  const apiUrl = org.keyinvoice_api_url || DEFAULT_KEYINVOICE_API_URL
+  // apiUrl already declared above
 
   async function getOrCreateProduct(name: string, price: number): Promise<string> {
     // Try to create product; if it already exists, search for it
