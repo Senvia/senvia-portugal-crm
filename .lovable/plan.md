@@ -1,113 +1,75 @@
 
-# Reescrita da Integração KeyInvoice -- API Correta
+# Corrigir Integração KeyInvoice para API 5.0
 
-## Contexto
+## O Problema
 
-A implementação atual do KeyInvoice utiliza endpoints REST inventados (`/auth/login/`, `/documents/new/`, `/documents/{id}/finalize/`, etc.) que **nao existem na API real**. A API KeyInvoice real funciona de forma completamente diferente:
-
-- **Endpoint unico**: POST para o endpoint base da API
-- **Metodo no body**: `{"method":"insertDocument",...}`  
-- **Autenticacao**: Header `Sid` com o identificador de sessao (nao `Authorization: Token`)
-- **Login**: `{"method":"login","username":"...","password":"..."}`
+A implementação atual pede **username, password e código de empresa** para autenticar com o KeyInvoice. Mas conforme o print do painel KeyInvoice, a **API 5.0** usa:
+- Uma **Chave (API Key)** direta -- sem login com email/password
+- URL: `https://login.keyinvoice.com/API5.php` (nao `https://app.keyinvoice.com/API/`)
+- Texto "CloudInvoice" esta desatualizado
 
 ## O que muda
 
-### 1. Reescrever `keyinvoice-auth` (Edge Function)
+### 1. Simplificar autenticacao (sem login)
 
-Corrigir o login para usar a API real:
-- Endpoint: POST para URL base da API (o endpoint exato do KeyInvoice, ex: `https://app.keyinvoice.com/API/`)
-- Body: `{"method":"login","username":"...","password":"...","companyCode":"..."}`
-- Resposta: `{Status:1,Data:{Sid:"..."}}` -- o `Sid` e o token de sessao
-- Guardar `Sid` como `keyinvoice_token` na BD
-- **Nota**: O endpoint base deve ser configuravel na organizacao (novo campo `keyinvoice_api_url`)
+Na API 5.0, a Chave e usada diretamente no header `Sid` -- nao e preciso chamar `method:"login"`. Isto elimina:
+- Campo username
+- Campo password
+- Campo codigo da empresa
+- Toda a logica de login e cache de token
 
-### 2. Reescrever `issue-invoice` -- bloco KeyInvoice
+### 2. UI nas Definicoes -- Integracoes
 
-Substituir a logica de criacao de documento:
-- Usar `method: "insertDocument"` com `DocType: "34"` (Fatura-Recibo) ou `DocType: "4"` (Fatura)
-- Header: `Sid: <token>` em vez de `Authorization: Token`
-- Body inclui `IdClient`, `DocLines` com `IdProduct`, `Qty`, `Price`, `IdTax`
-- Resposta: `{Status:1,Data:{DocType,DocSeries,DocNum,FullDocNumber}}`
-- Guardar `DocNum` + `FullDocNumber` como referencia
-- Obter PDF via `method: "getDocumentPDF"` (retorna Base64, converter e guardar no Storage)
+Substituir os 3 campos (email, password, codigo empresa) por **1 unico campo**:
+- **"Chave da API"** (campo com show/hide, tipo password)
+- Atualizar placeholder do URL da API para `https://login.keyinvoice.com/API5.php`
+- Remover todas as referencias a "CloudInvoice"
+- Atualizar badge para verificar apenas se a Chave esta preenchida
 
-### 3. Reescrever `cancel-invoice` -- bloco KeyInvoice
+### 3. Edge Functions
 
-Substituir anulacao:
-- Usar `method: "setDocumentVoid"` com `DocType`, `DocNum`, `CreditReason`
-- Se documento tem mais de 5 dias, a API emite nota de credito automaticamente
-- Resposta pode ser `{Voided,...}` ou `{DocType,DocSeries,DocNum,...}` (nota de credito)
+Todos os blocos KeyInvoice serao simplificados:
+- **Sem login** -- a Chave e usada diretamente como `Sid` no header
+- **Sem cache de token** -- nao e necessario, a chave e permanente
+- URL por defeito: `https://login.keyinvoice.com/API5.php`
 
-### 4. Reescrever `send-invoice-email` -- bloco KeyInvoice
+Funcoes afetadas:
+- `keyinvoice-auth` -- pode ser simplificada ou removida (a chave e a propria autenticacao)
+- `issue-invoice` -- `getKeyInvoiceSid()` passa a retornar a chave diretamente
+- `cancel-invoice` -- mesma simplificacao
+- `send-invoice-email` -- mesma simplificacao
 
-Substituir envio de email:
-- Usar `method: "sendDocumentPDF2Email"` com `DocType`, `DocNum`, `EmailDestinations`, `EmailSubject`, `EmailBody`
+### 4. Base de dados
 
-### 5. Adicionar campo `keyinvoice_api_url` a tabela `organizations`
+A coluna `keyinvoice_username` sera reutilizada internamente ou adicionamos coluna nova. Os campos `keyinvoice_password` e `keyinvoice_company_code` deixam de ser usados. Vamos guardar a Chave no campo existente `keyinvoice_password` (por seguranca, ja que e um campo existente) OU criar campo `keyinvoice_api_key_value` dedicado.
 
-A documentacao usa "ENDERECO_API" como URL base -- cada conta KeyInvoice pode ter URL diferente. Adicionar:
-- Nova coluna `keyinvoice_api_url` (text, nullable)
-- Valor por defeito: `https://app.keyinvoice.com/API/` (a confirmar)
-- Campo editavel nas Definicoes -> Integracoes -> KeyInvoice
-
-### 6. Atualizar UI nas Definicoes
-
-Adicionar campo "URL da API" no accordion do KeyInvoice para que o utilizador possa configurar o endpoint.
+Opcao mais limpa: reutilizar `keyinvoice_password` para guardar a Chave (evita migracao), ja que username e company_code deixam de ser necessarios.
 
 ## Detalhes Tecnicos
 
-### Arquitetura da chamada KeyInvoice (padrao para todas as funcoes)
+### Padrao de chamada simplificado (API 5.0)
 
 ```text
-POST {keyinvoice_api_url}
+POST https://login.keyinvoice.com/API5.php
 Headers:
-  Sid: {token_sessao}
+  Sid: {CHAVE_API}
   Content-Type: application/json
 Body:
   {"method":"insertDocument","DocType":"34","IdClient":"C001","DocLines":[...]}
-Resposta:
-  {"Status":1,"Data":{"DocType":"34","DocSeries":"1","DocNum":"101","FullDocNumber":"FR 1/101"}}
-```
-
-### Mapeamento de tipos de documento
-
-```text
-4  = Fatura (FT)
-7  = Nota de Credito (NC)
-32 = Fatura Simplificada (FS)
-34 = Fatura-Recibo (FR)
-```
-
-### Helper de autenticacao reutilizavel
-
-Criar funcao helper `getKeyInvoiceSid()` que:
-1. Verifica token em cache na BD
-2. Se expirado, faz `method: "login"` para obter novo `Sid`
-3. Guarda novo `Sid` com expiracao de 23h
-4. Retorna `Sid` pronto a usar
-
-### Fluxo de emissao de fatura (corrigido)
-
-```text
-1. getKeyInvoiceSid() -> Sid
-2. method: "insertDocument" (DocType=34, IdClient, DocLines) -> DocNum, FullDocNumber
-3. method: "getDocumentPDF" (DocType=34, DocNum) -> Base64
-4. Converter Base64 -> Buffer -> Upload Supabase Storage
-5. Guardar referencia na tabela sales
 ```
 
 ### Ficheiros a modificar
 
 | Ficheiro | Alteracao |
 |----------|-----------|
-| `supabase/functions/keyinvoice-auth/index.ts` | Reescrever login para usar `method:"login"` + `Sid` |
-| `supabase/functions/issue-invoice/index.ts` | Reescrever `handleKeyInvoice()` + `getKeyInvoiceToken()` |
-| `supabase/functions/cancel-invoice/index.ts` | Reescrever bloco KeyInvoice para `method:"setDocumentVoid"` |
-| `supabase/functions/send-invoice-email/index.ts` | Reescrever bloco KeyInvoice para `method:"sendDocumentPDF2Email"` |
-| `src/components/settings/IntegrationsContent.tsx` | Adicionar campo URL da API |
-| `src/pages/Settings.tsx` | Adicionar estado + handler para `keyinvoice_api_url` |
-| **Migracao BD** | Adicionar coluna `keyinvoice_api_url` a `organizations` |
+| `supabase/functions/keyinvoice-auth/index.ts` | Simplificar: retorna a chave diretamente (sem login) |
+| `supabase/functions/issue-invoice/index.ts` | `getKeyInvoiceSid()` retorna a chave, URL default atualizado |
+| `supabase/functions/cancel-invoice/index.ts` | Mesma simplificacao |
+| `supabase/functions/send-invoice-email/index.ts` | Mesma simplificacao |
+| `src/components/settings/IntegrationsContent.tsx` | Substituir 3 campos por 1 (Chave API), remover CloudInvoice |
+| `src/pages/Settings.tsx` | Remover estados username/companyCode, adaptar para chave unica |
+| `src/components/sales/SaleFiscalInfo.tsx` | Atualizar verificacao de credenciais |
 
-### Questao em aberto
+### Nao requer migracao BD
 
-O endpoint base da API KeyInvoice (ex: `https://app.keyinvoice.com/API/`) -- precisas de confirmar qual e o URL exato que utilizas. Se for sempre o mesmo para todos os clientes, posso usar um valor fixo em vez de campo configuravel.
+Vamos reutilizar a coluna `keyinvoice_password` para guardar a Chave da API (e a coluna mais segura por ser tratada como campo sensivel). Os campos `keyinvoice_username` e `keyinvoice_company_code` simplesmente deixam de ser usados.
