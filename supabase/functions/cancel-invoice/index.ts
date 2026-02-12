@@ -201,6 +201,13 @@ Deno.serve(async (req) => {
       try { await cancelRes.text() } catch {}
     }
 
+    // Update invoice status in invoices table
+    await supabase
+      .from('invoices')
+      .update({ status: 'canceled', updated_at: new Date().toISOString() })
+      .eq('organization_id', organization_id)
+      .eq('invoicexpress_id', invoicexpress_id)
+
     // Clear references
     if (payment_id) {
       await supabase
