@@ -38,6 +38,7 @@ export function useCancelInvoice() {
       toast.success("Documento anulado com sucesso");
       queryClient.invalidateQueries({ queryKey: ["sale-payments"] });
       queryClient.invalidateQueries({ queryKey: ["sales"] });
+      queryClient.invalidateQueries({ queryKey: ["invoices"] });
     },
     onError: (error: Error) => {
       toast.error(`Erro ao anular: ${error.message}`);
