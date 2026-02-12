@@ -158,22 +158,64 @@ async function handleKeyInvoice(supabase: any, org: any, saleId: string, organiz
   }
 
   // Build DocLines for KeyInvoice real API
-  // Use Description instead of IdProduct (which requires a numeric product ID)
-  const docLines = (saleItems || []).map((item: any) => {
+  // KeyInvoice requires a numeric IdProduct - create products via insertProduct first
+  const apiUrl = org.keyinvoice_api_url || DEFAULT_KEYINVOICE_API_URL
+
+  async function getOrCreateProduct(name: string, price: number): Promise<string> {
+    // Try to create product; if it already exists, search for it
+    try {
+      const insertRes = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Sid': sid },
+        body: JSON.stringify({
+          method: 'insertProduct',
+          Description: name,
+          Price: String(price),
+          UnitCode: 'UN',
+        }),
+      })
+      const insertData = await insertRes.json()
+      console.log('KeyInvoice insertProduct response:', JSON.stringify(insertData))
+      if (insertData.Status === 1 && insertData.Data?.Id) {
+        return String(insertData.Data.Id)
+      }
+      // If insert fails (duplicate?), try searching
+      const searchRes = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Sid': sid },
+        body: JSON.stringify({ method: 'getProducts', Search: name }),
+      })
+      const searchData = await searchRes.json()
+      console.log('KeyInvoice getProducts response:', JSON.stringify(searchData))
+      if (searchData.Status === 1 && searchData.Data) {
+        const products = Array.isArray(searchData.Data) ? searchData.Data : [searchData.Data]
+        const match = products.find((p: any) => p.Description === name || p.Name === name)
+        if (match?.Id) return String(match.Id)
+        if (products[0]?.Id) return String(products[0].Id)
+      }
+    } catch (e) {
+      console.warn('KeyInvoice product creation/search failed:', e)
+    }
+    return ''
+  }
+
+  const items = (saleItems && saleItems.length > 0) 
+    ? saleItems 
+    : [{ name: `Venda ${sale.code || saleId}`, quantity: 1, unit_price: sale.total_value }]
+
+  const docLines: any[] = []
+  for (const item of items) {
+    const productId = await getOrCreateProduct(item.name || 'Serviço', Number(item.unit_price))
     const line: any = {
-      Description: item.name || 'Serviço',
       Qty: String(Number(item.quantity)),
       Price: String(Number(item.unit_price)),
     }
-    return line
-  })
-
-  if (docLines.length === 0) {
-    docLines.push({
-      Description: `Venda ${sale.code || saleId}`,
-      Qty: '1',
-      Price: String(Number(sale.total_value)),
-    })
+    if (productId) {
+      line.IdProduct = productId
+    } else {
+      line.Description = item.name || 'Serviço'
+    }
+    docLines.push(line)
   }
   console.log('KeyInvoice DocLines:', JSON.stringify(docLines))
 
