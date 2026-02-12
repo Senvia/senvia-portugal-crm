@@ -158,64 +158,53 @@ async function handleKeyInvoice(supabase: any, org: any, saleId: string, organiz
   }
 
   // Build DocLines for KeyInvoice real API
-  // KeyInvoice requires a numeric IdProduct - create products via insertProduct first
-  // apiUrl already declared above
+  // KeyInvoice requires a valid numeric IdProduct for each line
+  // Use listProducts to find existing products, match by name or use first available
 
-  async function getOrCreateProduct(name: string, price: number): Promise<string> {
-    // Step 1: Try to find existing product by searching
-    try {
-      const searchRes = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Sid': sid },
-        body: JSON.stringify({ method: 'getProducts' }),
-      })
-      const searchData = await searchRes.json()
-      console.log('KeyInvoice getProducts status:', searchData.Status, 'count:', Array.isArray(searchData.Data) ? searchData.Data.length : 'N/A')
-      if (searchData.Status === 1 && searchData.Data) {
-        const products = Array.isArray(searchData.Data) ? searchData.Data : [searchData.Data]
-        // Try exact match first
-        const match = products.find((p: any) => 
-          (p.Description || p.Name || '').toLowerCase() === name.toLowerCase()
-        )
-        if (match?.Id) {
-          console.log('KeyInvoice: Found existing product:', match.Id, match.Description || match.Name)
-          return String(match.Id)
-        }
-        // Use first available product as fallback
-        if (products.length > 0 && products[0]?.Id) {
-          console.log('KeyInvoice: Using first available product as fallback:', products[0].Id, products[0].Description || products[0].Name)
-          return String(products[0].Id)
-        }
-      }
-    } catch (e) {
-      console.warn('KeyInvoice getProducts failed:', e)
+  // Fetch all products from KeyInvoice once
+  let keyInvoiceProducts: any[] = []
+  try {
+    const listRes = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Sid': sid },
+      body: JSON.stringify({ method: 'listProducts' }),
+    })
+    const listData = await listRes.json()
+    console.log('KeyInvoice listProducts status:', listData.Status)
+    if (listData.Status === 1 && listData.Data?.Products) {
+      keyInvoiceProducts = Array.isArray(listData.Data.Products) ? listData.Data.Products : []
+      console.log('KeyInvoice products found:', keyInvoiceProducts.length, 
+        keyInvoiceProducts.map((p: any) => `${p.Id}:${p.Description || p.Name}`).join(', '))
     }
+  } catch (e) {
+    console.warn('KeyInvoice listProducts failed:', e)
+  }
 
-    // Step 2: Try to create product with different field name variations
-    const fieldVariations = [
-      { method: 'insertProduct', Name: name, Price: String(price) },
-      { method: 'insertProduct', Description: name, Price: String(price), UnitCode: 'UN' },
-      { method: 'insertProduct', Name: name, Description: name, Price: String(price), Code: name.substring(0, 20).replace(/\s+/g, '_').toUpperCase() },
-    ]
-    for (const payload of fieldVariations) {
-      try {
-        console.log('KeyInvoice insertProduct attempt:', JSON.stringify(payload))
-        const insertRes = await fetch(apiUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Sid': sid },
-          body: JSON.stringify(payload),
-        })
-        const insertData = await insertRes.json()
-        console.log('KeyInvoice insertProduct response:', JSON.stringify(insertData))
-        if (insertData.Status === 1 && insertData.Data?.Id) {
-          return String(insertData.Data.Id)
-        }
-      } catch (e) {
-        console.warn('KeyInvoice insertProduct variation failed:', e)
-      }
-    }
+  if (keyInvoiceProducts.length === 0) {
+    return new Response(JSON.stringify({ 
+      error: 'Não existem produtos cadastrados na sua conta KeyInvoice. Crie pelo menos um produto (ex: "Serviço") no painel do KeyInvoice antes de emitir faturas via API.',
+    }), {
+      status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
+  }
 
-    return ''
+  function findProductId(name: string): string {
+    // Try exact match by Description or Name
+    const exactMatch = keyInvoiceProducts.find((p: any) => 
+      (p.Description || p.Name || '').toLowerCase() === name.toLowerCase()
+    )
+    if (exactMatch?.Id) return String(exactMatch.Id)
+
+    // Try partial match
+    const partialMatch = keyInvoiceProducts.find((p: any) => 
+      (p.Description || p.Name || '').toLowerCase().includes(name.toLowerCase()) ||
+      name.toLowerCase().includes((p.Description || p.Name || '').toLowerCase())
+    )
+    if (partialMatch?.Id) return String(partialMatch.Id)
+
+    // Fallback: use first product
+    console.log('KeyInvoice: No product match for "' + name + '", using first product:', keyInvoiceProducts[0].Id)
+    return String(keyInvoiceProducts[0].Id)
   }
 
   const items = (saleItems && saleItems.length > 0) 
@@ -224,16 +213,7 @@ async function handleKeyInvoice(supabase: any, org: any, saleId: string, organiz
 
   const docLines: any[] = []
   for (const item of items) {
-    const productId = await getOrCreateProduct(item.name || 'Serviço', Number(item.unit_price))
-    if (!productId) {
-      console.error('KeyInvoice: Could not resolve product ID for:', item.name)
-      return new Response(JSON.stringify({ 
-        error: 'Não foi possível criar/encontrar o produto no KeyInvoice. Verifique se existem produtos cadastrados na sua conta KeyInvoice.',
-        details: `Produto: ${item.name || 'Serviço'}`
-      }), {
-        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
+    const productId = findProductId(item.name || 'Serviço')
     docLines.push({
       IdProduct: productId,
       Qty: String(Number(item.quantity)),
