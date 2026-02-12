@@ -99,21 +99,46 @@ async function fetchKeyInvoicePdf(
     }
 
     const pdfData = await pdfRes.json()
+    console.log('KeyInvoice getDocumentPDF response Status:', pdfData.Status,
+      'Data type:', typeof pdfData.Data,
+      typeof pdfData.Data === 'object' && pdfData.Data !== null ? 'keys: ' + JSON.stringify(Object.keys(pdfData.Data)) : '')
+
     if (pdfData.Status !== 1 || !pdfData.Data) {
       console.warn('KeyInvoice getDocumentPDF failed:', pdfData.ErrorMessage)
       return { storagePath: null, signedUrl: null }
     }
 
-    let base64Pdf = typeof pdfData.Data === 'string'
-      ? pdfData.Data
-      : (pdfData.Data.PDF || pdfData.Data.Content || pdfData.Data.File || pdfData.Data.Base64 || '')
+    let base64Pdf = ''
+    if (typeof pdfData.Data === 'string') {
+      base64Pdf = pdfData.Data
+    } else if (typeof pdfData.Data === 'object' && pdfData.Data !== null) {
+      const knownKeys = ['PDF', 'pdf', 'Content', 'content', 'File', 'file',
+                         'Base64', 'base64', 'FileContent', 'Document', 'document', 'PDFContent']
+      for (const key of knownKeys) {
+        if (pdfData.Data[key] && typeof pdfData.Data[key] === 'string') {
+          console.log('KeyInvoice PDF: Found key:', key)
+          base64Pdf = pdfData.Data[key]
+          break
+        }
+      }
+      if (!base64Pdf) {
+        for (const [key, val] of Object.entries(pdfData.Data)) {
+          if (typeof val === 'string' && (val as string).length > 100) {
+            console.log('KeyInvoice PDF: Using fallback key:', key)
+            base64Pdf = val as string
+            break
+          }
+        }
+      }
+    }
 
     if (base64Pdf) {
       base64Pdf = base64Pdf.replace(/^data:[^;]+;base64,/, '')
     }
 
     if (!base64Pdf) {
-      console.warn('KeyInvoice: Could not extract base64 PDF')
+      console.warn('KeyInvoice: Could not extract base64 PDF. Data keys:', 
+        typeof pdfData.Data === 'object' ? JSON.stringify(Object.keys(pdfData.Data)) : typeof pdfData.Data)
       return { storagePath: null, signedUrl: null }
     }
 
