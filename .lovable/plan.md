@@ -1,27 +1,49 @@
 
 
-# Corrigir Visibilidade dos Botoes em Toda a App
+# Uniformizar Layout dos Modais de Venda
 
 ## Problema
-Os variantes `outline`, `secondary` e `ghost` do componente Button usam cores praticamente iguais ao fundo da pagina, tornando os botoes invisiveis.
+Os modais "Criar Venda" e "Editar Venda" tem os botoes de acao dentro da coluna direita (inline no scroll), enquanto o "Detalhes da Venda" tem um footer fixo no fundo. Isto cria uma experiencia inconsistente.
 
-## Solucao
+## O que fazer
 
-### `src/components/ui/button.tsx`
+### 1. `src/components/sales/CreateSaleModal.tsx`
 
-Atualizar os estilos dos 3 variantes problematicos:
+**Mover o botao "Criar Venda" para um footer fixo no fundo do modal**, igual ao SaleDetailsModal:
 
-- **outline**: Adicionar borda mais forte e fundo subtil para se destacar do background
-  - De: `border border-input bg-background hover:bg-accent`
-  - Para: `border-2 border-border bg-background hover:bg-accent hover:text-accent-foreground shadow-sm`
+- Remover o botao `<Button>Criar Venda</Button>` da coluna direita (linhas 1148-1162)
+- Adicionar um `<div>` de footer fixo apos o `</div>` do conteudo scrollavel, com a mesma estrutura do SaleDetailsModal:
+  - Botao "Criar Venda" com `variant="senvia"` (acao principal)
+  - Botao "Cancelar" com `variant="outline"`
 
-- **secondary**: Usar um fundo mais escuro/contrastante
-  - De: `bg-secondary text-secondary-foreground hover:bg-secondary/80`
-  - Para: `bg-muted text-foreground border border-border hover:bg-accent shadow-sm`
+Layout do footer:
+```text
+[ Criar Venda (senvia) ] [ Cancelar (outline) ]
+```
 
-- **ghost**: Adicionar borda subtil para que o botao seja pelo menos reconhecivel como botao
-  - De: `hover:bg-accent hover:text-accent-foreground`
-  - Para: `text-muted-foreground hover:bg-accent hover:text-accent-foreground border border-transparent hover:border-border`
+### 2. `src/components/sales/EditSaleModal.tsx`
 
-Estas alteracoes sao globais - afetam todos os botoes da aplicacao de uma vez, corrigindo o problema em todas as paginas (Vendas, Leads, Clientes, Financas, etc.).
+**Mover os botoes "Guardar Alteracoes" e "Cancelar" para um footer fixo no fundo**:
+
+- Remover os botoes da coluna direita (linhas 658-684)
+- Adicionar um `<div>` de footer fixo igual ao SaleDetailsModal:
+  - Botao "Guardar Alteracoes" com `variant="senvia"` (acao principal)
+  - Botao "Cancelar" com `variant="outline"`
+
+Layout do footer:
+```text
+[ Guardar Alteracoes (senvia) ] [ Cancelar (outline) ]
+```
+
+### Estrutura do footer (igual nos dois modais)
+
+```text
+<div className="p-4 border-t border-border/50 shrink-0">
+  <div className="flex gap-3 max-w-6xl mx-auto">
+    ... botoes ...
+  </div>
+</div>
+```
+
+Isto garante que os 3 modais de venda (Criar, Editar, Detalhes) tenham o mesmo padrao visual: conteudo scrollavel + footer fixo com acoes.
 
