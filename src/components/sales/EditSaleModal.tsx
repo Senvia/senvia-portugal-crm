@@ -89,7 +89,7 @@ export function EditSaleModal({
   
   // Form state
   const [clientId, setClientId] = useState<string>("");
-  const [saleDate, setSaleDate] = useState<Date>(new Date());
+  
   const [items, setItems] = useState<SaleItemDraft[]>([]);
   const [originalItemIds, setOriginalItemIds] = useState<string[]>([]);
   const [discount, setDiscount] = useState<string>("0");
@@ -100,7 +100,7 @@ export function EditSaleModal({
   useEffect(() => {
     if (open && sale) {
       setClientId(sale.client_id || "");
-      setSaleDate(sale.sale_date ? parseISO(sale.sale_date) : new Date());
+      
       setDiscount(sale.discount?.toString() || "0");
       setNotes(sale.notes || "");
     }
@@ -248,7 +248,7 @@ export function EditSaleModal({
         saleId: sale.id,
         updates: {
           client_id: clientId || null,
-          sale_date: format(saleDate, 'yyyy-MM-dd'),
+          
           total_value: total,
           subtotal: subtotal,
           discount: discountValue,
@@ -404,30 +404,9 @@ export function EditSaleModal({
 
                         <div className="space-y-1.5">
                           <Label className="text-xs text-muted-foreground">Data da Venda</Label>
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className={cn(
-                                  "w-full justify-start text-left font-normal",
-                                  !saleDate && "text-muted-foreground"
-                                )}
-                                disabled={!canFullEdit}
-                              >
-                                <CalendarIcon className="mr-2 h-3.5 w-3.5" />
-                                {saleDate ? format(saleDate, "PPP", { locale: pt }) : "Selecionar..."}
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0" align="start">
-                              <Calendar
-                                mode="single"
-                                selected={saleDate}
-                                onSelect={(date) => date && setSaleDate(date)}
-                                locale={pt}
-                              />
-                            </PopoverContent>
-                          </Popover>
+                          <p className="text-sm font-medium">
+                            {format(new Date(sale.sale_date), "d MMM yyyy", { locale: pt })}
+                          </p>
                         </div>
 
                         <div className="space-y-1.5">
