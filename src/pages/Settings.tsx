@@ -356,22 +356,25 @@ export default function Settings() {
                   setOrgName={setOrgName}
                   fullName={fullName}
                   setFullName={setFullName}
+                  handleSaveOrgName={handleSaveOrgName}
+                  handleSaveProfile={handleSaveProfile}
+                  updateOrganizationIsPending={updateOrganization.isPending}
+                  updateProfileIsPending={updateProfile.isPending}
+                  pushNotifications={pushNotifications}
+                />
+              )}
+              {mobileSection === "security" && (
+                <SecuritySettings
                   newPassword={newPassword}
                   setNewPassword={setNewPassword}
                   confirmPassword={confirmPassword}
                   setConfirmPassword={setConfirmPassword}
                   showPassword={showPassword}
                   setShowPassword={setShowPassword}
-                  handleSaveOrgName={handleSaveOrgName}
-                  handleSaveProfile={handleSaveProfile}
                   handleChangePassword={handleChangePassword}
-                  updateOrganizationIsPending={updateOrganization.isPending}
-                  updateProfileIsPending={updateProfile.isPending}
                   changePasswordIsPending={changePassword.isPending}
-                  pushNotifications={pushNotifications}
                 />
               )}
-              {mobileSection === "security" && <SecuritySettings />}
               {mobileSection === "team" && canManageTeam && <TeamTab />}
               {mobileSection === "profiles" && canManageTeam && <ProfilesTab />}
               {mobileSection === "teams" && canManageTeam && <TeamsSection />}
@@ -539,24 +542,25 @@ export default function Settings() {
                   setOrgName={setOrgName}
                   fullName={fullName}
                   setFullName={setFullName}
+                  handleSaveOrgName={handleSaveOrgName}
+                  handleSaveProfile={handleSaveProfile}
+                  updateOrganizationIsPending={updateOrganization.isPending}
+                  updateProfileIsPending={updateProfile.isPending}
+                  pushNotifications={pushNotifications}
+                />
+              </TabsContent>
+
+              <TabsContent value="security" className="max-w-4xl">
+                <SecuritySettings
                   newPassword={newPassword}
                   setNewPassword={setNewPassword}
                   confirmPassword={confirmPassword}
                   setConfirmPassword={setConfirmPassword}
                   showPassword={showPassword}
                   setShowPassword={setShowPassword}
-                  handleSaveOrgName={handleSaveOrgName}
-                  handleSaveProfile={handleSaveProfile}
                   handleChangePassword={handleChangePassword}
-                  updateOrganizationIsPending={updateOrganization.isPending}
-                  updateProfileIsPending={updateProfile.isPending}
                   changePasswordIsPending={changePassword.isPending}
-                  pushNotifications={pushNotifications}
                 />
-              </TabsContent>
-
-              <TabsContent value="security" className="max-w-4xl">
-                <SecuritySettings />
               </TabsContent>
 
               {canManageTeam && (
