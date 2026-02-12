@@ -15,6 +15,7 @@ import {
   Pencil,
   Eye,
   CreditCard,
+  ArrowLeft,
 } from "lucide-react";
 import {
   Dialog,
@@ -658,6 +659,14 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
           {/* Footer Actions */}
           <div className="p-4 border-t border-border/50 shrink-0">
             <div className="flex gap-3 max-w-6xl mx-auto">
+              <Button
+                variant="ghost"
+                className="flex-1"
+                onClick={() => onOpenChange(false)}
+              >
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Voltar
+              </Button>
               {sale.status !== 'cancelled' && onEdit && !isDeliveredAndLocked && (
                 <Button
                   variant="outline"
