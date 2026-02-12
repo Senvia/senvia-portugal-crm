@@ -1,34 +1,33 @@
 
 
-# Adicionar Progresso de Pagamento ao Modal Editar Venda
+# Emitir Fatura Direto (Sem Rascunho)
 
 ## Problema
-O modal "Detalhes da Venda" tem um card "Pagamento" na coluna direita com barra de progresso, total pago e valor em falta. O modal "Editar Venda" nao tem essa informacao.
+Os dois botoes ("Ver Rascunho Fatura" e "Emitir Fatura/Fatura-Recibo") executam a mesma acao: abrem o modal de rascunho. O botao "Emitir" deveria chamar diretamente a emissao da fatura, sem passar pelo rascunho.
 
 ## Alteracao
 
-### `src/components/sales/EditSaleModal.tsx`
+### `src/components/sales/SaleDetailsModal.tsx` (linhas 678-685)
 
-Adicionar um card "Pagamento" (read-only) na coluna direita, entre o card "Resumo" e o card "Notas" (linha ~648), replicando o layout do SaleDetailsModal:
+Alterar o `onClick` do botao "Emitir Fatura" / "Emitir Fatura-Recibo" para chamar diretamente a mutacao correspondente, em vez de abrir o rascunho:
 
-1. **Importar** `Progress` de `@/components/ui/progress`, `CreditCard` de `lucide-react`, e `useSalePayments` + `calculatePaymentSummary` de `@/hooks/useSalePayments`
-2. **Buscar dados**: Chamar `useSalePayments(sale.id)` e calcular o resumo com `calculatePaymentSummary`
-3. **Renderizar** o card com:
-   - Barra de progresso com percentagem
-   - Grid 2 colunas: Total Pago (verde) e Em Falta (amber)
-   - Valor Agendado (se existir)
-4. **Condicao**: Mostrar apenas quando `!isTelecom` e existam pagamentos (mesmo comportamento do SaleDetailsModal)
-
-### Estrutura do card
-
-```text
-Card: "Pagamento" (icone CreditCard)
-  - Progresso: barra + percentagem
-  - Grid 2 cols:
-    - Total Pago (verde)
-    - Em Falta (amber)
-  - Agendado (se > 0)
+**De:**
+```typescript
+onClick={() => setDraftMode(mode)}
 ```
 
-Nenhuma logica de edicao -- e apenas informacao visual read-only para contexto durante a edicao.
+**Para:**
+```typescript
+onClick={() => {
+  if (mode === 'invoice_receipt') {
+    issueInvoiceReceipt.mutate({ saleId: sale.id, organizationId: organization?.id || '' });
+  } else {
+    issueInvoice.mutate({ saleId: sale.id, organizationId: organization?.id || '' });
+  }
+}}
+```
+
+Tambem adicionar `disabled={issueInvoice.isPending || issueInvoiceReceipt.isPending}` ao botao e mostrar um spinner durante o loading.
+
+O botao "Ver Rascunho Fatura" continua a abrir o modal de rascunho normalmente, para quem quiser rever os dados e adicionar observacoes antes de emitir.
 
