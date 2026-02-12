@@ -129,12 +129,8 @@ Deno.serve(async (req) => {
       })
     }
 
-    if (payment.status !== 'paid') {
-      return new Response(JSON.stringify({ error: 'Só é possível gerar recibo para pagamentos com estado "Pago"' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
+    // Status check removed: receipt can be issued for any payment status
+    // Payment will be automatically marked as 'paid' after successful receipt generation
 
     // Format payment_date as dd/mm/yyyy
     const paymentDate = new Date(payment.payment_date)
@@ -240,6 +236,7 @@ Deno.serve(async (req) => {
       .update({
         invoice_reference: receiptReference,
         invoicexpress_id: receiptId || null,
+        status: 'paid',
         ...(fileUrl ? { invoice_file_url: fileUrl } : {}),
         ...(qrCodeUrl ? { qr_code_url: qrCodeUrl } : {}),
       })
