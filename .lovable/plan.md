@@ -1,69 +1,48 @@
 
-# Fix: Descarregar PDF da KeyInvoice - Debug e Correcao
+
+# Fix: PDF bloqueado pelo browser (ERR_BLOCKED_BY_CLIENT)
 
 ## Problema
 
-O sistema chama `getDocumentPDF` da API KeyInvoice com sucesso (`Status === 1`, `Data` existe), mas nao consegue extrair o conteudo Base64 do PDF. O log mostra "Could not extract base64 PDF", o que significa que `pdfData.Data` e um objecto cujas chaves nao correspondem a nenhuma das tentativas actuais (`PDF`, `Content`, `File`, `Base64`).
+O PDF foi descarregado com sucesso da KeyInvoice e guardado no storage -- a URL assinada existe e funciona. No entanto, ao abrir num novo separador com `window.open()`, extensoes do browser (ad blockers como uBlock Origin, AdBlock, etc.) bloqueiam o pedido porque detectam a URL do storage como "tracking" ou "terceiros".
 
 ## Solucao
 
-Adicionar logging detalhado para identificar a estrutura exacta da resposta e expandir a logica de extraccao para cobrir mais possibilidades.
+Substituir `window.open(url, '_blank')` por um download programatico via `fetch()` + Blob. Este metodo nao e interceptado por ad blockers porque o download acontece via JavaScript no contexto da pagina, sem navegacao para URL externa.
 
 ## Alteracoes tecnicas
 
-### Ficheiro: `supabase/functions/get-invoice-details/index.ts`
+### Criar funcao utilitaria de download
 
-**1. Adicionar logging da resposta completa** (funcao `fetchKeyInvoicePdf`, apos linha 101):
+Criar uma funcao reutilizavel (por exemplo em `src/lib/download.ts`) que:
+1. Faz `fetch()` da URL assinada
+2. Converte a resposta em Blob
+3. Cria um `URL.createObjectURL()` temporario
+4. Cria um elemento `<a>` invisivel com `download` attribute e clica nele programaticamente
+5. Revoga o object URL apos o download
 
 ```typescript
-const pdfData = await pdfRes.json()
-console.log('KeyInvoice getDocumentPDF response Status:', pdfData.Status,
-  'Data type:', typeof pdfData.Data,
-  typeof pdfData.Data === 'object' ? 'keys: ' + JSON.stringify(Object.keys(pdfData.Data)) : '')
-```
-
-**2. Expandir a logica de extraccao do Base64** (linhas 107-118):
-
-- Alem das chaves actuais (`PDF`, `Content`, `File`, `Base64`), adicionar verificacao de chaves em minuscula (`pdf`, `content`, `file`, `base64`) e variantes comuns (`FileContent`, `Document`, `document`, `PDFContent`).
-- Se nenhuma chave conhecida funcionar, usar a **primeira propriedade string** do objecto `Data` como fallback (muitas APIs retornam o Base64 numa unica chave com nome inesperado).
-- Adicionar log de warning com as chaves encontradas quando nenhuma das conhecidas funciona.
-
-Logica expandida:
-```typescript
-let base64Pdf = ''
-if (typeof pdfData.Data === 'string') {
-  base64Pdf = pdfData.Data
-} else if (typeof pdfData.Data === 'object' && pdfData.Data !== null) {
-  // Try known keys (case variations)
-  const knownKeys = ['PDF', 'pdf', 'Content', 'content', 'File', 'file', 
-                     'Base64', 'base64', 'FileContent', 'Document', 'document', 'PDFContent']
-  for (const key of knownKeys) {
-    if (pdfData.Data[key] && typeof pdfData.Data[key] === 'string') {
-      base64Pdf = pdfData.Data[key]
-      break
-    }
-  }
-  // Fallback: use the first string value found
-  if (!base64Pdf) {
-    for (const [key, val] of Object.entries(pdfData.Data)) {
-      if (typeof val === 'string' && (val as string).length > 100) {
-        console.log('KeyInvoice PDF: Using fallback key:', key)
-        base64Pdf = val as string
-        break
-      }
-    }
-  }
+export async function downloadFileFromUrl(url: string, filename: string) {
+  const response = await fetch(url);
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = objectUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(objectUrl);
 }
 ```
 
-### Ficheiro: `supabase/functions/issue-invoice/index.ts`
+### Ficheiros a alterar
 
-Aplicar a mesma melhoria de extraccao e logging na funcao de emissao (linhas 386-403), para garantir consistencia entre ambas as edge functions.
+1. **`src/lib/download.ts`** (novo) - Funcao utilitaria de download via blob
+2. **`src/components/sales/InvoiceDetailsModal.tsx`** - Substituir `window.open(details.pdf_signed_url, '_blank')` pela funcao de download
+3. **`src/components/finance/InvoicesContent.tsx`** - Mesma substituicao no handler de PDF
+4. **`src/components/finance/CreditNotesContent.tsx`** - Mesma substituicao
+5. **`src/components/sales/SalePaymentsList.tsx`** - Mesma substituicao
 
-### Deploy
+Em cada ficheiro, onde houver `window.open(url, '_blank')` para PDFs, substituir por `downloadFileFromUrl(url, 'fatura.pdf')` com o nome do ficheiro baseado na referencia do documento.
 
-Redesplegar ambas as edge functions (`get-invoice-details` e `issue-invoice`).
-
-## Resultado esperado
-
-Apos o deploy, ao clicar em "PDF" na fatura 34 47/1, os logs mostrarao as chaves exactas do objecto `Data`. Com o fallback expandido, o PDF sera extraido independentemente do nome da chave utilizada pela API KeyInvoice.
