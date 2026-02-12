@@ -190,10 +190,134 @@ Deno.serve(async (req) => {
     // Get org credentials
     const { data: org } = await supabase
       .from('organizations')
-      .select('invoicexpress_account_name, invoicexpress_api_key')
+      .select('invoicexpress_account_name, invoicexpress_api_key, billing_provider')
       .eq('id', organization_id)
       .single()
 
+    // Check if this is a KeyInvoice document - return data from DB instead of calling external API
+    const isKeyInvoice = org?.billing_provider === 'keyinvoice'
+
+    // Also check if the invoice record itself has keyinvoice source
+    let invoiceRecord: any = null
+    if (document_type !== 'credit_note') {
+      const { data: inv } = await supabase
+        .from('invoices')
+        .select('*')
+        .eq('organization_id', organization_id)
+        .eq('invoicexpress_id', document_id)
+        .maybeSingle()
+      invoiceRecord = inv
+    }
+
+    const isKeyInvoiceDoc = isKeyInvoice || (invoiceRecord?.raw_data?.source === 'keyinvoice')
+
+    if (isKeyInvoiceDoc) {
+      // For KeyInvoice documents, return data from the invoices table
+      if (!invoiceRecord) {
+        return new Response(JSON.stringify({ error: 'Documento não encontrado na base de dados' }), {
+          status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      // Get sale details for additional info
+      let saleData: any = null
+      if (invoiceRecord.sale_id) {
+        const { data: sale } = await supabase
+          .from('sales')
+          .select('*, sale_items(*)')
+          .eq('id', invoiceRecord.sale_id)
+          .maybeSingle()
+        saleData = sale
+      }
+
+      // Get client details
+      let clientData: any = null
+      if (saleData?.client_id) {
+        const { data: client } = await supabase
+          .from('crm_clients')
+          .select('*')
+          .eq('id', saleData.client_id)
+          .maybeSingle()
+        clientData = client
+      }
+
+      // Build PDF signed URL if pdf_path exists
+      let pdfSignedUrl: string | null = null
+      if (invoiceRecord.pdf_path) {
+        const { data: signedData } = await supabase.storage
+          .from('invoices')
+          .createSignedUrl(invoiceRecord.pdf_path, 3600)
+        pdfSignedUrl = signedData?.signedUrl || null
+      }
+
+      const items = (saleData?.sale_items || []).map((item: any) => ({
+        name: item.name,
+        description: '',
+        unit_price: String(item.unit_price),
+        quantity: String(item.quantity),
+        tax: null,
+        discount: 0,
+        subtotal: item.total,
+        tax_amount: 0,
+        total: item.total,
+      }))
+
+      const result = {
+        id: invoiceRecord.invoicexpress_id,
+        status: invoiceRecord.status || 'final',
+        sequence_number: invoiceRecord.reference,
+        atcud: null,
+        date: invoiceRecord.date,
+        due_date: invoiceRecord.due_date,
+        permalink: null,
+        sum: invoiceRecord.total,
+        discount: 0,
+        before_taxes: invoiceRecord.total,
+        taxes: 0,
+        total: invoiceRecord.total,
+        retention: 0,
+        currency: 'EUR',
+        tax_exemption: null,
+        observations: null,
+        mb_reference: null,
+        cancel_reason: null,
+        qr_code_url: null,
+        pdf_url: invoiceRecord.pdf_path,
+        pdf_signed_url: pdfSignedUrl,
+        owner: null,
+        client: clientData ? {
+          id: 0,
+          name: clientData.name,
+          fiscal_id: clientData.nif || '',
+          country: clientData.country || 'PT',
+          address: clientData.address_line1,
+          postal_code: clientData.postal_code,
+          city: clientData.city,
+          email: clientData.email,
+          phone: clientData.phone,
+        } : invoiceRecord.client_name ? {
+          id: 0,
+          name: invoiceRecord.client_name,
+          fiscal_id: '',
+          country: 'PT',
+          address: null,
+          postal_code: null,
+          city: null,
+          email: null,
+          phone: null,
+        } : null,
+        items,
+        tax_summary: [],
+        source: 'keyinvoice',
+      }
+
+      return new Response(JSON.stringify(result), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    // InvoiceXpress flow
     if (!org?.invoicexpress_account_name || !org?.invoicexpress_api_key) {
       return new Response(JSON.stringify({ error: 'Credenciais InvoiceXpress não configuradas' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
