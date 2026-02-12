@@ -1,7 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Eye, FileText, RefreshCw, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
+import { FileDown, FileText, RefreshCw, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { useCreditNotes, useSyncCreditNotes } from "@/hooks/useCreditNotes";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -161,7 +161,7 @@ export function CreditNotesContent() {
                             {viewingId === cn.id ? (
                               <Loader2 className="h-4 w-4 animate-spin" />
                             ) : (
-                              <Eye className="h-4 w-4" />
+                              <FileDown className="h-4 w-4" />
                             )}
                           </Button>
                         ) : (

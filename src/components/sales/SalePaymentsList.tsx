@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { format } from "date-fns";
 import { pt } from "date-fns/locale";
-import { Plus, Pencil, Trash2, CreditCard, Receipt, AlertCircle, Ban, FileText, QrCode, Mail, Eye, RefreshCw } from "lucide-react";
+import { Plus, Pencil, Trash2, CreditCard, Receipt, AlertCircle, Ban, FileText, QrCode, Mail, Eye, RefreshCw, FileDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -212,7 +212,7 @@ export function SalePaymentsList({
                     onClick={() => handlePdfView(invoicePdfUrl!)}
                     title="Ver PDF"
                   >
-                    <Eye className="h-3.5 w-3.5" />
+                     <FileDown className="h-3.5 w-3.5" />
                   </Button>
                 )}
                 {!invoicePdfUrl && invoicexpressId && (
@@ -433,7 +433,7 @@ export function SalePaymentsList({
                       onClick={() => handlePdfView(payment.invoice_file_url!)}
                       title="Ver PDF"
                     >
-                      <Eye className="h-3.5 w-3.5" />
+                       <FileDown className="h-3.5 w-3.5" />
                     </Button>
                   )}
                   {!payment.invoice_file_url && payment.invoicexpress_id && (
