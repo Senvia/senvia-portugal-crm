@@ -16,8 +16,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useSalePayments, useDeleteSalePayment, calculatePaymentSummary } from "@/hooks/useSalePayments";
-import { useIssueInvoice } from "@/hooks/useIssueInvoice";
-import { useIssueInvoiceReceipt } from "@/hooks/useIssueInvoiceReceipt";
 import { useGenerateReceipt } from "@/hooks/useGenerateReceipt";
 import { useCancelInvoice } from "@/hooks/useCancelInvoice";
 import { useSaleItems } from "@/hooks/useSaleItems";
@@ -91,8 +89,6 @@ export function SalePaymentsList({
     unit_price: Number(item.unit_price),
     tax_value: item.product?.tax_value ?? null,
   }));
-  const issueInvoice = useIssueInvoice();
-  const issueInvoiceReceipt = useIssueInvoiceReceipt();
   const generateReceipt = useGenerateReceipt();
   const cancelInvoice = useCancelInvoice();
   
@@ -103,8 +99,8 @@ export function SalePaymentsList({
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [cancellingPayment, setCancellingPayment] = useState<SalePayment | null>(null);
   
-  // Draft modal state - supports invoice (FT), receipt (RC), and invoice_receipt (FR)
-  const [draftMode, setDraftMode] = useState<"invoice" | "receipt" | "invoice_receipt" | null>(null);
+  // Draft modal state - supports receipt (RC) only; invoice/invoice_receipt handled by parent
+  const [draftMode, setDraftMode] = useState<"receipt" | null>(null);
   const [draftPayment, setDraftPayment] = useState<SalePayment | null>(null);
   
   // Email modal state
@@ -197,142 +193,6 @@ export function SalePaymentsList({
           )}
         </div>
 
-        {/* Global Invoice Button */}
-        {hasInvoiceXpress && !readonly && (
-          <div className="p-3 rounded-lg border bg-muted/20 space-y-2">
-            {hasInvoice ? (
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm">
-                  <FileText className="h-4 w-4 text-primary" />
-                  <span className="font-medium">Fatura: {invoiceReference}</span>
-                </div>
-                {invoicePdfUrl && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
-                    onClick={() => handlePdfView(invoicePdfUrl!)}
-                    title="Ver PDF"
-                  >
-                     <FileDown className="h-3.5 w-3.5" />
-                  </Button>
-                )}
-                {!invoicePdfUrl && invoicexpressId && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
-                    onClick={() => syncInvoice.mutate({
-                      documentId: invoicexpressId,
-                      documentType: (invoicexpressType === 'invoice_receipts' ? 'invoice_receipt' : 'invoice') as any,
-                      organizationId,
-                      saleId,
-                    })}
-                    disabled={syncInvoice.isPending}
-                    title="Buscar PDF"
-                  >
-                    <RefreshCw className={`h-3.5 w-3.5 ${syncInvoice.isPending ? 'animate-spin' : ''}`} />
-                  </Button>
-                )}
-                {invoicexpressId && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
-                    onClick={() => setDetailsModal({
-                      documentId: invoicexpressId,
-                      documentType: (invoicexpressType === 'invoice_receipts' ? 'invoice_receipt' : 'invoice') as any,
-                    })}
-                    title="Ver detalhes"
-                  >
-                    <Eye className="h-3.5 w-3.5" />
-                  </Button>
-                )}
-                {invoiceQrCodeUrl && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
-                    onClick={() => window.open(invoiceQrCodeUrl, '_blank')}
-                    title="Ver QR Code"
-                  >
-                    <QrCode className="h-3.5 w-3.5" />
-                  </Button>
-                )}
-                {invoicexpressId && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
-                    onClick={() => setEmailModal({
-                      documentId: invoicexpressId,
-                      documentType: (invoicexpressType === 'invoice_receipt' ? 'invoice_receipt' : 'invoice') as any,
-                      reference: invoiceReference || '',
-                    })}
-                    title="Enviar por email"
-                  >
-                    <Mail className="h-3.5 w-3.5" />
-                  </Button>
-                )}
-                {invoicexpressId && !creditNoteId && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 text-xs"
-                    onClick={() => setCreditNoteModal({
-                      documentId: invoicexpressId,
-                      documentType: (invoicexpressType === 'invoice_receipts' ? 'invoice_receipt' : 'invoice') as any,
-                      reference: invoiceReference || '',
-                      saleId,
-                    })}
-                    title="Nota de Crédito"
-                  >
-                    <FileText className="h-3 w-3 mr-1" />
-                    NC
-                  </Button>
-                )}
-                {invoicexpressId && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 text-xs text-destructive hover:text-destructive"
-                    onClick={() => {
-                      setCancellingPayment({
-                        id: '__sale__',
-                        invoicexpress_id: invoicexpressId,
-                        invoice_reference: invoiceReference || '',
-                      } as any);
-                    }}
-                  >
-                    <Ban className="h-3 w-3 mr-1" />
-                    Anular
-                  </Button>
-                )}
-              </div>
-            ) : canEmitInvoice ? (
-              (() => {
-                const allPaid = payments.length > 0 && payments.every(p => p.status === 'paid');
-                const mode = allPaid ? "invoice_receipt" : "invoice";
-                const label = allPaid ? "Ver Rascunho de Fatura-Recibo" : "Ver Rascunho de Fatura";
-                return (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full"
-                    onClick={() => setDraftMode(mode)}
-                  >
-                    <Eye className="h-4 w-4 mr-1" />
-                    {label}
-                  </Button>
-                );
-              })()
-            ) : hasInvoiceXpress && !clientNif ? (
-              <p className="text-xs text-muted-foreground text-center">
-                Adicione o NIF do cliente para emitir fatura
-              </p>
-            ) : null}
-          </div>
-        )}
 
         {/* Payments List */}
         {payments.length > 0 ? (
@@ -625,28 +485,6 @@ export function SalePaymentsList({
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Invoice Draft Modal - Invoice mode (sale total) */}
-      <InvoiceDraftModal
-        open={draftMode === "invoice"}
-        onOpenChange={(open) => { if (!open) setDraftMode(null); }}
-        onConfirm={(obs) => {
-          issueInvoice.mutate(
-            { saleId, organizationId, observations: obs },
-            { onSuccess: () => setDraftMode(null) }
-          );
-        }}
-        isLoading={issueInvoice.isPending}
-        mode="invoice"
-        clientName={clientName}
-        clientNif={clientNif}
-        amount={saleTotal}
-        paymentDate={new Date().toISOString()}
-        taxConfig={taxConfig}
-        saleItems={draftSaleItems}
-        saleTotal={saleTotal}
-        payments={payments}
-      />
-
       {/* Invoice Draft Modal - Receipt mode (RC - requires existing FT) */}
       <InvoiceDraftModal
         open={draftMode === "receipt" && !!draftPayment}
@@ -670,30 +508,6 @@ export function SalePaymentsList({
         taxConfig={taxConfig}
         saleItems={draftSaleItems}
         saleTotal={saleTotal}
-      />
-
-      {/* Invoice Draft Modal - Invoice Receipt mode (FR - full sale total) */}
-      <InvoiceDraftModal
-        open={draftMode === "invoice_receipt"}
-        onOpenChange={(open) => { 
-          if (!open) { setDraftMode(null); }
-        }}
-        onConfirm={(obs) => {
-          issueInvoiceReceipt.mutate(
-            { saleId, organizationId, observations: obs },
-            { onSuccess: () => { setDraftMode(null); } }
-          );
-        }}
-        isLoading={issueInvoiceReceipt.isPending}
-        mode="invoice_receipt"
-        clientName={clientName}
-        clientNif={clientNif}
-        amount={saleTotal}
-        paymentDate={new Date().toISOString()}
-        taxConfig={taxConfig}
-        saleItems={draftSaleItems}
-        saleTotal={saleTotal}
-        payments={payments}
       />
 
       {/* Cancel Invoice/Receipt Dialog */}
