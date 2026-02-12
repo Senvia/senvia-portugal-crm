@@ -555,6 +555,7 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                     clientName={sale.client?.name || sale.lead?.name}
                     clientEmail={sale.client?.email || sale.lead?.email}
                     taxConfig={organization?.tax_config as { tax_value?: number; tax_exemption_reason?: string } | null}
+                    creditNoteId={sale.credit_note_id}
                   />
                   <Separator />
                 </>

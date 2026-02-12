@@ -28,6 +28,7 @@ interface InvoiceActionItem {
   paymentId?: string;
   clientEmail?: string | null;
   organizationId: string;
+  creditNoteId?: number | null;
 }
 
 interface InvoiceActionsMenuProps {
@@ -131,10 +132,12 @@ export function InvoiceActionsMenu({ invoice }: InvoiceActionsMenuProps) {
           {hasInvoiceXpress && (
             <>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => setShowCreditNote(true)}>
-                <FileText className="h-4 w-4 mr-2" />
-                Nota de Crédito
-              </DropdownMenuItem>
+              {!invoice.creditNoteId && (
+                <DropdownMenuItem onClick={() => setShowCreditNote(true)}>
+                  <FileText className="h-4 w-4 mr-2" />
+                  Nota de Crédito
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem 
                 onClick={() => setShowCancel(true)}
                 className="text-destructive focus:text-destructive"

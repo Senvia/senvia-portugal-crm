@@ -144,6 +144,8 @@ export interface Sale {
   invoicexpress_type: string | null;
   qr_code_url?: string | null;
   invoice_pdf_url?: string | null;
+  credit_note_id?: number | null;
+  credit_note_reference?: string | null;
 }
 
 export interface SaleWithDetails extends Sale {

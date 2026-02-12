@@ -57,6 +57,7 @@ interface SalePaymentsListProps {
   clientName?: string | null;
   clientEmail?: string | null;
   taxConfig?: { tax_value?: number; tax_exemption_reason?: string } | null;
+  creditNoteId?: number | null;
 }
 
 export function SalePaymentsList({ 
@@ -74,6 +75,7 @@ export function SalePaymentsList({
   clientName,
   clientEmail,
   taxConfig,
+  creditNoteId,
 }: SalePaymentsListProps) {
   const { data: payments = [], isLoading } = useSalePayments(saleId);
   const { data: saleItemsData = [] } = useSaleItems(saleId);
@@ -261,7 +263,7 @@ export function SalePaymentsList({
                     <Mail className="h-3.5 w-3.5" />
                   </Button>
                 )}
-                {invoicexpressId && (
+                {invoicexpressId && !creditNoteId && (
                   <Button
                     variant="ghost"
                     size="sm"
