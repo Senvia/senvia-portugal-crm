@@ -1,19 +1,19 @@
 
 
-## Corrigir scroll no modal Nova Proposta
+## Alinhar filtros na pagina de Propostas
 
 ### Problema
-O mesmo problema que existia no Editar Proposta: o `ScrollArea` do Radix nao resolve alturas correctamente dentro de flex containers (`flex-1 min-h-0`), impedindo o scroll.
+Os filtros (pesquisa, equipa, status, periodo) nao estao alinhados verticalmente porque o contentor flex nao tem `items-center`.
 
 ### Solucao
-Substituir `ScrollArea` por `div` com `overflow-y-auto` (mesma correcao aplicada ao EditProposalModal).
+Adicionar `items-center` ao contentor dos filtros na linha 131 de `src/pages/Proposals.tsx`.
 
-### Alteracoes em `src/components/proposals/CreateProposalModal.tsx`
+### Alteracao
 
-1. **Linha 263**: Substituir `<ScrollArea className="flex-1 min-h-0">` por `<div className="flex-1 min-h-0 overflow-y-auto">`
-2. **Fecho correspondente**: Substituir `</ScrollArea>` por `</div>`
-3. **Remover import** do `ScrollArea` se nao for usado noutro local do ficheiro
+**`src/pages/Proposals.tsx`** (1 linha)
+
+Linha 131: Alterar `flex flex-col sm:flex-row gap-3` para `flex flex-col sm:flex-row sm:items-center gap-3`
 
 ### Ficheiro a editar
-- `src/components/proposals/CreateProposalModal.tsx` (3 linhas)
+- `src/pages/Proposals.tsx` (1 linha)
 
