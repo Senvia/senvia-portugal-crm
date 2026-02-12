@@ -1,7 +1,16 @@
-import { ChevronRight, Building, Users, UsersRound, Package, Link2, Bell, Receipt, Shield } from "lucide-react";
+import { ChevronRight, Building, Users, UsersRound, Package, Link2, Bell, Receipt, Shield, Settings, GitBranch, LayoutGrid, FileText, List, KeyRound, UserCog, Network, BellRing, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type SettingsSection = "general" | "security" | "team" | "products" | "finance" | "notifications" | "integrations";
+
+export type SettingsSubSection =
+  | "org-general" | "org-pipeline" | "org-modules" | "org-forms" | "org-fields"
+  | "security"
+  | "team-access" | "team-profiles" | "team-teams"
+  | "products"
+  | "finance-expenses"
+  | "notif-push" | "notif-alerts"
+  | "integrations";
 
 interface MobileSettingsNavProps {
   activeSection: SettingsSection | null;
@@ -70,3 +79,78 @@ export function MobileSettingsNav({
     </div>
   );
 }
+
+// Sub-section definitions per group
+export interface SubSectionItem {
+  id: SettingsSubSection;
+  label: string;
+  icon: any;
+  description: string;
+}
+
+export const subSectionsMap: Record<SettingsSection, SubSectionItem[]> = {
+  general: [
+    { id: "org-general", label: "Geral", icon: Building, description: "Organização e conta" },
+    { id: "org-pipeline", label: "Pipeline", icon: GitBranch, description: "Etapas do funil de vendas" },
+    { id: "org-modules", label: "Módulos", icon: LayoutGrid, description: "Ativar e desativar módulos" },
+    { id: "org-forms", label: "Formulário", icon: FileText, description: "Formulários de captura de leads" },
+    { id: "org-fields", label: "Campos", icon: List, description: "Campos personalizados de clientes" },
+  ],
+  security: [], // direct content
+  team: [
+    { id: "team-access", label: "Acessos", icon: KeyRound, description: "Utilizadores e convites" },
+    { id: "team-profiles", label: "Perfis", icon: UserCog, description: "Perfis de permissões" },
+    { id: "team-teams", label: "Equipas", icon: Network, description: "Hierarquia e liderança" },
+  ],
+  products: [], // direct content
+  finance: [], // direct content
+  notifications: [
+    { id: "notif-push", label: "Push", icon: BellRing, description: "Notificações push no browser" },
+    { id: "notif-alerts", label: "Alertas", icon: AlertTriangle, description: "Alertas de fidelização" },
+  ],
+  integrations: [], // direct content
+};
+
+interface MobileSubSectionNavProps {
+  group: SettingsSection;
+  onSelectSubSection: (sub: SettingsSubSection) => void;
+}
+
+export function MobileSubSectionNav({ group, onSelectSubSection }: MobileSubSectionNavProps) {
+  const items = subSectionsMap[group];
+
+  return (
+    <div className="space-y-2">
+      {items.map((item) => (
+        <button
+          key={item.id}
+          onClick={() => onSelectSubSection(item.id)}
+          className="w-full flex items-center gap-4 p-4 rounded-xl transition-colors text-left bg-muted/50 hover:bg-muted"
+        >
+          <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-background">
+            <item.icon className="h-5 w-5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-medium">{item.label}</p>
+            <p className="text-xs text-muted-foreground truncate">{item.description}</p>
+          </div>
+          <ChevronRight className="h-5 w-5 text-muted-foreground" />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// Groups that go directly to content (no sub-sections)
+export const directContentGroups: SettingsSection[] = ["security", "products", "finance", "integrations"];
+
+// Section titles
+export const sectionTitles: Record<SettingsSection, string> = {
+  general: "Definições Gerais",
+  security: "Segurança",
+  team: "Equipa e Acessos",
+  products: "Produtos",
+  finance: "Financeiro",
+  notifications: "Notificações",
+  integrations: "Integrações",
+};
