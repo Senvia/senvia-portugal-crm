@@ -38,6 +38,7 @@ interface AddPaymentModalProps {
   remaining: number;
   payment?: SalePayment | null; // For editing
   onSuccess?: (amountPaid: number, paymentMethod: PaymentMethod | null) => void;
+  onEditSuccess?: () => void;
   hasInvoiceXpress?: boolean;
 }
 
@@ -50,6 +51,7 @@ export function AddPaymentModal({
   remaining,
   payment,
   onSuccess,
+  onEditSuccess,
   hasInvoiceXpress = false,
 }: AddPaymentModalProps) {
   const createPayment = useCreateSalePayment();
@@ -111,7 +113,12 @@ export function AddPaymentModal({
     if (isEditing && payment) {
       updatePayment.mutate(
         { paymentId: payment.id, saleId, updates: data },
-        { onSuccess: () => onOpenChange(false) }
+        {
+          onSuccess: () => {
+            onEditSuccess?.();
+            onOpenChange(false);
+          },
+        }
       );
     } else {
       createPayment.mutate(

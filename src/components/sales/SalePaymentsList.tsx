@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { pt } from "date-fns/locale";
 import { Plus, Pencil, Trash2, CreditCard, Receipt, AlertCircle, Ban, FileText, QrCode, Mail, Eye, RefreshCw, FileDown } from "lucide-react";
@@ -98,6 +98,7 @@ export function SalePaymentsList({
   const [deletingPayment, setDeletingPayment] = useState<SalePayment | null>(null);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [cancellingPayment, setCancellingPayment] = useState<SalePayment | null>(null);
+  const [promptScheduleAfterEdit, setPromptScheduleAfterEdit] = useState(false);
   
   // Draft modal state - supports receipt (RC) only; invoice/invoice_receipt handled by parent
   const [draftMode, setDraftMode] = useState<"receipt" | null>(null);
@@ -129,6 +130,16 @@ export function SalePaymentsList({
   const syncInvoice = useSyncInvoice();
 
   const summary = calculatePaymentSummary(payments, saleTotal);
+
+  // After editing a payment, check if there's a gap and prompt to schedule
+  useEffect(() => {
+    if (promptScheduleAfterEdit) {
+      if (summary.remainingToSchedule > 0) {
+        setShowScheduleModal(true);
+      }
+      setPromptScheduleAfterEdit(false);
+    }
+  }, [promptScheduleAfterEdit, summary.remainingToSchedule]);
 
   const handlePdfView = async (path: string) => {
     try {
@@ -417,6 +428,7 @@ export function SalePaymentsList({
         saleTotal={saleTotal}
         remaining={summary.remaining}
         payment={editingPayment}
+        onEditSuccess={() => setPromptScheduleAfterEdit(true)}
         hasInvoiceXpress={hasInvoiceXpress}
       />
 
