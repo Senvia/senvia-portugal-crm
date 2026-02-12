@@ -257,13 +257,7 @@ export function InvoiceDraftModal({
               <span className="text-muted-foreground">
                 IVA {!hasItems && orgTaxRate === 0 ? "(Isento)" : ""}
               </span>
-              <span>
-                {fallbackTax === 0 ? (
-                  <span className="text-xs text-muted-foreground">{exemptionReason}</span>
-                ) : (
-                  formatCurrency(fallbackTax)
-                )}
-              </span>
+              <span>{formatCurrency(fallbackTax)}</span>
             </div>
             <Separator />
             <div className="flex justify-between font-semibold">
