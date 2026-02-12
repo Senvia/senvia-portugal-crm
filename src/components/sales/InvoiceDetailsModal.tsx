@@ -27,6 +27,7 @@ import { CancelInvoiceDialog } from "./CancelInvoiceDialog";
 import { useCancelInvoice } from "@/hooks/useCancelInvoice";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { downloadFileFromUrl } from "@/lib/download";
 
 interface InvoiceDetailsModalProps {
   open: boolean;
@@ -76,8 +77,13 @@ export function InvoiceDetailsModal({
   const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   const handleDownloadPdf = async () => {
+    const filename = `${TYPE_LABELS[documentType] || 'documento'}-${details?.sequence_number || documentId}.pdf`;
     if (details?.pdf_signed_url) {
-      window.open(details.pdf_signed_url, '_blank');
+      setDownloadingPdf(true);
+      try {
+        await downloadFileFromUrl(details.pdf_signed_url, filename);
+      } catch { toast.error("Erro ao fazer download"); }
+      finally { setDownloadingPdf(false); }
       return;
     }
     if (!details?.pdf_url) {
@@ -86,13 +92,13 @@ export function InvoiceDetailsModal({
     }
     setDownloadingPdf(true);
     try {
-      if (details.pdf_url.startsWith('http')) {
-        window.open(details.pdf_url, '_blank');
-      } else {
-        const { data, error } = await supabase.storage.from('invoices').createSignedUrl(details.pdf_url, 60);
-        if (error) { toast.error("Erro ao obter PDF"); return; }
-        if (data?.signedUrl) window.open(data.signedUrl, '_blank');
+      let url = details.pdf_url;
+      if (!url.startsWith('http')) {
+        const { data, error } = await supabase.storage.from('invoices').createSignedUrl(url, 60);
+        if (error || !data?.signedUrl) { toast.error("Erro ao obter PDF"); return; }
+        url = data.signedUrl;
       }
+      await downloadFileFromUrl(url, filename);
     } catch { toast.error("Erro ao fazer download"); }
     finally { setDownloadingPdf(false); }
   };

@@ -36,6 +36,7 @@ import {
 } from "@/types/sales";
 
 import { toast } from "sonner";
+import { downloadFileFromUrl } from "@/lib/download";
 import { SendInvoiceEmailModal } from "./SendInvoiceEmailModal";
 import { InvoiceDetailsModal } from "./InvoiceDetailsModal";
 import { CreateCreditNoteModal } from "./CreateCreditNoteModal";
@@ -197,7 +198,7 @@ export function SalePaymentsList({
                     variant="ghost"
                     size="icon"
                     className="h-7 w-7"
-                    onClick={() => window.open(invoicePdfUrl, '_blank')}
+                    onClick={() => downloadFileFromUrl(invoicePdfUrl!, `${invoiceReference || 'fatura'}.pdf`).catch(() => toast.error('Erro ao fazer download'))}
                     title="Download PDF"
                   >
                     <Download className="h-3.5 w-3.5" />
@@ -418,7 +419,7 @@ export function SalePaymentsList({
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8"
-                      onClick={() => window.open(payment.invoice_file_url!, '_blank')}
+                      onClick={() => downloadFileFromUrl(payment.invoice_file_url!, `${payment.invoice_reference || 'recibo'}.pdf`).catch(() => toast.error('Erro ao fazer download'))}
                       title="Download PDF"
                     >
                       <Download className="h-3.5 w-3.5" />

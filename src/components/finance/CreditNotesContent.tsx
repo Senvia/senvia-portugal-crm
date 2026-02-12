@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { downloadFileFromUrl } from "@/lib/download";
 
 const getStatusLabel = (status: string | null) => {
   const map: Record<string, string> = {
@@ -45,25 +46,23 @@ export function CreditNotesContent() {
     }
   }, []);
 
-  const handleDownload = async (id: string, pdfPath: string | null) => {
+  const handleDownload = async (id: string, pdfPath: string | null, reference?: string | null) => {
     if (!pdfPath) return;
+    const filename = `${reference || 'nota-credito'}.pdf`;
     setDownloadingId(id);
     try {
-      if (pdfPath.startsWith('http')) {
-        window.open(pdfPath, '_blank');
-        return;
+      let url = pdfPath;
+      if (!pdfPath.startsWith('http')) {
+        const { data, error } = await supabase.storage
+          .from('invoices')
+          .createSignedUrl(pdfPath, 60);
+        if (error || !data?.signedUrl) {
+          toast.error("Erro ao obter ficheiro");
+          return;
+        }
+        url = data.signedUrl;
       }
-      const { data, error } = await supabase.storage
-        .from('invoices')
-        .createSignedUrl(pdfPath, 60);
-
-      if (error) {
-        toast.error("Erro ao obter ficheiro");
-        return;
-      }
-      if (data?.signedUrl) {
-        window.open(data.signedUrl, '_blank');
-      }
+      await downloadFileFromUrl(url, filename);
     } catch {
       toast.error("Erro ao fazer download");
     } finally {
@@ -168,7 +167,7 @@ export function CreditNotesContent() {
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8"
-                            onClick={() => handleDownload(cn.id, cn.pdf_path)}
+                            onClick={() => handleDownload(cn.id, cn.pdf_path, cn.reference)}
                             disabled={downloadingId === cn.id}
                           >
                             {downloadingId === cn.id ? (
