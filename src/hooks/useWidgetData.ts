@@ -231,7 +231,7 @@ export function useWidgetData(widgetType: WidgetType): WidgetData {
 
       case 'sales_active': {
         const active = sales.filter(s => 
-          s.status === 'pending' || s.status === 'in_progress'
+          s.status === 'in_progress'
         );
         const totalValue = active.reduce((sum, s) => sum + (s.total_value || 0), 0);
 
@@ -305,7 +305,7 @@ export function useWidgetData(widgetType: WidgetType): WidgetData {
 
       case 'active_projects': {
         const active = sales.filter(s => 
-          s.status === 'pending' || s.status === 'in_progress'
+          s.status === 'in_progress'
         );
         return {
           value: active.length.toString(),
@@ -358,7 +358,7 @@ export function useWidgetData(widgetType: WidgetType): WidgetData {
       }
 
       case 'pending_installations': {
-        const pending = sales.filter(s => s.status === 'pending');
+        const pending = sales.filter(s => s.status === 'in_progress');
         return {
           value: pending.length.toString(),
           subtitle: 'aguardando instalação',
