@@ -1144,25 +1144,39 @@ export function CreateSaleModal({
                     </CardContent>
                   </Card>
 
-                  {/* Action Button */}
-                  <Button
-                    onClick={handleSubmit}
-                    disabled={!isValid || createSale.isPending}
-                    className="w-full"
-                    size="lg"
-                  >
-                    {createSale.isPending ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        A criar...
-                      </>
-                    ) : (
-                      "Criar Venda"
-                    )}
-                  </Button>
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Fixed Footer */}
+        <div className="p-4 border-t border-border/50 shrink-0">
+          <div className="flex gap-3 max-w-6xl mx-auto">
+            <Button
+              variant="senvia"
+              className="flex-1"
+              size="lg"
+              onClick={handleSubmit}
+              disabled={!isValid || createSale.isPending}
+            >
+              {createSale.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  A criar...
+                </>
+              ) : (
+                "Criar Venda"
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              className="flex-1"
+              size="lg"
+              onClick={() => onOpenChange(false)}
+            >
+              Cancelar
+            </Button>
           </div>
         </div>
 
