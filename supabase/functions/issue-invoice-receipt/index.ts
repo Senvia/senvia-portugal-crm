@@ -208,8 +208,14 @@ async function handleKeyInvoiceReceipt(supabase: any, org: any, saleId: string, 
     }
   }
 
-  function findProductId(name: string): string {
-    const getId = (p: any) => p.IdProduct || p.Id
+  const getId = (p: any) => p.IdProduct || p.Id
+
+  function findProductId(name: string, code?: string): string | null {
+    // First try matching by code (IdProduct in KeyInvoice)
+    if (code) {
+      const byCode = keyInvoiceProducts.find((p: any) => String(getId(p)) === code)
+      if (byCode) return String(getId(byCode))
+    }
     const exact = keyInvoiceProducts.find((p: any) => (p.Description || p.Name || '').toLowerCase() === name.toLowerCase())
     if (exact && getId(exact)) return String(getId(exact))
     const partial = keyInvoiceProducts.find((p: any) =>
@@ -217,18 +223,55 @@ async function handleKeyInvoiceReceipt(supabase: any, org: any, saleId: string, 
       name.toLowerCase().includes((p.Description || p.Name || '').toLowerCase())
     )
     if (partial && getId(partial)) return String(getId(partial))
-    return String(getId(keyInvoiceProducts[0]))
+    if (keyInvoiceProducts.length > 0) return String(getId(keyInvoiceProducts[0]))
+    return null
+  }
+
+  // Ensure all sale items have a valid KeyInvoice product, creating if needed
+  async function resolveProductId(item: any): Promise<string> {
+    const itemName = item.name || 'Serviço'
+    const itemCode = item.product?.code
+    const found = findProductId(itemName, itemCode)
+    if (found) return found
+
+    // Create product in KeyInvoice
+    const insertProductPayload: Record<string, any> = {
+      method: 'insertProduct',
+      IdProduct: itemCode || itemName.replace(/[^a-zA-Z0-9]/g, '').substring(0, 20) || 'SRV001',
+      Name: itemName,
+      TaxValue: String(orgTaxValue),
+      IsService: '1', HasStocks: '0', Active: '1',
+      Price: String(Number(item.unit_price)),
+    }
+    if (orgTaxValue === 0) insertProductPayload.TaxExemptionReasonCode = 'M10'
+    const prodRes = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Sid': sid },
+      body: JSON.stringify(insertProductPayload),
+    })
+    const prodData = await prodRes.json()
+    if (prodData.Status === 1 && (prodData.Data?.IdProduct || prodData.Data?.Id)) {
+      const newId = String(prodData.Data.IdProduct || prodData.Data.Id)
+      keyInvoiceProducts.push({ IdProduct: newId, Name: itemName })
+      return newId
+    }
+    console.error('KeyInvoice insertProduct failed:', prodData.ErrorMessage)
+    throw new Error(`Erro ao criar produto "${itemName}" no KeyInvoice: ${prodData.ErrorMessage || 'Erro desconhecido'}`)
   }
 
   const items = (saleItems && saleItems.length > 0)
     ? saleItems
     : [{ name: `Venda ${sale.code || saleId}`, quantity: 1, unit_price: sale.total_value }]
 
-  const docLines = items.map((item: any) => ({
-    IdProduct: item.product?.code || findProductId(item.name || 'Serviço'),
-    Qty: String(Number(item.quantity)),
-    Price: String(Number(item.unit_price)),
-  }))
+  const docLines: any[] = []
+  for (const item of items) {
+    const productId = await resolveProductId(item)
+    docLines.push({
+      IdProduct: productId,
+      Qty: String(Number(item.quantity)),
+      Price: String(Number(item.unit_price)),
+    })
+  }
 
   // Always DocType 34 = Fatura-Recibo (FR) since user explicitly chose this
   const docType = '34'
