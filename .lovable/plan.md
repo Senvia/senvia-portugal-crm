@@ -1,55 +1,56 @@
 
 
-# Corrigir tipo de documento: FT vs FR com base no estado do pagamento
+# Mostrar faturas KeyInvoice na aba Faturas
 
 ## Problema
 
-O sistema emite sempre **Fatura-Recibo (DocType 34)** independentemente do estado do pagamento. Quando o pagamento esta agendado/pendente, deveria emitir uma **Fatura simples (DocType 4)**.
+A aba "Faturas" no Financeiro le dados da tabela `invoices`. Essa tabela so e populada pelo `sync-invoices`, que funciona exclusivamente com a API do InvoiceXpress. O `issue-invoice` para KeyInvoice atualiza a tabela `sales` mas nunca insere na tabela `invoices`, por isso as faturas KeyInvoice nao aparecem.
 
-## Regras de negocio
+## Solucao
 
-- Pagamento **pendente** (agendado, ainda nao pago) -> **Fatura (FT)** = DocType `4`
-- Pagamento **pago** (ja recebido) -> **Fatura-Recibo (FR)** = DocType `34`
+Adicionar um INSERT na tabela `invoices` dentro do fluxo KeyInvoice do `issue-invoice`, imediatamente apos a emissao bem-sucedida.
 
 ## Alteracao
 
 **Ficheiro:** `supabase/functions/issue-invoice/index.ts`
 
-### 1. Determinar o tipo de documento dinamicamente (antes da linha 307)
-
-Consultar os pagamentos da venda para determinar se ha pagamentos com status `paid`:
+Apos o update da tabela `sales` (que ja existe), adicionar um upsert na tabela `invoices`:
 
 ```typescript
-// Determinar DocType com base no estado de pagamento
-const { data: payments } = await supabase
-  .from('sale_payments')
-  .select('status, amount')
-  .eq('sale_id', saleId)
-
-const totalPaid = (payments || [])
-  .filter((p: any) => p.status === 'paid')
-  .reduce((sum: number, p: any) => sum + Number(p.amount), 0)
-
-// DocType 4 = Fatura (FT), DocType 34 = Fatura-Recibo (FR)
-const docType = totalPaid >= sale.total_value ? '34' : '4'
-const docLabel = docType === '34' ? 'Fatura-Recibo' : 'Fatura'
-console.log(`KeyInvoice: Emitting ${docLabel} (DocType ${docType}), totalPaid=${totalPaid}, saleTotal=${sale.total_value}`)
+// Insert into invoices table so it appears in Faturas tab
+const invoiceDocType = docTypeCode === 'FR' ? 'invoice_receipt' : 'invoice';
+await supabase
+  .from('invoices')
+  .upsert({
+    organization_id: organizationId,
+    invoicexpress_id: docNum,
+    reference: fullDocNumber,
+    document_type: invoiceDocType,
+    status: 'final',
+    client_name: clientName,
+    total: sale.total_value,
+    date: new Date().toISOString().split('T')[0],
+    due_date: null,
+    sale_id: saleId,
+    payment_id: null,
+    pdf_path: storedPdfPath || null,
+    raw_data: { source: 'keyinvoice', docType, docNum, docSeries },
+    updated_at: new Date().toISOString(),
+  }, {
+    onConflict: 'organization_id,invoicexpress_id',
+  });
 ```
 
-### 2. Usar docType dinamico no payload (linha 309)
+### Mapeamento de document_type
 
-Substituir `DocType: '34'` por `DocType: docType`
+- DocType 4 (FT) -> `'invoice'` (para corresponder ao label "Fatura" no frontend)
+- DocType 34 (FR) -> `'invoice_receipt'` (para corresponder ao label "Fatura-Recibo")
 
-### 3. Atualizar label na resposta e nos logs
+### Detalhes
 
-Ajustar as mensagens de sucesso para usar `docLabel` em vez de "Fatura-Recibo" hardcoded.
+- Usa `upsert` com `onConflict` para evitar duplicados se a fatura for re-emitida
+- Guarda `raw_data` com `source: 'keyinvoice'` para distinguir de faturas InvoiceXpress
+- O `client_name` ja esta disponivel no fluxo (da venda associada)
+- O `pdf_path` e preenchido se o PDF foi guardado com sucesso
+- Apos o deploy, as faturas KeyInvoice aparecerao imediatamente na aba Faturas
 
-### 4. Atualizar o invoicexpress_type guardado na BD
-
-O campo `invoicexpress_type` na tabela `sales` deve guardar `'FT'` ou `'FR'` conforme o tipo emitido.
-
-## Resultado
-
-- Pagamento agendado -> emite **Fatura (FT)** no KeyInvoice
-- Pagamento ja pago -> emite **Fatura-Recibo (FR)** no KeyInvoice
-- Logs indicam claramente o tipo de documento emitido
