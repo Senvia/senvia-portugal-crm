@@ -13,7 +13,7 @@ import {
   Wrench,
   Pencil,
   Eye,
-  CreditCard
+  CreditCard,
 } from "lucide-react";
 import {
   Dialog,
@@ -44,7 +44,6 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUpdateSale } from "@/hooks/useSales";
 import { useOrganization } from "@/hooks/useOrganization";
@@ -556,39 +555,6 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                       </div>
                     </div>
 
-                    {/* Payment Progress */}
-                    {!isTelecom && salePayments.length > 0 && (
-                      <Card>
-                        <CardHeader className="pb-2 p-4">
-                          <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
-                            <CreditCard className="h-4 w-4" />
-                            Pagamento
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-4 pt-0 space-y-3">
-                          <div className="space-y-1">
-                            <div className="flex justify-between text-sm">
-                              <span className="text-muted-foreground">Progresso</span>
-                              <span className="font-medium">{Math.round(paymentSummary.percentage)}%</span>
-                            </div>
-                            <Progress value={paymentSummary.percentage} className="h-2" />
-                          </div>
-                          <div className="grid grid-cols-2 gap-3 text-sm">
-                            <div>
-                              <p className="text-xs text-muted-foreground">Total Pago</p>
-                              <p className="font-semibold text-primary">{formatCurrency(paymentSummary.totalPaid)}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-muted-foreground">Em Falta</p>
-                              <p className={cn('font-semibold', paymentSummary.remaining > 0 ? 'text-destructive' : 'text-primary')}>
-                                {formatCurrency(paymentSummary.remaining)}
-                              </p>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    )}
-
                     {/* Proposal Info */}
                     {sale.proposal && (
                       <Card>
@@ -672,16 +638,25 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                 if (!canEmit) return null;
                 const allPaid = salePayments.length > 0 && salePayments.every(p => p.status === 'paid');
                 const mode = allPaid ? "invoice_receipt" as const : "invoice" as const;
-                const label = allPaid ? "Emitir Fatura-Recibo" : "Emitir Fatura";
+                const emitLabel = allPaid ? "Emitir Fatura-Recibo" : "Emitir Fatura";
                 return (
-                  <Button
-                    variant="outline"
-                    className="flex-1"
-                    onClick={() => setDraftMode(mode)}
-                  >
-                    <FileText className="h-4 w-4 mr-2" />
-                    {label}
-                  </Button>
+                  <>
+                    <Button
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => setDraftMode(mode)}
+                    >
+                      <Eye className="h-4 w-4 mr-2" />
+                      Ver Rascunho Fatura
+                    </Button>
+                    <Button
+                      className="flex-1"
+                      onClick={() => setDraftMode(mode)}
+                    >
+                      <FileText className="h-4 w-4 mr-2" />
+                      {emitLabel}
+                    </Button>
+                  </>
                 );
               })()}
             </div>
