@@ -319,7 +319,7 @@ async function handleKeyInvoice(supabase: any, org: any, saleId: string, organiz
   if (observations) {
     insertPayload.Comments = observations
   }
-  console.log('KeyInvoice insertDocument payload keys:', Object.keys(insertPayload).join(', '), 'IdClient:', insertPayload.IdClient || 'N/A', 'ClientVATIN:', insertPayload.ClientVATIN || 'N/A')
+  console.log('KeyInvoice insertDocument FULL payload:', JSON.stringify(insertPayload).substring(0, 2000))
 
   const createRes = await fetch(apiUrl, {
     method: 'POST',
@@ -336,6 +336,7 @@ async function handleKeyInvoice(supabase: any, org: any, saleId: string, organiz
   }
 
   const createData = await createRes.json()
+  console.log('KeyInvoice insertDocument FULL response:', JSON.stringify(createData).substring(0, 2000))
   
   // Real API returns {Status:1,Data:{DocType,DocSeries,DocNum,FullDocNumber}}
   if (createData.Status !== 1 || !createData.Data) {
@@ -369,19 +370,36 @@ async function handleKeyInvoice(supabase: any, org: any, saleId: string, organiz
     if (pdfRes.ok) {
       const pdfData = await pdfRes.json()
       if (pdfData.Status === 1 && pdfData.Data) {
-        // Data contains Base64 PDF
-        const base64Pdf = pdfData.Data
-        const binaryStr = atob(base64Pdf)
-        const bytes = new Uint8Array(binaryStr.length)
-        for (let i = 0; i < binaryStr.length; i++) {
-          bytes[i] = binaryStr.charCodeAt(i)
+        console.log('KeyInvoice getDocumentPDF Data type:', typeof pdfData.Data,
+          typeof pdfData.Data === 'object' ? Object.keys(pdfData.Data).join(',') : 'string')
+        
+        // Try multiple paths for the base64 content
+        let base64Pdf = typeof pdfData.Data === 'string'
+          ? pdfData.Data
+          : (pdfData.Data.PDF || pdfData.Data.Content || pdfData.Data.File || pdfData.Data.Base64 || '')
+        
+        if (base64Pdf) {
+          // Remove potential data:application/pdf;base64, prefix
+          base64Pdf = base64Pdf.replace(/^data:[^;]+;base64,/, '')
         }
+        
+        if (!base64Pdf) {
+          console.warn('KeyInvoice: Could not extract base64 PDF from response')
+        }
+        
+         const binaryStr = base64Pdf ? atob(base64Pdf) : null
+        if (binaryStr) {
+          const bytes = new Uint8Array(binaryStr.length)
+          for (let i = 0; i < binaryStr.length; i++) {
+            bytes[i] = binaryStr.charCodeAt(i)
+          }
 
-        const pdfFileName = `${organizationId}/${saleId}/FR-${docNum}.pdf`
-        const { error: uploadError } = await supabase.storage
-          .from('invoices')
-          .upload(pdfFileName, bytes.buffer, { contentType: 'application/pdf', upsert: true })
-        if (!uploadError) storedPdfPath = pdfFileName
+          const pdfFileName = `${organizationId}/${saleId}/FR-${docNum}.pdf`
+          const { error: uploadError } = await supabase.storage
+            .from('invoices')
+            .upload(pdfFileName, bytes.buffer, { contentType: 'application/pdf', upsert: true })
+          if (!uploadError) storedPdfPath = pdfFileName
+        }
       }
     }
   } catch (e) {
