@@ -16,6 +16,7 @@ import { startOfDay, endOfDay, parseISO } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { downloadFileFromUrl } from "@/lib/download";
 import { InvoiceDetailsModal } from "@/components/sales/InvoiceDetailsModal";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -230,24 +231,23 @@ export function InvoicesContent() {
     exportToExcel(exportData, 'documentos-fiscais');
   };
 
-  const handleDownload = async (id: string, pdfPath: string | null) => {
+  const handleDownload = async (id: string, pdfPath: string | null, reference?: string | null) => {
     if (!pdfPath) return;
+    const filename = `${reference || 'documento'}.pdf`;
     setDownloadingId(id);
     try {
-      if (pdfPath.startsWith('http')) {
-        window.open(pdfPath, '_blank');
-        return;
+      let url = pdfPath;
+      if (!pdfPath.startsWith('http')) {
+        const { data, error } = await supabase.storage
+          .from('invoices')
+          .createSignedUrl(pdfPath, 60);
+        if (error || !data?.signedUrl) {
+          toast.error("Erro ao obter ficheiro");
+          return;
+        }
+        url = data.signedUrl;
       }
-      const { data, error } = await supabase.storage
-        .from('invoices')
-        .createSignedUrl(pdfPath, 60);
-      if (error) {
-        toast.error("Erro ao obter ficheiro");
-        return;
-      }
-      if (data?.signedUrl) {
-        window.open(data.signedUrl, '_blank');
-      }
+      await downloadFileFromUrl(url, filename);
     } catch {
       toast.error("Erro ao fazer download");
     } finally {
@@ -408,7 +408,7 @@ export function InvoicesContent() {
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8"
-                            onClick={(e) => { e.stopPropagation(); handleDownload(doc.id, doc.pdf_path); }}
+                            onClick={(e) => { e.stopPropagation(); handleDownload(doc.id, doc.pdf_path, doc.reference); }}
                             disabled={downloadingId === doc.id}
                           >
                             {downloadingId === doc.id ? (

@@ -16,6 +16,7 @@ import { InvoiceDetailsModal } from "@/components/sales/InvoiceDetailsModal";
 import { CreateCreditNoteModal } from "@/components/sales/CreateCreditNoteModal";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { downloadFileFromUrl } from "@/lib/download";
 
 interface InvoiceActionItem {
   id: string;
@@ -48,19 +49,17 @@ export function InvoiceActionsMenu({ invoice }: InvoiceActionsMenuProps) {
 
   const handleDownload = async () => {
     if (!invoice.invoiceFileUrl) return;
+    const filename = `${invoice.invoiceReference || 'documento'}.pdf`;
     setDownloading(true);
     try {
       const { data, error } = await supabase.storage
         .from('invoices')
         .createSignedUrl(invoice.invoiceFileUrl, 60);
-
-      if (error) {
+      if (error || !data?.signedUrl) {
         toast.error("Erro ao obter ficheiro");
         return;
       }
-      if (data?.signedUrl) {
-        window.open(data.signedUrl, '_blank');
-      }
+      await downloadFileFromUrl(data.signedUrl, filename);
     } catch {
       toast.error("Erro ao fazer download");
     } finally {
