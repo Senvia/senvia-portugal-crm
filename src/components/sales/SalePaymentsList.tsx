@@ -438,7 +438,7 @@ export function SalePaymentsList({
         onOpenChange={setShowScheduleModal}
         saleId={saleId}
         organizationId={organizationId}
-        remainingAmount={Math.max(0, summary.remaining)}
+        remainingAmount={Math.max(0, summary.remainingToSchedule)}
       />
 
       {/* Delete Confirmation */}
