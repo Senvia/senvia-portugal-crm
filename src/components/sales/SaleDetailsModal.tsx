@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
+import { Progress } from "@/components/ui/progress";
 import { format } from "date-fns";
 import { pt } from "date-fns/locale";
 import { 
@@ -554,6 +555,43 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                         )}
                       </div>
                     </div>
+
+                    {/* Payment Progress */}
+                    {!isTelecom && salePayments.length > 0 && (
+                      <Card>
+                        <CardHeader className="pb-2 p-4">
+                          <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
+                            <CreditCard className="h-4 w-4" />
+                            Pagamento
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-4 pt-0 space-y-4">
+                          <div className="space-y-2">
+                            <div className="flex justify-between text-xs text-muted-foreground">
+                              <span>Progresso</span>
+                              <span>{Math.round(paymentSummary.percentage)}%</span>
+                            </div>
+                            <Progress value={paymentSummary.percentage} className="h-2" />
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <p className="text-xs text-muted-foreground">Total Pago</p>
+                              <p className="text-sm font-semibold text-green-500">{formatCurrency(paymentSummary.totalPaid)}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground">Em Falta</p>
+                              <p className="text-sm font-semibold text-amber-500">{formatCurrency(paymentSummary.remaining)}</p>
+                            </div>
+                          </div>
+                          {paymentSummary.totalScheduled > 0 && (
+                            <div>
+                              <p className="text-xs text-muted-foreground">Agendado</p>
+                              <p className="text-sm font-semibold">{formatCurrency(paymentSummary.totalScheduled)}</p>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    )}
 
                     {/* Proposal Info */}
                     {sale.proposal && (
