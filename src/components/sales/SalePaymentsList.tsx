@@ -37,6 +37,7 @@ import {
 
 import { toast } from "sonner";
 import { downloadFileFromUrl } from "@/lib/download";
+import { supabase } from "@/integrations/supabase/client";
 import { SendInvoiceEmailModal } from "./SendInvoiceEmailModal";
 import { InvoiceDetailsModal } from "./InvoiceDetailsModal";
 import { CreateCreditNoteModal } from "./CreateCreditNoteModal";
@@ -131,6 +132,25 @@ export function SalePaymentsList({
 
   const summary = calculatePaymentSummary(payments, saleTotal);
 
+  const handlePdfDownload = async (path: string, filename: string) => {
+    try {
+      let url = path;
+      if (!path.startsWith('http')) {
+        const { data, error } = await supabase.storage
+          .from('invoices')
+          .createSignedUrl(path, 60);
+        if (error || !data?.signedUrl) {
+          toast.error('Erro ao gerar link de download');
+          return;
+        }
+        url = data.signedUrl;
+      }
+      await downloadFileFromUrl(url, filename);
+    } catch {
+      toast.error('Erro ao fazer download');
+    }
+  };
+
   const handleDelete = () => {
     if (!deletingPayment) return;
     
@@ -200,7 +220,7 @@ export function SalePaymentsList({
                     variant="ghost"
                     size="icon"
                     className="h-7 w-7"
-                    onClick={() => downloadFileFromUrl(invoicePdfUrl!, `${invoiceReference || 'fatura'}.pdf`).catch(() => toast.error('Erro ao fazer download'))}
+                    onClick={() => handlePdfDownload(invoicePdfUrl!, `${invoiceReference || 'fatura'}.pdf`)}
                     title="Download PDF"
                   >
                     <Download className="h-3.5 w-3.5" />
@@ -421,7 +441,7 @@ export function SalePaymentsList({
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8"
-                      onClick={() => downloadFileFromUrl(payment.invoice_file_url!, `${payment.invoice_reference || 'recibo'}.pdf`).catch(() => toast.error('Erro ao fazer download'))}
+                      onClick={() => handlePdfDownload(payment.invoice_file_url!, `${payment.invoice_reference || 'recibo'}.pdf`)}
                       title="Download PDF"
                     >
                       <Download className="h-3.5 w-3.5" />
