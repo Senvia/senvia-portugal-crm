@@ -1,47 +1,43 @@
 
-# Auto-sugerir Parcela Restante Apos Edicao de Pagamento
+# Corrigir Detalhes do Recibo - Valor Errado
 
 ## Problema
-Quando o utilizador edita um pagamento agendado (ex: de 198,50 para 100), o sistema deveria detetar automaticamente que existe um valor em falta (98,50) para cobrir o total da venda e sugerir a criacao de uma nova parcela.
+O recibo mostra 397,00 EUR (valor da venda inteira) em vez de 198,50 EUR (valor do pagamento).
+
+**Causa raiz**: O recibo foi gerado antes da correcao anterior, por isso nao existe registo na tabela `invoices` com `document_type = 'receipt'`. O `payment.invoicexpress_id = 1` aponta para a fatura original (que tem 397 EUR). Quando o `get-invoice-details` procura `invoices WHERE invoicexpress_id = 1`, encontra a fatura original.
 
 ## Solucao
 
-### `src/components/sales/AddPaymentModal.tsx`
+### `supabase/functions/get-invoice-details/index.ts`
 
-Adicionar um callback `onEditComplete` que e chamado apos uma edicao bem-sucedida, passando o novo valor do pagamento.
+Quando o `document_type` passado pelo frontend e `'receipt'` mas o registo encontrado na BD e uma `invoice` (nao um receipt), o sistema deve:
 
-### `src/components/sales/SalePaymentsList.tsx`
+1. Verificar se existe um `payment_id` no request (ja e passado pelo frontend)
+2. Buscar o pagamento na tabela `sale_payments` para obter o `amount` real
+3. Usar esse `amount` como `displayTotal` em vez do `invoiceRecord.total`
 
-1. Adicionar um estado `pendingScheduleAfterEdit` (boolean)
-2. No `AddPaymentModal`, ao fechar apos edicao com sucesso, verificar se `remainingToSchedule > 0` usando os dados atualizados
-3. Como o React Query invalida os dados apos o update, usar um `useEffect` que:
-   - Observa quando `pendingScheduleAfterEdit === true` E os pagamentos ja foram recarregados
-   - Recalcula `remainingToSchedule` com os novos dados
-   - Se `remainingToSchedule > 0`, abre automaticamente o `ScheduleRemainingModal`
-   - Reseta o flag
+### Alteracao concreta
 
-### Fluxo do Utilizador
+Na seccao KeyInvoice (linhas 438-468), apos determinar `isReceipt`:
 
 ```text
-1. Utilizador edita pagamento de 198,50 para 100
-2. Clica "Guardar Alteracoes"
-3. Modal de edicao fecha
-4. Sistema recalcula: total=397, pago=198.50, agendado=100, em falta=98.50
-5. ScheduleRemainingModal abre automaticamente com 98.50 pre-preenchido
-6. Utilizador pode agendar 1-4 parcelas ou clicar "Ignorar"
+Logica atual:
+  isReceipt = invoiceRecord.document_type === 'receipt'
+  displayTotal = invoiceRecord.total
+
+Nova logica:
+  isReceipt = document_type === 'receipt'  // usar o tipo do REQUEST, nao da BD
+  
+  Se isReceipt E existe payment_id no request:
+    - Buscar sale_payments WHERE id = payment_id
+    - displayTotal = payment.amount
+  Senao se isReceipt:
+    - displayTotal = invoiceRecord.total (fallback)
+  Senao:
+    - displayTotal = invoiceRecord.total (comportamento normal para faturas)
 ```
 
-### Detalhes Tecnicos
+Isto corrige tanto recibos antigos (sem registo proprio) como recibos novos (com registo na tabela `invoices`).
 
-**AddPaymentModal** - Alterar `onSuccess` do `updatePayment.mutate`:
-- Chamar um novo callback `onEditSuccess?.()` antes de fechar o modal
-
-**SalePaymentsList** - Alteracoes:
-1. Novo estado: `const [promptScheduleAfterEdit, setPromptScheduleAfterEdit] = useState(false)`
-2. No `AddPaymentModal` `onOpenChange`, quando fecha apos edicao:
-   - Ativar flag `setPromptScheduleAfterEdit(true)`
-3. `useEffect` que observa `[promptScheduleAfterEdit, summary.remainingToSchedule]`:
-   - Se `promptScheduleAfterEdit && summary.remainingToSchedule > 0` -> abrir `setShowScheduleModal(true)` e resetar flag
-   - Se `promptScheduleAfterEdit && summary.remainingToSchedule <= 0` -> apenas resetar flag
-
-Isto garante que apos qualquer edicao que crie um "buraco" no plano de pagamentos, o sistema sugere imediatamente preencher esse valor.
+### Ficheiros a alterar
+- `supabase/functions/get-invoice-details/index.ts` - unica alteracao necessaria
