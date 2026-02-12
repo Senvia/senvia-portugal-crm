@@ -203,18 +203,19 @@ Deno.serve(async (req) => {
         })
       }
 
-      // Extract credit note reference from response
-      const data = voidData.Data || {}
-      const creditNoteReference = data.FullDocNumber || 
-        (data.DocNum ? `NC ${data.DocNum}` : `NC #${original_document_id}`)
-      const creditNoteId = data.DocNum || original_document_id
+      // Build a useful reference from original doc info
+      const creditNoteReference = kiDocSeries 
+        ? `NC ${kiDocSeries}/${kiDocNum}` 
+        : `NC ${kiDocNum}`
+      // Use negative ID to avoid conflicts (KeyInvoice doesn't return a credit note ID)
+      const kiCreditNoteId = -(original_document_id)
 
       // Save reference in database
       if (payment_id) {
         await supabase
           .from('sale_payments')
           .update({
-            credit_note_id: creditNoteId,
+            credit_note_id: kiCreditNoteId,
             credit_note_reference: creditNoteReference,
           })
           .eq('id', payment_id)
@@ -224,32 +225,40 @@ Deno.serve(async (req) => {
         await supabase
           .from('sales')
           .update({
-            credit_note_id: creditNoteId,
+            credit_note_id: kiCreditNoteId,
             credit_note_reference: creditNoteReference,
           })
           .eq('id', sale_id)
       }
 
-      // Insert into credit_notes table for Finance visibility
-      const invoiceClientName = invoiceRecord ? (invoiceRecord.raw_data as any)?.clientName || null : null
-      const invoiceTotal = invoiceRecord ? (invoiceRecord.raw_data as any)?.total || null : null
+      // Fetch client_name and total from invoices table directly
+      const { data: invoiceInfo } = await supabase
+        .from('invoices')
+        .select('client_name, total')
+        .eq('invoicexpress_id', original_document_id)
+        .eq('organization_id', organization_id)
+        .maybeSingle()
 
-      await supabase.from('credit_notes').upsert({
+      const { error: upsertError } = await supabase.from('credit_notes').upsert({
         organization_id,
-        invoicexpress_id: typeof creditNoteId === 'number' ? creditNoteId : parseInt(String(creditNoteId), 10) || 0,
+        invoicexpress_id: kiCreditNoteId,
         reference: creditNoteReference,
         status: 'settled',
-        client_name: invoiceClientName,
-        total: invoiceTotal,
+        client_name: invoiceInfo?.client_name || null,
+        total: invoiceInfo?.total || null,
         date: new Date().toISOString().split('T')[0],
         related_invoice_id: original_document_id,
         sale_id: sale_id || null,
         payment_id: payment_id || null,
       }, { onConflict: 'invoicexpress_id,organization_id' })
 
+      if (upsertError) {
+        console.error('Failed to upsert credit note:', JSON.stringify(upsertError))
+      }
+
       return new Response(JSON.stringify({
         success: true,
-        credit_note_id: creditNoteId,
+        credit_note_id: kiCreditNoteId,
         credit_note_reference: creditNoteReference,
       }), {
         status: 200,
