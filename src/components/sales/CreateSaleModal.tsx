@@ -71,6 +71,7 @@ import {
 } from "@/types/sales";
 import { calculatePaymentSummary } from "@/hooks/useSalePayments";
 import { AddDraftPaymentModal, type DraftPayment } from "./AddDraftPaymentModal";
+import { PaymentTypeSelector } from "./PaymentTypeSelector";
 
 
 interface SaleItemDraft {
@@ -156,6 +157,7 @@ export function CreateSaleModal({
   // Draft payments state
   const [draftPayments, setDraftPayments] = useState<DraftPayment[]>([]);
   const [showDraftPaymentModal, setShowDraftPaymentModal] = useState(false);
+  const [showPaymentTypeSelector, setShowPaymentTypeSelector] = useState(false);
 
   // Reset form when modal opens
   useEffect(() => {
@@ -231,6 +233,7 @@ export function CreateSaleModal({
       setDiscount("0");
       setDraftPayments([]);
       setShowDraftPaymentModal(false);
+      setShowPaymentTypeSelector(false);
       if (!prefillProposal?.notes) {
         setNotes("");
       }
@@ -652,9 +655,11 @@ export function CreateSaleModal({
                   />
                 </div>
 
-                {/* Client Fiscal Card (InvoiceXpress only) */}
+                {/* Client Fiscal Card (InvoiceXpress only) - spans full width */}
                 {clientId && (
-                  <ClientFiscalCard client={selectedClient} isInvoiceXpressActive={ixActive} />
+                  <div className="sm:col-span-2">
+                    <ClientFiscalCard client={selectedClient} isInvoiceXpressActive={ixActive} />
+                  </div>
                 )}
 
                 {/* Proposal Select */}
@@ -1103,7 +1108,7 @@ export function CreateSaleModal({
                         type="button"
                         variant="outline"
                         size="sm"
-                        onClick={() => setShowDraftPaymentModal(true)}
+                        onClick={() => setShowPaymentTypeSelector(true)}
                       >
                         <Plus className="h-4 w-4 mr-1" />
                         Adicionar
@@ -1169,7 +1174,7 @@ export function CreateSaleModal({
                       type="button"
                       variant="outline"
                       className="w-full border-dashed"
-                      onClick={() => setShowDraftPaymentModal(true)}
+                      onClick={() => setShowPaymentTypeSelector(true)}
                     >
                       <Plus className="h-4 w-4 mr-2" />
                       Adicionar Pagamento
@@ -1197,6 +1202,27 @@ export function CreateSaleModal({
             </div>
           </form>
         </ScrollArea>
+
+        {/* Payment Type Selector */}
+        <PaymentTypeSelector
+          open={showPaymentTypeSelector}
+          onOpenChange={setShowPaymentTypeSelector}
+          remainingAmount={(() => {
+            const summary = calculatePaymentSummary(
+              draftPayments.map(dp => ({ ...dp, organization_id: '', sale_id: '', invoice_file_url: null, created_at: '', updated_at: '' })),
+              total
+            );
+            return summary.remaining;
+          })()}
+          onSelectTotal={() => {
+            setShowPaymentTypeSelector(false);
+            setShowDraftPaymentModal(true);
+          }}
+          onSelectInstallments={() => {
+            setShowPaymentTypeSelector(false);
+            setShowDraftPaymentModal(true);
+          }}
+        />
 
         {/* Draft Payment Modal */}
         <AddDraftPaymentModal
