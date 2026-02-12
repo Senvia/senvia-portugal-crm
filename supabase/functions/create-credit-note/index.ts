@@ -230,6 +230,23 @@ Deno.serve(async (req) => {
           .eq('id', sale_id)
       }
 
+      // Insert into credit_notes table for Finance visibility
+      const invoiceClientName = invoiceRecord ? (invoiceRecord.raw_data as any)?.clientName || null : null
+      const invoiceTotal = invoiceRecord ? (invoiceRecord.raw_data as any)?.total || null : null
+
+      await supabase.from('credit_notes').upsert({
+        organization_id,
+        invoicexpress_id: typeof creditNoteId === 'number' ? creditNoteId : parseInt(String(creditNoteId), 10) || 0,
+        reference: creditNoteReference,
+        status: 'settled',
+        client_name: invoiceClientName,
+        total: invoiceTotal,
+        date: new Date().toISOString().split('T')[0],
+        related_invoice_id: original_document_id,
+        sale_id: sale_id || null,
+        payment_id: payment_id || null,
+      }, { onConflict: 'invoicexpress_id,organization_id' })
+
       return new Response(JSON.stringify({
         success: true,
         credit_note_id: creditNoteId,
@@ -405,6 +422,23 @@ Deno.serve(async (req) => {
         })
         .eq('id', sale_id)
     }
+
+    // Insert into credit_notes table for Finance visibility
+    const ixClientName = originalDoc.client?.name || null
+    const ixTotal = creditNote.total || originalDoc.total || null
+
+    await supabase.from('credit_notes').upsert({
+      organization_id,
+      invoicexpress_id: creditNoteId,
+      reference: creditNoteReference,
+      status: 'settled',
+      client_name: ixClientName,
+      total: ixTotal ? Number(ixTotal) : null,
+      date: new Date().toISOString().split('T')[0],
+      related_invoice_id: original_document_id,
+      sale_id: sale_id || null,
+      payment_id: payment_id || null,
+    }, { onConflict: 'invoicexpress_id,organization_id' })
 
     return new Response(JSON.stringify({
       success: true,

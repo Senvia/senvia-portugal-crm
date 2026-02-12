@@ -37,6 +37,7 @@ interface InvoiceDetailsModalProps {
   organizationId: string;
   saleId?: string;
   paymentId?: string;
+  creditNoteId?: number | null;
 }
 
 const STATUS_MAP: Record<string, { label: string; className: string }> = {
@@ -64,6 +65,7 @@ export function InvoiceDetailsModal({
   organizationId,
   saleId,
   paymentId,
+  creditNoteId,
 }: InvoiceDetailsModalProps) {
   const { data: details, isLoading, error } = useInvoiceDetails(
     { documentId, documentType, organizationId },
@@ -360,10 +362,12 @@ export function InvoiceDetailsModal({
                 </Button>
                 {!isCancelled && (
                   <>
-                    <Button variant="outline" size="sm" onClick={() => setCreditNoteOpen(true)}>
-                      <FileText className="h-3.5 w-3.5 mr-1.5" />
-                      Nota Crédito
-                    </Button>
+                    {!creditNoteId && (
+                      <Button variant="outline" size="sm" onClick={() => setCreditNoteOpen(true)}>
+                        <FileText className="h-3.5 w-3.5 mr-1.5" />
+                        Nota Crédito
+                      </Button>
+                    )}
                     <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => setCancelOpen(true)}>
                       <Ban className="h-3.5 w-3.5 mr-1.5" />
                       Anular
