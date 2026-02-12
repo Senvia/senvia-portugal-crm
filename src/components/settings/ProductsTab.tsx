@@ -102,6 +102,9 @@ export function ProductsTab() {
                 >
                   <div className="flex-1 min-w-0 mr-4">
                     <div className="flex items-center gap-2 flex-wrap">
+                      {product.code && (
+                        <span className="text-xs font-mono text-muted-foreground">#{product.code}</span>
+                      )}
                       <h4 className="font-medium truncate">{product.name}</h4>
                       {product.is_recurring && (
                         <Badge variant="outline" className="text-xs gap-1 bg-primary/10 text-primary border-primary/30">
