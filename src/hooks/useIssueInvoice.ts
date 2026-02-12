@@ -38,6 +38,7 @@ export function useIssueInvoice() {
     onSuccess: (data) => {
       toast.success(`Fatura emitida: ${data.invoice_reference}`);
       queryClient.invalidateQueries({ queryKey: ["sales"] });
+      queryClient.invalidateQueries({ queryKey: ["invoices"] });
     },
     onError: (error: Error) => {
       toast.error(error.message || "Erro ao emitir fatura");

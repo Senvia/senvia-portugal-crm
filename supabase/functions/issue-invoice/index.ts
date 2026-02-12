@@ -421,7 +421,7 @@ async function handleKeyInvoice(supabase: any, org: any, saleId: string, organiz
     console.warn('KeyInvoice PDF generation failed (non-blocking):', e)
   }
 
-  // 3. Save reference
+  // 3. Save reference in sales table
   await supabase
     .from('sales')
     .update({
@@ -431,6 +431,29 @@ async function handleKeyInvoice(supabase: any, org: any, saleId: string, organiz
       ...(storedPdfPath ? { invoice_pdf_url: storedPdfPath } : {}),
     })
     .eq('id', saleId)
+
+  // 4. Insert into invoices table so it appears in Faturas tab
+  const invoiceDocType = docTypeCode === 'FR' ? 'invoice_receipt' : 'invoice'
+  await supabase
+    .from('invoices')
+    .upsert({
+      organization_id: organizationId,
+      invoicexpress_id: docNum,
+      reference: fullDocNumber,
+      document_type: invoiceDocType,
+      status: 'final',
+      client_name: clientName,
+      total: sale.total_value,
+      date: new Date().toISOString().split('T')[0],
+      due_date: null,
+      sale_id: saleId,
+      payment_id: null,
+      pdf_path: storedPdfPath || null,
+      raw_data: { source: 'keyinvoice', docType, docNum, docSeries },
+      updated_at: new Date().toISOString(),
+    }, {
+      onConflict: 'organization_id,invoicexpress_id',
+    })
 
   return new Response(JSON.stringify({
     success: true,
