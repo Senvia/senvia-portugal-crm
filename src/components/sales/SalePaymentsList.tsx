@@ -264,7 +264,7 @@ export function SalePaymentsList({
                     </>
                   )}
                   {/* Generate Receipt (RC) button - only when sale already has FT */}
-                  {payment.status === 'paid' && hasInvoiceXpress && hasInvoice && invoicexpressType === 'FT' && !payment.invoice_reference && !readonly && (
+                  {hasInvoiceXpress && hasInvoice && invoicexpressType === 'FT' && !payment.invoice_reference && !readonly && (
                     <Button
                       variant="outline"
                       size="sm"
