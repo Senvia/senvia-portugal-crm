@@ -2,7 +2,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Download, Search, FileText, X, Loader2, CheckCircle2, AlertCircle, ArrowUpDown, ArrowUp, ArrowDown, Eye } from "lucide-react";
+import { Download, Search, FileText, X, Loader2, CheckCircle2, AlertCircle, ArrowUpDown, ArrowUp, ArrowDown, FileDown } from "lucide-react";
 import { useInvoices, useSyncInvoices } from "@/hooks/useInvoices";
 import { useCreditNotes, useSyncCreditNotes } from "@/hooks/useCreditNotes";
 import { formatCurrency, formatDate } from "@/lib/format";
@@ -402,7 +402,7 @@ export function InvoicesContent() {
                             {viewingId === doc.id ? (
                               <Loader2 className="h-4 w-4 animate-spin" />
                             ) : (
-                              <Eye className="h-4 w-4" />
+                              <FileDown className="h-4 w-4" />
                             )}
                           </Button>
                         ) : (

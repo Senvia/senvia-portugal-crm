@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { MoreHorizontal, Eye, RefreshCw, Mail, Ban, FileText, Loader2 } from "lucide-react";
+import { MoreHorizontal, Eye, RefreshCw, Mail, Ban, FileText, Loader2, FileDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -104,7 +104,7 @@ export function InvoiceActionsMenu({ invoice }: InvoiceActionsMenuProps) {
 
           {hasLocalPdf ? (
             <DropdownMenuItem onClick={handleView} disabled={viewing}>
-              {viewing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Eye className="h-4 w-4 mr-2" />}
+              {viewing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileDown className="h-4 w-4 mr-2" />}
               Ver PDF
             </DropdownMenuItem>
           ) : hasInvoiceXpress ? (

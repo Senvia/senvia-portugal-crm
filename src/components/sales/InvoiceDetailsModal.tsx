@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Eye, Mail, FileText, Ban, Loader2 } from "lucide-react";
+import { Mail, FileText, Ban, Loader2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -342,7 +342,7 @@ export function InvoiceDetailsModal({
             <div className="p-4 border-t border-border/50 space-y-2">
               <div className="grid grid-cols-2 gap-2">
                 <Button variant="outline" size="sm" onClick={handleViewPdf} disabled={viewingPdf}>
-                  {viewingPdf ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Eye className="h-3.5 w-3.5 mr-1.5" />}
+                  {viewingPdf ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <FileText className="h-3.5 w-3.5 mr-1.5" />}
                   Ver PDF
                 </Button>
                 <Button variant="outline" size="sm" onClick={() => setEmailOpen(true)}>
