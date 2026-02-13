@@ -1,67 +1,33 @@
 
 
-# Separar NIF Cliente vs Contribuinte Empresa + Seletor de Faturacao
+# Adicionar "Contribuinte" como Campo Configuravel nas Definicoes
 
-## Resumo
-Atualmente existe apenas um campo `nif` na tabela `crm_clients`. Precisamos separar o NIF pessoal do cliente do Contribuinte da empresa, e adicionar um seletor "Faturar Cliente" / "Faturar Empresa" que determina qual entidade e dados fiscais sao usados no payload de faturacao.
+## Problema
+O campo "Contribuinte (Empresa)" (`company_nif`) nao esta no sistema de campos configuraveis. Apenas existe o campo `nif` (NIF Cliente). A Perfect2Gether precisa que o Contribuinte da empresa seja obrigatorio, mas o NIF pessoal nao.
 
-## 1. Migracao de Base de Dados
+## Alteracoes
 
-Adicionar 2 novas colunas a tabela `crm_clients`:
-- `company_nif` (text, nullable) - Contribuinte/NIF da empresa
-- `billing_target` (text, default `'client'`) - Valores: `'client'` ou `'company'`
+### 1. `src/types/clients.ts`
+- Adicionar `'company_nif'` ao tipo `ClientFieldKey`
+- Adicionar `company_nif: ClientFieldConfig` ao `ClientFieldsSettings`
+- Adicionar entrada em `CLIENT_FIELD_DEFAULTS` e `DEFAULT_CLIENT_FIELDS_SETTINGS`
 
-## 2. Alteracoes no Tipo `CrmClient` (`src/types/clients.ts`)
+### 2. `src/components/settings/ClientFieldsEditor.tsx`
+- Adicionar icone para `company_nif` em `FIELD_ICONS`
+- Adicionar `'company_nif'` ao `FIELD_ORDER` (depois de `company`)
 
-- Adicionar `company_nif?: string | null`
-- Adicionar `billing_target?: 'client' | 'company'`
-- Criar tipo `BillingTarget = 'client' | 'company'`
+### 3. `src/components/clients/CreateClientModal.tsx`
+- O campo "Contribuinte (Empresa)" passa a respeitar `settings.company_nif.visible` e `settings.company_nif.required`
+- Adicionar validacao de `companyNif` no `isValid` quando `settings.company_nif.required`
 
-## 3. Alteracoes nos Modais de Criacao e Edicao
+### 4. `src/components/clients/EditClientModal.tsx`
+- Mesmas alteracoes que o CreateClientModal
 
-### Coluna Esquerda - Reorganizacao dos Cards
-
-**Card "Informacoes Basicas"** (dados pessoais do cliente):
-- Nome
-- Email
-- Telefone
-- **NIF** (NIF pessoal do cliente - campo existente `nif`)
-
-**Card "Empresa"** (novo card separado):
-- Nome da Empresa (campo existente `company`)
-- **Contribuinte** (novo campo `company_nif`)
-
-**Card "Morada"** (sem alteracao)
-**Card "Notas"** (sem alteracao)
-
-### Coluna Direita - Novo Card "Faturacao"
-
-Novo card na coluna direita (sticky) com duas opcoes de selecao:
-
-```text
-Faturacao
----------
-( ) Faturar Cliente    -> usa nome + nif do cliente
-(o) Faturar Empresa   -> usa company + company_nif
-```
-
-Implementado como RadioGroup com duas opcoes visuais (cards clicaveis).
-
-## 4. Alteracoes no Hook `useClients.ts`
-
-- Incluir `company_nif` e `billing_target` nos payloads de criacao e atualizacao
-
-## 5. Alteracoes no `ClientDetailsDrawer.tsx`
-
-- Mostrar o NIF no card "Dados do Cliente" (NIF pessoal)
-- Mostrar o Contribuinte no card "Empresa" (NIF da empresa)
-- Indicar visualmente qual e a entidade de faturacao ativa
+### 5. Atualizar settings da Perfect2Gether
+- Depois de implementar, o administrador podera ir a Definicoes > Campos e configurar: NIF (Cliente) = nao obrigatorio, Contribuinte (Empresa) = obrigatorio
 
 ## Ficheiros alterados
-- Migracao SQL (nova coluna `company_nif` e `billing_target`)
 - `src/types/clients.ts`
+- `src/components/settings/ClientFieldsEditor.tsx`
 - `src/components/clients/CreateClientModal.tsx`
 - `src/components/clients/EditClientModal.tsx`
-- `src/components/clients/ClientDetailsDrawer.tsx`
-- `src/hooks/useClients.ts`
-
