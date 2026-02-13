@@ -156,7 +156,14 @@ export function ClientDetailsDrawer({
                 {/* Dados do Cliente */}
                 <Card>
                   <CardHeader className="pb-3">
-                    <CardTitle className="text-base">Dados do {labels.singular}</CardTitle>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      Dados do {labels.singular}
+                      {(!client.billing_target || client.billing_target === 'client') && (
+                        <Badge variant="outline" className="text-xs ml-auto border-primary/30 text-primary bg-primary/5">
+                          Faturação
+                        </Badge>
+                      )}
+                    </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3">
                     {client.code && (
@@ -218,6 +225,11 @@ export function ClientDetailsDrawer({
                     <CardTitle className="text-base flex items-center gap-2">
                       <Building2 className="h-4 w-4" />
                       Empresa
+                      {client.billing_target === 'company' && (
+                        <Badge variant="outline" className="text-xs ml-auto border-primary/30 text-primary bg-primary/5">
+                          Faturação
+                        </Badge>
+                      )}
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3">
@@ -229,10 +241,10 @@ export function ClientDetailsDrawer({
                     ) : (
                       <p className="text-sm text-muted-foreground">Sem empresa associada</p>
                     )}
-                    {client.nif && client.company && (
+                    {client.company_nif && (
                       <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">NIF</span>
-                        <span>{client.nif}</span>
+                        <span className="text-muted-foreground">Contribuinte</span>
+                        <span>{client.company_nif}</span>
                       </div>
                     )}
                     {hasAddress && (

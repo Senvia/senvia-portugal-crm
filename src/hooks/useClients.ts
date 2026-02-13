@@ -70,6 +70,8 @@ interface CreateClientData {
   phone?: string;
   company?: string;
   nif?: string;
+  company_nif?: string;
+  billing_target?: string;
   status?: ClientStatus;
   source?: string;
   notes?: string;

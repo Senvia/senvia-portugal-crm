@@ -18,13 +18,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { useCreateClient } from "@/hooks/useClients";
 import { useClientLabels } from "@/hooks/useClientLabels";
 import { useTeamMembers } from "@/hooks/useTeam";
 import { useClientFieldsSettings } from "@/hooks/useClientFieldsSettings";
-import { CLIENT_STATUS_LABELS, CLIENT_SOURCE_LABELS, ClientStatus, DEFAULT_CLIENT_FIELDS_SETTINGS } from "@/types/clients";
+import { CLIENT_SOURCE_LABELS, ClientStatus, DEFAULT_CLIENT_FIELDS_SETTINGS, BillingTarget } from "@/types/clients";
 import { COUNTRIES } from "@/lib/countries";
+import { User, Building2 } from "lucide-react";
 
 interface CreateClientModalProps {
   open: boolean;
@@ -52,6 +54,8 @@ export function CreateClientModal({ open, onOpenChange, onCreated, initialData }
   const [phone, setPhone] = useState("");
   const [company, setCompany] = useState("");
   const [nif, setNif] = useState("");
+  const [companyNif, setCompanyNif] = useState("");
+  const [billingTarget, setBillingTarget] = useState<BillingTarget>("client");
   const [status, setStatus] = useState<ClientStatus>("active");
   const [source, setSource] = useState("");
   const [notes, setNotes] = useState("");
@@ -97,6 +101,8 @@ export function CreateClientModal({ open, onOpenChange, onCreated, initialData }
         phone: phone.trim() || undefined,
         company: company.trim() || undefined,
         nif: nif.trim() || undefined,
+        company_nif: companyNif.trim() || undefined,
+        billing_target: billingTarget,
         status,
         source: source || undefined,
         notes: notes.trim() || undefined,
@@ -124,6 +130,8 @@ export function CreateClientModal({ open, onOpenChange, onCreated, initialData }
     setPhone("");
     setCompany("");
     setNif("");
+    setCompanyNif("");
+    setBillingTarget("client");
     setStatus("active");
     setSource("");
     setNotes("");
@@ -201,7 +209,35 @@ export function CreateClientModal({ open, onOpenChange, onCreated, initialData }
                         </div>
                       )}
 
-                      {settings.company.visible && (
+                      {settings.nif.visible && (
+                        <div className="space-y-2">
+                          <Label htmlFor="nif">
+                            NIF (Cliente) {settings.nif.required && '*'}
+                          </Label>
+                          <Input
+                            id="nif"
+                            value={nif}
+                            onChange={(e) => setNif(e.target.value)}
+                            placeholder="NIF pessoal"
+                            required={settings.nif.required}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Company Card */}
+                {settings.company.visible && (
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <Building2 className="h-4 w-4" />
+                        Empresa
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label htmlFor="company">
                             {settings.company.label} {settings.company.required && '*'}
@@ -214,25 +250,19 @@ export function CreateClientModal({ open, onOpenChange, onCreated, initialData }
                             required={settings.company.required}
                           />
                         </div>
-                      )}
-
-                      {settings.nif.visible && (
                         <div className="space-y-2">
-                          <Label htmlFor="nif">
-                            {settings.nif.label} {settings.nif.required && '*'}
-                          </Label>
+                          <Label htmlFor="company-nif">Contribuinte (Empresa)</Label>
                           <Input
-                            id="nif"
-                            value={nif}
-                            onChange={(e) => setNif(e.target.value)}
-                            placeholder="123456789"
-                            required={settings.nif.required}
+                            id="company-nif"
+                            value={companyNif}
+                            onChange={(e) => setCompanyNif(e.target.value)}
+                            placeholder="NIF da empresa"
                           />
                         </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
 
                 {/* Address */}
                 {settings.address.visible && (
@@ -313,6 +343,51 @@ export function CreateClientModal({ open, onOpenChange, onCreated, initialData }
               {/* Right Column - Sticky */}
               <div className="lg:col-span-2">
                 <div className="lg:sticky lg:top-0 space-y-4">
+                  {/* Billing Target */}
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base">Faturação</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <RadioGroup
+                        value={billingTarget}
+                        onValueChange={(v) => setBillingTarget(v as BillingTarget)}
+                        className="space-y-2"
+                      >
+                        <label
+                          htmlFor="billing-client"
+                          className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                            billingTarget === 'client'
+                              ? 'border-primary bg-primary/5'
+                              : 'border-border hover:border-muted-foreground/30'
+                          }`}
+                        >
+                          <RadioGroupItem value="client" id="billing-client" />
+                          <User className="h-4 w-4 text-muted-foreground" />
+                          <div>
+                            <p className="text-sm font-medium">Faturar Cliente</p>
+                            <p className="text-xs text-muted-foreground">Usa o nome e NIF do cliente</p>
+                          </div>
+                        </label>
+                        <label
+                          htmlFor="billing-company"
+                          className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                            billingTarget === 'company'
+                              ? 'border-primary bg-primary/5'
+                              : 'border-border hover:border-muted-foreground/30'
+                          }`}
+                        >
+                          <RadioGroupItem value="company" id="billing-company" />
+                          <Building2 className="h-4 w-4 text-muted-foreground" />
+                          <div>
+                            <p className="text-sm font-medium">Faturar Empresa</p>
+                            <p className="text-xs text-muted-foreground">Usa o nome e contribuinte da empresa</p>
+                          </div>
+                        </label>
+                      </RadioGroup>
+                    </CardContent>
+                  </Card>
+
                   <Card>
                     <CardHeader className="pb-3">
                       <CardTitle className="text-base">Classificação</CardTitle>
