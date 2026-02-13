@@ -1,29 +1,50 @@
 
-# Filtrar Destinatarios ao Clicar nos Cards de Metricas
+# Mitigar Falsos Positivos de Abertura de Email
 
-## Objetivo
+## Contexto do Problema
 
-Ao clicar num card de metrica (Destinatarios, Enviados, Aberturas, Cliques, Erros), a lista de destinatarios abaixo filtra automaticamente para mostrar apenas os registos correspondentes. Clicar novamente no mesmo card remove o filtro.
+Clientes de email como o Gmail fazem **pre-fetch automatico** das imagens dos emails para seguranca. Como o tracking de aberturas da Brevo funciona com um pixel (imagem invisivel), o Gmail carrega esse pixel antes do utilizador abrir o email. A Brevo regista isso como evento `opened`, gerando falsos positivos.
 
-## Alteracoes
+Exemplo real: `geral.senvia@gmail.com` foi marcado como "aberto" 6 segundos apos o envio — claramente um pre-fetch automatico, nao uma abertura real.
 
-### Ficheiro: `src/components/marketing/CampaignDetailsModal.tsx`
+## Solucao: Filtro de Aberturas Suspeitas
 
-1. **Novo estado** `activeFilter` com valores possiveis: `null | 'all' | 'delivered' | 'opened' | 'clicked' | 'failed'`
+### 1. Edge Function `sync-campaign-sends` — Marcar aberturas suspeitas
 
-2. **Cards clicaveis** — adicionar `cursor-pointer` e um anel visual (`ring-2 ring-primary`) ao card ativo. O `onClick` alterna o filtro (clique = ativa, segundo clique = desativa).
+Ao processar eventos da Brevo, se o `opened_at` ocorrer menos de 10 segundos apos o `sent_at`, considerar como abertura suspeita e **nao registar** o `opened_at`.
 
-3. **Logica de filtragem** — o `filteredSends` combina o filtro de metrica com a pesquisa por texto:
-   - `all`: mostra todos (sem filtro extra)
-   - `delivered`: `status === 'sent' || status === 'delivered'`
-   - `opened`: `opened_at !== null`
-   - `clicked`: `clicked_at !== null`
-   - `failed`: `status === 'failed' || status === 'bounced' || status === 'blocked' || status === 'spam'`
+Logica no bloco de processamento de eventos:
+- Quando o evento e `opened` ou `unique_opened`, verificar a diferenca entre a data do evento e o `sentAt` do registo
+- Se a diferenca for inferior a 10 segundos, ignorar o evento de abertura
+- Caso contrario, registar normalmente
 
-4. **Contador no titulo** — o titulo "Destinatarios (X)" atualiza para refletir a contagem filtrada quando um filtro esta ativo.
+### 2. Edge Function `brevo-webhook` — Mesmo filtro no webhook
 
-5. **Indicador visual** — badge ou texto junto ao titulo a indicar qual filtro esta ativo, com botao "Limpar" para remover.
+Quando o webhook recebe um evento `opened`:
+- Buscar o registo correspondente pelo `brevo_message_id`
+- Verificar se `sent_at` existe e se a diferenca para `now()` e inferior a 10 segundos
+- Se sim, ignorar o evento
 
-## Detalhe Tecnico
+### 3. Limpeza dos dados actuais
 
-Cada metrica no array `metrics` recebe um campo `filterKey` que mapeia ao tipo de filtro. O card renderiza com estilos condicionais baseados em `activeFilter === m.filterKey`. A filtragem e feita num unico `useMemo` que aplica primeiro o filtro de metrica e depois o filtro de texto.
+Correr um UPDATE para limpar os `opened_at` dos registos que foram marcados como abertos em menos de 10 segundos apos o envio:
+
+```sql
+UPDATE email_sends
+SET opened_at = NULL
+WHERE opened_at IS NOT NULL
+  AND sent_at IS NOT NULL
+  AND EXTRACT(EPOCH FROM (opened_at - sent_at)) < 10;
+```
+
+### Ficheiros a alterar
+
+- `supabase/functions/sync-campaign-sends/index.ts` — adicionar verificacao de tempo no bloco `opened/unique_opened`
+- `supabase/functions/brevo-webhook/index.ts` — adicionar verificacao de tempo no case `opened`
+- Migracao SQL — limpar falsos positivos existentes
+
+### Resultado
+
+- Aberturas reais (utilizador clicou e leu o email) serao contadas correctamente
+- Pre-fetches automaticos do Gmail/Outlook serao ignorados
+- As metricas de "Aberturas" passam a ser mais fieis a realidade
