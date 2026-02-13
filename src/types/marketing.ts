@@ -99,6 +99,20 @@ export const EMAIL_SEND_STATUS_STYLES: Record<EmailSendStatus, { bg: string; tex
   failed: { bg: 'hsl(0 84% 90%)', text: 'hsl(0 84% 30%)' },
 };
 
+export interface MarketingContact {
+  id: string;
+  organization_id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  company: string | null;
+  source: string | null;
+  tags: string[];
+  subscribed: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface EmailSendWithTracking {
   id: string;
   organization_id: string;
