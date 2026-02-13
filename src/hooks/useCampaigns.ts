@@ -6,7 +6,10 @@ import type { EmailCampaign, CampaignStatus } from '@/types/marketing';
 
 interface CreateCampaignData {
   name: string;
-  template_id: string;
+  template_id?: string;
+  subject?: string;
+  html_content?: string;
+  settings?: Record<string, boolean>;
 }
 
 export function useCampaigns() {
@@ -75,10 +78,13 @@ export function useCreateCampaign() {
         .insert({
           organization_id: organization.id,
           name: data.name,
-          template_id: data.template_id,
+          template_id: data.template_id || null,
+          subject: data.subject || null,
+          html_content: data.html_content || null,
+          settings: data.settings || {},
           status: 'draft' as const,
           created_by: user?.id,
-        })
+        } as any)
         .select()
         .single();
 

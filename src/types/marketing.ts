@@ -32,13 +32,16 @@ export const TEMPLATE_VARIABLES = [
 ] as const;
 
 // Campaign types
-export type CampaignStatus = 'draft' | 'sending' | 'sent' | 'failed';
+export type CampaignStatus = 'draft' | 'sending' | 'sent' | 'failed' | 'scheduled';
+
+export type CampaignChannel = 'email' | 'sms' | 'whatsapp';
 
 export const CAMPAIGN_STATUS_LABELS: Record<CampaignStatus, string> = {
   draft: 'Rascunho',
   sending: 'A enviar',
   sent: 'Enviada',
   failed: 'Falhada',
+  scheduled: 'Agendada',
 };
 
 export const CAMPAIGN_STATUS_STYLES: Record<CampaignStatus, { bg: string; text: string }> = {
@@ -46,6 +49,7 @@ export const CAMPAIGN_STATUS_STYLES: Record<CampaignStatus, { bg: string; text: 
   sending: { bg: 'hsl(45 93% 90%)', text: 'hsl(45 93% 30%)' },
   sent: { bg: 'hsl(142 76% 90%)', text: 'hsl(142 76% 30%)' },
   failed: { bg: 'hsl(0 84% 90%)', text: 'hsl(0 84% 30%)' },
+  scheduled: { bg: 'hsl(210 80% 90%)', text: 'hsl(210 80% 30%)' },
 };
 
 export interface EmailCampaign {
@@ -53,12 +57,15 @@ export interface EmailCampaign {
   organization_id: string;
   name: string;
   template_id: string | null;
+  subject: string | null;
+  html_content: string | null;
   status: CampaignStatus;
   total_recipients: number;
   sent_count: number;
   failed_count: number;
   scheduled_at: string | null;
   sent_at: string | null;
+  settings: Record<string, boolean>;
   created_by: string | null;
   created_at: string;
   updated_at: string;
