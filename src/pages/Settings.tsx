@@ -330,7 +330,6 @@ export default function Settings() {
       case "security": return "security";
       case "products": return "products";
       case "integrations": return "integrations";
-      case "integrations": return "integrations";
       default: return "security"; // fallback
     }
   };
