@@ -26,6 +26,7 @@ import { useTeamMembers } from "@/hooks/useTeam";
 import { useClientFieldsSettings } from "@/hooks/useClientFieldsSettings";
 import { useAuth } from "@/contexts/AuthContext";
 import { CLIENT_SOURCE_LABELS, ClientStatus, DEFAULT_CLIENT_FIELDS_SETTINGS, BillingTarget } from "@/types/clients";
+import { isBillingActive } from "@/components/sales/SaleFiscalInfo";
 import { COUNTRIES } from "@/lib/countries";
 import { User, Building2 } from "lucide-react";
 
@@ -48,7 +49,7 @@ export function CreateClientModal({ open, onOpenChange, onCreated, initialData }
   const { organization } = useAuth();
   const { data: teamMembers = [] } = useTeamMembers();
   const { data: fieldSettings } = useClientFieldsSettings();
-  const invoicingEnabled = (organization as any)?.tax_config?.invoicing_enabled !== false;
+  const invoicingEnabled = isBillingActive(organization);
   
   const settings = fieldSettings || DEFAULT_CLIENT_FIELDS_SETTINGS;
   
