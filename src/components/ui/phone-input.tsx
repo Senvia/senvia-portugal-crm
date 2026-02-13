@@ -140,7 +140,7 @@ export function PhoneInput({
             variant="outline"
             role="combobox"
             aria-expanded={open}
-            className="rounded-r-none border-r-0 px-2 h-10 min-w-fit justify-between gap-1"
+            className="rounded-r-none border-r-0 px-2 h-12 min-w-fit justify-between gap-1"
             disabled={disabled}
           >
             <span className="text-base leading-none">{selectedCountry.flag}</span>
