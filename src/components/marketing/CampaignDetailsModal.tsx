@@ -28,11 +28,13 @@ export function CampaignDetailsModal({ campaign, open, onOpenChange }: CampaignD
   const clicked = sends.filter(s => s.clicked_at).length;
   const failed = sends.filter(s => s.status === 'failed' || s.status === 'bounced').length;
   const delivered = sends.filter(s => s.status === 'sent' || s.status === 'delivered').length;
-  const progress = campaign.total_recipients > 0 ? Math.round(((campaign.sent_count + campaign.failed_count) / campaign.total_recipients) * 100) : 0;
-  const style = CAMPAIGN_STATUS_STYLES[campaign.status];
 
-  const openPct = campaign.total_recipients > 0 ? Math.round((opened / campaign.total_recipients) * 100) : 0;
-  const clickPct = campaign.total_recipients > 0 ? Math.round((clicked / campaign.total_recipients) * 100) : 0;
+  const totalRecipients = campaign?.total_recipients ?? 0;
+  const progress = totalRecipients > 0 ? Math.round((((campaign?.sent_count ?? 0) + (campaign?.failed_count ?? 0)) / totalRecipients) * 100) : 0;
+  const style = campaign ? CAMPAIGN_STATUS_STYLES[campaign.status] : CAMPAIGN_STATUS_STYLES['draft'];
+
+  const openPct = totalRecipients > 0 ? Math.round((opened / totalRecipients) * 100) : 0;
+  const clickPct = totalRecipients > 0 ? Math.round((clicked / totalRecipients) * 100) : 0;
 
   const filteredSends = useMemo(() => {
     if (!recipientSearch) return sends;
