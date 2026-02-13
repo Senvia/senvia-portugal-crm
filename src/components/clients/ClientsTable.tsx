@@ -175,8 +175,13 @@ export function ClientsTable({ clients, onEdit, onView, onDelete, selectedIds = 
                 <TableCell className="hidden lg:table-cell">
                   {client.company && (
                     <div className="flex items-center gap-1">
-                      <Building2 className="h-3 w-3 text-muted-foreground" />
-                      <span className="truncate max-w-[150px]">{client.company}</span>
+                      <Building2 className="h-3 w-3 text-muted-foreground shrink-0 mt-0.5" />
+                      <div>
+                        <p className="truncate max-w-[150px]">{client.company}</p>
+                        {client.company_nif && (
+                          <p className="text-xs text-muted-foreground">NIF: {client.company_nif}</p>
+                        )}
+                      </div>
                     </div>
                   )}
                 </TableCell>
