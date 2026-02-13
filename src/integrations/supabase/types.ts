@@ -380,6 +380,7 @@ export type Database = {
           total_sales: number | null
           total_value: number | null
           updated_at: string | null
+          whatsapp: string | null
         }
         Insert: {
           address_line1?: string | null
@@ -407,6 +408,7 @@ export type Database = {
           total_sales?: number | null
           total_value?: number | null
           updated_at?: string | null
+          whatsapp?: string | null
         }
         Update: {
           address_line1?: string | null
@@ -434,6 +436,7 @@ export type Database = {
           total_sales?: number | null
           total_value?: number | null
           updated_at?: string | null
+          whatsapp?: string | null
         }
         Relationships: [
           {
