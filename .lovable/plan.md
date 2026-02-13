@@ -1,32 +1,42 @@
 
 
-# Remover coluna "Associada" e corrigir erro de sincronizacao
+# Apagar todos os dados de teste do Geovane Felix
 
-## Alteracoes
+## Contexto
 
-### 1. `src/components/finance/InvoicesContent.tsx`
+Os dados nao foram apagados anteriormente porque a ferramenta de leitura so permite SELECT. Desta vez, vou usar uma migracao de base de dados para executar os DELETEs.
 
-**Remover coluna "Associada":**
-- Remover o `<TableHead>` "Associada" (linha 339)
-- Remover o `<TableCell>` correspondente com os icones CheckCircle2/AlertCircle (linhas 386-391)
-- Remover imports nao utilizados (`CheckCircle2`, `AlertCircle`) se deixarem de ser usados
+## Dados a apagar (por ordem de dependencia)
 
-**Corrigir erro de sincronizacao:**
-- No `useEffect` de auto-sync (linhas 89-95), envolver as chamadas `mutate()` com callbacks silenciosos para nao mostrar toast de erro durante a sincronizacao automatica em background
-- Substituir `syncInvoices.mutate()` e `syncCreditNotes.mutate()` por versoes com `onError` vazio, para que falhas silenciosas nao perturbem o utilizador:
+1. **1 nota de credito** (`credit_notes`)
+2. **2 faturas** (`invoices`)
+3. **5 pagamentos** (`sale_payments`)
+4. **3 itens de venda** (`sale_items`)
+5. **3 vendas** (`sales`) - V-0007, V-0008, V-0009
+6. **1 cliente** (`crm_clients`) - Geovane Felix
 
-```typescript
-useEffect(() => {
-  if (!hasSynced.current && !syncInvoices.isPending && !syncCreditNotes.isPending) {
-    hasSynced.current = true;
-    syncInvoices.mutate(undefined, { onError: () => {} });
-    syncCreditNotes.mutate(undefined, { onError: () => {} });
-  }
-}, []);
+## Implementacao
+
+Uma unica migracao SQL que apaga tudo na ordem correta:
+
+```sql
+-- 1. Notas de credito
+DELETE FROM credit_notes WHERE sale_id IN ('983dafb3-...', '008ade95-...', '99db5551-...');
+
+-- 2. Faturas
+DELETE FROM invoices WHERE sale_id IN ('983dafb3-...', '008ade95-...', '99db5551-...');
+
+-- 3. Pagamentos
+DELETE FROM sale_payments WHERE sale_id IN ('983dafb3-...', '008ade95-...', '99db5551-...');
+
+-- 4. Itens de venda
+DELETE FROM sale_items WHERE sale_id IN ('983dafb3-...', '008ade95-...', '99db5551-...');
+
+-- 5. Vendas
+DELETE FROM sales WHERE id IN ('983dafb3-...', '008ade95-...', '99db5551-...');
+
+-- 6. Cliente
+DELETE FROM crm_clients WHERE id = '829bae60-3b40-4d64-9df5-88bb28deb9b2';
 ```
 
-Isto garante que a sincronizacao automatica em background nunca mostra erros ao utilizador. Se o utilizador disparar manualmente (caso exista botao), o toast de erro continua a funcionar normalmente.
-
-### Ficheiros a alterar
-- `src/components/finance/InvoicesContent.tsx` - remover coluna + silenciar auto-sync
-
+Nenhum ficheiro de codigo e alterado. Apenas uma migracao de base de dados.
