@@ -74,7 +74,7 @@ export default function Finance() {
             </Card>
 
             {/* Stats Cards */}
-            <div className="grid gap-4 grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+            <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-7">
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Total Faturado</CardTitle>
@@ -84,7 +84,7 @@ export default function Finance() {
                   {isLoading ? (
                     <Skeleton className="h-8 w-24" />
                   ) : (
-                    <div className="text-2xl font-bold">{formatCurrency(stats.totalBilled)}</div>
+                    <div className="text-xl md:text-2xl font-bold">{formatCurrency(stats.totalBilled)}</div>
                   )}
                   <p className="text-xs text-muted-foreground">
                     {hasFilters ? "No período" : "Histórico total"}
@@ -107,7 +107,7 @@ export default function Finance() {
                   {isLoading ? (
                     <Skeleton className="h-8 w-24" />
                   ) : (
-                    <div className="text-2xl font-bold text-emerald-600">{formatCurrency(stats.totalReceived)}</div>
+                    <div className="text-xl md:text-2xl font-bold text-emerald-600">{formatCurrency(stats.totalReceived)}</div>
                   )}
                   <p className="text-xs text-muted-foreground">
                     {hasFilters ? "No período" : "Total recebido"}
@@ -130,7 +130,7 @@ export default function Finance() {
                   {isLoading ? (
                     <Skeleton className="h-8 w-24" />
                   ) : (
-                    <div className="text-2xl font-bold text-amber-600">{formatCurrency(stats.totalPending)}</div>
+                    <div className="text-xl md:text-2xl font-bold text-amber-600">{formatCurrency(stats.totalPending)}</div>
                   )}
                   <p className="text-xs text-muted-foreground">A receber</p>
                 </CardContent>
@@ -151,7 +151,7 @@ export default function Finance() {
                   {isLoading ? (
                     <Skeleton className="h-8 w-24" />
                   ) : (
-                    <div className="text-2xl font-bold text-orange-600">{formatCurrency(stats.totalOverdue)}</div>
+                    <div className="text-xl md:text-2xl font-bold text-orange-600">{formatCurrency(stats.totalOverdue)}</div>
                   )}
                   <p className="text-xs text-muted-foreground">{stats.overdueCount} pagamento(s)</p>
                 </CardContent>
@@ -172,7 +172,7 @@ export default function Finance() {
                   {isLoading ? (
                     <Skeleton className="h-8 w-24" />
                   ) : (
-                    <div className="text-2xl font-bold text-destructive">{formatCurrency(stats.totalExpenses)}</div>
+                    <div className="text-xl md:text-2xl font-bold text-destructive">{formatCurrency(stats.totalExpenses)}</div>
                   )}
                   <p className="text-xs text-muted-foreground">
                     {hasFilters ? "No período" : "Total"}
@@ -189,7 +189,7 @@ export default function Finance() {
                   {isLoading ? (
                     <Skeleton className="h-8 w-24" />
                   ) : (
-                    <div className={`text-2xl font-bold ${stats.balance >= 0 ? 'text-emerald-600' : 'text-destructive'}`}>
+                    <div className={`text-xl md:text-2xl font-bold ${stats.balance >= 0 ? 'text-emerald-600' : 'text-destructive'}`}>
                       {formatCurrency(stats.balance)}
                     </div>
                   )}
@@ -206,7 +206,7 @@ export default function Finance() {
                   {isLoading ? (
                     <Skeleton className="h-8 w-24" />
                   ) : (
-                    <div className="text-2xl font-bold text-blue-600">{formatCurrency(stats.dueSoon)}</div>
+                    <div className="text-xl md:text-2xl font-bold text-blue-600">{formatCurrency(stats.dueSoon)}</div>
                   )}
                   <p className="text-xs text-muted-foreground">{stats.dueSoonCount} pagamento(s)</p>
                 </CardContent>
