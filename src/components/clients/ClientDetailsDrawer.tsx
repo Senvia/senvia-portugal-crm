@@ -1,11 +1,16 @@
 import { useState, useEffect } from "react";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Mail,
   Phone,
@@ -22,6 +27,7 @@ import {
   User,
   Router,
   Zap,
+  Euro,
 } from "lucide-react";
 import { formatDate, formatCurrency, getWhatsAppUrl } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -62,18 +68,14 @@ export function ClientDetailsDrawer({
   const { data: teamMembers = [] } = useTeamMembers();
   const { organization } = useAuth();
   
-  // Telecom niche uses energy-specific labels
   const isTelecom = organization?.niche === 'telecom';
   const { data: cpes = [] } = useCpes(isTelecom ? client?.id : null);
-  const cpeTabLabel = isTelecom ? 'CPE/CUI' : 'CPEs';
   const CpeIcon = isTelecom ? Zap : Router;
 
-  // Communication modal state
   const [showAddCommunication, setShowAddCommunication] = useState(false);
   const [defaultCommType, setDefaultCommType] = useState<CommunicationType>('note');
   const [defaultCommDirection, setDefaultCommDirection] = useState<CommunicationDirection>('outbound');
 
-  // Get team member name by user_id
   const getTeamMemberName = (userId: string | null | undefined) => {
     if (!userId) return null;
     const member = teamMembers.find(m => m.user_id === userId);
@@ -86,11 +88,9 @@ export function ClientDetailsDrawer({
     setShowAddCommunication(true);
   };
 
-  // Notes editing state
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [editedNotes, setEditedNotes] = useState("");
 
-  // Sync notes when client changes
   useEffect(() => {
     if (client && !isEditingNotes) {
       setEditedNotes(client.notes || "");
@@ -134,26 +134,32 @@ export function ClientDetailsDrawer({
   const hasAddress = client.address_line1 || client.city || client.postal_code;
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-xl px-0 pb-0 pt-safe flex flex-col h-full">
-        <SheetHeader className="px-4 sm:px-6 pb-0 pt-14 shrink-0">
-          <div className="flex items-start justify-between">
-            <div>
-              <div className="flex items-center gap-2">
-                <SheetTitle className="text-left">{client.name}</SheetTitle>
-                {client.code && (
-                  <span className="text-xs font-mono text-primary bg-primary/10 px-2 py-0.5 rounded">
-                    #{client.code}
-                  </span>
-                )}
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent variant="fullScreen" className="flex flex-col p-0 gap-0">
+        {/* Header */}
+        <DialogHeader className="px-4 sm:px-6 py-4 border-b shrink-0">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-lg font-bold text-primary">
+                {client.name.charAt(0).toUpperCase()}
               </div>
-              <div className="flex items-center gap-2 mt-1">
-                <Badge variant="outline" className={cn('text-xs', statusStyle.bg, statusStyle.text, statusStyle.border)}>
-                  {statusLabel}
-                </Badge>
-                <span className="text-xs text-muted-foreground">
-                  {labels.since} {formatDate(client.created_at)}
-                </span>
+              <div>
+                <div className="flex items-center gap-2">
+                  <DialogTitle className="text-lg">{client.name}</DialogTitle>
+                  {client.code && (
+                    <span className="text-xs font-mono text-primary bg-primary/10 px-2 py-0.5 rounded">
+                      #{client.code}
+                    </span>
+                  )}
+                </div>
+                <DialogDescription className="mt-0.5">
+                  <Badge variant="outline" className={cn('text-xs mr-2', statusStyle.bg, statusStyle.text, statusStyle.border)}>
+                    {statusLabel}
+                  </Badge>
+                  <span className="text-xs text-muted-foreground">
+                    {labels.since} {formatDate(client.created_at)}
+                  </span>
+                </DialogDescription>
               </div>
             </div>
             <Button variant="outline" size="sm" onClick={() => onEdit(client)}>
@@ -161,100 +167,79 @@ export function ClientDetailsDrawer({
               Editar
             </Button>
           </div>
+        </DialogHeader>
 
-          {/* Quick Actions */}
-          <div className="flex flex-wrap gap-2 mt-4">
-            {client.phone && (
-              <>
-                <Button variant="outline" size="sm" asChild>
-                  <a href={`tel:${client.phone}`}>
-                    <Phone className="h-4 w-4 mr-1" />
-                    Ligar
-                  </a>
-                </Button>
-                <Button variant="outline" size="sm" className="text-success border-success/20 hover:bg-success/10" asChild>
-                  <a href={getWhatsAppUrl(client.phone)} target="_blank" rel="noopener noreferrer">
-                    <MessageSquare className="h-4 w-4 mr-1" />
-                    WhatsApp
-                  </a>
-                </Button>
-              </>
-            )}
-            {client.email && (
-              <Button variant="outline" size="sm" asChild>
-                <a href={`mailto:${client.email}`}>
-                  <Mail className="h-4 w-4 mr-1" />
-                  Email
-                </a>
-              </Button>
-            )}
-            {onNewProposal && (
-              <Button variant="outline" size="sm" onClick={() => onNewProposal(client)}>
-                <FileText className="h-4 w-4 mr-1" />
-                Nova Proposta
-              </Button>
-            )}
-            {onNewSale && (
-              <Button variant="outline" size="sm" onClick={() => onNewSale(client)}>
-                <ShoppingCart className="h-4 w-4 mr-1" />
-                Nova Venda
-              </Button>
-            )}
-            {onScheduleMeeting && (
-              <Button variant="outline" size="sm" onClick={() => onScheduleMeeting(client)}>
-                <CalendarIcon className="h-4 w-4 mr-1" />
-                Agendar
-              </Button>
-            )}
-          </div>
-        </SheetHeader>
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="max-w-6xl mx-auto p-4 sm:p-6">
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+              {/* Left Column */}
+              <div className="lg:col-span-3 space-y-4">
+                {/* Dados do Cliente */}
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">Dados do {labels.singular}</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">{labels.statusFieldLabel}</span>
+                      <Badge variant="outline" className={cn('text-xs', statusStyle.bg, statusStyle.text, statusStyle.border)}>
+                        {statusLabel}
+                      </Badge>
+                    </div>
+                    {client.source && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Origem</span>
+                        <Badge variant="secondary" className="text-xs">{sourceLabel}</Badge>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Data de Criação</span>
+                      <span>{formatDate(client.created_at)}</span>
+                    </div>
+                  </CardContent>
+                </Card>
 
-        <Tabs defaultValue="resumo" className="w-full mt-4 flex-1 flex flex-col min-h-0">
-          <TabsList className="w-full justify-start px-6 h-auto flex-wrap shrink-0">
-            <TabsTrigger value="resumo" className="text-xs">Resumo</TabsTrigger>
-            {isTelecom && (
-              <TabsTrigger value="cpes" className="text-xs">
-                <CpeIcon className="h-3 w-3 mr-1" />
-                {cpeTabLabel} ({cpes.length})
-              </TabsTrigger>
-            )}
-            <TabsTrigger value="notas" className="text-xs">Notas</TabsTrigger>
-            <TabsTrigger value="historico" className="text-xs">Histórico</TabsTrigger>
-            <TabsTrigger value="propostas" className="text-xs">
-              Propostas ({proposals.length})
-            </TabsTrigger>
-            <TabsTrigger value="vendas" className="text-xs">
-              Vendas ({sales.length})
-            </TabsTrigger>
-          </TabsList>
+                {/* Contacto */}
+                {(client.email || client.phone) && (
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base">Contacto</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {client.email && (
+                        <div className="flex items-center gap-3 text-sm">
+                          <Mail className="h-4 w-4 text-muted-foreground" />
+                          <a href={`mailto:${client.email}`} className="text-primary hover:underline">
+                            {client.email}
+                          </a>
+                        </div>
+                      )}
+                      {client.phone && (
+                        <div className="flex items-center gap-3 text-sm">
+                          <Phone className="h-4 w-4 text-muted-foreground" />
+                          <span>{client.phone}</span>
+                          <a
+                            href={getWhatsAppUrl(client.phone)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-success hover:underline text-xs ml-auto"
+                          >
+                            WhatsApp
+                          </a>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
 
-          <ScrollArea className="flex-1 min-h-0">
-            {/* Resumo Tab */}
-            <TabsContent value="resumo" className="p-6 pt-4 space-y-6 mt-0">
-              {/* Métricas */}
-              <div className="grid grid-cols-3 gap-4">
-                <div className="text-center p-3 bg-muted/50 rounded-lg">
-                  <p className="text-2xl font-bold text-primary">{client.total_proposals}</p>
-                  <p className="text-xs text-muted-foreground">Propostas</p>
-                </div>
-                <div className="text-center p-3 bg-muted/50 rounded-lg">
-                  <p className="text-2xl font-bold text-success">{client.total_sales}</p>
-                  <p className="text-xs text-muted-foreground">Vendas</p>
-                </div>
-                <div className="text-center p-3 bg-muted/50 rounded-lg">
-                  <p className="text-2xl font-bold">{formatCurrency(client.total_value)}</p>
-                  <p className="text-xs text-muted-foreground">Valor Total</p>
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* Empresa (prioritized for telecom niche) */}
-              {isTelecom && (client.company || client.nif) && (
-                <>
-                  <div className="space-y-3">
-                    <h3 className="text-sm font-medium">Empresa</h3>
-                    <div className="space-y-2">
+                {/* Empresa */}
+                {(client.company || client.nif) && (
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base">Empresa</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
                       {client.company && (
                         <div className="flex items-center gap-3 text-sm">
                           <Building2 className="h-4 w-4 text-muted-foreground" />
@@ -267,287 +252,259 @@ export function ClientDetailsDrawer({
                           <span>NIF: {client.nif}</span>
                         </div>
                       )}
-                    </div>
-                  </div>
-                  <Separator />
-                </>
-              )}
+                    </CardContent>
+                  </Card>
+                )}
 
-              {/* Contacto */}
-              <div className="space-y-3">
-                <h3 className="text-sm font-medium">Contacto</h3>
-                <div className="space-y-2">
-                  {client.email && (
-                    <div className="flex items-center gap-3 text-sm">
-                      <Mail className="h-4 w-4 text-muted-foreground" />
-                      <a href={`mailto:${client.email}`} className="text-primary hover:underline">
-                        {client.email}
-                      </a>
-                    </div>
-                  )}
-                  {client.phone && (
-                    <div className="flex items-center gap-3 text-sm">
-                      <Phone className="h-4 w-4 text-muted-foreground" />
-                      <span>{client.phone}</span>
-                      <a
-                        href={getWhatsAppUrl(client.phone)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-success hover:underline text-xs"
-                      >
-                        WhatsApp
-                      </a>
-                    </div>
-                  )}
-                </div>
-              </div>
+                {/* Morada */}
+                {hasAddress && (
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base">Morada</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex items-start gap-3 text-sm">
+                        <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
+                        <div>
+                          {client.address_line1 && <p>{client.address_line1}</p>}
+                          {client.address_line2 && <p>{client.address_line2}</p>}
+                          {(client.postal_code || client.city) && (
+                            <p>
+                              {client.postal_code && `${client.postal_code} `}
+                              {client.city}
+                            </p>
+                          )}
+                          {client.country && <p>{client.country}</p>}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
 
-              {/* Empresa (for non-telecom niches, shown after Contacto) */}
-              {!isTelecom && (client.company || client.nif) && (
-                <>
-                  <Separator />
-                  <div className="space-y-3">
-                    <h3 className="text-sm font-medium">Empresa</h3>
-                    <div className="space-y-2">
-                      {client.company && (
-                        <div className="flex items-center gap-3 text-sm">
-                          <Building2 className="h-4 w-4 text-muted-foreground" />
-                          <span>{client.company}</span>
+                {/* CPEs - Telecom only */}
+                {isTelecom && (
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <CpeIcon className="h-4 w-4" />
+                        CPE/CUI ({cpes.length})
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <CpeList clientId={client.id} />
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Notas */}
+                <Card>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-base">Notas</CardTitle>
+                      {!isEditingNotes ? (
+                        <Button variant="ghost" size="sm" onClick={() => setIsEditingNotes(true)}>
+                          <Edit className="h-4 w-4 mr-1" />
+                          Editar
+                        </Button>
+                      ) : (
+                        <div className="flex gap-2">
+                          <Button variant="ghost" size="sm" onClick={handleCancelNotes}>
+                            <X className="h-4 w-4 mr-1" />
+                            Cancelar
+                          </Button>
+                          <Button variant="default" size="sm" onClick={handleSaveNotes} disabled={updateClient.isPending}>
+                            <Save className="h-4 w-4 mr-1" />
+                            Guardar
+                          </Button>
                         </div>
                       )}
-                      {client.nif && (
-                        <div className="flex items-center gap-3 text-sm">
-                          <FileText className="h-4 w-4 text-muted-foreground" />
-                          <span>NIF: {client.nif}</span>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    {isEditingNotes ? (
+                      <Textarea
+                        value={editedNotes}
+                        onChange={(e) => setEditedNotes(e.target.value)}
+                        placeholder="Adicionar notas sobre este cliente..."
+                        className="min-h-[120px]"
+                      />
+                    ) : (
+                      <div 
+                        className="text-sm text-muted-foreground whitespace-pre-wrap min-h-[80px] p-3 bg-muted/30 rounded-lg cursor-pointer hover:bg-muted/50 transition-colors"
+                        onClick={() => setIsEditingNotes(true)}
+                      >
+                        {client.notes || "Clique para adicionar notas..."}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Histórico / Timeline */}
+                <Card>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-base">Histórico</CardTitle>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => handleOpenCommunicationModal('note', 'outbound')}
+                      >
+                        <Plus className="h-4 w-4 mr-1" />
+                        Registar Contacto
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <ClientTimeline events={timeline} isLoading={loadingHistory} />
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Right Column - Sticky */}
+              <div className="lg:col-span-2">
+                <div className="lg:sticky lg:top-0 space-y-4">
+                  {/* Métricas */}
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base">Métricas</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="text-center p-3 bg-muted/50 rounded-lg">
+                          <p className="text-xl font-bold text-primary">{client.total_proposals}</p>
+                          <p className="text-xs text-muted-foreground">Propostas</p>
+                        </div>
+                        <div className="text-center p-3 bg-muted/50 rounded-lg">
+                          <p className="text-xl font-bold text-success">{client.total_sales}</p>
+                          <p className="text-xs text-muted-foreground">Vendas</p>
+                        </div>
+                        <div className="text-center p-3 bg-muted/50 rounded-lg">
+                          <p className="text-xl font-bold">{formatCurrency(client.total_value)}</p>
+                          <p className="text-xs text-muted-foreground">Valor Total</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Ações Rápidas */}
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base">Ações Rápidas</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      {client.phone && (
+                        <div className="flex gap-2">
+                          <Button variant="outline" size="sm" className="flex-1" asChild>
+                            <a href={`tel:${client.phone}`}>
+                              <Phone className="h-4 w-4 mr-1" />
+                              Ligar
+                            </a>
+                          </Button>
+                          <Button variant="outline" size="sm" className="flex-1 text-success border-success/20 hover:bg-success/10" asChild>
+                            <a href={getWhatsAppUrl(client.phone)} target="_blank" rel="noopener noreferrer">
+                              <MessageSquare className="h-4 w-4 mr-1" />
+                              WhatsApp
+                            </a>
+                          </Button>
                         </div>
                       )}
-                    </div>
-                  </div>
-                </>
-              )}
+                      {client.email && (
+                        <Button variant="outline" size="sm" className="w-full" asChild>
+                          <a href={`mailto:${client.email}`}>
+                            <Mail className="h-4 w-4 mr-1" />
+                            Email
+                          </a>
+                        </Button>
+                      )}
+                      <Separator />
+                      {onNewProposal && (
+                        <Button variant="outline" size="sm" className="w-full" onClick={() => onNewProposal(client)}>
+                          <FileText className="h-4 w-4 mr-1" />
+                          Nova Proposta
+                        </Button>
+                      )}
+                      {onNewSale && (
+                        <Button variant="outline" size="sm" className="w-full" onClick={() => onNewSale(client)}>
+                          <ShoppingCart className="h-4 w-4 mr-1" />
+                          Nova Venda
+                        </Button>
+                      )}
+                      {onScheduleMeeting && (
+                        <Button variant="outline" size="sm" className="w-full" onClick={() => onScheduleMeeting(client)}>
+                          <CalendarIcon className="h-4 w-4 mr-1" />
+                          Agendar
+                        </Button>
+                      )}
+                    </CardContent>
+                  </Card>
 
-              {/* Morada */}
-              {hasAddress && (
-                <>
-                  <Separator />
-                  <div className="space-y-3">
-                    <h3 className="text-sm font-medium">Morada</h3>
-                    <div className="flex items-start gap-3 text-sm">
-                      <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
-                      <div>
-                        {client.address_line1 && <p>{client.address_line1}</p>}
-                        {client.address_line2 && <p>{client.address_line2}</p>}
-                        {(client.postal_code || client.city) && (
-                          <p>
-                            {client.postal_code && `${client.postal_code} `}
-                            {client.city}
-                          </p>
-                        )}
-                        {client.country && <p>{client.country}</p>}
-                      </div>
-                    </div>
-                  </div>
-                </>
-              )}
+                  {/* Vendedor Responsável */}
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base">Vendedor Responsável</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {getTeamMemberName(client.assigned_to) ? (
+                        <div className="flex items-center gap-2 text-sm">
+                          <User className="h-4 w-4 text-muted-foreground" />
+                          <span>{getTeamMemberName(client.assigned_to)}</span>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">Sem responsável atribuído</p>
+                      )}
+                    </CardContent>
+                  </Card>
 
-              {/* Origem */}
-              {client.source && (
-                <>
-                  <Separator />
-                  <div className="space-y-3">
-                    <h3 className="text-sm font-medium">Origem</h3>
-                    <Badge variant="secondary">{sourceLabel}</Badge>
-                  </div>
-                </>
-              )}
+                  {/* Propostas Recentes */}
+                  {proposals.length > 0 && (
+                    <Card>
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-base">Propostas Recentes</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-2">
+                        {proposals.slice(0, 3).map((proposal) => (
+                          <div key={proposal.id} className="flex items-center justify-between p-2 border rounded-lg text-sm">
+                            <div>
+                              <p className="font-medium">#{proposal.id.slice(0, 8)}</p>
+                              <p className="text-xs text-muted-foreground">{formatDate(proposal.created_at || '')}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-semibold text-success">{formatCurrency(proposal.total_value)}</p>
+                              <Badge variant="outline" className="text-xs">{proposal.status}</Badge>
+                            </div>
+                          </div>
+                        ))}
+                      </CardContent>
+                    </Card>
+                  )}
 
-              {/* Vendedor Responsável */}
-              <Separator />
-              <div className="space-y-3">
-                <h3 className="text-sm font-medium">Vendedor Responsável</h3>
-                {getTeamMemberName(client.assigned_to) ? (
-                  <div className="flex items-center gap-2 text-sm">
-                    <User className="h-4 w-4 text-muted-foreground" />
-                    <span>{getTeamMemberName(client.assigned_to)}</span>
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">Sem responsável atribuído</p>
-                )}
-              </div>
-            </TabsContent>
-
-            {/* CPEs Tab - Only for telecom niche */}
-            {isTelecom && (
-              <TabsContent value="cpes" className="p-6 pt-4 mt-0">
-                <CpeList clientId={client.id} />
-              </TabsContent>
-            )}
-
-            {/* Notas Tab */}
-            <TabsContent value="notas" className="p-6 pt-4 mt-0">
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-medium">Notas</h3>
-                  {!isEditingNotes ? (
-                    <Button 
-                      variant="ghost" 
-                      size="sm"
-                      onClick={() => setIsEditingNotes(true)}
-                    >
-                      <Edit className="h-4 w-4 mr-1" />
-                      Editar
-                    </Button>
-                  ) : (
-                    <div className="flex gap-2">
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        onClick={handleCancelNotes}
-                      >
-                        <X className="h-4 w-4 mr-1" />
-                        Cancelar
-                      </Button>
-                      <Button 
-                        variant="default" 
-                        size="sm"
-                        onClick={handleSaveNotes}
-                        disabled={updateClient.isPending}
-                      >
-                        <Save className="h-4 w-4 mr-1" />
-                        Guardar
-                      </Button>
-                    </div>
+                  {/* Vendas Recentes */}
+                  {sales.length > 0 && (
+                    <Card>
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-base">Vendas Recentes</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-2">
+                        {sales.slice(0, 3).map((sale) => (
+                          <div key={sale.id} className="flex items-center justify-between p-2 border rounded-lg text-sm">
+                            <div>
+                              <p className="font-medium">#{sale.id.slice(0, 8)}</p>
+                              <p className="text-xs text-muted-foreground">{formatDate(sale.created_at || '')}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-semibold text-success">{formatCurrency(sale.total_value)}</p>
+                              <Badge variant="outline" className="text-xs">{sale.status}</Badge>
+                            </div>
+                          </div>
+                        ))}
+                      </CardContent>
+                    </Card>
                   )}
                 </div>
-                
-                {isEditingNotes ? (
-                  <Textarea
-                    value={editedNotes}
-                    onChange={(e) => setEditedNotes(e.target.value)}
-                    placeholder="Adicionar notas sobre este cliente..."
-                    className="min-h-[200px]"
-                  />
-                ) : (
-                  <div 
-                    className="text-sm text-muted-foreground whitespace-pre-wrap min-h-[200px] p-3 bg-muted/30 rounded-lg cursor-pointer hover:bg-muted/50 transition-colors"
-                    onClick={() => setIsEditingNotes(true)}
-                  >
-                    {client.notes || "Clique para adicionar notas..."}
-                  </div>
-                )}
               </div>
-            </TabsContent>
-
-            {/* Histórico Tab */}
-            <TabsContent value="historico" className="p-6 pt-4 mt-0 space-y-4">
-              <div className="flex justify-end">
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => handleOpenCommunicationModal('note', 'outbound')}
-                >
-                  <Plus className="h-4 w-4 mr-1" />
-                  Registar Contacto
-                </Button>
-              </div>
-              <ClientTimeline events={timeline} isLoading={loadingHistory} />
-            </TabsContent>
-
-            {/* Propostas Tab */}
-            <TabsContent value="propostas" className="p-6 pt-4 mt-0">
-              {proposals.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <FileText className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                  <p>Sem propostas registadas</p>
-                  {onNewProposal && (
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      className="mt-4"
-                      onClick={() => onNewProposal(client)}
-                    >
-                      <Plus className="h-4 w-4 mr-1" />
-                      Nova Proposta
-                    </Button>
-                  )}
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {proposals.map((proposal) => (
-                    <div
-                      key={proposal.id}
-                      className="p-3 border rounded-lg hover:bg-muted/50 transition-colors"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-medium text-sm">Proposta #{proposal.id.slice(0, 8)}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {formatDate(proposal.created_at || '')}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-semibold text-success">
-                            {formatCurrency(proposal.total_value)}
-                          </p>
-                          <Badge variant="outline" className="text-xs">
-                            {proposal.status}
-                          </Badge>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </TabsContent>
-
-            {/* Vendas Tab */}
-            <TabsContent value="vendas" className="p-6 pt-4 mt-0">
-              {sales.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <ShoppingCart className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                  <p>Sem vendas registadas</p>
-                  {onNewSale && (
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      className="mt-4"
-                      onClick={() => onNewSale(client)}
-                    >
-                      <Plus className="h-4 w-4 mr-1" />
-                      Nova Venda
-                    </Button>
-                  )}
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {sales.map((sale) => (
-                    <div
-                      key={sale.id}
-                      className="p-3 border rounded-lg hover:bg-muted/50 transition-colors"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-medium text-sm">Venda #{sale.id.slice(0, 8)}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {formatDate(sale.created_at || '')}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-semibold text-success">
-                            {formatCurrency(sale.total_value)}
-                          </p>
-                          <Badge variant="outline" className="text-xs">
-                            {sale.status}
-                          </Badge>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </TabsContent>
-          </ScrollArea>
-        </Tabs>
+            </div>
+          </div>
+        </div>
 
         {/* Add Communication Modal */}
         <AddCommunicationModal
@@ -558,7 +515,7 @@ export function ClientDetailsDrawer({
           defaultType={defaultCommType}
           defaultDirection={defaultCommDirection}
         />
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   );
 }
