@@ -1,42 +1,62 @@
 
 
-# Apagar todos os dados de teste do Geovane Felix
+# Corrigir cores do grafico + Adicionar "Atrasados"
 
-## Contexto
+## O que muda
 
-Os dados nao foram apagados anteriormente porque a ferramenta de leitura so permite SELECT. Desta vez, vou usar uma migracao de base de dados para executar os DELETEs.
+### 1. Corrigir cores do grafico (Finance.tsx)
+Substituir as variaveis CSS inexistentes por cores directas:
+- **Recebido**: Verde (`#10b981`)
+- **Agendado**: Azul (`#3b82f6`)
+- **Despesas**: Vermelho (`#ef4444`)
+- **Atrasados** (novo): Laranja (`#f97316`)
 
-## Dados a apagar (por ordem de dependencia)
+### 2. Novo card "Atrasados" (Finance.tsx)
+Card que mostra o total de pagamentos pendentes cuja data ja passou (vencidos). Usa icone `AlertTriangle` em laranja. Clicavel, navega para `/financeiro/pagamentos?status=overdue`.
 
-1. **1 nota de credito** (`credit_notes`)
-2. **2 faturas** (`invoices`)
-3. **5 pagamentos** (`sale_payments`)
-4. **3 itens de venda** (`sale_items`)
-5. **3 vendas** (`sales`) - V-0007, V-0008, V-0009
-6. **1 cliente** (`crm_clients`) - Geovane Felix
+### 3. Nova metrica no hook (useFinanceStats.ts)
+Calcular `totalOverdue` e `overdueCount`: pagamentos com status `pending` e `payment_date < hoje`.
 
-## Implementacao
+### 4. Nova serie no grafico (Finance.tsx)
+Adicionar area "Atrasados" em laranja no grafico de Fluxo de Caixa, mostrando pagamentos vencidos por dia.
 
-Uma unica migracao SQL que apaga tudo na ordem correta:
+### 5. Tipos actualizados (types/finance.ts)
+- Adicionar `overdue` ao `CashflowPoint`
+- Adicionar `totalOverdue`, `overdueCount` ao `FinanceStats`
 
-```sql
--- 1. Notas de credito
-DELETE FROM credit_notes WHERE sale_id IN ('983dafb3-...', '008ade95-...', '99db5551-...');
+## Detalhe tecnico
 
--- 2. Faturas
-DELETE FROM invoices WHERE sale_id IN ('983dafb3-...', '008ade95-...', '99db5551-...');
+### `src/types/finance.ts`
+```typescript
+// CashflowPoint - adicionar campo
+overdue: number;
 
--- 3. Pagamentos
-DELETE FROM sale_payments WHERE sale_id IN ('983dafb3-...', '008ade95-...', '99db5551-...');
-
--- 4. Itens de venda
-DELETE FROM sale_items WHERE sale_id IN ('983dafb3-...', '008ade95-...', '99db5551-...');
-
--- 5. Vendas
-DELETE FROM sales WHERE id IN ('983dafb3-...', '008ade95-...', '99db5551-...');
-
--- 6. Cliente
-DELETE FROM crm_clients WHERE id = '829bae60-3b40-4d64-9df5-88bb28deb9b2';
+// FinanceStats - adicionar campos
+totalOverdue: number;
+overdueCount: number;
 ```
 
-Nenhum ficheiro de codigo e alterado. Apenas uma migracao de base de dados.
+### `src/hooks/useFinanceStats.ts`
+Calcular pagamentos atrasados (pendentes com data anterior a hoje):
+```typescript
+const overduePayments = filteredPayments.filter(p => {
+  if (p.status !== 'pending') return false;
+  const date = parseISO(p.payment_date);
+  return date < startOfDay(now);
+});
+const totalOverdue = overduePayments.reduce((sum, p) => sum + p.amount, 0);
+```
+No loop do cashflow trend, adicionar calculo de `overdue` por dia.
+
+### `src/pages/Finance.tsx`
+- Corrigir todas as cores do grafico (gradientes + areas)
+- Adicionar gradiente laranja `colorOverdue`
+- Adicionar `<Area>` para "Atrasados" em laranja
+- Adicionar card "Atrasados" na grid (alterar grid para 7 colunas ou manter 6 reorganizando)
+- Adicionar `<Legend>` ao grafico para identificar series
+
+### Ficheiros alterados
+- `src/types/finance.ts`
+- `src/hooks/useFinanceStats.ts`
+- `src/pages/Finance.tsx`
+
