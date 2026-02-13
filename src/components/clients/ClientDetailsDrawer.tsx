@@ -144,22 +144,8 @@ export function ClientDetailsDrawer({
                 {client.name.charAt(0).toUpperCase()}
               </div>
               <div>
-                <div className="flex items-center gap-2">
-                  <DialogTitle className="text-lg">{client.name}</DialogTitle>
-                  {client.code && (
-                    <span className="text-xs font-mono text-primary bg-primary/10 px-2 py-0.5 rounded">
-                      #{client.code}
-                    </span>
-                  )}
-                </div>
-                <DialogDescription className="mt-0.5">
-                  <Badge variant="outline" className={cn('text-xs mr-2', statusStyle.bg, statusStyle.text, statusStyle.border)}>
-                    {statusLabel}
-                  </Badge>
-                  <span className="text-xs text-muted-foreground">
-                    {labels.since} {formatDate(client.created_at)}
-                  </span>
-                </DialogDescription>
+                <DialogTitle className="text-lg">{client.name}</DialogTitle>
+                <DialogDescription className="sr-only">Detalhes do cliente {client.name}</DialogDescription>
               </div>
             </div>
             <Button variant="outline" size="sm" onClick={() => onEdit(client)}>
@@ -175,6 +161,30 @@ export function ClientDetailsDrawer({
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
               {/* Left Column */}
               <div className="lg:col-span-3 space-y-4">
+              {/* Card de Contexto */}
+                <Card>
+                  <CardContent className="py-3 px-4 space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      {client.code && (
+                        <span className="font-mono text-primary bg-primary/10 px-2 py-0.5 rounded text-xs font-semibold">
+                          #{client.code}
+                        </span>
+                      )}
+                      <span className="text-xs text-muted-foreground">
+                        {labels.since} {formatDate(client.created_at)}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className={cn('text-xs', statusStyle.bg, statusStyle.text, statusStyle.border)}>
+                        {statusLabel}
+                      </Badge>
+                      {client.source && (
+                        <Badge variant="secondary" className="text-xs">{sourceLabel}</Badge>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+
                 {/* Dados do Cliente */}
                 <Card>
                   <CardHeader className="pb-3">
