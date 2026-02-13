@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { Mail, CheckCircle2, AlertCircle, Eye, MousePointer, Search, ArrowLeft, RefreshCw } from "lucide-react";
 import {
   Dialog, DialogContent, DialogTitle,
@@ -24,6 +24,18 @@ export function CampaignDetailsModal({ campaign, open, onOpenChange }: CampaignD
   const { data: sends = [], isFetching } = useCampaignSends(campaign?.id || null);
   const { mutate: syncSends, isPending: isSyncing } = useSyncCampaignSends();
   const [recipientSearch, setRecipientSearch] = useState("");
+  const hasSyncedRef = useRef<string | null>(null);
+
+  // Auto-sync when modal opens
+  useEffect(() => {
+    if (open && campaign?.id && hasSyncedRef.current !== campaign.id) {
+      hasSyncedRef.current = campaign.id;
+      syncSends(campaign.id);
+    }
+    if (!open) {
+      hasSyncedRef.current = null;
+    }
+  }, [open, campaign?.id, syncSends]);
 
   const opened = sends.filter(s => s.opened_at).length;
   const clicked = sends.filter(s => s.clicked_at).length;
@@ -76,21 +88,11 @@ export function CampaignDetailsModal({ campaign, open, onOpenChange }: CampaignD
                     Enviada a {format(new Date(campaign.sent_at), "dd/MM/yyyy 'às' HH:mm")}
                   </span>
                 )}
-                {isFetching && !isSyncing && (
+                {(isFetching || isSyncing) && (
                   <RefreshCw className="h-3 w-3 text-muted-foreground animate-spin" />
                 )}
               </div>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => campaign && syncSends(campaign.id)}
-              disabled={isSyncing}
-              className="shrink-0"
-            >
-              <RefreshCw className={`h-4 w-4 mr-1.5 ${isSyncing ? 'animate-spin' : ''}`} />
-              {isSyncing ? 'A sincronizar...' : 'Sincronizar'}
-            </Button>
           </div>
         </div>
 
