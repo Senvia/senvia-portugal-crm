@@ -12,8 +12,17 @@ import type { EmailCampaign } from "@/types/marketing";
 export default function Campaigns() {
   const [createOpen, setCreateOpen] = useState(false);
   const [selectedCampaign, setSelectedCampaign] = useState<EmailCampaign | null>(null);
+  const [editingCampaign, setEditingCampaign] = useState<EmailCampaign | null>(null);
   const { data: campaigns = [], isLoading } = useCampaigns();
   const deleteCampaign = useDeleteCampaign();
+
+  const handleCampaignClick = (campaign: EmailCampaign) => {
+    if (campaign.status === 'draft') {
+      setEditingCampaign(campaign);
+    } else {
+      setSelectedCampaign(campaign);
+    }
+  };
 
   return (
     <AppLayout>
@@ -44,12 +53,18 @@ export default function Campaigns() {
         ) : (
           <CampaignsTable
             campaigns={campaigns}
-            onView={setSelectedCampaign}
+            onView={handleCampaignClick}
+            onEdit={setEditingCampaign}
             onDelete={(id) => deleteCampaign.mutate(id)}
           />
         )}
 
         <CreateCampaignModal open={createOpen} onOpenChange={setCreateOpen} />
+        <CreateCampaignModal
+          open={!!editingCampaign}
+          onOpenChange={(open) => !open && setEditingCampaign(null)}
+          campaign={editingCampaign ?? undefined}
+        />
         <CampaignDetailsModal
           campaign={selectedCampaign}
           open={!!selectedCampaign}

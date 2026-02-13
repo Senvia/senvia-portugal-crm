@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Search, Users, User, Send, Loader2, Mail, List, ArrowLeft, Check, Circle, Pencil,
   MessageSquare, Phone, Clock, ChevronDown, ChevronUp, Settings2, Save, AlertCircle,
@@ -23,7 +23,7 @@ import {
 import { Calendar } from "@/components/ui/calendar";
 import { useClients } from "@/hooks/useClients";
 import { useEmailTemplates } from "@/hooks/useEmailTemplates";
-import { useCreateCampaign, useUpdateCampaignStatus } from "@/hooks/useCampaigns";
+import { useCreateCampaign, useUpdateCampaignStatus, useUpdateCampaign } from "@/hooks/useCampaigns";
 import { useSendTemplateEmail } from "@/hooks/useSendTemplateEmail";
 import { useClientLabels } from "@/hooks/useClientLabels";
 import { CLIENT_STATUS_STYLES } from "@/types/clients";
@@ -32,12 +32,14 @@ import { useOrganization } from "@/hooks/useOrganization";
 import { normalizeString } from "@/lib/utils";
 import { TemplateEditor } from "@/components/marketing/TemplateEditor";
 import type { CrmClient } from "@/types/clients";
+import type { EmailCampaign } from "@/types/marketing";
 import { format } from "date-fns";
 import { pt } from "date-fns/locale";
 
 interface CreateCampaignModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  campaign?: EmailCampaign;
 }
 
 type Step = 1 | 2 | 3 | 4;
@@ -84,7 +86,8 @@ const CAMPAIGN_SETTINGS_GROUPS: { title: string; items: SettingItem[] }[] = [
   },
 ];
 
-export function CreateCampaignModal({ open, onOpenChange }: CreateCampaignModalProps) {
+export function CreateCampaignModal({ open, onOpenChange, campaign }: CreateCampaignModalProps) {
+  const isEditMode = !!campaign;
   const [step, setStep] = useState<Step>(1);
   const [name, setName] = useState("");
   const [subject, setSubject] = useState("");
@@ -110,11 +113,26 @@ export function CreateCampaignModal({ open, onOpenChange }: CreateCampaignModalP
   const { data: clients = [], isLoading: loadingClients } = useClients();
   const clientLabels = useClientLabels();
   const createCampaign = useCreateCampaign();
+  const updateCampaign = useUpdateCampaign();
   const updateStatus = useUpdateCampaignStatus();
   const sendTemplate = useSendTemplateEmail();
   const { data: contactLists = [] } = useContactLists();
   const { data: listMembers = [] } = useContactListMembers(selectedListId || null);
   const { data: org } = useOrganization();
+
+  // Sync state when editing a campaign
+  useEffect(() => {
+    if (campaign && open) {
+      setName(campaign.name || "");
+      setSubject(campaign.subject || "");
+      setTemplateId(campaign.template_id || "");
+      setContentMode(campaign.template_id ? "template" : campaign.html_content ? "custom" : "template");
+      setCustomHtml(campaign.html_content || "");
+      setSettings((campaign.settings as Record<string, boolean>) || {});
+      setSettingsData((campaign.settings_data as Record<string, string>) || {});
+      setStep(3);
+    }
+  }, [campaign, open]);
 
   const activeTemplates = useMemo(() => templates.filter(t => t.is_active), [templates]);
   const selectedTemplate = useMemo(() => templates.find(t => t.id === templateId), [templates, templateId]);
@@ -163,14 +181,30 @@ export function CreateCampaignModal({ open, onOpenChange }: CreateCampaignModalP
     setIsSending(true);
 
     try {
-      const campaign = await createCampaign.mutateAsync({
-        name,
-        template_id: contentMode === "template" ? templateId : undefined,
-        subject,
-        html_content: contentMode === "custom" ? customHtml : undefined,
-        settings,
-        settings_data: settingsData,
-      });
+      let campaignId: string;
+
+      if (isEditMode) {
+        await updateCampaign.mutateAsync({
+          id: campaign!.id,
+          name,
+          template_id: contentMode === "template" ? templateId : null,
+          subject,
+          html_content: contentMode === "custom" ? customHtml : null,
+          settings,
+          settings_data: settingsData,
+        });
+        campaignId = campaign!.id;
+      } else {
+        const newCampaign = await createCampaign.mutateAsync({
+          name,
+          template_id: contentMode === "template" ? templateId : undefined,
+          subject,
+          html_content: contentMode === "custom" ? customHtml : undefined,
+          settings,
+          settings_data: settingsData,
+        });
+        campaignId = newCampaign.id;
+      }
 
       if (sendMode === "scheduled" && scheduleDate) {
         const [h, m] = scheduleTime.split(":").map(Number);
@@ -178,7 +212,7 @@ export function CreateCampaignModal({ open, onOpenChange }: CreateCampaignModalP
         scheduledAt.setHours(h, m, 0, 0);
 
         await updateStatus.mutateAsync({
-          id: campaign.id,
+          id: campaignId,
           status: 'scheduled' as any,
           total_recipients: selectedClients.length,
         });
@@ -188,14 +222,14 @@ export function CreateCampaignModal({ open, onOpenChange }: CreateCampaignModalP
         await supabase
           .from("email_campaigns")
           .update({ scheduled_at: scheduledAt.toISOString() } as any)
-          .eq("id", campaign.id);
+          .eq("id", campaignId);
 
         handleClose();
         return;
       }
 
       await updateStatus.mutateAsync({
-        id: campaign.id,
+        id: campaignId,
         status: 'sending',
         total_recipients: selectedClients.length,
       });
@@ -215,13 +249,13 @@ export function CreateCampaignModal({ open, onOpenChange }: CreateCampaignModalP
       const result = await sendTemplate.mutateAsync({
         templateId: contentMode === "template" ? templateId : "",
         recipients,
-        campaignId: campaign.id,
+        campaignId,
         settings,
         settingsData,
       });
 
       await updateStatus.mutateAsync({
-        id: campaign.id,
+        id: campaignId,
         status: result.summary.failed === result.summary.total ? 'failed' : 'sent',
         sent_count: result.summary.sent,
         failed_count: result.summary.failed,
@@ -361,7 +395,7 @@ export function CreateCampaignModal({ open, onOpenChange }: CreateCampaignModalP
             <div className="border-b bg-card">
               <div className="max-w-3xl mx-auto w-full px-4 md:px-6 py-4 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">
-                  <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => setStep(2)}>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => isEditMode ? handleClose() : setStep(2)}>
                     <ArrowLeft className="h-4 w-4" />
                   </Button>
                   <div className="min-w-0">
@@ -682,22 +716,34 @@ export function CreateCampaignModal({ open, onOpenChange }: CreateCampaignModalP
                   <div className="flex gap-2">
                     <Button
                       variant="outline"
-                      disabled={!name.trim() || createCampaign.isPending}
+                      disabled={!name.trim() || createCampaign.isPending || updateCampaign.isPending}
                       onClick={async () => {
                         try {
-                          await createCampaign.mutateAsync({
-                            name,
-                            template_id: contentMode === "template" && templateId ? templateId : undefined,
-                            subject: subject || undefined,
-                            html_content: contentMode === "custom" && customHtml ? customHtml : undefined,
-                            settings,
-                            settings_data: settingsData,
-                          });
+                          if (isEditMode) {
+                            await updateCampaign.mutateAsync({
+                              id: campaign!.id,
+                              name,
+                              template_id: contentMode === "template" && templateId ? templateId : null,
+                              subject: subject || null,
+                              html_content: contentMode === "custom" && customHtml ? customHtml : null,
+                              settings,
+                              settings_data: settingsData,
+                            });
+                          } else {
+                            await createCampaign.mutateAsync({
+                              name,
+                              template_id: contentMode === "template" && templateId ? templateId : undefined,
+                              subject: subject || undefined,
+                              html_content: contentMode === "custom" && customHtml ? customHtml : undefined,
+                              settings,
+                              settings_data: settingsData,
+                            });
+                          }
                           handleClose();
                         } catch {}
                       }}
                     >
-                      {createCampaign.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                      {(createCampaign.isPending || updateCampaign.isPending) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                       Guardar Campanha
                     </Button>
                     {allSectionsComplete && (

@@ -17,6 +17,7 @@ import { normalizeString } from "@/lib/utils";
 interface CampaignsTableProps {
   campaigns: EmailCampaign[];
   onView: (campaign: EmailCampaign) => void;
+  onEdit: (campaign: EmailCampaign) => void;
   onDelete: (id: string) => void;
 }
 
@@ -28,7 +29,7 @@ const STATUS_DOT_COLORS: Record<CampaignStatus, string> = {
   scheduled: 'bg-blue-500',
 };
 
-export function CampaignsTable({ campaigns, onView, onDelete }: CampaignsTableProps) {
+export function CampaignsTable({ campaigns, onView, onEdit, onDelete }: CampaignsTableProps) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
@@ -129,7 +130,7 @@ export function CampaignsTable({ campaigns, onView, onDelete }: CampaignsTablePr
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8"
-                        onClick={() => onView(campaign)}
+                        onClick={() => campaign.status === 'draft' ? onEdit(campaign) : onView(campaign)}
                       >
                         {campaign.status === 'draft' ? (
                           <Pencil className="h-4 w-4" />
@@ -144,6 +145,11 @@ export function CampaignsTable({ campaigns, onView, onDelete }: CampaignsTablePr
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
+                          {campaign.status === 'draft' && (
+                            <DropdownMenuItem onClick={() => onEdit(campaign)}>
+                              <Pencil className="mr-2 h-4 w-4" /> Editar
+                            </DropdownMenuItem>
+                          )}
                           <DropdownMenuItem onClick={() => onView(campaign)}>
                             <BarChart3 className="mr-2 h-4 w-4" /> Ver detalhes
                           </DropdownMenuItem>

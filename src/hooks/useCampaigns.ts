@@ -133,6 +133,40 @@ export function useUpdateCampaignStatus() {
   });
 }
 
+export function useUpdateCampaign() {
+  const { organization } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, ...data }: {
+      id: string;
+      name?: string;
+      subject?: string | null;
+      template_id?: string | null;
+      html_content?: string | null;
+      settings?: Record<string, boolean>;
+      settings_data?: Record<string, string>;
+    }) => {
+      if (!organization?.id) throw new Error('Sem organização');
+
+      const { error } = await supabase
+        .from('email_campaigns')
+        .update(data as any)
+        .eq('id', id)
+        .eq('organization_id', organization.id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['email-campaigns'] });
+      toast.success('Campanha atualizada');
+    },
+    onError: () => {
+      toast.error('Erro ao atualizar campanha');
+    },
+  });
+}
+
 export function useDeleteCampaign() {
   const { organization } = useAuth();
   const queryClient = useQueryClient();
