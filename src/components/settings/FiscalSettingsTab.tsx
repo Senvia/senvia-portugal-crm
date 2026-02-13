@@ -2,7 +2,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
 import { Loader2, Info } from 'lucide-react';
 
 interface FiscalSettingsTabProps {
@@ -10,8 +9,6 @@ interface FiscalSettingsTabProps {
   setTaxRate: (value: string) => void;
   taxExemptionReason: string;
   setTaxExemptionReason: (value: string) => void;
-  invoicingEnabled: boolean;
-  setInvoicingEnabled: (value: boolean) => void;
   onSave: () => void;
   isPending: boolean;
 }
@@ -31,30 +28,10 @@ const EXEMPTION_OPTIONS = [
   { value: 'M16', label: 'M16 - Isento Artigo 14.º do RITI' },
 ];
 
-export function FiscalSettingsTab({ taxRate, setTaxRate, taxExemptionReason, setTaxExemptionReason, invoicingEnabled, setInvoicingEnabled, onSave, isPending }: FiscalSettingsTabProps) {
+export function FiscalSettingsTab({ taxRate, setTaxRate, taxExemptionReason, setTaxExemptionReason, onSave, isPending }: FiscalSettingsTabProps) {
   return (
     <div className="space-y-6">
-      {/* Invoicing Toggle */}
       <Card>
-        <CardHeader>
-          <CardTitle>Faturação</CardTitle>
-          <CardDescription>Ative ou desative a faturação para a sua organização.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label>Faturação ativa</Label>
-              <p className="text-sm text-muted-foreground">
-                Quando desativada, o campo de destino de faturação não aparece nos formulários de clientes.
-              </p>
-            </div>
-            <Switch checked={invoicingEnabled} onCheckedChange={setInvoicingEnabled} />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Tax Config */}
-      <Card className={!invoicingEnabled ? 'opacity-50 pointer-events-none' : ''}>
         <CardHeader>
           <CardTitle>Configuração Fiscal</CardTitle>
           <CardDescription>Defina a taxa de IVA global aplicada a todos os produtos e faturas.</CardDescription>
