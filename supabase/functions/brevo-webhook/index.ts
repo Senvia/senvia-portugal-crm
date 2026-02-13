@@ -36,9 +36,26 @@ serve(async (req: Request): Promise<Response> => {
         updateData.status = "delivered";
         break;
       case "opened":
-      case "unique_opened":
+      case "unique_opened": {
+        // Check for false positive: fetch the record's sent_at
+        const { data: sendRecord } = await supabase
+          .from("email_sends")
+          .select("sent_at")
+          .eq("brevo_message_id", String(messageId))
+          .maybeSingle();
+
+        if (sendRecord?.sent_at) {
+          const diffSeconds = (Date.now() - new Date(sendRecord.sent_at).getTime()) / 1000;
+          if (diffSeconds < 10) {
+            console.log(`Ignoring suspicious open: ${diffSeconds.toFixed(1)}s after send (messageId=${messageId})`);
+            return new Response(JSON.stringify({ ok: true, skipped: "suspicious_open" }), {
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+        }
         updateData.opened_at = new Date().toISOString();
         break;
+      }
       case "click":
         updateData.clicked_at = new Date().toISOString();
         break;
