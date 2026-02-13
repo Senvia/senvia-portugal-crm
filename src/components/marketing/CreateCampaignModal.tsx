@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import {
   Search, Users, User, Send, Loader2, Mail, List, ArrowLeft, Check, Circle, Pencil,
-  MessageSquare, Phone, Clock, ChevronDown, ChevronUp, Settings2,
+  MessageSquare, Phone, Clock, ChevronDown, ChevronUp, Settings2, Save,
 } from "lucide-react";
 import {
   Dialog, DialogContent, DialogTitle,
@@ -629,53 +629,80 @@ export function CreateCampaignModal({ open, onOpenChange }: CreateCampaignModalP
               </div>
             </ScrollArea>
 
-            {/* Footer with Schedule + Send */}
+            {/* Footer with Schedule + Send / Save Draft */}
             <div className="border-t bg-card px-4 md:px-6 py-4">
-              <div className="max-w-3xl mx-auto w-full flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-                <p className="text-sm text-muted-foreground">{selectedClients.length} destinatário(s)</p>
-                <div className="flex gap-2">
-                  <Popover open={showSchedulePicker} onOpenChange={setShowSchedulePicker}>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" disabled={!allSectionsComplete}>
-                        <Clock className="mr-2 h-4 w-4" /> Agendar envio
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-4 space-y-3" align="end">
-                      <p className="text-sm font-semibold">Agendar para:</p>
-                      <Calendar
-                        mode="single"
-                        selected={scheduleDate}
-                        onSelect={setScheduleDate}
-                        locale={pt}
-                        disabled={(date) => date < new Date()}
-                      />
-                      <div className="space-y-1">
-                        <Label className="text-xs">Hora</Label>
-                        <Input
-                          type="time"
-                          value={scheduleTime}
-                          onChange={(e) => setScheduleTime(e.target.value)}
-                        />
-                      </div>
-                      <Button
-                        className="w-full"
-                        disabled={!scheduleDate}
-                        onClick={() => {
-                          setSendMode("scheduled");
-                          setShowSchedulePicker(false);
-                          setStep(4);
-                        }}
-                      >
-                        Confirmar agendamento
-                      </Button>
-                    </PopoverContent>
-                  </Popover>
-                  <Button
-                    onClick={() => { setSendMode("immediate"); setStep(4); }}
-                    disabled={!allSectionsComplete}
-                  >
-                    <Send className="mr-2 h-4 w-4" /> Enviar campanha
-                  </Button>
+              <div className="max-w-3xl mx-auto w-full flex flex-col gap-3">
+                {!allSectionsComplete && (
+                  <p className="text-xs text-warning">
+                    Preencha destinatários, assunto e conteúdo para poder enviar ou agendar a campanha.
+                  </p>
+                )}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                  <p className="text-sm text-muted-foreground">{selectedClients.length} destinatário(s)</p>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      disabled={!name.trim() || createCampaign.isPending}
+                      onClick={async () => {
+                        try {
+                          await createCampaign.mutateAsync({
+                            name,
+                            template_id: contentMode === "template" && templateId ? templateId : undefined,
+                            subject: subject || undefined,
+                            html_content: contentMode === "custom" && customHtml ? customHtml : undefined,
+                            settings,
+                          });
+                          handleClose();
+                        } catch {}
+                      }}
+                    >
+                      {createCampaign.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                      Guardar Campanha
+                    </Button>
+                    {allSectionsComplete && (
+                      <>
+                        <Popover open={showSchedulePicker} onOpenChange={setShowSchedulePicker}>
+                          <PopoverTrigger asChild>
+                            <Button variant="outline">
+                              <Clock className="mr-2 h-4 w-4" /> Agendar envio
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-4 space-y-3" align="end">
+                            <p className="text-sm font-semibold">Agendar para:</p>
+                            <Calendar
+                              mode="single"
+                              selected={scheduleDate}
+                              onSelect={setScheduleDate}
+                              locale={pt}
+                              disabled={(date) => date < new Date()}
+                            />
+                            <div className="space-y-1">
+                              <Label className="text-xs">Hora</Label>
+                              <Input
+                                type="time"
+                                value={scheduleTime}
+                                onChange={(e) => setScheduleTime(e.target.value)}
+                              />
+                            </div>
+                            <Button
+                              className="w-full"
+                              disabled={!scheduleDate}
+                              onClick={() => {
+                                setSendMode("scheduled");
+                                setShowSchedulePicker(false);
+                                setStep(4);
+                              }}
+                            >
+                              Confirmar agendamento
+                            </Button>
+                          </PopoverContent>
+                        </Popover>
+                        <Button onClick={() => { setSendMode("immediate"); setStep(4); }}>
+                          <Send className="mr-2 h-4 w-4" /> Enviar campanha
+                        </Button>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
