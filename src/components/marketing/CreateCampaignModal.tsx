@@ -27,7 +27,8 @@ import { useCreateCampaign, useUpdateCampaignStatus, useUpdateCampaign } from "@
 import { useSendTemplateEmail } from "@/hooks/useSendTemplateEmail";
 import { useClientLabels } from "@/hooks/useClientLabels";
 import { CLIENT_STATUS_STYLES } from "@/types/clients";
-import { useContactLists, useContactListMembers } from "@/hooks/useContactLists";
+import { useContactLists } from "@/hooks/useContactLists";
+import { supabase } from "@/integrations/supabase/client";
 import { useOrganization } from "@/hooks/useOrganization";
 import { normalizeString } from "@/lib/utils";
 import { TemplateEditor } from "@/components/marketing/TemplateEditor";
@@ -98,7 +99,7 @@ export function CreateCampaignModal({ open, onOpenChange, campaign }: CreateCamp
   const [selectedClients, setSelectedClients] = useState<CrmClient[]>([]);
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectionMode, setSelectionMode] = useState<"individual" | "filter" | "list">("individual");
-  const [selectedListId, setSelectedListId] = useState("");
+  const [selectedListIds, setSelectedListIds] = useState<string[]>([]);
   const [isSending, setIsSending] = useState(false);
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
@@ -117,7 +118,7 @@ export function CreateCampaignModal({ open, onOpenChange, campaign }: CreateCamp
   const updateStatus = useUpdateCampaignStatus();
   const sendTemplate = useSendTemplateEmail();
   const { data: contactLists = [] } = useContactLists();
-  const { data: listMembers = [] } = useContactListMembers(selectedListId || null);
+  const [loadingListMembers, setLoadingListMembers] = useState(false);
   const { data: org } = useOrganization();
 
   // Sync state when editing a campaign
@@ -278,7 +279,7 @@ export function CreateCampaignModal({ open, onOpenChange, campaign }: CreateCamp
     setSelectedClients([]);
     setStatusFilter("all");
     setSelectionMode("individual");
-    setSelectedListId("");
+    setSelectedListIds([]);
     setIsSending(false);
     setExpandedSection(null);
     setShowSettings(false);
@@ -515,51 +516,87 @@ export function CreateCampaignModal({ open, onOpenChange, campaign }: CreateCamp
 
                     <TabsContent value="list" className="space-y-4">
                       <div className="space-y-2">
-                        <Label>Selecionar lista</Label>
-                        <Select value={selectedListId} onValueChange={setSelectedListId}>
-                          <SelectTrigger><SelectValue placeholder="Escolher lista..." /></SelectTrigger>
-                          <SelectContent>
-                            {contactLists.map(l => (
-                              <SelectItem key={l.id} value={l.id}>{l.name} ({l.member_count})</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      {selectedListId && listMembers.length > 0 && (
-                        <>
-                          <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                            <p className="text-sm font-medium">{listMembers.length} contacto(s) na lista</p>
-                            <Button variant="outline" size="sm" onClick={() => {
-                              const clientsFromList = listMembers
-                                .filter(m => m.contact?.email)
-                                .map(m => ({
-                                  id: m.contact!.id,
-                                  name: m.contact!.name,
-                                  email: m.contact!.email,
-                                  phone: m.contact!.phone,
-                                  company: m.contact!.company,
-                                  status: 'active',
-                                  organization_id: '',
-                                } as CrmClient));
-                              setSelectedClients(clientsFromList);
-                            }}>
-                              Carregar todos
-                            </Button>
+                        <Label>Selecionar listas</Label>
+                        <ScrollArea className="border rounded-md max-h-[200px]">
+                          <div className="p-2 space-y-1">
+                            {contactLists.length === 0 ? (
+                              <p className="text-sm text-muted-foreground text-center py-4">Nenhuma lista disponível</p>
+                            ) : (
+                              contactLists.map(l => {
+                                const isChecked = selectedListIds.includes(l.id);
+                                return (
+                                  <div
+                                    key={l.id}
+                                    className={`flex items-center gap-3 p-2 rounded-md cursor-pointer hover:bg-muted/50 ${isChecked ? 'bg-primary/10' : ''}`}
+                                    onClick={() => {
+                                      setSelectedListIds(prev =>
+                                        isChecked ? prev.filter(id => id !== l.id) : [...prev, l.id]
+                                      );
+                                    }}
+                                  >
+                                    <Checkbox checked={isChecked} />
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-sm font-medium truncate">{l.name}</p>
+                                    </div>
+                                    <Badge variant="secondary" className="text-xs shrink-0">{l.member_count}</Badge>
+                                  </div>
+                                );
+                              })
+                            )}
                           </div>
-                          <ScrollArea className="border rounded-md max-h-[200px]">
-                            <div className="p-2 space-y-1">
-                              {listMembers.filter(m => m.contact).map(m => (
-                                <div key={m.id} className="flex items-center gap-3 p-2 text-sm">
-                                  <span className="font-medium truncate">{m.contact?.name}</span>
-                                  <span className="text-xs text-muted-foreground truncate">{m.contact?.email}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </ScrollArea>
-                        </>
-                      )}
-                      {selectedListId && listMembers.length === 0 && (
-                        <p className="text-sm text-muted-foreground text-center py-4">Lista vazia</p>
+                        </ScrollArea>
+                      </div>
+
+                      {selectedListIds.length > 0 && (
+                        <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                          <div className="text-sm">
+                            <p className="font-medium">{selectedListIds.length} lista(s) selecionada(s)</p>
+                            {selectedClients.length > 0 && (
+                              <p className="text-xs text-muted-foreground">{selectedClients.length} contacto(s) carregados</p>
+                            )}
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={loadingListMembers}
+                            onClick={async () => {
+                              setLoadingListMembers(true);
+                              try {
+                                const { data: members } = await supabase
+                                  .from('marketing_list_members' as any)
+                                  .select('*, contact:marketing_contacts(id, name, email, phone, company)')
+                                  .in('list_id', selectedListIds);
+
+                                const newClients = ((members as any[]) || [])
+                                  .filter((m: any) => m.contact?.email)
+                                  .map((m: any) => ({
+                                    id: m.contact.id,
+                                    name: m.contact.name,
+                                    email: m.contact.email,
+                                    phone: m.contact.phone,
+                                    company: m.contact.company,
+                                    status: 'active',
+                                    organization_id: '',
+                                  } as CrmClient));
+
+                                // Merge with existing, deduplicate by email
+                                setSelectedClients(prev => {
+                                  const emailMap = new Map<string, CrmClient>();
+                                  [...prev, ...newClients].forEach(c => {
+                                    if (c.email && !emailMap.has(c.email.toLowerCase())) {
+                                      emailMap.set(c.email.toLowerCase(), c);
+                                    }
+                                  });
+                                  return Array.from(emailMap.values());
+                                });
+                              } finally {
+                                setLoadingListMembers(false);
+                              }
+                            }}
+                          >
+                            {loadingListMembers ? <Loader2 className="h-4 w-4 animate-spin" /> : "Carregar contactos"}
+                          </Button>
+                        </div>
                       )}
                     </TabsContent>
                   </Tabs>
