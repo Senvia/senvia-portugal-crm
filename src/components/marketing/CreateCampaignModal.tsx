@@ -1,8 +1,9 @@
 import { useState, useMemo } from "react";
 import {
   Search, Users, User, Send, Loader2, Mail, List, ArrowLeft, Check, Circle, Pencil,
-  MessageSquare, Phone, Clock, ChevronDown, ChevronUp, Settings2, Save,
+  MessageSquare, Phone, Clock, ChevronDown, ChevronUp, Settings2, Save, AlertCircle,
 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog, DialogContent, DialogTitle,
 } from "@/components/ui/dialog";
@@ -42,7 +43,15 @@ interface CreateCampaignModalProps {
 type Step = 1 | 2 | 3 | 4;
 type ContentMode = "template" | "custom";
 
-const CAMPAIGN_SETTINGS_GROUPS = [
+interface SettingItem {
+  key: string;
+  label: string;
+  inputType?: 'text' | 'email' | 'textarea';
+  placeholder?: string;
+  soon?: boolean;
+}
+
+const CAMPAIGN_SETTINGS_GROUPS: { title: string; items: SettingItem[] }[] = [
   {
     title: "Personalização",
     items: [
@@ -52,26 +61,25 @@ const CAMPAIGN_SETTINGS_GROUPS = [
   {
     title: "Envio e rastreamento",
     items: [
-      { key: "different_reply_to", label: "Usar um endereço de resposta diferente" },
-      { key: "ga_tracking", label: "Ativar rastreio do Google Analytics" },
-      { key: "attachment", label: "Adicionar anexo" },
-      { key: "tag", label: "Atribuir tag" },
-      { key: "expiration_date", label: "Configurar data de expiração" },
+      { key: "different_reply_to", label: "Usar um endereço de resposta diferente", inputType: "email", placeholder: "reply@empresa.com" },
+      { key: "ga_tracking", label: "Ativar rastreio do Google Analytics", inputType: "text", placeholder: "Nome da campanha UTM" },
+      { key: "tag", label: "Atribuir tag", inputType: "text", placeholder: "Nome da tag" },
+      { key: "expiration_date", label: "Configurar data de expiração", soon: true },
     ],
   },
   {
     title: "Assinatura",
     items: [
-      { key: "custom_unsubscribe", label: "Utilizar página de cancelamento personalizada" },
-      { key: "profile_update_form", label: "Usar formulário de atualização de perfil" },
+      { key: "custom_unsubscribe", label: "Utilizar página de cancelamento personalizada", inputType: "text", placeholder: "https://exemplo.com/cancelar" },
+      { key: "profile_update_form", label: "Usar formulário de atualização de perfil", soon: true },
     ],
   },
   {
     title: "Criação",
     items: [
-      { key: "custom_header", label: "Editar cabeçalho padrão" },
-      { key: "custom_footer", label: "Editar rodapé padrão" },
-      { key: "view_in_browser", label: "Habilitar link \"Ver no navegador\"" },
+      { key: "custom_header", label: "Editar cabeçalho padrão", inputType: "textarea", placeholder: "<div>Cabeçalho HTML...</div>" },
+      { key: "custom_footer", label: "Editar rodapé padrão", inputType: "textarea", placeholder: "<div>Rodapé HTML...</div>" },
+      { key: "view_in_browser", label: "Habilitar link \"Ver no navegador\"", soon: true },
     ],
   },
 ];
@@ -92,6 +100,7 @@ export function CreateCampaignModal({ open, onOpenChange }: CreateCampaignModalP
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [settings, setSettings] = useState<Record<string, boolean>>({});
+  const [settingsData, setSettingsData] = useState<Record<string, string>>({});
   const [scheduleDate, setScheduleDate] = useState<Date | undefined>();
   const [scheduleTime, setScheduleTime] = useState("09:00");
   const [showSchedulePicker, setShowSchedulePicker] = useState(false);
@@ -160,6 +169,7 @@ export function CreateCampaignModal({ open, onOpenChange }: CreateCampaignModalP
         subject,
         html_content: contentMode === "custom" ? customHtml : undefined,
         settings,
+        settings_data: settingsData,
       });
 
       if (sendMode === "scheduled" && scheduleDate) {
@@ -206,6 +216,8 @@ export function CreateCampaignModal({ open, onOpenChange }: CreateCampaignModalP
         templateId: contentMode === "template" ? templateId : "",
         recipients,
         campaignId: campaign.id,
+        settings,
+        settingsData,
       });
 
       await updateStatus.mutateAsync({
@@ -237,6 +249,7 @@ export function CreateCampaignModal({ open, onOpenChange }: CreateCampaignModalP
     setExpandedSection(null);
     setShowSettings(false);
     setSettings({});
+    setSettingsData({});
     setScheduleDate(undefined);
     setScheduleTime("09:00");
     setShowSchedulePicker(false);
@@ -608,13 +621,40 @@ export function CreateCampaignModal({ open, onOpenChange }: CreateCampaignModalP
                             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{group.title}</p>
                             <div className="space-y-2">
                               {group.items.map((item) => (
-                                <label key={item.key} className="flex items-center gap-3 cursor-pointer">
-                                  <Checkbox
-                                    checked={!!settings[item.key]}
-                                    onCheckedChange={(checked) => setSettings(prev => ({ ...prev, [item.key]: !!checked }))}
-                                  />
-                                  <span className="text-sm">{item.label}</span>
-                                </label>
+                                <div key={item.key} className="space-y-2">
+                                  <label className={`flex items-center gap-3 ${item.soon ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
+                                    <Checkbox
+                                      checked={!!settings[item.key]}
+                                      disabled={item.soon}
+                                      onCheckedChange={(checked) => {
+                                        setSettings(prev => ({ ...prev, [item.key]: !!checked }));
+                                        if (!checked) setSettingsData(prev => { const n = { ...prev }; delete n[item.key]; return n; });
+                                      }}
+                                    />
+                                    <span className="text-sm">{item.label}</span>
+                                    {item.soon && <Badge variant="secondary" className="text-[10px] ml-1">Em breve</Badge>}
+                                  </label>
+                                  {settings[item.key] && item.inputType && !item.soon && (
+                                    <div className="ml-9">
+                                      {item.inputType === 'textarea' ? (
+                                        <Textarea
+                                          placeholder={item.placeholder}
+                                          value={settingsData[item.key] || ''}
+                                          onChange={(e) => setSettingsData(prev => ({ ...prev, [item.key]: e.target.value }))}
+                                          className="text-xs min-h-[60px]"
+                                        />
+                                      ) : (
+                                        <Input
+                                          type={item.inputType}
+                                          placeholder={item.placeholder}
+                                          value={settingsData[item.key] || ''}
+                                          onChange={(e) => setSettingsData(prev => ({ ...prev, [item.key]: e.target.value }))}
+                                          className="text-xs h-9"
+                                        />
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
                               ))}
                             </div>
                           </div>
@@ -651,6 +691,7 @@ export function CreateCampaignModal({ open, onOpenChange }: CreateCampaignModalP
                             subject: subject || undefined,
                             html_content: contentMode === "custom" && customHtml ? customHtml : undefined,
                             settings,
+                            settings_data: settingsData,
                           });
                           handleClose();
                         } catch {}

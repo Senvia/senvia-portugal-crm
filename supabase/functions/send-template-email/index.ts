@@ -18,9 +18,10 @@ interface SendTemplateRequest {
   templateId: string;
   recipients: Recipient[];
   campaignId?: string;
+  settings?: Record<string, boolean>;
+  settingsData?: Record<string, string>;
 }
 
-// Replace variables in content
 function replaceVariables(content: string, variables: Record<string, string>): string {
   let result = content;
   for (const [key, value] of Object.entries(variables)) {
@@ -30,7 +31,6 @@ function replaceVariables(content: string, variables: Record<string, string>): s
   return result;
 }
 
-// Format current date in Portuguese
 function formatDate(): string {
   return new Date().toLocaleDateString('pt-PT', {
     day: '2-digit',
@@ -39,8 +39,59 @@ function formatDate(): string {
   });
 }
 
+// Add UTM parameters to all links in HTML
+function addUtmTracking(html: string, campaignName: string): string {
+  return html.replace(
+    /href="(https?:\/\/[^"]+)"/gi,
+    (_match, url) => {
+      try {
+        const u = new URL(url);
+        u.searchParams.set('utm_source', 'brevo');
+        u.searchParams.set('utm_medium', 'email');
+        u.searchParams.set('utm_campaign', campaignName);
+        return `href="${u.toString()}"`;
+      } catch {
+        return _match;
+      }
+    }
+  );
+}
+
+// Apply campaign settings to HTML content
+function applyHtmlSettings(
+  html: string,
+  settings: Record<string, boolean>,
+  settingsData: Record<string, string>
+): string {
+  let result = html;
+
+  // Custom header
+  if (settings.custom_header && settingsData.custom_header) {
+    result = settingsData.custom_header + result;
+  }
+
+  // Custom footer
+  if (settings.custom_footer && settingsData.custom_footer) {
+    result = result + settingsData.custom_footer;
+  }
+
+  // Custom unsubscribe URL
+  if (settings.custom_unsubscribe && settingsData.custom_unsubscribe) {
+    result = result.replace(
+      /\{\{\s*unsubscribe\s*\}\}/gi,
+      settingsData.custom_unsubscribe
+    );
+  }
+
+  // GA tracking
+  if (settings.ga_tracking && settingsData.ga_tracking) {
+    result = addUtmTracking(result, settingsData.ga_tracking);
+  }
+
+  return result;
+}
+
 serve(async (req: Request): Promise<Response> => {
-  // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -50,7 +101,10 @@ serve(async (req: Request): Promise<Response> => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { organizationId, templateId, recipients, campaignId }: SendTemplateRequest = await req.json();
+    const {
+      organizationId, templateId, recipients, campaignId,
+      settings = {}, settingsData = {}
+    }: SendTemplateRequest = await req.json();
 
     if (!organizationId || !templateId || !recipients || recipients.length === 0) {
       return new Response(
@@ -83,7 +137,6 @@ serve(async (req: Request): Promise<Response> => {
       .single();
 
     if (orgError || !org) {
-      console.error("Organization not found:", orgError);
       return new Response(
         JSON.stringify({ error: "Organization not found" }),
         { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -97,7 +150,7 @@ serve(async (req: Request): Promise<Response> => {
       );
     }
 
-    // Get user ID from auth header for logging
+    // Get user ID from auth header
     const authHeader = req.headers.get("authorization");
     let userId: string | null = null;
     if (authHeader) {
@@ -108,10 +161,8 @@ serve(async (req: Request): Promise<Response> => {
 
     const results: { email: string; status: string; error?: string }[] = [];
 
-    // Send to each recipient
     for (const recipient of recipients) {
       try {
-        // Build variables for this recipient
         const variables: Record<string, string> = {
           nome: recipient.name || '',
           email: recipient.email || '',
@@ -120,11 +171,34 @@ serve(async (req: Request): Promise<Response> => {
           ...recipient.variables,
         };
 
-        // Replace variables in subject and content
         const subject = replaceVariables(template.subject, variables);
-        const htmlContent = replaceVariables(template.html_content, variables);
+        let htmlContent = replaceVariables(template.html_content, variables);
 
-        // Send via Brevo
+        // Apply campaign settings to HTML
+        htmlContent = applyHtmlSettings(htmlContent, settings, settingsData);
+
+        // Build Brevo payload
+        const toName = settings.customize_to && recipient.variables?.empresa
+          ? `${recipient.name} - ${recipient.variables.empresa}`
+          : (recipient.name || recipient.email);
+
+        const brevoPayload: Record<string, unknown> = {
+          sender: { name: org.name, email: org.brevo_sender_email },
+          to: [{ email: recipient.email, name: toName }],
+          subject,
+          htmlContent,
+        };
+
+        // Reply-to
+        if (settings.different_reply_to && settingsData.different_reply_to) {
+          brevoPayload.replyTo = { email: settingsData.different_reply_to };
+        }
+
+        // Tags
+        if (settings.tag && settingsData.tag) {
+          brevoPayload.tags = [settingsData.tag];
+        }
+
         const brevoResponse = await fetch("https://api.brevo.com/v3/smtp/email", {
           method: "POST",
           headers: {
@@ -132,26 +206,12 @@ serve(async (req: Request): Promise<Response> => {
             "api-key": org.brevo_api_key,
             "content-type": "application/json",
           },
-          body: JSON.stringify({
-            sender: {
-              name: org.name,
-              email: org.brevo_sender_email,
-            },
-            to: [
-              {
-                email: recipient.email,
-                name: recipient.name || recipient.email,
-              },
-            ],
-            subject: subject,
-            htmlContent: htmlContent,
-          }),
+          body: JSON.stringify(brevoPayload),
         });
 
         const status = brevoResponse.ok ? "sent" : "failed";
         const errorMessage = brevoResponse.ok ? null : await brevoResponse.text();
 
-        // Extract Brevo messageId
         let brevoMessageId: string | null = null;
         if (brevoResponse.ok) {
           try {
@@ -160,7 +220,6 @@ serve(async (req: Request): Promise<Response> => {
           } catch { /* ignore */ }
         }
 
-        // Log the send
         await supabase.from("email_sends").insert({
           organization_id: organizationId,
           template_id: templateId,
@@ -168,26 +227,20 @@ serve(async (req: Request): Promise<Response> => {
           client_id: recipient.clientId || null,
           recipient_email: recipient.email,
           recipient_name: recipient.name,
-          subject: subject,
-          status: status,
+          subject,
+          status,
           error_message: errorMessage,
           sent_at: status === "sent" ? new Date().toISOString() : null,
           sent_by: userId,
           brevo_message_id: brevoMessageId,
         });
 
-        results.push({
-          email: recipient.email,
-          status,
-          error: errorMessage || undefined,
-        });
-
+        results.push({ email: recipient.email, status, error: errorMessage || undefined });
         console.log(`Email to ${recipient.email}: ${status}`);
       } catch (recipientError) {
         const errorMsg = recipientError instanceof Error ? recipientError.message : "Unknown error";
         console.error(`Failed to send to ${recipient.email}:`, errorMsg);
-        
-        // Log failed send
+
         await supabase.from("email_sends").insert({
           organization_id: organizationId,
           template_id: templateId,
@@ -201,11 +254,7 @@ serve(async (req: Request): Promise<Response> => {
           sent_by: userId,
         });
 
-        results.push({
-          email: recipient.email,
-          status: "failed",
-          error: errorMsg,
-        });
+        results.push({ email: recipient.email, status: "failed", error: errorMsg });
       }
     }
 
@@ -215,17 +264,10 @@ serve(async (req: Request): Promise<Response> => {
     return new Response(
       JSON.stringify({
         success: true,
-        summary: {
-          total: recipients.length,
-          sent: successful,
-          failed: failed,
-        },
+        summary: { total: recipients.length, sent: successful, failed },
         results,
       }),
-      {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
     console.error("Error in send-template-email:", error);
