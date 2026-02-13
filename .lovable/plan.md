@@ -1,46 +1,37 @@
 
-# Editar Campanha em Rascunho
+
+# Suporte a Multiplas Listas na Campanha
 
 ## Problema
 
-Ao clicar em "Editar" numa campanha com status `draft`, abre-se o modal de detalhes (apenas leitura) em vez de um modal de edicao com os dados pre-preenchidos.
+O selector de listas de transmissao na campanha usa um dropdown simples (`Select`) que so permite uma lista. Ao clicar "Carregar todos", os contactos anteriores sao substituidos em vez de acumulados.
 
 ## Solucao
 
-Transformar o `CreateCampaignModal` num modal reutilizavel para criar E editar campanhas. Quando uma campanha draft e passada como prop, o modal abre directamente no Step 3 com todos os campos pre-preenchidos.
+Permitir seleccionar varias listas e acumular os contactos de todas elas, evitando duplicados por email.
 
 ## Alteracoes
 
-### 1. `src/hooks/useCampaigns.ts` -- Novo hook `useUpdateCampaign`
+### `src/components/marketing/CreateCampaignModal.tsx`
 
-Criar um mutation hook para actualizar os campos de uma campanha existente (name, subject, template_id, html_content, settings, settings_data).
+1. **Substituir `selectedListId` (string) por `selectedListIds` (string[])**
+   - Usar checkboxes em vez de dropdown para permitir multipla seleccao de listas
 
-### 2. `src/components/marketing/CreateCampaignModal.tsx`
+2. **Botao "Carregar todos" passa a acumular**
+   - Em vez de `setSelectedClients(clientsFromList)`, usar logica de merge:
+   - Junta os contactos da lista seleccionada aos ja existentes
+   - Remove duplicados baseando-se no email (contactos com o mesmo email nao sao adicionados duas vezes)
 
-- Adicionar prop opcional `campaign?: EmailCampaign` para modo de edicao
-- Quando `campaign` e fornecida:
-  - Pre-preencher todos os estados (name, subject, templateId, settings, settingsData, contentMode, customHtml)
-  - Iniciar directamente no Step 3 (configuracao)
-  - O titulo muda de "Criar uma campanha" para "Editar campanha"
-  - O botao "Guardar Campanha" chama `useUpdateCampaign` em vez de `useCreateCampaign`
-  - O botao "Enviar campanha" actualiza a campanha existente e envia (em vez de criar uma nova)
-- Usar `useEffect` para sincronizar os estados quando a prop `campaign` muda
+3. **UI actualizada**
+   - Lista de listas com checkboxes (em vez de Select dropdown)
+   - Cada lista seleccionada mostra a contagem de membros
+   - Botao "Carregar contactos" que carrega todas as listas seleccionadas de uma vez
+   - Indicador visual de quantos contactos ja foram carregados e de que listas
 
-### 3. `src/pages/marketing/Campaigns.tsx`
-
-- Separar a logica de `onView` em dois fluxos:
-  - Se a campanha e `draft`: abrir o `CreateCampaignModal` com a campanha para edicao
-  - Se a campanha nao e `draft`: abrir o `CampaignDetailsModal` (comportamento actual)
-- Adicionar estado `editingCampaign` para controlar o modal de edicao
-
-### 4. `src/components/marketing/CampaignsTable.tsx`
-
-- Adicionar callback `onEdit` nas props
-- Separar o comportamento do botao de lapis (Pencil) para chamar `onEdit` em vez de `onView` quando a campanha e draft
-- No dropdown menu, adicionar opcao "Editar" para campanhas draft
+4. **Query de membros**
+   - Buscar membros de todas as listas seleccionadas (nao apenas uma)
+   - O hook `useListMembers` recebe um array de IDs em vez de um unico ID
 
 ## Resultado
 
-- Clicar no lapis de uma campanha draft abre o modal de edicao com os dados pre-preenchidos
-- Clicar numa campanha enviada/a enviar abre os detalhes (como antes)
-- O utilizador pode continuar a preencher os dados e enviar ou guardar novamente como rascunho
+O utilizador pode seleccionar 2 ou mais listas de transmissao, carregar os contactos de todas, e o sistema junta-os automaticamente sem duplicados.
