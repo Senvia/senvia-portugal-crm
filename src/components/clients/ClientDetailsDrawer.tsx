@@ -31,6 +31,8 @@ import {
 } from "lucide-react";
 import { formatDate, formatCurrency, getWhatsAppUrl } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { PROPOSAL_STATUS_LABELS, PROPOSAL_STATUS_COLORS, type ProposalStatus } from "@/types/proposals";
+import { SALE_STATUS_LABELS, SALE_STATUS_COLORS, type SaleStatus } from "@/types/sales";
 import { useClientLabels } from "@/hooks/useClientLabels";
 import { useClientHistory } from "@/hooks/useClientHistory";
 import { useUpdateClient } from "@/hooks/useClients";
@@ -438,12 +440,14 @@ export function ClientDetailsDrawer({
                         {proposals.slice(0, 3).map((proposal) => (
                           <div key={proposal.id} className="flex items-center justify-between p-2 border rounded-lg text-sm">
                             <div>
-                              <p className="font-medium">#{proposal.id.slice(0, 8)}</p>
+                              <p className="font-medium">{proposal.code || `#${proposal.id.slice(0, 8)}`}</p>
                               <p className="text-xs text-muted-foreground">{formatDate(proposal.created_at || '')}</p>
                             </div>
                             <div className="text-right">
                               <p className="font-semibold text-success">{formatCurrency(proposal.total_value)}</p>
-                              <Badge variant="outline" className="text-xs">{proposal.status}</Badge>
+                              <Badge variant="outline" className={cn('text-xs', PROPOSAL_STATUS_COLORS[proposal.status as ProposalStatus])}>
+                                {PROPOSAL_STATUS_LABELS[proposal.status as ProposalStatus] || proposal.status}
+                              </Badge>
                             </div>
                           </div>
                         ))}
@@ -461,12 +465,14 @@ export function ClientDetailsDrawer({
                         {sales.slice(0, 3).map((sale) => (
                           <div key={sale.id} className="flex items-center justify-between p-2 border rounded-lg text-sm">
                             <div>
-                              <p className="font-medium">#{sale.id.slice(0, 8)}</p>
+                              <p className="font-medium">{sale.code || `#${sale.id.slice(0, 8)}`}</p>
                               <p className="text-xs text-muted-foreground">{formatDate(sale.created_at || '')}</p>
                             </div>
                             <div className="text-right">
                               <p className="font-semibold text-success">{formatCurrency(sale.total_value)}</p>
-                              <Badge variant="outline" className="text-xs">{sale.status}</Badge>
+                              <Badge variant="outline" className={cn('text-xs', SALE_STATUS_COLORS[sale.status as SaleStatus])}>
+                                {SALE_STATUS_LABELS[sale.status as SaleStatus] || sale.status}
+                              </Badge>
                             </div>
                           </div>
                         ))}
