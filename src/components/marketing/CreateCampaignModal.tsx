@@ -238,7 +238,7 @@ export function CreateCampaignModal({ open, onOpenChange, campaign }: CreateCamp
       const recipients = selectedClients.map(client => ({
         email: client.email!,
         name: client.name,
-        clientId: client.id,
+        clientId: client.id.startsWith('marketing_') ? undefined : client.id,
         variables: {
           nome: client.name,
           email: client.email || '',
@@ -572,7 +572,7 @@ export function CreateCampaignModal({ open, onOpenChange, campaign }: CreateCamp
                                 const newClients = ((members as any[]) || [])
                                   .filter((m: any) => m.contact?.email)
                                   .map((m: any) => ({
-                                    id: m.contact.id,
+                                    id: `marketing_${m.contact.id}`,
                                     name: m.contact.name,
                                     email: m.contact.email,
                                     phone: m.contact.phone,

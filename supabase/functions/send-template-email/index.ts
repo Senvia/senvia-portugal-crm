@@ -238,7 +238,7 @@ serve(async (req: Request): Promise<Response> => {
           } catch { /* ignore */ }
         }
 
-        await supabase.from("email_sends").insert({
+        const emailSendRecord = {
           organization_id: organizationId,
           template_id: templateId || null,
           campaign_id: campaignId || null,
@@ -251,7 +251,15 @@ serve(async (req: Request): Promise<Response> => {
           sent_at: status === "sent" ? new Date().toISOString() : null,
           sent_by: userId,
           brevo_message_id: brevoMessageId,
-        });
+        };
+
+        const { error: insertError } = await supabase.from("email_sends").insert(emailSendRecord);
+        
+        // Fallback: if insert fails (e.g. FK constraint on client_id), retry without client_id
+        if (insertError) {
+          console.warn(`Insert failed for ${recipient.email}, retrying without client_id:`, insertError.message);
+          await supabase.from("email_sends").insert({ ...emailSendRecord, client_id: null });
+        }
 
         results.push({ email: recipient.email, status, error: errorMessage || undefined });
         console.log(`Email to ${recipient.email}: ${status}`);
@@ -259,7 +267,7 @@ serve(async (req: Request): Promise<Response> => {
         const errorMsg = recipientError instanceof Error ? recipientError.message : "Unknown error";
         console.error(`Failed to send to ${recipient.email}:`, errorMsg);
 
-        await supabase.from("email_sends").insert({
+        const failRecord = {
           organization_id: organizationId,
           template_id: templateId || null,
           campaign_id: campaignId || null,
@@ -270,7 +278,13 @@ serve(async (req: Request): Promise<Response> => {
           status: "failed",
           error_message: errorMsg,
           sent_by: userId,
-        });
+        };
+
+        const { error: failInsertError } = await supabase.from("email_sends").insert(failRecord);
+        if (failInsertError) {
+          console.warn(`Fail record insert failed for ${recipient.email}, retrying without client_id`);
+          await supabase.from("email_sends").insert({ ...failRecord, client_id: null });
+        }
 
         results.push({ email: recipient.email, status: "failed", error: errorMsg });
       }
