@@ -1,48 +1,26 @@
 
 
-# Reestruturar o ClientDetailsDrawer
+# Corrigir "Propostas Recentes" e "Vendas Recentes" no ClientDetailsDrawer
 
-## Resumo
-Reorganizar completamente a coluna esquerda do modal de detalhes do cliente conforme pedido, e adicionar um botao "Voltar" no final da coluna direita.
+## Problema
+Os cards de Propostas e Vendas Recentes mostram dados em bruto:
+- **ID truncado** (`#1e229838`) em vez do codigo legivel da proposta/venda
+- **Status em ingles** (`accepted`) em vez de portugues (`Aceite`)
 
 ## Alteracoes em `src/components/clients/ClientDetailsDrawer.tsx`
 
-### 1. Header
-- Alterar o titulo de "{client.name}" para **"Detalhes do Cliente #{client.code}"**
-- Usar icone `FileText` em vez de `User`
+### 1. Importar labels e cores de status
+Adicionar imports de `PROPOSAL_STATUS_LABELS`, `PROPOSAL_STATUS_COLORS` de `@/types/proposals` e `SALE_STATUS_LABELS`, `SALE_STATUS_COLORS` de `@/types/sales`.
 
-### 2. Coluna Esquerda - Nova estrutura de cards
+### 2. Propostas Recentes (linhas 438-448)
+- Trocar `#{proposal.id.slice(0, 8)}` por `{proposal.code || `#${proposal.id.slice(0, 8)}`}` para mostrar o codigo quando disponivel
+- Trocar `{proposal.status}` por `{PROPOSAL_STATUS_LABELS[proposal.status] || proposal.status}`
+- Aplicar cores ao Badge: `className={cn('text-xs', PROPOSAL_STATUS_COLORS[proposal.status])}`
 
-**Card 1: "Dados do Cliente"** (substitui o card de contexto + card dados + card contacto)
-- Codigo: `#{client.code}`
-- Nome: `{client.name}`
-- NIF: `{client.nif}` (NIF pessoal do cliente)
-- Email: com link mailto
-- Telefone: com link WhatsApp
-- Tipologia/Estado: badge com estilo
-- Origem: badge secundario
-
-**Card 2: "Empresa"** (mantém, sempre visivel)
-- Nome da empresa: `{client.company}`
-- NIF da empresa: `{client.nif}`
-- Morada completa (integrada neste card em vez de card separado)
-
-**Card 3: CPE/CUI** (telecom only, sem alteracao)
-
-**Card 4: Notas** (sem alteracao)
-
-**Card 5: Historico** (sem alteracao)
-
-### 3. Coluna Direita - Adicionar botao "Voltar"
-- Metricas (sem alteracao)
-- Acoes Rapidas (sem alteracao)
-- Vendedor Responsavel (sem alteracao)
-- Propostas Recentes (sem alteracao)
-- Vendas Recentes (sem alteracao)
-- **Novo: Botao "Voltar"** no final, que fecha o modal (`onOpenChange(false)`)
-
-### Nota sobre NIF
-O modelo `CrmClient` tem apenas um campo `nif`. Sera exibido tanto no card "Dados do Cliente" como no card "Empresa" (quando houver empresa). Se nao existir empresa, o NIF aparece apenas nos dados do cliente.
+### 3. Vendas Recentes (linhas 461-470)
+- Trocar `#{sale.id.slice(0, 8)}` por `{sale.code || `#${sale.id.slice(0, 8)}`}`
+- Trocar `{sale.status}` por `{SALE_STATUS_LABELS[sale.status] || sale.status}`
+- Aplicar cores ao Badge: `className={cn('text-xs', SALE_STATUS_COLORS[sale.status])}`
 
 ## Ficheiro alterado
 - `src/components/clients/ClientDetailsDrawer.tsx`
