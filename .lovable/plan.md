@@ -1,33 +1,22 @@
 
 
-# Adicionar "Contribuinte" como Campo Configuravel nas Definicoes
+# Corrigir Alinhamento do Campo Telefone
 
 ## Problema
-O campo "Contribuinte (Empresa)" (`company_nif`) nao esta no sistema de campos configuraveis. Apenas existe o campo `nif` (NIF Cliente). A Perfect2Gether precisa que o Contribuinte da empresa seja obrigatorio, mas o NIF pessoal nao.
+O componente `PhoneInput` tem o botao do seletor de pais com altura `h-10`, enquanto o componente `Input` customizado usa `h-12`. Isto causa desalinhamento visual entre o campo de email e o campo de telefone.
 
-## Alteracoes
+## Solucao
+Alterar a altura do botao do seletor de pais no `PhoneInput` de `h-10` para `h-12`, para ficar consistente com todos os outros inputs do sistema.
 
-### 1. `src/types/clients.ts`
-- Adicionar `'company_nif'` ao tipo `ClientFieldKey`
-- Adicionar `company_nif: ClientFieldConfig` ao `ClientFieldsSettings`
-- Adicionar entrada em `CLIENT_FIELD_DEFAULTS` e `DEFAULT_CLIENT_FIELDS_SETTINGS`
+## Ficheiro alterado
+- `src/components/ui/phone-input.tsx` - Alterar `h-10` para `h-12` no Button do seletor de pais (linha 119)
 
-### 2. `src/components/settings/ClientFieldsEditor.tsx`
-- Adicionar icone para `company_nif` em `FIELD_ICONS`
-- Adicionar `'company_nif'` ao `FIELD_ORDER` (depois de `company`)
+## Detalhe tecnico
+```
+// Antes
+className="rounded-r-none border-r-0 px-2 h-10 min-w-fit ..."
 
-### 3. `src/components/clients/CreateClientModal.tsx`
-- O campo "Contribuinte (Empresa)" passa a respeitar `settings.company_nif.visible` e `settings.company_nif.required`
-- Adicionar validacao de `companyNif` no `isValid` quando `settings.company_nif.required`
+// Depois
+className="rounded-r-none border-r-0 px-2 h-12 min-w-fit ..."
+```
 
-### 4. `src/components/clients/EditClientModal.tsx`
-- Mesmas alteracoes que o CreateClientModal
-
-### 5. Atualizar settings da Perfect2Gether
-- Depois de implementar, o administrador podera ir a Definicoes > Campos e configurar: NIF (Cliente) = nao obrigatorio, Contribuinte (Empresa) = obrigatorio
-
-## Ficheiros alterados
-- `src/types/clients.ts`
-- `src/components/settings/ClientFieldsEditor.tsx`
-- `src/components/clients/CreateClientModal.tsx`
-- `src/components/clients/EditClientModal.tsx`
