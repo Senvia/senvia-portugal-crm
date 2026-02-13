@@ -1,65 +1,55 @@
 
-
-# Sincronizacao Automatica: Clientes e Leads nas Listas de Marketing
+# Guardar Campanha como Rascunho
 
 ## Objectivo
 
-- Todo cliente criado/existente em `crm_clients` entra automaticamente na lista **"Clientes"**
-- Todo lead com status diferente de "won" (nao convertido) entra automaticamente na lista **"Leads Nao Convertidas"**
-- Quando um lead e convertido a cliente, sai da lista "Leads Nao Convertidas" e entra na lista "Clientes"
-
-## Como funciona
-
-Triggers no banco de dados que reagem a insercoes/actualizacoes e fazem o sync automatico.
-
-```text
-crm_clients (INSERT) ──> cria marketing_contact ──> adiciona a lista "Clientes"
-
-leads (INSERT/UPDATE)
-  ├── status != 'won' ──> cria marketing_contact ──> adiciona a lista "Leads Nao Convertidas"
-  └── status = 'won'  ──> remove da lista "Leads Nao Convertidas"
-```
+Permitir guardar uma campanha mesmo sem todos os dados preenchidos. O botao muda dinamicamente:
+- **Dados incompletos**: "Guardar Campanha" (guarda como rascunho) + aviso de que so pode enviar/agendar com tudo preenchido
+- **Dados completos**: "Enviar Campanha" + "Agendar envio" (comportamento actual)
 
 ## Alteracoes
 
-### 1. Migracao SQL
+### Ficheiro: `src/components/marketing/CreateCampaignModal.tsx`
 
-**Funcao `sync_client_to_marketing()`:**
-- Dispara em INSERT na tabela `crm_clients`
-- Cria (ou encontra) um `marketing_contact` com os dados do cliente
-- Procura a lista "Clientes" da organizacao (cria se nao existir)
-- Adiciona o contacto a lista (ignorando duplicados)
+**No footer do Step 3 (linhas 632-681):**
 
-**Funcao `sync_lead_to_marketing()`:**
-- Dispara em INSERT e UPDATE na tabela `leads`
-- Se o lead NAO esta convertido (status != 'won'): cria/encontra marketing_contact e adiciona a lista "Leads Nao Convertidas"
-- Se o lead FOI convertido (status = 'won'): remove da lista "Leads Nao Convertidas"
+1. Substituir a logica do footer para ter dois estados:
+   - Se `allSectionsComplete` e `false`:
+     - Mostrar uma nota/alerta: "Preencha todos os campos para poder enviar ou agendar a campanha."
+     - Botao principal: "Guardar Campanha" (icone Save) -- sempre activo desde que haja pelo menos o nome
+     - Esconder o botao "Agendar envio"
+   - Se `allSectionsComplete` e `true`:
+     - Manter o comportamento actual: botao "Agendar envio" + "Enviar campanha"
+     - Adicionar tambem um botao "Guardar Campanha" para quem queira guardar sem enviar
 
-**Triggers:**
-- `trg_client_to_marketing` -- AFTER INSERT em `crm_clients`
-- `trg_lead_to_marketing` -- AFTER INSERT OR UPDATE em `leads`
+2. **Nova funcao `handleSaveDraft`:**
+   - Chama `createCampaign.mutateAsync()` com os dados disponiveis (nome, subject se houver, template se houver, etc.)
+   - O status fica `draft` (ja e o default)
+   - Mostra toast de sucesso: "Campanha guardada como rascunho"
+   - Fecha o modal
 
-**Seed inicial:**
-- Insere os 4 clientes actuais como marketing_contacts e adiciona a lista "Clientes"
-- Insere os leads nao convertidos (status != 'won') como marketing_contacts e adiciona a lista "Leads Nao Convertidas"
+3. **Condicao minima para guardar:** apenas o nome da campanha (`name.trim()`)
 
-### 2. Sem alteracoes no frontend
+### Ficheiro: `src/hooks/useCampaigns.ts`
 
-Tudo acontece no backend via triggers. As listas ja aparecem correctamente na UI existente porque o hook `useContactLists` ja conta os membros de `marketing_list_members`.
+- Sem alteracoes necessarias -- `useCreateCampaign` ja cria com status `draft` por defeito e todos os campos sao opcionais excepto o nome.
 
-## Detalhes tecnicos
+## Resultado visual (Step 3 footer)
 
-- Os triggers usam `INSERT ... ON CONFLICT DO UPDATE` no `marketing_contacts` para nao duplicar contactos (pelo email + org)
-- Os triggers usam `INSERT ... ON CONFLICT DO NOTHING` no `marketing_list_members` para evitar duplicados
-- As listas "Clientes" e "Leads Nao Convertidas" sao criadas automaticamente pelo trigger se ainda nao existirem (usando os IDs das listas ja existentes no banco)
-- Os triggers sao `SECURITY DEFINER` para poder inserir em `marketing_contacts` e `marketing_list_members` sem restricoes de RLS
-- Leads com email placeholder (`nao-fornecido@placeholder.local`) sao incluidos mas usam o telefone como identificador alternativo
+**Quando faltam dados:**
+```text
+[Aviso: Preencha destinatarios, assunto e conteudo para enviar]
+                                          [ Guardar Campanha ]
+```
+
+**Quando tudo esta completo:**
+```text
+0 destinatario(s)
+              [ Guardar Campanha ]  [ Agendar envio ]  [ Enviar campanha ]
+```
 
 ## Ficheiros a editar
 
 | Ficheiro | Accao |
 |----------|-------|
-| Migracao SQL | Criar funcoes + triggers + seed dos dados actuais |
-
-Nenhum ficheiro frontend precisa de ser alterado.
-
+| `src/components/marketing/CreateCampaignModal.tsx` | Adicionar `handleSaveDraft`, mudar footer do Step 3 com logica condicional |
