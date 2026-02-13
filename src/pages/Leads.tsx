@@ -388,7 +388,12 @@ export default function Leads() {
           {/* Linha 1: Título + Pesquisa */}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h1 className="text-xl lg:text-2xl font-bold text-foreground">Leads</h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl lg:text-2xl font-bold text-foreground">Leads</h1>
+                <Badge variant="secondary" className="text-xs font-medium">
+                  {hasActiveFilters ? `${filteredLeads.length} / ${leads.length}` : leads.length}
+                </Badge>
+              </div>
               <p className="text-sm text-muted-foreground hidden sm:block">Gerencie os contactos da sua organização.</p>
             </div>
             <div className="flex items-center gap-2 w-full sm:w-auto">
