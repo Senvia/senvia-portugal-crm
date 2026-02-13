@@ -15,11 +15,13 @@ interface Recipient {
 
 interface SendTemplateRequest {
   organizationId: string;
-  templateId: string;
+  templateId?: string;
   recipients: Recipient[];
   campaignId?: string;
   settings?: Record<string, boolean>;
   settingsData?: Record<string, string>;
+  subject?: string;
+  htmlContent?: string;
 }
 
 function replaceVariables(content: string, variables: Record<string, string>): string {
@@ -103,30 +105,46 @@ serve(async (req: Request): Promise<Response> => {
 
     const {
       organizationId, templateId, recipients, campaignId,
-      settings = {}, settingsData = {}
+      settings = {}, settingsData = {},
+      subject: customSubject, htmlContent: customHtmlContent,
     }: SendTemplateRequest = await req.json();
 
-    if (!organizationId || !templateId || !recipients || recipients.length === 0) {
+    if (!organizationId || !recipients || recipients.length === 0) {
       return new Response(
         JSON.stringify({ error: "Missing required fields" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Fetch template
-    const { data: template, error: templateError } = await supabase
-      .from("email_templates")
-      .select("*")
-      .eq("id", templateId)
-      .eq("organization_id", organizationId)
-      .single();
-
-    if (templateError || !template) {
-      console.error("Template not found:", templateError);
+    // Need either a templateId or custom subject+htmlContent
+    if (!templateId && (!customSubject || !customHtmlContent)) {
       return new Response(
-        JSON.stringify({ error: "Template not found" }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: "Missing template or custom content" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    // Fetch template if provided
+    let templateSubject = customSubject || '';
+    let templateHtmlContent = customHtmlContent || '';
+
+    if (templateId) {
+      const { data: template, error: templateError } = await supabase
+        .from("email_templates")
+        .select("*")
+        .eq("id", templateId)
+        .eq("organization_id", organizationId)
+        .single();
+
+      if (templateError || !template) {
+        console.error("Template not found:", templateError);
+        return new Response(
+          JSON.stringify({ error: "Template not found" }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      templateSubject = template.subject;
+      templateHtmlContent = template.html_content;
     }
 
     // Fetch organization for Brevo config
@@ -171,8 +189,8 @@ serve(async (req: Request): Promise<Response> => {
           ...recipient.variables,
         };
 
-        const subject = replaceVariables(template.subject, variables);
-        let htmlContent = replaceVariables(template.html_content, variables);
+        const subject = replaceVariables(templateSubject, variables);
+        let htmlContent = replaceVariables(templateHtmlContent, variables);
 
         // Apply campaign settings to HTML
         htmlContent = applyHtmlSettings(htmlContent, settings, settingsData);
@@ -222,7 +240,7 @@ serve(async (req: Request): Promise<Response> => {
 
         await supabase.from("email_sends").insert({
           organization_id: organizationId,
-          template_id: templateId,
+          template_id: templateId || null,
           campaign_id: campaignId || null,
           client_id: recipient.clientId || null,
           recipient_email: recipient.email,
@@ -243,12 +261,12 @@ serve(async (req: Request): Promise<Response> => {
 
         await supabase.from("email_sends").insert({
           organization_id: organizationId,
-          template_id: templateId,
+          template_id: templateId || null,
           campaign_id: campaignId || null,
           client_id: recipient.clientId || null,
           recipient_email: recipient.email,
           recipient_name: recipient.name,
-          subject: template.subject,
+          subject: templateSubject,
           status: "failed",
           error_message: errorMsg,
           sent_by: userId,
