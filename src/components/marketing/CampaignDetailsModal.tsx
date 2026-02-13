@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from "react";
-import { Mail, CheckCircle2, AlertCircle, Eye, MousePointer, Search, ArrowLeft, RefreshCw } from "lucide-react";
+import { Mail, CheckCircle2, AlertCircle, Eye, MousePointer, Search, ArrowLeft, RefreshCw, X } from "lucide-react";
 import {
   Dialog, DialogContent, DialogTitle,
 } from "@/components/ui/dialog";
@@ -14,6 +14,8 @@ import { CAMPAIGN_STATUS_LABELS, CAMPAIGN_STATUS_STYLES } from "@/types/marketin
 import { format } from "date-fns";
 import { normalizeString } from "@/lib/utils";
 
+type MetricFilter = 'all' | 'delivered' | 'opened' | 'clicked' | 'failed';
+
 interface CampaignDetailsModalProps {
   campaign: EmailCampaign | null;
   open: boolean;
@@ -24,6 +26,7 @@ export function CampaignDetailsModal({ campaign, open, onOpenChange }: CampaignD
   const { data: sends = [], isFetching } = useCampaignSends(campaign?.id || null);
   const { mutate: syncSends, isPending: isSyncing } = useSyncCampaignSends();
   const [recipientSearch, setRecipientSearch] = useState("");
+  const [activeFilter, setActiveFilter] = useState<MetricFilter | null>(null);
   const hasSyncedRef = useRef<string | null>(null);
 
   // Auto-sync when modal opens
@@ -34,6 +37,7 @@ export function CampaignDetailsModal({ campaign, open, onOpenChange }: CampaignD
     }
     if (!open) {
       hasSyncedRef.current = null;
+      setActiveFilter(null);
     }
   }, [open, campaign?.id, syncSends]);
 
@@ -50,22 +54,51 @@ export function CampaignDetailsModal({ campaign, open, onOpenChange }: CampaignD
   const clickPct = totalRecipients > 0 ? Math.round((clicked / totalRecipients) * 100) : 0;
 
   const filteredSends = useMemo(() => {
-    if (!recipientSearch) return sends;
-    const q = normalizeString(recipientSearch);
-    return sends.filter(s =>
-      normalizeString(s.recipient_name || '').includes(q) ||
-      normalizeString(s.recipient_email).includes(q)
-    );
-  }, [sends, recipientSearch]);
+    let result = sends;
+
+    // Apply metric filter
+    if (activeFilter === 'delivered') {
+      result = result.filter(s => s.status === 'sent' || s.status === 'delivered');
+    } else if (activeFilter === 'opened') {
+      result = result.filter(s => s.opened_at);
+    } else if (activeFilter === 'clicked') {
+      result = result.filter(s => s.clicked_at);
+    } else if (activeFilter === 'failed') {
+      result = result.filter(s => s.status === 'failed' || s.status === 'bounced' || s.status === 'blocked' || s.status === 'spam');
+    }
+
+    // Apply text search
+    if (recipientSearch) {
+      const q = normalizeString(recipientSearch);
+      result = result.filter(s =>
+        normalizeString(s.recipient_name || '').includes(q) ||
+        normalizeString(s.recipient_email).includes(q)
+      );
+    }
+
+    return result;
+  }, [sends, recipientSearch, activeFilter]);
+
+  const handleFilterClick = (filterKey: MetricFilter) => {
+    setActiveFilter(prev => prev === filterKey ? null : filterKey);
+  };
 
   if (!campaign) return null;
 
-  const metrics = [
-    { label: "Destinatários", value: campaign.total_recipients, icon: Mail, color: "text-foreground" },
-    { label: "Enviados", value: delivered, icon: CheckCircle2, color: "text-green-500" },
-    { label: "Aberturas", value: opened, pct: openPct, icon: Eye, color: "text-blue-500" },
-    { label: "Cliques", value: clicked, pct: clickPct, icon: MousePointer, color: "text-purple-500" },
-    { label: "Erros", value: failed, icon: AlertCircle, color: "text-destructive" },
+  const FILTER_LABELS: Record<MetricFilter, string> = {
+    all: 'Todos',
+    delivered: 'Enviados',
+    opened: 'Aberturas',
+    clicked: 'Cliques',
+    failed: 'Erros',
+  };
+
+  const metrics: { label: string; value: number; pct?: number; icon: typeof Mail; color: string; filterKey: MetricFilter }[] = [
+    { label: "Destinatários", value: campaign.total_recipients, icon: Mail, color: "text-foreground", filterKey: 'all' },
+    { label: "Enviados", value: delivered, icon: CheckCircle2, color: "text-green-500", filterKey: 'delivered' },
+    { label: "Aberturas", value: opened, pct: openPct, icon: Eye, color: "text-blue-500", filterKey: 'opened' },
+    { label: "Cliques", value: clicked, pct: clickPct, icon: MousePointer, color: "text-purple-500", filterKey: 'clicked' },
+    { label: "Erros", value: failed, icon: AlertCircle, color: "text-destructive", filterKey: 'failed' },
   ];
 
   return (
@@ -102,14 +135,21 @@ export function CampaignDetailsModal({ campaign, open, onOpenChange }: CampaignD
             {/* Metrics Grid */}
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
               {metrics.map(m => (
-                <div key={m.label} className="text-center p-4 bg-muted/50 rounded-lg border">
+                <button
+                  key={m.label}
+                  type="button"
+                  onClick={() => handleFilterClick(m.filterKey)}
+                  className={`text-center p-4 bg-muted/50 rounded-lg border transition-all cursor-pointer hover:border-primary/50 ${
+                    activeFilter === m.filterKey ? 'ring-2 ring-primary border-primary' : ''
+                  }`}
+                >
                   <m.icon className={`h-5 w-5 mx-auto mb-2 ${m.color}`} />
                   <p className="text-2xl font-bold">
                     {m.value}
                     {m.pct !== undefined && <span className="text-xs font-normal text-muted-foreground ml-1">({m.pct}%)</span>}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">{m.label}</p>
-                </div>
+                </button>
               ))}
             </div>
 
@@ -149,7 +189,15 @@ export function CampaignDetailsModal({ campaign, open, onOpenChange }: CampaignD
             {/* Recipients List */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold">Destinatários ({sends.length})</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-semibold">Destinatários ({filteredSends.length})</p>
+                  {activeFilter && (
+                    <Badge variant="secondary" className="text-xs gap-1">
+                      {FILTER_LABELS[activeFilter]}
+                      <X className="h-3 w-3 cursor-pointer" onClick={() => setActiveFilter(null)} />
+                    </Badge>
+                  )}
+                </div>
               </div>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -182,7 +230,7 @@ export function CampaignDetailsModal({ campaign, open, onOpenChange }: CampaignD
                 ))}
                 {filteredSends.length === 0 && (
                   <p className="text-center py-6 text-muted-foreground text-sm">
-                    {recipientSearch ? 'Nenhum destinatário encontrado' : 'Sem dados de envio'}
+                    {recipientSearch || activeFilter ? 'Nenhum destinatário encontrado' : 'Sem dados de envio'}
                   </p>
                 )}
               </div>
