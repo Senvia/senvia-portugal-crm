@@ -67,7 +67,7 @@ serve(async (req: Request): Promise<Response> => {
     const startDate = campaign.sent_at
       ? new Date(new Date(campaign.sent_at).getTime() - 60 * 60 * 1000).toISOString().split("T")[0]
       : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-    const endDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+    const endDate = new Date().toISOString().split("T")[0];
 
     // Get campaign tag if set
     const settingsData = campaign.settings_data as Record<string, string> | null;
