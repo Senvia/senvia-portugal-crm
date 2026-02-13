@@ -17,18 +17,88 @@ interface Props {
 export function ImportStep1Upload({ fileName, headers, rows, onFileLoaded, onClearFile, onConfirm }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
 
+  const parseCSVLine = (line: string, delimiter: string): string[] => {
+    const values: string[] = [];
+    let current = "";
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (char === '"') {
+        if (inQuotes && i + 1 < line.length && line[i + 1] === '"') {
+          current += '"';
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (char === delimiter && !inQuotes) {
+        values.push(current.trim());
+        current = "";
+      } else {
+        current += char;
+      }
+    }
+    values.push(current.trim());
+    return values;
+  };
+
+  const detectDelimiter = (firstLine: string): string => {
+    const counts = { ",": 0, ";": 0, "\t": 0 };
+    let inQuotes = false;
+    for (const char of firstLine) {
+      if (char === '"') { inQuotes = !inQuotes; continue; }
+      if (!inQuotes && char in counts) counts[char as keyof typeof counts]++;
+    }
+    if (counts[";"] >= counts[","] && counts[";"] >= counts["\t"]) return ";";
+    if (counts["\t"] >= counts[","] && counts["\t"] >= counts[";"]) return "\t";
+    return ",";
+  };
+
+  const parseCSVText = (text: string): { headers: string[]; rows: Record<string, string>[] } => {
+    const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+    if (lines.length === 0) return { headers: [], rows: [] };
+    const delimiter = detectDelimiter(lines[0]);
+    const headers = parseCSVLine(lines[0], delimiter);
+    const rows: Record<string, string>[] = [];
+    for (let i = 1; i < lines.length && rows.length < 1000; i++) {
+      const values = parseCSVLine(lines[i], delimiter);
+      const row: Record<string, string> = {};
+      headers.forEach((h, idx) => { row[h] = values[idx] ?? ""; });
+      rows.push(row);
+    }
+    return { headers, rows };
+  };
+
   const handleFile = useCallback((file: File) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const data = new Uint8Array(e.target?.result as ArrayBuffer);
-      const wb = XLSX.read(data, { type: "array" });
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      const json = XLSX.utils.sheet_to_json<Record<string, string>>(ws, { defval: "" });
-      if (json.length === 0) { toast.error("Ficheiro vazio"); return; }
-      const fileHeaders = Object.keys(json[0]);
-      onFileLoaded(file.name, fileHeaders, json.slice(0, 1000));
-    };
-    reader.readAsArrayBuffer(file);
+    const ext = file.name.split(".").pop()?.toLowerCase() || "";
+    const isCSV = ["csv", "txt"].includes(ext);
+
+    if (isCSV) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const buffer = e.target?.result as ArrayBuffer;
+        let text = new TextDecoder("utf-8").decode(buffer);
+        // If UTF-8 produced replacement chars, try Latin-1
+        if (text.includes("\ufffd")) {
+          text = new TextDecoder("iso-8859-1").decode(buffer);
+        }
+        const { headers: csvHeaders, rows: csvRows } = parseCSVText(text);
+        if (csvHeaders.length === 0) { toast.error("Ficheiro vazio"); return; }
+        onFileLoaded(file.name, csvHeaders, csvRows);
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer);
+        const wb = XLSX.read(data, { type: "array" });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const json = XLSX.utils.sheet_to_json<Record<string, string>>(ws, { defval: "" });
+        if (json.length === 0) { toast.error("Ficheiro vazio"); return; }
+        const fileHeaders = Object.keys(json[0]);
+        onFileLoaded(file.name, fileHeaders, json.slice(0, 1000));
+      };
+      reader.readAsArrayBuffer(file);
+    }
   }, [onFileLoaded]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
