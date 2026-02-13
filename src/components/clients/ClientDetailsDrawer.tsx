@@ -137,17 +137,10 @@ export function ClientDetailsDrawer({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent variant="fullScreen" className="flex flex-col p-0 gap-0">
         {/* Header */}
-        <DialogHeader className="px-4 sm:px-6 py-4 border-b shrink-0">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-lg font-bold text-primary">
-                {client.name.charAt(0).toUpperCase()}
-              </div>
-              <div>
-                <DialogTitle className="text-lg">{client.name}</DialogTitle>
-                <DialogDescription className="sr-only">Detalhes do cliente {client.name}</DialogDescription>
-              </div>
-            </div>
+        <DialogHeader className="px-4 sm:px-6 py-3 border-b shrink-0">
+          <div className="flex items-center justify-end">
+            <DialogTitle className="sr-only">{client.name}</DialogTitle>
+            <DialogDescription className="sr-only">Detalhes do cliente {client.name}</DialogDescription>
             <Button variant="outline" size="sm" onClick={() => onEdit(client)}>
               <Edit className="h-4 w-4 mr-1" />
               Editar
