@@ -140,25 +140,45 @@ export function ImportContactsModal({ open, onOpenChange }: Props) {
               .insert({ name, email: email || null, phone: phone || null, company: company || null, organization_id: organization.id, source: "import" })
               .select("id")
               .single();
-            if (error) { errors++; continue; }
+            if (error) { console.error("Erro ao criar cliente:", error); errors++; continue; }
             clientId = data.id;
             if (email) emailMap.set(email, clientId);
             imported++;
           }
           clientIds.push(clientId);
-        } catch { errors++; }
+        } catch (e) { console.error("Erro inesperado na linha:", e); errors++; }
 
-        if (i % 20 === 0) setProgress(Math.round(((i + 1) / rows.length) * 100));
+        if (i % 20 === 0) setProgress(Math.round(((i + 1) / rows.length) * 80));
       }
 
-      // Add to list
+      // Set partial result before attempting list association
+      setProgress(90);
+      setResult({ imported, duplicates, errors });
+
+      // Add to list in batches of 100
       if (clientIds.length > 0) {
-        await addMembers.mutateAsync({ listId, clientIds });
+        try {
+          for (let i = 0; i < clientIds.length; i += 100) {
+            const chunk = clientIds.slice(i, i + 100);
+            const rows = chunk.map(client_id => ({ list_id: listId, client_id }));
+            const { error } = await supabase
+              .from('client_list_members')
+              .upsert(rows, { onConflict: 'list_id,client_id', ignoreDuplicates: true });
+            if (error) {
+              console.error("Erro ao associar batch à lista:", error);
+              throw error;
+            }
+          }
+          toast.success(`${clientIds.length} contactos adicionados à lista`);
+        } catch (e) {
+          console.error("Erro ao adicionar membros à lista:", e);
+          toast.warning("Contactos criados mas houve erro ao associar à lista. Tente adicionar manualmente.");
+        }
       }
 
       setProgress(100);
-      setResult({ imported, duplicates, errors });
-    } catch {
+    } catch (e) {
+      console.error("Erro geral na importação:", e);
       toast.error("Erro na importação");
     } finally {
       setImporting(false);
