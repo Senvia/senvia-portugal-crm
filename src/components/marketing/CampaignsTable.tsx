@@ -25,6 +25,7 @@ const STATUS_DOT_COLORS: Record<CampaignStatus, string> = {
   sending: 'bg-yellow-500',
   sent: 'bg-green-500',
   failed: 'bg-destructive',
+  scheduled: 'bg-blue-500',
 };
 
 export function CampaignsTable({ campaigns, onView, onDelete }: CampaignsTableProps) {
@@ -72,6 +73,7 @@ export function CampaignsTable({ campaigns, onView, onDelete }: CampaignsTablePr
             <SelectItem value="sending">A enviar</SelectItem>
             <SelectItem value="sent">Enviada</SelectItem>
             <SelectItem value="failed">Falhada</SelectItem>
+            <SelectItem value="scheduled">Agendada</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -86,7 +88,6 @@ export function CampaignsTable({ campaigns, onView, onDelete }: CampaignsTablePr
           {filtered.map((campaign, index) => {
             const style = CAMPAIGN_STATUS_STYLES[campaign.status];
             const dotColor = STATUS_DOT_COLORS[campaign.status];
-            const openRate = campaign.total_recipients > 0 ? Math.round((campaign.sent_count / campaign.total_recipients) * 100) : 0;
 
             return (
               <div
@@ -119,8 +120,8 @@ export function CampaignsTable({ campaigns, onView, onDelete }: CampaignsTablePr
                   {/* Right: metrics */}
                   <div className="flex items-center gap-4 sm:gap-6">
                     <MetricCol icon={<Mail className="h-3.5 w-3.5" />} label="Destinatários" value={campaign.total_recipients} />
-                    <MetricCol icon={<Eye className="h-3.5 w-3.5" />} label="Aberturas" value={campaign.sent_count} pct={openRate} />
-                    <MetricCol icon={<MousePointer className="h-3.5 w-3.5" />} label="Cliques" value={campaign.failed_count > 0 ? campaign.failed_count : 0} />
+                    <MetricCol icon={<Eye className="h-3.5 w-3.5" />} label="Enviados" value={campaign.sent_count} />
+                    <MetricCol icon={<MousePointer className="h-3.5 w-3.5" />} label="Falhados" value={campaign.failed_count} />
 
                     {/* Action button */}
                     <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>

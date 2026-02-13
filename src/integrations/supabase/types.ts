@@ -741,13 +741,16 @@ export type Database = {
           created_at: string
           created_by: string | null
           failed_count: number
+          html_content: string | null
           id: string
           name: string
           organization_id: string
           scheduled_at: string | null
           sent_at: string | null
           sent_count: number
+          settings: Json | null
           status: string
+          subject: string | null
           template_id: string | null
           total_recipients: number
           updated_at: string
@@ -756,13 +759,16 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           failed_count?: number
+          html_content?: string | null
           id?: string
           name: string
           organization_id: string
           scheduled_at?: string | null
           sent_at?: string | null
           sent_count?: number
+          settings?: Json | null
           status?: string
+          subject?: string | null
           template_id?: string | null
           total_recipients?: number
           updated_at?: string
@@ -771,13 +777,16 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           failed_count?: number
+          html_content?: string | null
           id?: string
           name?: string
           organization_id?: string
           scheduled_at?: string | null
           sent_at?: string | null
           sent_count?: number
+          settings?: Json | null
           status?: string
+          subject?: string | null
           template_id?: string | null
           total_recipients?: number
           updated_at?: string
