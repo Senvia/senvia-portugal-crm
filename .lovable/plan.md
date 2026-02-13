@@ -1,38 +1,87 @@
 
-# Corrigir Registos de Envio de Campanhas
+# Recuperar Dados da Campanha e Activar Tracking em Tempo Real
 
-## Problema Encontrado
+## Problema Actual
 
-Os emails estao a ser enviados correctamente (128 de 129 foram enviados), mas os **registos nao ficam guardados na base de dados**. Isto acontece porque:
+A campanha "Apoio Portugal 01" enviou 128 emails com sucesso via Brevo, mas **zero registos** ficaram guardados na base de dados porque o bug do FK constraint impediu todos os INSERTs. Os dados na Brevo existem, mas nao temos forma de os mostrar.
 
-1. Quando se usam contactos de **Listas de Marketing**, o sistema passa o `id` do contacto de marketing como `client_id`
-2. A tabela `email_sends` tem uma **foreign key** (`email_sends_client_id_fkey`) que exige que o `client_id` exista na tabela `clients`
-3. Como os IDs de marketing nao existem na tabela `clients`, o INSERT falha silenciosamente para todos os 129 registos
-4. Resultado: a campanha mostra "Sem dados de envio" e 0 em todas as metricas
+Alem disso, mesmo que o webhook da Brevo (`brevo-webhook`) esteja configurado, ele so actualiza registos que **ja existam** na tabela `email_sends`. Sem registos, nao ha nada para actualizar.
 
-## Solucao
+## Solucao (3 partes)
 
-Duas correcoes necessarias:
+### Parte 1: Edge Function para Backfill via API da Brevo
 
-### 1. Edge Function (`supabase/functions/send-template-email/index.ts`)
-- Quando o INSERT do `email_sends` falha (por exemplo, por causa do FK constraint), tentar novamente **sem o `client_id`** (colocando `null`)
-- Isto garante que mesmo contactos de listas de marketing ficam registados
-- Alternativa mais limpa: validar se o `client_id` existe na tabela `clients` antes de o usar
+Criar uma nova Edge Function `sync-campaign-sends` que:
+1. Recebe o `campaignId` e `organizationId`
+2. Busca o `brevo_api_key` da organizacao
+3. Chama a API da Brevo (`GET /v3/smtp/emails?messageId=...` ou `GET /v3/transactional/emails`) para obter o historico de emails transaccionais enviados
+4. Para cada email encontrado, cria o registo em `email_sends` com o `campaign_id`, `brevo_message_id`, status, `opened_at`, `clicked_at`, etc.
+5. Isto permite recuperar os dados da campanha que foram perdidos
 
-### 2. Frontend (`src/components/marketing/CreateCampaignModal.tsx`)
-- Quando os contactos vem de listas de marketing (linha 575), nao enviar o `id` do marketing_contact como `clientId`
-- Em vez disso, enviar `clientId: undefined` para contactos que nao sao clientes CRM
-- Assim o edge function nem tenta inserir um FK invalido
+A API da Brevo disponibiliza:
+- `GET /v3/smtp/statistics/events` - eventos recentes (delivered, opened, clicked, etc.)
+- Filtravel por `tag` ou intervalo de datas
+- Retorna `messageId`, `email`, `event`, `date`
 
-## Ficheiros a editar
+### Parte 2: Melhorar o Webhook Brevo (ja existe)
 
-1. **`src/components/marketing/CreateCampaignModal.tsx`** - Nao passar `clientId` quando o contacto vem de uma lista de marketing (o `id` e de `marketing_contacts`, nao de `clients`)
+O webhook actual (`brevo-webhook`) ja esta correcto - actualiza registos existentes pelo `brevo_message_id`. Com a Parte 1 a popular os registos, o webhook passara a funcionar automaticamente para updates futuros.
 
-2. **`supabase/functions/send-template-email/index.ts`** - Adicionar fallback: se o INSERT falhar, tentar novamente com `client_id: null` para garantir que o registo e sempre guardado
+### Parte 3: Realtime no Modal de Detalhes
+
+Adicionar `refetchInterval` ao `useCampaignSends` para polling automatico (a cada 10 segundos) quando o modal esta aberto, garantindo que as metricas se actualizam sem precisar de fechar e abrir.
+
+Opcionalmente, activar Supabase Realtime na tabela `email_sends` para updates instantaneos.
+
+## Ficheiros a criar/editar
+
+1. **CRIAR `supabase/functions/sync-campaign-sends/index.ts`**
+   - Edge Function que chama a API da Brevo para buscar eventos de email
+   - Filtra por datas da campanha e insere/actualiza registos em `email_sends`
+
+2. **EDITAR `src/hooks/useCampaigns.ts`**
+   - Adicionar `refetchInterval: 10000` ao `useCampaignSends` para polling automatico
+   - Criar hook `useSyncCampaignSends` para chamar a Edge Function de backfill
+
+3. **EDITAR `src/components/marketing/CampaignDetailsModal.tsx`**
+   - Adicionar botao "Sincronizar" que chama a Edge Function de backfill
+   - Mostrar indicador de "a actualizar..." durante o polling
+
+4. **Migracao SQL**
+   - Activar Realtime na tabela `email_sends` (opcional, polling pode ser suficiente)
+
+## Detalhe Tecnico: API Brevo para Backfill
+
+```text
+GET https://api.brevo.com/v3/smtp/statistics/events
+Headers: api-key: {brevo_api_key}
+Query params:
+  - startDate: data da campanha (sent_at)
+  - endDate: agora
+  - limit: 500
+  - offset: 0
+  - tags: campaign_{campaignId} (se usarmos tags)
+
+Resposta:
+{
+  "events": [
+    {
+      "email": "user@example.com",
+      "date": "2026-02-13T17:09:37Z",
+      "messageId": "<abc123@brevo>",
+      "event": "delivered" | "opened" | "click" | ...
+      "subject": "..."
+    }
+  ]
+}
+```
+
+Para cada evento, fazer upsert no `email_sends` usando o `brevo_message_id` como chave.
 
 ## Resultado Esperado
 
-- Todos os envios ficam registados na tabela `email_sends` com o `campaign_id` correcto
-- O modal de detalhes da campanha mostra todos os destinatarios e os seus estados
-- As metricas (Enviados, Erros, etc.) aparecem correctamente
-- Contactos CRM continuam a ter o `client_id` associado; contactos de listas aparecem sem `client_id`
+- Ao clicar "Sincronizar" na campanha, os dados sao recuperados da API da Brevo
+- Metricas (Enviados, Aberturas, Cliques, Erros) ficam correctas
+- Lista de destinatarios aparece com os estados correctos
+- Updates futuros do webhook funcionam automaticamente
+- Modal actualiza a cada 10 segundos enquanto esta aberto
