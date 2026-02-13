@@ -1,107 +1,65 @@
 
-# Separar Contactos de Marketing dos Clientes CRM
 
-## O Problema
+# Sincronizacao Automatica: Clientes e Leads nas Listas de Marketing
 
-A importacao de contactos para listas de marketing cria registos na tabela `crm_clients` com `source: 'import'`. Isto mistura contactos de marketing (para campanhas de email) com clientes reais do CRM, inflando os numeros de clientes (247 em vez de 8 reais).
+## Objectivo
 
-## A Solucao
+- Todo cliente criado/existente em `crm_clients` entra automaticamente na lista **"Clientes"**
+- Todo lead com status diferente de "won" (nao convertido) entra automaticamente na lista **"Leads Nao Convertidas"**
+- Quando um lead e convertido a cliente, sai da lista "Leads Nao Convertidas" e entra na lista "Clientes"
 
-Criar uma tabela `marketing_contacts` totalmente separada de `crm_clients`. As listas de marketing passam a referenciar `marketing_contacts` em vez de `crm_clients`.
+## Como funciona
 
----
+Triggers no banco de dados que reagem a insercoes/actualizacoes e fazem o sync automatico.
+
+```text
+crm_clients (INSERT) ──> cria marketing_contact ──> adiciona a lista "Clientes"
+
+leads (INSERT/UPDATE)
+  ├── status != 'won' ──> cria marketing_contact ──> adiciona a lista "Leads Nao Convertidas"
+  └── status = 'won'  ──> remove da lista "Leads Nao Convertidas"
+```
 
 ## Alteracoes
 
 ### 1. Migracao SQL
 
-**Criar tabela `marketing_contacts`:**
-- `id` (uuid, PK)
-- `organization_id` (uuid, FK para organizations)
-- `name` (text, NOT NULL)
-- `email` (text)
-- `phone` (text)
-- `company` (text)
-- `source` (text) -- 'import', 'manual', 'form'
-- `tags` (jsonb, default '[]')
-- `subscribed` (boolean, default true)
-- `created_at`, `updated_at`
-- Indice unico composto: `(organization_id, email)` para evitar duplicados por org
-- RLS: membros da org podem ler/escrever
+**Funcao `sync_client_to_marketing()`:**
+- Dispara em INSERT na tabela `crm_clients`
+- Cria (ou encontra) um `marketing_contact` com os dados do cliente
+- Procura a lista "Clientes" da organizacao (cria se nao existir)
+- Adiciona o contacto a lista (ignorando duplicados)
 
-**Criar tabela `marketing_list_members`:**
-- `id` (uuid, PK)
-- `list_id` (uuid, FK para client_lists)
-- `contact_id` (uuid, FK para marketing_contacts)
-- `added_at` (timestamptz)
-- Indice unico: `(list_id, contact_id)`
-- RLS: igual a client_lists
+**Funcao `sync_lead_to_marketing()`:**
+- Dispara em INSERT e UPDATE na tabela `leads`
+- Se o lead NAO esta convertido (status != 'won'): cria/encontra marketing_contact e adiciona a lista "Leads Nao Convertidas"
+- Se o lead FOI convertido (status = 'won'): remove da lista "Leads Nao Convertidas"
 
-**Migrar dados existentes:**
-- Copiar os 239 contactos importados de `crm_clients` para `marketing_contacts`
-- Copiar os registos de `client_list_members` que referenciam esses clientes para `marketing_list_members` (remapeando client_id para contact_id)
-- Apagar os 239 registos de `crm_clients` com `source = 'import'`
-- Apagar os registos antigos de `client_list_members` que ja foram migrados
+**Triggers:**
+- `trg_client_to_marketing` -- AFTER INSERT em `crm_clients`
+- `trg_lead_to_marketing` -- AFTER INSERT OR UPDATE em `leads`
 
-### 2. `src/hooks/useContactLists.ts` -- Actualizar
+**Seed inicial:**
+- Insere os 4 clientes actuais como marketing_contacts e adiciona a lista "Clientes"
+- Insere os leads nao convertidos (status != 'won') como marketing_contacts e adiciona a lista "Leads Nao Convertidas"
 
-- `useContactListMembers`: mudar query de `client_list_members` + `crm_clients` para `marketing_list_members` + `marketing_contacts`
-- `useAddListMembers`: inserir em `marketing_list_members` com `contact_id` em vez de `client_id`
-- `useRemoveListMember`: apagar de `marketing_list_members`
-- Actualizar tipos `ContactListMember` para ter `contact_id` e `contact` em vez de `client_id` e `client`
+### 2. Sem alteracoes no frontend
 
-### 3. `src/components/marketing/ImportContactsModal.tsx` -- Refazer importacao
+Tudo acontece no backend via triggers. As listas ja aparecem correctamente na UI existente porque o hook `useContactLists` ja conta os membros de `marketing_list_members`.
 
-- Em vez de inserir em `crm_clients`, inserir em `marketing_contacts`
-- Em vez de associar via `client_list_members`, associar via `marketing_list_members`
-- Remover a dependencia de `useClients()` (que carrega todos os clientes CRM desnecessariamente)
-- A verificacao de duplicados passa a ser por email dentro de `marketing_contacts`
+## Detalhes tecnicos
 
-### 4. `src/components/marketing/ListDetailsModal.tsx` -- Actualizar
-
-- Mudar a referencia de membros para usar `marketing_contacts` em vez de `crm_clients`
-- Actualizar display de contactos
-
-### 5. `src/components/marketing/SendTemplateModal.tsx` -- Actualizar
-
-- Se usa contactos de listas para enviar emails, mudar para buscar de `marketing_contacts`
-
-### 6. `src/types/marketing.ts` -- Adicionar tipo
-
-```
-export interface MarketingContact {
-  id: string;
-  organization_id: string;
-  name: string;
-  email: string | null;
-  phone: string | null;
-  company: string | null;
-  source: string | null;
-  tags: string[];
-  subscribed: boolean;
-  created_at: string;
-  updated_at: string;
-}
-```
-
----
+- Os triggers usam `INSERT ... ON CONFLICT DO UPDATE` no `marketing_contacts` para nao duplicar contactos (pelo email + org)
+- Os triggers usam `INSERT ... ON CONFLICT DO NOTHING` no `marketing_list_members` para evitar duplicados
+- As listas "Clientes" e "Leads Nao Convertidas" sao criadas automaticamente pelo trigger se ainda nao existirem (usando os IDs das listas ja existentes no banco)
+- Os triggers sao `SECURITY DEFINER` para poder inserir em `marketing_contacts` e `marketing_list_members` sem restricoes de RLS
+- Leads com email placeholder (`nao-fornecido@placeholder.local`) sao incluidos mas usam o telefone como identificador alternativo
 
 ## Ficheiros a editar
 
 | Ficheiro | Accao |
 |----------|-------|
-| Migracao SQL | Criar `marketing_contacts` e `marketing_list_members`, migrar dados, limpar `crm_clients` importados |
-| `src/types/marketing.ts` | Adicionar `MarketingContact` |
-| `src/hooks/useContactLists.ts` | Mudar queries para `marketing_contacts` + `marketing_list_members` |
-| `src/components/marketing/ImportContactsModal.tsx` | Importar para `marketing_contacts` em vez de `crm_clients` |
-| `src/components/marketing/ListDetailsModal.tsx` | Actualizar referencias |
-| `src/components/marketing/SendTemplateModal.tsx` | Buscar contactos de `marketing_contacts` |
-| `src/components/marketing/CreateCampaignModal.tsx` | Actualizar seccao de destinatarios para buscar de `marketing_contacts` |
+| Migracao SQL | Criar funcoes + triggers + seed dos dados actuais |
 
-## Resultado
+Nenhum ficheiro frontend precisa de ser alterado.
 
-- `crm_clients` volta a ter apenas os 8 clientes reais
-- Contactos de marketing vivem em `marketing_contacts` -- tabela separada
-- A importacao passa a criar contactos de marketing, nao clientes CRM
-- Listas de marketing referenciam contactos de marketing
-- Zero impacto nos clientes reais do CRM
