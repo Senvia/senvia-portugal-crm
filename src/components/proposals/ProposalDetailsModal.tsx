@@ -1,18 +1,18 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Trash2, Printer, Mail, Loader2, Router, Zap, Wrench, Pencil, MoreHorizontal, CalendarDays, TrendingUp } from 'lucide-react';
+import { Trash2, Printer, Mail, Loader2, Router, Zap, Wrench, Pencil, MoreHorizontal, CalendarDays, TrendingUp, FileText, User } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useSendProposalEmail } from '@/hooks/useSendProposalEmail';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -111,7 +111,6 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
   };
 
   const handleStatusChange = (newStatus: ProposalStatus) => {
-    // Quando seleciona "accepted", abre modal de venda (não muda status ainda)
     if (newStatus === 'accepted') {
       setShowSaleModal(true);
       return;
@@ -120,7 +119,6 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
     setStatus(newStatus);
     updateProposal.mutate({ id: proposal.id, status: newStatus });
     
-    // When proposal is rejected, move lead to final negative stage
     if (newStatus === 'rejected') {
       if (proposal.lead_id && finalNegativeStage) {
         updateLeadStatus.mutate({ leadId: proposal.lead_id, status: finalNegativeStage.key });
@@ -128,13 +126,10 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
     }
   };
 
-  // Callback quando venda é criada com sucesso
   const handleSaleCreated = () => {
-    // Só aqui é que a proposta passa a "accepted"
     updateProposal.mutate({ id: proposal.id, status: 'accepted' });
     setStatus('accepted');
     
-    // Atualizar lead para estágio final positivo
     if (proposal.lead_id && finalPositiveStage) {
       updateLeadStatus.mutate({ leadId: proposal.lead_id, status: finalPositiveStage.key });
       updateLead.mutate({ leadId: proposal.lead_id, updates: { value: proposal.total_value } });
@@ -147,21 +142,16 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
     }
   };
 
-
   const handlePrint = () => {
-    // Dados do cliente
     const client = proposal.client;
     const clientName = client?.name || '';
     const clientEmail = client?.email || '';
     const clientPhone = client?.phone || '';
-    
-    // Tentar obter dados adicionais do cliente (company, nif, address)
     const clientCompany = (client as any)?.company || '';
     const clientNif = (client as any)?.nif || '';
     const clientAddress = (client as any)?.address_line1 || '';
     const clientCity = (client as any)?.city || '';
     const clientPostalCode = (client as any)?.postal_code || '';
-    
     const fullAddress = [clientAddress, clientPostalCode, clientCity].filter(Boolean).join(', ');
 
     const printContent = `
@@ -181,8 +171,6 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
               line-height: 1.6;
               background: white;
             }
-            
-            /* CABEÇALHO */
             .header { 
               display: flex; 
               justify-content: space-between; 
@@ -191,178 +179,38 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
               padding-bottom: 25px;
               margin-bottom: 30px;
             }
-            .header-left { 
-              display: flex; 
-              flex-direction: column; 
-              gap: 8px; 
-            }
-            .header-left img { 
-              max-height: 60px; 
-              max-width: 180px; 
-              object-fit: contain; 
-            }
-            .header-left .org-name { 
-              font-size: 14px; 
-              color: #64748b; 
-              font-weight: 500;
-              text-transform: uppercase;
-              letter-spacing: 0.5px;
-            }
-            .header-right { 
-              text-align: right; 
-            }
-            .header-right h1 { 
-              font-size: 22px; 
-              color: #3B82F6; 
-              font-weight: 700;
-              margin-bottom: 4px;
-            }
-            .header-right .date { 
-              color: #64748b; 
-              font-size: 14px; 
-            }
-            
-            /* DADOS DO CLIENTE */
-            .client-box { 
-              background: #f8fafc; 
-              border: 1px solid #e2e8f0;
-              border-radius: 10px;
-              padding: 20px;
-              margin-bottom: 25px;
-            }
-            .client-box h3 { 
-              margin: 0 0 12px; 
-              font-size: 11px; 
-              color: #64748b; 
-              text-transform: uppercase;
-              letter-spacing: 1px;
-              font-weight: 600;
-            }
-            .client-box .client-name {
-              font-size: 18px;
-              font-weight: 600;
-              color: #1a1a1a;
-              margin-bottom: 8px;
-            }
-            .client-box .client-details {
-              display: grid;
-              grid-template-columns: 1fr 1fr;
-              gap: 8px 20px;
-            }
-            .client-box .client-detail {
-              font-size: 13px;
-              color: #475569;
-            }
-            .client-box .client-detail strong {
-              color: #64748b;
-              font-weight: 500;
-            }
-            
-            /* VALOR TOTAL */
-            .total-box { 
-              background: linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%);
-              color: white;
-              padding: 28px;
-              border-radius: 12px;
-              text-align: center;
-              margin: 25px 0;
-              box-shadow: 0 4px 20px rgba(59, 130, 246, 0.3);
-            }
-            .total-box .label { 
-              font-size: 11px; 
-              opacity: 0.9; 
-              letter-spacing: 2px;
-              text-transform: uppercase;
-              font-weight: 500;
-            }
-            .total-box .value { 
-              font-size: 42px; 
-              font-weight: 700; 
-              margin-top: 8px;
-              letter-spacing: -1px;
-            }
-            
-            /* CPE TABLE */
+            .header-left { display: flex; flex-direction: column; gap: 8px; }
+            .header-left img { max-height: 60px; max-width: 180px; object-fit: contain; }
+            .header-left .org-name { font-size: 14px; color: #64748b; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; }
+            .header-right { text-align: right; }
+            .header-right h1 { font-size: 22px; color: #3B82F6; font-weight: 700; margin-bottom: 4px; }
+            .header-right .date { color: #64748b; font-size: 14px; }
+            .client-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 20px; margin-bottom: 25px; }
+            .client-box h3 { margin: 0 0 12px; font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
+            .client-box .client-name { font-size: 18px; font-weight: 600; color: #1a1a1a; margin-bottom: 8px; }
+            .client-box .client-details { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 20px; }
+            .client-box .client-detail { font-size: 13px; color: #475569; }
+            .client-box .client-detail strong { color: #64748b; font-weight: 500; }
+            .total-box { background: linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%); color: white; padding: 28px; border-radius: 12px; text-align: center; margin: 25px 0; box-shadow: 0 4px 20px rgba(59, 130, 246, 0.3); }
+            .total-box .label { font-size: 11px; opacity: 0.9; letter-spacing: 2px; text-transform: uppercase; font-weight: 500; }
+            .total-box .value { font-size: 42px; font-weight: 700; margin-top: 8px; letter-spacing: -1px; }
             .cpes { margin: 30px 0; }
-            .cpes h3 { 
-              font-size: 11px; 
-              color: #64748b; 
-              text-transform: uppercase;
-              letter-spacing: 1px;
-              font-weight: 600;
-              margin-bottom: 12px;
-            }
-            .cpe-card {
-              background: #fffbeb;
-              border: 1px solid #fcd34d;
-              border-radius: 8px;
-              padding: 16px;
-              margin-bottom: 12px;
-            }
-            .cpe-header {
-              font-weight: 600;
-              margin-bottom: 8px;
-              color: #92400e;
-            }
-            .cpe-grid {
-              display: grid;
-              grid-template-columns: 1fr 1fr 1fr;
-              gap: 8px;
-              font-size: 13px;
-            }
-            .cpe-field {
-              color: #78350f;
-            }
-            .cpe-field strong {
-              color: #92400e;
-            }
-            
-            /* OBSERVAÇÕES */
-            .notes-section { 
-              background: #fefce8; 
-              border-left: 4px solid #eab308;
-              padding: 16px 20px;
-              border-radius: 0 10px 10px 0;
-              margin: 25px 0;
-            }
-            .notes-section h4 { 
-              font-size: 11px; 
-              color: #a16207; 
-              text-transform: uppercase;
-              letter-spacing: 1px;
-              font-weight: 600;
-              margin-bottom: 8px;
-            }
-            .notes-section p { 
-              font-size: 14px; 
-              color: #713f12;
-              white-space: pre-wrap;
-              line-height: 1.5;
-            }
-            
-            /* RODAPÉ */
-            .footer { 
-              margin-top: 50px; 
-              padding-top: 20px;
-              border-top: 1px solid #e2e8f0;
-              text-align: center;
-              color: #94a3b8;
-              font-size: 11px;
-            }
+            .cpes h3 { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; margin-bottom: 12px; }
+            .cpe-card { background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px; padding: 16px; margin-bottom: 12px; }
+            .cpe-header { font-weight: 600; margin-bottom: 8px; color: #92400e; }
+            .cpe-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; font-size: 13px; }
+            .cpe-field { color: #78350f; }
+            .cpe-field strong { color: #92400e; }
+            .notes-section { background: #fefce8; border-left: 4px solid #eab308; padding: 16px 20px; border-radius: 0 10px 10px 0; margin: 25px 0; }
+            .notes-section h4 { font-size: 11px; color: #a16207; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; margin-bottom: 8px; }
+            .notes-section p { font-size: 14px; color: #713f12; white-space: pre-wrap; line-height: 1.5; }
+            .footer { margin-top: 50px; padding-top: 20px; border-top: 1px solid #e2e8f0; text-align: center; color: #94a3b8; font-size: 11px; }
             .footer p { margin: 4px 0; }
-            .footer .validity {
-              color: #64748b;
-              font-weight: 500;
-            }
-            
-            @media print { 
-              body { padding: 20px; }
-              .total-box { box-shadow: none; }
-            }
+            .footer .validity { color: #64748b; font-weight: 500; }
+            @media print { body { padding: 20px; } .total-box { box-shadow: none; } }
           </style>
         </head>
         <body>
-          <!-- CABEÇALHO -->
           <div class="header">
             <div class="header-left">
               ${logoUrl ? `<img src="${logoUrl}" alt="Logo" />` : ''}
@@ -374,7 +222,6 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
             </div>
           </div>
           
-          <!-- DADOS DO CLIENTE -->
           ${clientName ? `
           <div class="client-box">
             <h3>Cliente</h3>
@@ -389,7 +236,6 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
           </div>
           ` : ''}
           
-          <!-- VALOR TOTAL -->
           <div class="total-box">
             <div class="label">${orgData?.niche === 'telecom' ? 'Consumo Total MWh' : 'Valor Total'}</div>
             <div class="value">${orgData?.niche === 'telecom' 
@@ -411,7 +257,6 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
             ` : ''}
           </div>
 
-          <!-- CPEs com dados de energia (apenas telecom) -->
           ${orgData?.niche === 'telecom' && proposalCpes.length > 0 ? `
             <div class="cpes">
               <h3>CPEs / Pontos de Consumo</h3>
@@ -433,7 +278,6 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
             </div>
           ` : ''}
 
-          <!-- Produtos/Serviços (nichos não-telecom) -->
           ${orgData?.niche !== 'telecom' && proposalProducts.length > 0 ? `
             <div class="cpes">
               <h3>Produtos / Serviços</h3>
@@ -460,7 +304,6 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
             </div>
           ` : ''}
 
-          <!-- OBSERVAÇÕES -->
           ${notes ? `
             <div class="notes-section">
               <h4>Observações</h4>
@@ -468,7 +311,6 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
             </div>
           ` : ''}
 
-          <!-- RODAPÉ -->
           <div class="footer">
             <p class="validity">Proposta válida por 30 dias a partir da data de emissão</p>
             <p>Documento gerado em ${format(new Date(), "d 'de' MMMM 'de' yyyy 'às' HH:mm", { locale: pt })}</p>
@@ -527,10 +369,11 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
         if (!isOpen && showSaleModal) return;
         onOpenChange(isOpen);
       }}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader className="pr-10">
+        <DialogContent variant="fullScreen" className="flex flex-col p-0 gap-0">
+          <DialogHeader className="px-6 pr-14 py-4 border-b border-border/50 shrink-0">
             <div className="flex items-center gap-3 flex-wrap">
-              <DialogTitle>
+              <DialogTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5 text-primary" />
                 Proposta {proposal.code || ''}
               </DialogTitle>
               <Badge className={cn(PROPOSAL_STATUS_COLORS[status])}>
@@ -547,320 +390,374 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
             </p>
           </DialogHeader>
 
-          <div className="space-y-4">
-            {/* Resumo Telecom */}
-            {orgData?.niche === 'telecom' && (
-              <div className="p-4 rounded-lg bg-muted/30 border space-y-1">
-                <p className="text-sm text-muted-foreground">
-                  Consumo Total: <strong className="text-foreground">{(proposalCpes.reduce((sum, cpe) => sum + (Number(cpe.consumo_anual) || 0), 0) / 1000).toLocaleString('pt-PT', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} MWh</strong>
-                </p>
-                {proposal.proposal_type === 'energia' && proposalCpes.length > 0 && (
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                    <span>Margem Total: <strong className="text-foreground">{formatCurrency(proposalCpes.reduce((sum, cpe) => sum + (Number(cpe.margem) || 0), 0))}</strong></span>
-                    <span>Comissão Total: <strong className="text-foreground">{formatCurrency(proposalCpes.reduce((sum, cpe) => sum + (Number(cpe.comissao) || 0), 0))}</strong></span>
-                  </div>
-                )}
-                {proposal.proposal_type === 'servicos' && (
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                    {proposal.kwp != null && <span>kWp: <strong className="text-foreground">{Number(proposal.kwp).toLocaleString('pt-PT')}</strong></span>}
-                    {proposal.comissao != null && <span>Comissão: <strong className="text-foreground">{formatCurrency(Number(proposal.comissao))}</strong></span>}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* 2. Cliente */}
-            {proposal.client && (
-              <div className="p-4 rounded-lg border bg-muted/30">
-                <p className="text-sm text-muted-foreground mb-2">Cliente</p>
-                <div className="space-y-1">
-                  <p className="font-medium text-base">{proposal.client.name}</p>
-                  {proposal.client.email && (
-                    <p className="text-sm text-muted-foreground">{proposal.client.email}</p>
+          <div className="flex-1 overflow-y-auto">
+            <div className="max-w-6xl mx-auto p-4 sm:p-6">
+              <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+                {/* LEFT COLUMN (60%) */}
+                <div className="lg:col-span-3 space-y-4">
+                  {/* Cliente */}
+                  {(proposal.client || proposal.lead) && (
+                    <Card>
+                      <CardHeader className="pb-2 p-4">
+                        <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
+                          <User className="h-4 w-4" />
+                          {proposal.client ? 'Cliente' : 'Lead'}
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-4 pt-0">
+                        <div className="space-y-1">
+                          <p className="font-medium text-base">{proposal.client?.name || proposal.lead?.name}</p>
+                          {(proposal.client?.email || proposal.lead?.email) && (
+                            <p className="text-sm text-muted-foreground">{proposal.client?.email || proposal.lead?.email}</p>
+                          )}
+                          {(proposal.client?.phone || proposal.lead?.phone) && (
+                            <p className="text-sm text-muted-foreground">{proposal.client?.phone || proposal.lead?.phone}</p>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
                   )}
-                  {proposal.client.phone && (
-                    <p className="text-sm text-muted-foreground">{proposal.client.phone}</p>
-                  )}
-                </div>
-              </div>
-            )}
-            {!proposal.client && proposal.lead && (
-              <div className="p-4 rounded-lg border bg-muted/30">
-                <p className="text-sm text-muted-foreground mb-2">Lead</p>
-                <div className="space-y-1">
-                  <p className="font-medium text-base">{proposal.lead.name}</p>
-                  {proposal.lead.email && (
-                    <p className="text-sm text-muted-foreground">{proposal.lead.email}</p>
-                  )}
-                  {proposal.lead.phone && (
-                    <p className="text-sm text-muted-foreground">{proposal.lead.phone}</p>
-                  )}
-                </div>
-              </div>
-            )}
 
-            {/* 3. Status */}
-            <div className="space-y-2">
-              <Label>Status da Proposta</Label>
-              <Select 
-                value={status} 
-                onValueChange={(v) => handleStatusChange(v as ProposalStatus)}
-                disabled={hasCompletedSale}
-              >
-                <SelectTrigger className={cn('border', PROPOSAL_STATUS_COLORS[status])}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {PROPOSAL_STATUSES.map((s) => (
-                    <SelectItem key={s} value={s}>
-                      <span className={cn('px-2 py-0.5 rounded text-xs font-medium', PROPOSAL_STATUS_COLORS[s])}>
-                        {PROPOSAL_STATUS_LABELS[s]}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+                  {/* Status */}
+                  <Card>
+                    <CardHeader className="pb-2 p-4">
+                      <CardTitle className="text-sm font-medium text-muted-foreground">Status da Proposta</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-4 pt-0">
+                      <Select 
+                        value={status} 
+                        onValueChange={(v) => handleStatusChange(v as ProposalStatus)}
+                        disabled={hasCompletedSale}
+                      >
+                        <SelectTrigger className={cn('border', PROPOSAL_STATUS_COLORS[status])}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {PROPOSAL_STATUSES.map((s) => (
+                            <SelectItem key={s} value={s}>
+                              <span className={cn('px-2 py-0.5 rounded text-xs font-medium', PROPOSAL_STATUS_COLORS[s])}>
+                                {PROPOSAL_STATUS_LABELS[s]}
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </CardContent>
+                  </Card>
 
-            {/* 4. Produtos/Serviços */}
-            {/* Tipo Badge - Telecom only */}
-            {orgData?.niche === 'telecom' && proposal.proposal_type && (
-              <div className="flex items-center gap-2">
-                <Badge variant="outline" className={cn(
-                  "flex items-center gap-1.5",
-                  proposal.proposal_type === 'energia' 
-                    ? "border-amber-500/50 text-amber-600 dark:text-amber-400" 
-                    : "border-blue-500/50 text-blue-600 dark:text-blue-400"
-                )}>
-                  {proposal.proposal_type === 'energia' ? <Zap className="h-3 w-3" /> : <Wrench className="h-3 w-3" />}
-                  {PROPOSAL_TYPE_LABELS[proposal.proposal_type as ProposalType] || proposal.proposal_type}
-                </Badge>
-              </div>
-            )}
-
-            {/* CPEs - Telecom only */}
-            {orgData?.niche === 'telecom' && proposalCpes.length > 0 && (
-              <div className="space-y-3">
-                <Label className="flex items-center gap-2">
-                  <Router className="h-4 w-4" />
-                  CPEs / Pontos de Consumo
-                </Label>
-                <div className="space-y-3">
-                  {proposalCpes.map((cpe) => (
-                    <div
-                      key={cpe.id}
-                      className="p-4 rounded-lg border bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800"
-                    >
-                      <div className="flex items-center justify-between mb-3">
+                  {/* Tipo Badge - Telecom only */}
+                  {orgData?.niche === 'telecom' && proposal.proposal_type && (
+                    <Card>
+                      <CardContent className="p-4">
                         <div className="flex items-center gap-2">
-                          <Zap className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                          <span className="font-medium text-sm">{cpe.equipment_type}</span>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                        <div>
-                          <span className="text-muted-foreground text-xs">Comercializador:</span>
-                          <p className="font-medium">{cpe.comercializador}</p>
-                        </div>
-                        {cpe.serial_number && (
-                          <div>
-                            <span className="text-muted-foreground text-xs">CPE/CUI:</span>
-                            <p className="font-medium font-mono text-xs">{cpe.serial_number}</p>
-                          </div>
-                        )}
-                        {cpe.consumo_anual && (
-                          <div>
-                            <span className="text-muted-foreground text-xs">Consumo Anual:</span>
-                            <p className="font-medium">{Number(cpe.consumo_anual).toLocaleString('pt-PT')} kWh</p>
-                          </div>
-                        )}
-                        {cpe.duracao_contrato && (
-                          <div>
-                            <span className="text-muted-foreground text-xs">Duração:</span>
-                            <p className="font-medium">{cpe.duracao_contrato} {cpe.duracao_contrato === 1 ? 'ano' : 'anos'}</p>
-                          </div>
-                        )}
-                        {cpe.dbl && (
-                          <div>
-                            <span className="text-muted-foreground text-xs">DBL:</span>
-                            <p className="font-medium">{cpe.dbl} €/MWh</p>
-                          </div>
-                        )}
-                        {cpe.margem && (
-                          <div>
-                            <span className="text-muted-foreground text-xs flex items-center gap-1">
-                              <TrendingUp className="h-3 w-3" /> Margem:
-                            </span>
-                            <p className="font-medium text-green-600 dark:text-green-400">{formatCurrency(Number(cpe.margem))}</p>
-                          </div>
-                        )}
-                        {cpe.comissao && (
-                          <div>
-                            <span className="text-muted-foreground text-xs">Comissão:</span>
-                            <p className="font-medium text-primary">{formatCurrency(Number(cpe.comissao))}</p>
-                          </div>
-                        )}
-                        {(cpe.contrato_inicio || cpe.contrato_fim) && (
-                          <div className="col-span-2 flex items-center gap-4 pt-2 border-t border-amber-200 dark:border-amber-700 mt-1">
-                            <CalendarDays className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                            {cpe.contrato_inicio && (
-                              <div>
-                                <span className="text-muted-foreground text-xs">Início:</span>
-                                <p className="font-medium text-xs">{cpe.contrato_inicio}</p>
-                              </div>
-                            )}
-                            {cpe.contrato_fim && (
-                              <div>
-                                <span className="text-muted-foreground text-xs">Fim:</span>
-                                <p className="font-medium text-xs">{cpe.contrato_fim}</p>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Serviços telecom */}
-            {orgData?.niche === 'telecom' && proposal.proposal_type === 'servicos' && (
-              <div className="space-y-3 p-4 rounded-lg border bg-blue-50/50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800">
-                <div className="flex items-center gap-2 text-blue-700 dark:text-blue-400">
-                  <Wrench className="h-4 w-4" />
-                  <span className="font-medium text-sm">Dados do Serviço</span>
-                </div>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                  {proposal.servicos_produtos && proposal.servicos_produtos.length > 0 && (
-                    <div className="col-span-2">
-                      <span className="text-muted-foreground">Produtos:</span>
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {proposal.servicos_produtos.map((prod) => (
-                          <Badge key={prod} variant="secondary" className="text-xs">
-                            {prod}
+                          <Badge variant="outline" className={cn(
+                            "flex items-center gap-1.5",
+                            proposal.proposal_type === 'energia' 
+                              ? "border-amber-500/50 text-amber-600 dark:text-amber-400" 
+                              : "border-blue-500/50 text-blue-600 dark:text-blue-400"
+                          )}>
+                            {proposal.proposal_type === 'energia' ? <Zap className="h-3 w-3" /> : <Wrench className="h-3 w-3" />}
+                            {PROPOSAL_TYPE_LABELS[proposal.proposal_type as ProposalType] || proposal.proposal_type}
                           </Badge>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* CPEs - Telecom only */}
+                  {orgData?.niche === 'telecom' && proposalCpes.length > 0 && (
+                    <Card>
+                      <CardHeader className="pb-2 p-4">
+                        <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
+                          <Router className="h-4 w-4" />
+                          CPEs / Pontos de Consumo
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-4 pt-0 space-y-3">
+                        {proposalCpes.map((cpe) => (
+                          <div
+                            key={cpe.id}
+                            className="p-4 rounded-lg border bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800"
+                          >
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-2">
+                                <Zap className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                                <span className="font-medium text-sm">{cpe.equipment_type}</span>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                              <div>
+                                <span className="text-muted-foreground text-xs">Comercializador:</span>
+                                <p className="font-medium">{cpe.comercializador}</p>
+                              </div>
+                              {cpe.serial_number && (
+                                <div>
+                                  <span className="text-muted-foreground text-xs">CPE/CUI:</span>
+                                  <p className="font-medium font-mono text-xs">{cpe.serial_number}</p>
+                                </div>
+                              )}
+                              {cpe.consumo_anual && (
+                                <div>
+                                  <span className="text-muted-foreground text-xs">Consumo Anual:</span>
+                                  <p className="font-medium">{Number(cpe.consumo_anual).toLocaleString('pt-PT')} kWh</p>
+                                </div>
+                              )}
+                              {cpe.duracao_contrato && (
+                                <div>
+                                  <span className="text-muted-foreground text-xs">Duração:</span>
+                                  <p className="font-medium">{cpe.duracao_contrato} {cpe.duracao_contrato === 1 ? 'ano' : 'anos'}</p>
+                                </div>
+                              )}
+                              {cpe.dbl && (
+                                <div>
+                                  <span className="text-muted-foreground text-xs">DBL:</span>
+                                  <p className="font-medium">{cpe.dbl} €/MWh</p>
+                                </div>
+                              )}
+                              {cpe.margem && (
+                                <div>
+                                  <span className="text-muted-foreground text-xs flex items-center gap-1">
+                                    <TrendingUp className="h-3 w-3" /> Margem:
+                                  </span>
+                                  <p className="font-medium text-green-600 dark:text-green-400">{formatCurrency(Number(cpe.margem))}</p>
+                                </div>
+                              )}
+                              {cpe.comissao && (
+                                <div>
+                                  <span className="text-muted-foreground text-xs">Comissão:</span>
+                                  <p className="font-medium text-primary">{formatCurrency(Number(cpe.comissao))}</p>
+                                </div>
+                              )}
+                              {(cpe.contrato_inicio || cpe.contrato_fim) && (
+                                <div className="col-span-2 flex items-center gap-4 pt-2 border-t border-amber-200 dark:border-amber-700 mt-1">
+                                  <CalendarDays className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                                  {cpe.contrato_inicio && (
+                                    <div>
+                                      <span className="text-muted-foreground text-xs">Início:</span>
+                                      <p className="font-medium text-xs">{cpe.contrato_inicio}</p>
+                                    </div>
+                                  )}
+                                  {cpe.contrato_fim && (
+                                    <div>
+                                      <span className="text-muted-foreground text-xs">Fim:</span>
+                                      <p className="font-medium text-xs">{cpe.contrato_fim}</p>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
                         ))}
-                      </div>
-                    </div>
+                      </CardContent>
+                    </Card>
                   )}
-                  {proposal.modelo_servico && (
-                    <div>
-                      <span className="text-muted-foreground">Modelo:</span>
-                      <span className="ml-2 font-medium">{MODELO_SERVICO_LABELS[proposal.modelo_servico as keyof typeof MODELO_SERVICO_LABELS] || proposal.modelo_servico}</span>
-                    </div>
+
+                  {/* Serviços telecom */}
+                  {orgData?.niche === 'telecom' && proposal.proposal_type === 'servicos' && (
+                    <Card>
+                      <CardContent className="p-4">
+                        <div className="space-y-3 p-4 rounded-lg border bg-blue-50/50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800">
+                          <div className="flex items-center gap-2 text-blue-700 dark:text-blue-400">
+                            <Wrench className="h-4 w-4" />
+                            <span className="font-medium text-sm">Dados do Serviço</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                            {proposal.servicos_produtos && proposal.servicos_produtos.length > 0 && (
+                              <div className="col-span-2">
+                                <span className="text-muted-foreground">Produtos:</span>
+                                <div className="flex flex-wrap gap-1 mt-1">
+                                  {proposal.servicos_produtos.map((prod) => (
+                                    <Badge key={prod} variant="secondary" className="text-xs">
+                                      {prod}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            {proposal.modelo_servico && (
+                              <div>
+                                <span className="text-muted-foreground">Modelo:</span>
+                                <span className="ml-2 font-medium">{MODELO_SERVICO_LABELS[proposal.modelo_servico as keyof typeof MODELO_SERVICO_LABELS] || proposal.modelo_servico}</span>
+                              </div>
+                            )}
+                            {proposal.kwp && (
+                              <div>
+                                <span className="text-muted-foreground">Potência:</span>
+                                <span className="ml-2 font-medium">{proposal.kwp} kWp</span>
+                              </div>
+                            )}
+                            {proposal.comissao && (
+                              <div className="col-span-2">
+                                <span className="text-muted-foreground">Comissão:</span>
+                                <span className="ml-2 font-medium text-green-600 dark:text-green-400">{formatCurrency(proposal.comissao)}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
                   )}
-                  {proposal.kwp && (
-                    <div>
-                      <span className="text-muted-foreground">Potência:</span>
-                      <span className="ml-2 font-medium">{proposal.kwp} kWp</span>
-                    </div>
+
+                  {/* Produtos do catálogo */}
+                  {proposalProducts.length > 0 && (
+                    <Card>
+                      <CardHeader className="pb-2 p-4">
+                        <CardTitle className="text-sm font-medium text-muted-foreground">Produtos/Serviços</CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-4 pt-0 space-y-2">
+                        {proposalProducts.map((item) => (
+                          <div
+                            key={item.id}
+                            className="flex items-center justify-between p-3 rounded-lg border bg-muted/30"
+                          >
+                            <div>
+                              <p className="font-medium text-sm">{item.product?.name || 'Produto'}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {item.quantity} × {formatCurrency(item.unit_price)}
+                              </p>
+                            </div>
+                            <p className="font-semibold">{formatCurrency(item.total)}</p>
+                          </div>
+                        ))}
+                      </CardContent>
+                    </Card>
                   )}
-                  {proposal.comissao && (
-                    <div className="col-span-2">
-                      <span className="text-muted-foreground">Comissão:</span>
-                      <span className="ml-2 font-medium text-green-600 dark:text-green-400">{formatCurrency(proposal.comissao)}</span>
-                    </div>
-                  )}
+
+                  {/* Observações */}
+                  <Card>
+                    <CardHeader className="pb-2 p-4">
+                      <CardTitle className="text-sm font-medium text-muted-foreground">Observações da Negociação</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-4 pt-0">
+                      <Textarea
+                        id="proposal-notes"
+                        value={notes}
+                        onChange={(e) => setNotes(e.target.value)}
+                        onBlur={handleNotesBlur}
+                        placeholder="Notas internas sobre a negociação..."
+                        rows={3}
+                      />
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* RIGHT COLUMN (40%) - Sticky */}
+                <div className="lg:col-span-2">
+                  <div className="lg:sticky lg:top-6 space-y-4">
+                    {/* Valor Total */}
+                    <Card>
+                      <CardContent className="p-4 space-y-3">
+                        <div className="p-4 rounded-lg bg-primary/10 border border-primary/20 text-center">
+                          <p className="text-sm text-muted-foreground mb-1">Valor Total</p>
+                          <p className="text-2xl font-bold text-primary">
+                            {formatCurrency(proposal.total_value)}
+                          </p>
+                        </div>
+
+                        {/* Resumo Telecom */}
+                        {orgData?.niche === 'telecom' && (
+                          <div className="space-y-2 text-sm">
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Consumo Total</span>
+                              <span className="font-medium">{(proposalCpes.reduce((sum, cpe) => sum + (Number(cpe.consumo_anual) || 0), 0) / 1000).toLocaleString('pt-PT', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} MWh</span>
+                            </div>
+                            {proposal.proposal_type === 'energia' && proposalCpes.length > 0 && (
+                              <>
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground">Margem Total</span>
+                                  <span className="font-medium text-green-600 dark:text-green-400">{formatCurrency(proposalCpes.reduce((sum, cpe) => sum + (Number(cpe.margem) || 0), 0))}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground">Comissão Total</span>
+                                  <span className="font-medium">{formatCurrency(proposalCpes.reduce((sum, cpe) => sum + (Number(cpe.comissao) || 0), 0))}</span>
+                                </div>
+                              </>
+                            )}
+                            {proposal.proposal_type === 'servicos' && (
+                              <>
+                                {proposal.kwp != null && (
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">kWp</span>
+                                    <span className="font-medium">{Number(proposal.kwp).toLocaleString('pt-PT')}</span>
+                                  </div>
+                                )}
+                                {proposal.comissao != null && (
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Comissão</span>
+                                    <span className="font-medium">{formatCurrency(Number(proposal.comissao))}</span>
+                                  </div>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+
+                    {/* Ações */}
+                    <Card>
+                      <CardHeader className="pb-2 p-4">
+                        <CardTitle className="text-sm font-medium text-muted-foreground">Ações</CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-4 pt-0 space-y-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full justify-start"
+                          onClick={() => setShowEditModal(true)}
+                          disabled={hasCompletedSale}
+                        >
+                          <Pencil className="h-4 w-4 mr-2" />
+                          Editar
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full justify-start"
+                          onClick={handlePrint}
+                        >
+                          <Printer className="h-4 w-4 mr-2" />
+                          Imprimir
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full justify-start"
+                          onClick={handleSendEmail}
+                          disabled={!canSendEmail}
+                        >
+                          {sendProposalEmail.isPending ? (
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          ) : (
+                            <Mail className="h-4 w-4 mr-2" />
+                          )}
+                          {!isBrevoConfigured ? 'Configurar Email' : 'Enviar Email'}
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          className="w-full justify-start"
+                          onClick={() => setShowDeleteConfirm(true)}
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Eliminar
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  </div>
                 </div>
               </div>
-            )}
-
-            {/* Produtos do catálogo */}
-            {proposalProducts.length > 0 && (
-              <div className="space-y-2">
-                <Label>Produtos/Serviços</Label>
-                <div className="space-y-2">
-                  {proposalProducts.map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex items-center justify-between p-3 rounded-lg border bg-muted/30"
-                    >
-                      <div>
-                        <p className="font-medium text-sm">{item.product?.name || 'Produto'}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {item.quantity} × {formatCurrency(item.unit_price)}
-                        </p>
-                      </div>
-                      <p className="font-semibold">{formatCurrency(item.total)}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* 5. Valor Total (read-only) */}
-            <div className="p-4 rounded-lg bg-primary/10 border border-primary/20">
-              <p className="text-sm text-muted-foreground mb-1">Valor Total</p>
-              <p className="text-2xl font-bold text-primary">
-                {formatCurrency(proposal.total_value)}
-              </p>
-            </div>
-
-            {/* 6. Observações */}
-            <div className="space-y-2">
-              <Label htmlFor="proposal-notes">Observações da Negociação</Label>
-              <Textarea
-                id="proposal-notes"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                onBlur={handleNotesBlur}
-                placeholder="Notas internas sobre a negociação..."
-                rows={3}
-              />
             </div>
           </div>
 
-          <DialogFooter className="flex flex-row justify-between gap-2 pt-4 border-t">
-            <Button
-              type="button"
-              variant="destructive"
-              size="sm"
-              onClick={() => setShowDeleteConfirm(true)}
-            >
-              <Trash2 className="h-4 w-4" />
-              <span className="hidden sm:inline ml-2">Eliminar</span>
-            </Button>
-            
-            <div className="flex gap-2">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    <MoreHorizontal className="h-4 w-4" />
-                    <span className="hidden sm:inline ml-2">Ações</span>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="bg-popover">
-                  <DropdownMenuItem 
-                    onClick={() => setShowEditModal(true)}
-                    disabled={hasCompletedSale}
-                  >
-                    <Pencil className="h-4 w-4 mr-2" />
-                    Editar
-                  </DropdownMenuItem>
-                  <DropdownMenuItem 
-                    onClick={handleSendEmail}
-                    disabled={!canSendEmail}
-                  >
-                    {sendProposalEmail.isPending ? (
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    ) : (
-                      <Mail className="h-4 w-4 mr-2" />
-                    )}
-                    {!isBrevoConfigured ? 'Configurar Email' : 'Enviar Email'}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handlePrint}>
-                    <Printer className="h-4 w-4 mr-2" />
-                    Imprimir
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-              
-              <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
+          {/* Fixed Footer */}
+          <div className="p-4 border-t border-border/50 shrink-0">
+            <div className="flex gap-3 max-w-6xl mx-auto justify-end">
+              <Button variant="outline" size="lg" onClick={() => onOpenChange(false)}>
                 Fechar
               </Button>
             </div>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -894,7 +791,6 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
         open={showEditModal}
         onOpenChange={setShowEditModal}
         onSuccess={() => {
-          // Fechar modal de detalhes para forçar refetch
           onOpenChange(false);
         }}
       />
