@@ -1,27 +1,67 @@
 
 
-# Corrigir "Propostas Recentes" e "Vendas Recentes" no ClientDetailsDrawer
+# Separar NIF Cliente vs Contribuinte Empresa + Seletor de Faturacao
 
-## Problema
-Os cards de Propostas e Vendas Recentes mostram dados em bruto:
-- **ID truncado** (`#1e229838`) em vez do codigo legivel da proposta/venda
-- **Status em ingles** (`accepted`) em vez de portugues (`Aceite`)
+## Resumo
+Atualmente existe apenas um campo `nif` na tabela `crm_clients`. Precisamos separar o NIF pessoal do cliente do Contribuinte da empresa, e adicionar um seletor "Faturar Cliente" / "Faturar Empresa" que determina qual entidade e dados fiscais sao usados no payload de faturacao.
 
-## Alteracoes em `src/components/clients/ClientDetailsDrawer.tsx`
+## 1. Migracao de Base de Dados
 
-### 1. Importar labels e cores de status
-Adicionar imports de `PROPOSAL_STATUS_LABELS`, `PROPOSAL_STATUS_COLORS` de `@/types/proposals` e `SALE_STATUS_LABELS`, `SALE_STATUS_COLORS` de `@/types/sales`.
+Adicionar 2 novas colunas a tabela `crm_clients`:
+- `company_nif` (text, nullable) - Contribuinte/NIF da empresa
+- `billing_target` (text, default `'client'`) - Valores: `'client'` ou `'company'`
 
-### 2. Propostas Recentes (linhas 438-448)
-- Trocar `#{proposal.id.slice(0, 8)}` por `{proposal.code || `#${proposal.id.slice(0, 8)}`}` para mostrar o codigo quando disponivel
-- Trocar `{proposal.status}` por `{PROPOSAL_STATUS_LABELS[proposal.status] || proposal.status}`
-- Aplicar cores ao Badge: `className={cn('text-xs', PROPOSAL_STATUS_COLORS[proposal.status])}`
+## 2. Alteracoes no Tipo `CrmClient` (`src/types/clients.ts`)
 
-### 3. Vendas Recentes (linhas 461-470)
-- Trocar `#{sale.id.slice(0, 8)}` por `{sale.code || `#${sale.id.slice(0, 8)}`}`
-- Trocar `{sale.status}` por `{SALE_STATUS_LABELS[sale.status] || sale.status}`
-- Aplicar cores ao Badge: `className={cn('text-xs', SALE_STATUS_COLORS[sale.status])}`
+- Adicionar `company_nif?: string | null`
+- Adicionar `billing_target?: 'client' | 'company'`
+- Criar tipo `BillingTarget = 'client' | 'company'`
 
-## Ficheiro alterado
+## 3. Alteracoes nos Modais de Criacao e Edicao
+
+### Coluna Esquerda - Reorganizacao dos Cards
+
+**Card "Informacoes Basicas"** (dados pessoais do cliente):
+- Nome
+- Email
+- Telefone
+- **NIF** (NIF pessoal do cliente - campo existente `nif`)
+
+**Card "Empresa"** (novo card separado):
+- Nome da Empresa (campo existente `company`)
+- **Contribuinte** (novo campo `company_nif`)
+
+**Card "Morada"** (sem alteracao)
+**Card "Notas"** (sem alteracao)
+
+### Coluna Direita - Novo Card "Faturacao"
+
+Novo card na coluna direita (sticky) com duas opcoes de selecao:
+
+```text
+Faturacao
+---------
+( ) Faturar Cliente    -> usa nome + nif do cliente
+(o) Faturar Empresa   -> usa company + company_nif
+```
+
+Implementado como RadioGroup com duas opcoes visuais (cards clicaveis).
+
+## 4. Alteracoes no Hook `useClients.ts`
+
+- Incluir `company_nif` e `billing_target` nos payloads de criacao e atualizacao
+
+## 5. Alteracoes no `ClientDetailsDrawer.tsx`
+
+- Mostrar o NIF no card "Dados do Cliente" (NIF pessoal)
+- Mostrar o Contribuinte no card "Empresa" (NIF da empresa)
+- Indicar visualmente qual e a entidade de faturacao ativa
+
+## Ficheiros alterados
+- Migracao SQL (nova coluna `company_nif` e `billing_target`)
+- `src/types/clients.ts`
+- `src/components/clients/CreateClientModal.tsx`
+- `src/components/clients/EditClientModal.tsx`
 - `src/components/clients/ClientDetailsDrawer.tsx`
+- `src/hooks/useClients.ts`
 
