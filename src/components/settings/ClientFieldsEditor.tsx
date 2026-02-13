@@ -101,7 +101,7 @@ export function ClientFieldsEditor() {
         {/* Field List */}
         <div className="space-y-3">
           {FIELD_ORDER.map((fieldKey) => {
-            const field = settings[fieldKey];
+            const field = settings[fieldKey] ?? DEFAULT_CLIENT_FIELDS_SETTINGS[fieldKey];
             
             return (
               <div 
