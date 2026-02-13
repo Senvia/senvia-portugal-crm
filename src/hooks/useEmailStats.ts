@@ -10,41 +10,52 @@ function getPeriodStart(period: Period): string {
   return subDays(new Date(), days).toISOString();
 }
 
-export function useEmailStats(period: Period = '30d') {
+export function useEmailStats(period: Period = '30d', campaignId?: string | null) {
   const { organization } = useAuth();
   const organizationId = organization?.id;
 
   return useQuery({
-    queryKey: ['email-stats', organizationId, period],
+    queryKey: ['email-stats', organizationId, period, campaignId],
     queryFn: async () => {
       if (!organizationId) return null;
 
       const periodStart = getPeriodStart(period);
 
-      const { data, error } = await supabase
+      let query = supabase
         .from('email_sends')
-        .select('status, sent_at, opened_at, clicked_at, created_at')
+        .select('*')
         .eq('organization_id', organizationId)
         .gte('created_at', periodStart);
 
+      if (campaignId) {
+        query = query.eq('campaign_id', campaignId);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
 
       const total = data.length;
-      const sent = data.filter(d => d.status === 'sent').length;
+      const sent = data.filter(d => d.status === 'sent' || d.status === 'delivered' || d.status === 'opened' || d.status === 'clicked').length;
+      const delivered = data.filter(d => ['delivered', 'opened', 'clicked'].includes(d.status)).length;
       const failed = data.filter(d => d.status === 'failed').length;
       const opened = data.filter(d => d.opened_at).length;
       const clicked = data.filter(d => d.clicked_at).length;
+      const bounced = data.filter(d => d.status === 'bounced').length;
+      const spam = data.filter(d => d.status === 'spam').length;
+      const blocked = data.filter(d => d.status === 'blocked').length;
+      const unsubscribed = data.filter(d => d.status === 'unsubscribed').length;
 
       // Group by day for chart
-      const dailyMap = new Map<string, { sent: number; failed: number; opened: number; clicked: number }>();
+      const dailyMap = new Map<string, { sent: number; delivered: number; failed: number; opened: number; clicked: number }>();
       
       data.forEach(item => {
         const day = format(new Date(item.created_at), 'yyyy-MM-dd');
         if (!dailyMap.has(day)) {
-          dailyMap.set(day, { sent: 0, failed: 0, opened: 0, clicked: 0 });
+          dailyMap.set(day, { sent: 0, delivered: 0, failed: 0, opened: 0, clicked: 0 });
         }
         const entry = dailyMap.get(day)!;
-        if (item.status === 'sent') entry.sent++;
+        if (['sent', 'delivered', 'opened', 'clicked'].includes(item.status)) entry.sent++;
+        if (['delivered', 'opened', 'clicked'].includes(item.status)) entry.delivered++;
         if (item.status === 'failed') entry.failed++;
         if (item.opened_at) entry.opened++;
         if (item.clicked_at) entry.clicked++;
@@ -57,12 +68,19 @@ export function useEmailStats(period: Period = '30d') {
       return {
         total,
         sent,
+        delivered,
         failed,
         opened,
         clicked,
+        bounced,
+        spam,
+        blocked,
+        unsubscribed,
+        deliveredRate: sent > 0 ? Math.round((delivered / sent) * 100) : 0,
         openRate: sent > 0 ? Math.round((opened / sent) * 100) : 0,
         clickRate: opened > 0 ? Math.round((clicked / opened) * 100) : 0,
         daily,
+        events: data,
       };
     },
     enabled: !!organizationId,

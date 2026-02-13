@@ -1,31 +1,58 @@
 import { useState } from "react";
-import { ArrowLeft, Mail, Eye, MousePointer, AlertCircle, Loader2 } from "lucide-react";
+import { ArrowLeft, Mail, Eye, MousePointer, AlertTriangle, Loader2, Send, CheckCircle, ShieldAlert, Ban, RefreshCw } from "lucide-react";
 import { Link } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useEmailStats } from "@/hooks/useEmailStats";
+import { useCampaigns } from "@/hooks/useCampaigns";
+import { EMAIL_SEND_STATUS_LABELS, EMAIL_SEND_STATUS_STYLES, type EmailSendStatus } from "@/types/marketing";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
 import { format } from "date-fns";
+import { useQueryClient } from "@tanstack/react-query";
 
 type Period = '7d' | '30d' | '90d';
 
 export default function Reports() {
   const [period, setPeriod] = useState<Period>('30d');
-  const { data: stats, isLoading } = useEmailStats(period);
+  const [campaignId, setCampaignId] = useState<string | null>(null);
+  const { data: stats, isLoading } = useEmailStats(period, campaignId);
+  const { data: campaigns } = useCampaigns();
+  const queryClient = useQueryClient();
+
+  const handleRefresh = () => {
+    queryClient.invalidateQueries({ queryKey: ['email-stats'] });
+  };
 
   const metrics = stats ? [
-    { label: "Total Enviados", value: stats.sent, icon: Mail, color: "text-foreground", sub: `${stats.total} totais` },
+    { label: "Enviados", value: stats.sent, icon: Send, color: "text-foreground", sub: `${stats.total} totais` },
+    { label: "Entregues", value: stats.delivered, icon: CheckCircle, color: "text-emerald-500", sub: `${stats.deliveredRate}% taxa de entrega` },
     { label: "Abertos", value: stats.opened, icon: Eye, color: "text-blue-500", sub: `${stats.openRate}% taxa de abertura` },
     { label: "Clicados", value: stats.clicked, icon: MousePointer, color: "text-purple-500", sub: `${stats.clickRate}% taxa de clique` },
-    { label: "Erros", value: stats.failed, icon: AlertCircle, color: "text-destructive", sub: stats.total > 0 ? `${Math.round((stats.failed / stats.total) * 100)}% taxa de erro` : '0%' },
+    { label: "Bounces", value: stats.bounced, icon: AlertTriangle, color: "text-yellow-500", sub: stats.sent > 0 ? `${Math.round((stats.bounced / stats.sent) * 100)}%` : '0%' },
+    { label: "Spam", value: stats.spam, icon: ShieldAlert, color: "text-destructive", sub: stats.sent > 0 ? `${Math.round((stats.spam / stats.sent) * 100)}%` : '0%' },
+    { label: "Bloqueados", value: stats.blocked, icon: Ban, color: "text-muted-foreground", sub: stats.sent > 0 ? `${Math.round((stats.blocked / stats.sent) * 100)}%` : '0%' },
   ] : [];
 
   const chartData = stats?.daily.map(d => ({
     ...d,
     label: format(new Date(d.date), "dd/MM"),
   })) || [];
+
+  const getStatusBadge = (status: string) => {
+    const s = status as EmailSendStatus;
+    const style = EMAIL_SEND_STATUS_STYLES[s] || EMAIL_SEND_STATUS_STYLES.sent;
+    const label = EMAIL_SEND_STATUS_LABELS[s] || status;
+    return (
+      <Badge variant="outline" style={{ backgroundColor: style.bg, color: style.text, borderColor: 'transparent' }}>
+        {label}
+      </Badge>
+    );
+  };
 
   return (
     <AppLayout>
@@ -43,6 +70,21 @@ export default function Reports() {
               <p className="text-muted-foreground text-sm">Métricas de envio de emails</p>
             </div>
           </div>
+        </div>
+
+        {/* Filters */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <Select value={campaignId || 'all'} onValueChange={(v) => setCampaignId(v === 'all' ? null : v)}>
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="Todas as campanhas" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas as campanhas</SelectItem>
+              {campaigns?.map(c => (
+                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Tabs value={period} onValueChange={(v) => setPeriod(v as Period)}>
             <TabsList>
               <TabsTrigger value="7d">7 dias</TabsTrigger>
@@ -50,6 +92,9 @@ export default function Reports() {
               <TabsTrigger value="90d">90 dias</TabsTrigger>
             </TabsList>
           </Tabs>
+          <Button variant="outline" size="icon" onClick={handleRefresh} className="h-9 w-9">
+            <RefreshCw className="h-4 w-4" />
+          </Button>
         </div>
 
         {isLoading ? (
@@ -59,7 +104,7 @@ export default function Reports() {
         ) : stats ? (
           <>
             {/* Metric Cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-7 gap-4">
               {metrics.map(m => (
                 <Card key={m.label}>
                   <CardContent className="p-4">
@@ -67,7 +112,7 @@ export default function Reports() {
                       <m.icon className={`h-4 w-4 ${m.color}`} />
                       <span className="text-sm text-muted-foreground">{m.label}</span>
                     </div>
-                    <p className="text-2xl font-bold">{m.value}</p>
+                    <p className="text-xl md:text-2xl font-bold">{m.value}</p>
                     <p className="text-xs text-muted-foreground mt-1">{m.sub}</p>
                   </CardContent>
                 </Card>
@@ -79,7 +124,7 @@ export default function Reports() {
               <div className="grid gap-4 md:grid-cols-2">
                 <Card>
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium">Envios ao longo do tempo</CardTitle>
+                    <CardTitle className="text-sm font-medium">Envios e Entregas</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="h-[250px]">
@@ -90,7 +135,8 @@ export default function Reports() {
                           <YAxis className="text-xs" tick={{ fontSize: 11 }} />
                           <Tooltip />
                           <Area type="monotone" dataKey="sent" stackId="1" stroke="hsl(var(--primary))" fill="hsl(var(--primary) / 0.2)" name="Enviados" />
-                          <Area type="monotone" dataKey="failed" stackId="1" stroke="hsl(var(--destructive))" fill="hsl(var(--destructive) / 0.2)" name="Erros" />
+                          <Area type="monotone" dataKey="delivered" stackId="2" stroke="hsl(142 76% 45%)" fill="hsl(142 76% 45% / 0.2)" name="Entregues" />
+                          <Area type="monotone" dataKey="failed" stackId="3" stroke="hsl(var(--destructive))" fill="hsl(var(--destructive) / 0.2)" name="Erros" />
                         </AreaChart>
                       </ResponsiveContainer>
                     </div>
@@ -119,7 +165,54 @@ export default function Reports() {
               </div>
             )}
 
-            {chartData.length === 0 && (
+            {/* Events Table */}
+            {stats.events && stats.events.length > 0 && (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium">Eventos Detalhados</CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="overflow-auto max-h-[400px]">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Destinatário</TableHead>
+                          <TableHead className="hidden md:table-cell">Email</TableHead>
+                          <TableHead>Estado</TableHead>
+                          <TableHead className="hidden md:table-cell">Enviado</TableHead>
+                          <TableHead className="hidden lg:table-cell">Aberto</TableHead>
+                          <TableHead className="hidden lg:table-cell">Clicado</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {stats.events.slice(0, 100).map((event: any) => (
+                          <TableRow key={event.id}>
+                            <TableCell className="font-medium truncate max-w-[150px]">
+                              {event.recipient_name || '—'}
+                            </TableCell>
+                            <TableCell className="hidden md:table-cell text-muted-foreground truncate max-w-[200px]">
+                              {event.recipient_email}
+                            </TableCell>
+                            <TableCell>{getStatusBadge(event.status)}</TableCell>
+                            <TableCell className="hidden md:table-cell text-muted-foreground text-xs">
+                              {event.sent_at ? format(new Date(event.sent_at), "dd/MM HH:mm") : '—'}
+                            </TableCell>
+                            <TableCell className="hidden lg:table-cell text-muted-foreground text-xs">
+                              {event.opened_at ? format(new Date(event.opened_at), "dd/MM HH:mm") : '—'}
+                            </TableCell>
+                            <TableCell className="hidden lg:table-cell text-muted-foreground text-xs">
+                              {event.clicked_at ? format(new Date(event.clicked_at), "dd/MM HH:mm") : '—'}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {chartData.length === 0 && (!stats.events || stats.events.length === 0) && (
               <div className="text-center py-12 text-muted-foreground">
                 <Mail className="h-12 w-12 mx-auto mb-4 opacity-50" />
                 <p>Sem dados de envio neste período</p>
