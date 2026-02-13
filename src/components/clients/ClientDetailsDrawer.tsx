@@ -138,14 +138,8 @@ export function ClientDetailsDrawer({
       <DialogContent variant="fullScreen" className="flex flex-col p-0 gap-0">
         {/* Header */}
         <DialogHeader className="px-4 sm:px-6 py-3 border-b shrink-0">
-          <div className="flex items-center justify-end">
-            <DialogTitle className="sr-only">{client.name}</DialogTitle>
-            <DialogDescription className="sr-only">Detalhes do cliente {client.name}</DialogDescription>
-            <Button variant="outline" size="sm" onClick={() => onEdit(client)}>
-              <Edit className="h-4 w-4 mr-1" />
-              Editar
-            </Button>
-          </div>
+          <DialogTitle className="sr-only">{client.name}</DialogTitle>
+          <DialogDescription className="sr-only">Detalhes do cliente {client.name}</DialogDescription>
         </DialogHeader>
 
         {/* Body */}
@@ -395,6 +389,11 @@ export function ClientDetailsDrawer({
                       <CardTitle className="text-base">Ações Rápidas</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-2">
+                      <Button variant="outline" size="sm" className="w-full justify-start" onClick={() => onEdit(client)}>
+                        <Edit className="h-4 w-4 mr-1" />
+                        Editar
+                      </Button>
+                      <Separator />
                       {client.phone && (
                         <div className="flex gap-2">
                           <Button variant="outline" size="sm" className="flex-1" asChild>
