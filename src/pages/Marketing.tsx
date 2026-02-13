@@ -1,4 +1,4 @@
-import { Mail, Send, BarChart3, ArrowRight } from "lucide-react";
+import { Mail, Send, BarChart3, ArrowRight, Users } from "lucide-react";
 import { Link } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,6 +18,13 @@ const modules = [
     description: "Envie emails em massa para clientes e leads segmentados",
     icon: Send,
     href: "/marketing/campaigns",
+    available: true,
+  },
+  {
+    title: "Listas",
+    description: "Gira listas de contactos e importe ficheiros XLSX/CSV",
+    icon: Users,
+    href: "/marketing/lists",
     available: true,
   },
   {

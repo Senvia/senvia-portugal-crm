@@ -26,6 +26,7 @@ import Marketing from "./pages/Marketing";
 import MarketingTemplates from "./pages/marketing/Templates";
 import MarketingCampaigns from "./pages/marketing/Campaigns";
 import MarketingReports from "./pages/marketing/Reports";
+import MarketingLists from "./pages/marketing/Lists";
 import EcommerceProducts from "./pages/ecommerce/Products";
 import EcommerceOrders from "./pages/ecommerce/Orders";
 import EcommerceCustomers from "./pages/ecommerce/Customers";
@@ -178,6 +179,11 @@ const App = () => (
             <Route path="/marketing/reports" element={
               <ProtectedRoute>
                 <MarketingReports />
+              </ProtectedRoute>
+            } />
+            <Route path="/marketing/lists" element={
+              <ProtectedRoute>
+                <MarketingLists />
               </ProtectedRoute>
             } />
 
