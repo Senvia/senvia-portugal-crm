@@ -53,6 +53,7 @@ export interface CashflowPoint {
   received: number;
   scheduled: number;
   expenses: number;
+  overdue: number;
 }
 
 export interface FinanceStats {
@@ -65,4 +66,6 @@ export interface FinanceStats {
   cashflowTrend: CashflowPoint[];
   totalExpenses: number;
   balance: number;
+  totalOverdue: number;
+  overdueCount: number;
 }
