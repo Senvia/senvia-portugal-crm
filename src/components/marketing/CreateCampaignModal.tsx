@@ -248,11 +248,13 @@ export function CreateCampaignModal({ open, onOpenChange, campaign }: CreateCamp
       }));
 
       const result = await sendTemplate.mutateAsync({
-        templateId: contentMode === "template" ? templateId : "",
+        templateId: contentMode === "template" ? templateId : undefined,
         recipients,
         campaignId,
         settings,
         settingsData,
+        subject: contentMode === "custom" ? subject : undefined,
+        htmlContent: contentMode === "custom" ? customHtml : undefined,
       });
 
       await updateStatus.mutateAsync({
