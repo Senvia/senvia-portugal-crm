@@ -66,6 +66,32 @@ export interface EmailCampaign {
   template?: EmailTemplate;
 }
 
+export type EmailSendStatus = 'sent' | 'delivered' | 'opened' | 'clicked' | 'bounced' | 'spam' | 'blocked' | 'unsubscribed' | 'failed';
+
+export const EMAIL_SEND_STATUS_LABELS: Record<EmailSendStatus, string> = {
+  sent: 'Enviado',
+  delivered: 'Entregue',
+  opened: 'Aberto',
+  clicked: 'Clicado',
+  bounced: 'Bounce',
+  spam: 'Spam',
+  blocked: 'Bloqueado',
+  unsubscribed: 'Dessubscrito',
+  failed: 'Falhado',
+};
+
+export const EMAIL_SEND_STATUS_STYLES: Record<EmailSendStatus, { bg: string; text: string }> = {
+  sent: { bg: 'hsl(var(--muted))', text: 'hsl(var(--muted-foreground))' },
+  delivered: { bg: 'hsl(142 76% 90%)', text: 'hsl(142 76% 30%)' },
+  opened: { bg: 'hsl(210 80% 90%)', text: 'hsl(210 80% 30%)' },
+  clicked: { bg: 'hsl(270 70% 90%)', text: 'hsl(270 70% 30%)' },
+  bounced: { bg: 'hsl(45 93% 90%)', text: 'hsl(45 93% 30%)' },
+  spam: { bg: 'hsl(0 84% 90%)', text: 'hsl(0 84% 30%)' },
+  blocked: { bg: 'hsl(220 10% 90%)', text: 'hsl(220 10% 40%)' },
+  unsubscribed: { bg: 'hsl(30 80% 90%)', text: 'hsl(30 80% 30%)' },
+  failed: { bg: 'hsl(0 84% 90%)', text: 'hsl(0 84% 30%)' },
+};
+
 export interface EmailSendWithTracking {
   id: string;
   organization_id: string;
