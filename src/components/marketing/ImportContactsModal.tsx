@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useContactLists, useCreateContactList } from "@/hooks/useContactLists";
@@ -203,21 +203,21 @@ export function ImportContactsModal({ open, onOpenChange }: Props) {
   };
 
   return (
-    <Sheet open={open} onOpenChange={handleClose}>
-      <SheetContent side="right" className="w-full sm:max-w-[700px] p-0 flex flex-col">
-        <div className="p-6 pb-0">
-          <SheetHeader>
-            <SheetTitle className="text-lg">Importar contactos de um arquivo</SheetTitle>
-            <SheetDescription>
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent variant="fullScreen" className="flex flex-col p-0">
+        <div className="p-6 pb-0 max-w-3xl mx-auto w-full">
+          <DialogHeader>
+            <DialogTitle className="text-lg">Importar contactos de um arquivo</DialogTitle>
+            <DialogDescription>
               Importe contactos de um ficheiro CSV, Excel ou TXT para uma lista de marketing.
-            </SheetDescription>
-          </SheetHeader>
+            </DialogDescription>
+          </DialogHeader>
         </div>
 
         <Separator className="mt-4" />
 
         <ScrollArea className="flex-1 px-6 py-4">
-          <div className="space-y-2">
+          <div className="max-w-3xl mx-auto w-full space-y-2">
             {/* Step 1 */}
             <div className="rounded-lg border">
               <ImportStepHeader
@@ -319,7 +319,7 @@ export function ImportContactsModal({ open, onOpenChange }: Props) {
             </div>
           </div>
         </ScrollArea>
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   );
 }
