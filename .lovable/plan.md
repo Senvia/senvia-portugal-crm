@@ -1,46 +1,29 @@
 
-# Corrigir Check Constraint na Tabela email_sends
+# Filtrar Destinatarios ao Clicar nos Cards de Metricas
 
-## Problema
+## Objetivo
 
-Todos os inserts da Edge Function `sync-campaign-sends` estao a falhar com:
+Ao clicar num card de metrica (Destinatarios, Enviados, Aberturas, Cliques, Erros), a lista de destinatarios abaixo filtra automaticamente para mostrar apenas os registos correspondentes. Clicar novamente no mesmo card remove o filtro.
 
-```
-violates check constraint "email_sends_status_check"
-```
+## Alteracoes
 
-A tabela `email_sends` tem um CHECK constraint que so aceita 3 valores:
-- `pending`, `sent`, `failed`
+### Ficheiro: `src/components/marketing/CampaignDetailsModal.tsx`
 
-Mas a Brevo devolve eventos com estados como `delivered`, `bounced`, `blocked`, `spam` — e a Edge Function tenta inseri-los, sendo todos rejeitados. Por isso:
-- **0 Destinatarios** (nenhum registo novo foi inserido, o `total_recipients` nunca foi actualizado)
-- **0 Aberturas / 0 Cliques / 0 Erros** (os 19 registos antigos tem status `sent` mas sem `opened_at` / `clicked_at`)
+1. **Novo estado** `activeFilter` com valores possiveis: `null | 'all' | 'delivered' | 'opened' | 'clicked' | 'failed'`
 
-## Solucao
+2. **Cards clicaveis** — adicionar `cursor-pointer` e um anel visual (`ring-2 ring-primary`) ao card ativo. O `onClick` alterna o filtro (clique = ativa, segundo clique = desativa).
 
-### 1. Migracao SQL - Expandir o CHECK constraint
+3. **Logica de filtragem** — o `filteredSends` combina o filtro de metrica com a pesquisa por texto:
+   - `all`: mostra todos (sem filtro extra)
+   - `delivered`: `status === 'sent' || status === 'delivered'`
+   - `opened`: `opened_at !== null`
+   - `clicked`: `clicked_at !== null`
+   - `failed`: `status === 'failed' || status === 'bounced' || status === 'blocked' || status === 'spam'`
 
-Alterar o constraint para aceitar todos os estados possiveis da Brevo:
+4. **Contador no titulo** — o titulo "Destinatarios (X)" atualiza para refletir a contagem filtrada quando um filtro esta ativo.
 
-```sql
-ALTER TABLE email_sends DROP CONSTRAINT email_sends_status_check;
-ALTER TABLE email_sends ADD CONSTRAINT email_sends_status_check 
-  CHECK (status IN ('pending', 'sent', 'delivered', 'failed', 'bounced', 'blocked', 'spam'));
-```
+5. **Indicador visual** — badge ou texto junto ao titulo a indicar qual filtro esta ativo, com botao "Limpar" para remover.
 
-### 2. Sem alteracoes de codigo
+## Detalhe Tecnico
 
-A Edge Function e o modal ja estao correctos. Uma vez que o constraint aceite os novos valores:
-- O auto-sync vai popular os registos com os dados da Brevo
-- O `total_recipients` vai ser actualizado automaticamente
-- As metricas (Aberturas, Cliques, Erros) vao aparecer correctamente
-- Os nomes dos destinatarios vao ser populados a partir do email (parte antes do @)
-
-## Resultado Esperado
-
-Apos a migracao, ao abrir o modal da campanha:
-- Destinatarios: numero real de emails enviados
-- Enviados: emails entregues com sucesso
-- Aberturas: emails abertos (com percentagem)
-- Cliques: emails com cliques (com percentagem)
-- Erros: bounces + bloqueados + spam
+Cada metrica no array `metrics` recebe um campo `filterKey` que mapeia ao tipo de filtro. O card renderiza com estilos condicionais baseados em `activeFilter === m.filterKey`. A filtragem e feita num unico `useMemo` que aplica primeiro o filtro de metrica e depois o filtro de texto.
