@@ -160,7 +160,7 @@ serve(async (req: Request): Promise<Response> => {
           const eventTime = new Date(event.date).getTime();
           const sentTime = record.sentAt ? new Date(record.sentAt).getTime() : 0;
           const diffSeconds = sentTime ? (eventTime - sentTime) / 1000 : Infinity;
-          if (diffSeconds < 10) {
+          if (diffSeconds < 120) {
             console.log(`Ignoring suspicious open for ${event.email}: ${diffSeconds.toFixed(1)}s after send`);
             break;
           }
