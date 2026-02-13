@@ -61,7 +61,9 @@ import { useSaleItems } from "@/hooks/useSaleItems";
 import { useProducts } from "@/hooks/useProducts";
 import { VatBadge, useVatCalculation, isInvoiceXpressActive as checkIxActive, getOrgTaxValue } from "./SaleFiscalInfo";
 import { useProposalCpes } from "@/hooks/useProposalCpes";
+import { useCpes } from "@/hooks/useCpes";
 import { formatCurrency } from "@/lib/format";
+import { CPE_STATUS_LABELS, CPE_STATUS_STYLES } from "@/types/cpes";
 import { MODELO_SERVICO_LABELS, NEGOTIATION_TYPE_LABELS, SERVICOS_PRODUCTS } from "@/types/proposals";
 import type { SaleWithDetails, SaleStatus } from "@/types/sales";
 import { SALE_STATUS_LABELS, SALE_STATUS_COLORS, SALE_STATUSES } from "@/types/sales";
@@ -99,6 +101,8 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
   const { data: saleItems = [] } = useSaleItems(sale?.id);
   const { data: products } = useProducts();
   const { data: proposalCpes = [] } = useProposalCpes(sale?.proposal_id ?? undefined);
+  const clientId = sale?.client_id || sale?.client?.id || null;
+  const { data: clientCpes = [] } = useCpes(clientId);
   const updateSale = useUpdateSale();
   const issueInvoice = useIssueInvoice();
   const issueInvoiceReceipt = useIssueInvoiceReceipt();
@@ -438,8 +442,8 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                     </Card>
                   )}
 
-                  {/* Telecom: CPEs */}
-                  {isTelecom && proposalCpes.length > 0 && (
+                  {/* Telecom: CPEs (proposal CPEs first, fallback to client CPEs) */}
+                  {isTelecom && (proposalCpes.length > 0 || clientCpes.length > 0) && (
                     <Card>
                       <CardHeader className="pb-2 p-4">
                         <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
@@ -448,44 +452,88 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                         </CardTitle>
                       </CardHeader>
                       <CardContent className="p-4 pt-0 space-y-2">
-                        {proposalCpes.map((cpe) => (
-                          <div
-                            key={cpe.id}
-                            className="p-3 rounded-lg border bg-muted/30 space-y-2"
-                          >
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <Badge variant="outline" className="text-xs">{cpe.equipment_type}</Badge>
-                              <Badge variant="secondary" className="text-xs">{cpe.comercializador}</Badge>
-                              {cpe.existing_cpe_id ? (
-                                <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-500 border-blue-500/30">Renovação</Badge>
-                              ) : (
-                                <Badge variant="outline" className="text-xs bg-green-500/10 text-green-500 border-green-500/30">Novo</Badge>
+                        {proposalCpes.length > 0 ? (
+                          proposalCpes.map((cpe) => (
+                            <div
+                              key={cpe.id}
+                              className="p-3 rounded-lg border bg-muted/30 space-y-2"
+                            >
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <Badge variant="outline" className="text-xs">{cpe.equipment_type}</Badge>
+                                <Badge variant="secondary" className="text-xs">{cpe.comercializador}</Badge>
+                                {cpe.existing_cpe_id ? (
+                                  <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-500 border-blue-500/30">Renovação</Badge>
+                                ) : (
+                                  <Badge variant="outline" className="text-xs bg-green-500/10 text-green-500 border-green-500/30">Novo</Badge>
+                                )}
+                              </div>
+                              {cpe.serial_number && (
+                                <div>
+                                  <p className="text-xs text-muted-foreground">{serialLabel}</p>
+                                  <p className="text-sm font-mono">{cpe.serial_number}</p>
+                                </div>
+                              )}
+                              {(cpe.fidelizacao_start || cpe.fidelizacao_end) && (
+                                <div>
+                                  <p className="text-xs text-muted-foreground">Fidelização</p>
+                                  <p className="text-sm">
+                                    {cpe.fidelizacao_start 
+                                      ? format(new Date(cpe.fidelizacao_start), "dd/MM/yyyy", { locale: pt })
+                                      : '—'
+                                    }
+                                    {' → '}
+                                    {cpe.fidelizacao_end 
+                                      ? format(new Date(cpe.fidelizacao_end), "dd/MM/yyyy", { locale: pt })
+                                      : '—'
+                                    }
+                                  </p>
+                                </div>
                               )}
                             </div>
-                            {cpe.serial_number && (
-                              <div>
-                                <p className="text-xs text-muted-foreground">{serialLabel}</p>
-                                <p className="text-sm font-mono">{cpe.serial_number}</p>
+                          ))
+                        ) : (
+                          clientCpes.map((cpe) => {
+                            const statusStyle = CPE_STATUS_STYLES[cpe.status as keyof typeof CPE_STATUS_STYLES];
+                            return (
+                              <div
+                                key={cpe.id}
+                                className="p-3 rounded-lg border bg-muted/30 space-y-2"
+                              >
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <Badge variant="outline" className="text-xs">{cpe.equipment_type}</Badge>
+                                  <Badge variant="secondary" className="text-xs">{cpe.comercializador}</Badge>
+                                  {statusStyle && (
+                                    <Badge variant="outline" className={`text-xs ${statusStyle.bg} ${statusStyle.text} ${statusStyle.border}`}>
+                                      {CPE_STATUS_LABELS[cpe.status as keyof typeof CPE_STATUS_LABELS]}
+                                    </Badge>
+                                  )}
+                                </div>
+                                {cpe.serial_number && (
+                                  <div>
+                                    <p className="text-xs text-muted-foreground">{serialLabel}</p>
+                                    <p className="text-sm font-mono">{cpe.serial_number}</p>
+                                  </div>
+                                )}
+                                {(cpe.fidelizacao_start || cpe.fidelizacao_end) && (
+                                  <div>
+                                    <p className="text-xs text-muted-foreground">Fidelização</p>
+                                    <p className="text-sm">
+                                      {cpe.fidelizacao_start 
+                                        ? format(new Date(cpe.fidelizacao_start), "dd/MM/yyyy", { locale: pt })
+                                        : '—'
+                                      }
+                                      {' → '}
+                                      {cpe.fidelizacao_end 
+                                        ? format(new Date(cpe.fidelizacao_end), "dd/MM/yyyy", { locale: pt })
+                                        : '—'
+                                      }
+                                    </p>
+                                  </div>
+                                )}
                               </div>
-                            )}
-                            {(cpe.fidelizacao_start || cpe.fidelizacao_end) && (
-                              <div>
-                                <p className="text-xs text-muted-foreground">Fidelização</p>
-                                <p className="text-sm">
-                                  {cpe.fidelizacao_start 
-                                    ? format(new Date(cpe.fidelizacao_start), "dd/MM/yyyy", { locale: pt })
-                                    : '—'
-                                  }
-                                  {' → '}
-                                  {cpe.fidelizacao_end 
-                                    ? format(new Date(cpe.fidelizacao_end), "dd/MM/yyyy", { locale: pt })
-                                    : '—'
-                                  }
-                                </p>
-                              </div>
-                            )}
-                          </div>
-                        ))}
+                            );
+                          })
+                        )}
                       </CardContent>
                     </Card>
                   )}
