@@ -2,6 +2,7 @@ import { Lead } from "@/types";
 
 export type ClientStatus = 'active' | 'inactive' | 'vip';
 export type ClientSource = 'lead' | 'referral' | 'direct' | 'website' | 'other';
+export type BillingTarget = 'client' | 'company';
 
 export interface CrmClient {
   id: string;
@@ -16,6 +17,8 @@ export interface CrmClient {
   phone?: string | null;
   company?: string | null;
   nif?: string | null;
+  company_nif?: string | null;
+  billing_target?: BillingTarget;
   
   // Address
   address_line1?: string | null;

@@ -358,9 +358,11 @@ export type Database = {
           address_line1: string | null
           address_line2: string | null
           assigned_to: string | null
+          billing_target: string
           city: string | null
           code: string | null
           company: string | null
+          company_nif: string | null
           country: string | null
           created_at: string | null
           email: string | null
@@ -383,9 +385,11 @@ export type Database = {
           address_line1?: string | null
           address_line2?: string | null
           assigned_to?: string | null
+          billing_target?: string
           city?: string | null
           code?: string | null
           company?: string | null
+          company_nif?: string | null
           country?: string | null
           created_at?: string | null
           email?: string | null
@@ -408,9 +412,11 @@ export type Database = {
           address_line1?: string | null
           address_line2?: string | null
           assigned_to?: string | null
+          billing_target?: string
           city?: string | null
           code?: string | null
           company?: string | null
+          company_nif?: string | null
           country?: string | null
           created_at?: string | null
           email?: string | null
