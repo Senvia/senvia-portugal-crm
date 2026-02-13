@@ -71,6 +71,7 @@ export default function Settings() {
   const [showInvoiceXpressApiKey, setShowInvoiceXpressApiKey] = useState(false);
   const [taxRate, setTaxRate] = useState('23');
   const [taxExemptionReason, setTaxExemptionReason] = useState('');
+  const [invoicingEnabled, setInvoicingEnabled] = useState(true);
 
   // KeyInvoice state
   const [keyinvoiceApiKey, setKeyinvoiceApiKey] = useState('');
@@ -133,6 +134,7 @@ export default function Settings() {
         if (tc) {
           setTaxRate(String(tc.tax_value ?? 23));
           setTaxExemptionReason(tc.tax_exemption_reason || '');
+          setInvoicingEnabled(tc.invoicing_enabled !== false);
         }
 
         if ((data as any).integrations_enabled) {
@@ -206,7 +208,7 @@ export default function Settings() {
     const taxValue = Number(taxRate);
     const taxName = taxValue === 0 ? 'Isento' : `IVA${taxValue}`;
     updateOrganization.mutate({
-      tax_config: { tax_name: taxName, tax_value: taxValue, tax_exemption_reason: taxValue === 0 ? taxExemptionReason : null },
+      tax_config: { tax_name: taxName, tax_value: taxValue, tax_exemption_reason: taxValue === 0 ? taxExemptionReason : null, invoicing_enabled: invoicingEnabled },
     });
   };
 
@@ -312,6 +314,8 @@ export default function Settings() {
           setTaxRate={setTaxRate}
           taxExemptionReason={taxExemptionReason}
           setTaxExemptionReason={setTaxExemptionReason}
+          invoicingEnabled={invoicingEnabled}
+          setInvoicingEnabled={setInvoicingEnabled}
           onSave={handleSaveFiscal}
           isPending={updateOrganization.isPending}
         />
