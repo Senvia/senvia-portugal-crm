@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Plus, UserPlus, Zap, Wrench, Package } from 'lucide-react';
+import { Plus, UserPlus, Zap, Wrench, Package, FileText, User } from 'lucide-react';
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { SearchableCombobox, type ComboboxOption } from '@/components/ui/searchable-combobox';
 import { Separator } from '@/components/ui/separator';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Loader2 } from 'lucide-react';
 import { useCreateProposal } from '@/hooks/useProposals';
 import { useClients } from '@/hooks/useClients';
 import { useCreateProposalCpesBatch } from '@/hooks/useProposalCpes';
@@ -46,7 +48,6 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
   const createProposal = useCreateProposal();
   const createProposalCpesBatch = useCreateProposalCpesBatch();
   
-  // Only show telecom-specific UI for telecom niche
   const isTelecom = organization?.niche === 'telecom';
   
   const [selectedClientId, setSelectedClientId] = useState<string | null>(client?.id || null);
@@ -54,19 +55,15 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
   const [proposalDate, setProposalDate] = useState(new Date().toISOString().split('T')[0]);
   const [status, setStatus] = useState<ProposalStatus>('draft');
   
-  // Tipo de proposta e negociação (telecom)
   const [proposalType, setProposalType] = useState<ProposalType>('energia');
   const [negotiationType, setNegotiationType] = useState<NegotiationType>('angariacao');
   
-  // Campos Serviços (telecom)
   const [kwp, setKwp] = useState<string>('');
   const [comissaoServicos, setComissaoServicos] = useState<string>('');
   const [servicosProdutos, setServicosProdutos] = useState<string[]>([]);
   
-  // CPEs para a proposta (apenas energia/telecom)
   const [proposalCpes, setProposalCpes] = useState<ProposalCpeDraft[]>([]);
   
-  // Campos para nichos NÃO-telecom
   const [selectedProducts, setSelectedProducts] = useState<Array<{
     product_id: string;
     name: string;
@@ -76,10 +73,8 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
     discount_value: number;
   }>>([]);
   
-  // Modal para criar novo cliente
   const [isCreateClientOpen, setIsCreateClientOpen] = useState(false);
 
-  // Update selectedClientId when client prop or preselectedClientId changes
   useEffect(() => {
     if (open) {
       if (preselectedClientId) {
@@ -90,7 +85,6 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
     }
   }, [open, client?.id, preselectedClientId]);
 
-  // Helper function for product total with discount
   const getProductTotal = (product: typeof selectedProducts[0]) => {
     const subtotal = product.quantity * product.unit_price;
     if (product.discount_type === 'percentage') {
@@ -99,7 +93,6 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
     return Math.max(0, subtotal - product.discount_value);
   };
 
-  // Calculate total value
   const totalValue = useMemo(() => {
     if (isTelecom) {
       if (proposalType === 'energia') {
@@ -107,12 +100,10 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
       }
       return 0;
     }
-    // Para não-telecom: soma dos produtos (com desconto)
     const productsTotal = selectedProducts.reduce((sum, p) => sum + getProductTotal(p), 0);
     return productsTotal;
   }, [isTelecom, proposalType, proposalCpes, selectedProducts]);
 
-  // Calculate total commission from CPEs (telecom only)
   const totalComissao = useMemo(() => {
     if (proposalType === 'energia') {
       return proposalCpes.reduce((sum, cpe) => sum + (parseFloat(cpe.comissao) || 0), 0);
@@ -172,7 +163,6 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
     );
   };
 
-
   const handleRemoveProduct = (productId: string) => {
     setSelectedProducts(prev => prev.filter(p => p.product_id !== productId));
   };
@@ -187,6 +177,10 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
     );
   };
 
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(value);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -197,16 +191,14 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
       status: status,
       notes: notes.trim() || undefined,
       proposal_date: proposalDate,
-      products: [], // No longer using products for telecom
+      products: [],
       proposal_type: proposalType,
       negotiation_type: isTelecom ? negotiationType : undefined,
-      // Serviços fields
       kwp: proposalType === 'servicos' ? (parseFloat(kwp) || undefined) : undefined,
       comissao: totalComissao || undefined,
       servicos_produtos: proposalType === 'servicos' && servicosProdutos.length > 0 ? servicosProdutos : undefined,
     }, {
       onSuccess: async (createdProposal) => {
-        // Criar CPEs da proposta se existirem
         if (proposalCpes.length > 0 && createdProposal?.id) {
           await createProposalCpesBatch.mutateAsync(
             proposalCpes.map(cpe => ({
@@ -229,7 +221,6 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
           );
         }
         
-        // Reset form
         setSelectedClientId(null);
         setNotes('');
         setProposalDate(new Date().toISOString().split('T')[0]);
@@ -248,381 +239,441 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
     });
   };
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(value);
-  };
-
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col p-0">
-          <DialogHeader className="px-6 py-4 border-b">
-            <DialogTitle>Nova Proposta</DialogTitle>
+        <DialogContent variant="fullScreen" className="flex flex-col p-0 gap-0">
+          <DialogHeader className="px-6 pr-14 py-4 border-b border-border/50 shrink-0">
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5 text-primary" />
+              Nova Proposta
+            </DialogTitle>
           </DialogHeader>
 
-          <div className="flex-1 min-h-0 overflow-y-auto">
-          <form onSubmit={handleSubmit} className="space-y-4 px-6 py-4">
-            {/* Client Selector */}
-            <div className="space-y-2">
-              <Label>Cliente</Label>
-              <div className="flex gap-2">
-                <SearchableCombobox
-                  options={clients.map((c): ComboboxOption => ({
-                    value: c.id,
-                    label: c.name,
-                    sublabel: c.code || c.email || undefined,
-                  }))}
-                  value={selectedClientId}
-                  onValueChange={setSelectedClientId}
-                  placeholder="Selecionar cliente..."
-                  searchPlaceholder="Pesquisar cliente..."
-                  emptyLabel="Sem cliente associado"
-                  emptyText="Nenhum cliente encontrado."
-                  className="flex-1"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setIsCreateClientOpen(true)}
-                  title="Novo Cliente"
-                >
-                  <UserPlus className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
+          <div className="flex-1 overflow-y-auto">
+            <div className="max-w-6xl mx-auto p-4 sm:p-6">
+              <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+                {/* LEFT COLUMN (60%) */}
+                <div className="lg:col-span-3 space-y-4">
+                  {/* Info Básica */}
+                  <Card>
+                    <CardHeader className="pb-2 p-4">
+                      <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
+                        <User className="h-4 w-4" />
+                        Informação Básica
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-4 pt-0 space-y-4">
+                      <div className="space-y-2">
+                        <Label>Cliente</Label>
+                        <div className="flex gap-2">
+                          <SearchableCombobox
+                            options={clients.map((c): ComboboxOption => ({
+                              value: c.id,
+                              label: c.name,
+                              sublabel: c.code || c.email || undefined,
+                            }))}
+                            value={selectedClientId}
+                            onValueChange={setSelectedClientId}
+                            placeholder="Selecionar cliente..."
+                            searchPlaceholder="Pesquisar cliente..."
+                            emptyLabel="Sem cliente associado"
+                            emptyText="Nenhum cliente encontrado."
+                            className="flex-1"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            onClick={() => setIsCreateClientOpen(true)}
+                            title="Novo Cliente"
+                          >
+                            <UserPlus className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="proposal-date">Data da Proposta</Label>
-                <Input
-                  id="proposal-date"
-                  type="date"
-                  value={proposalDate}
-                  onChange={(e) => setProposalDate(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="status">Estado</Label>
-                <Select value={status} onValueChange={(v) => setStatus(v as ProposalStatus)}>
-                  <SelectTrigger id="status">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PROPOSAL_STATUSES.map((s) => (
-                      <SelectItem key={s} value={s}>
-                        {PROPOSAL_STATUS_LABELS[s]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="proposal-date">Data da Proposta</Label>
+                          <Input
+                            id="proposal-date"
+                            type="date"
+                            value={proposalDate}
+                            onChange={(e) => setProposalDate(e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="status">Estado</Label>
+                          <Select value={status} onValueChange={(v) => setStatus(v as ProposalStatus)}>
+                            <SelectTrigger id="status">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {PROPOSAL_STATUSES.map((s) => (
+                                <SelectItem key={s} value={s}>
+                                  {PROPOSAL_STATUS_LABELS[s]}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
 
-            {/* Tipo de Negociação (apenas telecom) */}
-            {isTelecom && (
-              <div className="space-y-2">
-                <Label>Tipo de Negociação</Label>
-                <div className="grid grid-cols-2 gap-2">
-                  {NEGOTIATION_TYPES.map((type) => (
-                    <Button
-                      key={type}
-                      type="button"
-                      variant={negotiationType === type ? 'default' : 'outline'}
-                      size="sm"
-                      className="h-9 text-xs"
-                      onClick={() => setNegotiationType(type)}
-                    >
-                      {NEGOTIATION_TYPE_LABELS[type]}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            )}
+                  {/* Tipo de Negociação (apenas telecom) */}
+                  {isTelecom && (
+                    <Card>
+                      <CardHeader className="pb-2 p-4">
+                        <CardTitle className="text-sm font-medium text-muted-foreground">Tipo de Negociação</CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-4 pt-0">
+                        <div className="grid grid-cols-2 gap-2">
+                          {NEGOTIATION_TYPES.map((type) => (
+                            <Button
+                              key={type}
+                              type="button"
+                              variant={negotiationType === type ? 'default' : 'outline'}
+                              size="sm"
+                              className="h-9 text-xs"
+                              onClick={() => setNegotiationType(type)}
+                            >
+                              {NEGOTIATION_TYPE_LABELS[type]}
+                            </Button>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
 
-            {isTelecom && (
-              <>
-                <Separator />
+                  {/* Tipo de Proposta (apenas telecom) */}
+                  {isTelecom && (
+                    <Card>
+                      <CardHeader className="pb-2 p-4">
+                        <CardTitle className="text-sm font-medium text-muted-foreground">Tipo de Proposta</CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-4 pt-0">
+                        <div className="grid grid-cols-2 gap-2">
+                          <Button
+                            type="button"
+                            variant={proposalType === 'energia' ? 'default' : 'outline'}
+                            className="flex items-center justify-center gap-2 h-12"
+                            onClick={() => setProposalType('energia')}
+                          >
+                            <Zap className="h-4 w-4" />
+                            Energia
+                          </Button>
+                          <Button
+                            type="button"
+                            variant={proposalType === 'servicos' ? 'default' : 'outline'}
+                            className="flex items-center justify-center gap-2 h-12"
+                            onClick={() => setProposalType('servicos')}
+                          >
+                            <Wrench className="h-4 w-4" />
+                            Outros Serviços
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
 
-                {/* Tipo de Proposta */}
-                <div className="space-y-3">
-                  <Label>Tipo de Proposta</Label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button
-                      type="button"
-                      variant={proposalType === 'energia' ? 'default' : 'outline'}
-                      className="flex items-center justify-center gap-2 h-12"
-                      onClick={() => setProposalType('energia')}
-                    >
-                      <Zap className="h-4 w-4" />
-                      Energia
-                    </Button>
-                    <Button
-                      type="button"
-                      variant={proposalType === 'servicos' ? 'default' : 'outline'}
-                      className="flex items-center justify-center gap-2 h-12"
-                      onClick={() => setProposalType('servicos')}
-                    >
-                      <Wrench className="h-4 w-4" />
-                      Outros Serviços
-                    </Button>
-                  </div>
-                </div>
-              </>
-            )}
-
-            {/* CPE Selector para propostas de Energia */}
-            {isTelecom && proposalType === 'energia' && (
-              <>
-                <Separator />
-                <ProposalCpeSelector
-                  clientId={selectedClientId}
-                  cpes={proposalCpes}
-                  onCpesChange={setProposalCpes}
-                />
-              </>
-            )}
-
-            {/* Campos específicos de Serviços */}
-            {isTelecom && proposalType === 'servicos' && (
-              <div className="space-y-4 p-4 rounded-lg border bg-secondary/30 border-border">
-                <div className="flex items-center gap-2 text-foreground">
-                  <Wrench className="h-4 w-4" />
-                  <span className="font-medium text-sm">Dados do Serviço</span>
-                </div>
-                
-                {/* Produtos fixos (checkboxes) */}
-                <div className="space-y-2">
-                  <Label className="text-sm">Produtos</Label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {SERVICOS_PRODUCTS.map((produto) => (
-                      <div key={produto} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={`produto-${produto}`}
-                          checked={servicosProdutos.includes(produto)}
-                          onCheckedChange={() => handleToggleServicoProduto(produto)}
+                  {/* CPE Selector para propostas de Energia */}
+                  {isTelecom && proposalType === 'energia' && (
+                    <Card>
+                      <CardContent className="p-4">
+                        <ProposalCpeSelector
+                          clientId={selectedClientId}
+                          cpes={proposalCpes}
+                          onCpesChange={setProposalCpes}
                         />
-                        <Label 
-                          htmlFor={`produto-${produto}`} 
-                          className="text-sm cursor-pointer"
-                        >
-                          {produto}
-                        </Label>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="kwp">Potência (kWp)</Label>
-                    <Input
-                      id="kwp"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={kwp}
-                      onChange={(e) => setKwp(e.target.value)}
-                      placeholder="Ex: 6.5"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="comissao-servicos">Comissão (€)</Label>
-                    <Input
-                      id="comissao-servicos"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={comissaoServicos}
-                      onChange={(e) => setComissaoServicos(e.target.value)}
-                      placeholder="Ex: 500"
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
+                      </CardContent>
+                    </Card>
+                  )}
 
-            {/* Campos para nichos NÃO-telecom */}
-            {!isTelecom && (
-              <div className="space-y-4">
-                <Separator />
-                
-                {/* Produtos/Serviços */}
-                {products.length > 0 && (
-                  <div className="space-y-3">
-                    <Label>Produtos/Serviços</Label>
-                    
-                    {/* Seletor de produtos */}
-                    <Select onValueChange={handleAddProduct}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Adicionar produto/serviço..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {products.map((product) => (
-                          <SelectItem key={product.id} value={product.id}>
-                            {product.name} {product.price ? `- ${formatCurrency(product.price)}` : ''}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    
-                    {/* Lista de produtos selecionados com desconto */}
-                    {selectedProducts.length > 0 && (
-                      <div className="space-y-3">
-                        {selectedProducts.map((item) => {
-                          const subtotal = item.quantity * item.unit_price;
-                          const discountedTotal = getProductTotal(item);
-                          const hasDiscount = item.discount_value > 0;
+                  {/* Campos específicos de Serviços */}
+                  {isTelecom && proposalType === 'servicos' && (
+                    <Card>
+                      <CardContent className="p-4">
+                        <div className="space-y-4 p-4 rounded-lg border bg-secondary/30 border-border">
+                          <div className="flex items-center gap-2 text-foreground">
+                            <Wrench className="h-4 w-4" />
+                            <span className="font-medium text-sm">Dados do Serviço</span>
+                          </div>
                           
-                          return (
-                            <div key={item.product_id} className="p-3 rounded-lg bg-muted space-y-2">
-                              <div className="flex items-center gap-2">
-                                <Package className="h-4 w-4 text-muted-foreground" />
-                                <span className="flex-1 text-sm font-medium">{item.name}</span>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-8 w-8 p-0"
-                                  onClick={() => handleRemoveProduct(item.product_id)}
-                                >
-                                  ×
-                                </Button>
-                              </div>
-                              
-                              <div className="grid grid-cols-2 gap-2">
-                                <div>
-                                  <Label className="text-xs text-muted-foreground">Quantidade</Label>
-                                  <Input
-                                    type="number"
-                                    min="1"
-                                    value={item.quantity}
-                                    onChange={(e) => handleUpdateProductQuantity(item.product_id, parseInt(e.target.value) || 0)}
-                                    className="h-8"
+                          <div className="space-y-2">
+                            <Label className="text-sm">Produtos</Label>
+                            <div className="grid grid-cols-2 gap-2">
+                              {SERVICOS_PRODUCTS.map((produto) => (
+                                <div key={produto} className="flex items-center space-x-2">
+                                  <Checkbox
+                                    id={`produto-${produto}`}
+                                    checked={servicosProdutos.includes(produto)}
+                                    onCheckedChange={() => handleToggleServicoProduto(produto)}
                                   />
+                                  <Label 
+                                    htmlFor={`produto-${produto}`} 
+                                    className="text-sm cursor-pointer"
+                                  >
+                                    {produto}
+                                  </Label>
                                 </div>
-                                <div>
-                                  <Label className="text-xs text-muted-foreground">Preço Unit.</Label>
-                                  <Input
-                                    type="number"
-                                    step="0.01"
-                                    value={item.unit_price}
-                                    onChange={(e) => handleUpdateProductPrice(item.product_id, parseFloat(e.target.value) || 0)}
-                                    className="h-8"
-                                  />
-                                </div>
-                              </div>
-                              
-                              <div className="flex items-end gap-2">
-                                <div className="flex-1">
-                                  <Label className="text-xs text-muted-foreground">Desconto</Label>
-                                  <div className="flex gap-1">
-                                    <Button
-                                      type="button"
-                                      variant={item.discount_type === 'percentage' ? 'default' : 'outline'}
-                                      size="sm"
-                                      className="h-8 w-10 p-0"
-                                      onClick={() => handleUpdateProductDiscount(item.product_id, 'percentage', item.discount_value)}
-                                    >
-                                      %
-                                    </Button>
-                                    <Button
-                                      type="button"
-                                      variant={item.discount_type === 'fixed' ? 'default' : 'outline'}
-                                      size="sm"
-                                      className="h-8 w-10 p-0"
-                                      onClick={() => handleUpdateProductDiscount(item.product_id, 'fixed', item.discount_value)}
-                                    >
-                                      €
-                                    </Button>
-                                    <Input
-                                      type="number"
-                                      step="0.01"
-                                      min="0"
-                                      value={item.discount_value || ''}
-                                      onChange={(e) => handleUpdateProductDiscount(
-                                        item.product_id, 
-                                        item.discount_type, 
-                                        parseFloat(e.target.value) || 0
-                                      )}
-                                      className="h-8 flex-1"
-                                      placeholder="0"
-                                    />
-                                  </div>
-                                </div>
-                                <div className="text-right min-w-[80px]">
-                                  <Label className="text-xs text-muted-foreground">Subtotal</Label>
-                                  <div className="text-sm font-medium">
-                                    {hasDiscount && (
-                                      <span className="text-xs text-muted-foreground line-through mr-1">
-                                        {formatCurrency(subtotal)}
-                                      </span>
-                                    )}
-                                    <span className={hasDiscount ? 'text-green-600' : ''}>
-                                      {formatCurrency(discountedTotal)}
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
+                              ))}
                             </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                )}
-                
-                {/* Resumo do valor */}
-                {selectedProducts.length > 0 && (
-                  <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium text-sm">Total da Proposta</span>
-                      <span className="text-lg font-bold text-primary">{formatCurrency(totalValue)}</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
+                          </div>
+                          
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-2">
+                              <Label htmlFor="kwp">Potência (kWp)</Label>
+                              <Input
+                                id="kwp"
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={kwp}
+                                onChange={(e) => setKwp(e.target.value)}
+                                placeholder="Ex: 6.5"
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="comissao-servicos">Comissão (€)</Label>
+                              <Input
+                                id="comissao-servicos"
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={comissaoServicos}
+                                onChange={(e) => setComissaoServicos(e.target.value)}
+                                placeholder="Ex: 500"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
 
-            {/* Observações da Negociação */}
-            <div className="space-y-2">
-              <Label htmlFor="notes">Observações da Negociação</Label>
-              <Textarea
-                id="notes"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Detalhes da negociação, condições especiais, etc..."
-                rows={3}
-              />
+                  {/* Campos para nichos NÃO-telecom */}
+                  {!isTelecom && (
+                    <Card>
+                      <CardHeader className="pb-2 p-4">
+                        <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
+                          <Package className="h-4 w-4" />
+                          Produtos/Serviços
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-4 pt-0 space-y-3">
+                        {products.length > 0 && (
+                          <>
+                            <Select onValueChange={handleAddProduct}>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Adicionar produto/serviço..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {products.map((product) => (
+                                  <SelectItem key={product.id} value={product.id}>
+                                    {product.name} {product.price ? `- ${formatCurrency(product.price)}` : ''}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            
+                            {selectedProducts.length > 0 && (
+                              <div className="space-y-3">
+                                {selectedProducts.map((item) => {
+                                  const subtotal = item.quantity * item.unit_price;
+                                  const discountedTotal = getProductTotal(item);
+                                  const hasDiscount = item.discount_value > 0;
+                                  
+                                  return (
+                                    <div key={item.product_id} className="p-3 rounded-lg bg-muted space-y-2">
+                                      <div className="flex items-center gap-2">
+                                        <Package className="h-4 w-4 text-muted-foreground" />
+                                        <span className="flex-1 text-sm font-medium">{item.name}</span>
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-8 w-8 p-0"
+                                          onClick={() => handleRemoveProduct(item.product_id)}
+                                        >
+                                          ×
+                                        </Button>
+                                      </div>
+                                      
+                                      <div className="grid grid-cols-2 gap-2">
+                                        <div>
+                                          <Label className="text-xs text-muted-foreground">Quantidade</Label>
+                                          <Input
+                                            type="number"
+                                            min="1"
+                                            value={item.quantity}
+                                            onChange={(e) => handleUpdateProductQuantity(item.product_id, parseInt(e.target.value) || 0)}
+                                            className="h-8"
+                                          />
+                                        </div>
+                                        <div>
+                                          <Label className="text-xs text-muted-foreground">Preço Unit.</Label>
+                                          <Input
+                                            type="number"
+                                            step="0.01"
+                                            value={item.unit_price}
+                                            onChange={(e) => handleUpdateProductPrice(item.product_id, parseFloat(e.target.value) || 0)}
+                                            className="h-8"
+                                          />
+                                        </div>
+                                      </div>
+                                      
+                                      <div className="flex items-end gap-2">
+                                        <div className="flex-1">
+                                          <Label className="text-xs text-muted-foreground">Desconto</Label>
+                                          <div className="flex gap-1">
+                                            <Button
+                                              type="button"
+                                              variant={item.discount_type === 'percentage' ? 'default' : 'outline'}
+                                              size="sm"
+                                              className="h-8 w-10 p-0"
+                                              onClick={() => handleUpdateProductDiscount(item.product_id, 'percentage', item.discount_value)}
+                                            >
+                                              %
+                                            </Button>
+                                            <Button
+                                              type="button"
+                                              variant={item.discount_type === 'fixed' ? 'default' : 'outline'}
+                                              size="sm"
+                                              className="h-8 w-10 p-0"
+                                              onClick={() => handleUpdateProductDiscount(item.product_id, 'fixed', item.discount_value)}
+                                            >
+                                              €
+                                            </Button>
+                                            <Input
+                                              type="number"
+                                              step="0.01"
+                                              min="0"
+                                              value={item.discount_value || ''}
+                                              onChange={(e) => handleUpdateProductDiscount(
+                                                item.product_id, 
+                                                item.discount_type, 
+                                                parseFloat(e.target.value) || 0
+                                              )}
+                                              className="h-8 flex-1"
+                                              placeholder="0"
+                                            />
+                                          </div>
+                                        </div>
+                                        <div className="text-right min-w-[80px]">
+                                          <Label className="text-xs text-muted-foreground">Subtotal</Label>
+                                          <div className="text-sm font-medium">
+                                            {hasDiscount && (
+                                              <span className="text-xs text-muted-foreground line-through mr-1">
+                                                {formatCurrency(subtotal)}
+                                              </span>
+                                            )}
+                                            <span className={hasDiscount ? 'text-green-600' : ''}>
+                                              {formatCurrency(discountedTotal)}
+                                            </span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Observações */}
+                  <Card>
+                    <CardHeader className="pb-2 p-4">
+                      <CardTitle className="text-sm font-medium text-muted-foreground">Observações da Negociação</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-4 pt-0">
+                      <Textarea
+                        id="notes"
+                        value={notes}
+                        onChange={(e) => setNotes(e.target.value)}
+                        placeholder="Detalhes da negociação, condições especiais, etc..."
+                        rows={3}
+                      />
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* RIGHT COLUMN (40%) - Sticky */}
+                <div className="lg:col-span-2">
+                  <div className="lg:sticky lg:top-6 space-y-4">
+                    {/* Resumo */}
+                    <Card>
+                      <CardHeader className="pb-2 p-4">
+                        <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
+                          <FileText className="h-4 w-4" />
+                          Resumo
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-4 pt-0 space-y-3">
+                        {isTelecom && proposalType === 'energia' && proposalCpes.length > 0 && (
+                          <>
+                            <div className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">CPE/CUI adicionados</span>
+                              <span className="font-medium">{proposalCpes.length}</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">Comissão Total</span>
+                              <span className="font-medium">{formatCurrency(totalComissao)}</span>
+                            </div>
+                            <Separator />
+                          </>
+                        )}
+
+                        <div className="p-4 rounded-lg bg-primary/10 border border-primary/20 text-center">
+                          <p className="text-sm text-muted-foreground mb-1">Total da Proposta</p>
+                          <p className="text-2xl font-bold text-primary">{formatCurrency(totalValue)}</p>
+                          {isTelecom && proposalType === 'energia' && proposalCpes.length > 0 && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Soma das margens de {proposalCpes.length} CPE(s)
+                            </p>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </div>
+              </div>
             </div>
+          </div>
 
-            {/* Summary */}
-            {isTelecom && proposalType === 'energia' && proposalCpes.length > 0 && (
-              <div className="p-3 rounded-lg bg-muted text-sm">
-                <div className="flex justify-between">
-                  <span>CPE/CUI adicionados:</span>
-                  <span className="font-medium">{proposalCpes.length}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Margem Total:</span>
-                  <span className="font-medium text-primary">{formatCurrency(totalValue)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Comissão Total:</span>
-                  <span className="font-medium">{formatCurrency(totalComissao)}</span>
-                </div>
-              </div>
-            )}
-
-            <DialogFooter className="px-6 py-4 border-t">
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          {/* Fixed Footer */}
+          <div className="p-4 border-t border-border/50 shrink-0">
+            <div className="flex gap-3 max-w-6xl mx-auto">
+              <Button
+                variant="senvia"
+                className="flex-1"
+                size="lg"
+                onClick={handleSubmit}
+                disabled={createProposal.isPending}
+              >
+                {createProposal.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    A criar...
+                  </>
+                ) : (
+                  "Criar Proposta"
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                className="flex-1"
+                size="lg"
+                onClick={() => onOpenChange(false)}
+              >
                 Cancelar
               </Button>
-              <Button type="submit" disabled={createProposal.isPending}>
-                {createProposal.isPending ? 'A criar...' : 'Criar Proposta'}
-              </Button>
-            </DialogFooter>
-          </form>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
