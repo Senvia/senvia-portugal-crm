@@ -1,14 +1,18 @@
-import { Mail, Eye, AlertCircle, MoreHorizontal, Trash2, BarChart3 } from "lucide-react";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useState, useMemo } from "react";
+import { Mail, Eye, MousePointer, MoreHorizontal, Trash2, BarChart3, Search, Pencil } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type { EmailCampaign } from "@/types/marketing";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import type { EmailCampaign, CampaignStatus } from "@/types/marketing";
 import { CAMPAIGN_STATUS_LABELS, CAMPAIGN_STATUS_STYLES } from "@/types/marketing";
 import { format } from "date-fns";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { normalizeString } from "@/lib/utils";
 
 interface CampaignsTableProps {
   campaigns: EmailCampaign[];
@@ -16,8 +20,24 @@ interface CampaignsTableProps {
   onDelete: (id: string) => void;
 }
 
+const STATUS_DOT_COLORS: Record<CampaignStatus, string> = {
+  draft: 'bg-muted-foreground',
+  sending: 'bg-yellow-500',
+  sent: 'bg-green-500',
+  failed: 'bg-destructive',
+};
+
 export function CampaignsTable({ campaigns, onView, onDelete }: CampaignsTableProps) {
-  const isMobile = useIsMobile();
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+
+  const filtered = useMemo(() => {
+    return campaigns.filter(c => {
+      const matchesSearch = !search || normalizeString(c.name).includes(normalizeString(search));
+      const matchesStatus = statusFilter === "all" || c.status === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+  }, [campaigns, search, statusFilter]);
 
   if (campaigns.length === 0) {
     return (
@@ -29,96 +49,131 @@ export function CampaignsTable({ campaigns, onView, onDelete }: CampaignsTablePr
     );
   }
 
-  // Mobile card layout
-  if (isMobile) {
-    return (
-      <div className="space-y-3">
-        {campaigns.map(campaign => {
-          const style = CAMPAIGN_STATUS_STYLES[campaign.status];
-          return (
-            <div
-              key={campaign.id}
-              className="p-4 border rounded-lg space-y-2 cursor-pointer hover:bg-muted/30"
-              onClick={() => onView(campaign)}
-            >
-              <div className="flex items-start justify-between">
-                <div className="min-w-0 flex-1">
-                  <p className="font-medium truncate">{campaign.name}</p>
-                  <p className="text-xs text-muted-foreground">{campaign.template?.name || '—'}</p>
-                </div>
-                <Badge className="text-xs shrink-0 ml-2" style={{ backgroundColor: style.bg, color: style.text }}>
-                  {CAMPAIGN_STATUS_LABELS[campaign.status]}
-                </Badge>
-              </div>
-              <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                <span className="flex items-center gap-1"><Mail className="h-3 w-3" /> {campaign.total_recipients}</span>
-                <span className="flex items-center gap-1"><Eye className="h-3 w-3" /> {campaign.sent_count}</span>
-                {campaign.failed_count > 0 && (
-                  <span className="flex items-center gap-1 text-destructive"><AlertCircle className="h-3 w-3" /> {campaign.failed_count}</span>
-                )}
-                <span className="ml-auto">{format(new Date(campaign.created_at), "dd/MM/yyyy")}</span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    );
-  }
-
-  // Desktop table
   return (
-    <div className="border rounded-md">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Nome</TableHead>
-            <TableHead>Template</TableHead>
-            <TableHead className="text-center">Destinatários</TableHead>
-            <TableHead className="text-center">Enviados</TableHead>
-            <TableHead className="text-center">Erros</TableHead>
-            <TableHead>Estado</TableHead>
-            <TableHead>Data</TableHead>
-            <TableHead className="w-10" />
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {campaigns.map(campaign => {
+    <div className="space-y-4">
+      {/* Filters bar */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Procurar uma campanha..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-full sm:w-[180px]">
+            <SelectValue placeholder="Todos os status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os status</SelectItem>
+            <SelectItem value="draft">Rascunho</SelectItem>
+            <SelectItem value="sending">A enviar</SelectItem>
+            <SelectItem value="sent">Enviada</SelectItem>
+            <SelectItem value="failed">Falhada</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Campaign cards */}
+      {filtered.length === 0 ? (
+        <div className="text-center py-8 text-muted-foreground text-sm">
+          Nenhuma campanha encontrada
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {filtered.map((campaign, index) => {
             const style = CAMPAIGN_STATUS_STYLES[campaign.status];
+            const dotColor = STATUS_DOT_COLORS[campaign.status];
+            const openRate = campaign.total_recipients > 0 ? Math.round((campaign.sent_count / campaign.total_recipients) * 100) : 0;
+
             return (
-              <TableRow key={campaign.id} className="cursor-pointer" onClick={() => onView(campaign)}>
-                <TableCell className="font-medium">{campaign.name}</TableCell>
-                <TableCell className="text-muted-foreground">{campaign.template?.name || '—'}</TableCell>
-                <TableCell className="text-center">{campaign.total_recipients}</TableCell>
-                <TableCell className="text-center">{campaign.sent_count}</TableCell>
-                <TableCell className="text-center">{campaign.failed_count > 0 ? <span className="text-destructive">{campaign.failed_count}</span> : '0'}</TableCell>
-                <TableCell>
-                  <Badge className="text-xs" style={{ backgroundColor: style.bg, color: style.text }}>
-                    {CAMPAIGN_STATUS_LABELS[campaign.status]}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-muted-foreground">{format(new Date(campaign.created_at), "dd/MM/yyyy")}</TableCell>
-                <TableCell onClick={e => e.stopPropagation()}>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <MoreHorizontal className="h-4 w-4" />
+              <div
+                key={campaign.id}
+                className="border rounded-lg bg-card hover:bg-muted/30 transition-colors cursor-pointer"
+                onClick={() => onView(campaign)}
+              >
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4">
+                  {/* Left: info */}
+                  <div className="flex-1 min-w-0 space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs text-muted-foreground font-mono">#{campaigns.length - index}</span>
+                      <h3 className="font-semibold text-sm truncate">{campaign.name}</h3>
+                      <Badge
+                        className="text-xs shrink-0 gap-1.5 font-normal"
+                        style={{ backgroundColor: style.bg, color: style.text }}
+                      >
+                        <span className={`h-1.5 w-1.5 rounded-full ${dotColor}`} />
+                        {CAMPAIGN_STATUS_LABELS[campaign.status]}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {campaign.sent_at
+                        ? `Enviada a ${format(new Date(campaign.sent_at), "dd/MM/yyyy 'às' HH:mm")}`
+                        : `Editada a ${format(new Date(campaign.updated_at), "dd/MM/yyyy 'às' HH:mm")}`
+                      }
+                    </p>
+                  </div>
+
+                  {/* Right: metrics */}
+                  <div className="flex items-center gap-4 sm:gap-6">
+                    <MetricCol icon={<Mail className="h-3.5 w-3.5" />} label="Destinatários" value={campaign.total_recipients} />
+                    <MetricCol icon={<Eye className="h-3.5 w-3.5" />} label="Aberturas" value={campaign.sent_count} pct={openRate} />
+                    <MetricCol icon={<MousePointer className="h-3.5 w-3.5" />} label="Cliques" value={campaign.failed_count > 0 ? campaign.failed_count : 0} />
+
+                    {/* Action button */}
+                    <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => onView(campaign)}
+                      >
+                        {campaign.status === 'draft' ? (
+                          <Pencil className="h-4 w-4" />
+                        ) : (
+                          <BarChart3 className="h-4 w-4" />
+                        )}
                       </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => onView(campaign)}>
-                        <BarChart3 className="mr-2 h-4 w-4" /> Ver detalhes
-                      </DropdownMenuItem>
-                      <DropdownMenuItem className="text-destructive" onClick={() => onDelete(campaign.id)}>
-                        <Trash2 className="mr-2 h-4 w-4" /> Eliminar
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </TableCell>
-              </TableRow>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => onView(campaign)}>
+                            <BarChart3 className="mr-2 h-4 w-4" /> Ver detalhes
+                          </DropdownMenuItem>
+                          <DropdownMenuItem className="text-destructive" onClick={() => onDelete(campaign.id)}>
+                            <Trash2 className="mr-2 h-4 w-4" /> Eliminar
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </div>
+                </div>
+              </div>
             );
           })}
-        </TableBody>
-      </Table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MetricCol({ icon, label, value, pct }: { icon: React.ReactNode; label: string; value: number; pct?: number }) {
+  return (
+    <div className="text-center min-w-[60px] hidden sm:block">
+      <div className="flex items-center justify-center gap-1 text-muted-foreground mb-0.5">
+        {icon}
+        <span className="text-[10px] uppercase tracking-wider">{label}</span>
+      </div>
+      <p className="text-sm font-bold">
+        {value}
+        {pct !== undefined && <span className="text-xs font-normal text-muted-foreground ml-1">({pct}%)</span>}
+      </p>
     </div>
   );
 }
