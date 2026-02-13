@@ -139,8 +139,8 @@ export function ClientDetailsDrawer({
         {/* Header */}
         <DialogHeader className="px-4 sm:px-6 py-3 border-b shrink-0">
           <DialogTitle className="flex items-center gap-2">
-            <User className="h-5 w-5 text-primary" />
-            {client.name}
+            <FileText className="h-5 w-5 text-primary" />
+            Detalhes do {labels.singular} #{client.code}
           </DialogTitle>
           <DialogDescription className="sr-only">Detalhes do cliente {client.name}</DialogDescription>
         </DialogHeader>
@@ -151,36 +151,50 @@ export function ClientDetailsDrawer({
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
               {/* Left Column */}
               <div className="lg:col-span-3 space-y-4">
-              {/* Card de Contexto */}
-                <Card>
-                  <CardContent className="py-3 px-4 space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      {client.code && (
-                        <span className="font-mono text-primary bg-primary/10 px-2 py-0.5 rounded text-xs font-semibold">
-                          #{client.code}
-                        </span>
-                      )}
-                      <span className="text-xs text-muted-foreground">
-                        {labels.since} {formatDate(client.created_at)}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline" className={cn('text-xs', statusStyle.bg, statusStyle.text, statusStyle.border)}>
-                        {statusLabel}
-                      </Badge>
-                      {client.source && (
-                        <Badge variant="secondary" className="text-xs">{sourceLabel}</Badge>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-
                 {/* Dados do Cliente */}
                 <Card>
                   <CardHeader className="pb-3">
                     <CardTitle className="text-base">Dados do {labels.singular}</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3">
+                    {client.code && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Código</span>
+                        <span className="font-mono text-primary bg-primary/10 px-2 py-0.5 rounded text-xs font-semibold">#{client.code}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Nome</span>
+                      <span className="font-medium">{client.name}</span>
+                    </div>
+                    {client.nif && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">NIF</span>
+                        <span>{client.nif}</span>
+                      </div>
+                    )}
+                    {client.email && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Email</span>
+                        <a href={`mailto:${client.email}`} className="text-primary hover:underline">{client.email}</a>
+                      </div>
+                    )}
+                    {client.phone && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Telefone</span>
+                        <div className="flex items-center gap-2">
+                          <span>{client.phone}</span>
+                          <a
+                            href={getWhatsAppUrl(client.phone)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-success hover:underline text-xs"
+                          >
+                            WhatsApp
+                          </a>
+                        </div>
+                      </div>
+                    )}
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">{labels.statusFieldLabel}</span>
                       <Badge variant="outline" className={cn('text-xs', statusStyle.bg, statusStyle.text, statusStyle.border)}>
@@ -193,93 +207,47 @@ export function ClientDetailsDrawer({
                         <Badge variant="secondary" className="text-xs">{sourceLabel}</Badge>
                       </div>
                     )}
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Data de Criação</span>
-                      <span>{formatDate(client.created_at)}</span>
-                    </div>
                   </CardContent>
                 </Card>
 
-                {/* Contacto */}
-                {(client.email || client.phone) && (
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-base">Contacto</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      {client.email && (
-                        <div className="flex items-center gap-3 text-sm">
-                          <Mail className="h-4 w-4 text-muted-foreground" />
-                          <a href={`mailto:${client.email}`} className="text-primary hover:underline">
-                            {client.email}
-                          </a>
-                        </div>
-                      )}
-                      {client.phone && (
-                        <div className="flex items-center gap-3 text-sm">
-                          <Phone className="h-4 w-4 text-muted-foreground" />
-                          <span>{client.phone}</span>
-                          <a
-                            href={getWhatsAppUrl(client.phone)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-success hover:underline text-xs ml-auto"
-                          >
-                            WhatsApp
-                          </a>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                )}
-
                 {/* Empresa */}
-                {(client.company || client.nif) && (
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-base">Empresa</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      {client.company && (
-                        <div className="flex items-center gap-3 text-sm">
-                          <Building2 className="h-4 w-4 text-muted-foreground" />
-                          <span className="font-medium">{client.company}</span>
-                        </div>
-                      )}
-                      {client.nif && (
-                        <div className="flex items-center gap-3 text-sm">
-                          <FileText className="h-4 w-4 text-muted-foreground" />
-                          <span>NIF: {client.nif}</span>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* Morada */}
-                {hasAddress && (
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-base">Morada</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="flex items-start gap-3 text-sm">
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Building2 className="h-4 w-4" />
+                      Empresa
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {client.company ? (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Nome</span>
+                        <span className="font-medium">{client.company}</span>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">Sem empresa associada</p>
+                    )}
+                    {client.nif && client.company && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">NIF</span>
+                        <span>{client.nif}</span>
+                      </div>
+                    )}
+                    {hasAddress && (
+                      <div className="flex items-start gap-3 text-sm pt-1">
                         <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
                         <div>
                           {client.address_line1 && <p>{client.address_line1}</p>}
                           {client.address_line2 && <p>{client.address_line2}</p>}
                           {(client.postal_code || client.city) && (
-                            <p>
-                              {client.postal_code && `${client.postal_code} `}
-                              {client.city}
-                            </p>
+                            <p>{client.postal_code && `${client.postal_code} `}{client.city}</p>
                           )}
                           {client.country && <p>{client.country}</p>}
                         </div>
                       </div>
-                    </CardContent>
-                  </Card>
-                )}
+                    )}
+                  </CardContent>
+                </Card>
 
                 {/* CPEs - Telecom only */}
                 {isTelecom && (
@@ -484,7 +452,7 @@ export function ClientDetailsDrawer({
                   )}
 
                   {/* Vendas Recentes */}
-                  {sales.length > 0 && (
+                   {sales.length > 0 && (
                     <Card>
                       <CardHeader className="pb-3">
                         <CardTitle className="text-base">Vendas Recentes</CardTitle>
@@ -505,6 +473,11 @@ export function ClientDetailsDrawer({
                       </CardContent>
                     </Card>
                   )}
+
+                  {/* Botão Voltar */}
+                  <Button variant="outline" className="w-full" onClick={() => onOpenChange(false)}>
+                    Voltar
+                  </Button>
                 </div>
               </div>
             </div>
