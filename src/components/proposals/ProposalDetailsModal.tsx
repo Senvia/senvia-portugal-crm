@@ -371,23 +371,10 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
       }}>
         <DialogContent variant="fullScreen" className="flex flex-col p-0 gap-0">
           <DialogHeader className="px-6 pr-14 py-4 border-b border-border/50 shrink-0">
-            <div className="flex items-center gap-3 flex-wrap">
-              <DialogTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5 text-primary" />
-                Proposta {proposal.code || ''}
-              </DialogTitle>
-              <Badge className={cn(PROPOSAL_STATUS_COLORS[status])}>
-                {PROPOSAL_STATUS_LABELS[status]}
-              </Badge>
-              {orgData?.niche === 'telecom' && proposal.negotiation_type && (
-                <Badge variant="outline" className="text-xs">
-                  {NEGOTIATION_TYPE_LABELS[proposal.negotiation_type as NegotiationType]}
-                </Badge>
-              )}
-            </div>
-            <p className="text-sm text-muted-foreground">
-              {format(new Date(proposal.proposal_date), "d 'de' MMMM 'de' yyyy", { locale: pt })}
-            </p>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5 text-primary" />
+              Proposta {proposal.code || ''}
+            </DialogTitle>
           </DialogHeader>
 
           <div className="flex-1 overflow-y-auto">
@@ -395,6 +382,57 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
               <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
                 {/* LEFT COLUMN (60%) */}
                 <div className="lg:col-span-3 space-y-4">
+                  {/* Dados da Proposta - Context Card */}
+                  <Card>
+                    <CardContent className="p-4 space-y-3">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <span className="font-mono text-sm font-semibold text-primary">
+                          Proposta {proposal.code || ''}
+                        </span>
+                        <span className="text-sm text-muted-foreground flex items-center gap-1.5">
+                          <CalendarDays className="h-3.5 w-3.5" />
+                          {format(new Date(proposal.proposal_date), "d MMM yyyy", { locale: pt })}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Select 
+                          value={status} 
+                          onValueChange={(v) => handleStatusChange(v as ProposalStatus)}
+                          disabled={hasCompletedSale}
+                        >
+                          <SelectTrigger className={cn('w-auto min-w-[140px] h-8 text-xs', PROPOSAL_STATUS_COLORS[status])}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {PROPOSAL_STATUSES.map((s) => (
+                              <SelectItem key={s} value={s}>
+                                <span className={cn('px-2 py-0.5 rounded text-xs font-medium', PROPOSAL_STATUS_COLORS[s])}>
+                                  {PROPOSAL_STATUS_LABELS[s]}
+                                </span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {orgData?.niche === 'telecom' && proposal.negotiation_type && (
+                          <Badge variant="outline" className="text-xs">
+                            {NEGOTIATION_TYPE_LABELS[proposal.negotiation_type as NegotiationType]}
+                          </Badge>
+                        )}
+                        {orgData?.niche === 'telecom' && proposal.proposal_type && (
+                          <Badge variant="outline" className={cn(
+                            "flex items-center gap-1 text-xs",
+                            proposal.proposal_type === 'energia' 
+                              ? "border-amber-500/50 text-amber-600 dark:text-amber-400" 
+                              : "border-blue-500/50 text-blue-600 dark:text-blue-400"
+                          )}>
+                            {proposal.proposal_type === 'energia' ? <Zap className="h-3 w-3" /> : <Wrench className="h-3 w-3" />}
+                            {PROPOSAL_TYPE_LABELS[proposal.proposal_type as ProposalType] || proposal.proposal_type}
+                          </Badge>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+
                   {/* Cliente */}
                   {(proposal.client || proposal.lead) && (
                     <Card>
@@ -418,51 +456,6 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
                     </Card>
                   )}
 
-                  {/* Status */}
-                  <Card>
-                    <CardHeader className="pb-2 p-4">
-                      <CardTitle className="text-sm font-medium text-muted-foreground">Status da Proposta</CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-4 pt-0">
-                      <Select 
-                        value={status} 
-                        onValueChange={(v) => handleStatusChange(v as ProposalStatus)}
-                        disabled={hasCompletedSale}
-                      >
-                        <SelectTrigger className={cn('border', PROPOSAL_STATUS_COLORS[status])}>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {PROPOSAL_STATUSES.map((s) => (
-                            <SelectItem key={s} value={s}>
-                              <span className={cn('px-2 py-0.5 rounded text-xs font-medium', PROPOSAL_STATUS_COLORS[s])}>
-                                {PROPOSAL_STATUS_LABELS[s]}
-                              </span>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </CardContent>
-                  </Card>
-
-                  {/* Tipo Badge - Telecom only */}
-                  {orgData?.niche === 'telecom' && proposal.proposal_type && (
-                    <Card>
-                      <CardContent className="p-4">
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline" className={cn(
-                            "flex items-center gap-1.5",
-                            proposal.proposal_type === 'energia' 
-                              ? "border-amber-500/50 text-amber-600 dark:text-amber-400" 
-                              : "border-blue-500/50 text-blue-600 dark:text-blue-400"
-                          )}>
-                            {proposal.proposal_type === 'energia' ? <Zap className="h-3 w-3" /> : <Wrench className="h-3 w-3" />}
-                            {PROPOSAL_TYPE_LABELS[proposal.proposal_type as ProposalType] || proposal.proposal_type}
-                          </Badge>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  )}
 
                   {/* CPEs - Telecom only */}
                   {orgData?.niche === 'telecom' && proposalCpes.length > 0 && (
