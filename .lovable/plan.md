@@ -1,23 +1,23 @@
 
 
-# Mover dados do cliente para card de contexto
+# Remover nome e avatar do header
 
 ## Objectivo
-Mover o codigo, badge de status e data de criacao do header para um card de contexto posicionado acima do card "Dados do Cliente" na coluna esquerda -- seguindo o mesmo padrao aplicado nas Propostas.
+Limpar o header do ClientDetailsDrawer, removendo o avatar e o nome do cliente. O header fica apenas com o botao "Editar" e o botao de fechar (X).
 
-## Alteracoes em `src/components/clients/ClientDetailsDrawer.tsx`
+## Alteracao em `src/components/clients/ClientDetailsDrawer.tsx`
 
-### 1. Simplificar o Header (linhas 140-170)
-- Manter apenas: Avatar + Nome do cliente + botao "Editar" + botao fechar
-- Remover: codigo (#0004), badge de status (Bronze), texto "Cliente desde..."
+### Header (linhas ~140-157)
+Remover:
+- O div do avatar (circulo com inicial)
+- O DialogTitle com o nome do cliente
 
-### 2. Novo Card de Contexto (antes do card "Dados do Cliente", linha 179)
-Inserir um novo card com:
-- Linha 1: Codigo do cliente (ex: "#0004") + Data de criacao
-- Linha 2: Badge de status/tipologia (Bronze/Prata/Ouro ou Ativo/Inativo/VIP) + Badge de origem (se existir)
+Manter:
+- DialogDescription sr-only (acessibilidade)
+- Botao "Editar"
+- Botao fechar (X) -- gerado automaticamente pelo DialogContent
 
-### 3. Manter o card "Dados do Cliente" actual
-O card existente fica por baixo do novo card de contexto, mantendo os restantes campos (contacto, empresa, etc.).
+O header ficara apenas com o botao "Editar" alinhado a direita.
 
 ## Ficheiro alterado
 - `src/components/clients/ClientDetailsDrawer.tsx`
