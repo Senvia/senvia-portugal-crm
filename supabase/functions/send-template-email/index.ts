@@ -17,6 +17,7 @@ interface SendTemplateRequest {
   organizationId: string;
   templateId: string;
   recipients: Recipient[];
+  campaignId?: string;
 }
 
 // Replace variables in content
@@ -49,7 +50,7 @@ serve(async (req: Request): Promise<Response> => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { organizationId, templateId, recipients }: SendTemplateRequest = await req.json();
+    const { organizationId, templateId, recipients, campaignId }: SendTemplateRequest = await req.json();
 
     if (!organizationId || !templateId || !recipients || recipients.length === 0) {
       return new Response(
@@ -150,10 +151,20 @@ serve(async (req: Request): Promise<Response> => {
         const status = brevoResponse.ok ? "sent" : "failed";
         const errorMessage = brevoResponse.ok ? null : await brevoResponse.text();
 
+        // Extract Brevo messageId
+        let brevoMessageId: string | null = null;
+        if (brevoResponse.ok) {
+          try {
+            const brevoData = await brevoResponse.json();
+            brevoMessageId = brevoData.messageId || null;
+          } catch { /* ignore */ }
+        }
+
         // Log the send
         await supabase.from("email_sends").insert({
           organization_id: organizationId,
           template_id: templateId,
+          campaign_id: campaignId || null,
           client_id: recipient.clientId || null,
           recipient_email: recipient.email,
           recipient_name: recipient.name,
@@ -162,6 +173,7 @@ serve(async (req: Request): Promise<Response> => {
           error_message: errorMessage,
           sent_at: status === "sent" ? new Date().toISOString() : null,
           sent_by: userId,
+          brevo_message_id: brevoMessageId,
         });
 
         results.push({
@@ -179,6 +191,7 @@ serve(async (req: Request): Promise<Response> => {
         await supabase.from("email_sends").insert({
           organization_id: organizationId,
           template_id: templateId,
+          campaign_id: campaignId || null,
           client_id: recipient.clientId || null,
           recipient_email: recipient.email,
           recipient_name: recipient.name,

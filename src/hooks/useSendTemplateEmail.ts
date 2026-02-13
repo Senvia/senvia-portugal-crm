@@ -13,6 +13,7 @@ interface Recipient {
 interface SendTemplateRequest {
   templateId: string;
   recipients: Recipient[];
+  campaignId?: string;
 }
 
 interface SendTemplateResponse {
@@ -34,7 +35,7 @@ export function useSendTemplateEmail() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ templateId, recipients }: SendTemplateRequest): Promise<SendTemplateResponse> => {
+    mutationFn: async ({ templateId, recipients, campaignId }: SendTemplateRequest): Promise<SendTemplateResponse> => {
       if (!organization?.id) throw new Error('Sem organização');
 
       const { data, error } = await supabase.functions.invoke('send-template-email', {
@@ -42,6 +43,7 @@ export function useSendTemplateEmail() {
           organizationId: organization.id,
           templateId,
           recipients,
+          campaignId,
         },
       });
 

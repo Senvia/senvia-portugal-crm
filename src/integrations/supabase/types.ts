@@ -733,12 +733,79 @@ export type Database = {
           },
         ]
       }
+      email_campaigns: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          failed_count: number
+          id: string
+          name: string
+          organization_id: string
+          scheduled_at: string | null
+          sent_at: string | null
+          sent_count: number
+          status: string
+          template_id: string | null
+          total_recipients: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          failed_count?: number
+          id?: string
+          name: string
+          organization_id: string
+          scheduled_at?: string | null
+          sent_at?: string | null
+          sent_count?: number
+          status?: string
+          template_id?: string | null
+          total_recipients?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          failed_count?: number
+          id?: string
+          name?: string
+          organization_id?: string
+          scheduled_at?: string | null
+          sent_at?: string | null
+          sent_count?: number
+          status?: string
+          template_id?: string | null
+          total_recipients?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_campaigns_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_campaigns_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "email_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_sends: {
         Row: {
+          brevo_message_id: string | null
+          campaign_id: string | null
+          clicked_at: string | null
           client_id: string | null
           created_at: string
           error_message: string | null
           id: string
+          opened_at: string | null
           organization_id: string
           recipient_email: string
           recipient_name: string | null
@@ -749,10 +816,14 @@ export type Database = {
           template_id: string | null
         }
         Insert: {
+          brevo_message_id?: string | null
+          campaign_id?: string | null
+          clicked_at?: string | null
           client_id?: string | null
           created_at?: string
           error_message?: string | null
           id?: string
+          opened_at?: string | null
           organization_id: string
           recipient_email: string
           recipient_name?: string | null
@@ -763,10 +834,14 @@ export type Database = {
           template_id?: string | null
         }
         Update: {
+          brevo_message_id?: string | null
+          campaign_id?: string | null
+          clicked_at?: string | null
           client_id?: string | null
           created_at?: string
           error_message?: string | null
           id?: string
+          opened_at?: string | null
           organization_id?: string
           recipient_email?: string
           recipient_name?: string | null
@@ -777,6 +852,13 @@ export type Database = {
           template_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "email_sends_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "email_campaigns"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "email_sends_client_id_fkey"
             columns: ["client_id"]

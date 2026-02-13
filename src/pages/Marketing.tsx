@@ -18,14 +18,14 @@ const modules = [
     description: "Envie emails em massa para clientes e leads segmentados",
     icon: Send,
     href: "/marketing/campaigns",
-    available: false,
+    available: true,
   },
   {
     title: "Relatórios",
     description: "Acompanhe métricas de abertura, cliques e conversões",
     icon: BarChart3,
     href: "/marketing/reports",
-    available: false,
+    available: true,
   },
 ];
 
