@@ -1,24 +1,35 @@
 
-# Importacao Full-Page (Correcao)
+# Detalhes da Lista -- Full-Page com Pesquisa
 
 ## Problema
-O importador de contactos usa um `Sheet` (painel lateral) que fica no canto da tela. O plano original pedia full-page mas foi implementado como side-sheet.
-
-## Solucao
-Substituir o `Sheet` por um `Dialog` com `variant="fullScreen"` -- que ja existe no projeto e e o mesmo padrao usado nos modais de Vendas e Clientes.
+O modal de detalhes da lista (`ListDetailsModal`) abre como um dialogo pequeno centrado no ecra. Deveria ser full-page como os restantes modais do sistema (Vendas, Clientes, Importacao). Tambem falta um filtro de pesquisa para os membros da lista.
 
 ## Alteracoes
 
-### `src/components/marketing/ImportContactsModal.tsx`
+### Ficheiro: `src/components/marketing/ListDetailsModal.tsx`
 
-1. Trocar os imports de `Sheet/SheetContent/SheetHeader/SheetTitle/SheetDescription` por `Dialog/DialogContent/DialogHeader/DialogTitle/DialogDescription`
-2. No JSX:
-   - `<Sheet>` -> `<Dialog>`
-   - `<SheetContent side="right" className="w-full sm:max-w-[700px] ...">` -> `<DialogContent variant="fullScreen">`
-   - `<SheetHeader>` -> `<DialogHeader>`
-   - `<SheetTitle>` -> `<DialogTitle>`
-   - `<SheetDescription>` -> `<DialogDescription>`
-3. Manter o layout interno com `ScrollArea` e os 4 passos do stepper -- apenas o contentor exterior muda
-4. Dentro do fullScreen, centrar o conteudo com `max-w-3xl mx-auto` para nao ficar esticado em ecras grandes
+**1. Converter para full-page**
+- Adicionar `variant="fullScreen"` ao `DialogContent`
+- Remover `max-w-lg max-h-[85vh]`
+- Centrar conteudo com `max-w-3xl mx-auto w-full`
 
-Apenas 1 ficheiro a editar. Toda a logica de importacao, steps e sub-componentes permanecem iguais.
+**2. Adicionar filtro de pesquisa nos membros**
+- Novo estado `memberSearch` para filtrar a lista de membros existentes
+- Campo de pesquisa com icone acima da lista de membros
+- Filtragem accent-insensitive usando a funcao `normalizeString` ja existente em `src/lib/utils.ts`
+- Pesquisa por nome, email e telefone do cliente
+
+**3. Aplicar `normalizeString` tambem na pesquisa de "Adicionar contactos"**
+- A pesquisa actual na seccao de adicionar usa `.toLowerCase()` simples
+- Passar a usar `normalizeString` para ignorar acentos
+
+### Detalhes tecnicos
+- Importar `normalizeString` de `@/lib/utils`
+- Filtro de membros: `normalizeString(name).includes(normalizeString(query)) || normalizeString(email).includes(normalizeString(query)) || normalizeString(phone).includes(normalizeString(query))`
+- Layout full-page: header fixo com nome da lista + badge de contagem + botao adicionar, seguido do campo de pesquisa e a lista scrollavel
+- Remover `max-h-[300px]` do ScrollArea dos membros para usar o espaco full-page
+
+### Ficheiros a editar
+| Ficheiro | Acao |
+|----------|------|
+| `src/components/marketing/ListDetailsModal.tsx` | Editar |
