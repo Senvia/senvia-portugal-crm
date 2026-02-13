@@ -24,6 +24,7 @@ import { useCreateClient } from "@/hooks/useClients";
 import { useClientLabels } from "@/hooks/useClientLabels";
 import { useTeamMembers } from "@/hooks/useTeam";
 import { useClientFieldsSettings } from "@/hooks/useClientFieldsSettings";
+import { useAuth } from "@/contexts/AuthContext";
 import { CLIENT_SOURCE_LABELS, ClientStatus, DEFAULT_CLIENT_FIELDS_SETTINGS, BillingTarget } from "@/types/clients";
 import { COUNTRIES } from "@/lib/countries";
 import { User, Building2 } from "lucide-react";
@@ -44,8 +45,10 @@ interface CreateClientModalProps {
 
 export function CreateClientModal({ open, onOpenChange, onCreated, initialData }: CreateClientModalProps) {
   const labels = useClientLabels();
+  const { organization } = useAuth();
   const { data: teamMembers = [] } = useTeamMembers();
   const { data: fieldSettings } = useClientFieldsSettings();
+  const invoicingEnabled = (organization as any)?.tax_config?.invoicing_enabled !== false;
   
   const settings = fieldSettings || DEFAULT_CLIENT_FIELDS_SETTINGS;
   
@@ -350,6 +353,7 @@ export function CreateClientModal({ open, onOpenChange, onCreated, initialData }
               <div className="lg:col-span-2">
                 <div className="lg:sticky lg:top-0 space-y-4">
                   {/* Billing Target */}
+                  {invoicingEnabled && (
                   <Card>
                     <CardHeader className="pb-3">
                       <CardTitle className="text-base">Faturação</CardTitle>
@@ -393,6 +397,7 @@ export function CreateClientModal({ open, onOpenChange, onCreated, initialData }
                       </RadioGroup>
                     </CardContent>
                   </Card>
+                  )}
 
                   <Card>
                     <CardHeader className="pb-3">
