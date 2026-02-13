@@ -83,7 +83,7 @@ export default function FinancePayments() {
   // Read status from URL on mount
   useEffect(() => {
     const statusFromUrl = searchParams.get('status');
-    if (statusFromUrl === 'pending' || statusFromUrl === 'paid') {
+    if (statusFromUrl === 'pending' || statusFromUrl === 'paid' || statusFromUrl === 'overdue') {
       setStatusFilter(statusFromUrl);
     }
   }, [searchParams]);
@@ -97,7 +97,11 @@ export default function FinancePayments() {
         if (paymentDate < startOfDay(dateRange.from)) return false;
         if (dateRange.to && paymentDate > endOfDay(dateRange.to)) return false;
       }
-      if (statusFilter !== "all" && payment.status !== statusFilter) return false;
+      if (statusFilter === 'overdue') {
+        if (payment.status !== 'pending') return false;
+        const paymentDate = parseISO(payment.payment_date);
+        if (paymentDate >= startOfDay(new Date())) return false;
+      } else if (statusFilter !== "all" && payment.status !== statusFilter) return false;
       if (methodFilter !== "all" && payment.payment_method !== methodFilter) return false;
       if (searchTerm) {
         const search = searchTerm.toLowerCase();
@@ -309,6 +313,7 @@ export default function FinancePayments() {
                     <SelectItem value="all">Todos</SelectItem>
                     <SelectItem value="paid">Pagos</SelectItem>
                     <SelectItem value="pending">Agendados</SelectItem>
+                    <SelectItem value="overdue">Atrasados</SelectItem>
                   </SelectContent>
                 </Select>
                 <Select value={methodFilter} onValueChange={setMethodFilter}>
