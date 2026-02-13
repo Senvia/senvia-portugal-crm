@@ -1,24 +1,18 @@
 
+# Mover botão "Editar" do header para a coluna direita
 
-# Remover nome e avatar do header
+## Problema
+O botão "Editar" está no header (topo do modal), mas nos modais de Propostas e Vendas ele fica na coluna direita, dentro do card "Ações Rápidas".
 
-## Objectivo
-Limpar o header do ClientDetailsDrawer, removendo o avatar e o nome do cliente. O header fica apenas com o botao "Editar" e o botao de fechar (X).
+## Alteração em `src/components/clients/ClientDetailsDrawer.tsx`
 
-## Alteracao em `src/components/clients/ClientDetailsDrawer.tsx`
+### 1. Limpar o Header
+- Remover o botão "Editar" do `DialogHeader`
+- O header fica apenas com o botão de fechar (X) gerado automaticamente pelo DialogContent
 
-### Header (linhas ~140-157)
-Remover:
-- O div do avatar (circulo com inicial)
-- O DialogTitle com o nome do cliente
-
-Manter:
-- DialogDescription sr-only (acessibilidade)
-- Botao "Editar"
-- Botao fechar (X) -- gerado automaticamente pelo DialogContent
-
-O header ficara apenas com o botao "Editar" alinhado a direita.
+### 2. Adicionar "Editar" ao card "Ações Rápidas"
+- Inserir o botão "Editar" no card "Ações Rápidas" na coluna direita, como primeiro item (antes dos botões Ligar/WhatsApp)
+- Seguir o padrão do ProposalDetailsModal: `variant="outline"`, `size="sm"`, `className="w-full justify-start"`
 
 ## Ficheiro alterado
 - `src/components/clients/ClientDetailsDrawer.tsx`
-
