@@ -2,7 +2,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Download, Search, FileText, X, Loader2, CheckCircle2, AlertCircle, ArrowUpDown, ArrowUp, ArrowDown, FileDown } from "lucide-react";
+import { Download, Search, FileText, X, Loader2, ArrowUpDown, ArrowUp, ArrowDown, FileDown } from "lucide-react";
 import { useInvoices, useSyncInvoices } from "@/hooks/useInvoices";
 import { useCreditNotes, useSyncCreditNotes } from "@/hooks/useCreditNotes";
 import { formatCurrency, formatDate } from "@/lib/format";
@@ -89,8 +89,8 @@ export function InvoicesContent() {
   useEffect(() => {
     if (!hasSynced.current && !syncInvoices.isPending && !syncCreditNotes.isPending) {
       hasSynced.current = true;
-      syncInvoices.mutate();
-      syncCreditNotes.mutate();
+      syncInvoices.mutate(undefined, { onError: () => {} });
+      syncCreditNotes.mutate(undefined, { onError: () => {} });
     }
   }, []);
 
@@ -336,7 +336,6 @@ export function InvoicesContent() {
                     <TableHead className="text-right cursor-pointer select-none" onClick={() => handleSort('total')}>
                       <span className="flex items-center justify-end">Valor <SortIcon field="total" sortField={sortField} sortDirection={sortDirection} /></span>
                     </TableHead>
-                    <TableHead className="text-center">Associada</TableHead>
                     <TableHead className="text-center w-[60px]">PDF</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -382,13 +381,6 @@ export function InvoicesContent() {
                       </TableCell>
                       <TableCell className="text-right font-semibold whitespace-nowrap">
                         {formatCurrency(doc.total)}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {doc.sale_id || doc.payment_id ? (
-                          <CheckCircle2 className="h-4 w-4 text-green-500 mx-auto" />
-                        ) : (
-                          <AlertCircle className="h-4 w-4 text-yellow-500 mx-auto" />
-                        )}
                       </TableCell>
                       <TableCell className="text-center">
                         {doc.pdf_path ? (
