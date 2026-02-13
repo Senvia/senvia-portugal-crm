@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import type { EmailCampaign, CampaignStatus } from '@/types/marketing';
+import { useState } from 'react';
 
 interface CreateCampaignData {
   name: string;
@@ -63,7 +64,39 @@ export function useCampaignSends(campaignId: string | null) {
       return data;
     },
     enabled: !!campaignId && !!organization?.id,
+    refetchInterval: 10000,
   });
+}
+
+export function useSyncCampaignSends() {
+  const { organization } = useAuth();
+  const queryClient = useQueryClient();
+  const [lastSyncResult, setLastSyncResult] = useState<{ inserted: number; updated: number } | null>(null);
+
+  const mutation = useMutation({
+    mutationFn: async (campaignId: string) => {
+      if (!organization?.id) throw new Error('Sem organização');
+
+      const { data, error } = await supabase.functions.invoke('sync-campaign-sends', {
+        body: { campaignId, organizationId: organization.id },
+      });
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      setLastSyncResult({ inserted: data.inserted, updated: data.updated });
+      queryClient.invalidateQueries({ queryKey: ['campaign-sends'] });
+      queryClient.invalidateQueries({ queryKey: ['email-campaigns'] });
+      const total = (data.inserted || 0) + (data.updated || 0);
+      toast.success(`Sincronizados ${total} registos da Brevo`);
+    },
+    onError: (err) => {
+      toast.error(`Erro ao sincronizar: ${err.message}`);
+    },
+  });
+
+  return { ...mutation, lastSyncResult };
 }
 
 export function useCreateCampaign() {

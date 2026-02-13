@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Mail, CheckCircle2, AlertCircle, Eye, MousePointer, Search, ArrowLeft } from "lucide-react";
+import { Mail, CheckCircle2, AlertCircle, Eye, MousePointer, Search, ArrowLeft, RefreshCw } from "lucide-react";
 import {
   Dialog, DialogContent, DialogTitle,
 } from "@/components/ui/dialog";
@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Progress } from "@/components/ui/progress";
-import { useCampaignSends } from "@/hooks/useCampaigns";
+import { useCampaignSends, useSyncCampaignSends } from "@/hooks/useCampaigns";
 import type { EmailCampaign } from "@/types/marketing";
 import { CAMPAIGN_STATUS_LABELS, CAMPAIGN_STATUS_STYLES } from "@/types/marketing";
 import { format } from "date-fns";
@@ -21,7 +21,8 @@ interface CampaignDetailsModalProps {
 }
 
 export function CampaignDetailsModal({ campaign, open, onOpenChange }: CampaignDetailsModalProps) {
-  const { data: sends = [] } = useCampaignSends(campaign?.id || null);
+  const { data: sends = [], isFetching } = useCampaignSends(campaign?.id || null);
+  const { mutate: syncSends, isPending: isSyncing } = useSyncCampaignSends();
   const [recipientSearch, setRecipientSearch] = useState("");
 
   const opened = sends.filter(s => s.opened_at).length;
@@ -75,8 +76,21 @@ export function CampaignDetailsModal({ campaign, open, onOpenChange }: CampaignD
                     Enviada a {format(new Date(campaign.sent_at), "dd/MM/yyyy 'às' HH:mm")}
                   </span>
                 )}
+                {isFetching && !isSyncing && (
+                  <RefreshCw className="h-3 w-3 text-muted-foreground animate-spin" />
+                )}
               </div>
             </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => campaign && syncSends(campaign.id)}
+              disabled={isSyncing}
+              className="shrink-0"
+            >
+              <RefreshCw className={`h-4 w-4 mr-1.5 ${isSyncing ? 'animate-spin' : ''}`} />
+              {isSyncing ? 'A sincronizar...' : 'Sincronizar'}
+            </Button>
           </div>
         </div>
 
