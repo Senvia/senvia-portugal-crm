@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Search, Users, User, Send, Loader2, Mail, Rocket } from "lucide-react";
+import { Search, Users, User, Send, Loader2, Mail, Rocket, List } from "lucide-react";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -19,6 +19,7 @@ import { useCreateCampaign, useUpdateCampaignStatus } from "@/hooks/useCampaigns
 import { useSendTemplateEmail } from "@/hooks/useSendTemplateEmail";
 import { useClientLabels } from "@/hooks/useClientLabels";
 import { CLIENT_STATUS_STYLES } from "@/types/clients";
+import { useContactLists, useContactListMembers } from "@/hooks/useContactLists";
 import type { CrmClient } from "@/types/clients";
 
 interface CreateCampaignModalProps {
@@ -35,7 +36,8 @@ export function CreateCampaignModal({ open, onOpenChange }: CreateCampaignModalP
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedClients, setSelectedClients] = useState<CrmClient[]>([]);
   const [statusFilter, setStatusFilter] = useState("all");
-  const [selectionMode, setSelectionMode] = useState<"individual" | "filter">("individual");
+  const [selectionMode, setSelectionMode] = useState<"individual" | "filter" | "list">("individual");
+  const [selectedListId, setSelectedListId] = useState("");
   const [isSending, setIsSending] = useState(false);
 
   const { data: templates = [] } = useEmailTemplates();
@@ -44,6 +46,8 @@ export function CreateCampaignModal({ open, onOpenChange }: CreateCampaignModalP
   const createCampaign = useCreateCampaign();
   const updateStatus = useUpdateCampaignStatus();
   const sendTemplate = useSendTemplateEmail();
+  const { data: contactLists = [] } = useContactLists();
+  const { data: listMembers = [] } = useContactListMembers(selectedListId || null);
 
   const activeTemplates = useMemo(() => templates.filter(t => t.is_active), [templates]);
   const selectedTemplate = useMemo(() => templates.find(t => t.id === templateId), [templates, templateId]);
@@ -131,6 +135,7 @@ export function CreateCampaignModal({ open, onOpenChange }: CreateCampaignModalP
     setSelectedClients([]);
     setStatusFilter("all");
     setSelectionMode("individual");
+    setSelectedListId("");
     setIsSending(false);
     onOpenChange(false);
   };
@@ -194,12 +199,15 @@ export function CreateCampaignModal({ open, onOpenChange }: CreateCampaignModalP
             </DialogHeader>
 
             <Tabs value={selectionMode} onValueChange={(v) => setSelectionMode(v as any)} className="flex-1 overflow-hidden flex flex-col">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="individual" className="flex items-center gap-2">
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="individual" className="flex items-center gap-2 text-xs">
                   <User className="h-4 w-4" /> Individual
                 </TabsTrigger>
-                <TabsTrigger value="filter" className="flex items-center gap-2">
-                  <Users className="h-4 w-4" /> Por Filtro
+                <TabsTrigger value="filter" className="flex items-center gap-2 text-xs">
+                  <Users className="h-4 w-4" /> Filtro
+                </TabsTrigger>
+                <TabsTrigger value="list" className="flex items-center gap-2 text-xs">
+                  <List className="h-4 w-4" /> Lista
                 </TabsTrigger>
               </TabsList>
 
@@ -271,6 +279,50 @@ export function CreateCampaignModal({ open, onOpenChange }: CreateCampaignModalP
                     })}
                   </div>
                 </ScrollArea>
+              </TabsContent>
+
+              <TabsContent value="list" className="flex-1 overflow-hidden flex flex-col mt-4 space-y-4">
+                <div className="space-y-2">
+                  <Label>Selecionar lista</Label>
+                  <Select value={selectedListId} onValueChange={(v) => {
+                    setSelectedListId(v);
+                  }}>
+                    <SelectTrigger><SelectValue placeholder="Escolher lista..." /></SelectTrigger>
+                    <SelectContent>
+                      {contactLists.map(l => (
+                        <SelectItem key={l.id} value={l.id}>{l.name} ({l.member_count})</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {selectedListId && listMembers.length > 0 && (
+                  <>
+                    <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                      <p className="text-sm font-medium">{listMembers.length} contacto(s) na lista</p>
+                      <Button variant="outline" size="sm" onClick={() => {
+                        const clientsFromList = listMembers
+                          .filter(m => m.client?.email)
+                          .map(m => m.client as CrmClient);
+                        setSelectedClients(clientsFromList);
+                      }}>
+                        Carregar todos
+                      </Button>
+                    </div>
+                    <ScrollArea className="flex-1 border rounded-md max-h-[200px]">
+                      <div className="p-2 space-y-1">
+                        {listMembers.filter(m => m.client).map(m => (
+                          <div key={m.id} className="flex items-center gap-3 p-2 text-sm">
+                            <span className="font-medium truncate">{m.client?.name}</span>
+                            <span className="text-xs text-muted-foreground truncate">{m.client?.email}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </>
+                )}
+                {selectedListId && listMembers.length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-4">Lista vazia</p>
+                )}
               </TabsContent>
             </Tabs>
 
