@@ -1,62 +1,35 @@
 
+# Melhorar responsividade dos cards financeiros
 
-# Corrigir cores do grafico + Adicionar "Atrasados"
+## Problema
 
-## O que muda
+A grid actual tem 7 cards numa unica linha em `xl`, o que os torna demasiado estreitos. Em resolucoes intermedias (`lg`), ficam 4 por linha com 3 em baixo, tambem apertados.
 
-### 1. Corrigir cores do grafico (Finance.tsx)
-Substituir as variaveis CSS inexistentes por cores directas:
-- **Recebido**: Verde (`#10b981`)
-- **Agendado**: Azul (`#3b82f6`)
-- **Despesas**: Vermelho (`#ef4444`)
-- **Atrasados** (novo): Laranja (`#f97316`)
+## Solucao
 
-### 2. Novo card "Atrasados" (Finance.tsx)
-Card que mostra o total de pagamentos pendentes cuja data ja passou (vencidos). Usa icone `AlertTriangle` em laranja. Clicavel, navega para `/financeiro/pagamentos?status=overdue`.
+Reorganizar a grid com breakpoints mais graduais para que os cards tenham sempre espaco suficiente:
 
-### 3. Nova metrica no hook (useFinanceStats.ts)
-Calcular `totalOverdue` e `overdueCount`: pagamentos com status `pending` e `payment_date < hoje`.
+- **Mobile** (default): 2 colunas (ja esta bem)
+- **md** (768px+): 3 colunas
+- **lg** (1024px+): 4 colunas
+- **xl** (1280px+): 4 colunas (manter 4, nao forcar 7)
+- **2xl** (1536px+): 7 colunas (so em ecras largos)
 
-### 4. Nova serie no grafico (Finance.tsx)
-Adicionar area "Atrasados" em laranja no grafico de Fluxo de Caixa, mostrando pagamentos vencidos por dia.
+Tambem reduzir ligeiramente o tamanho do valor nos cards para `text-xl` em vez de `text-2xl`, para caber melhor em espacos menores.
 
-### 5. Tipos actualizados (types/finance.ts)
-- Adicionar `overdue` ao `CashflowPoint`
-- Adicionar `totalOverdue`, `overdueCount` ao `FinanceStats`
-
-## Detalhe tecnico
-
-### `src/types/finance.ts`
-```typescript
-// CashflowPoint - adicionar campo
-overdue: number;
-
-// FinanceStats - adicionar campos
-totalOverdue: number;
-overdueCount: number;
-```
-
-### `src/hooks/useFinanceStats.ts`
-Calcular pagamentos atrasados (pendentes com data anterior a hoje):
-```typescript
-const overduePayments = filteredPayments.filter(p => {
-  if (p.status !== 'pending') return false;
-  const date = parseISO(p.payment_date);
-  return date < startOfDay(now);
-});
-const totalOverdue = overduePayments.reduce((sum, p) => sum + p.amount, 0);
-```
-No loop do cashflow trend, adicionar calculo de `overdue` por dia.
+## Alteracao tecnica
 
 ### `src/pages/Finance.tsx`
-- Corrigir todas as cores do grafico (gradientes + areas)
-- Adicionar gradiente laranja `colorOverdue`
-- Adicionar `<Area>` para "Atrasados" em laranja
-- Adicionar card "Atrasados" na grid (alterar grid para 7 colunas ou manter 6 reorganizando)
-- Adicionar `<Legend>` ao grafico para identificar series
 
-### Ficheiros alterados
-- `src/types/finance.ts`
-- `src/hooks/useFinanceStats.ts`
-- `src/pages/Finance.tsx`
+Linha ~77 - alterar a classe da grid de:
+```
+grid-cols-2 lg:grid-cols-4 xl:grid-cols-7
+```
+para:
+```
+grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-7
+```
 
+Opcionalmente, reduzir o `text-2xl` dos valores para `text-xl md:text-2xl` nos 7 cards para melhor legibilidade em ecras menores.
+
+Um unico ficheiro alterado: `src/pages/Finance.tsx`.
