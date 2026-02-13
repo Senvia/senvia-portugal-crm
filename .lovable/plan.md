@@ -1,35 +1,42 @@
 
-# Melhorar responsividade dos cards financeiros
+
+# Corrigir filtro "Atrasados" na pagina de Pagamentos
 
 ## Problema
 
-A grid actual tem 7 cards numa unica linha em `xl`, o que os torna demasiado estreitos. Em resolucoes intermedias (`lg`), ficam 4 por linha com 3 em baixo, tambem apertados.
+O card "Atrasados" navega para `/financeiro/pagamentos?status=overdue`, mas a pagina de Pagamentos so reconhece `pending` e `paid` como filtros validos (linha 86). O valor `overdue` e ignorado e mostra todos os pagamentos.
 
 ## Solucao
 
-Reorganizar a grid com breakpoints mais graduais para que os cards tenham sempre espaco suficiente:
+Actualizar a pagina de Pagamentos para reconhecer `overdue` como filtro especial: mostra apenas pagamentos com status `pending` cuja data ja passou.
 
-- **Mobile** (default): 2 colunas (ja esta bem)
-- **md** (768px+): 3 colunas
-- **lg** (1024px+): 4 colunas
-- **xl** (1280px+): 4 colunas (manter 4, nao forcar 7)
-- **2xl** (1536px+): 7 colunas (so em ecras largos)
+## Alteracoes tecnicas
 
-Tambem reduzir ligeiramente o tamanho do valor nos cards para `text-xl` em vez de `text-2xl`, para caber melhor em espacos menores.
+### `src/pages/finance/Payments.tsx`
 
-## Alteracao tecnica
-
-### `src/pages/Finance.tsx`
-
-Linha ~77 - alterar a classe da grid de:
-```
-grid-cols-2 lg:grid-cols-4 xl:grid-cols-7
-```
-para:
-```
-grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-7
+1. **useEffect (linha 84-89)**: Adicionar `'overdue'` a lista de valores aceites do URL:
+```typescript
+if (statusFromUrl === 'pending' || statusFromUrl === 'paid' || statusFromUrl === 'overdue') {
+  setStatusFilter(statusFromUrl);
+}
 ```
 
-Opcionalmente, reduzir o `text-2xl` dos valores para `text-xl md:text-2xl` nos 7 cards para melhor legibilidade em ecras menores.
+2. **filteredPayments (linha 100)**: Adicionar logica para o filtro `overdue` -- mostrar apenas pagamentos `pending` com `payment_date < hoje`:
+```typescript
+if (statusFilter === 'overdue') {
+  if (payment.status !== 'pending') return false;
+  const paymentDate = parseISO(payment.payment_date);
+  if (paymentDate >= startOfDay(new Date())) return false;
+} else if (statusFilter !== "all" && payment.status !== statusFilter) {
+  return false;
+}
+```
 
-Um unico ficheiro alterado: `src/pages/Finance.tsx`.
+3. **Select de estado (linha 304-313)**: Adicionar opcao "Atrasados" ao dropdown:
+```html
+<SelectItem value="overdue">Atrasados</SelectItem>
+```
+
+### Ficheiro alterado
+- `src/pages/finance/Payments.tsx`
+
