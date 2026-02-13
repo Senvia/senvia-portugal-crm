@@ -66,6 +66,7 @@ export interface EmailCampaign {
   scheduled_at: string | null;
   sent_at: string | null;
   settings: Record<string, boolean>;
+  settings_data: Record<string, string>;
   created_by: string | null;
   created_at: string;
   updated_at: string;
