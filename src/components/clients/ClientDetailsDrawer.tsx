@@ -138,7 +138,10 @@ export function ClientDetailsDrawer({
       <DialogContent variant="fullScreen" className="flex flex-col p-0 gap-0">
         {/* Header */}
         <DialogHeader className="px-4 sm:px-6 py-3 border-b shrink-0">
-          <DialogTitle className="sr-only">{client.name}</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <User className="h-5 w-5 text-primary" />
+            {client.name}
+          </DialogTitle>
           <DialogDescription className="sr-only">Detalhes do cliente {client.name}</DialogDescription>
         </DialogHeader>
 
