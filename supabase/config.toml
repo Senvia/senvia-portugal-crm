@@ -74,3 +74,6 @@ verify_jwt = false
 
 [functions.send-template-email]
 verify_jwt = false
+
+[functions.sync-campaign-sends]
+verify_jwt = false
