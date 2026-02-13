@@ -24,6 +24,8 @@ import FinanceExpenses from "./pages/finance/Expenses";
 import Ecommerce from "./pages/Ecommerce";
 import Marketing from "./pages/Marketing";
 import MarketingTemplates from "./pages/marketing/Templates";
+import MarketingCampaigns from "./pages/marketing/Campaigns";
+import MarketingReports from "./pages/marketing/Reports";
 import EcommerceProducts from "./pages/ecommerce/Products";
 import EcommerceOrders from "./pages/ecommerce/Orders";
 import EcommerceCustomers from "./pages/ecommerce/Customers";
@@ -166,6 +168,16 @@ const App = () => (
             <Route path="/marketing/templates" element={
               <ProtectedRoute>
                 <MarketingTemplates />
+              </ProtectedRoute>
+            } />
+            <Route path="/marketing/campaigns" element={
+              <ProtectedRoute>
+                <MarketingCampaigns />
+              </ProtectedRoute>
+            } />
+            <Route path="/marketing/reports" element={
+              <ProtectedRoute>
+                <MarketingReports />
               </ProtectedRoute>
             } />
 
