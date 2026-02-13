@@ -14,12 +14,13 @@ const FIELD_ICONS: Record<ClientFieldKey, React.ReactNode> = {
   email: <Mail className="h-4 w-4" />,
   phone: <Phone className="h-4 w-4" />,
   company: <Building className="h-4 w-4" />,
+  company_nif: <FileText className="h-4 w-4" />,
   nif: <FileText className="h-4 w-4" />,
   address: <MapPin className="h-4 w-4" />,
   notes: <MessageSquare className="h-4 w-4" />,
 };
 
-const FIELD_ORDER: ClientFieldKey[] = ['name', 'email', 'phone', 'company', 'nif', 'address', 'notes'];
+const FIELD_ORDER: ClientFieldKey[] = ['name', 'email', 'phone', 'company', 'company_nif', 'nif', 'address', 'notes'];
 
 export function ClientFieldsEditor() {
   const { data: savedSettings, isLoading } = useClientFieldsSettings();

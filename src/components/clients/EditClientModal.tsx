@@ -88,10 +88,11 @@ export function EditClientModal({ client, open, onOpenChange }: EditClientModalP
     if (settings.phone.visible && settings.phone.required && !phone.trim()) return false;
     if (settings.company.visible && settings.company.required && !company.trim()) return false;
     if (settings.nif.visible && settings.nif.required && !nif.trim()) return false;
+    if (settings.company_nif?.visible && settings.company_nif?.required && !companyNif.trim()) return false;
     if (settings.address.visible && settings.address.required && !addressLine1.trim()) return false;
     if (settings.notes.visible && settings.notes.required && !notes.trim()) return false;
     return true;
-  }, [name, email, phone, company, nif, addressLine1, notes, settings]);
+  }, [name, email, phone, company, nif, companyNif, addressLine1, notes, settings]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -228,15 +229,20 @@ export function EditClientModal({ client, open, onOpenChange }: EditClientModalP
                             required={settings.company.required}
                           />
                         </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="edit-company-nif">Contribuinte (Empresa)</Label>
-                          <Input
-                            id="edit-company-nif"
-                            value={companyNif}
-                            onChange={(e) => setCompanyNif(e.target.value)}
-                            placeholder="NIF da empresa"
-                          />
-                        </div>
+                        {settings.company_nif?.visible && (
+                          <div className="space-y-2">
+                            <Label htmlFor="edit-company-nif">
+                              {settings.company_nif.label} {settings.company_nif.required && '*'}
+                            </Label>
+                            <Input
+                              id="edit-company-nif"
+                              value={companyNif}
+                              onChange={(e) => setCompanyNif(e.target.value)}
+                              placeholder="NIF da empresa"
+                              required={settings.company_nif.required}
+                            />
+                          </div>
+                        )}
                       </div>
                     </CardContent>
                   </Card>

@@ -63,7 +63,7 @@ export const CLIENT_SOURCE_LABELS: Record<string, string> = {
 };
 
 // Client Field Settings Types
-export type ClientFieldKey = 'name' | 'email' | 'phone' | 'company' | 'nif' | 'address' | 'notes';
+export type ClientFieldKey = 'name' | 'email' | 'phone' | 'company' | 'company_nif' | 'nif' | 'address' | 'notes';
 
 export interface ClientFieldConfig {
   visible: boolean;
@@ -76,6 +76,7 @@ export interface ClientFieldsSettings {
   email: ClientFieldConfig;
   phone: ClientFieldConfig;
   company: ClientFieldConfig;
+  company_nif: ClientFieldConfig;
   nif: ClientFieldConfig;
   address: ClientFieldConfig;
   notes: ClientFieldConfig;
@@ -86,6 +87,7 @@ export const CLIENT_FIELD_DEFAULTS: Record<ClientFieldKey, { label: string; icon
   email: { label: 'Email', icon: 'Mail' },
   phone: { label: 'Telefone', icon: 'Phone' },
   company: { label: 'Empresa', icon: 'Building' },
+  company_nif: { label: 'Contribuinte (Empresa)', icon: 'FileText' },
   nif: { label: 'NIF', icon: 'FileText' },
   address: { label: 'Morada', icon: 'MapPin' },
   notes: { label: 'Notas', icon: 'MessageSquare' },
@@ -96,6 +98,7 @@ export const DEFAULT_CLIENT_FIELDS_SETTINGS: ClientFieldsSettings = {
   email: { visible: true, required: false, label: 'Email' },
   phone: { visible: true, required: false, label: 'Telefone' },
   company: { visible: true, required: false, label: 'Empresa' },
+  company_nif: { visible: true, required: false, label: 'Contribuinte (Empresa)' },
   nif: { visible: true, required: false, label: 'NIF' },
   address: { visible: true, required: false, label: 'Morada' },
   notes: { visible: true, required: false, label: 'Notas' },
