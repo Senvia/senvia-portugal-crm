@@ -1,28 +1,32 @@
 
 
-# Corrigir Valor do "Agendar Restante"
+# Remover coluna "Associada" e corrigir erro de sincronizacao
 
-## Problema
+## Alteracoes
 
-O `ScheduleRemainingModal` recebe `summary.remaining` que calcula apenas `saleTotal - totalPaid`, ignorando os pagamentos ja agendados (pendentes). Deveria receber `summary.remainingToSchedule` que calcula `saleTotal - totalPaid - totalScheduled`.
+### 1. `src/components/finance/InvoicesContent.tsx`
 
-Exemplo: Venda de 397. Pago: 198,50. Agendado: 100. O modal deveria mostrar 98,50 para agendar, mas esta a mostrar 198,50 (ignorando os 100 ja agendados).
+**Remover coluna "Associada":**
+- Remover o `<TableHead>` "Associada" (linha 339)
+- Remover o `<TableCell>` correspondente com os icones CheckCircle2/AlertCircle (linhas 386-391)
+- Remover imports nao utilizados (`CheckCircle2`, `AlertCircle`) se deixarem de ser usados
 
-## Alteracao
+**Corrigir erro de sincronizacao:**
+- No `useEffect` de auto-sync (linhas 89-95), envolver as chamadas `mutate()` com callbacks silenciosos para nao mostrar toast de erro durante a sincronizacao automatica em background
+- Substituir `syncInvoices.mutate()` e `syncCreditNotes.mutate()` por versoes com `onError` vazio, para que falhas silenciosas nao perturbem o utilizador:
 
-### `src/components/sales/SalePaymentsList.tsx`
-
-Linha onde o `ScheduleRemainingModal` e chamado - trocar `summary.remaining` por `summary.remainingToSchedule`:
-
+```typescript
+useEffect(() => {
+  if (!hasSynced.current && !syncInvoices.isPending && !syncCreditNotes.isPending) {
+    hasSynced.current = true;
+    syncInvoices.mutate(undefined, { onError: () => {} });
+    syncCreditNotes.mutate(undefined, { onError: () => {} });
+  }
+}, []);
 ```
-remainingAmount={Math.max(0, summary.remaining)}
-```
 
-passa a ser:
+Isto garante que a sincronizacao automatica em background nunca mostra erros ao utilizador. Se o utilizador disparar manualmente (caso exista botao), o toast de erro continua a funcionar normalmente.
 
-```
-remainingAmount={Math.max(0, summary.remainingToSchedule)}
-```
-
-Uma unica linha a alterar.
+### Ficheiros a alterar
+- `src/components/finance/InvoicesContent.tsx` - remover coluna + silenciar auto-sync
 
