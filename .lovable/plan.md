@@ -1,23 +1,32 @@
 
-# Sincronizacao Automatica de Campanhas
+# Corrigir Sync de Campanhas - Data Invalida
 
-## O que muda
+## Problema
 
-Remover o botao "Sincronizar" e tornar o processo completamente automatico. Quando o modal de detalhes abre, o sistema faz o sync com a Brevo automaticamente em background, sem precisar de nenhuma accao do utilizador.
+A Edge Function `sync-campaign-sends` nao esta a recuperar dados da Brevo porque envia uma data futura como `endDate`. O erro nos logs:
 
-## Alteracoes
+```
+Brevo API error: 400 {"code":"invalid_parameter","message":"End date should not be greater than current date"}
+```
 
-### 1. `src/components/marketing/CampaignDetailsModal.tsx`
-- Remover o botao "Sincronizar" do header
-- Adicionar um `useEffect` que dispara `syncSends(campaign.id)` automaticamente quando o modal abre (e `sends.length === 0` ou sempre na primeira abertura)
-- Manter o spinner discreto no header (o `RefreshCw` pequeno que ja existe) para indicar que esta a carregar/sincronizar
-- O polling de 10s que ja existe no hook continua a manter os dados actualizados depois do sync inicial
+A linha problemática (linha 75 do ficheiro):
+```javascript
+const endDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+```
 
-### 2. `src/hooks/useCampaigns.ts`
-- Sem alteracoes necessarias - o `useSyncCampaignSends` e o `refetchInterval: 10000` ja estao implementados
+Isto calcula a data de amanha, que a Brevo rejeita.
 
-## Resultado
+## Solucao
 
-- O utilizador abre o modal e os dados aparecem automaticamente (sync + polling)
-- Zero botoes para carregar, experiencia seamless
-- O spinner discreto no header indica actividade em background
+### Ficheiro: `supabase/functions/sync-campaign-sends/index.ts`
+
+Alterar o calculo do `endDate` para usar a data de **hoje** em vez de amanha:
+
+```javascript
+const endDate = new Date().toISOString().split("T")[0];
+```
+
+Isto e a unica alteracao necessaria. Uma vez corrigido:
+- O auto-sync que ja esta implementado no modal vai funcionar
+- Os dados da campanha "Apoio Portugal 01" vao ser recuperados automaticamente da Brevo
+- O polling de 10 segundos vai manter tudo actualizado
