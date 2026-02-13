@@ -1,108 +1,107 @@
 
+# Separar Contactos de Marketing dos Clientes CRM
 
-# Refazer Criacao de Campanhas -- Fiel ao Brevo
+## O Problema
 
-## Fluxo Completo (4 Steps)
+A importacao de contactos para listas de marketing cria registos na tabela `crm_clients` com `source: 'import'`. Isto mistura contactos de marketing (para campanhas de email) com clientes reais do CRM, inflando os numeros de clientes (247 em vez de 8 reais).
 
-### Step 1 -- Tipo de Campanha (NOVO)
-- Titulo: "Criar uma campanha"
-- Seccao "Padrao" com 3 cards visuais lado a lado:
-  - **E-mail** (icone Mail, clicavel)
-  - **SMS** (icone MessageSquare, badge "Em breve", desactivado, opacity-60)
-  - **WhatsApp** (icone Phone, badge "Em breve", desactivado, opacity-60)
-- Ao clicar no E-mail, avanca para Step 2
+## A Solucao
 
-### Step 2 -- Nome da Campanha
-- Titulo: "Criar uma campanha de e-mail"
-- Toggle "Regular" (unico disponivel)
-- Campo "Nome da campanha" com contador 0/128
-- Footer: "Cancelar" + "Criar campanha" (desactivado ate ter nome)
-
-### Step 3 -- Stepper com 4 seccoes
-Header: nome da campanha + badge "Rascunho"
-
-**Seccao 1 - Remetente:** Pre-preenchido com org (sempre completo)
-
-**Seccao 2 - Destinatarios:** Tabs Individual/Filtro/Lista (igual ao actual)
-
-**Seccao 3 - Assunto:** Campo editavel para o subject do email. Pre-preenchido se um template for escolhido, mas sempre editavel manualmente.
-
-**Seccao 4 - Conteudo:** Duas opcoes via tabs:
-- **"Usar Template"**: Selector de template existente (como esta agora)
-- **"Criar email"**: Editor inline (usando o componente `TemplateEditor` que ja existe) -- o conteudo NAO e guardado como template, e usado apenas para esta campanha
+Criar uma tabela `marketing_contacts` totalmente separada de `crm_clients`. As listas de marketing passam a referenciar `marketing_contacts` em vez de `crm_clients`.
 
 ---
 
-**Configuracoes adicionais** (seccao colapsavel, antes dos botoes):
-Baseado no print do Brevo, com checkboxes agrupados:
+## Alteracoes
 
-**Personalizacao:**
-- Personalizar o campo "Enviar para"
+### 1. Migracao SQL
 
-**Envio e rastreamento:**
-- Usar um endereco de resposta diferente
-- Ativar rastreio do Google Analytics
-- Adicionar anexo
-- Atribuir tag
-- Configurar data de expiracao
+**Criar tabela `marketing_contacts`:**
+- `id` (uuid, PK)
+- `organization_id` (uuid, FK para organizations)
+- `name` (text, NOT NULL)
+- `email` (text)
+- `phone` (text)
+- `company` (text)
+- `source` (text) -- 'import', 'manual', 'form'
+- `tags` (jsonb, default '[]')
+- `subscribed` (boolean, default true)
+- `created_at`, `updated_at`
+- Indice unico composto: `(organization_id, email)` para evitar duplicados por org
+- RLS: membros da org podem ler/escrever
 
-**Assinatura:**
-- Utilizar pagina de cancelamento personalizada
-- Usar formulario de atualizacao de perfil
+**Criar tabela `marketing_list_members`:**
+- `id` (uuid, PK)
+- `list_id` (uuid, FK para client_lists)
+- `contact_id` (uuid, FK para marketing_contacts)
+- `added_at` (timestamptz)
+- Indice unico: `(list_id, contact_id)`
+- RLS: igual a client_lists
 
-**Criacao:**
-- Editar cabecalho padrao
-- Editar rodape padrao
-- Habilitar link "Ver no navegador"
+**Migrar dados existentes:**
+- Copiar os 239 contactos importados de `crm_clients` para `marketing_contacts`
+- Copiar os registos de `client_list_members` que referenciam esses clientes para `marketing_list_members` (remapeando client_id para contact_id)
+- Apagar os 239 registos de `crm_clients` com `source = 'import'`
+- Apagar os registos antigos de `client_list_members` que ja foram migrados
 
-Cada checkbox guarda o valor no estado local (para futuro uso). Botao "Guardar" fecha a seccao.
+### 2. `src/hooks/useContactLists.ts` -- Actualizar
+
+- `useContactListMembers`: mudar query de `client_list_members` + `crm_clients` para `marketing_list_members` + `marketing_contacts`
+- `useAddListMembers`: inserir em `marketing_list_members` com `contact_id` em vez de `client_id`
+- `useRemoveListMember`: apagar de `marketing_list_members`
+- Actualizar tipos `ContactListMember` para ter `contact_id` e `contact` em vez de `client_id` e `client`
+
+### 3. `src/components/marketing/ImportContactsModal.tsx` -- Refazer importacao
+
+- Em vez de inserir em `crm_clients`, inserir em `marketing_contacts`
+- Em vez de associar via `client_list_members`, associar via `marketing_list_members`
+- Remover a dependencia de `useClients()` (que carrega todos os clientes CRM desnecessariamente)
+- A verificacao de duplicados passa a ser por email dentro de `marketing_contacts`
+
+### 4. `src/components/marketing/ListDetailsModal.tsx` -- Actualizar
+
+- Mudar a referencia de membros para usar `marketing_contacts` em vez de `crm_clients`
+- Actualizar display de contactos
+
+### 5. `src/components/marketing/SendTemplateModal.tsx` -- Actualizar
+
+- Se usa contactos de listas para enviar emails, mudar para buscar de `marketing_contacts`
+
+### 6. `src/types/marketing.ts` -- Adicionar tipo
+
+```
+export interface MarketingContact {
+  id: string;
+  organization_id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  company: string | null;
+  source: string | null;
+  tags: string[];
+  subscribed: boolean;
+  created_at: string;
+  updated_at: string;
+}
+```
 
 ---
-
-**Footer com 2 botoes:**
-- **"Agendar envio"**: Abre um date/time picker para escolher data e hora de envio (guarda na campanha com status `scheduled`)
-- **"Enviar campanha"**: Avanca para Step 4 (confirmacao de envio imediato)
-
-Ambos so ficam activos quando todas as seccoes estao completas (nome + destinatarios + assunto + conteudo).
-
-### Step 4 -- Confirmacao
-Resumo com: nome, assunto, conteudo (template ou custom), destinatarios. Botoes "Voltar" e "Enviar Campanha" / "Agendar".
-
-## Logica de envio
-
-- Se o utilizador escolheu "Usar Template": envia com `templateId` como antes
-- Se o utilizador escolheu "Criar email": envia com o `html_content` e `subject` directamente (sem template)
-- O hook `useSendTemplateEmail` precisa de ser ajustado (ou criar um novo `useSendCampaignEmail`) para aceitar HTML directo alem de templateId
-
-## Alteracoes na tabela (migracao SQL)
-
-Adicionar campos a `email_campaigns`:
-```
-ALTER TABLE email_campaigns ADD COLUMN IF NOT EXISTS subject TEXT;
-ALTER TABLE email_campaigns ADD COLUMN IF NOT EXISTS html_content TEXT;
-ALTER TABLE email_campaigns ADD COLUMN IF NOT EXISTS scheduled_at TIMESTAMPTZ;
-ALTER TABLE email_campaigns ADD COLUMN IF NOT EXISTS settings JSONB DEFAULT '{}';
-```
-- `subject`: assunto custom (quando nao usa template)
-- `html_content`: conteudo HTML custom (quando nao usa template)
-- `scheduled_at`: data/hora de envio agendado (null = envio imediato)
-- `settings`: configuracoes adicionais (checkboxes do Brevo)
 
 ## Ficheiros a editar
 
 | Ficheiro | Accao |
 |----------|-------|
-| Migracao SQL | Adicionar `subject`, `html_content`, `scheduled_at`, `settings` a `email_campaigns` |
-| `src/components/marketing/CreateCampaignModal.tsx` | Refazer completo: 4 steps com tipo, nome, stepper (com editor inline + config adicionais + agendar) |
-| `src/components/marketing/CampaignsTable.tsx` | Corrigir metricas falsas, mostrar status "Agendada" |
-| `src/types/marketing.ts` | Adicionar `CampaignChannel`, actualizar `EmailCampaign` com novos campos |
-| `src/hooks/useCampaigns.ts` | Ajustar `useCreateCampaign` para aceitar novos campos |
+| Migracao SQL | Criar `marketing_contacts` e `marketing_list_members`, migrar dados, limpar `crm_clients` importados |
+| `src/types/marketing.ts` | Adicionar `MarketingContact` |
+| `src/hooks/useContactLists.ts` | Mudar queries para `marketing_contacts` + `marketing_list_members` |
+| `src/components/marketing/ImportContactsModal.tsx` | Importar para `marketing_contacts` em vez de `crm_clients` |
+| `src/components/marketing/ListDetailsModal.tsx` | Actualizar referencias |
+| `src/components/marketing/SendTemplateModal.tsx` | Buscar contactos de `marketing_contacts` |
+| `src/components/marketing/CreateCampaignModal.tsx` | Actualizar seccao de destinatarios para buscar de `marketing_contacts` |
 
-## Detalhes tecnicos
+## Resultado
 
-- O `TemplateEditor` (tiptap) ja existe e sera reutilizado no tab "Criar email" da seccao Conteudo
-- O `handleSend` e ajustado: se `contentMode === 'template'` usa templateId, se `contentMode === 'custom'` usa `subject` + `html_content` directos
-- As "Configuracoes adicionais" sao guardadas como JSON no campo `settings` -- por agora so guardam o estado dos checkboxes para futuro uso
-- O agendamento guarda `scheduled_at` na campanha com status `scheduled` -- o envio real sera implementado depois com um cron/edge function
-- Mobile-first: cards de tipo empilhados, seccoes colapsaveis, footer fixo com botoes
-
+- `crm_clients` volta a ter apenas os 8 clientes reais
+- Contactos de marketing vivem em `marketing_contacts` -- tabela separada
+- A importacao passa a criar contactos de marketing, nao clientes CRM
+- Listas de marketing referenciam contactos de marketing
+- Zero impacto nos clientes reais do CRM
