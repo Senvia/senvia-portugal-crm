@@ -155,10 +155,19 @@ serve(async (req: Request): Promise<Response> => {
           record.status = "delivered";
           break;
         case "opened":
-        case "unique_opened":
+        case "unique_opened": {
+          // Filter out false positives from email client pre-fetching (e.g. Gmail proxy)
+          const eventTime = new Date(event.date).getTime();
+          const sentTime = record.sentAt ? new Date(record.sentAt).getTime() : 0;
+          const diffSeconds = sentTime ? (eventTime - sentTime) / 1000 : Infinity;
+          if (diffSeconds < 10) {
+            console.log(`Ignoring suspicious open for ${event.email}: ${diffSeconds.toFixed(1)}s after send`);
+            break;
+          }
           if (!record.openedAt) record.openedAt = event.date;
           if (record.status !== "delivered") record.status = "delivered";
           break;
+        }
         case "click":
           if (!record.clickedAt) record.clickedAt = event.date;
           if (record.status !== "delivered") record.status = "delivered";
