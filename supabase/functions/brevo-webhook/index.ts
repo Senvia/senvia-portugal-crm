@@ -46,7 +46,7 @@ serve(async (req: Request): Promise<Response> => {
 
         if (sendRecord?.sent_at) {
           const diffSeconds = (Date.now() - new Date(sendRecord.sent_at).getTime()) / 1000;
-          if (diffSeconds < 10) {
+          if (diffSeconds < 120) {
             console.log(`Ignoring suspicious open: ${diffSeconds.toFixed(1)}s after send (messageId=${messageId})`);
             return new Response(JSON.stringify({ ok: true, skipped: "suspicious_open" }), {
               headers: { ...corsHeaders, "Content-Type": "application/json" },
