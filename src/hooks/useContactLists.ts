@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import type { MarketingContact } from '@/types/marketing';
 
 export interface ContactList {
   id: string;
@@ -17,15 +18,9 @@ export interface ContactList {
 export interface ContactListMember {
   id: string;
   list_id: string;
-  client_id: string;
+  contact_id: string;
   added_at: string;
-  client?: {
-    id: string;
-    name: string;
-    email: string | null;
-    phone: string | null;
-    company: string | null;
-  };
+  contact?: MarketingContact;
 }
 
 export function useContactLists() {
@@ -45,15 +40,15 @@ export function useContactLists() {
 
       if (error) throw error;
 
-      // Get member counts
+      // Get member counts from marketing_list_members
       const { data: members, error: membersError } = await supabase
-        .from('client_list_members')
+        .from('marketing_list_members' as any)
         .select('list_id');
 
       if (membersError) throw membersError;
 
       const countMap = new Map<string, number>();
-      members?.forEach(m => {
+      (members as any[])?.forEach((m: any) => {
         countMap.set(m.list_id, (countMap.get(m.list_id) || 0) + 1);
       });
 
@@ -73,8 +68,8 @@ export function useContactListMembers(listId: string | null) {
       if (!listId) return [];
 
       const { data, error } = await supabase
-        .from('client_list_members')
-        .select('*, client:crm_clients(id, name, email, phone, company)')
+        .from('marketing_list_members' as any)
+        .select('*, contact:marketing_contacts(id, name, email, phone, company, source, subscribed)')
         .eq('list_id', listId)
         .order('added_at', { ascending: false });
 
@@ -131,8 +126,8 @@ export function useDeleteContactList() {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      // Delete members first
-      await supabase.from('client_list_members').delete().eq('list_id', id);
+      // Delete marketing members first
+      await supabase.from('marketing_list_members' as any).delete().eq('list_id', id);
       const { error } = await supabase.from('client_lists').delete().eq('id', id);
       if (error) throw error;
     },
@@ -148,11 +143,11 @@ export function useAddListMembers() {
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ listId, clientIds }: { listId: string; clientIds: string[] }) => {
-      const rows = clientIds.map(client_id => ({ list_id: listId, client_id }));
+    mutationFn: async ({ listId, contactIds }: { listId: string; contactIds: string[] }) => {
+      const rows = contactIds.map(contact_id => ({ list_id: listId, contact_id }));
       const { error } = await supabase
-        .from('client_list_members')
-        .upsert(rows, { onConflict: 'list_id,client_id', ignoreDuplicates: true });
+        .from('marketing_list_members' as any)
+        .upsert(rows, { onConflict: 'list_id,contact_id', ignoreDuplicates: true });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -168,12 +163,12 @@ export function useRemoveListMember() {
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ listId, clientId }: { listId: string; clientId: string }) => {
+    mutationFn: async ({ listId, contactId }: { listId: string; contactId: string }) => {
       const { error } = await supabase
-        .from('client_list_members')
+        .from('marketing_list_members' as any)
         .delete()
         .eq('list_id', listId)
-        .eq('client_id', clientId);
+        .eq('contact_id', contactId);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -182,5 +177,26 @@ export function useRemoveListMember() {
       toast.success('Contacto removido da lista');
     },
     onError: () => toast.error('Erro ao remover contacto'),
+  });
+}
+
+export function useMarketingContacts() {
+  const { organization } = useAuth();
+  const orgId = organization?.id;
+
+  return useQuery({
+    queryKey: ['marketing-contacts', orgId],
+    queryFn: async () => {
+      if (!orgId) return [];
+      const { data, error } = await supabase
+        .from('marketing_contacts' as any)
+        .select('*')
+        .eq('organization_id', orgId)
+        .eq('subscribed', true)
+        .order('name');
+      if (error) throw error;
+      return data as unknown as MarketingContact[];
+    },
+    enabled: !!orgId,
   });
 }

@@ -484,8 +484,16 @@ export function CreateCampaignModal({ open, onOpenChange }: CreateCampaignModalP
                             <p className="text-sm font-medium">{listMembers.length} contacto(s) na lista</p>
                             <Button variant="outline" size="sm" onClick={() => {
                               const clientsFromList = listMembers
-                                .filter(m => m.client?.email)
-                                .map(m => m.client as CrmClient);
+                                .filter(m => m.contact?.email)
+                                .map(m => ({
+                                  id: m.contact!.id,
+                                  name: m.contact!.name,
+                                  email: m.contact!.email,
+                                  phone: m.contact!.phone,
+                                  company: m.contact!.company,
+                                  status: 'active',
+                                  organization_id: '',
+                                } as CrmClient));
                               setSelectedClients(clientsFromList);
                             }}>
                               Carregar todos
@@ -493,10 +501,10 @@ export function CreateCampaignModal({ open, onOpenChange }: CreateCampaignModalP
                           </div>
                           <ScrollArea className="border rounded-md max-h-[200px]">
                             <div className="p-2 space-y-1">
-                              {listMembers.filter(m => m.client).map(m => (
+                              {listMembers.filter(m => m.contact).map(m => (
                                 <div key={m.id} className="flex items-center gap-3 p-2 text-sm">
-                                  <span className="font-medium truncate">{m.client?.name}</span>
-                                  <span className="text-xs text-muted-foreground truncate">{m.client?.email}</span>
+                                  <span className="font-medium truncate">{m.contact?.name}</span>
+                                  <span className="text-xs text-muted-foreground truncate">{m.contact?.email}</span>
                                 </div>
                               ))}
                             </div>
