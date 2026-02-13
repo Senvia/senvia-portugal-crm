@@ -1,122 +1,45 @@
 
-# Modulo de Listas de Transmissao no Marketing
 
-## Resumo
-Criar um novo modulo "Listas" dentro do Marketing Hub que permite gerir listas de contactos reutilizaveis, com importacao de ficheiros XLSX/CSV atraves de um wizard de 4 passos.
+# Corrigir Importacao de Contactos para Listas
 
-As tabelas `client_lists` e `client_list_members` ja existem na base de dados com RLS configurado -- vamos apenas construir o frontend.
+## Problema Identificado
+A importacao criou 12 clientes na tabela `crm_clients` com sucesso, mas **0 membros** foram adicionados a `client_list_members`. A chamada `addMembers.mutateAsync()` falhou silenciosamente -- o erro foi apanhado pelo `catch` generico sem feedback ao utilizador.
 
----
+## Causa Raiz
+1. O upsert de todos os `clientIds` de uma vez pode falhar com muitos registos
+2. O erro e "engolido" pelo `catch` generico que apenas mostra "Erro na importacao" sem detalhe
+3. O `result` nunca e definido quando `addMembers` falha, deixando o utilizador sem feedback claro
 
-## 1. Novos Ficheiros
+## Solucao
 
-### Pagina: `src/pages/marketing/Lists.tsx`
-- Header com botao "Nova Lista" e "Importar Contactos"
-- Tabela/cards com listas existentes: Nome, Descricao, N. de contactos, Data de criacao
-- Clique numa lista abre modal de detalhe com membros
-- Acoes: editar nome, eliminar lista
+### Ficheiro: `src/components/marketing/ImportContactsModal.tsx`
 
-### Hook: `src/hooks/useContactLists.ts`
-- CRUD completo sobre `client_lists` e `client_list_members`
-- Criar lista, adicionar/remover membros, eliminar lista
-- Query com contagem de membros por lista
-- Listar membros de uma lista com join a `crm_clients`
+**1. Dividir o upsert em batches de 100 registos**
+Em vez de enviar todos os `clientIds` de uma vez, dividir em lotes de 100 para evitar timeouts ou limites de payload.
 
-### Componente: `src/components/marketing/ContactListsTable.tsx`
-- Tabela responsiva (cards em mobile)
-- Colunas: Nome, Descricao, Contactos, Criado em
-- Badge com contagem de membros
-- Botoes de acao (ver, editar, eliminar)
+**2. Melhorar o tratamento de erros**
+- Separar o erro de `addMembers` do erro de criacao de clientes
+- Se a criacao de clientes funcionar mas `addMembers` falhar, ainda mostrar o resultado parcial com aviso
+- Adicionar `console.error` para facilitar o debug futuro
 
-### Componente: `src/components/marketing/CreateListModal.tsx`
-- Formulario simples: Nome + Descricao
-- Opcao de adicionar contactos manualmente (selecao do CRM, reutilizando logica existente)
+**3. Garantir que o resultado e sempre mostrado**
+Definir `result` antes de chamar `addMembers`, e atualizar se houver erro na associacao.
 
-### Componente: `src/components/marketing/ListDetailsModal.tsx`
-- Info da lista (nome, descricao, total)
-- Tabela dos membros com nome, email, telefone
-- Botao para adicionar mais contactos do CRM
-- Botao para remover contacto da lista
-
-### Componente: `src/components/marketing/ImportContactsModal.tsx`
-Wizard de 4 passos:
-
-**Step 1 - Carregar Arquivo**
-- Drag & drop ou botao para selecionar ficheiro
-- Aceita .xlsx, .xls e .csv
-- Preview do nome do ficheiro e tamanho
-- Usa a biblioteca `xlsx` (ja instalada) para ler o ficheiro
-
-**Step 2 - Mapear Campos**
-- Mostra as colunas detetadas no ficheiro (headers)
-- Para cada coluna do sistema (Nome, Email, Telefone, Empresa), dropdown para selecionar a coluna correspondente do ficheiro
-- Preview das primeiras 3-5 linhas mapeadas
-- Campo "Nome" obrigatorio, "Email" recomendado
-
-**Step 3 - Selecionar ou Criar Lista**
-- Dropdown com listas existentes
-- Botao "Criar nova lista" com campo de nome inline
-- Opcao de adicionar a uma lista existente ou criar nova
-
-**Step 4 - Finalizar Importacao**
-- Resumo: X contactos a importar, para a lista Y
-- Botao "Importar"
-- Barra de progresso durante a importacao
-- Os contactos sao criados na tabela `crm_clients` (se nao existirem por email) e adicionados a `client_list_members`
-- Ecra de sucesso com contagem de importados / duplicados / erros
-
----
-
-## 2. Alteracoes em Ficheiros Existentes
-
-### `src/pages/Marketing.tsx`
-- Adicionar card "Listas" com icone `Users` (lucide) e link para `/marketing/lists`
-
-### `src/App.tsx`
-- Adicionar rota `/marketing/lists` apontando para o novo componente
-
-### `src/components/marketing/CreateCampaignModal.tsx`
-- No Step 2 (selecao de destinatarios), adicionar uma terceira tab "Por Lista" que permite selecionar uma lista de transmissao existente e carregar os seus membros automaticamente
-
----
-
-## 3. Logica de Importacao (detalhe tecnico)
-
+### Logica actualizada (pseudo-codigo):
 ```text
-Ficheiro (XLSX/CSV)
-  |
-  v
-xlsx.read() -> worksheet -> JSON array
-  |
-  v
-Mapear colunas (user define: coluna X = nome, coluna Y = email...)
-  |
-  v
-Para cada linha:
-  1. Verificar se ja existe crm_client com esse email na org
-  2. Se nao existe -> INSERT em crm_clients (source: 'other', status: 'active')
-  3. Se ja existe -> reutilizar o client_id existente
-  4. INSERT em client_list_members (list_id, client_id) com ON CONFLICT ignorar
+1. Criar lista (se nova)
+2. Loop: criar clientes -> recolher clientIds
+3. Definir resultado parcial (clientes criados)
+4. Upsert membros em batches de 100
+   - Se falhar: mostrar toast de aviso mas manter resultado dos clientes
+5. Mostrar ecra de sucesso com contagens finais
 ```
 
-- Processamento feito em batch no frontend (nao precisa de edge function)
-- Limite de 1000 contactos por importacao para performance
-- Validacao de emails no frontend antes de inserir
+### Alteracoes concretas no codigo:
+- Adicionar funcao `chunkArray` para dividir arrays em lotes
+- Mover `setResult` para antes do `addMembers` 
+- Envolver `addMembers` num try/catch separado com toast de aviso
+- Substituir o upsert unico por um loop de batches de 100
 
----
-
-## 4. Ficheiros a criar/editar
-
-| Acao | Ficheiro |
-|------|----------|
-| Criar | `src/pages/marketing/Lists.tsx` |
-| Criar | `src/hooks/useContactLists.ts` |
-| Criar | `src/components/marketing/ContactListsTable.tsx` |
-| Criar | `src/components/marketing/CreateListModal.tsx` |
-| Criar | `src/components/marketing/ListDetailsModal.tsx` |
-| Criar | `src/components/marketing/ImportContactsModal.tsx` |
-| Editar | `src/pages/Marketing.tsx` (adicionar card Listas) |
-| Editar | `src/App.tsx` (adicionar rota) |
-| Editar | `src/components/marketing/CreateCampaignModal.tsx` (tab "Por Lista") |
-
-Nao sao necessarias alteracoes na base de dados -- as tabelas `client_lists` e `client_list_members` ja existem com RLS.
+## Ficheiros a editar
+- `src/components/marketing/ImportContactsModal.tsx` -- unica alteracao necessaria
