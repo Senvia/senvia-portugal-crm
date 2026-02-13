@@ -10,6 +10,7 @@ interface CreateCampaignData {
   subject?: string;
   html_content?: string;
   settings?: Record<string, boolean>;
+  settings_data?: Record<string, string>;
 }
 
 export function useCampaigns() {
@@ -82,6 +83,7 @@ export function useCreateCampaign() {
           subject: data.subject || null,
           html_content: data.html_content || null,
           settings: data.settings || {},
+          settings_data: data.settings_data || {},
           status: 'draft' as const,
           created_by: user?.id,
         } as any)

@@ -14,6 +14,8 @@ interface SendTemplateRequest {
   templateId: string;
   recipients: Recipient[];
   campaignId?: string;
+  settings?: Record<string, boolean>;
+  settingsData?: Record<string, string>;
 }
 
 interface SendTemplateResponse {
@@ -35,7 +37,7 @@ export function useSendTemplateEmail() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ templateId, recipients, campaignId }: SendTemplateRequest): Promise<SendTemplateResponse> => {
+    mutationFn: async ({ templateId, recipients, campaignId, settings, settingsData }: SendTemplateRequest): Promise<SendTemplateResponse> => {
       if (!organization?.id) throw new Error('Sem organização');
 
       const { data, error } = await supabase.functions.invoke('send-template-email', {
@@ -44,6 +46,8 @@ export function useSendTemplateEmail() {
           templateId,
           recipients,
           campaignId,
+          settings,
+          settingsData,
         },
       });
 

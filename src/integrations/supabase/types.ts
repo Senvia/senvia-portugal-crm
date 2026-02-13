@@ -749,6 +749,7 @@ export type Database = {
           sent_at: string | null
           sent_count: number
           settings: Json | null
+          settings_data: Json | null
           status: string
           subject: string | null
           template_id: string | null
@@ -767,6 +768,7 @@ export type Database = {
           sent_at?: string | null
           sent_count?: number
           settings?: Json | null
+          settings_data?: Json | null
           status?: string
           subject?: string | null
           template_id?: string | null
@@ -785,6 +787,7 @@ export type Database = {
           sent_at?: string | null
           sent_count?: number
           settings?: Json | null
+          settings_data?: Json | null
           status?: string
           subject?: string | null
           template_id?: string | null
