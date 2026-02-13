@@ -3,13 +3,13 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Wallet, TrendingUp, Clock, CalendarDays, ArrowRight, TrendingDown, Scale, ExternalLink } from "lucide-react";
+import { Wallet, TrendingUp, Clock, CalendarDays, ArrowRight, TrendingDown, Scale, ExternalLink, AlertTriangle } from "lucide-react";
 import { useFinanceStats } from "@/hooks/useFinanceStats";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { useNavigate } from "react-router-dom";
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { format, parseISO } from "date-fns";
 import { pt } from "date-fns/locale";
 import { PAYMENT_METHOD_LABELS } from "@/types/sales";
@@ -74,7 +74,7 @@ export default function Finance() {
             </Card>
 
             {/* Stats Cards */}
-            <div className="grid gap-4 grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+            <div className="grid gap-4 grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Total Faturado</CardTitle>
@@ -92,7 +92,6 @@ export default function Finance() {
                 </CardContent>
               </Card>
 
-              {/* Card Recebido - Clicável */}
               <Card 
                 className="cursor-pointer hover:bg-muted/50 transition-colors group"
                 onClick={() => navigate('/financeiro/pagamentos?status=paid')}
@@ -137,7 +136,27 @@ export default function Finance() {
                 </CardContent>
               </Card>
 
-              {/* Card Despesas - Clicável */}
+              <Card 
+                className="cursor-pointer hover:bg-muted/50 transition-colors group"
+                onClick={() => navigate('/financeiro/pagamentos?status=overdue')}
+              >
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Atrasados</CardTitle>
+                  <div className="flex items-center gap-1">
+                    <AlertTriangle className="h-4 w-4 text-orange-500" />
+                    <ExternalLink className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {isLoading ? (
+                    <Skeleton className="h-8 w-24" />
+                  ) : (
+                    <div className="text-2xl font-bold text-orange-600">{formatCurrency(stats.totalOverdue)}</div>
+                  )}
+                  <p className="text-xs text-muted-foreground">{stats.overdueCount} pagamento(s)</p>
+                </CardContent>
+              </Card>
+
               <Card 
                 className="cursor-pointer hover:bg-muted/50 transition-colors group"
                 onClick={() => navigate('/financeiro/despesas')}
@@ -209,12 +228,16 @@ export default function Finance() {
                     <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                       <defs>
                         <linearGradient id="colorReceived" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="hsl(var(--chart-1))" stopOpacity={0.3}/>
-                          <stop offset="95%" stopColor="hsl(var(--chart-1))" stopOpacity={0}/>
+                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
                         </linearGradient>
                         <linearGradient id="colorScheduled" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="hsl(var(--chart-2))" stopOpacity={0.3}/>
-                          <stop offset="95%" stopColor="hsl(var(--chart-2))" stopOpacity={0}/>
+                          <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                        </linearGradient>
+                        <linearGradient id="colorOverdue" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#f97316" stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor="#f97316" stopOpacity={0}/>
                         </linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
@@ -240,11 +263,12 @@ export default function Finance() {
                           borderRadius: '8px'
                         }}
                       />
+                      <Legend />
                       <Area
                         type="monotone"
                         dataKey="received"
                         name="Recebido"
-                        stroke="hsl(var(--chart-1))"
+                        stroke="#10b981"
                         fillOpacity={1}
                         fill="url(#colorReceived)"
                         strokeWidth={2}
@@ -253,18 +277,27 @@ export default function Finance() {
                         type="monotone"
                         dataKey="scheduled"
                         name="Agendado"
-                        stroke="hsl(var(--chart-2))"
+                        stroke="#3b82f6"
                         fillOpacity={1}
                         fill="url(#colorScheduled)"
                         strokeWidth={2}
                       />
                       <Area
                         type="monotone"
+                        dataKey="overdue"
+                        name="Atrasados"
+                        stroke="#f97316"
+                        fillOpacity={1}
+                        fill="url(#colorOverdue)"
+                        strokeWidth={2}
+                      />
+                      <Area
+                        type="monotone"
                         dataKey="expenses"
                         name="Despesas"
-                        stroke="hsl(var(--destructive))"
+                        stroke="#ef4444"
                         fillOpacity={0.3}
-                        fill="hsl(var(--destructive))"
+                        fill="#ef4444"
                         strokeWidth={2}
                       />
                     </AreaChart>

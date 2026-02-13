@@ -165,6 +165,8 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
       cashflowTrend: [],
       totalExpenses: 0,
       balance: 0,
+      totalOverdue: 0,
+      overdueCount: 0,
     };
 
     if (!filteredSales?.length && !filteredPayments?.length && !filteredExpenses?.length) {
@@ -197,6 +199,14 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
 
     const dueSoon = dueSoonPayments.reduce((sum, p) => sum + p.amount, 0);
 
+    // Overdue payments (pending with date before today)
+    const overduePayments = filteredPayments.filter(p => {
+      if (p.status !== 'pending') return false;
+      const date = parseISO(p.payment_date);
+      return date < startOfDay(now);
+    });
+    const totalOverdue = overduePayments.reduce((sum, p) => sum + p.amount, 0);
+
     // Expenses totals
     const totalExpenses = filteredExpenses.reduce((sum, e) => sum + e.amount, 0);
 
@@ -216,14 +226,18 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
         .reduce((sum, p) => sum + p.amount, 0);
 
       const scheduled = filteredPayments
-        .filter(p => p.status === 'pending' && p.payment_date === dayStr)
+        .filter(p => p.status === 'pending' && p.payment_date === dayStr && parseISO(p.payment_date) >= startOfDay(now))
         .reduce((sum, p) => sum + p.amount, 0);
 
       const expensesOnDay = filteredExpenses
         .filter(e => e.expense_date === dayStr)
         .reduce((sum, e) => sum + e.amount, 0);
 
-      cashflowTrend.push({ date: dayStr, received, scheduled, expenses: expensesOnDay });
+      const overdueOnDay = filteredPayments
+        .filter(p => p.status === 'pending' && p.payment_date === dayStr && parseISO(p.payment_date) < startOfDay(now))
+        .reduce((sum, p) => sum + p.amount, 0);
+
+      cashflowTrend.push({ date: dayStr, received, scheduled, expenses: expensesOnDay, overdue: overdueOnDay });
     }
 
     return {
@@ -236,6 +250,8 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
       cashflowTrend,
       totalExpenses,
       balance,
+      totalOverdue,
+      overdueCount: overduePayments.length,
     };
   }, [filteredSales, filteredPayments, filteredExpenses, dateRange]);
 
