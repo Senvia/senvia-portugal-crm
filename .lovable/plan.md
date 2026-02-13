@@ -1,55 +1,80 @@
 
-# Guardar Campanha como Rascunho
+# Configuracoes Adicionais da Campanha - Funcionais via Brevo API
 
-## Objectivo
+## Situacao Actual
 
-Permitir guardar uma campanha mesmo sem todos os dados preenchidos. O botao muda dinamicamente:
-- **Dados incompletos**: "Guardar Campanha" (guarda como rascunho) + aviso de que so pode enviar/agendar com tudo preenchido
-- **Dados completos**: "Enviar Campanha" + "Agendar envio" (comportamento actual)
+Os checkboxes de "Configuracoes adicionais" existem na UI mas sao apenas guardados como JSON. Nenhuma dessas opcoes e realmente aplicada ao enviar o email via Brevo.
 
-## Alteracoes
+## O que vai mudar
 
-### Ficheiro: `src/components/marketing/CreateCampaignModal.tsx`
+Cada checkbox vai ganhar campos de input contextuais (quando necessario) e o edge function vai aplicar essas configuracoes na chamada a API da Brevo.
 
-**No footer do Step 3 (linhas 632-681):**
+## Mapeamento das Configuracoes
 
-1. Substituir a logica do footer para ter dois estados:
-   - Se `allSectionsComplete` e `false`:
-     - Mostrar uma nota/alerta: "Preencha todos os campos para poder enviar ou agendar a campanha."
-     - Botao principal: "Guardar Campanha" (icone Save) -- sempre activo desde que haja pelo menos o nome
-     - Esconder o botao "Agendar envio"
-   - Se `allSectionsComplete` e `true`:
-     - Manter o comportamento actual: botao "Agendar envio" + "Enviar campanha"
-     - Adicionar tambem um botao "Guardar Campanha" para quem queira guardar sem enviar
+### PERSONALIZACAO
+| Opcao | Implementacao |
+|-------|--------------|
+| Personalizar "Enviar para" | Usa o nome do destinatario no campo `to.name` (ja funciona parcialmente, mas vai ser melhorado com formatacao "Nome - Empresa") |
 
-2. **Nova funcao `handleSaveDraft`:**
-   - Chama `createCampaign.mutateAsync()` com os dados disponiveis (nome, subject se houver, template se houver, etc.)
-   - O status fica `draft` (ja e o default)
-   - Mostra toast de sucesso: "Campanha guardada como rascunho"
-   - Fecha o modal
+### ENVIO E RASTREAMENTO
+| Opcao | Implementacao |
+|-------|--------------|
+| Endereco de resposta diferente | Campo de input para email de reply-to. Enviado como `replyTo` na API Brevo |
+| Rastreio Google Analytics | Campo para UTM Campaign. Adiciona `?utm_source=brevo&utm_medium=email&utm_campaign=X` a todos os links no HTML |
+| Adicionar anexo | Upload de ficheiro (base64). Enviado como `attachment` na API Brevo |
+| Atribuir tag | Campo de input para nome da tag. Enviado como `tags` na API Brevo |
+| Data de expiracao | Nota informativa (Brevo nao suporta expiracao nativa em transacional; opcao guardada como metadata) |
 
-3. **Condicao minima para guardar:** apenas o nome da campanha (`name.trim()`)
+### ASSINATURA
+| Opcao | Implementacao |
+|-------|--------------|
+| Pagina de cancelamento personalizada | Campo para URL. Substitui o link `{{ unsubscribe }}` no HTML por esse URL |
+| Formulario de actualizacao de perfil | Nota informativa (requer integracao Brevo Contacts avancada; guardado como metadata) |
 
-### Ficheiro: `src/hooks/useCampaigns.ts`
+### CRIACAO
+| Opcao | Implementacao |
+|-------|--------------|
+| Editar cabecalho padrao | Campo textarea para HTML do cabecalho. Inserido antes do conteudo principal |
+| Editar rodape padrao | Campo textarea para HTML do rodape. Inserido apos o conteudo principal |
+| Link "Ver no navegador" | Nota informativa (requer hosting do email como pagina web; guardado como metadata para futuro) |
 
-- Sem alteracoes necessarias -- `useCreateCampaign` ja cria com status `draft` por defeito e todos os campos sao opcionais excepto o nome.
+## Alteracoes por Ficheiro
 
-## Resultado visual (Step 3 footer)
+### 1. `src/components/marketing/CreateCampaignModal.tsx`
 
-**Quando faltam dados:**
-```text
-[Aviso: Preencha destinatarios, assunto e conteudo para enviar]
-                                          [ Guardar Campanha ]
-```
+- Transformar `CAMPAIGN_SETTINGS_GROUPS` para incluir o tipo de input de cada opcao (`toggle_only`, `text`, `email`, `textarea`, `file`)
+- Quando um checkbox e activado e tem um tipo de input, mostrar o campo correspondente abaixo do checkbox
+- Guardar os valores extras num novo state `settingsData` (Record de string para string)
+- Passar `settingsData` junto com `settings` ao criar a campanha e ao enviar
 
-**Quando tudo esta completo:**
-```text
-0 destinatario(s)
-              [ Guardar Campanha ]  [ Agendar envio ]  [ Enviar campanha ]
-```
+### 2. `src/hooks/useCampaigns.ts`
 
-## Ficheiros a editar
+- Actualizar `CreateCampaignData` para aceitar `settings_data?: Record<string, string>` com os valores extras (reply-to email, tag name, UTM, etc.)
 
-| Ficheiro | Accao |
-|----------|-------|
-| `src/components/marketing/CreateCampaignModal.tsx` | Adicionar `handleSaveDraft`, mudar footer do Step 3 com logica condicional |
+### 3. `supabase/functions/send-template-email/index.ts`
+
+- Receber `settings` e `settingsData` no body do request
+- Aplicar as configuracoes na chamada a API Brevo:
+  - `replyTo`: se `different_reply_to` activo, usar o email fornecido
+  - `tags`: se `tag` activo, incluir a tag no array
+  - `attachment`: se `attachment` activo, incluir o ficheiro em base64
+  - GA tracking: se `ga_tracking` activo, percorrer o HTML e adicionar UTM params aos links
+  - Custom header/footer: se activos, concatenar ao HTML antes/depois do conteudo
+  - Custom unsubscribe: se activo, substituir placeholder no HTML
+
+### 4. Migracao SQL (se necessario)
+
+- Adicionar coluna `settings_data` (JSONB) a tabela `email_campaigns` para guardar os valores dos campos extras
+
+## Opcoes que ficam como metadata (sem implementacao funcional imediata)
+
+Algumas opcoes nao tem equivalente directo na API transacional da Brevo. Estas ficam guardadas na base de dados para futura implementacao:
+- "Configurar data de expiracao"
+- "Usar formulario de actualizacao de perfil"
+- "Habilitar link Ver no navegador"
+
+Estas opcoes terao uma nota `(Em breve)` ao lado do checkbox.
+
+## Resultado
+
+Os utilizadores poderao configurar reply-to, tags, GA tracking, anexos, cabecalho/rodape personalizado e pagina de cancelamento -- e tudo sera efectivamente aplicado ao enviar a campanha via Brevo.
