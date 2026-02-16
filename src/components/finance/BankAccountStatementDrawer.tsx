@@ -1,11 +1,11 @@
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useBankAccountTransactions, useBankAccountBalance } from '@/hooks/useBankAccounts';
 import { formatCurrency, formatDate } from '@/lib/format';
 import { TRANSACTION_TYPE_LABELS } from '@/types/bank-accounts';
 import type { BankAccount, BankTransactionType } from '@/types/bank-accounts';
-import { ArrowDownLeft, ArrowUpRight, Landmark, Settings2 } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, Landmark, Printer, Settings2 } from 'lucide-react';
 
 interface Props {
   account: BankAccount | null;
@@ -29,22 +29,28 @@ export function BankAccountStatementDrawer({ account, open, onOpenChange }: Prop
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
-        <SheetHeader>
-          <SheetTitle className="text-left">{account.name}</SheetTitle>
-          {account.bank_name && (
-            <p className="text-sm text-muted-foreground">{account.bank_name}</p>
-          )}
+        <SheetHeader className="flex flex-row items-center justify-between pr-8">
+          <div>
+            <SheetTitle className="text-left">{account.name}</SheetTitle>
+            {account.bank_name && (
+              <p className="text-sm text-muted-foreground">{account.bank_name}</p>
+            )}
+          </div>
+          <Button variant="ghost" size="icon-sm" onClick={() => window.print()} className="print:hidden">
+            <Printer className="h-4 w-4" />
+          </Button>
         </SheetHeader>
 
-        <div className="mt-4 p-4 rounded-lg bg-muted/50 border">
-          <p className="text-sm text-muted-foreground">Saldo Atual</p>
-          <p className={`text-2xl font-bold ${(balance ?? 0) >= 0 ? 'text-emerald-600' : 'text-destructive'}`}>
-            {formatCurrency(balance ?? 0)}
-          </p>
-        </div>
+        <div id="bank-statement-print">
+          <div className="mt-4 p-4 rounded-lg bg-muted/50 border print:bg-transparent print:border-border">
+            <p className="text-sm text-muted-foreground">Saldo Atual</p>
+            <p className={`text-2xl font-bold ${(balance ?? 0) >= 0 ? 'text-emerald-600' : 'text-destructive'}`}>
+              {formatCurrency(balance ?? 0)}
+            </p>
+          </div>
 
-        <div className="mt-6 space-y-1">
-          <h3 className="text-sm font-medium text-muted-foreground mb-3">Extracto</h3>
+          <div className="mt-6 space-y-1">
+            <h3 className="text-sm font-medium text-muted-foreground mb-3">Extracto</h3>
           {isLoading ? (
             Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-14 w-full" />)
           ) : !transactions?.length ? (
@@ -71,6 +77,7 @@ export function BankAccountStatementDrawer({ account, open, onOpenChange }: Prop
               );
             })
           )}
+          </div>
         </div>
       </SheetContent>
     </Sheet>
