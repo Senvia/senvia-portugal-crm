@@ -1,6 +1,28 @@
 // PT-PT Formatting Utilities
 
 /**
+ * Parse a localized number string (PT/EN formats) into a JS number.
+ * Handles: "1.376,59" | "1 376,59" | "1,376.59" | "1376,59" | "1376.59"
+ */
+export function parseLocalizedNumber(value: string): number {
+  if (!value || !value.trim()) return 0;
+  // Remove spaces
+  let cleaned = value.replace(/\s/g, '');
+  // Find last comma and last dot
+  const lastComma = cleaned.lastIndexOf(',');
+  const lastDot = cleaned.lastIndexOf('.');
+  if (lastComma > lastDot) {
+    // Comma is decimal separator (PT format: 1.376,59)
+    cleaned = cleaned.replace(/\./g, '').replace(',', '.');
+  } else if (lastDot > lastComma) {
+    // Dot is decimal separator (EN format: 1,376.59)
+    cleaned = cleaned.replace(/,/g, '');
+  }
+  const result = parseFloat(cleaned);
+  return isNaN(result) ? 0 : result;
+}
+
+/**
  * Format date to PT-PT format (DD/MM/YYYY)
  */
 export function formatDate(date: Date | string): string {

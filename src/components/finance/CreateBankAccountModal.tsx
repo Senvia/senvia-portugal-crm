@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useCreateBankAccount } from '@/hooks/useBankAccounts';
+import { parseLocalizedNumber } from '@/lib/format';
 
 interface Props {
   open: boolean;
@@ -30,7 +31,7 @@ export function CreateBankAccountModal({ open, onOpenChange }: Props) {
         bank_name: bankName.trim() || null,
         iban: iban.trim() || null,
         holder_name: holderName.trim() || null,
-        initial_balance: parseFloat(initialBalance.replace(',', '.')) || 0,
+        initial_balance: parseLocalizedNumber(initialBalance),
         is_default: isDefault,
       },
       {
