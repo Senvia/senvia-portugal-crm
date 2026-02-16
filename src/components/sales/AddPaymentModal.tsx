@@ -41,7 +41,6 @@ interface AddPaymentModalProps {
   onSuccess?: (amountPaid: number, paymentMethod: PaymentMethod | null) => void;
   onEditSuccess?: () => void;
   hasInvoiceXpress?: boolean;
-  forceStatusPaid?: boolean;
 }
 
 export function AddPaymentModal({
@@ -55,7 +54,6 @@ export function AddPaymentModal({
   onSuccess,
   onEditSuccess,
   hasInvoiceXpress = false,
-  forceStatusPaid = false,
 }: AddPaymentModalProps) {
   const createPayment = useCreateSalePayment();
   const updatePayment = useUpdateSalePayment();
@@ -89,7 +87,7 @@ export function AddPaymentModal({
         setAmount(remaining > 0 ? String(remaining) : "");
         setPaymentDate(new Date());
         setPaymentMethod("");
-        setStatus(forceStatusPaid ? "paid" : "paid");
+        setStatus("pending");
         setInvoiceReference("");
         setInvoiceFileUrl(null);
         setNotes("");
@@ -234,8 +232,7 @@ export function AddPaymentModal({
           </div>
 
           {/* Status */}
-          {!forceStatusPaid && (
-            <div className="space-y-2">
+          <div className="space-y-2">
               <Label>Estado</Label>
               <RadioGroup
                 value={status}
@@ -256,7 +253,6 @@ export function AddPaymentModal({
                 </div>
               </RadioGroup>
             </div>
-          )}
 
           {/* Invoice Reference - hidden when InvoiceXpress is active */}
           {!hasInvoiceXpress && (

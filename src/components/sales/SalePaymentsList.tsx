@@ -97,7 +97,7 @@ export function SalePaymentsList({
   const [editingPayment, setEditingPayment] = useState<SalePayment | null>(null);
   const [deletingPayment, setDeletingPayment] = useState<SalePayment | null>(null);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
-  const [forceStatusPaid, setForceStatusPaid] = useState(false);
+  
   const [cancellingPayment, setCancellingPayment] = useState<SalePayment | null>(null);
   const [promptScheduleAfterEdit, setPromptScheduleAfterEdit] = useState(false);
   
@@ -407,7 +407,6 @@ export function SalePaymentsList({
         remainingAmount={summary.remaining}
         onSelectTotal={() => {
           setShowTypeSelector(false);
-          setForceStatusPaid(true);
           setShowAddModal(true);
         }}
         onSelectInstallments={() => {
@@ -423,7 +422,6 @@ export function SalePaymentsList({
           if (!open) {
             setShowAddModal(false);
             setEditingPayment(null);
-            setForceStatusPaid(false);
           }
         }}
         saleId={saleId}
@@ -433,7 +431,7 @@ export function SalePaymentsList({
         payment={editingPayment}
         onEditSuccess={() => setPromptScheduleAfterEdit(true)}
         hasInvoiceXpress={hasInvoiceXpress}
-        forceStatusPaid={forceStatusPaid}
+        
       />
 
       {/* Schedule Remaining Modal */}
