@@ -44,6 +44,7 @@ interface AddDraftPaymentModalProps {
   remaining: number;
   onAdd: (payment: DraftPayment) => void;
   hideInvoiceReference?: boolean;
+  forceStatusPaid?: boolean;
 }
 
 export function AddDraftPaymentModal({
@@ -53,6 +54,7 @@ export function AddDraftPaymentModal({
   remaining,
   onAdd,
   hideInvoiceReference,
+  forceStatusPaid = false,
 }: AddDraftPaymentModalProps) {
   const [amount, setAmount] = useState("");
   const [paymentDate, setPaymentDate] = useState<Date>(new Date());
@@ -66,7 +68,7 @@ export function AddDraftPaymentModal({
       setAmount(remaining > 0 ? String(remaining) : "");
       setPaymentDate(new Date());
       setPaymentMethod("");
-      setStatus("paid");
+      setStatus(forceStatusPaid ? "paid" : "paid");
       setInvoiceReference("");
       setNotes("");
     }
@@ -170,23 +172,25 @@ export function AddDraftPaymentModal({
             </Select>
           </div>
 
-          <div className="space-y-2">
-            <Label>Estado</Label>
-            <RadioGroup
-              value={status}
-              onValueChange={(v) => setStatus(v as PaymentRecordStatus)}
-              className="flex gap-4"
-            >
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="paid" id="draft-paid" />
-                <Label htmlFor="draft-paid" className="font-normal cursor-pointer">Pago</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="pending" id="draft-pending" />
-                <Label htmlFor="draft-pending" className="font-normal cursor-pointer">Agendado</Label>
-              </div>
-            </RadioGroup>
-          </div>
+          {!forceStatusPaid && (
+            <div className="space-y-2">
+              <Label>Estado</Label>
+              <RadioGroup
+                value={status}
+                onValueChange={(v) => setStatus(v as PaymentRecordStatus)}
+                className="flex gap-4"
+              >
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="paid" id="draft-paid" />
+                  <Label htmlFor="draft-paid" className="font-normal cursor-pointer">Pago</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="pending" id="draft-pending" />
+                  <Label htmlFor="draft-pending" className="font-normal cursor-pointer">Agendado</Label>
+                </div>
+              </RadioGroup>
+            </div>
+          )}
 
           {hideInvoiceReference ? (
             <p className="text-xs text-muted-foreground bg-muted/50 rounded-md p-3">

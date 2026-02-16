@@ -41,6 +41,7 @@ interface AddPaymentModalProps {
   onSuccess?: (amountPaid: number, paymentMethod: PaymentMethod | null) => void;
   onEditSuccess?: () => void;
   hasInvoiceXpress?: boolean;
+  forceStatusPaid?: boolean;
 }
 
 export function AddPaymentModal({
@@ -54,6 +55,7 @@ export function AddPaymentModal({
   onSuccess,
   onEditSuccess,
   hasInvoiceXpress = false,
+  forceStatusPaid = false,
 }: AddPaymentModalProps) {
   const createPayment = useCreateSalePayment();
   const updatePayment = useUpdateSalePayment();
@@ -87,7 +89,7 @@ export function AddPaymentModal({
         setAmount(remaining > 0 ? String(remaining) : "");
         setPaymentDate(new Date());
         setPaymentMethod("");
-        setStatus("paid");
+        setStatus(forceStatusPaid ? "paid" : "paid");
         setInvoiceReference("");
         setInvoiceFileUrl(null);
         setNotes("");
@@ -232,27 +234,29 @@ export function AddPaymentModal({
           </div>
 
           {/* Status */}
-          <div className="space-y-2">
-            <Label>Estado</Label>
-            <RadioGroup
-              value={status}
-              onValueChange={(v) => setStatus(v as PaymentRecordStatus)}
-              className="flex gap-4"
-            >
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="paid" id="paid" />
-                <Label htmlFor="paid" className="font-normal cursor-pointer">
-                  Pago
-                </Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="pending" id="pending" />
-                <Label htmlFor="pending" className="font-normal cursor-pointer">
-                  Agendado
-                </Label>
-              </div>
-            </RadioGroup>
-          </div>
+          {!forceStatusPaid && (
+            <div className="space-y-2">
+              <Label>Estado</Label>
+              <RadioGroup
+                value={status}
+                onValueChange={(v) => setStatus(v as PaymentRecordStatus)}
+                className="flex gap-4"
+              >
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="paid" id="paid" />
+                  <Label htmlFor="paid" className="font-normal cursor-pointer">
+                    Pago
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="pending" id="pending" />
+                  <Label htmlFor="pending" className="font-normal cursor-pointer">
+                    Agendado
+                  </Label>
+                </div>
+              </RadioGroup>
+            </div>
+          )}
 
           {/* Invoice Reference - hidden when InvoiceXpress is active */}
           {!hasInvoiceXpress && (
