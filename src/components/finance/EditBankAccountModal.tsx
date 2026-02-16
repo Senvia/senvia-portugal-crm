@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useUpdateBankAccount } from '@/hooks/useBankAccounts';
-import { parseLocalizedNumber } from '@/lib/format';
+import { parseLocalizedNumber, formatIban, cleanIban } from '@/lib/format';
 import type { BankAccount } from '@/types/bank-accounts';
 
 interface Props {
@@ -18,7 +18,7 @@ export function EditBankAccountModal({ account, open, onOpenChange }: Props) {
   const update = useUpdateBankAccount();
   const [name, setName] = useState(account.name);
   const [bankName, setBankName] = useState(account.bank_name || '');
-  const [iban, setIban] = useState(account.iban || '');
+  const [iban, setIban] = useState(formatIban(account.iban || ''));
   const [holderName, setHolderName] = useState(account.holder_name || '');
   const [initialBalance, setInitialBalance] = useState(
     account.initial_balance.toLocaleString('pt-PT', { minimumFractionDigits: 2 })
@@ -29,7 +29,7 @@ export function EditBankAccountModal({ account, open, onOpenChange }: Props) {
   useEffect(() => {
     setName(account.name);
     setBankName(account.bank_name || '');
-    setIban(account.iban || '');
+    setIban(formatIban(account.iban || ''));
     setHolderName(account.holder_name || '');
     setInitialBalance(account.initial_balance.toLocaleString('pt-PT', { minimumFractionDigits: 2 }));
     setIsDefault(account.is_default);
@@ -45,7 +45,7 @@ export function EditBankAccountModal({ account, open, onOpenChange }: Props) {
         id: account.id,
         name: name.trim(),
         bank_name: bankName.trim() || null,
-        iban: iban.trim() || null,
+        iban: cleanIban(iban) || null,
         holder_name: holderName.trim() || null,
         initial_balance: parseLocalizedNumber(initialBalance),
         is_default: isDefault,
@@ -78,7 +78,7 @@ export function EditBankAccountModal({ account, open, onOpenChange }: Props) {
           </div>
           <div className="space-y-2">
             <Label>IBAN</Label>
-            <Input value={iban} onChange={(e) => setIban(e.target.value)} />
+            <Input value={iban} onChange={(e) => setIban(formatIban(e.target.value))} />
           </div>
           <div className="space-y-2">
             <Label>Saldo Inicial (EUR)</Label>

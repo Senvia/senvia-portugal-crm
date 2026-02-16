@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useCreateBankAccount } from '@/hooks/useBankAccounts';
-import { parseLocalizedNumber } from '@/lib/format';
+import { parseLocalizedNumber, formatIban, cleanIban } from '@/lib/format';
 
 interface Props {
   open: boolean;
@@ -29,7 +29,7 @@ export function CreateBankAccountModal({ open, onOpenChange }: Props) {
       {
         name: name.trim(),
         bank_name: bankName.trim() || null,
-        iban: iban.trim() || null,
+        iban: cleanIban(iban) || null,
         holder_name: holderName.trim() || null,
         initial_balance: parseLocalizedNumber(initialBalance),
         is_default: isDefault,
@@ -69,7 +69,7 @@ export function CreateBankAccountModal({ open, onOpenChange }: Props) {
 
           <div className="space-y-2">
             <Label>IBAN</Label>
-            <Input value={iban} onChange={(e) => setIban(e.target.value)} placeholder="PT50 0000 0000 0000 0000 0000 0" />
+            <Input value={iban} onChange={(e) => setIban(formatIban(e.target.value))} placeholder="PT50 0000 0000 0000 0000 0000 0" />
           </div>
 
           <div className="grid grid-cols-2 gap-4">

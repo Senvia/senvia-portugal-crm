@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Plus, Pencil, Eye, Landmark } from 'lucide-react';
 import { useBankAccounts } from '@/hooks/useBankAccounts';
-import { formatCurrency } from '@/lib/format';
+import { formatCurrency, formatIban } from '@/lib/format';
 import { CreateBankAccountModal } from './CreateBankAccountModal';
 import { EditBankAccountModal } from './EditBankAccountModal';
 import { BankAccountStatementDrawer } from './BankAccountStatementDrawer';
@@ -87,7 +87,7 @@ function BankAccountCard({ account, onEdit, onStatement }: { account: BankAccoun
       </CardHeader>
       <CardContent className="space-y-3">
         {account.iban && (
-          <p className="text-xs text-muted-foreground font-mono">{account.iban}</p>
+          <p className="text-xs text-muted-foreground font-mono">{formatIban(account.iban)}</p>
         )}
         {account.holder_name && (
           <p className="text-xs text-muted-foreground">Titular: {account.holder_name}</p>
