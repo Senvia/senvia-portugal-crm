@@ -13,9 +13,11 @@ import { SaleDetailsModal } from "@/components/sales/SaleDetailsModal";
 import { CreateSaleModal } from "@/components/sales/CreateSaleModal";
 import { EditSaleModal } from "@/components/sales/EditSaleModal";
 import { TeamMemberFilter } from "@/components/dashboard/TeamMemberFilter";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { formatCurrency } from "@/lib/format";
-import { format } from "date-fns";
+import { format, parseISO, startOfDay, endOfDay } from "date-fns";
 import { pt } from "date-fns/locale";
+import type { DateRange } from "react-day-picker";
 import type { SaleWithDetails, SaleStatus } from "@/types/sales";
 import { SALE_STATUS_LABELS, SALE_STATUS_COLORS, SALE_STATUSES } from "@/types/sales";
 import { AppLayout } from "@/components/layout/AppLayout";
@@ -31,6 +33,7 @@ export default function Sales() {
   const { data: telecomMetrics } = useTelecomSaleMetrics();
   const [search, setSearch] = usePersistedState("sales-search-v1", "");
   const [statusFilter, setStatusFilter] = usePersistedState<SaleStatus | "all">("sales-status-v1", "all");
+  const [dateRange, setDateRange] = usePersistedState<DateRange | undefined>("sales-date-range-v1", undefined);
   const [selectedSale, setSelectedSale] = useState<SaleWithDetails | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [saleToEdit, setSaleToEdit] = useState<SaleWithDetails | null>(null);
@@ -62,9 +65,16 @@ export default function Sales() {
     return sales.filter((sale) => {
       const matchesStatus = statusFilter === "all" || sale.status === statusFilter;
       
-      // Se não há termo de pesquisa, inclui todas as vendas que correspondem ao status
+      const matchesDate = (() => {
+        if (!dateRange?.from) return true;
+        const saleDate = parseISO(sale.sale_date);
+        if (saleDate < startOfDay(dateRange.from)) return false;
+        if (dateRange.to && saleDate > endOfDay(dateRange.to)) return false;
+        return true;
+      })();
+
       if (!search.trim()) {
-        return matchesStatus;
+        return matchesStatus && matchesDate;
       }
       
       const searchLower = search.toLowerCase();
@@ -76,25 +86,25 @@ export default function Sales() {
         sale.code?.toLowerCase().includes(searchLower) ||
         sale.notes?.toLowerCase().includes(searchLower);
       
-      return matchesSearch && matchesStatus;
+      return matchesSearch && matchesStatus && matchesDate;
     });
-  }, [sales, search, statusFilter]);
+  }, [sales, search, statusFilter, dateRange]);
 
   // Summary stats
   const stats = useMemo(() => {
-    if (!sales) return { total: 0, totalValue: 0, delivered: 0, deliveredValue: 0, inProgress: 0 };
+    if (!filteredSales.length) return { total: 0, totalValue: 0, delivered: 0, deliveredValue: 0, inProgress: 0 };
     
-    const delivered = sales.filter(s => s.status === 'delivered');
-    const inProgress = sales.filter(s => s.status === 'in_progress');
+    const delivered = filteredSales.filter(s => s.status === 'delivered');
+    const inProgress = filteredSales.filter(s => s.status === 'in_progress');
     
     return {
-      total: sales.length,
-      totalValue: sales.reduce((acc, s) => acc + (s.total_value || 0), 0),
+      total: filteredSales.length,
+      totalValue: filteredSales.reduce((acc, s) => acc + (s.total_value || 0), 0),
       delivered: delivered.length,
       deliveredValue: delivered.reduce((acc, s) => acc + (s.total_value || 0), 0),
       inProgress: inProgress.length,
     };
-  }, [sales]);
+  }, [filteredSales]);
 
   return (
     <AppLayout userName={profile?.full_name} organizationName={organization?.name}>
@@ -189,6 +199,7 @@ export default function Sales() {
             ))}
           </SelectContent>
         </Select>
+        <DateRangePicker value={dateRange} onChange={setDateRange} className="w-full sm:w-auto" />
       </div>
 
       {/* Sales List */}
