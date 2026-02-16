@@ -56,7 +56,7 @@ export function AddRevenueModal({ open, onOpenChange }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent variant="fullScreen" className="md:fixed md:left-[50%] md:top-[50%] md:translate-x-[-50%] md:translate-y-[-50%] md:max-w-md md:h-auto md:rounded-lg md:border md:inset-auto">
+      <DialogContent variant="fullScreen" className="md:inset-auto md:left-[50%] md:top-[50%] md:translate-x-[-50%] md:translate-y-[-50%] md:max-w-md md:h-auto md:max-h-[90vh] md:rounded-lg md:border">
         <DialogHeader className="pt-safe">
           <DialogTitle>Adicionar Receita</DialogTitle>
           <DialogDescription>
