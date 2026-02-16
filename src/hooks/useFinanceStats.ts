@@ -23,7 +23,7 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
       if (!organizationId) return [];
       const { data, error } = await supabase
         .from('sales')
-        .select('id, total_value, created_at')
+        .select('id, total_value, created_at, sale_date')
         .eq('organization_id', organizationId);
       if (error) throw error;
       return (data || []).map(s => ({ ...s, total_value: Number(s.total_value || 0) }));
@@ -123,7 +123,7 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
     if (!sales) return [];
     if (!dateRange?.from) return sales;
     return sales.filter(s => {
-      const date = parseISO(s.created_at);
+      const date = parseISO(s.sale_date);
       if (dateRange.from && date < startOfDay(dateRange.from)) return false;
       if (dateRange.to && date > endOfDay(dateRange.to)) return false;
       return true;
