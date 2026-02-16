@@ -1,44 +1,30 @@
 
-# Corrigir Calculo do "Total Faturado" vs "Recebido"
+# Corrigir Posicionamento do Modal "Adicionar Receita"
 
 ## Problema
-Quando um filtro de periodo esta ativo, o "Total Faturado" e menor que o "Recebido" porque usam datas de campos diferentes:
-- **Total Faturado**: filtra vendas por `created_at` (data de criacao da venda)
-- **Recebido**: filtra pagamentos por `payment_date` (data do pagamento)
-
-Isto gera inconsistencia quando uma venda foi criada fora do periodo mas os pagamentos foram feitos dentro do periodo.
+O `DialogContent` usa a variante `fullScreen` com overrides `md:` para aparecer como modal centrado em desktop. No entanto, o `md:inset-auto` remove o posicionamento `inset-0` do fullScreen, e as propriedades `md:left-[50%] md:top-[50%]` com `translate` nao conseguem centrar corretamente porque ha conflito com os estilos base da variante.
 
 ## Solucao
-Alterar o calculo do "Total Faturado" para usar a `sale_date` em vez de `created_at`, e incluir tambem as vendas cujos pagamentos caem dentro do periodo selecionado. Duas opcoes:
+Simplificar a abordagem: usar a variante `default` (que ja esta centrada) e aplicar `fullScreen` apenas em mobile via classes responsivas.
 
-### Opcao A (Recomendada): Usar `sale_date` para filtrar vendas
-Alterar o filtro das vendas de `created_at` para `sale_date`, que e o campo que o utilizador define como data da venda — mais coerente com a realidade comercial.
+## Alteracao
 
-### Opcao B: Incluir vendas dos pagamentos filtrados
-Calcular o "Total Faturado" a partir das vendas associadas aos pagamentos que estao dentro do periodo (evitando duplicados). Isto garante coerencia total entre os dois cartoes.
+### Ficheiro: `src/components/finance/AddRevenueModal.tsx`
 
-## Recomendacao
-A **Opcao A** e mais simples e resolve o caso mais comum. Se o utilizador tambem quiser coerencia absoluta, a Opcao B pode ser combinada.
-
-## Alteracoes tecnicas
-
-### Ficheiro: `src/hooks/useFinanceStats.ts`
-
-1. **Query das vendas**: adicionar o campo `sale_date` ao SELECT
-2. **Filtro de vendas por periodo**: trocar `created_at` por `sale_date` no filtro `filteredSales`
-
-```
-// Antes
-const date = parseISO(s.created_at);
-
-// Depois
-const date = parseISO(s.sale_date);
+Linha 59 — substituir:
+```tsx
+<DialogContent variant="fullScreen" className="md:fixed md:left-[50%] md:top-[50%] md:translate-x-[-50%] md:translate-y-[-50%] md:max-w-md md:h-auto md:rounded-lg md:border md:inset-auto">
 ```
 
-3. Atualizar a query para incluir `sale_date`:
-```
-.select('id, total_value, created_at, sale_date')
+Por:
+```tsx
+<DialogContent variant="fullScreen" className="md:inset-auto md:left-[50%] md:top-[50%] md:translate-x-[-50%] md:translate-y-[-50%] md:max-w-md md:h-auto md:max-h-[90vh] md:rounded-lg md:border">
 ```
 
-## Resultado
-Os cartoes "Total Faturado" e "Recebido" passarao a ser coerentes quando um filtro de periodo esta ativo, usando a data da venda em vez da data de criacao do registo.
+A diferenca principal e adicionar `md:max-h-[90vh]` para limitar a altura em desktop e garantir que o posicionamento funcione. Se ainda houver conflito, a alternativa mais segura sera trocar a abordagem completamente:
+
+```tsx
+<DialogContent className="fixed inset-0 z-50 bg-background md:inset-auto md:left-[50%] md:top-[50%] md:translate-x-[-50%] md:translate-y-[-50%] md:max-w-md md:h-auto md:rounded-lg md:border">
+```
+
+Isto remove a dependencia da variante `fullScreen` e controla tudo via classes utilitarias, garantindo fullscreen em mobile e modal centrado em desktop — o mesmo padrao usado noutros modais do projeto.
