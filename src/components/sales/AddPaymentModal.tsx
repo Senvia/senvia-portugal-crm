@@ -28,6 +28,7 @@ import { useCreateSalePayment, useUpdateSalePayment } from "@/hooks/useSalePayme
 import { InvoiceUploader } from "./InvoiceUploader";
 import type { SalePayment, PaymentMethod, PaymentRecordStatus } from "@/types/sales";
 import { PAYMENT_METHODS, PAYMENT_METHOD_LABELS } from "@/types/sales";
+import { BankAccountSelect } from "@/components/finance/BankAccountSelect";
 
 interface AddPaymentModalProps {
   open: boolean;
@@ -66,6 +67,7 @@ export function AddPaymentModal({
   const [invoiceReference, setInvoiceReference] = useState("");
   const [invoiceFileUrl, setInvoiceFileUrl] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
+  const [bankAccountId, setBankAccountId] = useState("");
 
   // Reset form when modal opens/closes or payment changes
   useEffect(() => {
@@ -79,6 +81,7 @@ export function AddPaymentModal({
         setInvoiceReference(payment.invoice_reference || "");
         setInvoiceFileUrl(payment.invoice_file_url || null);
         setNotes(payment.notes || "");
+        setBankAccountId((payment as any).bank_account_id || "");
       } else {
         // Creating mode - pre-fill with remaining amount
         setAmount(remaining > 0 ? String(remaining) : "");
@@ -88,6 +91,7 @@ export function AddPaymentModal({
         setInvoiceReference("");
         setInvoiceFileUrl(null);
         setNotes("");
+        setBankAccountId("");
       }
     }
   }, [open, payment, remaining]);
@@ -108,6 +112,7 @@ export function AddPaymentModal({
       invoice_file_url: invoiceFileUrl,
       status,
       notes: notes.trim() || null,
+      bank_account_id: bankAccountId && bankAccountId !== 'none' ? bankAccountId : null,
     };
 
     if (isEditing && payment) {
@@ -293,6 +298,8 @@ export function AddPaymentModal({
               rows={2}
             />
           </div>
+
+          <BankAccountSelect value={bankAccountId} onChange={setBankAccountId} />
 
           {/* Actions */}
           <div className="flex gap-3 pt-2">

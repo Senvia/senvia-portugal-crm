@@ -17,6 +17,7 @@ import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { DateRange } from "react-day-picker";
 import { InvoicesContent } from "@/components/finance/InvoicesContent";
 import InternalRequests from "@/pages/finance/InternalRequests";
+import { BankAccountsTab } from "@/components/finance/BankAccountsTab";
 
 export default function Finance() {
   const [dateRange, setDateRange] = usePersistedState<DateRange | undefined>('finance-daterange-v1', undefined);
@@ -48,6 +49,7 @@ export default function Finance() {
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList>
             <TabsTrigger value="resumo">Resumo</TabsTrigger>
+            <TabsTrigger value="contas">Contas</TabsTrigger>
             <TabsTrigger value="faturas">Faturas</TabsTrigger>
             <TabsTrigger value="outros">Outros</TabsTrigger>
           </TabsList>
@@ -306,6 +308,10 @@ export default function Finance() {
               </CardContent>
             </Card>
 
+          </TabsContent>
+
+          <TabsContent value="contas" className="mt-0">
+            <BankAccountsTab />
           </TabsContent>
 
           <TabsContent value="faturas" className="mt-0">

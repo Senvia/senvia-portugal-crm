@@ -13,6 +13,7 @@ import { format, parseISO } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { useUpdateExpense } from '@/hooks/useExpenses';
 import { useExpenseCategories } from '@/hooks/useExpenseCategories';
+import { BankAccountSelect } from '@/components/finance/BankAccountSelect';
 import type { Expense } from '@/types/expenses';
 
 interface EditExpenseModalProps {
@@ -31,6 +32,7 @@ export function EditExpenseModal({ expense, open, onOpenChange }: EditExpenseMod
   const [date, setDate] = useState<Date>(parseISO(expense.expense_date));
   const [isRecurring, setIsRecurring] = useState(expense.is_recurring);
   const [notes, setNotes] = useState(expense.notes || '');
+  const [bankAccountId, setBankAccountId] = useState((expense as any).bank_account_id || '');
 
   useEffect(() => {
     setDescription(expense.description);
@@ -39,6 +41,7 @@ export function EditExpenseModal({ expense, open, onOpenChange }: EditExpenseMod
     setDate(parseISO(expense.expense_date));
     setIsRecurring(expense.is_recurring);
     setNotes(expense.notes || '');
+    setBankAccountId((expense as any).bank_account_id || '');
   }, [expense]);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -56,6 +59,7 @@ export function EditExpenseModal({ expense, open, onOpenChange }: EditExpenseMod
         expense_date: format(date, 'yyyy-MM-dd'),
         is_recurring: isRecurring,
         notes: notes.trim() || null,
+        bank_account_id: bankAccountId && bankAccountId !== 'none' ? bankAccountId : null,
       },
       {
         onSuccess: () => onOpenChange(false),
@@ -158,6 +162,8 @@ export function EditExpenseModal({ expense, open, onOpenChange }: EditExpenseMod
               rows={2}
             />
           </div>
+
+          <BankAccountSelect value={bankAccountId} onChange={setBankAccountId} />
 
           <DialogFooter className="gap-2 sm:gap-0">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
