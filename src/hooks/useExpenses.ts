@@ -48,6 +48,7 @@ interface CreateExpenseData {
   is_recurring?: boolean;
   notes?: string | null;
   receipt_file_url?: string | null;
+  bank_account_id?: string | null;
 }
 
 export function useCreateExpense() {
@@ -69,6 +70,7 @@ export function useCreateExpense() {
         notes: data.notes || null,
         receipt_file_url: data.receipt_file_url || null,
         created_by: session?.user?.id || null,
+        bank_account_id: data.bank_account_id || null,
       });
 
       if (error) throw error;
