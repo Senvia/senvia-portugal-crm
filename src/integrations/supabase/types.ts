@@ -14,6 +14,116 @@ export type Database = {
   }
   public: {
     Tables: {
+      bank_account_transactions: {
+        Row: {
+          amount: number
+          bank_account_id: string
+          created_at: string
+          description: string | null
+          id: string
+          organization_id: string
+          reference_id: string | null
+          reference_type: string | null
+          running_balance: number
+          transaction_date: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          bank_account_id: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          organization_id: string
+          reference_id?: string | null
+          reference_type?: string | null
+          running_balance?: number
+          transaction_date?: string
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          bank_account_id?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          organization_id?: string
+          reference_id?: string | null
+          reference_type?: string | null
+          running_balance?: number
+          transaction_date?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bank_account_transactions_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bank_account_transactions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bank_accounts: {
+        Row: {
+          bank_name: string | null
+          created_at: string
+          holder_name: string | null
+          iban: string | null
+          id: string
+          initial_balance: number
+          is_active: boolean
+          is_default: boolean
+          name: string
+          organization_id: string
+          updated_at: string
+        }
+        Insert: {
+          bank_name?: string | null
+          created_at?: string
+          holder_name?: string | null
+          iban?: string | null
+          id?: string
+          initial_balance?: number
+          is_active?: boolean
+          is_default?: boolean
+          name: string
+          organization_id: string
+          updated_at?: string
+        }
+        Update: {
+          bank_name?: string | null
+          created_at?: string
+          holder_name?: string | null
+          iban?: string | null
+          id?: string
+          initial_balance?: number
+          is_active?: boolean
+          is_default?: boolean
+          name?: string
+          organization_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bank_accounts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       calendar_events: {
         Row: {
           all_day: boolean | null
@@ -998,6 +1108,7 @@ export type Database = {
       expenses: {
         Row: {
           amount: number
+          bank_account_id: string | null
           category_id: string | null
           created_at: string | null
           created_by: string | null
@@ -1012,6 +1123,7 @@ export type Database = {
         }
         Insert: {
           amount: number
+          bank_account_id?: string | null
           category_id?: string | null
           created_at?: string | null
           created_by?: string | null
@@ -1026,6 +1138,7 @@ export type Database = {
         }
         Update: {
           amount?: number
+          bank_account_id?: string | null
           category_id?: string | null
           created_at?: string | null
           created_by?: string | null
@@ -1039,6 +1152,13 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "expenses_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "expenses_category_id_fkey"
             columns: ["category_id"]
@@ -2554,6 +2674,7 @@ export type Database = {
       sale_payments: {
         Row: {
           amount: number
+          bank_account_id: string | null
           created_at: string | null
           credit_note_id: number | null
           credit_note_reference: string | null
@@ -2572,6 +2693,7 @@ export type Database = {
         }
         Insert: {
           amount: number
+          bank_account_id?: string | null
           created_at?: string | null
           credit_note_id?: number | null
           credit_note_reference?: string | null
@@ -2590,6 +2712,7 @@ export type Database = {
         }
         Update: {
           amount?: number
+          bank_account_id?: string | null
           created_at?: string | null
           credit_note_id?: number | null
           credit_note_reference?: string | null
@@ -2607,6 +2730,13 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "sale_payments_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "sale_payments_organization_id_fkey"
             columns: ["organization_id"]
@@ -2934,6 +3064,10 @@ export type Database = {
       accept_invite: {
         Args: { _token: string; _user_id: string }
         Returns: boolean
+      }
+      calc_bank_running_balance: {
+        Args: { _bank_account_id: string; _transaction_date: string }
+        Returns: number
       }
       create_organization_for_current_user: {
         Args: { _name: string; _slug: string }
