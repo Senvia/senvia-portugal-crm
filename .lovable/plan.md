@@ -1,48 +1,44 @@
 
+# Corrigir Calculo do "Total Faturado" vs "Recebido"
 
-# Adicionar Receita Manual na Pagina de Recebidos
+## Problema
+Quando um filtro de periodo esta ativo, o "Total Faturado" e menor que o "Recebido" porque usam datas de campos diferentes:
+- **Total Faturado**: filtra vendas por `created_at` (data de criacao da venda)
+- **Recebido**: filtra pagamentos por `payment_date` (data do pagamento)
 
-## Contexto
-O utilizador quer registar entradas manuais (ex: juros, transferencias) diretamente na secao de Pagamentos/Recebidos, nao no extrato da conta corrente.
+Isto gera inconsistencia quando uma venda foi criada fora do periodo mas os pagamentos foram feitos dentro do periodo.
 
 ## Solucao
-Adicionar um botao "Adicionar Receita" no header da pagina de Pagamentos (`/financeiro/pagamentos`) que abre um modal para registar uma transacao manual do tipo `adjustment` (positiva) numa conta corrente selecionada.
+Alterar o calculo do "Total Faturado" para usar a `sale_date` em vez de `created_at`, e incluir tambem as vendas cujos pagamentos caem dentro do periodo selecionado. Duas opcoes:
 
-## Alteracoes
+### Opcao A (Recomendada): Usar `sale_date` para filtrar vendas
+Alterar o filtro das vendas de `created_at` para `sale_date`, que e o campo que o utilizador define como data da venda — mais coerente com a realidade comercial.
 
-### 1. Novo componente `AddRevenueModal.tsx`
-- Ficheiro: `src/components/finance/AddRevenueModal.tsx`
-- Campos do formulario:
-  - **Conta Corrente**: Select com as contas ativas (usando `useActiveBankAccounts`)
-  - **Valor (EUR)**: Input numerico com suporte a formato europeu (`parseLocalizedNumber`)
-  - **Data**: Input de data (default: hoje)
-  - **Descricao**: Input de texto obrigatorio (ex: "Juros creditados", "Transferencia recebida")
-- O valor e sempre positivo (entrada de receita)
-- Design mobile-first, fullscreen em mobile
+### Opcao B: Incluir vendas dos pagamentos filtrados
+Calcular o "Total Faturado" a partir das vendas associadas aos pagamentos que estao dentro do periodo (evitando duplicados). Isto garante coerencia total entre os dois cartoes.
 
-### 2. Novo hook `useCreateBankTransaction` em `src/hooks/useBankAccounts.ts`
-- Mutation que insere um registo em `bank_account_transactions`:
-  - `type`: `'adjustment'`
-  - `amount`: valor positivo
-  - `running_balance`: saldo atual + amount (calculado via query antes do insert)
-  - `description`: texto do utilizador
-  - `transaction_date`: data selecionada
-- Invalida queries: `bank-transactions`, `bank-balance`, `bank-accounts`
+## Recomendacao
+A **Opcao A** e mais simples e resolve o caso mais comum. Se o utilizador tambem quiser coerencia absoluta, a Opcao B pode ser combinada.
 
-### 3. Botao na pagina de Pagamentos (`src/pages/finance/Payments.tsx`)
-- Adicionar botao "Adicionar Receita" no header, ao lado do botao "Exportar"
-- Icone: `Plus` ou `ArrowDownLeft` (entrada)
-- Ao clicar, abre o `AddRevenueModal`
+## Alteracoes tecnicas
 
-### 4. Sem migracao SQL necessaria
-- A tabela `bank_account_transactions` ja suporta o tipo `adjustment`
-- As RLS policies ja permitem INSERT para membros da organizacao
+### Ficheiro: `src/hooks/useFinanceStats.ts`
 
-## Ficheiros a criar/alterar
-- `src/components/finance/AddRevenueModal.tsx` -- novo componente
-- `src/hooks/useBankAccounts.ts` -- novo hook `useCreateBankTransaction`
-- `src/pages/finance/Payments.tsx` -- botao para abrir o modal
+1. **Query das vendas**: adicionar o campo `sale_date` ao SELECT
+2. **Filtro de vendas por periodo**: trocar `created_at` por `sale_date` no filtro `filteredSales`
+
+```
+// Antes
+const date = parseISO(s.created_at);
+
+// Depois
+const date = parseISO(s.sale_date);
+```
+
+3. Atualizar a query para incluir `sale_date`:
+```
+.select('id, total_value, created_at, sale_date')
+```
 
 ## Resultado
-O utilizador podera registar receitas avulsas (juros, transferencias, etc.) diretamente na pagina de Recebidos, associando-as a uma conta corrente especifica.
-
+Os cartoes "Total Faturado" e "Recebido" passarao a ser coerentes quando um filtro de periodo esta ativo, usando a data da venda em vez da data de criacao do registo.
