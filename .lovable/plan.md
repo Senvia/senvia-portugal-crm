@@ -1,28 +1,38 @@
 
 
-# Botao de Imprimir Extrato Bancario
+# Corrigir Parsing do Saldo Inicial (Formato Europeu)
 
-## Objetivo
-Adicionar um botao "Imprimir" no drawer do extrato bancario (`BankAccountStatementDrawer`) que permita ao utilizador imprimir ou guardar como PDF o extrato da conta corrente.
+## Problema
+O campo "Saldo Inicial" usa `parseFloat()` que nao suporta o formato numerico portugues (ex: "1.376,59" ou "1 376,59"). O `parseFloat` para de ler ao encontrar um espaco ou um segundo ponto, resultando em valores errados (1 EUR em vez de 1.376,59 EUR).
 
-## Abordagem
-Utilizar `window.print()` com estilos CSS dedicados para impressao (`@media print`), garantindo que apenas o conteudo do extrato e impresso de forma limpa e profissional.
+## Solucao
+Criar uma funcao `parseLocalizedNumber()` que:
+1. Remove espacos e pontos usados como separador de milhares
+2. Converte a virgula decimal para ponto
+3. So entao faz o `parseFloat`
 
-## Alteracoes
+## Ficheiros a alterar
 
-### 1. `src/components/finance/BankAccountStatementDrawer.tsx`
-- Adicionar um botao "Imprimir" no header do drawer (ao lado do titulo), usando o icone `Printer` do lucide-react
-- Ao clicar, executa `window.print()`
-- Envolver o conteudo do extrato numa `div` com um `id` especifico (ex: `bank-statement-print`) para targeting CSS
+### 1. `src/lib/format.ts`
+- Adicionar funcao `parseLocalizedNumber(value: string): number`
+- Logica: detectar automaticamente se a virgula ou o ponto e o separador decimal (baseado na posicao — o ultimo separador e o decimal)
 
-### 2. `src/index.css`
-- Adicionar bloco `@media print` que:
-  - Esconde tudo excepto o conteudo com id `bank-statement-print`
-  - Remove backgrounds escuros e adapta cores para impressao (fundo branco, texto preto)
-  - Mostra o nome da conta, banco e saldo no topo
-  - Formata a tabela de movimentos de forma legivel em papel A4
-  - Esconde botoes, sidebar, header e outros elementos de UI
+### 2. `src/components/finance/CreateBankAccountModal.tsx`
+- Substituir `parseFloat(initialBalance.replace(',', '.'))` por `parseLocalizedNumber(initialBalance)`
 
-## Resultado
-O utilizador clica em "Imprimir", o browser abre o dialogo nativo de impressao com o extrato formatado, podendo imprimir ou guardar como PDF.
+### 3. Corrigir o valor actual na base de dados
+- Depois de implementar, o utilizador pode editar a conta existente e corrigir o saldo, ou eliminar e recriar
+
+## Detalhes Tecnicos
+
+```text
+parseLocalizedNumber("1.376,59")  => 1376.59
+parseLocalizedNumber("1 376,59")  => 1376.59
+parseLocalizedNumber("1,376.59")  => 1376.59
+parseLocalizedNumber("1376.59")   => 1376.59
+parseLocalizedNumber("1376,59")   => 1376.59
+parseLocalizedNumber("0,00")      => 0
+```
+
+A funcao detecta o formato automaticamente: o ultimo separador (virgula ou ponto) e tratado como decimal, os restantes sao removidos como separadores de milhares.
 
