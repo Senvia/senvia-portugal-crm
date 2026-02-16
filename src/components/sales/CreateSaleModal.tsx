@@ -160,7 +160,7 @@ export function CreateSaleModal({
   const [showDraftPaymentModal, setShowDraftPaymentModal] = useState(false);
   const [showPaymentTypeSelector, setShowPaymentTypeSelector] = useState(false);
   const [showDraftScheduleModal, setShowDraftScheduleModal] = useState(false);
-  const [forceStatusPaid, setForceStatusPaid] = useState(false);
+  
 
   // Reset form when modal opens
   useEffect(() => {
@@ -1194,7 +1194,6 @@ export function CreateSaleModal({
           })()}
           onSelectTotal={() => {
             setShowPaymentTypeSelector(false);
-            setForceStatusPaid(true);
             setShowDraftPaymentModal(true);
           }}
           onSelectInstallments={() => {
@@ -1208,7 +1207,7 @@ export function CreateSaleModal({
           open={showDraftPaymentModal}
           onOpenChange={(open) => {
             setShowDraftPaymentModal(open);
-            if (!open) setForceStatusPaid(false);
+            if (!open) {}
           }}
           saleTotal={total}
           remaining={(() => {
@@ -1223,7 +1222,7 @@ export function CreateSaleModal({
             (organization?.integrations_enabled as any)?.invoicexpress !== false
             && !!(organization?.invoicexpress_account_name && organization?.invoicexpress_api_key)
           }
-          forceStatusPaid={forceStatusPaid}
+          
         />
 
         {/* Draft Schedule Modal */}
