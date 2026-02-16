@@ -176,3 +176,52 @@ export function useBankAccountBalance(accountId: string | null) {
     enabled: !!orgId && !!accountId,
   });
 }
+
+interface CreateBankTransactionData {
+  bank_account_id: string;
+  amount: number;
+  description: string;
+  transaction_date: string;
+}
+
+export function useCreateBankTransaction() {
+  const { organization } = useAuth();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (data: CreateBankTransactionData) => {
+      if (!organization?.id) throw new Error('No organization');
+
+      // Get current balance for running_balance
+      const { data: txns, error: balErr } = await supabase
+        .from('bank_account_transactions')
+        .select('amount')
+        .eq('bank_account_id', data.bank_account_id)
+        .eq('organization_id', organization.id);
+      if (balErr) throw balErr;
+      const currentBalance = (txns || []).reduce((sum, t) => sum + Number(t.amount), 0);
+
+      const { error } = await supabase.from('bank_account_transactions').insert({
+        organization_id: organization.id,
+        bank_account_id: data.bank_account_id,
+        type: 'adjustment',
+        amount: data.amount,
+        running_balance: currentBalance + data.amount,
+        description: data.description,
+        transaction_date: data.transaction_date,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bank-transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['bank-balance'] });
+      queryClient.invalidateQueries({ queryKey: ['bank-accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['bank-accounts-active'] });
+      toast({ title: 'Receita registada com sucesso!' });
+    },
+    onError: () => {
+      toast({ title: 'Erro ao registar receita', variant: 'destructive' });
+    },
+  });
+}

@@ -6,7 +6,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ArrowLeft, Download, Search, CreditCard, X, CheckCircle, Receipt, FileText, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { ArrowLeft, Download, Search, CreditCard, X, CheckCircle, Receipt, FileText, ArrowUpDown, ArrowUp, ArrowDown, Plus } from "lucide-react";
+import { AddRevenueModal } from "@/components/finance/AddRevenueModal";
 import { useAllPayments } from "@/hooks/useAllPayments";
 import { useUpdateSalePayment } from "@/hooks/useSalePayments";
 import { useGenerateReceipt } from "@/hooks/useGenerateReceipt";
@@ -52,6 +53,7 @@ export default function FinancePayments() {
   const [draftPayment, setDraftPayment] = useState<PaymentWithSale | null>(null);
   const [draftMode, setDraftMode] = useState<"receipt" | "invoice_receipt">("receipt");
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | "">("");
+  const [showRevenueModal, setShowRevenueModal] = useState(false);
   const SORT_KEY = 'finance-payments-sort-v1';
   const VALID_FIELDS: SortField[] = ['payment_date', 'sale_code', 'client_name', 'amount', 'payment_method', 'status'];
 
@@ -279,10 +281,16 @@ export default function FinancePayments() {
               </p>
             </div>
           </div>
-          <Button onClick={handleExport} variant="outline" className="gap-2">
-            <Download className="h-4 w-4" />
-            <span className="hidden sm:inline">Exportar</span>
-          </Button>
+          <div className="flex gap-2">
+            <Button onClick={() => setShowRevenueModal(true)} className="gap-2">
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline">Adicionar Receita</span>
+            </Button>
+            <Button onClick={handleExport} variant="outline" className="gap-2">
+              <Download className="h-4 w-4" />
+              <span className="hidden sm:inline">Exportar</span>
+            </Button>
+          </div>
         </div>
 
         {/* Filters */}
@@ -533,6 +541,8 @@ export default function FinancePayments() {
           saleTotal={draftPayment.sale.total_value}
         />
       )}
+
+      <AddRevenueModal open={showRevenueModal} onOpenChange={setShowRevenueModal} />
     </AppLayout>
   );
 }
