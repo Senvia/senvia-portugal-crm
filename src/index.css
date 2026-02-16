@@ -314,3 +314,41 @@
     }
   }
 }
+
+/* Print styles for bank statement */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  #bank-statement-print,
+  #bank-statement-print * {
+    visibility: visible;
+  }
+
+  #bank-statement-print {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    padding: 2rem;
+    background: white !important;
+    color: black !important;
+  }
+
+  #bank-statement-print .text-muted-foreground {
+    color: #555 !important;
+  }
+
+  #bank-statement-print .text-emerald-600 {
+    color: #059669 !important;
+  }
+
+  #bank-statement-print .text-destructive {
+    color: #dc2626 !important;
+  }
+
+  .print\\:hidden {
+    display: none !important;
+  }
+}
