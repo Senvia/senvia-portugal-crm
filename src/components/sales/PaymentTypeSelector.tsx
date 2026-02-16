@@ -44,7 +44,7 @@ export function PaymentTypeSelector({
               <CheckCircle2 className="h-5 w-5 text-primary" />
             </div>
             <div className="space-y-1">
-              <p className="text-sm font-semibold">Pagamento Total</p>
+              <p className="text-sm font-semibold">Pronto Pagamento</p>
               <p className="text-xs text-muted-foreground">
                 {formatCurrency(remainingAmount)}
               </p>
@@ -61,9 +61,9 @@ export function PaymentTypeSelector({
               <CalendarClock className="h-5 w-5 text-primary" />
             </div>
             <div className="space-y-1">
-              <p className="text-sm font-semibold">Parcelado</p>
+              <p className="text-sm font-semibold">Agendar Pagamento</p>
               <p className="text-xs text-muted-foreground">
-                Dividir em parcelas
+                Agendar em parcelas
               </p>
             </div>
           </button>
