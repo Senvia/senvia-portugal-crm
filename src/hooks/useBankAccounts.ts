@@ -125,6 +125,8 @@ export function useUpdateBankAccount() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bank-accounts'] });
       queryClient.invalidateQueries({ queryKey: ['bank-accounts-active'] });
+      queryClient.invalidateQueries({ queryKey: ['bank-transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['bank-balance'] });
       toast({ title: 'Conta corrente atualizada!' });
     },
     onError: () => {

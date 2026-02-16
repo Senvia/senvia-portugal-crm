@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useUpdateBankAccount } from '@/hooks/useBankAccounts';
+import { parseLocalizedNumber } from '@/lib/format';
 import type { BankAccount } from '@/types/bank-accounts';
 
 interface Props {
@@ -19,6 +20,9 @@ export function EditBankAccountModal({ account, open, onOpenChange }: Props) {
   const [bankName, setBankName] = useState(account.bank_name || '');
   const [iban, setIban] = useState(account.iban || '');
   const [holderName, setHolderName] = useState(account.holder_name || '');
+  const [initialBalance, setInitialBalance] = useState(
+    account.initial_balance.toLocaleString('pt-PT', { minimumFractionDigits: 2 })
+  );
   const [isDefault, setIsDefault] = useState(account.is_default);
   const [isActive, setIsActive] = useState(account.is_active);
 
@@ -27,6 +31,7 @@ export function EditBankAccountModal({ account, open, onOpenChange }: Props) {
     setBankName(account.bank_name || '');
     setIban(account.iban || '');
     setHolderName(account.holder_name || '');
+    setInitialBalance(account.initial_balance.toLocaleString('pt-PT', { minimumFractionDigits: 2 }));
     setIsDefault(account.is_default);
     setIsActive(account.is_active);
   }, [account]);
@@ -42,6 +47,7 @@ export function EditBankAccountModal({ account, open, onOpenChange }: Props) {
         bank_name: bankName.trim() || null,
         iban: iban.trim() || null,
         holder_name: holderName.trim() || null,
+        initial_balance: parseLocalizedNumber(initialBalance),
         is_default: isDefault,
         is_active: isActive,
       },
@@ -73,6 +79,15 @@ export function EditBankAccountModal({ account, open, onOpenChange }: Props) {
           <div className="space-y-2">
             <Label>IBAN</Label>
             <Input value={iban} onChange={(e) => setIban(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>Saldo Inicial (EUR)</Label>
+            <Input
+              value={initialBalance}
+              onChange={(e) => setInitialBalance(e.target.value)}
+              placeholder="0,00"
+              inputMode="decimal"
+            />
           </div>
           <div className="flex gap-6">
             <div className="flex items-center gap-2">
