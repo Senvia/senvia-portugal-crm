@@ -80,6 +80,21 @@ export function formatPhoneForWhatsApp(phone: string): string {
 }
 
 /**
+ * Format IBAN with spaces every 4 characters
+ */
+export function formatIban(value: string): string {
+  const cleaned = value.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+  return cleaned.match(/.{1,4}/g)?.join(' ') || cleaned;
+}
+
+/**
+ * Strip IBAN formatting for storage
+ */
+export function cleanIban(value: string): string {
+  return value.replace(/\s/g, '');
+}
+
+/**
  * Generate WhatsApp URL
  */
 export function getWhatsAppUrl(phone: string, message?: string): string {
