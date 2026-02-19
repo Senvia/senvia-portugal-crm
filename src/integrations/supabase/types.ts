@@ -1888,6 +1888,7 @@ export type Database = {
         Row: {
           base_role: Database["public"]["Enums"]["app_role"]
           created_at: string
+          dashboard_widgets: Json | null
           data_scope: string
           id: string
           is_default: boolean
@@ -1898,6 +1899,7 @@ export type Database = {
         Insert: {
           base_role?: Database["public"]["Enums"]["app_role"]
           created_at?: string
+          dashboard_widgets?: Json | null
           data_scope?: string
           id?: string
           is_default?: boolean
@@ -1908,6 +1910,7 @@ export type Database = {
         Update: {
           base_role?: Database["public"]["Enums"]["app_role"]
           created_at?: string
+          dashboard_widgets?: Json | null
           data_scope?: string
           id?: string
           is_default?: boolean

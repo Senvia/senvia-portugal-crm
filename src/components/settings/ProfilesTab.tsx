@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import {
@@ -20,8 +21,11 @@ import {
   DataScope,
   DATA_SCOPE_LABELS,
   DATA_SCOPE_DESCRIPTIONS,
+  ProfileDashboardWidget,
 } from '@/hooks/useOrganizationProfiles';
-import { Shield, Plus, Pencil, Trash2, Loader2, Eye } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { WIDGET_DEFINITIONS, WidgetType, filterWidgetsByModules, getAllAvailableWidgets } from '@/lib/dashboard-templates';
+import { Shield, Plus, Pencil, Trash2, Loader2, Eye, LayoutDashboard } from 'lucide-react';
 
 const BASE_ROLE_LABELS: Record<string, string> = {
   admin: 'Administrador',
@@ -31,6 +35,7 @@ const BASE_ROLE_LABELS: Record<string, string> = {
 
 export function ProfilesTab() {
   const { profiles, isLoading, createProfile, updateProfile, deleteProfile } = useOrganizationProfiles();
+  const { organization } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [editingProfile, setEditingProfile] = useState<OrganizationProfile | null>(null);
 
@@ -38,13 +43,25 @@ export function ProfilesTab() {
   const [baseRole, setBaseRole] = useState<string>('salesperson');
   const [dataScope, setDataScope] = useState<DataScope>('own');
   const [permissions, setPermissions] = useState<GranularPermissions>(buildDefaultPermissions('salesperson'));
+  const [useCustomDashboard, setUseCustomDashboard] = useState(false);
+  const [dashboardWidgets, setDashboardWidgets] = useState<ProfileDashboardWidget[]>([]);
 
+  const enabledModules = (organization?.enabled_modules as Record<string, boolean>) || {
+    sales: true, proposals: true, calendar: true, ecommerce: false,
+  };
+
+  const availableWidgets = getAllAvailableWidgets().filter(w => {
+    if (w.requiredModule && enabledModules[w.requiredModule] === false) return false;
+    return true;
+  });
   const openCreate = () => {
     setEditingProfile(null);
     setName('');
     setBaseRole('salesperson');
     setDataScope('own');
     setPermissions(buildDefaultPermissions('salesperson'));
+    setUseCustomDashboard(false);
+    setDashboardWidgets([]);
     setIsOpen(true);
   };
 
@@ -54,6 +71,8 @@ export function ProfilesTab() {
     setBaseRole(profile.base_role);
     setDataScope(profile.data_scope || 'own');
     setPermissions(profile.module_permissions);
+    setUseCustomDashboard(!!profile.dashboard_widgets);
+    setDashboardWidgets(profile.dashboard_widgets || []);
     setIsOpen(true);
   };
 
@@ -131,14 +150,23 @@ export function ProfilesTab() {
     return hasTrue && hasFalse;
   };
 
+  const toggleDashboardWidget = (widgetType: WidgetType) => {
+    setDashboardWidgets(prev => {
+      const exists = prev.find(w => w.type === widgetType);
+      if (exists) return prev.filter(w => w.type !== widgetType);
+      return [...prev, { type: widgetType, is_visible: true }];
+    });
+  };
+
   const handleSave = () => {
     if (!name.trim()) return;
+    const dw = useCustomDashboard ? dashboardWidgets : null;
     if (editingProfile) {
-      updateProfile.mutate({ id: editingProfile.id, name: name.trim(), base_role: baseRole, module_permissions: permissions, data_scope: dataScope }, {
+      updateProfile.mutate({ id: editingProfile.id, name: name.trim(), base_role: baseRole, module_permissions: permissions, data_scope: dataScope, dashboard_widgets: dw }, {
         onSuccess: () => setIsOpen(false),
       });
     } else {
-      createProfile.mutate({ name: name.trim(), base_role: baseRole, module_permissions: permissions, data_scope: dataScope }, {
+      createProfile.mutate({ name: name.trim(), base_role: baseRole, module_permissions: permissions, data_scope: dataScope, dashboard_widgets: dw }, {
         onSuccess: () => setIsOpen(false),
       });
     }
@@ -335,6 +363,43 @@ export function ProfilesTab() {
                   );
                 })}
               </Accordion>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="flex items-center gap-2">
+                  <LayoutDashboard className="h-4 w-4" />
+                  Dashboard Personalizado
+                </Label>
+                <Switch checked={useCustomDashboard} onCheckedChange={setUseCustomDashboard} />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {useCustomDashboard
+                  ? 'Selecione os widgets que este perfil verá por defeito no painel.'
+                  : 'A usar o padrão do nicho da organização.'}
+              </p>
+              {useCustomDashboard && (
+                <div className="grid grid-cols-1 gap-2 border rounded-lg p-3">
+                  {availableWidgets.map(widget => {
+                    const isSelected = dashboardWidgets.some(dw => dw.type === widget.type);
+                    return (
+                      <label key={widget.type} className="flex items-center gap-2 cursor-pointer py-1">
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={() => toggleDashboardWidget(widget.type)}
+                        />
+                        <widget.icon className="h-4 w-4 text-muted-foreground" />
+                        <div className="flex-1 min-w-0">
+                          <span className="text-sm">{widget.title}</span>
+                          {widget.description && (
+                            <span className="text-xs text-muted-foreground ml-2">{widget.description}</span>
+                          )}
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
 

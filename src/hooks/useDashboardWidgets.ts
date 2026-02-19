@@ -8,6 +8,7 @@ import {
   filterWidgetsByModules,
   WIDGET_DEFINITIONS 
 } from "@/lib/dashboard-templates";
+import { usePermissions } from "@/hooks/usePermissions";
 import { toast } from "sonner";
 
 export interface DashboardWidget {
@@ -23,6 +24,7 @@ export interface DashboardWidget {
 
 export function useDashboardWidgets() {
   const { user, organization } = useAuth();
+  const { profileDashboardWidgets } = usePermissions();
   const queryClient = useQueryClient();
 
   const { data: savedWidgets = [], isLoading } = useQuery({
@@ -70,17 +72,37 @@ export function useDashboardWidgets() {
     created_at: new Date().toISOString(),
   }));
 
-  // Use saved widgets if available, otherwise defaults
+  // Build profile-level widgets if available
+  const profileWidgets: DashboardWidget[] | null = profileDashboardWidgets
+    ? profileDashboardWidgets
+        .filter(pw => {
+          const def = WIDGET_DEFINITIONS[pw.type as WidgetType];
+          if (!def) return false;
+          if (def.requiredModule && enabledModules[def.requiredModule] === false) return false;
+          return true;
+        })
+        .map((pw, index) => ({
+          id: `profile-${pw.type}`,
+          organization_id: organization?.id || '',
+          user_id: user?.id || '',
+          widget_type: pw.type as WidgetType,
+          position: index,
+          is_visible: pw.is_visible,
+          config: {},
+          created_at: new Date().toISOString(),
+        }))
+    : null;
+
+  // Priority: 1. User saved → 2. Profile defaults → 3. Niche defaults
   const widgets = savedWidgets.length > 0 
     ? savedWidgets.filter(w => {
-        // Filter out widgets for disabled modules
         const def = WIDGET_DEFINITIONS[w.widget_type as WidgetType];
         if (def?.requiredModule && enabledModules[def.requiredModule] === false) {
           return false;
         }
         return true;
       })
-    : defaultWidgets;
+    : profileWidgets || defaultWidgets;
 
   const visibleWidgets = widgets.filter(w => w.is_visible);
   const hasCustomWidgets = savedWidgets.length > 0;
