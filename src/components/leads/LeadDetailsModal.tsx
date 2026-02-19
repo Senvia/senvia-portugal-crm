@@ -1,4 +1,5 @@
 import { Lead, STATUS_LABELS, LeadStatus, LeadTemperature, LeadTipologia, TEMPERATURE_LABELS, TEMPERATURE_STYLES, TIPOLOGIA_LABELS, TIPOLOGIA_STYLES, FormSettings, CustomField, ROLE_LABELS } from "@/types";
+import { usePipelineStages } from "@/hooks/usePipelineStages";
 import { formatDate, formatDateTime, getWhatsAppUrl } from "@/lib/format";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useAuth } from "@/contexts/AuthContext";
@@ -96,7 +97,7 @@ export function LeadDetailsModal({
   const { canDeleteLeads, canManageTeam } = usePermissions();
   const { organization } = useAuth();
   const { data: teamMembers } = useTeamMembers();
-  
+  const { data: stages } = usePipelineStages();
   // Editable fields state
   const [editValue, setEditValue] = useState<string>("");
   const [editConsumo, setEditConsumo] = useState<string>("");
@@ -295,9 +296,9 @@ export function LeadDetailsModal({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {Object.entries(STATUS_LABELS).map(([value, label]) => (
-                  <SelectItem key={value} value={value}>
-                    {label}
+                {(stages && stages.length > 0 ? stages : Object.entries(STATUS_LABELS).map(([key, name]) => ({ key, name }))).map((stage) => (
+                  <SelectItem key={stage.key} value={stage.key}>
+                    {stage.name}
                   </SelectItem>
                 ))}
               </SelectContent>
