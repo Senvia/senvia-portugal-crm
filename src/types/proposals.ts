@@ -113,7 +113,7 @@ export const NEGOTIATION_TYPE_LABELS: Record<NegotiationType, string> = {
   angariacao: 'Angariação',
   angariacao_indexado: 'Angariação Indexado',
   renovacao: 'Renovação',
-  sem_volume: 'Sem Volume',
+  sem_volume: 'Ang sem Volume',
 };
 
 export const NEGOTIATION_TYPES: NegotiationType[] = ['angariacao', 'angariacao_indexado', 'renovacao', 'sem_volume'];
