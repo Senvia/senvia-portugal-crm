@@ -157,7 +157,17 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
     return servicosProdutos.length > 0 && totalKwp > 0 && parseFloat(comissaoServicos) > 0;
   }, [isTelecom, proposalType, servicosProdutos, totalKwp, comissaoServicos]);
 
-  const isFormValid = isServicosValid;
+  const isEnergiaValid = useMemo(() => {
+    if (!isTelecom || proposalType !== 'energia') return true;
+    return proposalCpes.length > 0;
+  }, [isTelecom, proposalType, proposalCpes]);
+
+  const isGenericValid = useMemo(() => {
+    if (isTelecom) return true;
+    return selectedProducts.length > 0;
+  }, [isTelecom, selectedProducts]);
+
+  const isFormValid = isServicosValid && isEnergiaValid && isGenericValid && !!selectedClientId;
 
   const handleAddProduct = (productId: string) => {
     const product = products.find(p => p.id === productId);
@@ -306,7 +316,7 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
                     </CardHeader>
                     <CardContent className="p-4 pt-0 space-y-4">
                       <div className="space-y-2">
-                        <Label>Cliente</Label>
+                        <Label>Cliente <span className="text-destructive">*</span></Label>
                         <div className="flex gap-2">
                           <SearchableCombobox
                             options={clients.map((c): ComboboxOption => ({
@@ -332,6 +342,9 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
                             <UserPlus className="h-4 w-4" />
                           </Button>
                         </div>
+                        {attempted && !selectedClientId && (
+                          <p className="text-xs text-destructive">Selecione um cliente</p>
+                        )}
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -423,6 +436,9 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
                   {isTelecom && proposalType === 'energia' && (
                     <Card>
                       <CardContent className="p-4">
+                        {attempted && !isEnergiaValid && (
+                          <p className="text-xs text-destructive mb-2">Adicione pelo menos 1 CPE/CUI</p>
+                        )}
                         <ProposalCpeSelector
                           clientId={selectedClientId}
                           cpes={proposalCpes}
@@ -555,6 +571,9 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
                         </CardTitle>
                       </CardHeader>
                       <CardContent className="p-4 pt-0 space-y-3">
+                        {attempted && !isGenericValid && (
+                          <p className="text-xs text-destructive">Adicione pelo menos 1 produto</p>
+                        )}
                         {products.length > 0 && (
                           <>
                             <Select onValueChange={handleAddProduct}>
