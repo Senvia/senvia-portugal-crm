@@ -161,8 +161,8 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
     if (proposalType === 'energia') {
       return proposalCpes.reduce((sum, cpe) => sum + (parseFloat(cpe.comissao) || 0), 0);
     }
-    return parseFloat(servicosComissao) || 0;
-  }, [proposalType, proposalCpes, servicosComissao]);
+    return servicosProdutos.reduce((sum, p) => sum + (servicosDetails[p]?.comissao || 0), 0);
+  }, [proposalType, proposalCpes, servicosProdutos, servicosDetails]);
 
   const handleClientCreated = (newClientId: string) => {
     setSelectedClientId(newClientId);
@@ -269,7 +269,7 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
       anos_contrato: null,
       modelo_servico: proposalType === 'servicos' ? modeloServico : null,
       kwp: proposalType === 'servicos' ? (totalKwp || null) : null,
-      comissao: proposalType === 'servicos' ? (parseFloat(servicosComissao) || null) : null,
+      comissao: proposalType === 'servicos' ? (totalComissao || null) : null,
       servicos_produtos: proposalType === 'servicos' ? servicosProdutos : null,
       servicos_details: proposalType === 'servicos' && Object.keys(servicosDetails).length > 0 ? servicosDetails : null,
     });
@@ -544,7 +544,7 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
                             })}
                           </div>
 
-                          {/* Comissão + kWp total */}
+                          {/* kWp Total + Comissão Total */}
                           <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border/50">
                             <div className="space-y-1">
                               <Label className="text-xs text-muted-foreground">kWp Total</Label>
@@ -553,17 +553,10 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
                               </div>
                             </div>
                             <div className="space-y-1">
-                              <Label htmlFor="edit-comissao-servicos" className="text-xs text-muted-foreground">Comissão (€)</Label>
-                              <Input
-                                id="edit-comissao-servicos"
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                value={servicosComissao}
-                                onChange={(e) => setServicosComissao(e.target.value)}
-                                placeholder="Ex: 250"
-                                className="h-8"
-                              />
+                              <Label className="text-xs text-muted-foreground">Comissão Total (€)</Label>
+                              <div className="h-8 flex items-center text-sm font-medium px-3 rounded-md bg-muted">
+                                {totalComissao ? totalComissao.toLocaleString('pt-PT', { maximumFractionDigits: 2 }) : '—'}
+                              </div>
                             </div>
                           </div>
                         </div>
