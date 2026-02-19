@@ -557,7 +557,7 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                   )}
 
                   {/* Products/Services */}
-                  {saleItems.length > 0 && (
+                  {!isTelecom && saleItems.length > 0 && (
                     <Card>
                       <CardHeader className="pb-2 p-4">
                         <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
