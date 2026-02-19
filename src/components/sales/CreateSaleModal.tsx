@@ -313,7 +313,7 @@ export function CreateSaleModal({
   const filteredProposals = useMemo(() => {
     if (!proposals) return [];
     
-    let filtered = proposals.filter(p => p.status !== 'rejected');
+    let filtered = proposals.filter(p => p.status === 'accepted');
     
     if (prefillProposal && !filtered.find(p => p.id === prefillProposal.id)) {
       filtered = [prefillProposal, ...filtered];
