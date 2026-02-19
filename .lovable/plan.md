@@ -1,34 +1,23 @@
 
 
-# Tornar Agendamento Obrigatorio ao Marcar Lead como Perdido
+# Corrigir Dropdown de Estado no Modal de Detalhes do Lead
 
-## Objetivo
-Remover a opcao de desativar o agendamento de recontacto. Sempre que um lead for marcado como "Perdido", o utilizador tem de obrigatoriamente agendar um follow-up futuro.
+## Problema
+O seletor de "Estado" no modal de detalhes do lead usa uma lista fixa de estados (`STATUS_LABELS`) com apenas 6 opcoes: Novo, Contactado, Agendado, Proposta, Ganho, Perdido. No entanto, o pipeline e dinamico (configurado por organizacao na tabela `pipeline_stages`) e pode ter estados adicionais como "Instalacao" ou "Ativo". Quando o lead tem um desses estados dinamicos, o Select fica vazio porque nao encontra correspondencia.
+
+## Solucao
+Alterar o `LeadDetailsModal` para usar as etapas dinamicas do pipeline (`usePipelineStages`) em vez do `STATUS_LABELS` hardcoded.
 
 ## Alteracoes
 
-### Ficheiro: `src/components/leads/LostLeadDialog.tsx`
+### Ficheiro: `src/components/leads/LeadDetailsModal.tsx`
 
-1. Remover o estado `scheduleFollowUp` e o componente `Switch` que permite desativar o agendamento
-2. Os campos de data, hora e tipo de evento ficam sempre visiveis (sem condicional)
-3. A validacao passa a exigir sempre `followUpDate` preenchido
-4. O botao de confirmacao mostra sempre "Confirmar e Agendar" (remover a variante "Perda Definitiva")
-5. O `onConfirm` passa sempre `scheduleFollowUp: true`
-
-### Detalhe tecnico
-
-**Remover:**
-- Estado `scheduleFollowUp` (linha 64)
-- Bloco do Switch (linhas 141-150)
-- Condicional `{scheduleFollowUp && ...}` nos campos de data/hora/tipo (linhas 152, 220-221)
-- Reset do `scheduleFollowUp` nos handlers (linhas 81, 91)
-- Variante do botao com icone `XCircle` (linhas 229-233)
-
-**Alterar:**
-- Validacao (linha 96): de `lossReason && (scheduleFollowUp ? followUpDate : true)` para `lossReason && followUpDate`
-- `onConfirm` (linha 74): passar sempre `scheduleFollowUp: true`
+1. Importar o hook `usePipelineStages`
+2. Chamar `usePipelineStages()` dentro do componente para obter as etapas reais
+3. Substituir o `Object.entries(STATUS_LABELS).map(...)` pelo mapeamento das etapas dinamicas: `stages?.map(stage => ...)` usando `stage.key` como value e `stage.name` como label
+4. Manter o `STATUS_LABELS` como fallback caso as etapas ainda nao tenham carregado
 
 ### Resultado
 - 1 ficheiro alterado
 - 0 alteracoes de base de dados
-- O agendamento de recontacto torna-se obrigatorio em todos os casos
+- O dropdown de estado mostra sempre as etapas corretas do pipeline da organizacao
