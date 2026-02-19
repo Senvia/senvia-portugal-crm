@@ -132,6 +132,7 @@ export interface ServicosProductDetail {
   duracao?: number;
   valor?: number;
   kwp?: number;
+  comissao?: number;
 }
 
 export type ServicosDetails = Record<string, ServicosProductDetail>;
@@ -139,23 +140,24 @@ export type ServicosDetails = Record<string, ServicosProductDetail>;
 // Config de campos por produto
 export interface ServicosProductConfig {
   name: string;
-  fields: ('duracao' | 'valor' | 'kwp')[];
+  fields: ('duracao' | 'valor' | 'kwp' | 'comissao')[];
   kwpAuto?: (detail: ServicosProductDetail) => number | null;
 }
 
 export const SERVICOS_PRODUCT_CONFIGS: ServicosProductConfig[] = [
-  { name: 'Solar', fields: ['duracao', 'kwp'] },
-  { name: 'Carregadores/Baterias', fields: ['kwp'] },
+  { name: 'Solar', fields: ['duracao', 'kwp', 'comissao'] },
+  { name: 'Carregadores/Baterias', fields: ['kwp', 'comissao'] },
   { 
     name: 'Condensadores', 
-    fields: ['duracao', 'valor', 'kwp'],
+    fields: ['duracao', 'valor', 'kwp', 'comissao'],
     kwpAuto: (d) => d.valor ? (d.valor / 0.67) / 1000 : null,
   },
-  { name: 'Coberturas', fields: ['valor', 'kwp'] },
+  { name: 'Coberturas', fields: ['valor', 'kwp', 'comissao'] },
 ];
 
 export const FIELD_LABELS: Record<string, string> = {
   duracao: 'Duração (anos)',
   valor: 'Valor (€)',
   kwp: 'kWp',
+  comissao: 'Comissão (€)',
 };

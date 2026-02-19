@@ -117,8 +117,9 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
     if (proposalType === 'energia') {
       return proposalCpes.reduce((sum, cpe) => sum + (parseFloat(cpe.comissao) || 0), 0);
     }
-    return parseFloat(comissaoServicos) || 0;
-  }, [proposalType, proposalCpes, comissaoServicos]);
+    // Sum comissao from each active servicos product
+    return servicosProdutos.reduce((sum, p) => sum + (servicosDetails[p]?.comissao || 0), 0);
+  }, [proposalType, proposalCpes, servicosProdutos, servicosDetails]);
 
   const handleClientCreated = (newClientId: string) => {
     setSelectedClientId(newClientId);
@@ -154,8 +155,8 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
 
   const isServicosValid = useMemo(() => {
     if (!isTelecom || proposalType !== 'servicos') return true;
-    return servicosProdutos.length > 0 && totalKwp > 0 && parseFloat(comissaoServicos) > 0;
-  }, [isTelecom, proposalType, servicosProdutos, totalKwp, comissaoServicos]);
+    return servicosProdutos.length > 0 && totalKwp > 0 && totalComissao > 0;
+  }, [isTelecom, proposalType, servicosProdutos, totalKwp, totalComissao]);
 
   const isEnergiaValid = useMemo(() => {
     if (!isTelecom || proposalType !== 'energia') return true;
@@ -528,7 +529,7 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
                             })}
                           </div>
 
-                          {/* Comissão + kWp total */}
+                          {/* kWp Total + Comissão Total */}
                           <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border/50">
                             <div className="space-y-1">
                               <Label className="text-xs text-muted-foreground">kWp Total</Label>
@@ -540,18 +541,11 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
                               )}
                             </div>
                             <div className="space-y-1">
-                              <Label htmlFor="comissao-servicos" className="text-xs text-muted-foreground">Comissão (€)</Label>
-                              <Input
-                                id="comissao-servicos"
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                value={comissaoServicos}
-                                onChange={(e) => setComissaoServicos(e.target.value)}
-                                placeholder="Ex: 500"
-                                className="h-8"
-                              />
-                              {attempted && !(parseFloat(comissaoServicos) > 0) && (
+                              <Label className="text-xs text-muted-foreground">Comissão Total (€)</Label>
+                              <div className="h-8 flex items-center text-sm font-medium px-3 rounded-md bg-muted">
+                                {totalComissao ? totalComissao.toLocaleString('pt-PT', { maximumFractionDigits: 2 }) : '—'}
+                              </div>
+                              {attempted && totalComissao <= 0 && (
                                 <p className="text-xs text-destructive">Comissão obrigatória</p>
                               )}
                             </div>
