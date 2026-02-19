@@ -250,13 +250,14 @@ export default function Leads() {
 
     // Intercept drops on won stages -> auto-create client
     if (isWonStage(newStatus) && lead) {
-      const existingClient = clients.find(c => c.lead_id === leadId);
+      const existingClient = clients.find(c => c.lead_id === leadId || (lead.company_nif && c.company_nif === lead.company_nif));
       if (!existingClient) {
         convertLeadToClient.mutate({
           lead_id: leadId,
           name: lead.name,
           email: lead.email,
           phone: lead.phone,
+          company_nif: lead.company_nif || undefined,
           notes: lead.notes || undefined,
         }, {
           onSuccess: () => {

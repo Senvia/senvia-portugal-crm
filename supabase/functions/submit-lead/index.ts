@@ -6,6 +6,7 @@ const corsHeaders = {
 };
 
 interface LeadSubmission {
+  company_nif?: string | null;
   name?: string | null;
   email?: string | null;
   phone?: string | null;
@@ -193,6 +194,7 @@ Deno.serve(async (req) => {
         organization_id: org.id,
         form_id: body.form_id || null,
         assigned_to: formSettings.assigned_to || null,
+        company_nif: body.company_nif?.trim() || null,
         name: body.name?.trim() || 'Anónimo',
         email: body.email?.trim()?.toLowerCase() || 'nao-fornecido@placeholder.local',
         phone: cleanPhone || '000000000',

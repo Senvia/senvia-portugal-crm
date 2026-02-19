@@ -1465,6 +1465,7 @@ export type Database = {
         Row: {
           assigned_to: string | null
           automation_enabled: boolean
+          company_nif: string | null
           consumo_anual: number | null
           created_at: string | null
           custom_data: Json | null
@@ -1486,6 +1487,7 @@ export type Database = {
         Insert: {
           assigned_to?: string | null
           automation_enabled?: boolean
+          company_nif?: string | null
           consumo_anual?: number | null
           created_at?: string | null
           custom_data?: Json | null
@@ -1507,6 +1509,7 @@ export type Database = {
         Update: {
           assigned_to?: string | null
           automation_enabled?: boolean
+          company_nif?: string | null
           consumo_anual?: number | null
           created_at?: string | null
           custom_data?: Json | null

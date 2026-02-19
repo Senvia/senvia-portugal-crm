@@ -20,6 +20,7 @@ import {
 import { Sparkles, CheckCircle2, Loader2 } from "lucide-react";
 
 const leadFormSchema = z.object({
+  company_nif: z.string().trim().min(1, "O NIF da empresa é obrigatório"),
   name: z.string().trim().min(2, "O nome deve ter pelo menos 2 caracteres").max(100, "O nome não pode exceder 100 caracteres"),
   email: z.string().trim().email("Por favor, insira um email válido").max(255, "O email não pode exceder 255 caracteres"),
   phone: z.string().trim().min(9, "Por favor, insira um número de telefone válido").max(20, "Número de telefone inválido"),
@@ -43,6 +44,7 @@ export function PublicLeadForm({ organizationName = "Senvia OS", onSubmit }: Pub
   const form = useForm<LeadFormValues>({
     resolver: zodResolver(leadFormSchema),
     defaultValues: {
+      company_nif: "",
       name: "",
       email: "",
       phone: "",
@@ -104,6 +106,20 @@ export function PublicLeadForm({ organizationName = "Senvia OS", onSubmit }: Pub
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
+          <FormField
+            control={form.control}
+            name="company_nif"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>NIF Empresa *</FormLabel>
+                <FormControl>
+                  <Input placeholder="123456789" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
           <FormField
             control={form.control}
             name="name"
