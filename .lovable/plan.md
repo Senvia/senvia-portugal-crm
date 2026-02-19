@@ -1,23 +1,61 @@
 
 
-# Corrigir Dropdown de Estado no Modal de Detalhes do Lead
+# Corrigir Criacao de Agendamento ao Marcar Lead como Perdido
 
-## Problema
-O seletor de "Estado" no modal de detalhes do lead usa uma lista fixa de estados (`STATUS_LABELS`) com apenas 6 opcoes: Novo, Contactado, Agendado, Proposta, Ganho, Perdido. No entanto, o pipeline e dinamico (configurado por organizacao na tabela `pipeline_stages`) e pode ter estados adicionais como "Instalacao" ou "Ativo". Quando o lead tem um desses estados dinamicos, o Select fica vazio porque nao encontra correspondencia.
+## Problema Identificado
+Ao analisar o codigo em detalhe, o fluxo de criacao de evento quando um lead e marcado como "Perdido" esta a depender de uma condicao desnecessaria (`data.scheduleFollowUp && data.followUpDate`) em `Leads.tsx` linha 282. Embora o `LostLeadDialog` envie sempre `scheduleFollowUp: true`, esta condicao pode falhar em cenarios edge-case. Alem disso, o hook `useCreateEvent` atualiza o status do lead para `scheduled` apos criar o evento, o que conflita com o status `lost` ja definido -- podendo causar erros silenciosos.
 
 ## Solucao
-Alterar o `LeadDetailsModal` para usar as etapas dinamicas do pipeline (`usePipelineStages`) em vez do `STATUS_LABELS` hardcoded.
 
-## Alteracoes
+### 1. `src/pages/Leads.tsx` - Simplificar condicao e corrigir conflito de status
 
-### Ficheiro: `src/components/leads/LeadDetailsModal.tsx`
+**Remover a condicao `data.scheduleFollowUp`** -- como o agendamento e agora obrigatorio, basta verificar se `followUpDate` existe (o que ja e garantido pela validacao do dialog).
 
-1. Importar o hook `usePipelineStages`
-2. Chamar `usePipelineStages()` dentro do componente para obter as etapas reais
-3. Substituir o `Object.entries(STATUS_LABELS).map(...)` pelo mapeamento das etapas dinamicas: `stages?.map(stage => ...)` usando `stage.key` como value e `stage.name` como label
-4. Manter o `STATUS_LABELS` como fallback caso as etapas ainda nao tenham carregado
+**Criar o evento SEM `lead_id`** no `createEvent.mutate` para evitar que o hook altere o status do lead para `scheduled`. Em vez disso, inserir o evento diretamente com o Supabase client para ter controlo total:
 
-### Resultado
-- 1 ficheiro alterado
+```typescript
+// Substituir createEvent.mutate por insercao direta
+const followUpDate = new Date(`${data.followUpDate}T${data.followUpTime}:00`);
+
+// Inserir evento diretamente (sem alterar status do lead)
+supabase
+  .from('calendar_events')
+  .insert({
+    title: `Recontacto: ${pendingLead.name}`,
+    description: `Follow-up de lead perdido (${reasonLabel}). ${data.notes || ""}`.trim(),
+    event_type: data.eventType,
+    start_time: followUpDate.toISOString(),
+    lead_id: pendingLead.id,
+    user_id: user.id,
+    organization_id: organization.id,
+  })
+  .select()
+  .single()
+  .then(({ error }) => {
+    if (error) {
+      toast.error('Erro ao criar agendamento de recontacto');
+      console.error('Error creating follow-up event:', error);
+    } else {
+      toast.success('Recontacto agendado com sucesso');
+      queryClient.invalidateQueries({ queryKey: ['calendar-events'] });
+      queryClient.invalidateQueries({ queryKey: ['lead-events'] });
+    }
+  });
+```
+
+### 2. `src/pages/Leads.tsx` - Importacoes necessarias
+
+- Importar `supabase` de `@/integrations/supabase/client`
+- Importar `useQueryClient` de `@tanstack/react-query`
+- Importar `toast` de `sonner`
+
+### 3. Remover dependencia do `useCreateEvent` para este fluxo
+
+O `useCreateEvent` continua a ser usado para criar eventos normais (quando o lead vai para "Agendado"). Apenas para o fluxo de "Perdido", usamos insercao direta para evitar o conflito de status.
+
+## Resumo
+- 1 ficheiro alterado (`src/pages/Leads.tsx`)
 - 0 alteracoes de base de dados
-- O dropdown de estado mostra sempre as etapas corretas do pipeline da organizacao
+- O evento de recontacto e criado diretamente, sem passar pelo hook que altera o status do lead
+- O lead mantem-se como "Perdido" sem conflito
+- Toast de sucesso/erro para feedback visual ao utilizador
