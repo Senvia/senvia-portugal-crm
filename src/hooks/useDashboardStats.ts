@@ -15,7 +15,7 @@ export function useDashboardStats() {
 
     // === VENDAS ===
     const deliveredSales = sales.filter(s => s.status === 'delivered');
-    const activeSales = sales.filter(s => s.status === 'in_progress');
+    const activeSales = sales.filter(s => s.status === 'in_progress' || s.status === 'fulfilled');
     
     // Trend data for delivered sales (last 7 days)
     const deliveredTrend = last7Days.map(day => {

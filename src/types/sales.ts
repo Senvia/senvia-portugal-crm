@@ -1,5 +1,5 @@
 export type NegotiationType = 'angariacao' | 'angariacao_indexado' | 'renovacao' | 'sem_volume';
-export type SaleStatus = 'in_progress' | 'delivered' | 'cancelled';
+export type SaleStatus = 'in_progress' | 'fulfilled' | 'delivered' | 'cancelled';
 export type PaymentMethod = 'mbway' | 'transfer' | 'cash' | 'card' | 'check' | 'other';
 export type PaymentStatus = 'pending' | 'partial' | 'paid';
 export type ProposalType = 'energia' | 'servicos';
@@ -7,17 +7,19 @@ export type ModeloServico = 'transacional' | 'saas';
 
 export const SALE_STATUS_LABELS: Record<SaleStatus, string> = {
   in_progress: 'Em Progresso',
+  fulfilled: 'Entregue',
   delivered: 'Concluída',
   cancelled: 'Cancelado',
 };
 
 export const SALE_STATUS_COLORS: Record<SaleStatus, string> = {
   in_progress: 'bg-blue-500/20 text-blue-500 border-blue-500/30',
+  fulfilled: 'bg-purple-500/20 text-purple-500 border-purple-500/30',
   delivered: 'bg-green-500/20 text-green-500 border-green-500/30',
   cancelled: 'bg-red-500/20 text-red-500 border-red-500/30',
 };
 
-export const SALE_STATUSES: SaleStatus[] = ['in_progress', 'delivered', 'cancelled'];
+export const SALE_STATUSES: SaleStatus[] = ['in_progress', 'fulfilled', 'delivered', 'cancelled'];
 
 export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   mbway: 'MB Way',

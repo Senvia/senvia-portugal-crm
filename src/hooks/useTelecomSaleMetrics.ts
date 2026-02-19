@@ -24,7 +24,7 @@ export function useTelecomSaleMetrics() {
         .filter(s => s.proposal_type === 'servicos')
         .reduce((sum, s) => sum + (Number(s.kwp) || 0), 0);
 
-      const delivered = sales.filter(s => s.status === 'delivered');
+      const delivered = sales.filter(s => s.status === 'delivered' || s.status === 'fulfilled');
       const deliveredMWh = delivered.reduce((sum, s) => sum + (Number(s.consumo_anual) || 0), 0) / 1000;
       const deliveredKWp = delivered
         .filter(s => s.proposal_type === 'servicos')
