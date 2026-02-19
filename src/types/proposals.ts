@@ -49,6 +49,7 @@ export interface Proposal {
   modelo_servico?: ModeloServico | null;
   kwp?: number | null;
   servicos_produtos?: string[] | null; // Fixed products checkboxes
+  servicos_details?: ServicosDetails | null; // Per-product details JSONB
   
   // Comum
   comissao?: number | null;
@@ -125,3 +126,36 @@ export const SERVICOS_PRODUCTS = [
   'Condensadores',
   'Coberturas',
 ];
+
+// Detalhes por produto de serviço
+export interface ServicosProductDetail {
+  duracao?: number;
+  valor?: number;
+  kwp?: number;
+}
+
+export type ServicosDetails = Record<string, ServicosProductDetail>;
+
+// Config de campos por produto
+export interface ServicosProductConfig {
+  name: string;
+  fields: ('duracao' | 'valor' | 'kwp')[];
+  kwpAuto?: (detail: ServicosProductDetail) => number | null;
+}
+
+export const SERVICOS_PRODUCT_CONFIGS: ServicosProductConfig[] = [
+  { name: 'Solar', fields: ['duracao', 'kwp'] },
+  { name: 'Carregadores/Baterias', fields: ['kwp'] },
+  { 
+    name: 'Condensadores', 
+    fields: ['duracao', 'valor', 'kwp'],
+    kwpAuto: (d) => d.valor ? (d.valor / 0.67) / 1000 : null,
+  },
+  { name: 'Coberturas', fields: ['valor', 'kwp'] },
+];
+
+export const FIELD_LABELS: Record<string, string> = {
+  duracao: 'Duração (anos)',
+  valor: 'Valor (€)',
+  kwp: 'kWp',
+};

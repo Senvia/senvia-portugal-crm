@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SearchableCombobox, type ComboboxOption } from '@/components/ui/searchable-combobox';
 import { Separator } from '@/components/ui/separator';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+
 
 import { Checkbox } from '@/components/ui/checkbox';
 import { useUpdateProposal, useProposalProducts, useUpdateProposalProducts } from '@/hooks/useProposals';
@@ -25,6 +25,9 @@ import {
   NEGOTIATION_TYPE_LABELS,
   NEGOTIATION_TYPES,
   SERVICOS_PRODUCTS,
+  SERVICOS_PRODUCT_CONFIGS,
+  FIELD_LABELS,
+  type ServicosDetails,
   type ProposalStatus, 
   type ProposalType,
   type ModeloServico,
@@ -63,6 +66,7 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
   const [kwp, setKwp] = useState<string>('');
   const [servicosComissao, setServicosComissao] = useState<string>('');
   const [servicosProdutos, setServicosProdutos] = useState<string[]>([]);
+  const [servicosDetails, setServicosDetails] = useState<ServicosDetails>({});
   
   const [proposalCpes, setProposalCpes] = useState<ProposalCpeDraft[]>([]);
   
@@ -90,6 +94,7 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
       setKwp(proposal.kwp?.toString() || '');
       setServicosComissao(proposal.comissao?.toString() || '');
       setServicosProdutos(proposal.servicos_produtos || []);
+      setServicosDetails((proposal as any).servicos_details || {});
       
       if (!isTelecom && existingProducts.length > 0) {
         setSelectedProducts(existingProducts.map(pp => ({
@@ -168,8 +173,25 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
       setServicosProdutos(prev => [...prev, produto]);
     } else {
       setServicosProdutos(prev => prev.filter(p => p !== produto));
+      setServicosDetails(d => { const n = { ...d }; delete n[produto]; return n; });
     }
   };
+
+  const handleUpdateProductDetail = (produto: string, field: string, value: number | undefined) => {
+    setServicosDetails(prev => {
+      const detail = { ...prev[produto], [field]: value };
+      const config = SERVICOS_PRODUCT_CONFIGS.find(c => c.name === produto);
+      if (config?.kwpAuto && field !== 'kwp') {
+        const autoKwp = config.kwpAuto(detail);
+        if (autoKwp !== null) detail.kwp = Math.round(autoKwp * 100) / 100;
+      }
+      return { ...prev, [produto]: detail };
+    });
+  };
+
+  const totalKwp = useMemo(() => {
+    return Object.values(servicosDetails).reduce((sum, d) => sum + (d.kwp || 0), 0);
+  }, [servicosDetails]);
 
   const handleAddProduct = (productId: string) => {
     const product = products.find(p => p.id === productId);
@@ -246,9 +268,10 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
       dbl: null,
       anos_contrato: null,
       modelo_servico: proposalType === 'servicos' ? modeloServico : null,
-      kwp: proposalType === 'servicos' ? (parseFloat(kwp) || null) : null,
+      kwp: proposalType === 'servicos' ? (totalKwp || null) : null,
       comissao: proposalType === 'servicos' ? (parseFloat(servicosComissao) || null) : null,
       servicos_produtos: proposalType === 'servicos' ? servicosProdutos : null,
+      servicos_details: proposalType === 'servicos' && Object.keys(servicosDetails).length > 0 ? servicosDetails : null,
     });
 
     if (isTelecom && proposalType === 'energia') {
@@ -448,67 +471,89 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
                   {isTelecom && proposalType === 'servicos' && (
                     <Card>
                       <CardContent className="p-4">
-                        <div className="space-y-4 p-4 rounded-lg border bg-blue-50/50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800">
-                          <div className="flex items-center gap-2 text-blue-700 dark:text-blue-400">
+                        <div className="space-y-4 p-4 rounded-lg border bg-secondary/30 border-border">
+                          <div className="flex items-center gap-2 text-foreground">
                             <Wrench className="h-4 w-4" />
-                            <span className="font-medium text-sm">Dados do Serviço</span>
+                            <span className="font-medium text-sm">Outros Serviços</span>
                           </div>
-                          
-                          <div className="space-y-2">
-                            <Label className="text-xs">Produtos</Label>
-                            <div className="grid grid-cols-2 gap-2">
-                              {SERVICOS_PRODUCTS.map((produto) => (
-                                <div key={produto} className="flex items-center space-x-2">
-                                  <Checkbox
-                                    id={`edit-produto-${produto}`}
-                                    checked={servicosProdutos.includes(produto)}
-                                    onCheckedChange={(checked) => handleServicosProdutoToggle(produto, !!checked)}
-                                  />
-                                  <Label 
-                                    htmlFor={`edit-produto-${produto}`} 
-                                    className="text-sm cursor-pointer"
-                                  >
-                                    {produto}
-                                  </Label>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                          
+
+                          {/* Modelo de Serviço PRIMEIRO */}
                           <div className="space-y-2">
                             <Label className="text-xs">Modelo de Serviço</Label>
-                            <RadioGroup
-                              value={modeloServico}
-                              onValueChange={(v) => setModeloServico(v as ModeloServico)}
-                              className="flex gap-4"
-                            >
-                              <div className="flex items-center space-x-2">
-                                <RadioGroupItem value="transacional" id="edit-transacional" />
-                                <Label htmlFor="edit-transacional" className="cursor-pointer text-sm">Transacional</Label>
-                              </div>
-                              <div className="flex items-center space-x-2">
-                                <RadioGroupItem value="saas" id="edit-saas" />
-                                <Label htmlFor="edit-saas" className="cursor-pointer text-sm">SAAS</Label>
-                              </div>
-                            </RadioGroup>
-                          </div>
-                          
-                          <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-1">
-                              <Label htmlFor="edit-kwp" className="text-xs">Potência (kWp)</Label>
-                              <Input
-                                id="edit-kwp"
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                value={kwp}
-                                onChange={(e) => setKwp(e.target.value)}
-                                placeholder="Ex: 6.5"
+                            <div className="grid grid-cols-2 gap-2">
+                              <Button
+                                type="button"
+                                variant={modeloServico === 'transacional' ? 'default' : 'outline'}
+                                size="sm"
                                 className="h-9"
-                              />
+                                onClick={() => setModeloServico('transacional')}
+                              >
+                                Transacional
+                              </Button>
+                              <Button
+                                type="button"
+                                variant={modeloServico === 'saas' ? 'default' : 'outline'}
+                                size="sm"
+                                className="h-9"
+                                onClick={() => setModeloServico('saas')}
+                              >
+                                SAAS
+                              </Button>
+                            </div>
+                          </div>
+
+                          {/* Produtos em linha */}
+                          <div className="space-y-3">
+                            <Label className="text-xs">Produtos</Label>
+                            {SERVICOS_PRODUCT_CONFIGS.map((config) => {
+                              const isActive = servicosProdutos.includes(config.name);
+                              const detail = servicosDetails[config.name] || {};
+                              return (
+                                <div key={config.name} className="space-y-2">
+                                  <div className="flex items-center space-x-2">
+                                    <Checkbox
+                                      id={`edit-produto-${config.name}`}
+                                      checked={isActive}
+                                      onCheckedChange={(checked) => handleServicosProdutoToggle(config.name, !!checked)}
+                                    />
+                                    <Label htmlFor={`edit-produto-${config.name}`} className="text-sm cursor-pointer font-medium">
+                                      {config.name}
+                                    </Label>
+                                  </div>
+                                  {isActive && (
+                                    <div className="ml-6 flex flex-wrap gap-2">
+                                      {config.fields.map((field) => (
+                                        <div key={field} className="space-y-1 min-w-[100px] flex-1">
+                                          <Label className="text-xs text-muted-foreground">{FIELD_LABELS[field]}</Label>
+                                          <Input
+                                            type="number"
+                                            step="0.01"
+                                            min="0"
+                                            value={detail[field] ?? ''}
+                                            onChange={(e) => handleUpdateProductDetail(config.name, field, e.target.value ? parseFloat(e.target.value) : undefined)}
+                                            placeholder={field === 'kwp' && config.kwpAuto ? 'Auto' : '0'}
+                                            className="h-8"
+                                            readOnly={field === 'kwp' && !!config.kwpAuto && detail.valor !== undefined}
+                                          />
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {/* Comissão + kWp total */}
+                          <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border/50">
+                            <div className="space-y-1">
+                              <Label className="text-xs text-muted-foreground">kWp Total</Label>
+                              <div className="h-8 flex items-center text-sm font-medium px-3 rounded-md bg-muted">
+                                {totalKwp ? totalKwp.toLocaleString('pt-PT', { maximumFractionDigits: 2 }) : '—'}
+                              </div>
                             </div>
                             <div className="space-y-1">
-                              <Label htmlFor="edit-comissao-servicos" className="text-xs">Comissão (€)</Label>
+                              <Label htmlFor="edit-comissao-servicos" className="text-xs text-muted-foreground">Comissão (€)</Label>
                               <Input
                                 id="edit-comissao-servicos"
                                 type="number"
@@ -517,7 +562,7 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
                                 value={servicosComissao}
                                 onChange={(e) => setServicosComissao(e.target.value)}
                                 placeholder="Ex: 250"
-                                className="h-9"
+                                className="h-8"
                               />
                             </div>
                           </div>

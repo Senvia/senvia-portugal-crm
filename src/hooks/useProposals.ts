@@ -120,6 +120,7 @@ interface CreateProposalData {
   modelo_servico?: 'transacional' | 'saas';
   kwp?: number;
   servicos_produtos?: string[];
+  servicos_details?: Record<string, any>;
   
   // Comum
   comissao?: number;
@@ -171,6 +172,7 @@ export function useCreateProposal() {
           kwp: data.kwp || null,
           comissao: data.comissao || null,
           servicos_produtos: data.servicos_produtos || null,
+          servicos_details: data.servicos_details || null,
         })
         .select(`
           *,
@@ -227,6 +229,7 @@ interface UpdateProposalData {
   kwp?: number | null;
   comissao?: number | null;
   servicos_produtos?: string[] | null;
+  servicos_details?: Record<string, any> | null;
 }
 
 export function useUpdateProposal() {

@@ -2518,6 +2518,7 @@ export type Database = {
           organization_id: string
           proposal_date: string | null
           proposal_type: string | null
+          servicos_details: Json | null
           servicos_produtos: string[] | null
           status: string
           total_value: number
@@ -2542,6 +2543,7 @@ export type Database = {
           organization_id: string
           proposal_date?: string | null
           proposal_type?: string | null
+          servicos_details?: Json | null
           servicos_produtos?: string[] | null
           status?: string
           total_value?: number
@@ -2566,6 +2568,7 @@ export type Database = {
           organization_id?: string
           proposal_date?: string | null
           proposal_type?: string | null
+          servicos_details?: Json | null
           servicos_produtos?: string[] | null
           status?: string
           total_value?: number

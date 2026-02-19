@@ -26,8 +26,13 @@ import {
   NEGOTIATION_TYPE_LABELS,
   NEGOTIATION_TYPES,
   SERVICOS_PRODUCTS,
+  SERVICOS_PRODUCT_CONFIGS,
+  FIELD_LABELS,
+  type ServicosDetails,
+  type ServicosProductDetail,
   type ProposalStatus, 
   type ProposalType,
+  type ModeloServico,
   type NegotiationType,
   type Proposal 
 } from '@/types/proposals';
@@ -58,9 +63,10 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
   const [proposalType, setProposalType] = useState<ProposalType>('energia');
   const [negotiationType, setNegotiationType] = useState<NegotiationType>('angariacao');
   
-  const [kwp, setKwp] = useState<string>('');
+  const [modeloServico, setModeloServico] = useState<ModeloServico>('transacional');
   const [comissaoServicos, setComissaoServicos] = useState<string>('');
   const [servicosProdutos, setServicosProdutos] = useState<string[]>([]);
+  const [servicosDetails, setServicosDetails] = useState<ServicosDetails>({});
   
   const [proposalCpes, setProposalCpes] = useState<ProposalCpeDraft[]>([]);
   
@@ -116,12 +122,32 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
   };
 
   const handleToggleServicoProduto = (produto: string) => {
-    setServicosProdutos(prev => 
-      prev.includes(produto) 
-        ? prev.filter(p => p !== produto)
-        : [...prev, produto]
-    );
+    setServicosProdutos(prev => {
+      if (prev.includes(produto)) {
+        // Remove details when unchecking
+        setServicosDetails(d => { const n = { ...d }; delete n[produto]; return n; });
+        return prev.filter(p => p !== produto);
+      }
+      return [...prev, produto];
+    });
   };
+
+  const handleUpdateProductDetail = (produto: string, field: string, value: number | undefined) => {
+    setServicosDetails(prev => {
+      const detail = { ...prev[produto], [field]: value };
+      // Auto-calc kWp for Condensadores
+      const config = SERVICOS_PRODUCT_CONFIGS.find(c => c.name === produto);
+      if (config?.kwpAuto && field !== 'kwp') {
+        const autoKwp = config.kwpAuto(detail);
+        if (autoKwp !== null) detail.kwp = Math.round(autoKwp * 100) / 100;
+      }
+      return { ...prev, [produto]: detail };
+    });
+  };
+
+  const totalKwp = useMemo(() => {
+    return Object.values(servicosDetails).reduce((sum, d) => sum + (d.kwp || 0), 0);
+  }, [servicosDetails]);
 
   const handleAddProduct = (productId: string) => {
     const product = products.find(p => p.id === productId);
@@ -194,9 +220,11 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
       products: [],
       proposal_type: proposalType,
       negotiation_type: isTelecom ? negotiationType : undefined,
-      kwp: proposalType === 'servicos' ? (parseFloat(kwp) || undefined) : undefined,
+      kwp: proposalType === 'servicos' ? (totalKwp || undefined) : undefined,
+      modelo_servico: proposalType === 'servicos' ? modeloServico : undefined,
       comissao: totalComissao || undefined,
       servicos_produtos: proposalType === 'servicos' && servicosProdutos.length > 0 ? servicosProdutos : undefined,
+      servicos_details: proposalType === 'servicos' && Object.keys(servicosDetails).length > 0 ? servicosDetails : undefined,
     }, {
       onSuccess: async (createdProposal) => {
         if (proposalCpes.length > 0 && createdProposal?.id) {
@@ -228,9 +256,10 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
         setProposalCpes([]);
         setProposalType('energia');
         setNegotiationType('angariacao');
-        setKwp('');
+        setModeloServico('transacional');
         setComissaoServicos('');
         setServicosProdutos([]);
+        setServicosDetails({});
         setSelectedProducts([]);
         
         onOpenChange(false);
@@ -398,45 +427,86 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
                         <div className="space-y-4 p-4 rounded-lg border bg-secondary/30 border-border">
                           <div className="flex items-center gap-2 text-foreground">
                             <Wrench className="h-4 w-4" />
-                            <span className="font-medium text-sm">Dados do Serviço</span>
+                            <span className="font-medium text-sm">Outros Serviços</span>
                           </div>
-                          
+
+                          {/* Modelo de Serviço PRIMEIRO */}
                           <div className="space-y-2">
-                            <Label className="text-sm">Produtos</Label>
+                            <Label className="text-sm">Modelo de Serviço</Label>
                             <div className="grid grid-cols-2 gap-2">
-                              {SERVICOS_PRODUCTS.map((produto) => (
-                                <div key={produto} className="flex items-center space-x-2">
-                                  <Checkbox
-                                    id={`produto-${produto}`}
-                                    checked={servicosProdutos.includes(produto)}
-                                    onCheckedChange={() => handleToggleServicoProduto(produto)}
-                                  />
-                                  <Label 
-                                    htmlFor={`produto-${produto}`} 
-                                    className="text-sm cursor-pointer"
-                                  >
-                                    {produto}
-                                  </Label>
-                                </div>
-                              ))}
+                              <Button
+                                type="button"
+                                variant={modeloServico === 'transacional' ? 'default' : 'outline'}
+                                size="sm"
+                                className="h-9"
+                                onClick={() => setModeloServico('transacional')}
+                              >
+                                Transacional
+                              </Button>
+                              <Button
+                                type="button"
+                                variant={modeloServico === 'saas' ? 'default' : 'outline'}
+                                size="sm"
+                                className="h-9"
+                                onClick={() => setModeloServico('saas')}
+                              >
+                                SAAS
+                              </Button>
                             </div>
                           </div>
-                          
-                          <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-2">
-                              <Label htmlFor="kwp">Potência (kWp)</Label>
-                              <Input
-                                id="kwp"
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                value={kwp}
-                                onChange={(e) => setKwp(e.target.value)}
-                                placeholder="Ex: 6.5"
-                              />
+
+                          {/* Produtos em linha */}
+                          <div className="space-y-3">
+                            <Label className="text-sm">Produtos</Label>
+                            {SERVICOS_PRODUCT_CONFIGS.map((config) => {
+                              const isActive = servicosProdutos.includes(config.name);
+                              const detail = servicosDetails[config.name] || {};
+                              return (
+                                <div key={config.name} className="space-y-2">
+                                  <div className="flex items-center space-x-2">
+                                    <Checkbox
+                                      id={`produto-${config.name}`}
+                                      checked={isActive}
+                                      onCheckedChange={() => handleToggleServicoProduto(config.name)}
+                                    />
+                                    <Label htmlFor={`produto-${config.name}`} className="text-sm cursor-pointer font-medium">
+                                      {config.name}
+                                    </Label>
+                                  </div>
+                                  {isActive && (
+                                    <div className="ml-6 flex flex-wrap gap-2">
+                                      {config.fields.map((field) => (
+                                        <div key={field} className="space-y-1 min-w-[100px] flex-1">
+                                          <Label className="text-xs text-muted-foreground">{FIELD_LABELS[field]}</Label>
+                                          <Input
+                                            type="number"
+                                            step="0.01"
+                                            min="0"
+                                            value={detail[field] ?? ''}
+                                            onChange={(e) => handleUpdateProductDetail(config.name, field, e.target.value ? parseFloat(e.target.value) : undefined)}
+                                            placeholder={field === 'kwp' && config.kwpAuto ? 'Auto' : '0'}
+                                            className="h-8"
+                                            readOnly={field === 'kwp' && !!config.kwpAuto && detail.valor !== undefined}
+                                          />
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {/* Comissão + kWp total */}
+                          <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border/50">
+                            <div className="space-y-1">
+                              <Label className="text-xs text-muted-foreground">kWp Total</Label>
+                              <div className="h-8 flex items-center text-sm font-medium px-3 rounded-md bg-muted">
+                                {totalKwp ? totalKwp.toLocaleString('pt-PT', { maximumFractionDigits: 2 }) : '—'}
+                              </div>
                             </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="comissao-servicos">Comissão (€)</Label>
+                            <div className="space-y-1">
+                              <Label htmlFor="comissao-servicos" className="text-xs text-muted-foreground">Comissão (€)</Label>
                               <Input
                                 id="comissao-servicos"
                                 type="number"
@@ -445,6 +515,7 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
                                 value={comissaoServicos}
                                 onChange={(e) => setComissaoServicos(e.target.value)}
                                 placeholder="Ex: 500"
+                                className="h-8"
                               />
                             </div>
                           </div>
