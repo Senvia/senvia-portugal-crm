@@ -1,61 +1,77 @@
 
+# Auto-preencher Lead com dados de Cliente existente
 
-# Corrigir Criacao de Agendamento ao Marcar Lead como Perdido
+## Objetivo
+Ao criar uma lead manualmente, quando o utilizador preenche o email ou telefone, o sistema verifica se ja existe um cliente (`crm_clients`) com esses dados e, se sim, preenche automaticamente os campos restantes (nome, email, telefone, notas) e mostra um aviso visual.
 
-## Problema Identificado
-Ao analisar o codigo em detalhe, o fluxo de criacao de evento quando um lead e marcado como "Perdido" esta a depender de uma condicao desnecessaria (`data.scheduleFollowUp && data.followUpDate`) em `Leads.tsx` linha 282. Embora o `LostLeadDialog` envie sempre `scheduleFollowUp: true`, esta condicao pode falhar em cenarios edge-case. Alem disso, o hook `useCreateEvent` atualiza o status do lead para `scheduled` apos criar o evento, o que conflita com o status `lost` ja definido -- podendo causar erros silenciosos.
+## Como funciona
 
-## Solucao
+1. O utilizador comeca a preencher o campo **email** ou **telefone**
+2. Ao sair do campo (on blur), o sistema faz uma pesquisa na tabela `crm_clients` por email ou telefone correspondente
+3. Se encontrar um cliente existente:
+   - Mostra um banner informativo: "Cliente existente encontrado: [Nome]"
+   - Preenche automaticamente os campos vazios (nome, email, telefone, notas)
+   - O utilizador pode editar qualquer campo preenchido
+4. Se nao encontrar, nada muda
 
-### 1. `src/pages/Leads.tsx` - Simplificar condicao e corrigir conflito de status
+## Alteracoes
 
-**Remover a condicao `data.scheduleFollowUp`** -- como o agendamento e agora obrigatorio, basta verificar se `followUpDate` existe (o que ja e garantido pela validacao do dialog).
+### Ficheiro: `src/components/leads/AddLeadModal.tsx`
 
-**Criar o evento SEM `lead_id`** no `createEvent.mutate` para evitar que o hook altere o status do lead para `scheduled`. Em vez disso, inserir o evento diretamente com o Supabase client para ter controlo total:
+1. **Importar** `supabase` e `useAuth` (ja importado) para fazer a pesquisa
+2. **Adicionar estado** `matchedClient` para guardar o cliente encontrado e `isSearching` para loading
+3. **Criar funcao `searchClient`** que:
+   - Recebe email ou telefone
+   - Pesquisa na tabela `crm_clients` com `organization_id` filtrado
+   - Se encontrar, faz `form.setValue` nos campos vazios
+4. **Adicionar `onBlur`** nos campos de email e telefone para disparar a pesquisa
+5. **Mostrar banner** com icone e nome do cliente quando encontrado, com botao para limpar a associacao
 
-```typescript
-// Substituir createEvent.mutate por insercao direta
-const followUpDate = new Date(`${data.followUpDate}T${data.followUpTime}:00`);
+### Detalhe tecnico
 
-// Inserir evento diretamente (sem alterar status do lead)
-supabase
-  .from('calendar_events')
-  .insert({
-    title: `Recontacto: ${pendingLead.name}`,
-    description: `Follow-up de lead perdido (${reasonLabel}). ${data.notes || ""}`.trim(),
-    event_type: data.eventType,
-    start_time: followUpDate.toISOString(),
-    lead_id: pendingLead.id,
-    user_id: user.id,
-    organization_id: organization.id,
-  })
-  .select()
-  .single()
-  .then(({ error }) => {
-    if (error) {
-      toast.error('Erro ao criar agendamento de recontacto');
-      console.error('Error creating follow-up event:', error);
-    } else {
-      toast.success('Recontacto agendado com sucesso');
-      queryClient.invalidateQueries({ queryKey: ['calendar-events'] });
-      queryClient.invalidateQueries({ queryKey: ['lead-events'] });
-    }
-  });
+```
+Fluxo:
+  Email/Phone onBlur
+       |
+       v
+  Query crm_clients WHERE email = X OR phone = X
+       |
+       v
+  [Match found?]
+    Sim -> setValue(name, email, phone, notes) + mostrar banner
+    Nao -> nada
 ```
 
-### 2. `src/pages/Leads.tsx` - Importacoes necessarias
+**Nova funcao no componente:**
+```typescript
+const searchExistingClient = async (field: 'email' | 'phone', value: string) => {
+  if (!value || !organization?.id) return;
+  
+  const { data } = await supabase
+    .from('crm_clients')
+    .select('id, name, email, phone, notes')
+    .eq('organization_id', organization.id)
+    .eq(field, value)
+    .limit(1)
+    .maybeSingle();
+  
+  if (data) {
+    setMatchedClient(data);
+    // Auto-fill empty fields
+    if (!form.getValues('name')) form.setValue('name', data.name);
+    if (!form.getValues('email') && data.email) form.setValue('email', data.email);
+    if (!form.getValues('phone') && data.phone) form.setValue('phone', data.phone);
+  }
+};
+```
 
-- Importar `supabase` de `@/integrations/supabase/client`
-- Importar `useQueryClient` de `@tanstack/react-query`
-- Importar `toast` de `sonner`
+**Banner visual (acima dos campos do formulario):**
+- Fundo amarelo/amber suave com icone de utilizador
+- Texto: "Cliente existente: [Nome]"
+- Botao X para descartar a associacao
 
-### 3. Remover dependencia do `useCreateEvent` para este fluxo
-
-O `useCreateEvent` continua a ser usado para criar eventos normais (quando o lead vai para "Agendado"). Apenas para o fluxo de "Perdido", usamos insercao direta para evitar o conflito de status.
-
-## Resumo
-- 1 ficheiro alterado (`src/pages/Leads.tsx`)
+### Resultado
+- 1 ficheiro alterado (`src/components/leads/AddLeadModal.tsx`)
 - 0 alteracoes de base de dados
-- O evento de recontacto e criado diretamente, sem passar pelo hook que altera o status do lead
-- O lead mantem-se como "Perdido" sem conflito
-- Toast de sucesso/erro para feedback visual ao utilizador
+- A pesquisa usa os dados ja carregados ou faz query direta (mais preciso)
+- Nao bloqueia a criacao da lead - apenas preenche campos como sugestao
