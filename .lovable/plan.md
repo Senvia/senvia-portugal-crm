@@ -1,44 +1,28 @@
 
-
-# Bloquear Edicao de Vendas "Entregue" por Perfil
+# Ocultar Produtos/Servicos nas Vendas (Telecom)
 
 ## Resumo
-Adicionar uma nova regra em Definicoes > Vendas que bloqueia a edicao de vendas com estado "Entregue", semelhante ao bloqueio ja existente para vendas "Concluidas". Quando ativa, apenas administradores podem alterar vendas nesse estado.
-
-## Como funciona hoje
-Ja existe uma regra `lock_delivered_sales` que bloqueia vendas "Concluidas". O mecanismo e:
-- Toggle em Definicoes > Vendas
-- Quando ativo, o botao "Editar" desaparece e os campos ficam bloqueados
-- Admins continuam a poder alterar o estado
+No nicho telecom, a seccao "Produtos / Servicos" nas vendas nao e utilizada (a faturacao e externa). Vamos ocultar esta seccao nos 3 locais onde aparece: criacao, detalhes e edicao de vendas.
 
 ## O que muda
 
-### 1. Settings de Vendas (`SalesSettingsTab.tsx`)
-Adicionar um novo checkbox:
-- **"Bloquear edicao de vendas entregues"**
-- Descricao: "Vendas com estado 'Entregue' nao podem ser editadas por utilizadores sem perfil de administrador."
-- Nova propriedade: `lock_fulfilled_sales` no objeto `sales_settings`
+### 1. Modal de Criacao (`src/components/sales/CreateSaleModal.tsx`)
+- Envolver o bloco "Produtos / Servicos" (linhas ~870-973) com `{!isTelecom && (...)}`
+- A variavel `isTelecom` ja existe no componente (linha 114)
+- Para telecom, o valor total vem da proposta (CPEs/comissoes), nao de itens de produto
 
-### 2. Modal de Detalhes (`SaleDetailsModal.tsx`)
-- Adicionar logica `isFulfilledAndLocked` semelhante a `isDeliveredAndLocked`
-- Quando `lock_fulfilled_sales` esta ativo e o estado e `fulfilled`:
-  - Esconder botao "Editar" para nao-admins
-  - Bloquear alteracao de notas
-  - Manter possibilidade de ver detalhes e pagamentos
-  - Admins continuam com acesso total
+### 2. Modal de Detalhes (`src/components/sales/SaleDetailsModal.tsx`)
+- Envolver o bloco "Products/Services" (linhas ~559-588) com `{!isTelecom && saleItems.length > 0 && (...)}`
+- A variavel `isTelecom` ja existe no componente (linha 131)
 
-### 3. Modal de Edicao (`EditSaleModal.tsx`)
-- Verificar se a venda esta no estado `fulfilled` com lock ativo
-- Se sim, impedir abertura para nao-admins
+### 3. Modal de Edicao (`src/components/sales/EditSaleModal.tsx`)
+- Adicionar a variavel `isTelecom` (importando `useAuth` e verificando `organization?.niche`)
+- Envolver o bloco "Produtos/Servicos" (linha ~479) com `{!isTelecom && (...)}`
 
-### 4. Confirmacao de estado
-- Quando o utilizador muda o estado para "Entregue" e o lock esta ativo, mostrar dialogo de confirmacao (tal como ja acontece com "Concluida")
+### 4. Logica de submissao (CreateSaleModal)
+- Na submissao, saltar a criacao de `sale_items` quando `isTelecom` (ja que nao ha itens)
 
 ## Ficheiros alterados
-- `src/components/settings/SalesSettingsTab.tsx` (novo checkbox)
-- `src/components/sales/SaleDetailsModal.tsx` (logica de bloqueio)
-- `src/components/sales/EditSaleModal.tsx` (verificacao de acesso)
-
-## Sem alteracoes na base de dados
-O campo `sales_settings` ja e JSONB, basta adicionar a nova propriedade `lock_fulfilled_sales`.
-
+- `src/components/sales/CreateSaleModal.tsx`
+- `src/components/sales/SaleDetailsModal.tsx`
+- `src/components/sales/EditSaleModal.tsx`
