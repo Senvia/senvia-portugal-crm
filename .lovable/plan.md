@@ -1,44 +1,54 @@
 
-# Validacao na Criacao de Propostas "Outros Servicos"
+# Corrigir Validacao de Propostas (Todos os Tipos)
 
-## Resumo
-Adicionar validacao ao formulario de criacao de propostas do tipo "Outros Servicos" (telecom), impedindo a submissao sem os dados obrigatorios preenchidos.
+## Problema
+A validacao atual (`isFormValid`) so verifica propostas do tipo "servicos" em telecom. Para o tipo "energia" (o default), retorna sempre `true`, permitindo criar propostas completamente vazias (como a "0020").
 
-## Regras de Validacao
+## Solucao
 
-Para propostas do tipo **servicos** (telecom):
-1. **Pelo menos 1 produto** deve estar selecionado (checkbox ativo)
-2. **Modelo de Servico** deve ter um dos dois selecionados (Transacional ou SAAS) -- ja esta pre-selecionado por defeito como "transacional", por isso esta regra ja e cumprida
-3. **kWp total** deve ser maior que 0 (ou seja, pelo menos um produto com kWp preenchido)
-4. **Comissao** deve estar preenchida (maior que 0)
+Adicionar validacao para **todos os cenarios** no `CreateProposalModal.tsx`:
 
-## O que muda
+### Telecom - Energia
+- Pelo menos 1 CPE adicionado (`proposalCpes.length > 0`)
+- Valor total da proposta maior que 0 (margem dos CPEs)
 
-### `src/components/proposals/CreateProposalModal.tsx`
+### Telecom - Servicos (ja existe, manter)
+- Pelo menos 1 produto selecionado
+- kWp total > 0
+- Comissao > 0
 
-1. **Adicionar um `useMemo` de validacao** que calcula se o formulario esta valido:
-   - Se `proposalType === 'servicos'`: verificar que `servicosProdutos.length > 0`, `totalKwp > 0`, e `comissaoServicos` preenchido
-   - Se `proposalType === 'energia'`: manter logica atual (sem alteracao)
+### Non-Telecom (generico)
+- Pelo menos 1 produto selecionado OU valor total > 0
 
-2. **Desabilitar o botao "Criar Proposta"** quando a validacao falha (`disabled={!isValid || isPending}`)
+### Comum a todos
+- Cliente selecionado (obrigatorio em todos os cenarios)
 
-3. **Mostrar mensagens de erro inline** junto aos campos em falta (texto vermelho discreto), apenas apos a primeira tentativa de submissao (usando um estado `attempted`)
+## Alteracoes no codigo
 
-## Detalhes Tecnicos
+**Ficheiro:** `src/components/proposals/CreateProposalModal.tsx`
 
+1. Substituir a logica de validacao atual:
+
+```typescript
+const isEnergiaValid = useMemo(() => {
+  if (!isTelecom || proposalType !== 'energia') return true;
+  return proposalCpes.length > 0;
+}, [isTelecom, proposalType, proposalCpes]);
+
+const isGenericValid = useMemo(() => {
+  if (isTelecom) return true;
+  return selectedProducts.length > 0;
+}, [isTelecom, selectedProducts]);
+
+const isFormValid = isServicosValid && isEnergiaValid && isGenericValid && !!selectedClientId;
 ```
-isServicosValid = 
-  servicosProdutos.length > 0 
-  && totalKwp > 0 
-  && parseFloat(comissaoServicos) > 0
 
-isFormValid = 
-  isTelecom && proposalType === 'servicos' 
-    ? isServicosValid 
-    : true  // energia e non-telecom mantêm logica atual
-```
+2. Adicionar mensagens de erro inline para:
+   - Cliente nao selecionado: "Selecione um cliente"
+   - Energia sem CPEs: "Adicione pelo menos 1 CPE/CUI"
+   - Generico sem produtos: "Adicione pelo menos 1 produto"
 
-O botao fica desabilitado e com estilo visual (opacity) quando invalido. Ao clicar com dados em falta, mostra as mensagens de erro nos campos relevantes.
+3. O botao "Criar Proposta" fica desabilitado apos tentativa com dados em falta (logica `attempted` ja existente)
 
 ## Ficheiros alterados
 - `src/components/proposals/CreateProposalModal.tsx`
