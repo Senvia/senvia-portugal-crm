@@ -33,7 +33,7 @@ export function usePermissions() {
 
       const { data: profile } = await supabase
         .from('organization_profiles')
-        .select('module_permissions, data_scope')
+        .select('module_permissions, data_scope, dashboard_widgets')
         .eq('id', member.profile_id)
         .single();
       
@@ -41,6 +41,7 @@ export function usePermissions() {
       return {
         permissions: profile.module_permissions ? convertLegacyToGranular(profile.module_permissions) : null,
         dataScope: (profile as any).data_scope as string | null,
+        dashboardWidgets: (profile as any).dashboard_widgets as Array<{ type: string; is_visible: boolean }> | null,
       };
     },
     enabled: !!user?.id && !!organization?.id && !isSuperAdmin,
@@ -91,6 +92,7 @@ export function usePermissions() {
     isViewer,
     isSuperAdmin,
     dataScope,
+    profileDashboardWidgets: profileData?.dashboardWidgets ?? null,
   };
 }
 
