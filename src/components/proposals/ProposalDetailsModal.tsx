@@ -29,7 +29,10 @@ import {
   PROPOSAL_TYPE_LABELS, 
   MODELO_SERVICO_LABELS,
   NEGOTIATION_TYPE_LABELS,
-  type NegotiationType 
+  SERVICOS_PRODUCT_CONFIGS,
+  FIELD_LABELS,
+  type NegotiationType,
+  type ServicosDetails,
 } from '@/types/proposals';
 import type { Proposal, ProposalStatus, ProposalType } from '@/types/proposals';
 import { cn } from '@/lib/utils';
@@ -549,40 +552,58 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
                   {orgData?.niche === 'telecom' && proposal.proposal_type === 'servicos' && (
                     <Card>
                       <CardContent className="p-4">
-                        <div className="space-y-3 p-4 rounded-lg border bg-blue-50/50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800">
-                          <div className="flex items-center gap-2 text-blue-700 dark:text-blue-400">
+                        <div className="space-y-3 p-4 rounded-lg border bg-secondary/30 border-border">
+                          <div className="flex items-center gap-2 text-foreground">
                             <Wrench className="h-4 w-4" />
-                            <span className="font-medium text-sm">Dados do Serviço</span>
+                            <span className="font-medium text-sm">Outros Serviços</span>
                           </div>
-                          <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                            {proposal.servicos_produtos && proposal.servicos_produtos.length > 0 && (
-                              <div className="col-span-2">
-                                <span className="text-muted-foreground">Produtos:</span>
-                                <div className="flex flex-wrap gap-1 mt-1">
-                                  {proposal.servicos_produtos.map((prod) => (
-                                    <Badge key={prod} variant="secondary" className="text-xs">
-                                      {prod}
-                                    </Badge>
-                                  ))}
-                                </div>
+                          
+                          {proposal.modelo_servico && (
+                            <div className="text-sm">
+                              <span className="text-muted-foreground">Modelo:</span>
+                              <Badge variant="outline" className="ml-2">
+                                {MODELO_SERVICO_LABELS[proposal.modelo_servico as keyof typeof MODELO_SERVICO_LABELS] || proposal.modelo_servico}
+                              </Badge>
+                            </div>
+                          )}
+
+                          {/* Product details table */}
+                          {proposal.servicos_produtos && proposal.servicos_produtos.length > 0 && (() => {
+                            const details: ServicosDetails = (proposal as any).servicos_details || {};
+                            return (
+                              <div className="space-y-2">
+                                {proposal.servicos_produtos.map((prod) => {
+                                  const d = details[prod];
+                                  const config = SERVICOS_PRODUCT_CONFIGS.find(c => c.name === prod);
+                                  return (
+                                    <div key={prod} className="flex flex-wrap items-center gap-x-4 gap-y-1 p-2 rounded bg-muted/50 text-sm">
+                                      <span className="font-medium min-w-[140px]">{prod}</span>
+                                      {d && config?.fields.map(field => (
+                                        d[field] != null && (
+                                          <span key={field} className="text-muted-foreground">
+                                            {FIELD_LABELS[field]}: <span className="font-medium text-foreground">{Number(d[field]).toLocaleString('pt-PT', { maximumFractionDigits: 2 })}</span>
+                                          </span>
+                                        )
+                                      ))}
+                                      {!d && <span className="text-muted-foreground text-xs">(sem detalhes)</span>}
+                                    </div>
+                                  );
+                                })}
                               </div>
-                            )}
-                            {proposal.modelo_servico && (
+                            );
+                          })()}
+
+                          <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm pt-2 border-t border-border/50">
+                            {proposal.kwp != null && (
                               <div>
-                                <span className="text-muted-foreground">Modelo:</span>
-                                <span className="ml-2 font-medium">{MODELO_SERVICO_LABELS[proposal.modelo_servico as keyof typeof MODELO_SERVICO_LABELS] || proposal.modelo_servico}</span>
+                                <span className="text-muted-foreground">kWp Total:</span>
+                                <span className="ml-2 font-medium">{Number(proposal.kwp).toLocaleString('pt-PT', { maximumFractionDigits: 2 })}</span>
                               </div>
                             )}
-                            {proposal.kwp && (
+                            {proposal.comissao != null && (
                               <div>
-                                <span className="text-muted-foreground">Potência:</span>
-                                <span className="ml-2 font-medium">{proposal.kwp} kWp</span>
-                              </div>
-                            )}
-                            {proposal.comissao && (
-                              <div className="col-span-2">
                                 <span className="text-muted-foreground">Comissão:</span>
-                                <span className="ml-2 font-medium text-green-600 dark:text-green-400">{formatCurrency(proposal.comissao)}</span>
+                                <span className="ml-2 font-medium text-primary">{formatCurrency(proposal.comissao)}</span>
                               </div>
                             )}
                           </div>
