@@ -80,6 +80,18 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
     }
   }, [updateContratoInicio, updateDuracaoContrato]);
 
+  // Auto-calculate duracao when contrato_fim changes
+  useEffect(() => {
+    if (updateContratoInicio && updateContratoFim) {
+      const start = new Date(updateContratoInicio);
+      const end = new Date(updateContratoFim);
+      const days = (end.getTime() - start.getTime()) / 86400000;
+      if (days > 0) {
+        setUpdateDuracaoContrato((days / 365).toFixed(3));
+      }
+    }
+  }, [updateContratoFim]);
+
   const resetForm = () => {
     setSelectedExistingCpe(null);
     setUpdateConsumoAnual('');
@@ -149,6 +161,16 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
         if (years > 0) {
           start.setFullYear(start.getFullYear() + years);
           updated.contrato_fim = start.toISOString().split('T')[0];
+        }
+      }
+      // Auto-recalculate duracao_contrato when contrato_fim changes
+      if (field === 'contrato_fim' && updated.contrato_inicio && updated.contrato_fim) {
+        const start = new Date(updated.contrato_inicio);
+        const end = new Date(updated.contrato_fim);
+        const days = (end.getTime() - start.getTime()) / 86400000;
+        if (days > 0) {
+          updated.duracao_contrato = (days / 365).toFixed(3);
+          updated.margem = calculateMargem(updated.consumo_anual, updated.duracao_contrato, updated.dbl);
         }
       }
       return updated;
@@ -244,7 +266,10 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">Duração (anos)</Label>
+                  <Label className="text-xs flex items-center gap-1">
+                    <Calculator className="h-3 w-3" />
+                    Duração (anos)
+                  </Label>
                   <Input
                     type="number"
                     min="1"
@@ -308,8 +333,8 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
                   <Input
                     type="date"
                     value={cpe.contrato_fim}
-                    className="h-8 text-sm bg-muted"
-                    disabled
+                    onChange={(e) => handleUpdateCpeField(cpe.id, 'contrato_fim', e.target.value)}
+                    className="h-8 text-sm"
                   />
                 </div>
               </div>
@@ -400,13 +425,13 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
                       className="h-9"
                     />
                   </div>
-                  <div className="space-y-1">
+                   <div className="space-y-1">
                     <Label className="text-xs">Fim Contrato</Label>
                     <Input
                       type="date"
                       value={updateContratoFim}
-                      className="h-9 bg-muted"
-                      disabled
+                      onChange={(e) => setUpdateContratoFim(e.target.value)}
+                      className="h-9"
                     />
                   </div>
                 </div>
@@ -428,7 +453,10 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Duração (anos)</Label>
+                    <Label className="text-xs flex items-center gap-1">
+                      <Calculator className="h-3 w-3" />
+                      Duração (anos)
+                    </Label>
                     <Input
                       type="number"
                       min="1"
