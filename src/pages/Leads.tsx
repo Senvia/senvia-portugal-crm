@@ -16,7 +16,9 @@ import { BulkActionsBar } from "@/components/shared/BulkActionsBar";
 import { AssignTeamMemberModal } from "@/components/shared/AssignTeamMemberModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProposals } from "@/hooks/useProposals";
-import { useCalendarEvents, useCreateEvent } from "@/hooks/useCalendarEvents";
+import { useCalendarEvents } from "@/hooks/useCalendarEvents";
+import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
 import { usePipelineStages } from "@/hooks/usePipelineStages";
 import type { Proposal } from "@/types/proposals";
 import type { CalendarEvent } from "@/types/calendar";
@@ -41,7 +43,7 @@ export default function Leads() {
   // Subscribe to realtime updates
   useLeadsRealtime();
   useProposalsRealtime();
-  const { profile, organization } = useAuth();
+  const { user, profile, organization } = useAuth();
   const { data: leads = [], isLoading } = useLeads();
   const { data: proposals = [] } = useProposals();
   const { data: clients = [] } = useClients();
@@ -65,7 +67,7 @@ export default function Leads() {
   // Lost lead dialog state
   const [isLostDialogOpen, setIsLostDialogOpen] = useState(false);
   const [pendingLostStatus, setPendingLostStatus] = useState<{ leadId: string; status: string } | null>(null);
-  const createEvent = useCreateEvent();
+  const queryClient = useQueryClient();
   
   // New states for the chained client -> proposal flow
   const [isCreateClientModalOpen, setIsCreateClientModalOpen] = useState(false);
@@ -279,18 +281,33 @@ export default function Leads() {
     updateLead.mutate({ leadId: pendingLostStatus.leadId, updates: { notes: updatedNotes } });
 
     // Create follow-up calendar event only if requested
-    if (data.scheduleFollowUp && data.followUpDate) {
+    if (data.followUpDate && user && organization) {
       const followUpDate = new Date(`${data.followUpDate}T${data.followUpTime}:00`);
-      createEvent.mutate({
-        title: `Recontacto: ${pendingLead.name}`,
-        description: `Follow-up de lead perdido (${reasonLabel}). ${data.notes || ""}`.trim(),
-        event_type: data.eventType,
-        start_time: followUpDate.toISOString(),
-        lead_id: pendingLead.id,
-      });
+      
+      supabase
+        .from('calendar_events')
+        .insert({
+          title: `Recontacto: ${pendingLead.name}`,
+          description: `Follow-up de lead perdido (${reasonLabel}). ${data.notes || ""}`.trim(),
+          event_type: data.eventType,
+          start_time: followUpDate.toISOString(),
+          lead_id: pendingLead.id,
+          user_id: user!.id,
+          organization_id: organization!.id,
+        })
+        .select()
+        .single()
+        .then(({ error }) => {
+          if (error) {
+            toast.error('Erro ao criar agendamento de recontacto');
+            console.error('Error creating follow-up event:', error);
+          } else {
+            toast.success('Recontacto agendado com sucesso');
+            queryClient.invalidateQueries({ queryKey: ['calendar-events'] });
+            queryClient.invalidateQueries({ queryKey: ['lead-events'] });
+          }
+        });
     }
-
-    // Cleanup
     setIsLostDialogOpen(false);
     setPendingLostStatus(null);
     setPendingLead(null);
