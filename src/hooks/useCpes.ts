@@ -65,6 +65,7 @@ interface CreateCpeData {
   fidelizacao_start?: string;
   fidelizacao_end?: string;
   status?: CpeStatus;
+  nivel_tensao?: string;
   notes?: string;
 }
 

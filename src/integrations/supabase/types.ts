@@ -332,6 +332,7 @@ export type Database = {
           fidelizacao_end: string | null
           fidelizacao_start: string | null
           id: string
+          nivel_tensao: string | null
           notes: string | null
           organization_id: string
           serial_number: string | null
@@ -348,6 +349,7 @@ export type Database = {
           fidelizacao_end?: string | null
           fidelizacao_start?: string | null
           id?: string
+          nivel_tensao?: string | null
           notes?: string | null
           organization_id: string
           serial_number?: string | null
@@ -364,6 +366,7 @@ export type Database = {
           fidelizacao_end?: string | null
           fidelizacao_start?: string | null
           id?: string
+          nivel_tensao?: string | null
           notes?: string | null
           organization_id?: string
           serial_number?: string | null

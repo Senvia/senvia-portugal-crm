@@ -19,7 +19,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useCreateCpe } from '@/hooks/useCpes';
-import { EQUIPMENT_TYPES, COMERCIALIZADORES, ENERGY_TYPES, ENERGY_COMERCIALIZADORES, type CpeStatus } from '@/types/cpes';
+import { EQUIPMENT_TYPES, COMERCIALIZADORES, ENERGY_TYPES, ENERGY_COMERCIALIZADORES, NIVEL_TENSAO_OPTIONS, type CpeStatus, type NivelTensao } from '@/types/cpes';
 
 interface CreateCpeModalProps {
   open: boolean;
@@ -39,6 +39,7 @@ export function CreateCpeModal({ open, onOpenChange, clientId, isTelecom = false
   const [fidelizacaoStart, setFidelizacaoStart] = useState('');
   const [fidelizacaoEnd, setFidelizacaoEnd] = useState('');
   const [status, setStatus] = useState<CpeStatus>('active');
+  const [nivelTensao, setNivelTensao] = useState<NivelTensao | ''>('');
   const [notes, setNotes] = useState('');
   
   // Conditional labels and options based on niche
@@ -61,6 +62,7 @@ export function CreateCpeModal({ open, onOpenChange, clientId, isTelecom = false
     setFidelizacaoStart('');
     setFidelizacaoEnd('');
     setStatus('active');
+    setNivelTensao('');
     setNotes('');
   };
 
@@ -80,6 +82,7 @@ export function CreateCpeModal({ open, onOpenChange, clientId, isTelecom = false
       fidelizacao_start: fidelizacaoStart || undefined,
       fidelizacao_end: fidelizacaoEnd || undefined,
       status,
+      nivel_tensao: isTelecom && nivelTensao ? nivelTensao : undefined,
       notes: notes || undefined,
     }, {
       onSuccess: () => {
@@ -177,21 +180,37 @@ export function CreateCpeModal({ open, onOpenChange, clientId, isTelecom = false
             </div>
           </div>
 
-          {/* Status */}
-          <div className="space-y-2">
-            <Label>Estado</Label>
-            <Select value={status} onValueChange={(v) => setStatus(v as CpeStatus)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="active">Ativo</SelectItem>
-                <SelectItem value="pending">Pendente</SelectItem>
-                <SelectItem value="inactive">Inativo</SelectItem>
-                <SelectItem value="returned">Devolvido</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          {/* Status or Nivel Tensão */}
+          {isTelecom ? (
+            <div className="space-y-2">
+              <Label>Nível Tensão</Label>
+              <Select value={nivelTensao} onValueChange={(v) => setNivelTensao(v as NivelTensao)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o nível" />
+                </SelectTrigger>
+                <SelectContent>
+                  {NIVEL_TENSAO_OPTIONS.map((nt) => (
+                    <SelectItem key={nt} value={nt}>{nt}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <Label>Estado</Label>
+              <Select value={status} onValueChange={(v) => setStatus(v as CpeStatus)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Ativo</SelectItem>
+                  <SelectItem value="pending">Pendente</SelectItem>
+                  <SelectItem value="inactive">Inativo</SelectItem>
+                  <SelectItem value="returned">Devolvido</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           {/* Notes */}
           <div className="space-y-2">

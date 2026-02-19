@@ -1,4 +1,5 @@
 export type CpeStatus = 'active' | 'inactive' | 'pending' | 'returned';
+export type NivelTensao = 'BTE' | 'BTN' | 'MT';
 
 export interface Cpe {
   id: string;
@@ -10,10 +11,25 @@ export interface Cpe {
   fidelizacao_start?: string | null;
   fidelizacao_end?: string | null;
   status: CpeStatus;
+  nivel_tensao?: NivelTensao | null;
   notes?: string | null;
   created_at: string;
   updated_at: string;
 }
+
+export const NIVEL_TENSAO_OPTIONS: NivelTensao[] = ['BTE', 'BTN', 'MT'];
+
+export const NIVEL_TENSAO_LABELS: Record<NivelTensao, string> = {
+  BTE: 'BTE',
+  BTN: 'BTN',
+  MT: 'MT',
+};
+
+export const NIVEL_TENSAO_STYLES: Record<NivelTensao, { bg: string; text: string; border: string }> = {
+  BTE: { bg: 'bg-primary/10', text: 'text-primary', border: 'border-primary/20' },
+  BTN: { bg: 'bg-success/10', text: 'text-success', border: 'border-success/20' },
+  MT: { bg: 'bg-warning/10', text: 'text-warning', border: 'border-warning/20' },
+};
 
 export const CPE_STATUS_LABELS: Record<CpeStatus, string> = {
   active: 'Ativo',
