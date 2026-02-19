@@ -135,7 +135,7 @@ export function EditSaleModal({
   }, [open, existingItems]);
 
   // Check if sale can be fully edited
-  const canFullEdit = sale?.status !== 'delivered' && sale?.status !== 'cancelled';
+  const canFullEdit = sale?.status !== 'delivered' && sale?.status !== 'cancelled' && sale?.status !== 'fulfilled';
 
   // Client options
   const clientOptions: ComboboxOption[] = useMemo(() => {

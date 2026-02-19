@@ -93,10 +93,13 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
 
   const { organization } = useAuth();
   const { data: orgData } = useOrganization();
-  const salesSettings = (orgData?.sales_settings as { lock_delivered_sales?: boolean; prevent_payment_deletion?: boolean }) || {};
+  const salesSettings = (orgData?.sales_settings as { lock_delivered_sales?: boolean; lock_fulfilled_sales?: boolean; prevent_payment_deletion?: boolean }) || {};
   const lockDeliveredSales = !!salesSettings.lock_delivered_sales;
+  const lockFulfilledSales = !!salesSettings.lock_fulfilled_sales;
   const preventPaymentDeletion = !!salesSettings.prevent_payment_deletion;
   const isDeliveredAndLocked = lockDeliveredSales && sale?.status === 'delivered';
+  const isFulfilledAndLocked = lockFulfilledSales && sale?.status === 'fulfilled';
+  const isLocked = isDeliveredAndLocked || isFulfilledAndLocked;
 
   const { data: saleItems = [] } = useSaleItems(sale?.id);
   const { data: products } = useProducts();
@@ -129,6 +132,9 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
   const cpeLabel = isTelecom ? 'CPE/CUI (Pontos de Consumo)' : 'CPEs (Equipamentos)';
   const serialLabel = isTelecom ? 'Local de Consumo' : 'Nº Série';
 
+  const [showFulfilledConfirm, setShowFulfilledConfirm] = useState(false);
+  const [pendingStatus, setPendingStatus] = useState<SaleStatus | null>(null);
+
   useEffect(() => {
     if (sale) {
       setStatus(sale.status);
@@ -140,7 +146,13 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
 
   const handleStatusChange = (newStatus: SaleStatus) => {
     if (newStatus === 'delivered' && lockDeliveredSales) {
+      setPendingStatus('delivered');
       setShowDeliveredConfirm(true);
+      return;
+    }
+    if (newStatus === 'fulfilled' && lockFulfilledSales) {
+      setPendingStatus('fulfilled');
+      setShowFulfilledConfirm(true);
       return;
     }
     setStatus(newStatus);
@@ -151,6 +163,12 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
     setStatus('delivered');
     updateSale.mutate({ saleId: sale.id, updates: { status: 'delivered' } });
     setShowDeliveredConfirm(false);
+  };
+
+  const confirmFulfilled = () => {
+    setStatus('fulfilled');
+    updateSale.mutate({ saleId: sale.id, updates: { status: 'fulfilled' } });
+    setShowFulfilledConfirm(false);
   };
 
   const handleNotesBlur = () => {
@@ -230,7 +248,7 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                         </div>
                         <div>
                           <p className="text-xs text-muted-foreground">Estado</p>
-                          <Select value={status} onValueChange={handleStatusChange} disabled={isDeliveredAndLocked}>
+                          <Select value={status} onValueChange={handleStatusChange} disabled={isLocked}>
                             <SelectTrigger className={cn('w-full h-8 text-xs border mt-0.5', SALE_STATUS_COLORS[status])}>
                               <SelectValue />
                             </SelectTrigger>
@@ -246,9 +264,9 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                           </Select>
                         </div>
                       </div>
-                      {isDeliveredAndLocked && (
+                      {isLocked && (
                         <p className="text-xs text-muted-foreground mt-3">
-                          Esta venda está concluída e não pode ser alterada.
+                          Esta venda está {isFulfilledAndLocked ? 'entregue' : 'concluída'} e não pode ser alterada.
                         </p>
                       )}
                     </CardContent>
@@ -805,7 +823,7 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
 
                 return null;
               })()}
-              {sale.status !== 'cancelled' && onEdit && !isDeliveredAndLocked && (
+              {sale.status !== 'cancelled' && onEdit && !isLocked && (
                 <Button
                   variant="outline"
                   className="flex-1"
@@ -843,6 +861,24 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={confirmDelivered}>
+              Confirmar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Fulfilled Confirmation Dialog */}
+      <AlertDialog open={showFulfilledConfirm} onOpenChange={setShowFulfilledConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Marcar como Entregue</AlertDialogTitle>
+            <AlertDialogDescription>
+              Ao marcar esta venda como entregue, ela não poderá mais ser editada por utilizadores sem perfil de administrador. Deseja continuar?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmFulfilled}>
               Confirmar
             </AlertDialogAction>
           </AlertDialogFooter>
