@@ -1,54 +1,47 @@
 
-# Corrigir Validacao de Propostas (Todos os Tipos)
+# Adicionar Comissao por Produto + Totais kWp e Comissao
 
-## Problema
-A validacao atual (`isFormValid`) so verifica propostas do tipo "servicos" em telecom. Para o tipo "energia" (o default), retorna sempre `true`, permitindo criar propostas completamente vazias (como a "0020").
+## Resumo
+Adicionar um campo "Comissao" a cada linha de produto nos "Outros Servicos", e mostrar no fundo os totais de kWp e Comissao (soma de todas as linhas). O campo global de comissao passa a ser calculado automaticamente.
 
-## Solucao
+## Alteracoes
 
-Adicionar validacao para **todos os cenarios** no `CreateProposalModal.tsx`:
+### 1. Tipos (`src/types/proposals.ts`)
+- Adicionar `comissao` ao `ServicosProductDetail`
+- Adicionar `'comissao'` ao tipo de campos permitidos em `ServicosProductConfig`
+- Adicionar `comissao` a todos os `SERVICOS_PRODUCT_CONFIGS` (todos os produtos terao campo comissao)
+- Adicionar `'Comissao (EUR)'` ao `FIELD_LABELS`
 
-### Telecom - Energia
-- Pelo menos 1 CPE adicionado (`proposalCpes.length > 0`)
-- Valor total da proposta maior que 0 (margem dos CPEs)
+### 2. Formulario (`src/components/proposals/CreateProposalModal.tsx`)
+- Adicionar campo "Comissao (EUR)" em cada linha de produto (apos o kWp)
+- Calcular `totalComissao` via `useMemo` (soma de `comissao` de todos os produtos ativos)
+- Remover o input manual de comissao global, substituir por valor calculado (read-only)
+- Reordenar os campos em cada linha: campos especificos do produto, depois kWp, depois Comissao
+- Na seccao de totais: mostrar kWp Total e Comissao Total lado a lado
+- O `comissaoServicos` passa a ser o `totalComissao` calculado (usado na submissao)
 
-### Telecom - Servicos (ja existe, manter)
-- Pelo menos 1 produto selecionado
-- kWp total > 0
-- Comissao > 0
+### 3. Layout por produto (nova ordem dos campos)
 
-### Non-Telecom (generico)
-- Pelo menos 1 produto selecionado OU valor total > 0
+| Produto | Campos inline |
+|---------|--------------|
+| Solar | Duracao, kWp, Comissao |
+| Carregadores/Baterias | kWp, Comissao |
+| Condensadores | Duracao, Valor, kWp, Comissao |
+| Coberturas | Valor, kWp, Comissao |
 
-### Comum a todos
-- Cliente selecionado (obrigatorio em todos os cenarios)
+### 4. Totais no fundo
+- kWp Total (read-only, soma)
+- Comissao Total (read-only, soma)
 
-## Alteracoes no codigo
+### 5. Validacao
+- Manter: `totalKwp > 0`
+- Alterar: verificar `totalComissao > 0` em vez de `parseFloat(comissaoServicos) > 0`
 
-**Ficheiro:** `src/components/proposals/CreateProposalModal.tsx`
-
-1. Substituir a logica de validacao atual:
-
-```typescript
-const isEnergiaValid = useMemo(() => {
-  if (!isTelecom || proposalType !== 'energia') return true;
-  return proposalCpes.length > 0;
-}, [isTelecom, proposalType, proposalCpes]);
-
-const isGenericValid = useMemo(() => {
-  if (isTelecom) return true;
-  return selectedProducts.length > 0;
-}, [isTelecom, selectedProducts]);
-
-const isFormValid = isServicosValid && isEnergiaValid && isGenericValid && !!selectedClientId;
-```
-
-2. Adicionar mensagens de erro inline para:
-   - Cliente nao selecionado: "Selecione um cliente"
-   - Energia sem CPEs: "Adicione pelo menos 1 CPE/CUI"
-   - Generico sem produtos: "Adicione pelo menos 1 produto"
-
-3. O botao "Criar Proposta" fica desabilitado apos tentativa com dados em falta (logica `attempted` ja existente)
+### 6. Submissao
+- Guardar `comissao` por produto no `servicos_details` JSONB
+- Usar `totalComissao` como o valor de `comissao` da proposta
 
 ## Ficheiros alterados
+- `src/types/proposals.ts`
 - `src/components/proposals/CreateProposalModal.tsx`
+- `src/components/proposals/EditProposalModal.tsx` (mesma logica)
