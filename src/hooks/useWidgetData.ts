@@ -231,7 +231,7 @@ export function useWidgetData(widgetType: WidgetType): WidgetData {
 
       case 'sales_active': {
         const active = sales.filter(s => 
-          s.status === 'in_progress'
+          s.status === 'in_progress' || s.status === 'fulfilled'
         );
         const totalValue = active.reduce((sum, s) => sum + (s.total_value || 0), 0);
 
@@ -294,7 +294,7 @@ export function useWidgetData(widgetType: WidgetType): WidgetData {
 
       case 'treatments_completed':
       case 'completed_projects': {
-        const completed = sales.filter(s => s.status === 'delivered');
+        const completed = sales.filter(s => s.status === 'delivered' || s.status === 'fulfilled');
         return {
           value: completed.length.toString(),
           subtitle: 'este mês',
@@ -305,7 +305,7 @@ export function useWidgetData(widgetType: WidgetType): WidgetData {
 
       case 'active_projects': {
         const active = sales.filter(s => 
-          s.status === 'in_progress'
+          s.status === 'in_progress' || s.status === 'fulfilled'
         );
         return {
           value: active.length.toString(),

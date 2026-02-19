@@ -92,10 +92,11 @@ export default function Sales() {
 
   // Summary stats
   const stats = useMemo(() => {
-    if (!filteredSales.length) return { total: 0, totalValue: 0, delivered: 0, deliveredValue: 0, inProgress: 0 };
+    if (!filteredSales.length) return { total: 0, totalValue: 0, delivered: 0, deliveredValue: 0, inProgress: 0, fulfilled: 0, fulfilledValue: 0 };
     
     const delivered = filteredSales.filter(s => s.status === 'delivered');
     const inProgress = filteredSales.filter(s => s.status === 'in_progress');
+    const fulfilled = filteredSales.filter(s => s.status === 'fulfilled');
     
     return {
       total: filteredSales.length,
@@ -103,6 +104,8 @@ export default function Sales() {
       delivered: delivered.length,
       deliveredValue: delivered.reduce((acc, s) => acc + (s.total_value || 0), 0),
       inProgress: inProgress.length,
+      fulfilled: fulfilled.length,
+      fulfilledValue: fulfilled.reduce((acc, s) => acc + (s.total_value || 0), 0),
     };
   }, [filteredSales]);
 
@@ -130,7 +133,7 @@ export default function Sales() {
       </div>
 
       {/* Summary Cards */}
-      <div className="p-4 md:p-6 grid grid-cols-3 gap-3 md:gap-4">
+      <div className="p-4 md:p-6 grid grid-cols-2 sm:grid-cols-4 gap-3 md:gap-4">
         <Card className="bg-card/50 border-border/50">
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-2">
@@ -150,8 +153,29 @@ export default function Sales() {
         <Card className="bg-card/50 border-border/50">
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-2">
-              <CheckCircle className="h-4 w-4 text-green-500" />
+              <Package className="h-4 w-4 text-blue-500" />
+              <span className="text-xs text-muted-foreground">Em Progresso</span>
+            </div>
+            <p className="text-2xl font-bold text-blue-500">{stats.inProgress}</p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-card/50 border-border/50">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Package className="h-4 w-4 text-purple-500" />
               <span className="text-xs text-muted-foreground">Entregues</span>
+            </div>
+            <p className="text-2xl font-bold text-purple-500">{stats.fulfilled}</p>
+            <p className="text-xs text-muted-foreground">{formatCurrency(stats.fulfilledValue)}</p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-card/50 border-border/50">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <CheckCircle className="h-4 w-4 text-green-500" />
+              <span className="text-xs text-muted-foreground">Concluídas</span>
             </div>
             <p className="text-2xl font-bold text-green-500">{stats.delivered}</p>
             <p className="text-xs text-muted-foreground">{formatCurrency(stats.deliveredValue)}</p>
@@ -160,16 +184,6 @@ export default function Sales() {
                 {telecomMetrics.deliveredMWh.toFixed(1)} MWh · {telecomMetrics.deliveredKWp.toFixed(1)} kWp
               </p>
             )}
-          </CardContent>
-        </Card>
-
-        <Card className="bg-card/50 border-border/50">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Package className="h-4 w-4 text-blue-500" />
-              <span className="text-xs text-muted-foreground">Em Progresso</span>
-            </div>
-            <p className="text-2xl font-bold text-blue-500">{stats.inProgress}</p>
           </CardContent>
         </Card>
       </div>
