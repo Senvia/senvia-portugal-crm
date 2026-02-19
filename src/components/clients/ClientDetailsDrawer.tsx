@@ -28,11 +28,13 @@ import {
   Router,
   Zap,
   Euro,
+  ChevronRight,
 } from "lucide-react";
 import { formatDate, formatCurrency, getWhatsAppUrl } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { PROPOSAL_STATUS_LABELS, PROPOSAL_STATUS_COLORS, type ProposalStatus } from "@/types/proposals";
+import { PROPOSAL_STATUS_LABELS, PROPOSAL_STATUS_COLORS, type ProposalStatus, type Proposal } from "@/types/proposals";
 import { SALE_STATUS_LABELS, SALE_STATUS_COLORS, type SaleStatus } from "@/types/sales";
+import { ProposalDetailsModal } from "@/components/proposals/ProposalDetailsModal";
 import { useClientLabels } from "@/hooks/useClientLabels";
 import { useClientHistory } from "@/hooks/useClientHistory";
 import { useUpdateClient } from "@/hooks/useClients";
@@ -77,6 +79,7 @@ export function ClientDetailsDrawer({
   const [showAddCommunication, setShowAddCommunication] = useState(false);
   const [defaultCommType, setDefaultCommType] = useState<CommunicationType>('note');
   const [defaultCommDirection, setDefaultCommDirection] = useState<CommunicationDirection>('outbound');
+  const [selectedProposal, setSelectedProposal] = useState<Proposal | null>(null);
 
   const getTeamMemberName = (userId: string | null | undefined) => {
     if (!userId) return null;
@@ -450,16 +453,23 @@ export function ClientDetailsDrawer({
                       </CardHeader>
                       <CardContent className="space-y-2">
                         {proposals.slice(0, 3).map((proposal) => (
-                          <div key={proposal.id} className="flex items-center justify-between p-2 border rounded-lg text-sm">
+                          <div 
+                            key={proposal.id} 
+                            className="flex items-center justify-between p-2 border rounded-lg text-sm cursor-pointer hover:bg-muted/50 transition-colors"
+                            onClick={() => setSelectedProposal(proposal as unknown as Proposal)}
+                          >
                             <div>
                               <p className="font-medium">{proposal.code || `#${proposal.id.slice(0, 8)}`}</p>
                               <p className="text-xs text-muted-foreground">{formatDate(proposal.created_at || '')}</p>
                             </div>
-                            <div className="text-right">
-                              <p className="font-semibold text-success">{formatCurrency(proposal.total_value)}</p>
-                              <Badge variant="outline" className={cn('text-xs', PROPOSAL_STATUS_COLORS[proposal.status as ProposalStatus])}>
-                                {PROPOSAL_STATUS_LABELS[proposal.status as ProposalStatus] || proposal.status}
-                              </Badge>
+                            <div className="flex items-center gap-2">
+                              <div className="text-right">
+                                <p className="font-semibold text-success">{formatCurrency(proposal.total_value)}</p>
+                                <Badge variant="outline" className={cn('text-xs', PROPOSAL_STATUS_COLORS[proposal.status as ProposalStatus])}>
+                                  {PROPOSAL_STATUS_LABELS[proposal.status as ProposalStatus] || proposal.status}
+                                </Badge>
+                              </div>
+                              <ChevronRight className="h-4 w-4 text-muted-foreground" />
                             </div>
                           </div>
                         ))}
@@ -510,6 +520,13 @@ export function ClientDetailsDrawer({
           clientName={client.name}
           defaultType={defaultCommType}
           defaultDirection={defaultCommDirection}
+        />
+
+        {/* Proposal Details Modal */}
+        <ProposalDetailsModal
+          proposal={selectedProposal}
+          open={!!selectedProposal}
+          onOpenChange={(open) => { if (!open) setSelectedProposal(null); }}
         />
       </DialogContent>
     </Dialog>
