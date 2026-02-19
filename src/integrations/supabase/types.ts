@@ -1933,6 +1933,7 @@ export type Database = {
           brevo_sender_email: string | null
           client_fields_settings: Json | null
           code: string | null
+          commission_matrix: Json | null
           created_at: string | null
           enabled_modules: Json | null
           fidelization_alert_days: Json | null
@@ -1977,6 +1978,7 @@ export type Database = {
           brevo_sender_email?: string | null
           client_fields_settings?: Json | null
           code?: string | null
+          commission_matrix?: Json | null
           created_at?: string | null
           enabled_modules?: Json | null
           fidelization_alert_days?: Json | null
@@ -2021,6 +2023,7 @@ export type Database = {
           brevo_sender_email?: string | null
           client_fields_settings?: Json | null
           code?: string | null
+          commission_matrix?: Json | null
           created_at?: string | null
           enabled_modules?: Json | null
           fidelization_alert_days?: Json | null

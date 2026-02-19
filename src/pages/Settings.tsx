@@ -23,6 +23,7 @@ import { FidelizationAlertsSettings } from '@/components/settings/FidelizationAl
 import { ExpenseCategoriesTab } from '@/components/settings/ExpenseCategoriesTab';
 import { FiscalSettingsTab } from '@/components/settings/FiscalSettingsTab';
 import { SalesSettingsTab } from '@/components/settings/SalesSettingsTab';
+import { CommissionMatrixTab } from '@/components/settings/CommissionMatrixTab';
 import { PushNotificationsCard } from '@/components/settings/PushNotificationsCard';
 
 import { ProfilesTab } from '@/components/settings/ProfilesTab';
@@ -293,6 +294,7 @@ export default function Settings() {
       case "org-forms": return <FormsManager />;
       case "org-fields": return <ClientFieldsEditor />;
       case "org-sales": return <SalesSettingsTab />;
+      case "org-matrix": return <CommissionMatrixTab />;
       case "security": return (
         <SecuritySettings
           newPassword={newPassword} setNewPassword={setNewPassword}

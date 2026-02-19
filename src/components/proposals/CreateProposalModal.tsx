@@ -19,6 +19,7 @@ import { useActiveProducts } from '@/hooks/useProducts';
 import { CreateClientModal } from '@/components/clients/CreateClientModal';
 import { ProposalCpeSelector, type ProposalCpeDraft } from '@/components/proposals/ProposalCpeSelector';
 import { useAuth } from '@/contexts/AuthContext';
+import { useCommissionMatrix } from '@/hooks/useCommissionMatrix';
 import type { CrmClient } from '@/types/clients';
 import { 
   PROPOSAL_STATUS_LABELS, 
@@ -50,6 +51,7 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
   const { data: clients = [] } = useClients();
   const { data: products = [] } = useActiveProducts();
   const { organization } = useAuth();
+  const { calculateCommission, isAutoCalculated } = useCommissionMatrix();
   const createProposal = useCreateProposal();
   const createProposalCpesBatch = useCreateProposalCpesBatch();
   
@@ -144,6 +146,11 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
       if (config?.kwpAuto && field !== 'kwp') {
         const autoKwp = config.kwpAuto(detail);
         if (autoKwp !== null) detail.kwp = Math.round(autoKwp * 100) / 100;
+      }
+      // Auto-calc comissao via matrix
+      if (field !== 'comissao') {
+        const calc = calculateCommission(produto, detail);
+        if (calc !== null) detail.comissao = Math.round(calc * 100) / 100;
       }
       return { ...prev, [produto]: detail };
     });
@@ -507,9 +514,14 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
                                   </div>
                                   {isActive && (
                                     <div className="ml-6 flex flex-wrap gap-2">
-                                      {config.fields.map((field) => (
+                                      {config.fields.map((field) => {
+                                        const isComissaoAuto = field === 'comissao' && isAutoCalculated(config.name);
+                                        return (
                                         <div key={field} className="space-y-1 min-w-[100px] flex-1">
-                                          <Label className="text-xs text-muted-foreground">{FIELD_LABELS[field]}</Label>
+                                          <Label className="text-xs text-muted-foreground">
+                                            {FIELD_LABELS[field]}
+                                            {isComissaoAuto && <span className="ml-1 text-primary">(auto)</span>}
+                                          </Label>
                                           <Input
                                             type="number"
                                             step="0.01"
@@ -518,10 +530,11 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
                                             onChange={(e) => handleUpdateProductDetail(config.name, field, e.target.value ? parseFloat(e.target.value) : undefined)}
                                             placeholder={field === 'kwp' && config.kwpAuto ? 'Auto' : '0'}
                                             className="h-8"
-                                            readOnly={field === 'kwp' && !!config.kwpAuto && detail.valor !== undefined}
+                                            readOnly={(field === 'kwp' && !!config.kwpAuto && detail.valor !== undefined) || isComissaoAuto}
                                           />
                                         </div>
-                                      ))}
+                                        );
+                                      })}
                                     </div>
                                   )}
                                 </div>
