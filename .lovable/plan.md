@@ -1,56 +1,44 @@
 
 
-# Adicionar Estado "Entregue" nas Vendas
+# Bloquear Edicao de Vendas "Entregue" por Perfil
 
 ## Resumo
-Adicionar um novo estado "Entregue" ao ciclo de vida das vendas, ficando com 4 estados no total: **Em Progresso**, **Entregue**, **Concluida** e **Cancelado**.
+Adicionar uma nova regra em Definicoes > Vendas que bloqueia a edicao de vendas com estado "Entregue", semelhante ao bloqueio ja existente para vendas "Concluidas". Quando ativa, apenas administradores podem alterar vendas nesse estado.
 
-## Logica de Negogio
-
-O fluxo passa a ser:
-1. **Em Progresso** - Venda criada, a decorrer
-2. **Entregue** - Servico/produto entregue ao cliente
-3. **Concluida** - Venda finalizada (ex: apos faturacao)
-4. **Cancelado** - Venda cancelada
-
-A automacao de faturacao continua a marcar vendas como "Concluida" (delivered). O novo estado "Entregue" (fulfilled) e um passo intermedio.
+## Como funciona hoje
+Ja existe uma regra `lock_delivered_sales` que bloqueia vendas "Concluidas". O mecanismo e:
+- Toggle em Definicoes > Vendas
+- Quando ativo, o botao "Editar" desaparece e os campos ficam bloqueados
+- Admins continuam a poder alterar o estado
 
 ## O que muda
 
-### 1. Tipos e Constantes (`src/types/sales.ts`)
-- Adicionar `'fulfilled'` ao tipo `SaleStatus`
-- Adicionar label: `fulfilled: 'Entregue'`
-- Adicionar cor: `fulfilled: 'bg-purple-500/20 text-purple-500 border-purple-500/30'`
-- Adicionar ao array `SALE_STATUSES`
+### 1. Settings de Vendas (`SalesSettingsTab.tsx`)
+Adicionar um novo checkbox:
+- **"Bloquear edicao de vendas entregues"**
+- Descricao: "Vendas com estado 'Entregue' nao podem ser editadas por utilizadores sem perfil de administrador."
+- Nova propriedade: `lock_fulfilled_sales` no objeto `sales_settings`
 
-### 2. Pagina de Vendas (`src/pages/Sales.tsx`)
-- Atualizar as stats do resumo para incluir contagem de vendas "Entregue"
-- Adicionar card de resumo ou ajustar os existentes
+### 2. Modal de Detalhes (`SaleDetailsModal.tsx`)
+- Adicionar logica `isFulfilledAndLocked` semelhante a `isDeliveredAndLocked`
+- Quando `lock_fulfilled_sales` esta ativo e o estado e `fulfilled`:
+  - Esconder botao "Editar" para nao-admins
+  - Bloquear alteracao de notas
+  - Manter possibilidade de ver detalhes e pagamentos
+  - Admins continuam com acesso total
 
-### 3. Modal de Detalhes (`src/components/sales/SaleDetailsModal.tsx`)
-- O dropdown de estado ja usa `SALE_STATUSES` dinamicamente, portanto vai aparecer automaticamente
-- A logica de "lock delivered sales" mantem-se apenas para o estado `delivered` (Concluida)
+### 3. Modal de Edicao (`EditSaleModal.tsx`)
+- Verificar se a venda esta no estado `fulfilled` com lock ativo
+- Se sim, impedir abertura para nao-admins
 
-### 4. Modal de Criacao (`src/components/sales/CreateSaleModal.tsx`)
-- O novo estado fica disponivel no selector de estado
-
-### 5. Dashboard Stats (`src/hooks/useDashboardStats.ts`)
-- Ajustar para considerar `fulfilled` nas metricas relevantes
-
-### 6. Widget Data (`src/hooks/useWidgetData.ts`)
-- Atualizar filtros de vendas entregues se necessario
-
-### 7. Edge Functions de Faturacao
-- **Sem alteracao** - continuam a marcar como `delivered` (Concluida) apos emissao de fatura
-
-### 8. Base de Dados
-- O campo `status` na tabela `sales` e do tipo `text`, nao precisa de migracao
+### 4. Confirmacao de estado
+- Quando o utilizador muda o estado para "Entregue" e o lock esta ativo, mostrar dialogo de confirmacao (tal como ja acontece com "Concluida")
 
 ## Ficheiros alterados
-- `src/types/sales.ts`
-- `src/pages/Sales.tsx`
-- `src/components/sales/SaleDetailsModal.tsx` (verificar logica de lock)
-- `src/hooks/useDashboardStats.ts`
-- `src/hooks/useWidgetData.ts`
-- `src/hooks/useTelecomSaleMetrics.ts`
+- `src/components/settings/SalesSettingsTab.tsx` (novo checkbox)
+- `src/components/sales/SaleDetailsModal.tsx` (logica de bloqueio)
+- `src/components/sales/EditSaleModal.tsx` (verificacao de acesso)
+
+## Sem alteracoes na base de dados
+O campo `sales_settings` ja e JSONB, basta adicionar a nova propriedade `lock_fulfilled_sales`.
 
