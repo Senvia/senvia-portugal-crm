@@ -80,6 +80,9 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
   }>>([]);
   
   const [isCreateClientOpen, setIsCreateClientOpen] = useState(false);
+  const [attempted, setAttempted] = useState(false);
+
+  // validation moved after totalKwp declaration
 
   useEffect(() => {
     if (open) {
@@ -149,6 +152,13 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
     return Object.values(servicosDetails).reduce((sum, d) => sum + (d.kwp || 0), 0);
   }, [servicosDetails]);
 
+  const isServicosValid = useMemo(() => {
+    if (!isTelecom || proposalType !== 'servicos') return true;
+    return servicosProdutos.length > 0 && totalKwp > 0 && parseFloat(comissaoServicos) > 0;
+  }, [isTelecom, proposalType, servicosProdutos, totalKwp, comissaoServicos]);
+
+  const isFormValid = isServicosValid;
+
   const handleAddProduct = (productId: string) => {
     const product = products.find(p => p.id === productId);
     if (!product) return;
@@ -209,6 +219,8 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setAttempted(true);
+    if (!isFormValid) return;
 
     createProposal.mutate({
       client_id: selectedClientId || undefined,
@@ -458,6 +470,9 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
                           {/* Produtos em linha */}
                           <div className="space-y-3">
                             <Label className="text-sm">Produtos</Label>
+                            {attempted && servicosProdutos.length === 0 && (
+                              <p className="text-xs text-destructive">Selecione pelo menos 1 produto</p>
+                            )}
                             {SERVICOS_PRODUCT_CONFIGS.map((config) => {
                               const isActive = servicosProdutos.includes(config.name);
                               const detail = servicosDetails[config.name] || {};
@@ -504,6 +519,9 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
                               <div className="h-8 flex items-center text-sm font-medium px-3 rounded-md bg-muted">
                                 {totalKwp ? totalKwp.toLocaleString('pt-PT', { maximumFractionDigits: 2 }) : '—'}
                               </div>
+                              {attempted && totalKwp <= 0 && (
+                                <p className="text-xs text-destructive">Potência total deve ser maior que 0</p>
+                              )}
                             </div>
                             <div className="space-y-1">
                               <Label htmlFor="comissao-servicos" className="text-xs text-muted-foreground">Comissão (€)</Label>
@@ -517,6 +535,9 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
                                 placeholder="Ex: 500"
                                 className="h-8"
                               />
+                              {attempted && !(parseFloat(comissaoServicos) > 0) && (
+                                <p className="text-xs text-destructive">Comissão obrigatória</p>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -725,7 +746,7 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
                 className="flex-1"
                 size="lg"
                 onClick={handleSubmit}
-                disabled={createProposal.isPending}
+                disabled={createProposal.isPending || (attempted && !isFormValid)}
               >
                 {createProposal.isPending ? (
                   <>
