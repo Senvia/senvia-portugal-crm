@@ -20,8 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CalendarClock, Phone, Users, XCircle } from "lucide-react";
-import { Switch } from "@/components/ui/switch";
+import { CalendarClock, Phone, Users } from "lucide-react";
 
 const LOSS_REASONS = [
   { value: "price", label: "Preço" },
@@ -61,7 +60,6 @@ export function LostLeadDialog({
   const [followUpDate, setFollowUpDate] = useState("");
   const [followUpTime, setFollowUpTime] = useState("10:00");
   const [eventType, setEventType] = useState<"call" | "meeting">("call");
-  const [scheduleFollowUp, setScheduleFollowUp] = useState(true);
 
   const handleQuickDate = (days: number) => {
     const date = addDays(new Date(), days);
@@ -69,16 +67,14 @@ export function LostLeadDialog({
   };
 
   const handleConfirm = () => {
-    if (!lossReason) return;
-    if (scheduleFollowUp && !followUpDate) return;
-    onConfirm({ lossReason, notes, followUpDate, followUpTime, eventType, scheduleFollowUp });
+    if (!lossReason || !followUpDate) return;
+    onConfirm({ lossReason, notes, followUpDate, followUpTime, eventType, scheduleFollowUp: true });
     // Reset
     setLossReason("");
     setNotes("");
     setFollowUpDate("");
     setFollowUpTime("10:00");
     setEventType("call");
-    setScheduleFollowUp(true);
   };
 
   const handleClose = (open: boolean) => {
@@ -88,12 +84,11 @@ export function LostLeadDialog({
       setFollowUpDate("");
       setFollowUpTime("10:00");
       setEventType("call");
-      setScheduleFollowUp(true);
     }
     onOpenChange(open);
   };
 
-  const isValid = lossReason && (scheduleFollowUp ? followUpDate : true);
+  const isValid = lossReason && followUpDate;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -138,20 +133,7 @@ export function LostLeadDialog({
             />
           </div>
 
-          {/* Schedule Follow-up Switch */}
-          <div className="flex items-center justify-between rounded-lg border p-3">
-            <div className="space-y-0.5">
-              <Label className="text-sm font-medium">Agendar recontacto futuro</Label>
-              <p className="text-xs text-muted-foreground">
-                {scheduleFollowUp ? "Será criado um evento no calendário" : "Lead será marcado como perdido definitivo"}
-              </p>
-            </div>
-            <Switch checked={scheduleFollowUp} onCheckedChange={setScheduleFollowUp} />
-          </div>
-
-          {scheduleFollowUp && (
-            <>
-              {/* Follow-up Date */}
+          {/* Follow-up Date */}
               <div className="space-y-2">
                 <Label>Data de recontacto *</Label>
                 <div className="flex gap-2 mb-2">
@@ -217,8 +199,6 @@ export function LostLeadDialog({
                   ))}
                 </div>
               </div>
-            </>
-          )}
         </div>
 
         <DialogFooter className="flex-col gap-2 sm:flex-row">
@@ -226,11 +206,7 @@ export function LostLeadDialog({
             Cancelar
           </Button>
           <Button onClick={handleConfirm} disabled={!isValid} className="w-full sm:w-auto">
-            {scheduleFollowUp ? (
-              <><CalendarClock className="h-4 w-4 mr-2" />Confirmar e Agendar</>
-            ) : (
-              <><XCircle className="h-4 w-4 mr-2" />Confirmar Perda Definitiva</>
-            )}
+            <CalendarClock className="h-4 w-4 mr-2" />Confirmar e Agendar
           </Button>
         </DialogFooter>
       </DialogContent>
