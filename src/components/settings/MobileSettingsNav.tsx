@@ -4,7 +4,7 @@ import { SettingsCard } from "./SettingsCard";
 export type SettingsSection = "general" | "security" | "team" | "products" | "finance" | "notifications" | "integrations";
 
 export type SettingsSubSection =
-  | "org-general" | "org-pipeline" | "org-modules" | "org-forms" | "org-fields" | "org-sales"
+  | "org-general" | "org-pipeline" | "org-modules" | "org-forms" | "org-fields" | "org-sales" | "org-matrix"
   | "security"
   | "team-access" | "team-profiles" | "team-teams"
   | "products"
@@ -81,6 +81,7 @@ export const subSectionsMap: Record<SettingsSection, SubSectionItem[]> = {
     { id: "org-forms", label: "Formulário", icon: FileText, description: "Captação de leads" },
     { id: "org-fields", label: "Campos", icon: List, description: "Campos personalizados" },
     { id: "org-sales", label: "Vendas", icon: ShoppingCart, description: "Regras de vendas" },
+    { id: "org-matrix", label: "Matriz Comissões", icon: Calculator, description: "Cálculo automático de comissões" },
   ],
   security: [],
   team: [

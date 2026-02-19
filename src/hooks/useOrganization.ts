@@ -52,6 +52,7 @@ interface UpdateOrganizationData {
   tax_config?: Json;
   integrations_enabled?: Json;
   sales_settings?: Json;
+  commission_matrix?: Json;
 }
 
 export function useUpdateOrganization() {
