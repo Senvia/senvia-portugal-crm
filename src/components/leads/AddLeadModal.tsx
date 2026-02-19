@@ -28,11 +28,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { PhoneInput } from "@/components/ui/phone-input";
-import { Loader2, Zap, UserCircle } from "lucide-react";
+import { Loader2, Zap, UserCircle, X, User } from "lucide-react";
 import { useCreateLead } from "@/hooks/useLeads";
 import { useTeamMembers } from "@/hooks/useTeam";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import type { LeadTemperature, LeadTipologia } from "@/types";
 import { ROLE_LABELS as RoleLabels, TIPOLOGIA_LABELS, TIPOLOGIA_STYLES } from "@/types";
 
@@ -86,6 +87,9 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
   const { canManageTeam } = usePermissions();
   const { organization } = useAuth();
   
+  const [matchedClient, setMatchedClient] = useState<{ id: string; name: string; email: string | null; phone: string | null; notes: string | null } | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
+  
   // Check if organization is telecom template
   const isTelecom = organization?.niche === 'telecom';
   
@@ -107,6 +111,35 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
     },
   });
 
+  const searchExistingClient = async (field: 'email' | 'phone', value: string) => {
+    if (!value || value.length < 3 || !organization?.id) return;
+    
+    setIsSearching(true);
+    try {
+      const { data } = await supabase
+        .from('crm_clients')
+        .select('id, name, email, phone, notes')
+        .eq('organization_id', organization.id)
+        .eq(field, value)
+        .limit(1)
+        .maybeSingle();
+      
+      if (data) {
+        setMatchedClient(data);
+        if (!form.getValues('name')) form.setValue('name', data.name);
+        if (!form.getValues('email') && data.email) form.setValue('email', data.email);
+        if (!form.getValues('phone') && data.phone) form.setValue('phone', data.phone);
+        if (!form.getValues('notes') && data.notes) form.setValue('notes', data.notes);
+      }
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const clearMatchedClient = () => {
+    setMatchedClient(null);
+  };
+
   const onSubmit = async (data: AddLeadFormData) => {
     await createLead.mutateAsync({
       name: data.name,
@@ -125,9 +158,7 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
       consumo_anual: isTelecom && data.consumo_anual ? Number(data.consumo_anual) : undefined,
     });
     
-    form.reset();
-    onOpenChange(false);
-    
+    setMatchedClient(null);
     form.reset();
     onOpenChange(false);
   };
@@ -141,6 +172,26 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            {/* Banner cliente existente */}
+            {matchedClient && (
+              <div className="flex items-center gap-2 rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700 p-3">
+                <User className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                <span className="text-sm text-amber-800 dark:text-amber-300 flex-1">
+                  Cliente existente: <strong>{matchedClient.name}</strong>
+                </span>
+                <button type="button" onClick={clearMatchedClient} className="text-amber-600 dark:text-amber-400 hover:text-amber-800">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+
+            {isSearching && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                A verificar cliente...
+              </div>
+            )}
+
             <FormField
               control={form.control}
               name="name"
@@ -162,7 +213,15 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
                 <FormItem>
                   <FormLabel>Email *</FormLabel>
                   <FormControl>
-                    <Input type="email" placeholder="joao@exemplo.pt" {...field} />
+                    <Input
+                      type="email"
+                      placeholder="joao@exemplo.pt"
+                      {...field}
+                      onBlur={(e) => {
+                        field.onBlur();
+                        searchExistingClient('email', e.target.value);
+                      }}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -176,10 +235,12 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
                 <FormItem>
                   <FormLabel>Telemóvel *</FormLabel>
                   <FormControl>
-                    <PhoneInput
-                      value={field.value}
-                      onChange={field.onChange}
-                    />
+                    <div onBlur={() => searchExistingClient('phone', field.value)}>
+                      <PhoneInput
+                        value={field.value}
+                        onChange={field.onChange}
+                      />
+                    </div>
                   </FormControl>
                   <FormMessage />
                 </FormItem>
