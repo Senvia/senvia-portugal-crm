@@ -1,86 +1,46 @@
 
-# Adicionar NIF Obrigatorio e Verificacao Anti-Duplicacao
+
+# Substituir "Estado" por "Nivel Tensao" nos CPE/CUI
 
 ## Resumo
-Tornar o campo "NIF da Empresa" (company_nif) obrigatorio tanto na criacao de leads como de clientes, e usar o NIF como criterio principal para detetar clientes existentes e evitar duplicacao.
+No contexto do nicho telecom, substituir o campo "Estado" (active/inactive/pending/returned) por "Nivel Tensao" com as opcoes **BTE**, **BTN** e **MT** nos formularios e listagem de CPE/CUI.
 
 ## O que muda
 
-1. **Nova coluna na tabela `leads`**: Adicionar `company_nif` (text) para guardar o NIF da empresa diretamente na lead
-2. **Formulario de Lead (AddLeadModal)**: Novo campo "NIF Empresa" obrigatorio, com pesquisa automatica no `crm_clients` por NIF ao sair do campo
-3. **Formulario Publico (PublicLeadForm)**: Adicionar campo NIF obrigatorio
-4. **Edge Function (submit-lead)**: Aceitar e guardar o campo `company_nif`
-5. **Conversao Lead -> Cliente**: Passar o `company_nif` da lead para o cliente ao converter automaticamente (etapa "Ganho")
-6. **Formularios de Cliente**: Garantir que `company_nif` fica obrigatorio por defeito nas definicoes
+1. Nova coluna `nivel_tensao` na tabela `cpes` (text, nullable)
+2. Nos formularios de criar e editar CPE (apenas para nicho telecom), o campo "Estado" e substituido por "Nivel Tensao" com 3 opcoes
+3. Na listagem de CPEs, o badge de estado e substituido pelo badge de nivel de tensao (para telecom)
+4. Nichos nao-telecom continuam a usar o campo "Estado" normalmente
 
 ## Alteracoes tecnicas
 
 ### 1. Migracao de Base de Dados
-- Adicionar coluna `company_nif` (text, nullable) na tabela `leads`
+- Adicionar coluna `nivel_tensao` (text, nullable) na tabela `cpes`
 
-### 2. `src/components/leads/AddLeadModal.tsx`
-- Adicionar campo `company_nif` ao schema Zod como obrigatorio: `z.string().min(1, "NIF da empresa e obrigatorio")`
-- Adicionar input "NIF Empresa *" no formulario (entre telefone e origem)
-- Alterar `searchExistingClient` para pesquisar por `company_nif` em vez de email/phone
-- Remover os `onBlur` de email e phone, e adicionar `onBlur` no campo NIF
-- Passar `company_nif` no `createLead.mutateAsync`
+### 2. `src/types/cpes.ts`
+- Adicionar tipo `NivelTensao = 'BTE' | 'BTN' | 'MT'`
+- Adicionar constantes `NIVEL_TENSAO_OPTIONS`, `NIVEL_TENSAO_LABELS` e `NIVEL_TENSAO_STYLES`
+- Adicionar `nivel_tensao` na interface `Cpe`
 
-### 3. `src/hooks/useLeads.ts`
-- Adicionar `company_nif?: string` ao tipo do `useCreateLead`
+### 3. `src/components/clients/CreateCpeModal.tsx`
+- Se `isTelecom`: mostrar campo "Nivel Tensao" (BTE/BTN/MT) em vez de "Estado"
+- Passar `nivel_tensao` no `createCpe.mutate`
 
-### 4. `src/types/index.ts`
-- Adicionar `company_nif?: string | null` na interface `Lead`
+### 4. `src/components/clients/EditCpeModal.tsx`
+- Se `isTelecom`: mostrar campo "Nivel Tensao" em vez de "Estado"
+- Carregar e guardar `nivel_tensao` do CPE existente
 
-### 5. `src/components/forms/PublicLeadForm.tsx`
-- Adicionar campo `company_nif` obrigatorio ao schema e ao formulario publico
+### 5. `src/components/clients/CpeList.tsx`
+- Se `isTelecom`: mostrar badge de "Nivel Tensao" (BTE/BTN/MT) em vez do badge de "Estado"
 
-### 6. `supabase/functions/submit-lead/index.ts`
-- Aceitar `company_nif` no body e incluir no INSERT
-
-### 7. `src/hooks/useClients.ts` (useConvertLeadToClient)
-- Passar `company_nif` da lead para o cliente ao converter
-
-### 8. `src/pages/Leads.tsx`
-- Passar `company_nif` do lead na chamada `convertLeadToClient.mutate` quando a lead e ganha
-
-### 9. `src/components/leads/LeadDetailsModal.tsx`
-- Mostrar o campo NIF na ficha do lead
-
-### Fluxo de verificacao
-
-```text
-Campo NIF Empresa (onBlur)
-       |
-       v
-Query crm_clients WHERE company_nif = X AND organization_id = Y
-       |
-       v
-[Match encontrado?]
-  Sim -> Auto-preencher nome, email, phone, notes + banner amarelo
-  Nao -> Nada (continuar normalmente)
-```
-
-### Fluxo Lead Ganha -> Cliente
-
-```text
-Lead arrastada para "Ganho"
-       |
-       v
-Verificar crm_clients WHERE lead_id = X OU company_nif = lead.company_nif
-       |
-       v
-[Existe?]
-  Sim -> Nao duplicar
-  Nao -> Criar cliente com company_nif da lead
-```
+### 6. `src/hooks/useCpes.ts`
+- Adicionar `nivel_tensao` ao tipo `CreateCpeData`
 
 ## Ficheiros alterados
-- 1 migracao SQL (nova coluna `company_nif` na tabela `leads`)
-- `src/types/index.ts`
-- `src/hooks/useLeads.ts`
-- `src/hooks/useClients.ts`
-- `src/components/leads/AddLeadModal.tsx`
-- `src/components/leads/LeadDetailsModal.tsx`
-- `src/components/forms/PublicLeadForm.tsx`
-- `src/pages/Leads.tsx`
-- `supabase/functions/submit-lead/index.ts`
+- 1 migracao SQL
+- `src/types/cpes.ts`
+- `src/hooks/useCpes.ts`
+- `src/components/clients/CreateCpeModal.tsx`
+- `src/components/clients/EditCpeModal.tsx`
+- `src/components/clients/CpeList.tsx`
+
