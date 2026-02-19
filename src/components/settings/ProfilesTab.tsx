@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -25,7 +24,7 @@ import {
 } from '@/hooks/useOrganizationProfiles';
 import { useAuth } from '@/contexts/AuthContext';
 import { WIDGET_DEFINITIONS, WidgetType, filterWidgetsByModules, getAllAvailableWidgets } from '@/lib/dashboard-templates';
-import { Shield, Plus, Pencil, Trash2, Loader2, Eye, LayoutDashboard } from 'lucide-react';
+import { Shield, Plus, Pencil, Trash2, Loader2, Eye, LayoutDashboard, ArrowLeft } from 'lucide-react';
 
 const BASE_ROLE_LABELS: Record<string, string> = {
   admin: 'Administrador',
@@ -54,6 +53,7 @@ export function ProfilesTab() {
     if (w.requiredModule && enabledModules[w.requiredModule] === false) return false;
     return true;
   });
+
   const openCreate = () => {
     setEditingProfile(null);
     setName('');
@@ -88,17 +88,13 @@ export function ProfilesTab() {
       const mod = prev[module];
       const sub = mod?.subareas?.[subarea] || {};
       const newValue = !sub[action];
-
       const newSub = { ...sub, [action]: newValue };
-      // If disabling view, disable all in subarea
       if (action === 'view' && !newValue) {
         for (const k of Object.keys(newSub)) newSub[k] = false;
       }
-      // If enabling a non-view action, enable view
       if (action !== 'view' && newValue) {
         newSub.view = true;
       }
-
       return {
         ...prev,
         [module]: {
@@ -177,7 +173,6 @@ export function ProfilesTab() {
     deleteProfile.mutate(profile.id);
   };
 
-  // Count active permissions for a profile badge summary
   const getActiveModules = (perms: GranularPermissions): string[] => {
     return Object.entries(MODULE_SCHEMA)
       .filter(([key]) => {
@@ -192,6 +187,184 @@ export function ProfilesTab() {
     return <div className="space-y-4"><Skeleton className="h-32" /><Skeleton className="h-32" /></div>;
   }
 
+  // ── Full-page editor view ──
+  if (isOpen) {
+    return (
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" onClick={() => setIsOpen(false)}>
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <div>
+            <h2 className="text-lg font-semibold">{editingProfile ? 'Editar Perfil' : 'Criar Perfil'}</h2>
+            <p className="text-sm text-muted-foreground">Configure permissões granulares por módulo e sub-área.</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+          {/* Left column */}
+          <div className="lg:col-span-3 space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Informações Gerais</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Nome do Perfil</Label>
+                  <Input placeholder="Ex: Diretor Comercial" value={name} onChange={e => setName(e.target.value)} />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Role Base</Label>
+                  <Select value={baseRole} onValueChange={handleBaseRoleChange}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="admin">Administrador</SelectItem>
+                      <SelectItem value="viewer">Visualizador</SelectItem>
+                      <SelectItem value="salesperson">Vendedor</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">Define as políticas de segurança base.</p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Visibilidade de Dados</Label>
+                  <Select value={dataScope} onValueChange={(v) => setDataScope(v as DataScope)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {(['own', 'team', 'all'] as DataScope[]).map(scope => (
+                        <SelectItem key={scope} value={scope}>
+                          {DATA_SCOPE_LABELS[scope]} — {DATA_SCOPE_DESCRIPTIONS[scope]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">Define de quem o utilizador pode ver os dados.</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Permissões por Módulo</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Accordion type="multiple" className="border rounded-lg">
+                  {Object.entries(MODULE_SCHEMA).map(([moduleKey, schema]) => {
+                    const allEnabled = isModuleAllEnabled(moduleKey);
+                    const partial = isModulePartial(moduleKey);
+
+                    return (
+                      <AccordionItem key={moduleKey} value={moduleKey} className="border-b last:border-b-0">
+                        <AccordionTrigger className="px-4 py-3 hover:no-underline">
+                          <div className="flex items-center gap-3 flex-1">
+                            <span className="font-medium text-sm">{schema.label}</span>
+                            {allEnabled && <Badge variant="secondary" className="text-xs">Tudo</Badge>}
+                            {partial && !allEnabled && <Badge variant="outline" className="text-xs">Parcial</Badge>}
+                            {!allEnabled && !partial && <Badge variant="outline" className="text-xs text-muted-foreground">Desativado</Badge>}
+                          </div>
+                        </AccordionTrigger>
+                        <AccordionContent className="px-4 pb-4">
+                          <div className="flex gap-2 mb-3">
+                            <Button type="button" variant="outline" size="sm" className="text-xs h-7" onClick={() => setModuleAll(moduleKey, true)}>Tudo</Button>
+                            <Button type="button" variant="outline" size="sm" className="text-xs h-7" onClick={() => setModuleAll(moduleKey, false)}>Nada</Button>
+                          </div>
+                          <div className="space-y-4">
+                            {Object.entries(schema.subareas).map(([subKey, subSchema]) => {
+                              const subPerms = permissions[moduleKey]?.subareas?.[subKey] || {};
+                              return (
+                                <div key={subKey} className="space-y-2">
+                                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{subSchema.label}</p>
+                                  <div className="flex flex-wrap gap-x-4 gap-y-2">
+                                    {subSchema.actions.map(action => (
+                                      <label key={action} className="flex items-center gap-1.5 cursor-pointer">
+                                        <Checkbox checked={subPerms[action] ?? false} onCheckedChange={() => toggleAction(moduleKey, subKey, action)} />
+                                        <span className="text-sm">{ACTION_LABELS[action] || action}</span>
+                                      </label>
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </AccordionContent>
+                      </AccordionItem>
+                    );
+                  })}
+                </Accordion>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Right column */}
+          <div className="lg:col-span-2">
+            <div className="lg:sticky lg:top-4 space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <LayoutDashboard className="h-4 w-4" />
+                    Dashboard Personalizado
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm">Widgets personalizados</Label>
+                    <Switch checked={useCustomDashboard} onCheckedChange={setUseCustomDashboard} />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {useCustomDashboard
+                      ? 'Selecione os widgets que este perfil verá por defeito no painel.'
+                      : 'A usar o padrão do nicho da organização.'}
+                  </p>
+                  {useCustomDashboard && (
+                    <div className="grid grid-cols-1 gap-2 border rounded-lg p-3">
+                      {availableWidgets.map(widget => {
+                        const isSelected = dashboardWidgets.some(dw => dw.type === widget.type);
+                        return (
+                          <label key={widget.type} className="flex items-center gap-2 cursor-pointer py-1">
+                            <Checkbox checked={isSelected} onCheckedChange={() => toggleDashboardWidget(widget.type)} />
+                            <widget.icon className="h-4 w-4 text-muted-foreground" />
+                            <div className="flex-1 min-w-0">
+                              <span className="text-sm">{widget.title}</span>
+                              {widget.description && (
+                                <span className="text-xs text-muted-foreground ml-2">{widget.description}</span>
+                              )}
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Actions */}
+              <div className="flex flex-col gap-2">
+                <Button onClick={handleSave} disabled={!name.trim() || createProfile.isPending || updateProfile.isPending} className="w-full">
+                  {(createProfile.isPending || updateProfile.isPending) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {editingProfile ? 'Guardar' : 'Criar'}
+                </Button>
+                <Button variant="outline" onClick={() => setIsOpen(false)} className="w-full">Cancelar</Button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Mobile fixed bottom bar */}
+        <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t flex gap-2 lg:hidden z-50">
+          <Button variant="outline" onClick={() => setIsOpen(false)} className="flex-1">Cancelar</Button>
+          <Button onClick={handleSave} disabled={!name.trim() || createProfile.isPending || updateProfile.isPending} className="flex-1">
+            {(createProfile.isPending || updateProfile.isPending) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {editingProfile ? 'Guardar' : 'Criar'}
+          </Button>
+        </div>
+        <div className="h-20 lg:hidden" />
+      </div>
+    );
+  }
+
+  // ── List view ──
   return (
     <div className="space-y-6">
       <Card>
@@ -201,9 +374,7 @@ export function ProfilesTab() {
               <Shield className="h-5 w-5" />
               Perfis de Acesso
             </CardTitle>
-            <CardDescription>
-              Defina perfis com permissões granulares por módulo e sub-área.
-            </CardDescription>
+            <CardDescription>Defina perfis com permissões granulares por módulo e sub-área.</CardDescription>
           </div>
           <Button onClick={openCreate}>
             <Plus className="mr-2 h-4 w-4" />
@@ -248,170 +419,6 @@ export function ProfilesTab() {
           </div>
         </CardContent>
       </Card>
-
-      <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{editingProfile ? 'Editar Perfil' : 'Criar Perfil'}</DialogTitle>
-            <DialogDescription>
-              Configure permissões granulares por módulo e sub-área.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label>Nome do Perfil</Label>
-              <Input placeholder="Ex: Diretor Comercial" value={name} onChange={e => setName(e.target.value)} />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Role Base</Label>
-              <Select value={baseRole} onValueChange={handleBaseRoleChange}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="admin">Administrador</SelectItem>
-                  <SelectItem value="viewer">Visualizador</SelectItem>
-                  <SelectItem value="salesperson">Vendedor</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Define as políticas de segurança base.
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Visibilidade de Dados</Label>
-              <Select value={dataScope} onValueChange={(v) => setDataScope(v as DataScope)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {(['own', 'team', 'all'] as DataScope[]).map(scope => (
-                    <SelectItem key={scope} value={scope}>
-                      {DATA_SCOPE_LABELS[scope]} — {DATA_SCOPE_DESCRIPTIONS[scope]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Define de quem o utilizador pode ver os dados.
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Permissões por Módulo</Label>
-              <Accordion type="multiple" className="border rounded-lg">
-                {Object.entries(MODULE_SCHEMA).map(([moduleKey, schema]) => {
-                  const allEnabled = isModuleAllEnabled(moduleKey);
-                  const partial = isModulePartial(moduleKey);
-
-                  return (
-                    <AccordionItem key={moduleKey} value={moduleKey} className="border-b last:border-b-0">
-                      <AccordionTrigger className="px-4 py-3 hover:no-underline">
-                        <div className="flex items-center gap-3 flex-1">
-                          <span className="font-medium text-sm">{schema.label}</span>
-                          {allEnabled && <Badge variant="secondary" className="text-xs">Tudo</Badge>}
-                          {partial && !allEnabled && <Badge variant="outline" className="text-xs">Parcial</Badge>}
-                          {!allEnabled && !partial && <Badge variant="outline" className="text-xs text-muted-foreground">Desativado</Badge>}
-                        </div>
-                      </AccordionTrigger>
-                      <AccordionContent className="px-4 pb-4">
-                        <div className="flex gap-2 mb-3">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="text-xs h-7"
-                            onClick={() => setModuleAll(moduleKey, true)}
-                          >
-                            Tudo
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="text-xs h-7"
-                            onClick={() => setModuleAll(moduleKey, false)}
-                          >
-                            Nada
-                          </Button>
-                        </div>
-
-                        <div className="space-y-4">
-                          {Object.entries(schema.subareas).map(([subKey, subSchema]) => {
-                            const subPerms = permissions[moduleKey]?.subareas?.[subKey] || {};
-                            return (
-                              <div key={subKey} className="space-y-2">
-                                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                                  {subSchema.label}
-                                </p>
-                                <div className="flex flex-wrap gap-x-4 gap-y-2">
-                                  {subSchema.actions.map(action => (
-                                    <label key={action} className="flex items-center gap-1.5 cursor-pointer">
-                                      <Checkbox
-                                        checked={subPerms[action] ?? false}
-                                        onCheckedChange={() => toggleAction(moduleKey, subKey, action)}
-                                      />
-                                      <span className="text-sm">{ACTION_LABELS[action] || action}</span>
-                                    </label>
-                                  ))}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </AccordionContent>
-                    </AccordionItem>
-                  );
-                })}
-              </Accordion>
-            </div>
-
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <Label className="flex items-center gap-2">
-                  <LayoutDashboard className="h-4 w-4" />
-                  Dashboard Personalizado
-                </Label>
-                <Switch checked={useCustomDashboard} onCheckedChange={setUseCustomDashboard} />
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {useCustomDashboard
-                  ? 'Selecione os widgets que este perfil verá por defeito no painel.'
-                  : 'A usar o padrão do nicho da organização.'}
-              </p>
-              {useCustomDashboard && (
-                <div className="grid grid-cols-1 gap-2 border rounded-lg p-3">
-                  {availableWidgets.map(widget => {
-                    const isSelected = dashboardWidgets.some(dw => dw.type === widget.type);
-                    return (
-                      <label key={widget.type} className="flex items-center gap-2 cursor-pointer py-1">
-                        <Checkbox
-                          checked={isSelected}
-                          onCheckedChange={() => toggleDashboardWidget(widget.type)}
-                        />
-                        <widget.icon className="h-4 w-4 text-muted-foreground" />
-                        <div className="flex-1 min-w-0">
-                          <span className="text-sm">{widget.title}</span>
-                          {widget.description && (
-                            <span className="text-xs text-muted-foreground ml-2">{widget.description}</span>
-                          )}
-                        </div>
-                      </label>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSave} disabled={!name.trim() || createProfile.isPending || updateProfile.isPending}>
-              {(createProfile.isPending || updateProfile.isPending) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {editingProfile ? 'Guardar' : 'Criar'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
