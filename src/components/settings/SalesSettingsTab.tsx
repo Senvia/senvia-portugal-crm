@@ -8,6 +8,7 @@ import { ShoppingCart } from "lucide-react";
 
 interface SalesSettings {
   lock_delivered_sales?: boolean;
+  lock_fulfilled_sales?: boolean;
   prevent_payment_deletion?: boolean;
 }
 
@@ -18,10 +19,12 @@ export function SalesSettingsTab() {
   const currentSettings: SalesSettings = (org?.sales_settings as SalesSettings) || {};
 
   const [lockDelivered, setLockDelivered] = useState(false);
+  const [lockFulfilled, setLockFulfilled] = useState(false);
   const [preventDeletion, setPreventDeletion] = useState(false);
 
   useEffect(() => {
     setLockDelivered(!!currentSettings.lock_delivered_sales);
+    setLockFulfilled(!!currentSettings.lock_fulfilled_sales);
     setPreventDeletion(!!currentSettings.prevent_payment_deletion);
   }, [org?.sales_settings]);
 
@@ -29,6 +32,7 @@ export function SalesSettingsTab() {
     updateOrganization.mutate({
       sales_settings: {
         lock_delivered_sales: lockDelivered,
+        lock_fulfilled_sales: lockFulfilled,
         prevent_payment_deletion: preventDeletion,
       },
     });
@@ -36,6 +40,7 @@ export function SalesSettingsTab() {
 
   const hasChanges =
     lockDelivered !== !!currentSettings.lock_delivered_sales ||
+    lockFulfilled !== !!currentSettings.lock_fulfilled_sales ||
     preventDeletion !== !!currentSettings.prevent_payment_deletion;
 
   return (
@@ -59,6 +64,22 @@ export function SalesSettingsTab() {
             </Label>
             <p className="text-xs text-muted-foreground">
               Vendas com estado "Concluída" não podem ser editadas.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-start gap-3">
+          <Checkbox
+            id="lock_fulfilled"
+            checked={lockFulfilled}
+            onCheckedChange={(checked) => setLockFulfilled(!!checked)}
+          />
+          <div className="space-y-0.5">
+            <Label htmlFor="lock_fulfilled" className="font-medium cursor-pointer">
+              Bloquear edição de vendas entregues
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              Vendas com estado "Entregue" não podem ser editadas por utilizadores sem perfil de administrador.
             </p>
           </div>
         </div>
