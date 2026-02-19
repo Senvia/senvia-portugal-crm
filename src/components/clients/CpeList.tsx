@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useCpes, useDeleteCpe } from '@/hooks/useCpes';
 import { useAuth } from '@/contexts/AuthContext';
-import { CPE_STATUS_LABELS, CPE_STATUS_STYLES, type Cpe } from '@/types/cpes';
+import { CPE_STATUS_LABELS, CPE_STATUS_STYLES, NIVEL_TENSAO_LABELS, NIVEL_TENSAO_STYLES, type Cpe, type NivelTensao } from '@/types/cpes';
 import { CreateCpeModal } from './CreateCpeModal';
 import { EditCpeModal } from './EditCpeModal';
 
@@ -104,12 +104,21 @@ export function CpeList({ clientId }: CpeListProps) {
                       {/* Header */}
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-medium">{cpe.equipment_type}</span>
-                        <Badge 
-                          variant="outline" 
-                          className={`${statusStyle.bg} ${statusStyle.text} ${statusStyle.border}`}
-                        >
-                          {CPE_STATUS_LABELS[cpe.status as keyof typeof CPE_STATUS_LABELS]}
-                        </Badge>
+                        {isTelecom && cpe.nivel_tensao ? (
+                          <Badge 
+                            variant="outline" 
+                            className={`${NIVEL_TENSAO_STYLES[cpe.nivel_tensao as NivelTensao]?.bg} ${NIVEL_TENSAO_STYLES[cpe.nivel_tensao as NivelTensao]?.text} ${NIVEL_TENSAO_STYLES[cpe.nivel_tensao as NivelTensao]?.border}`}
+                          >
+                            {NIVEL_TENSAO_LABELS[cpe.nivel_tensao as NivelTensao]}
+                          </Badge>
+                        ) : !isTelecom && (
+                          <Badge 
+                            variant="outline" 
+                            className={`${statusStyle.bg} ${statusStyle.text} ${statusStyle.border}`}
+                          >
+                            {CPE_STATUS_LABELS[cpe.status as keyof typeof CPE_STATUS_LABELS]}
+                          </Badge>
+                        )}
                       </div>
 
                       {/* Details */}
