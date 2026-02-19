@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { FileText, Search, Filter, Plus } from 'lucide-react';
+import { FileText, Search, Filter, Plus, Zap, Wrench } from 'lucide-react';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
 import type { DateRange } from 'react-day-picker';
 import { ProposalDetailsModal } from '@/components/proposals/ProposalDetailsModal';
@@ -18,9 +18,10 @@ import { CreateProposalModal } from '@/components/proposals/CreateProposalModal'
 import { 
   PROPOSAL_STATUS_LABELS, 
   PROPOSAL_STATUS_COLORS, 
-  PROPOSAL_STATUSES 
+  PROPOSAL_STATUSES,
+  PROPOSAL_TYPE_LABELS,
 } from '@/types/proposals';
-import type { Proposal, ProposalStatus } from '@/types/proposals';
+import type { Proposal, ProposalStatus, ProposalType } from '@/types/proposals';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { useTelecomProposalMetrics } from '@/hooks/useTelecomProposalMetrics';
@@ -192,6 +193,12 @@ export default function Proposals() {
                       <Badge className={cn('text-xs', PROPOSAL_STATUS_COLORS[proposal.status])}>
                         {PROPOSAL_STATUS_LABELS[proposal.status]}
                       </Badge>
+                      {proposal.proposal_type && (
+                        <Badge className={cn('text-xs', proposal.proposal_type === 'energia' ? 'bg-indigo-500/20 text-indigo-400' : 'bg-violet-500/20 text-violet-400')}>
+                          {proposal.proposal_type === 'energia' ? <Zap className="h-3 w-3 mr-1" /> : <Wrench className="h-3 w-3 mr-1" />}
+                          {PROPOSAL_TYPE_LABELS[proposal.proposal_type]}
+                        </Badge>
+                      )}
                       {proposal.code && (
                         <span className="text-xs font-mono text-primary font-medium">
                           {proposal.code}
