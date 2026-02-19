@@ -84,6 +84,7 @@ export function EditSaleModal({
   const createSalePayment = useCreateSalePayment();
 
   const { organization } = useAuth();
+  const isTelecom = organization?.niche === 'telecom';
   
   // Fiscal info
   const ixActive = isInvoiceXpressActive(organization);
@@ -474,7 +475,7 @@ export function EditSaleModal({
                   )}
 
                   {/* Products/Services */}
-                  {canFullEdit && (
+                  {canFullEdit && !isTelecom && (
                     <Card>
                       <CardHeader className="pb-2 p-4">
                         <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">

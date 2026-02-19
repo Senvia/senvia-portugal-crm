@@ -479,7 +479,7 @@ export function CreateSaleModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (total <= 0 && items.length === 0) return;
+    if (!isTelecom && total <= 0 && items.length === 0) return;
 
     try {
       const recurringItems = items.filter(item => {
@@ -523,7 +523,7 @@ export function CreateSaleModal({
         next_renewal_date: nextRenewalDate,
       });
 
-      if (items.length > 0 && sale?.id) {
+      if (!isTelecom && items.length > 0 && sale?.id) {
         await createSaleItems.mutateAsync(
           items.map(item => ({
             sale_id: sale.id,
@@ -868,6 +868,7 @@ export function CreateSaleModal({
                 )}
 
                 {/* Products/Services */}
+                {!isTelecom && (
                 <Card>
                   <CardHeader className="pb-2 p-4">
                     <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
@@ -971,6 +972,7 @@ export function CreateSaleModal({
                     )}
                   </CardContent>
                 </Card>
+                )}
 
                 {/* Payments (non-telecom) */}
                 {!isTelecom && (
