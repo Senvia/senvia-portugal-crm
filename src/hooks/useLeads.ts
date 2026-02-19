@@ -149,6 +149,7 @@ export function useCreateLead() {
       // Telecom template fields
       tipologia?: LeadTipologia;
       consumo_anual?: number;
+      company_nif?: string;
     }) => {
       if (!organization?.id) throw new Error('Sem organização');
       

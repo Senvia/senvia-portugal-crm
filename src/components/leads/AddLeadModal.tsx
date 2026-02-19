@@ -48,6 +48,9 @@ const SOURCES = [
 ] as const;
 
 const addLeadSchema = z.object({
+  company_nif: z
+    .string()
+    .min(1, "NIF da empresa é obrigatório"),
   name: z
     .string()
     .min(2, "Nome deve ter pelo menos 2 caracteres")
@@ -96,6 +99,7 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
   const form = useForm<AddLeadFormData>({
     resolver: zodResolver(addLeadSchema),
     defaultValues: {
+      company_nif: "",
       name: "",
       email: "",
       phone: "",
@@ -111,8 +115,8 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
     },
   });
 
-  const searchExistingClient = async (field: 'email' | 'phone', value: string) => {
-    if (!value || value.length < 3 || !organization?.id) return;
+  const searchExistingClient = async (nifValue: string) => {
+    if (!nifValue || nifValue.length < 3 || !organization?.id) return;
     
     setIsSearching(true);
     try {
@@ -120,7 +124,7 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
         .from('crm_clients')
         .select('id, name, email, phone, notes')
         .eq('organization_id', organization.id)
-        .eq(field, value)
+        .eq('company_nif', nifValue)
         .limit(1)
         .maybeSingle();
       
@@ -130,6 +134,8 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
         if (!form.getValues('email') && data.email) form.setValue('email', data.email);
         if (!form.getValues('phone') && data.phone) form.setValue('phone', data.phone);
         if (!form.getValues('notes') && data.notes) form.setValue('notes', data.notes);
+      } else {
+        setMatchedClient(null);
       }
     } finally {
       setIsSearching(false);
@@ -142,6 +148,7 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
 
   const onSubmit = async (data: AddLeadFormData) => {
     await createLead.mutateAsync({
+      company_nif: data.company_nif,
       name: data.name,
       email: data.email,
       phone: data.phone,
@@ -194,6 +201,27 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
 
             <FormField
               control={form.control}
+              name="company_nif"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>NIF Empresa *</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="123456789"
+                      {...field}
+                      onBlur={(e) => {
+                        field.onBlur();
+                        searchExistingClient(e.target.value);
+                      }}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
               name="name"
               render={({ field }) => (
                 <FormItem>
@@ -217,10 +245,6 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
                       type="email"
                       placeholder="joao@exemplo.pt"
                       {...field}
-                      onBlur={(e) => {
-                        field.onBlur();
-                        searchExistingClient('email', e.target.value);
-                      }}
                     />
                   </FormControl>
                   <FormMessage />
@@ -235,12 +259,10 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
                 <FormItem>
                   <FormLabel>Telemóvel *</FormLabel>
                   <FormControl>
-                    <div onBlur={() => searchExistingClient('phone', field.value)}>
-                      <PhoneInput
-                        value={field.value}
-                        onChange={field.onChange}
-                      />
-                    </div>
+                    <PhoneInput
+                      value={field.value}
+                      onChange={field.onChange}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

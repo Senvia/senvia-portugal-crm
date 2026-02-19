@@ -181,6 +181,7 @@ export function useConvertLeadToClient() {
       phone?: string;
       company?: string;
       nif?: string;
+      company_nif?: string;
       notes?: string;
     }) => {
       if (!organizationId) throw new Error('No organization');
@@ -202,6 +203,7 @@ export function useConvertLeadToClient() {
           phone: leadData.phone,
           company: leadData.company,
           nif: leadData.nif,
+          company_nif: leadData.company_nif,
           notes: leadData.notes,
           source: 'lead',
           status: 'active',

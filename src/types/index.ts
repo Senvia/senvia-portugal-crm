@@ -63,6 +63,7 @@ export interface Lead {
   // Telecom template fields
   tipologia?: LeadTipologia | null;
   consumo_anual?: number | null;
+  company_nif?: string | null;
   created_at: string;
   updated_at?: string;
 }
