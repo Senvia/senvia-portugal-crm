@@ -1,67 +1,44 @@
 
-
-# Redesenhar "Outros Servicos" nas Propostas Telecom
+# Validacao na Criacao de Propostas "Outros Servicos"
 
 ## Resumo
-Reestruturar a seccao "Outros Servicos" para que cada produto tenha campos especificos em linha, com calculos automaticos de kWp onde aplicavel. O modelo de servico (Transacional/SAAS) passa a aparecer primeiro.
+Adicionar validacao ao formulario de criacao de propostas do tipo "Outros Servicos" (telecom), impedindo a submissao sem os dados obrigatorios preenchidos.
 
-## Nova Estrutura por Produto
+## Regras de Validacao
 
-Cada produto tem campos especificos numa linha horizontal:
-
-| Produto | Campos | kWp |
-|---------|--------|-----|
-| Solar | Duracao, kWp | Manual |
-| Carregadores/Baterias | kWp | Manual |
-| Condensadores | Duracao, Valor, kWp | Auto: (Valor / 0.67) / 1000 |
-| Coberturas | Valor, kWp | Auto (formula a definir, por agora manual) |
+Para propostas do tipo **servicos** (telecom):
+1. **Pelo menos 1 produto** deve estar selecionado (checkbox ativo)
+2. **Modelo de Servico** deve ter um dos dois selecionados (Transacional ou SAAS) -- ja esta pre-selecionado por defeito como "transacional", por isso esta regra ja e cumprida
+3. **kWp total** deve ser maior que 0 (ou seja, pelo menos um produto com kWp preenchido)
+4. **Comissao** deve estar preenchida (maior que 0)
 
 ## O que muda
 
-### 1. Migracao de Base de Dados
-Adicionar coluna JSONB `servicos_details` na tabela `proposals` para guardar os dados por produto:
-```json
-{
-  "Solar": { "duracao": 5, "kwp": 6.5 },
-  "Carregadores/Baterias": { "kwp": 3.2 },
-  "Condensadores": { "duracao": 3, "valor": 5000, "kwp": 7.46 },
-  "Coberturas": { "valor": 8000, "kwp": 4.0 }
-}
+### `src/components/proposals/CreateProposalModal.tsx`
+
+1. **Adicionar um `useMemo` de validacao** que calcula se o formulario esta valido:
+   - Se `proposalType === 'servicos'`: verificar que `servicosProdutos.length > 0`, `totalKwp > 0`, e `comissaoServicos` preenchido
+   - Se `proposalType === 'energia'`: manter logica atual (sem alteracao)
+
+2. **Desabilitar o botao "Criar Proposta"** quando a validacao falha (`disabled={!isValid || isPending}`)
+
+3. **Mostrar mensagens de erro inline** junto aos campos em falta (texto vermelho discreto), apenas apos a primeira tentativa de submissao (usando um estado `attempted`)
+
+## Detalhes Tecnicos
+
 ```
-O campo `kwp` existente passa a guardar o total (soma de todos). Os campos `servicos_produtos` continuam a funcionar como lista dos produtos selecionados.
+isServicosValid = 
+  servicosProdutos.length > 0 
+  && totalKwp > 0 
+  && parseFloat(comissaoServicos) > 0
 
-### 2. Tipos (`src/types/proposals.ts`)
-- Adicionar interface `ServicosProductDetails` com os campos por produto
-- Adicionar tipo `ServicosDetails` como Record de produto para detalhes
-- Definir configs por produto (quais campos cada um tem, formula de kWp)
+isFormValid = 
+  isTelecom && proposalType === 'servicos' 
+    ? isServicosValid 
+    : true  // energia e non-telecom mantêm logica atual
+```
 
-### 3. Formulario de Criacao (`CreateProposalModal.tsx`)
-Redesenhar a seccao de servicos:
-1. **Modelo de Servico** aparece primeiro (Transacional / SAAS)
-2. **Produtos em linha** - cada produto e uma linha com checkbox + campos inline:
-   - Checkbox para ativar/desativar o produto
-   - Campos especificos aparecem quando ativado
-   - kWp calculado automaticamente para Condensadores (e Coberturas quando tiver formula)
-3. **Totais** - kWp total e comissao no resumo lateral
-
-### 4. Formulario de Edicao (`EditProposalModal.tsx`)
-- Mesma logica do formulario de criacao
-- Carregar `servicos_details` do proposal existente
-
-### 5. Modal de Detalhes (`ProposalDetailsModal.tsx`)
-- Mostrar cada produto ativo com os seus campos numa tabela/grid
-- Mostrar kWp calculados vs manuais
-
-### 6. Submissao e Logica
-- Na submissao, construir o objeto `servicos_details` e calcular `kwp` total
-- Formula Condensadores: kWp = (valor / 0.67) / 1000
-- Formula Coberturas: por agora kWp manual (a definir depois)
+O botao fica desabilitado e com estilo visual (opacity) quando invalido. Ao clicar com dados em falta, mostra as mensagens de erro nos campos relevantes.
 
 ## Ficheiros alterados
-- **Migracao SQL**: Adicionar coluna `servicos_details` (JSONB) a `proposals`
-- `src/types/proposals.ts`: Novos tipos e configuracao por produto
-- `src/components/proposals/CreateProposalModal.tsx`: Redesenhar seccao servicos
-- `src/components/proposals/EditProposalModal.tsx`: Mesma reestruturacao
-- `src/components/proposals/ProposalDetailsModal.tsx`: Visualizacao atualizada
-- `src/hooks/useProposals.ts`: Guardar/ler `servicos_details`
-
+- `src/components/proposals/CreateProposalModal.tsx`
