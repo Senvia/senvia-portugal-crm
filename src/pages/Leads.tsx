@@ -23,7 +23,7 @@ import { usePipelineStages } from "@/hooks/usePipelineStages";
 import type { Proposal } from "@/types/proposals";
 import type { CalendarEvent } from "@/types/calendar";
 import { useLeads, useUpdateLeadStatus, useDeleteLead, useUpdateLead } from "@/hooks/useLeads";
-import { useClients } from "@/hooks/useClients";
+import { useClients, useConvertLeadToClient } from "@/hooks/useClients";
 import { useLeadsRealtime, useProposalsRealtime } from "@/hooks/useRealtimeSubscription";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -52,6 +52,7 @@ export default function Leads() {
   const updateStatus = useUpdateLeadStatus();
   const deleteLead = useDeleteLead();
   const updateLead = useUpdateLead();
+  const convertLeadToClient = useConvertLeadToClient();
   
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -163,6 +164,13 @@ export default function Leads() {
     return stage && lostKeywords.some(kw => stage.name.toLowerCase().includes(kw));
   };
 
+  const isWonStage = (stageKey: string) => {
+    const stage = stages.find(s => s.key === stageKey);
+    if (stage?.is_final_positive) return true;
+    const wonKeywords = ['ganho', 'won', 'fechado', 'closed'];
+    return stage && wonKeywords.some(kw => stage.name.toLowerCase().includes(kw));
+  };
+
   const handleStatusChange = (leadId: string, newStatus: string) => {
     const lead = leads.find(l => l.id === leadId);
     
@@ -239,8 +247,26 @@ export default function Leads() {
       setIsLostDialogOpen(true);
       return;
     }
+
+    // Intercept drops on won stages -> auto-create client
+    if (isWonStage(newStatus) && lead) {
+      const existingClient = clients.find(c => c.lead_id === leadId);
+      if (!existingClient) {
+        convertLeadToClient.mutate({
+          lead_id: leadId,
+          name: lead.name,
+          email: lead.email,
+          phone: lead.phone,
+          notes: lead.notes || undefined,
+        }, {
+          onSuccess: () => {
+            toast.success('Lead ganha! Cliente criado automaticamente.');
+          },
+        });
+      }
+    }
     
-    // For other statuses, update normally
+    // For other statuses (including won), update normally
     updateStatus.mutate({ leadId, status: newStatus });
   };
 
