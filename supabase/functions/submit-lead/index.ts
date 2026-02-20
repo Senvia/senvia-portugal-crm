@@ -7,6 +7,7 @@ const corsHeaders = {
 
 interface LeadSubmission {
   company_nif?: string | null;
+  company_name?: string | null;
   name?: string | null;
   email?: string | null;
   phone?: string | null;
@@ -195,6 +196,7 @@ Deno.serve(async (req) => {
         form_id: body.form_id || null,
         assigned_to: formSettings.assigned_to || null,
         company_nif: body.company_nif?.trim() || null,
+        company_name: body.company_name?.trim() || null,
         name: body.name?.trim() || 'Anónimo',
         email: body.email?.trim()?.toLowerCase() || 'nao-fornecido@placeholder.local',
         phone: cleanPhone || '000000000',
@@ -291,6 +293,8 @@ Deno.serve(async (req) => {
           name: lead.name,
           email: lead.email,
           phone: lead.phone,
+          company_nif: lead.company_nif,
+          company_name: lead.company_name,
           source: lead.source,
           status: lead.status,
           temperature: lead.temperature,

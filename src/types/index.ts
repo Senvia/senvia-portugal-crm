@@ -64,6 +64,7 @@ export interface Lead {
   tipologia?: LeadTipologia | null;
   consumo_anual?: number | null;
   company_nif?: string | null;
+  company_name?: string | null;
   created_at: string;
   updated_at?: string;
 }

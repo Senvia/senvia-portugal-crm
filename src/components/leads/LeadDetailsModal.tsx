@@ -1,4 +1,5 @@
 import { Lead, STATUS_LABELS, LeadStatus, LeadTemperature, LeadTipologia, TEMPERATURE_LABELS, TEMPERATURE_STYLES, TIPOLOGIA_LABELS, TIPOLOGIA_STYLES, FormSettings, CustomField, ROLE_LABELS } from "@/types";
+import { LeadAttachments } from "@/components/leads/LeadAttachments";
 import { usePipelineStages } from "@/hooks/usePipelineStages";
 import { formatDate, formatDateTime, getWhatsAppUrl } from "@/lib/format";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -439,7 +440,10 @@ export function LeadDetailsModal({
             {lead.company_nif && (
               <div className="flex items-center gap-3 text-sm">
                 <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                <span className="text-foreground">NIF: <strong>{lead.company_nif}</strong></span>
+                <span className="text-foreground">
+                  NIF: <strong>{lead.company_nif}</strong>
+                  {lead.company_name && <> — {lead.company_name}</>}
+                </span>
               </div>
             )}
             
@@ -561,7 +565,15 @@ export function LeadDetailsModal({
             }}
             className="resize-none"
           />
-        </div>
+          </div>
+
+          {/* Faturas Anexadas - Telecom only */}
+          {isTelecom && lead.id && (
+            <>
+              <Separator />
+              <LeadAttachments leadId={lead.id} />
+            </>
+          )}
 
           <Separator />
 

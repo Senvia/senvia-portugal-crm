@@ -1464,10 +1464,62 @@ export type Database = {
           },
         ]
       }
+      lead_attachments: {
+        Row: {
+          created_at: string
+          file_name: string
+          file_path: string
+          file_size: number | null
+          file_type: string | null
+          id: string
+          lead_id: string
+          organization_id: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          file_name: string
+          file_path: string
+          file_size?: number | null
+          file_type?: string | null
+          id?: string
+          lead_id: string
+          organization_id: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          file_name?: string
+          file_path?: string
+          file_size?: number | null
+          file_type?: string | null
+          id?: string
+          lead_id?: string
+          organization_id?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_attachments_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_attachments_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       leads: {
         Row: {
           assigned_to: string | null
           automation_enabled: boolean
+          company_name: string | null
           company_nif: string | null
           consumo_anual: number | null
           created_at: string | null
@@ -1490,6 +1542,7 @@ export type Database = {
         Insert: {
           assigned_to?: string | null
           automation_enabled?: boolean
+          company_name?: string | null
           company_nif?: string | null
           consumo_anual?: number | null
           created_at?: string | null
@@ -1512,6 +1565,7 @@ export type Database = {
         Update: {
           assigned_to?: string | null
           automation_enabled?: boolean
+          company_name?: string | null
           company_nif?: string | null
           consumo_anual?: number | null
           created_at?: string | null

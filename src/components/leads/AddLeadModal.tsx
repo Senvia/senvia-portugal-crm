@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -28,12 +28,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { PhoneInput } from "@/components/ui/phone-input";
-import { Loader2, Zap, UserCircle, X, User } from "lucide-react";
+import { Loader2, Zap, UserCircle, X, User, Upload, FileText, Trash2, Paperclip } from "lucide-react";
 import { useCreateLead } from "@/hooks/useLeads";
 import { useTeamMembers } from "@/hooks/useTeam";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
+import { useUploadLeadAttachment } from "@/hooks/useLeadAttachments";
 import type { LeadTemperature, LeadTipologia } from "@/types";
 import { ROLE_LABELS as RoleLabels, TIPOLOGIA_LABELS, TIPOLOGIA_STYLES } from "@/types";
 
@@ -51,6 +52,9 @@ const addLeadSchema = z.object({
   company_nif: z
     .string()
     .min(1, "NIF da empresa é obrigatório"),
+  company_name: z
+    .string()
+    .min(2, "Nome da empresa é obrigatório"),
   name: z
     .string()
     .min(2, "Nome deve ter pelo menos 2 caracteres")
@@ -86,12 +90,15 @@ interface AddLeadModalProps {
 
 export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
   const createLead = useCreateLead();
+  const uploadAttachment = useUploadLeadAttachment();
   const { data: teamMembers } = useTeamMembers();
   const { canManageTeam } = usePermissions();
   const { organization } = useAuth();
   
-  const [matchedClient, setMatchedClient] = useState<{ id: string; name: string; email: string | null; phone: string | null; notes: string | null } | null>(null);
+  const [matchedClient, setMatchedClient] = useState<{ id: string; name: string; email: string | null; phone: string | null; notes: string | null; company: string | null } | null>(null);
   const [isSearching, setIsSearching] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Check if organization is telecom template
   const isTelecom = organization?.niche === 'telecom';
@@ -100,6 +107,7 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
     resolver: zodResolver(addLeadSchema),
     defaultValues: {
       company_nif: "",
+      company_name: "",
       name: "",
       email: "",
       phone: "",
@@ -122,7 +130,7 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
     try {
       const { data } = await supabase
         .from('crm_clients')
-        .select('id, name, email, phone, notes')
+        .select('id, name, email, phone, notes, company')
         .eq('organization_id', organization.id)
         .eq('company_nif', nifValue)
         .limit(1)
@@ -131,6 +139,7 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
       if (data) {
         setMatchedClient(data);
         if (!form.getValues('name')) form.setValue('name', data.name);
+        if (!form.getValues('company_name') && data.company) form.setValue('company_name', data.company);
         if (!form.getValues('email') && data.email) form.setValue('email', data.email);
         if (!form.getValues('phone') && data.phone) form.setValue('phone', data.phone);
         if (!form.getValues('notes') && data.notes) form.setValue('notes', data.notes);
@@ -147,27 +156,47 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
   };
 
   const onSubmit = async (data: AddLeadFormData) => {
-    await createLead.mutateAsync({
+    const lead = await createLead.mutateAsync({
       company_nif: data.company_nif,
+      company_name: data.company_name,
       name: data.name,
       email: data.email,
       phone: data.phone,
       source: data.source,
       temperature: data.temperature as LeadTemperature,
-      // For telecom, use consumo_anual; for others, use value
       value: isTelecom ? undefined : (data.value ? Number(data.value) : undefined),
       notes: data.notes,
       gdpr_consent: data.gdpr_consent,
       automation_enabled: data.automation_enabled,
       assigned_to: data.assigned_to && data.assigned_to !== 'unassigned' ? data.assigned_to : undefined,
-      // Telecom fields
       tipologia: isTelecom ? data.tipologia as LeadTipologia : undefined,
       consumo_anual: isTelecom && data.consumo_anual ? Number(data.consumo_anual) : undefined,
     });
+
+    // Upload pending files if any (telecom)
+    if (pendingFiles.length > 0 && lead?.id) {
+      for (const file of pendingFiles) {
+        await uploadAttachment.mutateAsync({ leadId: lead.id, file });
+      }
+    }
     
     setMatchedClient(null);
+    setPendingFiles([]);
     form.reset();
     onOpenChange(false);
+  };
+
+  const handleAddFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+    const maxSize = 10 * 1024 * 1024;
+    const validFiles = Array.from(files).filter(f => f.size <= maxSize);
+    setPendingFiles(prev => [...prev, ...validFiles]);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const removePendingFile = (index: number) => {
+    setPendingFiles(prev => prev.filter((_, i) => i !== index));
   };
 
   return (
@@ -214,6 +243,20 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
                         searchExistingClient(e.target.value);
                       }}
                     />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="company_name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Nome da Empresa *</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Empresa Exemplo, Lda" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -445,6 +488,54 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
                 </FormItem>
               )}
             />
+
+            {/* Anexar Faturas - Only for Telecom */}
+            {isTelecom && (
+              <div className="space-y-3 rounded-md border p-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium flex items-center gap-2">
+                    <Paperclip className="h-4 w-4 text-muted-foreground" />
+                    Anexar Faturas
+                  </span>
+                  <div>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".pdf,.png,.jpg,.jpeg"
+                      multiple
+                      className="hidden"
+                      onChange={handleAddFiles}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <Upload className="h-4 w-4" />
+                      Adicionar
+                    </Button>
+                  </div>
+                </div>
+                {pendingFiles.length > 0 && (
+                  <div className="space-y-2">
+                    {pendingFiles.map((file, i) => (
+                      <div key={i} className="flex items-center gap-2 rounded bg-muted/50 p-2 text-sm">
+                        <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <span className="flex-1 truncate">{file.name}</span>
+                        <span className="text-xs text-muted-foreground">{(file.size / 1024).toFixed(0)} KB</span>
+                        <Button type="button" variant="ghost" size="icon-sm" onClick={() => removePendingFile(i)}>
+                          <Trash2 className="h-3 w-3 text-destructive" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {pendingFiles.length === 0 && (
+                  <p className="text-xs text-muted-foreground">PDF, PNG ou JPG (máx. 10MB)</p>
+                )}
+              </div>
+            )}
 
             <FormField
               control={form.control}

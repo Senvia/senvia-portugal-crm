@@ -196,6 +196,9 @@ export function LeadCard({
       {/* Content */}
       <div className="mt-3">
         <h4 className="font-semibold text-card-foreground">{lead.name}</h4>
+        {lead.company_name && (
+          <p className="text-xs text-muted-foreground">{lead.company_name}</p>
+        )}
         
         {/* Tipologia badge for Telecom */}
         {isTelecom && lead.tipologia && (
