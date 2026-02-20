@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Check, Crown, Loader2, ExternalLink, Sparkles, Users, FileText, MessageSquare, BarChart3, Puzzle, Zap, Package } from 'lucide-react';
+import { Check, Crown, Loader2, ExternalLink, Sparkles, Users, FileText, MessageSquare, BarChart3, Puzzle, Zap, Package, CreditCard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -13,6 +13,7 @@ const INTEGRATION_ICONS: Record<string, React.ElementType> = {
   WhatsApp: MessageSquare,
   'Meta Pixels': BarChart3,
   'Faturação (InvoiceXpress)': FileText,
+  'Stripe (Pagamentos)': CreditCard,
 };
 
 export function BillingTab() {
@@ -69,8 +70,8 @@ export function BillingTab() {
         </div>
       )}
 
-      {/* Plans Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 lg:gap-6">
+      {/* Plans - Full Width Vertical Sections */}
+      <div className="space-y-5">
         {STRIPE_PLANS.map((plan) => {
           const isCurrent = plan.id === currentPlanId;
           const isHighlighted = plan.highlighted;
@@ -78,7 +79,7 @@ export function BillingTab() {
           return (
             <div
               key={plan.id}
-              className={`relative flex flex-col rounded-2xl border-2 overflow-hidden transition-all ${
+              className={`relative rounded-2xl border-2 overflow-hidden transition-all ${
                 isCurrent
                   ? 'border-primary ring-2 ring-primary/20 shadow-lg'
                   : isHighlighted
@@ -86,43 +87,64 @@ export function BillingTab() {
                   : 'border-border shadow-sm'
               }`}
             >
-              {/* Premium Header */}
+              {/* Header - horizontal on desktop */}
               <div className={`p-5 md:p-6 ${
                 isCurrent
-                  ? 'bg-gradient-to-br from-primary/10 via-primary/5 to-transparent'
+                  ? 'bg-gradient-to-r from-primary/10 via-primary/5 to-transparent'
                   : isHighlighted
-                  ? 'bg-gradient-to-br from-primary/8 via-transparent to-transparent'
-                  : 'bg-gradient-to-br from-muted/50 to-transparent'
+                  ? 'bg-gradient-to-r from-primary/8 via-transparent to-transparent'
+                  : 'bg-gradient-to-r from-muted/50 to-transparent'
               }`}>
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <h3 className="text-xl font-bold tracking-tight">{plan.name}</h3>
-                    <p className="text-sm text-muted-foreground mt-1">{plan.description}</p>
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <div>
+                      <div className="flex items-center gap-2.5">
+                        <h3 className="text-xl font-bold tracking-tight">{plan.name}</h3>
+                        {isCurrent && (
+                          <Badge className="bg-primary text-primary-foreground text-[10px] px-2.5 py-1">
+                            <Crown className="h-3 w-3 mr-1" />
+                            Atual
+                          </Badge>
+                        )}
+                        {isHighlighted && !isCurrent && (
+                          <Badge variant="secondary" className="text-[10px] px-2.5 py-1">
+                            <Sparkles className="h-3 w-3 mr-1" />
+                            Popular
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-1">{plan.description}</p>
+                    </div>
                   </div>
-                  {isCurrent && (
-                    <Badge className="bg-primary text-primary-foreground text-[10px] px-2.5 py-1 shrink-0">
-                      <Crown className="h-3 w-3 mr-1" />
-                      Atual
-                    </Badge>
-                  )}
-                  {isHighlighted && !isCurrent && (
-                    <Badge variant="secondary" className="text-[10px] px-2.5 py-1 shrink-0">
-                      <Sparkles className="h-3 w-3 mr-1" />
-                      Popular
-                    </Badge>
-                  )}
-                </div>
 
-                <div className="flex items-baseline gap-1">
-                  <span className="text-4xl font-extrabold tracking-tight">{plan.priceMonthly}€</span>
-                  <span className="text-muted-foreground text-sm font-medium">/mês</span>
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-4xl font-extrabold tracking-tight">{plan.priceMonthly}€</span>
+                      <span className="text-muted-foreground text-sm font-medium">/mês</span>
+                    </div>
+                    <Button
+                      size="lg"
+                      variant={isCurrent ? 'outline' : isHighlighted ? 'default' : 'secondary'}
+                      disabled={isCurrent || isLoading || checkingPlan === plan.id}
+                      onClick={() => handleSelectPlan(plan)}
+                      className="min-w-[160px]"
+                    >
+                      {checkingPlan === plan.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : isCurrent ? (
+                        'Plano Atual'
+                      ) : (
+                        'Fazer Upgrade'
+                      )}
+                    </Button>
+                  </div>
                 </div>
               </div>
 
               <Separator />
 
-              {/* Content */}
-              <div className="flex-1 p-5 md:p-6 space-y-5">
+              {/* Content - 3 columns on desktop */}
+              <div className="p-5 md:p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
                 {/* Modules */}
                 <div>
                   <div className="flex items-center gap-2 mb-3">
@@ -138,8 +160,6 @@ export function BillingTab() {
                     ))}
                   </ul>
                 </div>
-
-                <Separator className="opacity-50" />
 
                 {/* Integrations */}
                 <div>
@@ -164,8 +184,6 @@ export function BillingTab() {
                   )}
                 </div>
 
-                <Separator className="opacity-50" />
-
                 {/* Limits */}
                 <div>
                   <div className="flex items-center gap-2 mb-3">
@@ -183,25 +201,6 @@ export function BillingTab() {
                     </div>
                   </div>
                 </div>
-              </div>
-
-              {/* Action Button */}
-              <div className="p-5 md:p-6 pt-0">
-                <Button
-                  className="w-full"
-                  size="lg"
-                  variant={isCurrent ? 'outline' : isHighlighted ? 'default' : 'secondary'}
-                  disabled={isCurrent || isLoading || checkingPlan === plan.id}
-                  onClick={() => handleSelectPlan(plan)}
-                >
-                  {checkingPlan === plan.id ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : isCurrent ? (
-                    'Plano Atual'
-                  ) : (
-                    'Fazer Upgrade'
-                  )}
-                </Button>
               </div>
             </div>
           );
