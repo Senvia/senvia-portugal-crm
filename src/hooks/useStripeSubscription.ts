@@ -7,6 +7,7 @@ interface SubscriptionStatus {
   plan_id: string | null;
   product_id: string | null;
   subscription_end: string | null;
+  billing_exempt?: boolean;
 }
 
 export function useStripeSubscription() {

@@ -1931,6 +1931,7 @@ export type Database = {
       organizations: {
         Row: {
           ai_qualification_rules: string | null
+          billing_exempt: boolean | null
           billing_provider: string
           brevo_api_key: string | null
           brevo_sender_email: string | null
@@ -1976,6 +1977,7 @@ export type Database = {
         }
         Insert: {
           ai_qualification_rules?: string | null
+          billing_exempt?: boolean | null
           billing_provider?: string
           brevo_api_key?: string | null
           brevo_sender_email?: string | null
@@ -2021,6 +2023,7 @@ export type Database = {
         }
         Update: {
           ai_qualification_rules?: string | null
+          billing_exempt?: boolean | null
           billing_provider?: string
           brevo_api_key?: string | null
           brevo_sender_email?: string | null

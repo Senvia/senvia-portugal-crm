@@ -47,8 +47,25 @@ export function BillingTab() {
 
   return (
     <div className="space-y-6">
+      {/* Billing Exempt Status */}
+      {subscriptionStatus?.billing_exempt && (
+        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 md:p-5">
+          <div className="flex items-center gap-2 mb-1">
+            <Crown className="h-4 w-4 text-emerald-500" />
+            <span className="font-semibold text-sm">Plano Vitalício</span>
+            <Badge className="bg-emerald-500 text-white text-[10px] px-2.5 py-1">
+              <Sparkles className="h-3 w-3 mr-1" />
+              Isento
+            </Badge>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            A sua organização tem acesso vitalício ao plano Elite sem necessidade de pagamento.
+          </p>
+        </div>
+      )}
+
       {/* Current Plan Status */}
-      {subscriptionStatus?.subscribed && subscriptionStatus.subscription_end && (
+      {!subscriptionStatus?.billing_exempt && subscriptionStatus?.subscribed && subscriptionStatus.subscription_end && (
         <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 md:p-5">
           <div className="flex items-center gap-2 mb-1">
             <Crown className="h-4 w-4 text-primary" />
@@ -122,21 +139,23 @@ export function BillingTab() {
                       <span className="text-4xl font-extrabold tracking-tight">{plan.priceMonthly}€</span>
                       <span className="text-muted-foreground text-sm font-medium">/mês</span>
                     </div>
-                    <Button
-                      size="lg"
-                      variant={isCurrent ? 'outline' : isHighlighted ? 'default' : 'secondary'}
-                      disabled={isCurrent || isLoading || checkingPlan === plan.id}
-                      onClick={() => handleSelectPlan(plan)}
-                      className="min-w-[160px]"
-                    >
-                      {checkingPlan === plan.id ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : isCurrent ? (
-                        'Plano Atual'
-                      ) : (
-                        'Fazer Upgrade'
-                      )}
-                    </Button>
+                    {!subscriptionStatus?.billing_exempt && (
+                      <Button
+                        size="lg"
+                        variant={isCurrent ? 'outline' : isHighlighted ? 'default' : 'secondary'}
+                        disabled={isCurrent || isLoading || checkingPlan === plan.id}
+                        onClick={() => handleSelectPlan(plan)}
+                        className="min-w-[160px]"
+                      >
+                        {checkingPlan === plan.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : isCurrent ? (
+                          'Plano Atual'
+                        ) : (
+                          'Fazer Upgrade'
+                        )}
+                      </Button>
+                    )}
                   </div>
                 </div>
               </div>
