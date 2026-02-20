@@ -1,35 +1,51 @@
 
 
-## Corrigir Conhecimento do Otto - Adicionar KeyInvoice
+## Reescrever o System Prompt do Otto - Novo Fluxo Obrigatorio
 
-O system prompt do Otto menciona apenas o InvoiceXpress em 3 locais e ignora completamente o KeyInvoice. Vamos atualizar o conhecimento do Otto para refletir que o sistema suporta **dois fornecedores de faturacao** mutuamente exclusivos.
+O system prompt atual do Otto e demasiado generico e nao segue o fluxo correto de clarificacao antes de resposta. Vamos substituir completamente o SYSTEM_PROMPT no ficheiro `supabase/functions/otto-chat/index.ts` com as novas instrucoes profissionais.
 
-### Alteracoes no Ficheiro
+### O que muda
 
-**`supabase/functions/otto-chat/index.ts`** - Atualizar o SYSTEM_PROMPT em 3 secoes:
+O Otto passa de um assistente "informal e amigavel" para um assistente **profissional, direto e eficiente** com um fluxo obrigatorio:
 
-1. **Secao VENDAS (linha 55)**: Substituir "Faturas: emitir via InvoiceXpress (se configurado)" por texto que mencione ambos os fornecedores
+1. **Interpretar** a intencao do utilizador
+2. **Clarificar** com 2-3 botoes antes de dar a resposta completa
+3. **Instruir** com passos numerados e nomes exatos de menus
+4. **Recusar educadamente** perguntas fora do ambito do Senvia OS
 
-2. **Secao FINANCEIRO (linha 66)**: Substituir "Faturas: sincronizacao com InvoiceXpress" por texto que inclua KeyInvoice como alternativa
+### Alteracoes Tecnicas
 
-3. **Secao CONFIGURACOES (linha 87)**: Substituir "Integrações: WhatsApp (Evolution API), InvoiceXpress, Brevo" por texto que liste tambem o KeyInvoice
+**Ficheiro:** `supabase/functions/otto-chat/index.ts`
 
-4. **Adicionar nova secao FATURACAO** no system prompt com detalhes sobre:
-   - InvoiceXpress: como configurar, o que faz (faturas, faturas-recibo, notas de credito)
-   - KeyInvoice: como configurar (API 5.0), o que faz
-   - Regra de exclusividade: apenas um fornecedor pode estar ativo de cada vez
-   - Como alternar entre fornecedores: Definicoes -> Integracoes -> Faturacao
-   - Configurar em: Definicoes -> Integracoes -> escolher InvoiceXpress ou KeyInvoice
+Substituir o bloco `SYSTEM_PROMPT` (linhas 9-116) com o novo prompt que inclui:
 
-### Conteudo Atualizado
-
-| Secao | Antes | Depois |
-|-------|-------|--------|
-| Vendas | "Faturas: emitir via InvoiceXpress" | "Faturas: emitir via InvoiceXpress ou KeyInvoice (conforme o fornecedor configurado)" |
-| Financeiro | "Faturas: sincronizacao com InvoiceXpress" | "Faturas: sincronizacao com InvoiceXpress ou KeyInvoice" |
-| Configuracoes | "Integracoes: WhatsApp, InvoiceXpress, Brevo" | "Integracoes: WhatsApp (Evolution API), InvoiceXpress, KeyInvoice, Brevo" |
-| Nova secao | (nao existia) | Detalhes sobre ambos os fornecedores e regra de exclusividade |
+- **Identidade**: Assistente tecnico de suporte interno (nao informal/amigavel)
+- **Fluxo obrigatorio em 4 passos**: Interpretacao, Clarificacao com botoes, Instrucao passo-a-passo, Fronteira de conhecimento
+- **Exemplo de interacao perfeita** embutido no prompt para o modelo seguir
+- **Mapeamento completo dos 19 modulos** do Senvia OS:
+  - Painel (Dashboard)
+  - Leads e Pipeline
+  - Clientes
+  - Propostas
+  - Vendas
+  - Agenda (Calendario)
+  - Financeiro (Pagamentos, Faturas, Despesas, Contas Bancarias, Pedidos Internos)
+  - Marketing (Templates, Listas, Campanhas, Relatorios)
+  - E-commerce (Produtos, Encomendas, Inventario, Clientes, Descontos)
+  - Definicoes com todos os separadores: Geral, Pipeline, Formularios, Equipa, Produtos, Integracoes, Perfis, Modulos, Fiscal, Comissoes, Campos de Cliente, Alertas de Fidelizacao, Vendas
+- **Integracoes detalhadas**: n8n/Webhook, WhatsApp (Evolution API), Brevo, InvoiceXpress, KeyInvoice
+- **Faturacao**: dois fornecedores mutuamente exclusivos com instrucoes de configuracao
+- **Regras de formatacao**: maximo 200 palavras, 2-4 botoes, markdown, sem emojis excessivos
 
 ### Resultado
 
-O Otto passara a responder corretamente que o Senvia OS suporta **InvoiceXpress e KeyInvoice** como fornecedores de faturacao, e sabera explicar as diferencas e como configurar cada um.
+O Otto vai:
+- Nunca dar a resposta completa logo de imediato
+- Sempre clarificar com botoes primeiro
+- Dar instrucoes extremamente precisas com nomes exatos dos menus (ex: "Definicoes > Integracoes > Brevo")
+- Recusar educadamente perguntas fora do Senvia OS
+- Cobrir todos os 19 modulos do sistema com conhecimento atualizado
+
+### Deploy
+
+Apos a alteracao, o edge function `otto-chat` sera reimplantado automaticamente.
