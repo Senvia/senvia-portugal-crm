@@ -89,3 +89,6 @@ verify_jwt = false
 
 [functions.cleanup-expired-trials]
 verify_jwt = false
+
+[functions.otto-chat]
+verify_jwt = false

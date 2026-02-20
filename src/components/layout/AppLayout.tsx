@@ -6,6 +6,7 @@ import { MobileMenu } from "./MobileMenu";
 import { TrialBanner } from "./TrialBanner";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useStripeSubscription } from "@/hooks/useStripeSubscription";
+import { OttoFAB } from "@/components/otto/OttoFAB";
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -49,6 +50,7 @@ export function AppLayout({ children, userName, organizationName }: AppLayoutPro
           </div>
         </main>
         <MobileBottomNav />
+        <OttoFAB />
       </div>
     );
   }
@@ -63,6 +65,7 @@ export function AppLayout({ children, userName, organizationName }: AppLayoutPro
           {children}
         </div>
       </main>
+      <OttoFAB />
     </div>
   );
 }
