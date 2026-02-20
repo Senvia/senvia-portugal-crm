@@ -4,7 +4,7 @@ export type AppRole = 'super_admin' | 'admin' | 'viewer' | 'salesperson';
 export type LeadStatus = 'new' | 'contacted' | 'scheduled' | 'proposal' | 'won' | 'lost';
 export type LeadTemperature = 'cold' | 'warm' | 'hot';
 export type LeadTipologia = 'ee' | 'gas' | 'servicos' | 'ee_servicos';
-export type OrganizationPlan = 'basic' | 'pro';
+export type OrganizationPlan = 'starter' | 'pro' | 'elite';
 
 // Meta Ads Pixel
 export interface MetaPixel {
@@ -110,8 +110,9 @@ export const ROLE_LABELS: Record<AppRole, string> = {
 
 // PT-PT Plan Labels
 export const PLAN_LABELS: Record<OrganizationPlan, string> = {
-  basic: 'Básico',
-  pro: 'Profissional',
+  starter: 'Starter',
+  pro: 'Pro',
+  elite: 'Elite',
 };
 
 // Kanban column order
