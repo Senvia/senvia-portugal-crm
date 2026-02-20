@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -36,6 +36,8 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useUploadLeadAttachment } from "@/hooks/useLeadAttachments";
+import { useLeadFieldsSettings } from "@/hooks/useLeadFieldsSettings";
+import { LeadFieldsSettings, DEFAULT_LEAD_FIELDS_SETTINGS } from "@/types/field-settings";
 import type { LeadTemperature, LeadTipologia } from "@/types";
 import { ROLE_LABELS as RoleLabels, TIPOLOGIA_LABELS, TIPOLOGIA_STYLES } from "@/types";
 
@@ -55,26 +57,40 @@ const TEMPERATURE_LABELS: Record<string, { label: string; emoji: string }> = {
   hot: { label: "Quente", emoji: "🔥" },
 };
 
-const addLeadSchema = z.object({
-  company_nif: z.string().min(1, "NIF da empresa é obrigatório"),
-  company_name: z.string().min(2, "Nome da empresa é obrigatório"),
-  name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres").max(100, "Nome muito longo"),
-  email: z.string().email("Email inválido").max(255, "Email muito longo"),
-  phone: z.string().min(9, "Telemóvel inválido").max(20, "Telemóvel muito longo"),
-  source: z.string().optional(),
-  temperature: z.enum(["cold", "warm", "hot"]).optional(),
-  value: z.coerce.number().min(0, "Valor inválido").optional().or(z.literal("")),
-  notes: z.string().max(500, "Notas muito longas").optional(),
-  gdpr_consent: z.literal(true, {
-    errorMap: () => ({ message: "Consentimento RGPD é obrigatório" }),
-  }),
-  automation_enabled: z.boolean().default(true),
-  assigned_to: z.string().optional(),
-  tipologia: z.enum(["ee", "gas", "servicos", "ee_servicos"]).optional(),
-  consumo_anual: z.coerce.number().min(0, "Consumo inválido").optional().or(z.literal("")),
-});
+function buildLeadSchema(settings: LeadFieldsSettings | undefined) {
+  const s = settings ?? DEFAULT_LEAD_FIELDS_SETTINGS;
 
-type AddLeadFormData = z.infer<typeof addLeadSchema>;
+  const strField = (key: keyof LeadFieldsSettings, minLen = 1) => {
+    const cfg = s[key];
+    if (!cfg?.visible || !cfg?.required) return z.string().optional().or(z.literal(""));
+    return z.string().min(minLen, `${cfg.label} é obrigatório`);
+  };
+
+  return z.object({
+    company_nif: strField('company_nif'),
+    company_name: strField('company_name', 2),
+    name: strField('name', 2),
+    email: s.email?.visible && s.email?.required
+      ? z.string().email("Email inválido").max(255, "Email muito longo")
+      : z.string().optional().or(z.literal("")),
+    phone: s.phone?.visible && s.phone?.required
+      ? z.string().min(9, "Telemóvel inválido").max(20, "Telemóvel muito longo")
+      : z.string().optional().or(z.literal("")),
+    source: z.string().optional(),
+    temperature: z.enum(["cold", "warm", "hot"]).optional(),
+    value: z.coerce.number().min(0, "Valor inválido").optional().or(z.literal("")),
+    notes: z.string().max(500, "Notas muito longas").optional(),
+    gdpr_consent: z.literal(true, {
+      errorMap: () => ({ message: "Consentimento RGPD é obrigatório" }),
+    }),
+    automation_enabled: z.boolean().default(true),
+    assigned_to: z.string().optional(),
+    tipologia: z.enum(["ee", "gas", "servicos", "ee_servicos"]).optional(),
+    consumo_anual: z.coerce.number().min(0, "Consumo inválido").optional().or(z.literal("")),
+  });
+}
+
+type AddLeadFormData = z.infer<ReturnType<typeof buildLeadSchema>>;
 
 interface AddLeadModalProps {
   open: boolean;
@@ -87,6 +103,10 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
   const { data: teamMembers } = useTeamMembers();
   const { canManageTeam } = usePermissions();
   const { organization } = useAuth();
+  const { data: fieldSettings } = useLeadFieldsSettings();
+
+  const fs = fieldSettings ?? DEFAULT_LEAD_FIELDS_SETTINGS;
+  const schema = useMemo(() => buildLeadSchema(fieldSettings), [fieldSettings]);
 
   const [matchedClient, setMatchedClient] = useState<{ id: string; name: string; email: string | null; phone: string | null; notes: string | null; company: string | null } | null>(null);
   const [isSearching, setIsSearching] = useState(false);
@@ -96,7 +116,7 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
   const isTelecom = organization?.niche === 'telecom';
 
   const form = useForm<AddLeadFormData>({
-    resolver: zodResolver(addLeadSchema),
+    resolver: zodResolver(schema),
     defaultValues: {
       company_nif: "",
       company_name: "",
@@ -116,6 +136,16 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
   });
 
   const watchedValues = useWatch({ control: form.control });
+
+  // Helper: is field visible?
+  const isVisible = (key: keyof LeadFieldsSettings) => fs[key]?.visible !== false;
+  // Helper: is field required?
+  const isRequired = (key: keyof LeadFieldsSettings) => fs[key]?.visible !== false && fs[key]?.required === true;
+  // Helper: get label
+  const getLabel = (key: keyof LeadFieldsSettings, fallback: string) => fs[key]?.label || fallback;
+  // Helper: label with optional asterisk
+  const labelText = (key: keyof LeadFieldsSettings, fallback: string) =>
+    `${getLabel(key, fallback)}${isRequired(key) ? ' *' : ''}`;
 
   const searchExistingClient = async (nifValue: string) => {
     if (!nifValue || nifValue.length < 3 || !organization?.id) return;
@@ -150,11 +180,11 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
 
   const onSubmit = async (data: AddLeadFormData) => {
     const lead = await createLead.mutateAsync({
-      company_nif: data.company_nif,
-      company_name: data.company_name,
-      name: data.name,
-      email: data.email,
-      phone: data.phone,
+      company_nif: data.company_nif || undefined,
+      company_name: data.company_name || undefined,
+      name: data.name || '',
+      email: data.email || '',
+      phone: data.phone || '',
       source: data.source,
       temperature: data.temperature as LeadTemperature,
       value: isTelecom ? undefined : (data.value ? Number(data.value) : undefined),
@@ -190,6 +220,11 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
   const removePendingFile = (index: number) => {
     setPendingFiles(prev => prev.filter((_, i) => i !== index));
   };
+
+  // Check if empresa card has any visible fields
+  const showEmpresaCard = isVisible('company_nif') || isVisible('company_name');
+  // Check if contacto card has any visible fields
+  const showContactoCard = isVisible('name') || isVisible('email') || isVisible('phone');
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -229,104 +264,118 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
                   )}
 
                   {/* Card: Empresa */}
-                  <Card>
-                    <CardHeader className="pb-4">
-                      <CardTitle className="text-base flex items-center gap-2">
-                        <Building2 className="h-4 w-4 text-muted-foreground" />
-                        Empresa
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <FormField
-                          control={form.control}
-                          name="company_nif"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>NIF Empresa *</FormLabel>
-                              <FormControl>
-                                <Input
-                                  placeholder="123456789"
-                                  {...field}
-                                  onBlur={(e) => {
-                                    field.onBlur();
-                                    searchExistingClient(e.target.value);
-                                  }}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
+                  {showEmpresaCard && (
+                    <Card>
+                      <CardHeader className="pb-4">
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <Building2 className="h-4 w-4 text-muted-foreground" />
+                          Empresa
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          {isVisible('company_nif') && (
+                            <FormField
+                              control={form.control}
+                              name="company_nif"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>{labelText('company_nif', 'NIF Empresa')}</FormLabel>
+                                  <FormControl>
+                                    <Input
+                                      placeholder="123456789"
+                                      {...field}
+                                      onBlur={(e) => {
+                                        field.onBlur();
+                                        searchExistingClient(e.target.value);
+                                      }}
+                                    />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
                           )}
-                        />
-                        <FormField
-                          control={form.control}
-                          name="company_name"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Nome da Empresa *</FormLabel>
-                              <FormControl>
-                                <Input placeholder="Empresa Exemplo, Lda" {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
+                          {isVisible('company_name') && (
+                            <FormField
+                              control={form.control}
+                              name="company_name"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>{labelText('company_name', 'Nome da Empresa')}</FormLabel>
+                                  <FormControl>
+                                    <Input placeholder="Empresa Exemplo, Lda" {...field} />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
                           )}
-                        />
-                      </div>
-                    </CardContent>
-                  </Card>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
 
                   {/* Card: Contacto */}
-                  <Card>
-                    <CardHeader className="pb-4">
-                      <CardTitle className="text-base flex items-center gap-2">
-                        <Contact className="h-4 w-4 text-muted-foreground" />
-                        Contacto
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <FormField
-                        control={form.control}
-                        name="name"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Nome Completo *</FormLabel>
-                            <FormControl>
-                              <Input placeholder="João Silva" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
+                  {showContactoCard && (
+                    <Card>
+                      <CardHeader className="pb-4">
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <Contact className="h-4 w-4 text-muted-foreground" />
+                          Contacto
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        {isVisible('name') && (
+                          <FormField
+                            control={form.control}
+                            name="name"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>{labelText('name', 'Nome Completo')}</FormLabel>
+                                <FormControl>
+                                  <Input placeholder="João Silva" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
                         )}
-                      />
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <FormField
-                          control={form.control}
-                          name="email"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Email *</FormLabel>
-                              <FormControl>
-                                <Input type="email" placeholder="joao@exemplo.pt" {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          {isVisible('email') && (
+                            <FormField
+                              control={form.control}
+                              name="email"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>{labelText('email', 'Email')}</FormLabel>
+                                  <FormControl>
+                                    <Input type="email" placeholder="joao@exemplo.pt" {...field} />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
                           )}
-                        />
-                        <FormField
-                          control={form.control}
-                          name="phone"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Telemóvel *</FormLabel>
-                              <FormControl>
-                                <PhoneInput value={field.value} onChange={field.onChange} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
+                          {isVisible('phone') && (
+                            <FormField
+                              control={form.control}
+                              name="phone"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>{labelText('phone', 'Telemóvel')}</FormLabel>
+                                  <FormControl>
+                                    <PhoneInput value={field.value} onChange={field.onChange} />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
                           )}
-                        />
-                      </div>
-                    </CardContent>
-                  </Card>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
 
                   {/* Card: Detalhes */}
                   <Card>
@@ -338,59 +387,63 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <FormField
-                          control={form.control}
-                          name="source"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Origem</FormLabel>
-                              <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                <FormControl>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Selecionar" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  {SOURCES.map((source) => (
-                                    <SelectItem key={source} value={source}>{source}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={form.control}
-                          name="temperature"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Temperatura</FormLabel>
-                              <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                <FormControl>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Selecionar" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  <SelectItem value="cold">🧊 Frio</SelectItem>
-                                  <SelectItem value="warm">🌤️ Morno</SelectItem>
-                                  <SelectItem value="hot">🔥 Quente</SelectItem>
-                                </SelectContent>
-                              </Select>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
+                        {isVisible('source') && (
+                          <FormField
+                            control={form.control}
+                            name="source"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>{labelText('source', 'Origem')}</FormLabel>
+                                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                  <FormControl>
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Selecionar" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    {SOURCES.map((source) => (
+                                      <SelectItem key={source} value={source}>{source}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        )}
+                        {isVisible('temperature') && (
+                          <FormField
+                            control={form.control}
+                            name="temperature"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>{labelText('temperature', 'Temperatura')}</FormLabel>
+                                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                  <FormControl>
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Selecionar" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    <SelectItem value="cold">🧊 Frio</SelectItem>
+                                    <SelectItem value="warm">🌤️ Morno</SelectItem>
+                                    <SelectItem value="hot">🔥 Quente</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        )}
                       </div>
 
-                      {isTelecom && (
+                      {isVisible('tipologia') && isTelecom && (
                         <FormField
                           control={form.control}
                           name="tipologia"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Tipologia</FormLabel>
+                              <FormLabel>{labelText('tipologia', 'Tipologia')}</FormLabel>
                               <Select onValueChange={field.onChange} defaultValue={field.value}>
                                 <FormControl>
                                   <SelectTrigger>
@@ -414,13 +467,13 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
                         />
                       )}
 
-                      {isTelecom ? (
+                      {isVisible('consumo_anual') && isTelecom ? (
                         <FormField
                           control={form.control}
                           name="consumo_anual"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Consumo Anual/kWp (kWh)</FormLabel>
+                              <FormLabel>{labelText('consumo_anual', 'Consumo Anual/kWp (kWh)')}</FormLabel>
                               <FormControl>
                                 <Input type="number" min="0" step="1" placeholder="0" {...field} />
                               </FormControl>
@@ -428,13 +481,13 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
                             </FormItem>
                           )}
                         />
-                      ) : (
+                      ) : isVisible('value') && !isTelecom ? (
                         <FormField
                           control={form.control}
                           name="value"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Valor do Negócio (€)</FormLabel>
+                              <FormLabel>{labelText('value', 'Valor do Negócio (€)')}</FormLabel>
                               <FormControl>
                                 <Input type="number" min="0" step="0.01" placeholder="0.00" {...field} />
                               </FormControl>
@@ -442,7 +495,7 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
                             </FormItem>
                           )}
                         />
-                      )}
+                      ) : null}
 
                       {canManageTeam && teamMembers && teamMembers.length > 0 && (
                         <FormField
@@ -480,75 +533,77 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
                   </Card>
 
                   {/* Card: Observações & Anexos */}
-                  <Card>
-                    <CardHeader className="pb-4">
-                      <CardTitle className="text-base flex items-center gap-2">
-                        <StickyNote className="h-4 w-4 text-muted-foreground" />
-                        Observações
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <FormField
-                        control={form.control}
-                        name="notes"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormControl>
-                              <Textarea
-                                placeholder="Notas adicionais sobre o lead..."
-                                className="resize-none"
-                                rows={3}
-                                {...field}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                  {isVisible('notes') && (
+                    <Card>
+                      <CardHeader className="pb-4">
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <StickyNote className="h-4 w-4 text-muted-foreground" />
+                          {getLabel('notes', 'Observações')}
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <FormField
+                          control={form.control}
+                          name="notes"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormControl>
+                                <Textarea
+                                  placeholder="Notas adicionais sobre o lead..."
+                                  className="resize-none"
+                                  rows={3}
+                                  {...field}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
 
-                      {isTelecom && (
-                        <div className="space-y-3 rounded-md border p-4">
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm font-medium flex items-center gap-2">
-                              <Paperclip className="h-4 w-4 text-muted-foreground" />
-                              Anexar Faturas
-                            </span>
-                            <div>
-                              <input
-                                ref={fileInputRef}
-                                type="file"
-                                accept=".pdf,.png,.jpg,.jpeg"
-                                multiple
-                                className="hidden"
-                                onChange={handleAddFiles}
-                              />
-                              <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
-                                <Upload className="h-4 w-4" />
-                                Adicionar
-                              </Button>
+                        {isTelecom && (
+                          <div className="space-y-3 rounded-md border p-4">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-medium flex items-center gap-2">
+                                <Paperclip className="h-4 w-4 text-muted-foreground" />
+                                Anexar Faturas
+                              </span>
+                              <div>
+                                <input
+                                  ref={fileInputRef}
+                                  type="file"
+                                  accept=".pdf,.png,.jpg,.jpeg"
+                                  multiple
+                                  className="hidden"
+                                  onChange={handleAddFiles}
+                                />
+                                <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+                                  <Upload className="h-4 w-4" />
+                                  Adicionar
+                                </Button>
+                              </div>
                             </div>
+                            {pendingFiles.length > 0 && (
+                              <div className="space-y-2">
+                                {pendingFiles.map((file, i) => (
+                                  <div key={i} className="flex items-center gap-2 rounded bg-muted/50 p-2 text-sm">
+                                    <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                                    <span className="flex-1 truncate">{file.name}</span>
+                                    <span className="text-xs text-muted-foreground">{(file.size / 1024).toFixed(0)} KB</span>
+                                    <Button type="button" variant="ghost" size="icon-sm" onClick={() => removePendingFile(i)}>
+                                      <Trash2 className="h-3 w-3 text-destructive" />
+                                    </Button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            {pendingFiles.length === 0 && (
+                              <p className="text-xs text-muted-foreground">PDF, PNG ou JPG (máx. 10MB)</p>
+                            )}
                           </div>
-                          {pendingFiles.length > 0 && (
-                            <div className="space-y-2">
-                              {pendingFiles.map((file, i) => (
-                                <div key={i} className="flex items-center gap-2 rounded bg-muted/50 p-2 text-sm">
-                                  <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                                  <span className="flex-1 truncate">{file.name}</span>
-                                  <span className="text-xs text-muted-foreground">{(file.size / 1024).toFixed(0)} KB</span>
-                                  <Button type="button" variant="ghost" size="icon-sm" onClick={() => removePendingFile(i)}>
-                                    <Trash2 className="h-3 w-3 text-destructive" />
-                                  </Button>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                          {pendingFiles.length === 0 && (
-                            <p className="text-xs text-muted-foreground">PDF, PNG ou JPG (máx. 10MB)</p>
-                          )}
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
+                        )}
+                      </CardContent>
+                    </Card>
+                  )}
                 </div>
 
                 {/* Right Column - Summary & Actions */}
@@ -564,29 +619,29 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
                       </CardHeader>
                       <CardContent>
                         <div className="space-y-3 text-sm">
-                          <SummaryRow label="Empresa" value={watchedValues.company_name} />
-                          <SummaryRow label="NIF" value={watchedValues.company_nif} />
-                          <SummaryRow label="Nome" value={watchedValues.name} />
-                          <SummaryRow label="Email" value={watchedValues.email} />
-                          <SummaryRow label="Telefone" value={watchedValues.phone} />
-                          <SummaryRow label="Origem" value={watchedValues.source} />
-                          {watchedValues.temperature && (
+                          {isVisible('company_name') && <SummaryRow label={getLabel('company_name', 'Empresa')} value={watchedValues.company_name} />}
+                          {isVisible('company_nif') && <SummaryRow label={getLabel('company_nif', 'NIF')} value={watchedValues.company_nif} />}
+                          {isVisible('name') && <SummaryRow label={getLabel('name', 'Nome')} value={watchedValues.name} />}
+                          {isVisible('email') && <SummaryRow label={getLabel('email', 'Email')} value={watchedValues.email} />}
+                          {isVisible('phone') && <SummaryRow label={getLabel('phone', 'Telefone')} value={watchedValues.phone} />}
+                          {isVisible('source') && <SummaryRow label={getLabel('source', 'Origem')} value={watchedValues.source} />}
+                          {isVisible('temperature') && watchedValues.temperature && (
                             <SummaryRow
-                              label="Temperatura"
+                              label={getLabel('temperature', 'Temperatura')}
                               value={`${TEMPERATURE_LABELS[watchedValues.temperature]?.emoji} ${TEMPERATURE_LABELS[watchedValues.temperature]?.label}`}
                             />
                           )}
-                          {!isTelecom && watchedValues.value && (
-                            <SummaryRow label="Valor" value={`€${watchedValues.value}`} />
+                          {isVisible('value') && !isTelecom && watchedValues.value && (
+                            <SummaryRow label={getLabel('value', 'Valor')} value={`€${watchedValues.value}`} />
                           )}
-                          {isTelecom && watchedValues.tipologia && (
+                          {isVisible('tipologia') && isTelecom && watchedValues.tipologia && (
                             <SummaryRow
-                              label="Tipologia"
+                              label={getLabel('tipologia', 'Tipologia')}
                               value={`${TIPOLOGIA_STYLES[watchedValues.tipologia as LeadTipologia]?.emoji} ${TIPOLOGIA_LABELS[watchedValues.tipologia as LeadTipologia]}`}
                             />
                           )}
-                          {isTelecom && watchedValues.consumo_anual && (
-                            <SummaryRow label="Consumo" value={`${watchedValues.consumo_anual} kWh`} />
+                          {isVisible('consumo_anual') && isTelecom && watchedValues.consumo_anual && (
+                            <SummaryRow label={getLabel('consumo_anual', 'Consumo')} value={`${watchedValues.consumo_anual} kWh`} />
                           )}
                         </div>
                       </CardContent>
