@@ -35,11 +35,14 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useForms, useDeleteForm, useDuplicateForm, useUpdateForm } from '@/hooks/useForms';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSubscription } from '@/hooks/useSubscription';
 import { Form } from '@/types';
 import { PRODUCTION_URL } from '@/lib/constants';
 import { CreateFormModal } from './CreateFormModal';
 import { FormEditor } from './FormEditor';
+import { UpgradeModal } from '@/components/shared/UpgradeModal';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 export function FormsManager() {
   const { organization } = useAuth();
@@ -47,10 +50,12 @@ export function FormsManager() {
   const deleteForm = useDeleteForm();
   const duplicateForm = useDuplicateForm();
   const updateForm = useUpdateForm();
+  const { limits, planName } = useSubscription();
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingForm, setEditingForm] = useState<Form | null>(null);
   const [formToDelete, setFormToDelete] = useState<Form | null>(null);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
   const getFormUrl = (form: Form) => {
     if (!organization?.slug) return '';
@@ -113,7 +118,14 @@ export function FormsManager() {
             Crie e gira múltiplos formulários para diferentes campanhas
           </p>
         </div>
-        <Button onClick={() => setShowCreateModal(true)} className="gap-2">
+        <Button onClick={() => {
+          if (limits.maxForms !== null && forms && forms.length >= limits.maxForms) {
+            toast.error(`Limite de ${limits.maxForms} formulários atingido no plano ${planName}`);
+            setShowUpgradeModal(true);
+            return;
+          }
+          setShowCreateModal(true);
+        }} className="gap-2">
           <Plus className="h-4 w-4" />
           <span className="hidden sm:inline">Novo Formulário</span>
         </Button>
@@ -283,6 +295,13 @@ export function FormsManager() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      {/* Upgrade Modal */}
+      <UpgradeModal
+        open={showUpgradeModal}
+        onOpenChange={setShowUpgradeModal}
+        featureName="Formulários"
+        requiredPlan="Pro"
+      />
     </div>
   );
 }
