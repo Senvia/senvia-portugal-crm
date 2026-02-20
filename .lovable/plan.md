@@ -1,31 +1,37 @@
 
+## Adicionar Tooltip/Balão de Ajuda ao Botão do Otto
 
-## Corrigir Safe Area do Otto no iPhone
+### Objetivo
 
-### Problema
+Adicionar uma pequena mensagem flutuante acima do ícone do Otto (FAB) para que os utilizadores saibam que ele está ali para ajudar. A mensagem aparece automaticamente e pode ser fechada pelo utilizador.
 
-No iPhone, quando o Otto abre em tela cheia no mobile (`fixed inset-0`), o header fica por baixo do notch/Dynamic Island porque nao tem padding para a safe area superior. O mesmo acontece no input inferior que fica por baixo do indicador home do iPhone.
+### Implementação
 
-### Solucao
+**Ficheiro:** `src/components/otto/OttoFAB.tsx`
 
-Alterar o `OttoChatWindow.tsx` para aplicar safe area padding no mobile:
+- Adicionar um balão (tooltip/bubble) posicionado acima do botão FAB do Otto
+- A mensagem será algo como: **"Precisa de ajuda? Pergunte-me sobre o Senvia OS!"**
+- O balão aparece automaticamente quando o Otto não está aberto
+- O utilizador pode fechar o balão clicando num "X" pequeno
+- Usar `localStorage` para guardar se o utilizador já fechou o balão (para não voltar a aparecer sempre)
+- Incluir uma pequena "seta" a apontar para baixo (estilo speech bubble)
+- Animação suave de entrada com framer-motion (fade in + slide up)
 
-**1. Header** - Adicionar `safe-top` (classe ja existente no CSS) ao header quando em mobile, garantindo que o conteudo nao fica debaixo do notch.
+### Design
 
-**2. Input (fundo)** - Adicionar `safe-bottom` ao container do input para nao ficar debaixo do indicador home do iPhone.
+- Fundo escuro (`bg-card`) com borda (`border-border`), cantos arredondados
+- Texto pequeno (`text-xs`) em 1-2 linhas
+- Botão "X" discreto no canto superior direito do balão
+- Seta triangular na parte inferior a apontar para o botão do Otto
+- Largura máxima de ~200px para não ocupar muito espaço
+- Posicionado logo acima do FAB, alinhado à direita
 
-### Alteracao
+### Lógica de Exibição
 
-**Ficheiro:** `src/components/otto/OttoChatWindow.tsx`
+- Mostrar o balão apenas quando o chat do Otto **não está aberto**
+- Esconder permanentemente após o utilizador clicar no "X" (persistido via `localStorage`)
+- Esconder automaticamente quando o utilizador abre o Otto pela primeira vez
 
-- Na `div` do header (linha 63): adicionar a classe `pt-safe` condicionalmente quando `isMobile` for true, para empurrar o conteudo para baixo do notch
-- Na `div` do input (linha 124): adicionar a classe `pb-safe` condicionalmente quando `isMobile` for true, para o input nao ficar tapado pelo indicador home
+### Ficheiros Alterados
 
-A logica sera simples - usar as classes CSS utilitarias ja definidas no `index.css` (`pt-safe` e `pb-safe`) que utilizam `env(safe-area-inset-top)` e `env(safe-area-inset-bottom)`.
-
-### Resultado
-
-- O header do Otto fica abaixo do notch/Dynamic Island no iPhone
-- O input fica acima do indicador home
-- Sem impacto no desktop (as variaveis de safe area retornam 0)
-
+- `src/components/otto/OttoFAB.tsx` - adicionar o balão de ajuda com lógica de visibilidade
