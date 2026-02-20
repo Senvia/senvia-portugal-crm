@@ -6,21 +6,25 @@ export interface FieldConfig {
 }
 
 // ==================== LEADS ====================
-export type LeadFieldKey = 'name' | 'email' | 'phone' | 'source' | 'temperature' | 'value' | 'notes';
+export type LeadFieldKey = 'company_nif' | 'company_name' | 'name' | 'email' | 'phone' | 'source' | 'temperature' | 'tipologia' | 'consumo_anual' | 'value' | 'notes';
 
 export type LeadFieldsSettings = Record<LeadFieldKey, FieldConfig>;
 
 export const DEFAULT_LEAD_FIELDS_SETTINGS: LeadFieldsSettings = {
+  company_nif: { visible: true, required: true, label: 'NIF Empresa' },
+  company_name: { visible: true, required: true, label: 'Nome Empresa' },
   name: { visible: true, required: true, label: 'Nome' },
   email: { visible: true, required: true, label: 'Email' },
   phone: { visible: true, required: true, label: 'Telefone' },
   source: { visible: true, required: false, label: 'Origem' },
   temperature: { visible: true, required: false, label: 'Temperatura' },
+  tipologia: { visible: true, required: false, label: 'Tipologia' },
+  consumo_anual: { visible: true, required: false, label: 'Consumo Anual (kWh)' },
   value: { visible: true, required: false, label: 'Valor Estimado' },
   notes: { visible: true, required: false, label: 'Observações' },
 };
 
-export const LEAD_FIELD_ORDER: LeadFieldKey[] = ['name', 'email', 'phone', 'source', 'temperature', 'value', 'notes'];
+export const LEAD_FIELD_ORDER: LeadFieldKey[] = ['company_nif', 'company_name', 'name', 'email', 'phone', 'source', 'temperature', 'tipologia', 'consumo_anual', 'value', 'notes'];
 
 // ==================== PROPOSTAS ====================
 export type ProposalFieldKey = 'type' | 'value' | 'date' | 'notes';
