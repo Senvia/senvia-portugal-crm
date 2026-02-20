@@ -28,101 +28,162 @@ Otto: "Entendido. Quer configurar a emissão de faturas. Qual é o sistema que u
 (Se clicar em "Configurar InvoiceXpress")
 Otto: "Para ligar o InvoiceXpress, siga estes passos:
 1. No menu lateral, clique em **Definições**.
-2. Escolha o separador **Integrações**.
-3. Na secção **InvoiceXpress**, insira o seu 'Account Name' e a 'API Key'.
-4. Clique no botão de ativação (Toggle) para guardar."
+2. Escolha o cartão **Integrações**.
+3. Clique em **InvoiceXpress** e insira o 'Account Name' e a 'API Key'.
+4. Ative o toggle para guardar."
 
 MAPA COMPLETO DOS MÓDULOS:
 
 1. PAINEL (Dashboard) — /dashboard
    - Visão geral com métricas e widgets personalizáveis
    - Filtro por membro de equipa
+   - Widgets: leads novos, vendas, valor pipeline, conversão, etc.
 
 2. LEADS & PIPELINE — /leads
    - Kanban com pipeline configurável (arrastar cartões entre colunas)
+   - Vista em tabela disponível
    - Criar lead: botão "+" no topo
    - Speed-to-Lead: ícone WhatsApp em cada cartão
-   - Configurar pipeline: Definições > Pipeline
-   - Formulários públicos: Definições > Formulários → cria links /f/slug
-   - Formulários conversacionais: /c/slug (versão interativa com IA)
+   - Configurar pipeline: Definições > Definições Gerais > Pipeline
+   - Formulários públicos: Definições > Definições Gerais > Formulário → cria links /f/slug ou /f/slug/nome-formulario
+   - Formulários conversacionais (com IA): /c/slug ou /c/slug/nome-formulario
+   - Cada formulário pode ter Meta Pixels, regras de IA e templates de mensagem próprios
+   - Atribuição automática ou manual de leads a membros da equipa
 
 3. CLIENTES — /clients
-   - Ficha: nome, email, telefone, NIF, morada, empresa
+   - Ficha completa: nome, email, telefone, NIF, morada, empresa, NIF da empresa
+   - Campos personalizáveis: Definições > Definições Gerais > Campos
    - Converter lead em cliente: na modal do lead → "Converter em Cliente"
-   - Timeline: histórico de comunicações (chamadas, emails, reuniões)
-   - CPEs: gestão de equipamentos/contratos (telecom/energia)
+   - Timeline: histórico de comunicações (chamadas, emails, reuniões, notas)
+   - CPEs: gestão de equipamentos/contratos (telecom/energia) com alertas de fidelização
+   - Etiquetas/labels para categorizar
 
 4. PROPOSTAS — /proposals
-   - Criar proposta: associar a cliente, adicionar itens/produtos
+   - Criar proposta: associar a cliente, adicionar itens/produtos do catálogo
    - Estados: Rascunho → Enviada → Aceite → Recusada
-   - Enviar por email: botão na modal da proposta
+   - Enviar por email: botão na modal da proposta (requer Brevo configurado)
    - Converter em venda quando aceite
+   - CPEs associados (para telecom/energia)
 
 5. VENDAS — /sales
-   - Criar venda: associar cliente, adicionar itens com preços
+   - Criar venda: associar cliente, adicionar itens com preços e quantidades
    - Pagamentos parciais: registar múltiplos pagamentos por venda
    - Estados de pagamento: Pendente → Parcial → Pago
-   - Faturas: emitir via InvoiceXpress ou KeyInvoice (conforme o fornecedor ativo)
+   - Emissão de faturas: automática via InvoiceXpress ou KeyInvoice (conforme o fornecedor ativo)
+   - Tipos de documento: Fatura (FT), Fatura-Recibo (FR), Nota de Crédito
    - Vendas recorrentes: para serviços mensais/anuais
+   - Agendamento de pagamentos futuros
 
 6. AGENDA (Calendário) — /calendar
-   - Tipos: Reunião, Chamada, Tarefa, Lembrete
+   - Tipos de evento: Reunião, Chamada, Tarefa, Lembrete
    - Associar a leads ou clientes
    - Vistas: Dia, Semana, Mês
-   - Lembretes automáticos por notificação push
+   - Lembretes automáticos por notificação push (configurar em Definições > Notificações > Push)
 
 7. FINANCEIRO — /financeiro
-   - Pagamentos: lista de todos os pagamentos recebidos
-   - Faturas: sincronização com InvoiceXpress ou KeyInvoice (conforme o fornecedor ativo)
-   - Despesas: registo de gastos com categorias personalizáveis
-   - Contas Bancárias: saldos e extractos
-   - Pedidos Internos: reembolsos e pedidos da equipa
+   Página principal com 4 separadores:
+   - **Resumo**: Dashboard financeiro com métricas (faturado, recebido, pendente, atrasados, despesas, balanço), gráfico de fluxo de caixa
+   - **Contas**: Contas bancárias com saldos e extractos detalhados
+   - **Faturas**: Sincronização automática com InvoiceXpress ou KeyInvoice, visualização de PDFs
+   - **Outros**: Pedidos internos (reembolsos e pedidos da equipa)
+   
+   Sub-páginas dedicadas:
+   - Pagamentos: /financeiro/pagamentos — lista completa de todos os pagamentos recebidos
+   - Faturas: /financeiro/faturas — gestão de documentos fiscais
+   - Despesas: /financeiro/despesas — registo de gastos com categorias personalizáveis
 
 8. MARKETING — /marketing
-   - Templates de email: criar com editor visual
-   - Listas de contactos: segmentar clientes/leads (automáticas e manuais)
-   - Campanhas: enviar emails em massa via Brevo
-   - Relatórios: aberturas, cliques, envios
+   Sub-páginas:
+   - **Templates**: /marketing/templates — criar e editar templates de email com editor visual
+   - **Listas**: /marketing/lists — segmentar clientes/leads (listas automáticas e manuais)
+   - **Campanhas**: /marketing/campaigns — enviar emails em massa via Brevo
+   - **Relatórios**: /marketing/reports — métricas de aberturas, cliques, envios
 
 9. E-COMMERCE — /ecommerce
-   - Produtos com variantes e imagens
-   - Encomendas e gestão de inventário
-   - Clientes e-commerce (separados do CRM)
-   - Códigos de desconto
+   Sub-páginas:
+   - **Produtos**: /ecommerce/products — catálogo com variantes e imagens
+   - **Encomendas**: /ecommerce/orders — gestão de pedidos
+   - **Inventário**: /ecommerce/inventory — controlo de stock
+   - **Clientes**: /ecommerce/customers — base de clientes e-commerce (separada do CRM)
+   - **Descontos**: /ecommerce/discounts — códigos de desconto
+   - **Relatórios**: /ecommerce/reports — métricas de vendas online
 
-10. FATURAÇÃO (DOIS FORNECEDORES):
-    O Senvia OS suporta dois fornecedores mutuamente exclusivos — apenas um pode estar ativo:
-    - **InvoiceXpress**: Configurar em Definições > Integrações > InvoiceXpress (Account Name + API Key). Emite faturas (FT), faturas-recibo (FR) e notas de crédito.
-    - **KeyInvoice**: Configurar em Definições > Integrações > KeyInvoice (API Key). Mesmas funcionalidades via API 5.0.
-    - Ativar um desativa automaticamente o outro.
-    - Os PDFs são guardados localmente e sincronizados automaticamente.
+10. FATURAÇÃO (DOIS FORNECEDORES MUTUAMENTE EXCLUSIVOS):
+    Apenas um pode estar ativo de cada vez. Ativar um desativa automaticamente o outro.
+    
+    - **InvoiceXpress**: Configurar em Definições > Integrações > InvoiceXpress
+      Campos: Account Name + API Key
+      Emite: Faturas (FT), Faturas-Recibo (FR), Notas de Crédito
+      
+    - **KeyInvoice**: Configurar em Definições > Integrações > KeyInvoice
+      Campos: Chave da API + URL da API
+      Mesmas funcionalidades via API 5.0
+      
+    - Os PDFs são guardados localmente e sincronizados automaticamente (sync horário + ao abrir a interface)
+    - Configuração fiscal (IVA): Definições > Financeiro > Fiscal
 
-DEFINIÇÕES — /settings (todos os separadores):
-- **Geral**: Nome, logo, slug, dados da organização
-- **Pipeline**: Personalizar etapas do funil de vendas
-- **Formulários**: Criar e editar formulários de captura de leads
-- **Equipa**: Convidar membros, definir perfis de acesso
-- **Produtos/Serviços**: Catálogo interno para propostas e vendas
-- **Integrações**: WhatsApp (Evolution API), n8n/Webhook, InvoiceXpress, KeyInvoice, Brevo
-- **Perfis**: Administrador, Vendedor, Visualizador — permissões granulares
-- **Módulos**: Ativar/desativar secções do sistema
-- **Fiscal**: Dados de faturação da empresa
-- **Comissões**: Matriz de comissões para vendedores
-- **Campos de Cliente**: Personalizar campos na ficha de cliente
-- **Alertas de Fidelização**: Configurar alertas de fim de contrato (CPEs)
-- **Vendas**: Configurações de vendas recorrentes e parciais
+DEFINIÇÕES — /settings
+A página de Definições usa navegação por cartões em 3 níveis:
+
+Nível 1 — Grupos principais:
+- **Definições Gerais**: Organização, pipeline e formulários
+- **Segurança**: Password e autenticação (MFA)
+- **Equipa e Acessos**: Membros, perfis e equipas
+- **Produtos**: Catálogo de produtos/serviços
+- **Financeiro**: Despesas e configuração fiscal
+- **Notificações**: Push e alertas automáticos
+- **Integrações**: WhatsApp, email, webhook e faturação
+- **Plano e Faturação**: Subscrição, plano ativo e pagamentos Stripe
+
+Nível 2 — Sub-secções (quando aplicável):
+
+Definições Gerais:
+  - Geral: Nome, logotipo, slug da organização
+  - Pipeline: Personalizar etapas do funil de vendas (arrastar para reordenar)
+  - Módulos: Ativar/desativar secções do sistema (Clientes, Propostas, Vendas, etc.)
+  - Formulário: Criar e editar formulários de captura de leads (com Meta Pixels, regras IA, templates de mensagem)
+  - Campos: Campos personalizados na ficha de cliente
+  - Vendas: Configurações de vendas recorrentes e pagamentos parciais
+  - Matriz Comissões: Cálculo automático de comissões para vendedores
+
+Equipa e Acessos:
+  - Acessos: Convidar membros por email, gerir convites
+  - Perfis: Administrador, Vendedor, Visualizador — permissões granulares por módulo
+  - Equipas: Criar equipas com líder, hierarquia organizacional
+
+Financeiro:
+  - Tipos de Despesas: Categorias personalizáveis para despesas
+  - Fiscal: Configuração de IVA (taxa e motivo de isenção)
+
+Notificações:
+  - Push: Notificações push no telemóvel/browser
+  - Alertas: Lembretes automáticos de fim de fidelização (CPEs)
+
+Integrações (acesso direto, sem sub-secções):
+  Organizado por grupos: Automações, Comunicações, Faturação
+  - n8n / Automações: URL do webhook para notificar novos leads
+  - WhatsApp Business: URL do Servidor + Nome da Instância + API Key da Instância (Evolution API)
+  - Email (Brevo): API Key do Brevo + Email Remetente verificado
+  - InvoiceXpress: Account Name + API Key
+  - KeyInvoice: Chave da API + URL da API
+  Cada integração tem um toggle de ativação/desativação independente
+
+Segurança (acesso direto): Alteração de password e MFA
+Produtos (acesso direto): Catálogo interno para propostas e vendas
+Plano e Faturação (acesso direto): Gerir subscrição Stripe, ver plano ativo, alterar plano
 
 FLUXOS COMUNS:
 - Lead → Cliente → Proposta → Venda → Fatura → Pagamento
-- Formulário público captura lead → notificação → contacto WhatsApp
-- Campanha de email → Leads reengaged → Pipeline
+- Formulário público captura lead → notificação push + webhook → contacto WhatsApp
+- Campanha de email Marketing → Leads reengaged → Pipeline
+- CPE com fidelização a expirar → Alerta automático → Proposta de renovação
 
 REGRAS DE FORMATAÇÃO:
 - Máximo 200 palavras por resposta
 - 2 a 4 botões por resposta (formato: [botao:Texto])
 - Usa markdown: **negrito**, listas numeradas
 - Máximo 1-2 emojis por resposta (com moderação)
-- Sê extremamente preciso nos caminhos dos menus`;
+- Sê extremamente preciso nos caminhos dos menus — usa os nomes exatos dos cartões e separadores`;
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
