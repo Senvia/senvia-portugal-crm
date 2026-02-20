@@ -1,67 +1,43 @@
 
-## Corrigir Upload de Anexos para Super Admins
 
-### Problema Identificado
+## Corrigir RLS da tabela lead_attachments para Super Admins
 
-O upload de ficheiros falha com erro **403 (RLS policy violation)** no storage.
+### Problema
 
-**Causa raiz:** O utilizador e super_admin e tem a organizacao "Perfect2Gether" (`96a3950e`) selecionada no UI, mas so tem membership na tabela `organization_members` para "Senvia Agency" (`06fe9e1d`). 
+O upload do ficheiro para o storage agora funciona (retorna 200), mas o INSERT na tabela `lead_attachments` falha com **403 RLS violation**.
 
-As politicas de storage do bucket `invoices` verificam membership via `is_org_member()` ou `get_user_org_id()` -- ambas retornam a org errada para super_admins que estao a visualizar outra organizacao.
+As 3 politicas RLS da tabela `lead_attachments` usam apenas `is_org_member()`, que retorna `false` para super_admins a visualizar organizacoes onde nao sao membros diretos.
 
 ### Solucao
 
-Atualizar as **3 politicas RLS de storage** do bucket `invoices` que usam `is_org_member()` para tambem permitir acesso a super_admins. As politicas afetadas sao:
+Atualizar as 3 politicas RLS da tabela `lead_attachments` para incluir `has_role(auth.uid(), 'super_admin')`:
 
-1. **Members can upload lead attachments** (INSERT)
-2. **Members can view lead attachment files** (SELECT)
-3. **Members can delete lead attachment files** (DELETE)
-
-### Alteracoes
-
-**Migracao SQL** -- Atualizar as 3 politicas para incluir super_admin:
+**Migracao SQL:**
 
 ```sql
--- DROP e recreate das 3 politicas
-
 -- 1. INSERT
-DROP POLICY IF EXISTS "Members can upload lead attachments" ON storage.objects;
-CREATE POLICY "Members can upload lead attachments" ON storage.objects
+DROP POLICY IF EXISTS "Members can insert lead attachments" ON public.lead_attachments;
+CREATE POLICY "Members can insert lead attachments" ON public.lead_attachments
   FOR INSERT WITH CHECK (
-    bucket_id = 'invoices' AND (
-      (storage.foldername(name))[1] IN (
-        SELECT organizations.id::text FROM organizations
-        WHERE is_org_member(auth.uid(), organizations.id)
-      )
-      OR has_role(auth.uid(), 'super_admin'::app_role)
-    )
+    is_org_member(auth.uid(), organization_id)
+    OR has_role(auth.uid(), 'super_admin'::app_role)
   );
 
 -- 2. SELECT
-DROP POLICY IF EXISTS "Members can view lead attachment files" ON storage.objects;
-CREATE POLICY "Members can view lead attachment files" ON storage.objects
+DROP POLICY IF EXISTS "Members can view lead attachments" ON public.lead_attachments;
+CREATE POLICY "Members can view lead attachments" ON public.lead_attachments
   FOR SELECT USING (
-    bucket_id = 'invoices' AND (
-      (storage.foldername(name))[1] IN (
-        SELECT organizations.id::text FROM organizations
-        WHERE is_org_member(auth.uid(), organizations.id)
-      )
-      OR has_role(auth.uid(), 'super_admin'::app_role)
-    )
+    is_org_member(auth.uid(), organization_id)
+    OR has_role(auth.uid(), 'super_admin'::app_role)
   );
 
 -- 3. DELETE
-DROP POLICY IF EXISTS "Members can delete lead attachment files" ON storage.objects;
-CREATE POLICY "Members can delete lead attachment files" ON storage.objects
+DROP POLICY IF EXISTS "Members can delete lead attachments" ON public.lead_attachments;
+CREATE POLICY "Members can delete lead attachments" ON public.lead_attachments
   FOR DELETE USING (
-    bucket_id = 'invoices' AND (
-      (storage.foldername(name))[1] IN (
-        SELECT organizations.id::text FROM organizations
-        WHERE is_org_member(auth.uid(), organizations.id)
-      )
-      OR has_role(auth.uid(), 'super_admin'::app_role)
-    )
+    is_org_member(auth.uid(), organization_id)
+    OR has_role(auth.uid(), 'super_admin'::app_role)
   );
 ```
 
-Nenhuma alteracao de codigo frontend necessaria -- o problema e exclusivamente nas permissoes de storage.
+Nenhuma alteracao de codigo frontend necessaria.
