@@ -1,47 +1,31 @@
 
 
-## Personalizar Dashboard apenas por Perfis
+## Corrigir Safe Area do Otto no iPhone
 
-### O que muda
+### Problema
 
-Atualmente, cada utilizador pode personalizar o seu dashboard individualmente (botao "Personalizar" no Painel que abre um Sheet lateral). O objetivo e remover essa personalizacao individual e deixar o dashboard controlado **exclusivamente pelos Perfis de Acesso** (Definicoes > Perfis).
+No iPhone, quando o Otto abre em tela cheia no mobile (`fixed inset-0`), o header fica por baixo do notch/Dynamic Island porque nao tem padding para a safe area superior. O mesmo acontece no input inferior que fica por baixo do indicador home do iPhone.
 
-### Alteracoes
+### Solucao
 
-**1. Simplificar `Dashboard.tsx`**
+Alterar o `OttoChatWindow.tsx` para aplicar safe area padding no mobile:
 
-- Remover o botao "Personalizar" (icone Settings2)
-- Remover o estado `isCustomizing` e todo o bloco do `WidgetSelector`
-- Remover as funcoes `handleSaveWidgets` e `handleResetWidgets`
-- Remover o import do `WidgetSelector`
-- O dashboard passa a mostrar apenas os widgets definidos pelo perfil do utilizador (ou os defaults do nicho)
+**1. Header** - Adicionar `safe-top` (classe ja existente no CSS) ao header quando em mobile, garantindo que o conteudo nao fica debaixo do notch.
 
-**2. Simplificar `useDashboardWidgets.ts`**
+**2. Input (fundo)** - Adicionar `safe-bottom` ao container do input para nao ficar debaixo do indicador home do iPhone.
 
-- Remover as mutations `saveWidgets`, `toggleVisibility`, `reorderWidgets` e `resetToDefaults` (ja nao ha personalizacao individual)
-- Remover a query a tabela `dashboard_widgets` (ja nao e usada)
-- A hierarquia passa a ser: **Perfil > Nicho default** (sem camada de personalizacao individual)
-- O hook continua a ler os `profileDashboardWidgets` do `usePermissions` para determinar quais widgets mostrar
+### Alteracao
 
-**3. Eliminar `WidgetSelector.tsx`**
+**Ficheiro:** `src/components/otto/OttoChatWindow.tsx`
 
-- O componente `src/components/dashboard/WidgetSelector.tsx` deixa de ser necessario e sera removido
+- Na `div` do header (linha 63): adicionar a classe `pt-safe` condicionalmente quando `isMobile` for true, para empurrar o conteudo para baixo do notch
+- Na `div` do input (linha 124): adicionar a classe `pb-safe` condicionalmente quando `isMobile` for true, para o input nao ficar tapado pelo indicador home
 
-**4. Atualizar o conhecimento do Otto** (`supabase/functions/otto-chat/index.ts`)
-
-No `SYSTEM_PROMPT`, atualizar a secao do PAINEL:
-- Remover referencia a "widgets personalizaveis" pelo utilizador
-- Indicar que os widgets do dashboard sao configurados pelo Administrador em **Definicoes > Perfis > Dashboard Personalizado**
-- Indicar que cada perfil pode ter um conjunto diferente de widgets
-
-**5. Limpar ficheiros e imports**
-
-- Remover `WidgetSelector` dos ficheiros do projeto
-- Remover imports nao utilizados em `Dashboard.tsx` (ex: `Settings2`, `WidgetSelector`, `WidgetType`)
+A logica sera simples - usar as classes CSS utilitarias ja definidas no `index.css` (`pt-safe` e `pb-safe`) que utilizam `env(safe-area-inset-top)` e `env(safe-area-inset-bottom)`.
 
 ### Resultado
 
-- O botao "Personalizar" desaparece do Painel
-- Os widgets do dashboard sao controlados exclusivamente pela configuracao do Perfil de Acesso do utilizador
-- Se o perfil nao tiver widgets configurados, usa os defaults do nicho
-- O Otto sabe explicar que a configuracao do dashboard e feita nos Perfis de Acesso
+- O header do Otto fica abaixo do notch/Dynamic Island no iPhone
+- O input fica acima do indicador home
+- Sem impacto no desktop (as variaveis de safe area retornam 0)
+
