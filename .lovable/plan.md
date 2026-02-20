@@ -1,29 +1,45 @@
 
 
-## Converter LeadDetailsModal para Full Screen
+## Adicionar campos em falta ao Editor de Campos de Leads
 
-O modal que abre ao clicar num lead (detalhes/edicao) ainda usa o layout pequeno (`max-w-lg`). Precisa ser convertido para full screen, seguindo o mesmo padrao do resto do sistema.
+### Problema
 
-### Alteracao
+O editor de campos de leads nas Definicoes (tab "Leads") so mostra 7 campos basicos (Nome, Email, Telefone, Origem, Temperatura, Valor, Observacoes), mas a tabela `leads` e o formulario `AddLeadModal` usam mais campos que tambem deviam ser configuraveis:
 
-**Ficheiro:** `src/components/leads/LeadDetailsModal.tsx`
+- **NIF Empresa** (`company_nif`)
+- **Nome Empresa** (`company_name`)
+- **Tipologia** (`tipologia`) - especifico Telecom
+- **Consumo Anual** (`consumo_anual`) - especifico Telecom
 
-**Linha 264** - Trocar:
-```
-<DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-```
-Por:
-```
-<DialogContent variant="fullScreen" className="flex flex-col p-0 gap-0">
-```
+### Solucao
 
-**Reestruturar o layout interno:**
+Adicionar estes 4 campos ao sistema de configuracao de campos de leads.
 
-- Header fixo com borda inferior (titulo editavel + subtitulo "Lead criada em...")
-- Conteudo scrollavel com container centrado (`max-w-5xl mx-auto`)
-- Grid de 2 colunas em desktop (`lg:grid-cols-5`):
-  - **Coluna esquerda (3/5):** Cards com os dados editaveis (Estado/Temperatura/Tipologia, Atribuicao, Valor/Consumo, Observacoes, Anexos, Campos customizados)
-  - **Coluna direita (2/5, sticky):** Card de resumo com informacoes de contacto (telefone, email, data de criacao, origem), botoes de acao rapida (WhatsApp, Marcar evento), e footer com botoes Eliminar/Guardar
+### Alteracoes
 
-Toda a logica existente (editar campos inline, guardar alteracoes, eliminar lead, WhatsApp link, eventos, anexos, campos customizados) sera mantida intacta - apenas o layout visual muda.
+**Ficheiro: `src/types/field-settings.ts`**
+
+1. Expandir o tipo `LeadFieldKey` para incluir os novos campos:
+   - Adicionar `'company_nif' | 'company_name' | 'tipologia' | 'consumo_anual'`
+
+2. Adicionar os defaults no `DEFAULT_LEAD_FIELDS_SETTINGS`:
+   - `company_nif: { visible: true, required: true, label: 'NIF Empresa' }`
+   - `company_name: { visible: true, required: true, label: 'Nome Empresa' }`
+   - `tipologia: { visible: true, required: false, label: 'Tipologia' }`
+   - `consumo_anual: { visible: true, required: false, label: 'Consumo Anual (kWh)' }`
+
+3. Atualizar `LEAD_FIELD_ORDER` para incluir os novos campos na ordem logica:
+   - `['company_nif', 'company_name', 'name', 'email', 'phone', 'source', 'temperature', 'tipologia', 'consumo_anual', 'value', 'notes']`
+
+**Ficheiro: `src/components/settings/LeadFieldsEditor.tsx`**
+
+4. Adicionar icones para os novos campos no `FIELD_ICONS`:
+   - `company_nif`: icone `FileText`
+   - `company_name`: icone `Building2` (importar do lucide-react)
+   - `tipologia`: icone `ClipboardList` (importar)
+   - `consumo_anual`: icone `Zap` (importar)
+
+Nenhuma outra alteracao necessaria -- o editor ja itera sobre `LEAD_FIELD_ORDER` dinamicamente, portanto os novos campos aparecerao automaticamente.
+
+**Nota:** A integracao destes campos configuraveis com o `AddLeadModal` (respeitar visibilidade/obrigatoriedade) e um passo futuro separado. Este plano apenas garante que os campos aparecem no editor de definicoes para o administrador configurar.
 
