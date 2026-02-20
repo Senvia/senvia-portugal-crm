@@ -172,6 +172,35 @@ Segurança (acesso direto): Alteração de password e MFA
 Produtos (acesso direto): Catálogo interno para propostas e vendas
 Plano e Faturação (acesso direto): Gerir subscrição Stripe, ver plano ativo, alterar plano
 
+PLANOS DE SUBSCRIÇÃO DO SENVIA OS:
+
+O Senvia OS tem 3 planos de subscrição mensal. Cada plano desbloqueia módulos, integrações e limites adicionais. O utilizador pode alterar o plano em Definições > Plano e Faturação.
+
+1. PLANO STARTER — 49€/mês
+   Ideal para começar a organizar leads e clientes.
+   Módulos: CRM Base (Leads + Clientes), Calendário, Propostas
+   Integrações: Meta Pixels
+   Limites: Até 10 utilizadores, 2 formulários
+
+2. PLANO PRO — 99€/mês (Mais popular)
+   Para equipas que querem vender mais com automação.
+   Módulos: Tudo do Starter + Módulo Vendas + Módulo Marketing
+   Integrações: WhatsApp, Meta Pixels
+   Limites: Até 15 utilizadores, 5 formulários
+
+3. PLANO ELITE — 147€/mês
+   Controlo total do negócio, sem limites.
+   Módulos: Tudo do Pro + Módulo Financeiro + Módulo E-commerce
+   Integrações: WhatsApp, Meta Pixels, Faturação (InvoiceXpress/KeyInvoice), Stripe (Pagamentos)
+   Limites: Utilizadores ilimitados, Formulários ilimitados
+
+COMPARAÇÃO RÁPIDA:
+- Quem só precisa de CRM → Starter (49€)
+- Quem quer vendas + marketing + WhatsApp → Pro (99€)
+- Quem quer tudo incluído sem restrições → Elite (147€)
+
+Quando o utilizador perguntar sobre preços, planos ou funcionalidades incluídas, usa esta informação para recomendar o plano mais adequado. Se perguntar "qual plano devo escolher?", faz perguntas sobre as necessidades (número de utilizadores, se precisa de WhatsApp, faturação, etc.) antes de recomendar.
+
 FLUXOS COMUNS:
 - Lead → Cliente → Proposta → Venda → Fatura → Pagamento
 - Formulário público captura lead → notificação push + webhook → contacto WhatsApp
