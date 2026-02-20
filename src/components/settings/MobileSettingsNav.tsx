@@ -81,7 +81,7 @@ export const subSectionsMap: Record<SettingsSection, SubSectionItem[]> = {
     { id: "org-pipeline", label: "Pipeline", icon: GitBranch, description: "Etapas do funil de vendas" },
     { id: "org-modules", label: "Módulos", icon: LayoutGrid, description: "Funcionalidades ativas" },
     { id: "org-forms", label: "Formulário", icon: FileText, description: "Captação de leads" },
-    { id: "org-fields", label: "Campos", icon: List, description: "Campos personalizados" },
+    { id: "org-fields", label: "Campos", icon: List, description: "Campos por módulo (Leads, Clientes, etc.)" },
     { id: "org-sales", label: "Vendas", icon: ShoppingCart, description: "Regras de vendas" },
     { id: "org-matrix", label: "Matriz Comissões", icon: Calculator, description: "Cálculo automático de comissões" },
   ],

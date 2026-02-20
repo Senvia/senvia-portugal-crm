@@ -18,7 +18,7 @@ import { TeamsSection } from '@/components/settings/TeamsSection';
 import { FormsManager } from '@/components/settings/FormsManager';
 import { GeneralContent } from '@/components/settings/GeneralContent';
 import { IntegrationsContent } from '@/components/settings/IntegrationsContent';
-import { ClientFieldsEditor } from '@/components/settings/ClientFieldsEditor';
+import { FieldsManagerTabs } from '@/components/settings/FieldsManagerTabs';
 import { FidelizationAlertsSettings } from '@/components/settings/FidelizationAlertsSettings';
 import { ExpenseCategoriesTab } from '@/components/settings/ExpenseCategoriesTab';
 import { FiscalSettingsTab } from '@/components/settings/FiscalSettingsTab';
@@ -293,7 +293,7 @@ export default function Settings() {
       case "org-pipeline": return <PipelineEditor />;
       case "org-modules": return <ModulesTab />;
       case "org-forms": return <FormsManager />;
-      case "org-fields": return <ClientFieldsEditor />;
+      case "org-fields": return <FieldsManagerTabs />;
       case "org-sales": return <SalesSettingsTab />;
       case "org-matrix": return <CommissionMatrixTab />;
       case "security": return (
