@@ -1,5 +1,6 @@
 import ReactMarkdown from "react-markdown";
-import { Bot, User } from "lucide-react";
+import { User } from "lucide-react";
+import ottoMascot from "@/assets/otto-mascot.svg";
 import { Button } from "@/components/ui/button";
 import type { OttoMessage as OttoMessageType } from "@/hooks/useOttoChat";
 
@@ -30,11 +31,11 @@ export function OttoMessageComponent({ message, onButtonClick, isStreaming }: Ot
     <div className={`flex gap-2.5 ${isUser ? "flex-row-reverse" : "flex-row"}`}>
       {/* Avatar */}
       <div
-        className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center ${
-          isUser ? "bg-primary text-primary-foreground" : "bg-accent text-accent-foreground"
+        className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center overflow-hidden ${
+          isUser ? "bg-primary text-primary-foreground" : ""
         }`}
       >
-        {isUser ? <User className="w-3.5 h-3.5" /> : <Bot className="w-3.5 h-3.5" />}
+        {isUser ? <User className="w-3.5 h-3.5" /> : <img src={ottoMascot} alt="Otto" className="w-full h-full object-cover" />}
       </div>
 
       {/* Bubble */}

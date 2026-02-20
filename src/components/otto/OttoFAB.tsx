@@ -1,9 +1,9 @@
-import { Bot } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { OttoChatWindow } from "./OttoChatWindow";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { AnimatePresence, motion } from "framer-motion";
 import { useOttoStore } from "@/stores/useOttoStore";
+import ottoMascot from "@/assets/otto-mascot.svg";
 
 export function OttoFAB() {
   const { isOpen, setOpen } = useOttoStore();
@@ -23,10 +23,10 @@ export function OttoFAB() {
         >
           <Button
             onClick={() => setOpen(true)}
-            className="h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-shadow gradient-senvia"
+            className="h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-shadow p-0 overflow-hidden"
             size="icon"
           >
-            <Bot className="w-6 h-6" />
+            <img src={ottoMascot} alt="Otto" className="w-full h-full object-cover" />
           </Button>
         </motion.div>
       )}
