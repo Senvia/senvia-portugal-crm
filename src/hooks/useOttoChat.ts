@@ -1,37 +1,26 @@
-import { useState, useCallback, useRef } from "react";
+import { useCallback, useRef } from "react";
 import { toast } from "sonner";
+import { useOttoStore } from "@/stores/useOttoStore";
 
-export type OttoMessage = {
-  role: "user" | "assistant";
-  content: string;
-};
+export type { OttoMessage } from "@/stores/useOttoStore";
 
 const OTTO_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/otto-chat`;
 
 export function useOttoChat() {
-  const [messages, setMessages] = useState<OttoMessage[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const { messages, isLoading, addMessage, updateLastMessage, clearMessages, setLoading } = useOttoStore();
   const abortRef = useRef<AbortController | null>(null);
 
   const sendMessage = useCallback(async (input: string) => {
-    const userMsg: OttoMessage = { role: "user", content: input };
-    setMessages((prev) => [...prev, userMsg]);
-    setIsLoading(true);
+    const userMsg = { role: "user" as const, content: input };
+    addMessage(userMsg);
+    setLoading(true);
 
     const allMessages = [...messages, userMsg];
     let assistantSoFar = "";
 
     const upsert = (chunk: string) => {
       assistantSoFar += chunk;
-      setMessages((prev) => {
-        const last = prev[prev.length - 1];
-        if (last?.role === "assistant") {
-          return prev.map((m, i) =>
-            i === prev.length - 1 ? { ...m, content: assistantSoFar } : m
-          );
-        }
-        return [...prev, { role: "assistant", content: assistantSoFar }];
-      });
+      updateLastMessage(assistantSoFar);
     };
 
     try {
@@ -51,7 +40,7 @@ export function useOttoChat() {
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({ error: "Erro desconhecido" }));
         toast.error(err.error || "Erro ao contactar o Otto");
-        setIsLoading(false);
+        setLoading(false);
         return;
       }
 
@@ -92,7 +81,6 @@ export function useOttoChat() {
         }
       }
 
-      // Flush remaining
       if (buffer.trim()) {
         for (let raw of buffer.split("\n")) {
           if (!raw) continue;
@@ -114,12 +102,10 @@ export function useOttoChat() {
         toast.error("Erro ao comunicar com o Otto");
       }
     } finally {
-      setIsLoading(false);
+      setLoading(false);
       abortRef.current = null;
     }
-  }, [messages]);
-
-  const clearMessages = useCallback(() => setMessages([]), []);
+  }, [messages, addMessage, updateLastMessage, setLoading]);
 
   const cancelStream = useCallback(() => {
     abortRef.current?.abort();

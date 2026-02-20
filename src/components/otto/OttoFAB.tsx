@@ -1,17 +1,17 @@
-import { useState } from "react";
 import { Bot } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { OttoChatWindow } from "./OttoChatWindow";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { AnimatePresence, motion } from "framer-motion";
+import { useOttoStore } from "@/stores/useOttoStore";
 
 export function OttoFAB() {
-  const [isOpen, setIsOpen] = useState(false);
+  const { isOpen, setOpen } = useOttoStore();
   const isMobile = useIsMobile();
 
   return (
     <>
-      <AnimatePresence>{isOpen && <OttoChatWindow onClose={() => setIsOpen(false)} />}</AnimatePresence>
+      <AnimatePresence>{isOpen && <OttoChatWindow onClose={() => setOpen(false)} />}</AnimatePresence>
 
       {!isOpen && (
         <motion.div
@@ -22,7 +22,7 @@ export function OttoFAB() {
           }`}
         >
           <Button
-            onClick={() => setIsOpen(true)}
+            onClick={() => setOpen(true)}
             className="h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-shadow gradient-senvia"
             size="icon"
           >
