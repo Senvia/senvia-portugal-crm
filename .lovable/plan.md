@@ -1,133 +1,35 @@
 
 
-## Otto - Assistente IA Integrado no Senvia OS
+## Corrigir Conhecimento do Otto - Adicionar KeyInvoice
 
-Chatbot inteligente que fica no canto inferior direito da aplicacao, ajudando os utilizadores com duvidas sobre o sistema atraves de um fluxo conversacional com botoes de acao rapida.
+O system prompt do Otto menciona apenas o InvoiceXpress em 3 locais e ignora completamente o KeyInvoice. Vamos atualizar o conhecimento do Otto para refletir que o sistema suporta **dois fornecedores de faturacao** mutuamente exclusivos.
 
-### Experiencia do Utilizador
+### Alteracoes no Ficheiro
 
-O Otto aparece como um botao flutuante (FAB) no canto inferior direito. Ao clicar, abre-se uma janela de chat com:
+**`supabase/functions/otto-chat/index.ts`** - Atualizar o SYSTEM_PROMPT em 3 secoes:
 
-1. Mensagem de boas-vindas do Otto com botoes de topicos frequentes
-2. O utilizador clica num botao ou escreve uma duvida
-3. O Otto responde com um passo-a-passo claro, podendo incluir novos botoes para aprofundar
-4. As respostas sao renderizadas com markdown para formatacao rica
+1. **Secao VENDAS (linha 55)**: Substituir "Faturas: emitir via InvoiceXpress (se configurado)" por texto que mencione ambos os fornecedores
 
-```text
-+---------------------------+
-|  Otto - Assistente        |
-|---------------------------|
-|  Ola! Sou o Otto, o teu  |
-|  assistente Senvia OS.    |
-|  Como posso ajudar?       |
-|                           |
-|  [Como criar um lead?]    |
-|  [Gerir pipeline]         |
-|  [Enviar proposta]        |
-|  [Configurar WhatsApp]    |
-|                           |
-|  ________________________ |
-|  | Escreve aqui...    [>]||
-+---------------------------+
-```
+2. **Secao FINANCEIRO (linha 66)**: Substituir "Faturas: sincronizacao com InvoiceXpress" por texto que inclua KeyInvoice como alternativa
 
-### Arquitetura
+3. **Secao CONFIGURACOES (linha 87)**: Substituir "Integrações: WhatsApp (Evolution API), InvoiceXpress, Brevo" por texto que liste tambem o KeyInvoice
 
-```text
-Frontend (React)                  Backend (Edge Function)              Lovable AI
-   |                                    |                                  |
-   |-- Mensagem do user -------------->|                                  |
-   |                                    |-- System prompt + contexto ---->|
-   |                                    |<-- Stream de tokens ------------|
-   |<-- SSE stream de tokens -----------|                                  |
-   |                                    |                                  |
-   | Renderiza tokens em tempo real     |                                  |
-```
+4. **Adicionar nova secao FATURACAO** no system prompt com detalhes sobre:
+   - InvoiceXpress: como configurar, o que faz (faturas, faturas-recibo, notas de credito)
+   - KeyInvoice: como configurar (API 5.0), o que faz
+   - Regra de exclusividade: apenas um fornecedor pode estar ativo de cada vez
+   - Como alternar entre fornecedores: Definicoes -> Integracoes -> Faturacao
+   - Configurar em: Definicoes -> Integracoes -> escolher InvoiceXpress ou KeyInvoice
 
-### Componentes a Criar
+### Conteudo Atualizado
 
-**1. Edge Function: `otto-chat/index.ts`**
-- Recebe as mensagens do utilizador
-- Usa Lovable AI (modelo `google/gemini-3-flash-preview`) com streaming
-- System prompt especializado com conhecimento completo do Senvia OS:
-  - Navegacao (como chegar a cada pagina)
-  - Funcionalidades (leads, clientes, vendas, propostas, calendario, marketing, financeiro)
-  - Configuracoes (pipeline, formularios, equipa, integracao WhatsApp)
-  - Fluxos comuns (criar lead, converter em cliente, enviar proposta, registar venda)
-- Instrucao no prompt para o Otto sugerir botoes no formato `[botao:texto]` quando relevante
-- Suporte a streaming SSE para respostas em tempo real
-- Tratamento de erros 429 (rate limit) e 402 (creditos)
+| Secao | Antes | Depois |
+|-------|-------|--------|
+| Vendas | "Faturas: emitir via InvoiceXpress" | "Faturas: emitir via InvoiceXpress ou KeyInvoice (conforme o fornecedor configurado)" |
+| Financeiro | "Faturas: sincronizacao com InvoiceXpress" | "Faturas: sincronizacao com InvoiceXpress ou KeyInvoice" |
+| Configuracoes | "Integracoes: WhatsApp, InvoiceXpress, Brevo" | "Integracoes: WhatsApp (Evolution API), InvoiceXpress, KeyInvoice, Brevo" |
+| Nova secao | (nao existia) | Detalhes sobre ambos os fornecedores e regra de exclusividade |
 
-**2. Componente: `src/components/otto/OttoFAB.tsx`**
-- Botao flutuante (floating action button) no canto inferior direito
-- Icone de robot/assistente com animacao subtil
-- Badge de notificacao na primeira visita
-- No mobile: posicionado acima da bottom nav
-- No desktop: canto inferior direito com margem
+### Resultado
 
-**3. Componente: `src/components/otto/OttoChatWindow.tsx`**
-- Janela de chat responsiva
-- Mobile: fullscreen (ocupa todo o ecra)
-- Desktop: janela flutuante 380x520px no canto
-- Header com nome "Otto" e botao de fechar
-- Area de mensagens com scroll
-- Input de texto com botao de enviar
-- Suporte a Markdown nas respostas (react-markdown sera necessario)
-
-**4. Componente: `src/components/otto/OttoMessage.tsx`**
-- Renderiza cada mensagem (user ou assistente)
-- Parsing de botoes sugeridos: detecta `[botao:texto]` nas respostas e renderiza como botoes clicaveis
-- Animacao de "typing" enquanto o Otto esta a responder
-- Avatar do Otto (icone de robot)
-
-**5. Componente: `src/components/otto/OttoQuickActions.tsx`**
-- Botoes de acao rapida na mensagem de boas-vindas
-- Categorias: Leads, Clientes, Vendas, Configuracoes, etc.
-- Ao clicar, envia a pergunta automaticamente
-
-**6. Hook: `src/hooks/useOttoChat.ts`**
-- Gestao do estado do chat (mensagens, loading, erro)
-- Streaming SSE com parsing token-by-token
-- Persistencia das mensagens na sessao (sessionStorage)
-- Logica de retry em caso de erro
-
-### Integracao no Layout
-
-**Ficheiro: `src/components/layout/AppLayout.tsx`**
-- Adicionar o `<OttoFAB />` dentro do layout principal (tanto mobile como desktop)
-- O FAB fica sempre visivel em todas as paginas protegidas
-
-### Detalhes do System Prompt
-
-O Otto sera instruido a:
-- Responder APENAS sobre o Senvia OS (nao responder a perguntas fora do ambito)
-- Usar linguagem informal e amigavel em Portugues de Portugal
-- Dar respostas curtas e objetivas com passos numerados
-- Sugerir botoes de follow-up usando o formato `[botao:Como configurar o pipeline?]`
-- Nunca inventar funcionalidades que nao existem
-- Direcionar para as Definicoes quando necessario
-
-### Dependencias
-
-- Instalar `react-markdown` para renderizar respostas formatadas
-- Usar Lovable AI (ja configurado, sem necessidade de API key adicional)
-
-### Ficheiros Alterados/Criados
-
-| Ficheiro | Tipo |
-|----------|------|
-| `supabase/functions/otto-chat/index.ts` | Novo |
-| `src/components/otto/OttoFAB.tsx` | Novo |
-| `src/components/otto/OttoChatWindow.tsx` | Novo |
-| `src/components/otto/OttoMessage.tsx` | Novo |
-| `src/components/otto/OttoQuickActions.tsx` | Novo |
-| `src/hooks/useOttoChat.ts` | Novo |
-| `src/components/layout/AppLayout.tsx` | Alterado (adicionar FAB) |
-| `supabase/config.toml` | Alterado (adicionar funcao) |
-
-### Seguranca
-
-- A edge function valida o token JWT do utilizador (apenas users autenticados podem usar o Otto)
-- Nenhum dado sensivel e enviado para a IA - apenas a pergunta do utilizador
-- Rate limiting natural do Lovable AI protege contra abuso
-
+O Otto passara a responder corretamente que o Senvia OS suporta **InvoiceXpress e KeyInvoice** como fornecedores de faturacao, e sabera explicar as diferencas e como configurar cada um.
