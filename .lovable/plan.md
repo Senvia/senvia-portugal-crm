@@ -1,37 +1,54 @@
 
-## Adicionar Tooltip/Balão de Ajuda ao Botão do Otto
+
+## Converter AddLeadModal para Pagina Full Screen
 
 ### Objetivo
 
-Adicionar uma pequena mensagem flutuante acima do ícone do Otto (FAB) para que os utilizadores saibam que ele está ali para ajudar. A mensagem aparece automaticamente e pode ser fechada pelo utilizador.
+Transformar o modal de adicionar lead de um dialogo pequeno (`max-w-md`) para pagina full screen, usando o mesmo padrao ja implementado no sistema (CreateSaleModal, CreateProposalModal, CreateClientModal, etc.).
 
-### Implementação
+### Alteracao
 
-**Ficheiro:** `src/components/otto/OttoFAB.tsx`
+**Ficheiro:** `src/components/leads/AddLeadModal.tsx`
 
-- Adicionar um balão (tooltip/bubble) posicionado acima do botão FAB do Otto
-- A mensagem será algo como: **"Precisa de ajuda? Pergunte-me sobre o Senvia OS!"**
-- O balão aparece automaticamente quando o Otto não está aberto
-- O utilizador pode fechar o balão clicando num "X" pequeno
-- Usar `localStorage` para guardar se o utilizador já fechou o balão (para não voltar a aparecer sempre)
-- Incluir uma pequena "seta" a apontar para baixo (estilo speech bubble)
-- Animação suave de entrada com framer-motion (fade in + slide up)
+**1. Usar variant fullScreen no DialogContent**
 
-### Design
+O componente Dialog ja suporta `variant="fullScreen"`. Basta trocar:
+- De: `<DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">`
+- Para: `<DialogContent variant="fullScreen" className="flex flex-col p-0 gap-0">`
 
-- Fundo escuro (`bg-card`) com borda (`border-border`), cantos arredondados
-- Texto pequeno (`text-xs`) em 1-2 linhas
-- Botão "X" discreto no canto superior direito do balão
-- Seta triangular na parte inferior a apontar para o botão do Otto
-- Largura máxima de ~200px para não ocupar muito espaço
-- Posicionado logo acima do FAB, alinhado à direita
+**2. Reestruturar o layout seguindo o padrao do projeto**
 
-### Lógica de Exibição
+- Header fixo com borda inferior (`px-6 pr-14 py-4 border-b border-border/50 shrink-0`)
+- Conteudo scrollavel (`flex-1 overflow-y-auto`)
+- Container centrado com largura maxima (`max-w-6xl mx-auto p-4 sm:p-6`)
+- Grid de 2 colunas em desktop (`grid grid-cols-1 lg:grid-cols-5 gap-6`)
 
-- Mostrar o balão apenas quando o chat do Otto **não está aberto**
-- Esconder permanentemente após o utilizador clicar no "X" (persistido via `localStorage`)
-- Esconder automaticamente quando o utilizador abre o Otto pela primeira vez
+**3. Coluna Esquerda (3/5 = 60%) - Formulario Principal**
 
-### Ficheiros Alterados
+Organizado em Cards tematicos:
+- Card "Empresa": NIF + Nome da Empresa (com banner de cliente existente)
+- Card "Contacto": Nome, Email, Telefone
+- Card "Detalhes": Origem, Temperatura, Tipologia (telecom), Valor/Consumo, Atribuicao
+- Card "Observacoes": Notas + Anexos (telecom)
 
-- `src/components/otto/OttoFAB.tsx` - adicionar o balão de ajuda com lógica de visibilidade
+**4. Coluna Direita (2/5 = 40%, sticky) - Resumo e Acoes**
+
+- Card com resumo dos dados preenchidos ate ao momento (nome, email, telefone, origem, temperatura, valor)
+- Checkboxes RGPD e Automacao
+- Botoes Cancelar / Criar Lead
+
+**5. Manter toda a logica existente**
+
+- Schema Zod inalterado
+- Pesquisa NIF com auto-preenchimento
+- Campos condicionais (telecom)
+- Upload de ficheiros (telecom)
+- Atribuicao de equipa (admins)
+
+### Resultado
+
+- Experiencia consistente com o resto do sistema (Vendas, Propostas, Clientes)
+- Desktop: formulario organizado em 2 colunas com resumo sticky
+- Mobile: tela cheia com scroll natural
+- Sem impacto na logica de negocio
+
