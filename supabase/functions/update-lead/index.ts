@@ -5,10 +5,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-api-key',
 };
 
-// Valid status values
-const VALID_STATUSES = ['new', 'contacted', 'scheduled', 'won', 'lost'] as const;
-type LeadStatus = typeof VALID_STATUSES[number];
-
 // Valid temperature values
 const VALID_TEMPERATURES = ['cold', 'warm', 'hot'] as const;
 type LeadTemperature = typeof VALID_TEMPERATURES[number];
@@ -17,7 +13,7 @@ interface UpdateLeadRequest {
   lead_id: string;
   organization_id: string;
   updates: {
-    status?: LeadStatus;
+    status?: string;
     temperature?: LeadTemperature;
     notes?: string;
     value?: number;
@@ -114,15 +110,40 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Validate status if provided
-    if (body.updates.status && !VALID_STATUSES.includes(body.updates.status)) {
-      return new Response(
-        JSON.stringify({ 
-          error: 'Invalid status value',
-          details: `Status must be one of: ${VALID_STATUSES.join(', ')}`
-        }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    // Validate status dynamically against pipeline_stages
+    if (body.updates.status) {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL');
+      const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+      if (!supabaseUrl || !serviceRoleKey) {
+        return new Response(
+          JSON.stringify({ error: 'Server configuration error' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      const sbForValidation = createClient(supabaseUrl, serviceRoleKey);
+      const { data: validStages, error: stagesError } = await sbForValidation
+        .from('pipeline_stages')
+        .select('key')
+        .eq('organization_id', body.organization_id);
+
+      if (stagesError) {
+        console.error('Error fetching pipeline stages:', stagesError);
+        return new Response(
+          JSON.stringify({ error: 'Failed to validate status' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const validKeys = validStages?.map((s: { key: string }) => s.key) || [];
+      if (!validKeys.includes(body.updates.status)) {
+        return new Response(
+          JSON.stringify({ 
+            error: 'Invalid status value',
+            details: `Status must be one of: ${validKeys.join(', ')}`
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
     }
 
     // Validate temperature if provided
