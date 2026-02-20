@@ -182,7 +182,7 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
     const lead = await createLead.mutateAsync({
       company_nif: data.company_nif || undefined,
       company_name: data.company_name || undefined,
-      name: data.name || '',
+      name: data.name || data.company_name || '',
       email: data.email || '',
       phone: data.phone || '',
       source: data.source,
