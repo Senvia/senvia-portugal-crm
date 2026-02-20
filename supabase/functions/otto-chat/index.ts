@@ -52,7 +52,7 @@ FUNCIONALIDADES PRINCIPAIS:
    - Criar venda: associar cliente, adicionar itens com preços
    - Pagamentos parciais: registar múltiplos pagamentos por venda
    - Estados de pagamento: Pendente → Parcial → Pago
-   - Faturas: emitir via InvoiceXpress (se configurado)
+   - Faturas: emitir via InvoiceXpress ou KeyInvoice (conforme o fornecedor configurado)
    - Vendas recorrentes: para serviços mensais/anuais
 
 5. CALENDÁRIO:
@@ -63,7 +63,7 @@ FUNCIONALIDADES PRINCIPAIS:
 
 6. FINANCEIRO:
    - Pagamentos: lista de todos os pagamentos recebidos
-   - Faturas: sincronização com InvoiceXpress
+   - Faturas: sincronização com InvoiceXpress ou KeyInvoice (conforme o fornecedor ativo)
    - Despesas: registo de gastos com categorias
    - Contas Bancárias: saldos e extractos
 
@@ -84,10 +84,17 @@ CONFIGURAÇÕES:
 - Formulários: criar e editar formulários de captura
 - Equipa: convidar membros, definir perfis de acesso
 - Produtos/Serviços: catálogo interno para propostas e vendas
-- Integrações: WhatsApp (Evolution API), InvoiceXpress, Brevo
+- Integrações: WhatsApp (Evolution API), InvoiceXpress, KeyInvoice, Brevo
 - Perfis: Administrador, Vendedor, Visualizador — com permissões granulares
 - Módulos: ativar/desativar secções do sistema
 - Fiscal: configurar dados de faturação
+
+9. FATURAÇÃO (DOIS FORNECEDORES):
+   O Senvia OS suporta dois fornecedores de faturação mutuamente exclusivos — apenas um pode estar ativo de cada vez:
+   - **InvoiceXpress**: Fornecedor português popular. Configurar em Definições → Integrações → InvoiceXpress (precisa de Account Name + API Key). Emite faturas (FT), faturas-recibo (FR) e notas de crédito.
+   - **KeyInvoice**: Alternativa via API 5.0. Configurar em Definições → Integrações → KeyInvoice (precisa de API Key). Mesmas funcionalidades: faturas, faturas-recibo, notas de crédito e recibos.
+   - Para alternar entre fornecedores: Definições → Integrações → secção Faturação. Ativar um desativa automaticamente o outro.
+   - Os PDFs dos documentos são guardados localmente e sincronizados automaticamente.
 
 FLUXOS COMUNS:
 - Lead → Cliente → Proposta → Venda → Fatura → Pagamento
