@@ -1,43 +1,60 @@
 
 
-## Corrigir RLS da tabela lead_attachments para Super Admins
+## Corrigir Leads Orfaos (Status Desalinhado com Pipeline)
 
 ### Problema
 
-O upload do ficheiro para o storage agora funciona (retorna 200), mas o INSERT na tabela `lead_attachments` falha com **403 RLS violation**.
+A organizacao "Perfect2Gether" usa o template Telecom, onde a etapa final negativa tem a key `perdido`. No entanto, 2 leads (AD e Joaquim) tem o status `lost` -- que e a key do template generico, nao do Telecom.
 
-As 3 politicas RLS da tabela `lead_attachments` usam apenas `is_org_member()`, que retorna `false` para super_admins a visualizar organizacoes onde nao sao membros diretos.
+Resultado: esses leads nao aparecem em nenhuma coluna do Kanban porque nenhuma etapa da pipeline tem key = `lost`.
 
-### Solucao
+**Leads afetados:**
+- AD (`0ea11adc`)
+- Joaquim (`510c10a6`)
 
-Atualizar as 3 politicas RLS da tabela `lead_attachments` para incluir `has_role(auth.uid(), 'super_admin')`:
+### Causa Raiz
 
-**Migracao SQL:**
+Existem pontos no codigo que usam valores hardcoded como `'lost'` ou `'won'` em vez de consultar as etapas dinamicas da pipeline (`is_final_negative` / `is_final_positive`). Quando o utilizador marca um lead como "Perdido" atraves de certas acoes (ex: LostLeadDialog, conversao automatica), o sistema escreve `lost` em vez de `perdido`.
+
+### Solucao (2 Partes)
+
+**Parte 1 -- Correcao de dados (SQL)**
+
+Atualizar os 2 leads orfaos para usar a key correta da pipeline:
 
 ```sql
--- 1. INSERT
-DROP POLICY IF EXISTS "Members can insert lead attachments" ON public.lead_attachments;
-CREATE POLICY "Members can insert lead attachments" ON public.lead_attachments
-  FOR INSERT WITH CHECK (
-    is_org_member(auth.uid(), organization_id)
-    OR has_role(auth.uid(), 'super_admin'::app_role)
-  );
-
--- 2. SELECT
-DROP POLICY IF EXISTS "Members can view lead attachments" ON public.lead_attachments;
-CREATE POLICY "Members can view lead attachments" ON public.lead_attachments
-  FOR SELECT USING (
-    is_org_member(auth.uid(), organization_id)
-    OR has_role(auth.uid(), 'super_admin'::app_role)
-  );
-
--- 3. DELETE
-DROP POLICY IF EXISTS "Members can delete lead attachments" ON public.lead_attachments;
-CREATE POLICY "Members can delete lead attachments" ON public.lead_attachments
-  FOR DELETE USING (
-    is_org_member(auth.uid(), organization_id)
-    OR has_role(auth.uid(), 'super_admin'::app_role)
-  );
+UPDATE leads 
+SET status = 'perdido' 
+WHERE organization_id = '96a3950e-31be-4c6d-abed-b82968c0d7e9' 
+  AND status = 'lost';
 ```
 
-Nenhuma alteracao de codigo frontend necessaria.
+**Parte 2 -- Correcao no codigo**
+
+Auditar e corrigir todos os locais que usam `'lost'` ou `'won'` hardcoded, substituindo pela logica dinamica que consulta `pipeline_stages` com `is_final_positive` / `is_final_negative`. Os ficheiros principais a corrigir:
+
+1. **LostLeadDialog.tsx** -- Quando marca um lead como perdido, deve usar a key da etapa `is_final_negative` da pipeline da organizacao, nao `'lost'` fixo.
+
+2. **useLeads.ts** -- O `useLeadStats()` usa `l.status === 'new'`, `'won'`, `'lost'` hardcoded. Deve usar as keys da pipeline.
+
+3. **KanbanBoard.tsx / KanbanTabs.tsx** -- Verificar se ha logica hardcoded para filtros de "won"/"lost".
+
+4. **Conversao Lead->Cliente** -- O trigger ou funcao que converte leads ganhos em clientes CRM pode estar a verificar `status = 'won'` em vez de `is_final_positive`.
+
+5. **Dashboard stats** -- Qualquer widget que conte leads por "won"/"lost" deve usar a pipeline dinamica.
+
+### Detalhes Tecnicos
+
+Para obter a key correta dinamicamente:
+
+```typescript
+// Em vez de hardcoded 'lost':
+const lostStage = stages?.find(s => s.is_final_negative);
+const lostKey = lostStage?.key || 'lost'; // fallback
+
+// Em vez de hardcoded 'won':
+const wonStage = stages?.find(s => s.is_final_positive);
+const wonKey = wonStage?.key || 'won'; // fallback
+```
+
+Os fallbacks garantem compatibilidade com organizacoes que ainda nao tem pipeline configurada.
