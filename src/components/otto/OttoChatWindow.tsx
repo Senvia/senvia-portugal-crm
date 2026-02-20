@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
-import { X, Send, Trash2, Bot } from "lucide-react";
+import { X, Send, Trash2 } from "lucide-react";
+import ottoMascot from "@/assets/otto-mascot.svg";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useOttoChat } from "@/hooks/useOttoChat";
@@ -61,8 +62,8 @@ export function OttoChatWindow({ onClose }: OttoChatWindowProps) {
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/30">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
-            <Bot className="w-4 h-4 text-primary-foreground" />
+          <div className="w-8 h-8 rounded-full overflow-hidden">
+            <img src={ottoMascot} alt="Otto" className="w-full h-full object-cover" />
           </div>
           <div>
             <h3 className="text-sm font-semibold">Otto</h3>
@@ -86,8 +87,8 @@ export function OttoChatWindow({ onClose }: OttoChatWindowProps) {
         <div ref={scrollRef} className="p-4 space-y-4">
           {messages.length === 0 && (
             <div className="flex gap-2.5">
-              <div className="flex-shrink-0 w-7 h-7 rounded-full bg-accent flex items-center justify-center">
-                <Bot className="w-3.5 h-3.5 text-accent-foreground" />
+              <div className="flex-shrink-0 w-7 h-7 rounded-full overflow-hidden">
+                <img src={ottoMascot} alt="Otto" className="w-full h-full object-cover" />
               </div>
               <div className="max-w-[85%]">
                 <OttoQuickActions onSelect={handleQuickAction} />
@@ -104,8 +105,8 @@ export function OttoChatWindow({ onClose }: OttoChatWindowProps) {
           ))}
           {isLoading && messages[messages.length - 1]?.role === "user" && (
             <div className="flex gap-2.5">
-              <div className="flex-shrink-0 w-7 h-7 rounded-full bg-accent flex items-center justify-center">
-                <Bot className="w-3.5 h-3.5 text-accent-foreground" />
+              <div className="flex-shrink-0 w-7 h-7 rounded-full overflow-hidden">
+                <img src={ottoMascot} alt="Otto" className="w-full h-full object-cover" />
               </div>
               <div className="bg-muted rounded-2xl rounded-tl-md px-3.5 py-2.5">
                 <div className="flex gap-1">
