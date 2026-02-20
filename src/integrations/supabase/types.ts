@@ -2012,6 +2012,7 @@ export type Database = {
           keyinvoice_token: string | null
           keyinvoice_token_expires_at: string | null
           keyinvoice_username: string | null
+          lead_fields_settings: Json | null
           logo_url: string | null
           meta_pixels: Json | null
           msg_template_cold: string | null
@@ -2020,7 +2021,9 @@ export type Database = {
           name: string
           niche: string | null
           plan: string | null
+          proposal_fields_settings: Json | null
           public_key: string
+          sale_fields_settings: Json | null
           sales_settings: Json | null
           slug: string
           tax_config: Json | null
@@ -2059,6 +2062,7 @@ export type Database = {
           keyinvoice_token?: string | null
           keyinvoice_token_expires_at?: string | null
           keyinvoice_username?: string | null
+          lead_fields_settings?: Json | null
           logo_url?: string | null
           meta_pixels?: Json | null
           msg_template_cold?: string | null
@@ -2067,7 +2071,9 @@ export type Database = {
           name: string
           niche?: string | null
           plan?: string | null
+          proposal_fields_settings?: Json | null
           public_key?: string
+          sale_fields_settings?: Json | null
           sales_settings?: Json | null
           slug: string
           tax_config?: Json | null
@@ -2106,6 +2112,7 @@ export type Database = {
           keyinvoice_token?: string | null
           keyinvoice_token_expires_at?: string | null
           keyinvoice_username?: string | null
+          lead_fields_settings?: Json | null
           logo_url?: string | null
           meta_pixels?: Json | null
           msg_template_cold?: string | null
@@ -2114,7 +2121,9 @@ export type Database = {
           name?: string
           niche?: string | null
           plan?: string | null
+          proposal_fields_settings?: Json | null
           public_key?: string
+          sale_fields_settings?: Json | null
           sales_settings?: Json | null
           slug?: string
           tax_config?: Json | null
