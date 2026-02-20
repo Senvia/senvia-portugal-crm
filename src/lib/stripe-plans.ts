@@ -25,7 +25,7 @@ export const STRIPE_PLANS: StripePlan[] = [
       "Calendário",
       "Propostas",
     ],
-    integrations: [],
+    integrations: ["Meta Pixels"],
     limits: { users: "Até 10", forms: "2 formulários" },
     features: [
       "CRM base (Leads + Clientes)",
@@ -69,7 +69,7 @@ export const STRIPE_PLANS: StripePlan[] = [
       "Módulo Financeiro",
       "Módulo E-commerce",
     ],
-    integrations: ["WhatsApp", "Meta Pixels", "Faturação (InvoiceXpress)"],
+    integrations: ["WhatsApp", "Meta Pixels", "Faturação (InvoiceXpress)", "Stripe (Pagamentos)"],
     limits: { users: "Ilimitados", forms: "Ilimitados" },
     features: [
       "Tudo do Pro +",

@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
 type ModuleKey = 'sales' | 'finance' | 'marketing' | 'ecommerce';
-type IntegrationKey = 'whatsapp' | 'invoicing' | 'meta_pixels';
+type IntegrationKey = 'whatsapp' | 'invoicing' | 'meta_pixels' | 'stripe';
 type FeatureKey = 'conversational_forms' | 'multi_org' | 'push_notifications' | 'fidelization_alerts';
 
 interface PlanFeatures {
@@ -29,7 +29,7 @@ const DEFAULT_PLAN: SubscriptionPlan = {
   price_monthly: 49,
   features: {
     modules: { sales: false, finance: false, marketing: false, ecommerce: false },
-    integrations: { whatsapp: false, invoicing: false, meta_pixels: false },
+    integrations: { whatsapp: false, invoicing: false, meta_pixels: false, stripe: false },
     features: { conversational_forms: false, multi_org: false, push_notifications: false, fidelization_alerts: false },
   },
 };
