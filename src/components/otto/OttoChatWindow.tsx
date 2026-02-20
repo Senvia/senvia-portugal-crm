@@ -60,7 +60,7 @@ export function OttoChatWindow({ onClose }: OttoChatWindowProps) {
       }
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/30">
+      <div className={`flex items-center justify-between px-4 py-3 border-b border-border bg-muted/30 ${isMobile ? "pt-safe" : ""}`}>
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-full overflow-hidden">
             <img src={ottoMascot} alt="Otto" className="w-full h-full object-cover" />
@@ -121,7 +121,7 @@ export function OttoChatWindow({ onClose }: OttoChatWindowProps) {
       </ScrollArea>
 
       {/* Input */}
-      <div className="p-3 border-t border-border bg-muted/20">
+      <div className={`p-3 border-t border-border bg-muted/20 ${isMobile ? "pb-safe" : ""}`}>
         <div className="flex items-center gap-2">
           <input
             ref={inputRef}
