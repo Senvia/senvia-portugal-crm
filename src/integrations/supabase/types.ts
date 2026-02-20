@@ -2989,6 +2989,36 @@ export type Database = {
           },
         ]
       }
+      subscription_plans: {
+        Row: {
+          created_at: string
+          features: Json
+          id: string
+          max_forms: number | null
+          max_users: number | null
+          name: string
+          price_monthly: number
+        }
+        Insert: {
+          created_at?: string
+          features?: Json
+          id: string
+          max_forms?: number | null
+          max_users?: number | null
+          name: string
+          price_monthly?: number
+        }
+        Update: {
+          created_at?: string
+          features?: Json
+          id?: string
+          max_forms?: number | null
+          max_users?: number | null
+          name?: string
+          price_monthly?: number
+        }
+        Relationships: []
+      }
       team_members: {
         Row: {
           created_at: string
