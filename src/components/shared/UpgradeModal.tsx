@@ -1,4 +1,4 @@
-import { Lock, Sparkles, ArrowRight } from "lucide-react";
+import { Lock, Sparkles, ArrowRight, Loader2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -7,6 +7,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { useStripeSubscription } from "@/hooks/useStripeSubscription";
+import { getPlanById, STRIPE_PLANS } from "@/lib/stripe-plans";
 
 interface UpgradeModalProps {
   open: boolean;
@@ -16,6 +18,16 @@ interface UpgradeModalProps {
 }
 
 export function UpgradeModal({ open, onOpenChange, featureName, requiredPlan }: UpgradeModalProps) {
+  const { createCheckout, isLoading } = useStripeSubscription();
+
+  const targetPlan = STRIPE_PLANS.find(p => p.name.toLowerCase() === requiredPlan.toLowerCase())
+    || getPlanById(requiredPlan.toLowerCase())
+    || STRIPE_PLANS[1]; // fallback to Pro
+
+  const handleUpgrade = async () => {
+    await createCheckout(targetPlan.priceId);
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -26,7 +38,7 @@ export function UpgradeModal({ open, onOpenChange, featureName, requiredPlan }: 
           <DialogTitle className="text-xl">Funcionalidade Premium</DialogTitle>
           <DialogDescription className="text-center text-sm">
             <strong>{featureName}</strong> está disponível a partir do plano{' '}
-            <span className="font-semibold text-primary">{requiredPlan}</span>.
+            <span className="font-semibold text-primary">{targetPlan.name}</span> ({targetPlan.priceMonthly}€/mês).
           </DialogDescription>
         </DialogHeader>
 
@@ -49,9 +61,15 @@ export function UpgradeModal({ open, onOpenChange, featureName, requiredPlan }: 
         </div>
 
         <div className="flex flex-col gap-2 mt-4">
-          <Button className="w-full gap-2" onClick={() => onOpenChange(false)}>
-            Falar com Vendas
-            <ArrowRight className="h-4 w-4" />
+          <Button className="w-full gap-2" onClick={handleUpgrade} disabled={isLoading}>
+            {isLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <>
+                Fazer Upgrade para {targetPlan.name}
+                <ArrowRight className="h-4 w-4" />
+              </>
+            )}
           </Button>
           <Button variant="ghost" className="w-full" onClick={() => onOpenChange(false)}>
             Agora não
