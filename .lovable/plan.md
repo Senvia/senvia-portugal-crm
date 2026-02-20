@@ -1,54 +1,107 @@
 
 
-## Converter AddLeadModal para Pagina Full Screen
+## Expandir Secção "Campos" com Tabs por Módulo
 
-### Objetivo
+### Problema Atual
 
-Transformar o modal de adicionar lead de um dialogo pequeno (`max-w-md`) para pagina full screen, usando o mesmo padrao ja implementado no sistema (CreateSaleModal, CreateProposalModal, CreateClientModal, etc.).
+A secção Definições > Definições Gerais > Campos mostra apenas o `ClientFieldsEditor` (campos de Clientes). Nao existe forma de configurar campos para Leads, Propostas ou Vendas.
 
-### Alteracao
+### Solucao
 
-**Ficheiro:** `src/components/leads/AddLeadModal.tsx`
+Transformar a secção "Campos" numa pagina com **Tabs** (abas) para cada modulo do sistema, permitindo configurar os campos de cada entidade separadamente.
 
-**1. Usar variant fullScreen no DialogContent**
+### Tabs Previstas
 
-O componente Dialog ja suporta `variant="fullScreen"`. Basta trocar:
-- De: `<DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">`
-- Para: `<DialogContent variant="fullScreen" className="flex flex-col p-0 gap-0">`
+1. **Leads** - Campos do formulario de adicionar lead (Nome, Email, Telefone, Origem, Temperatura, Valor, Observacoes, etc.)
+2. **Clientes** - Ja existe (`ClientFieldsEditor`) - manter como esta
+3. **Propostas** - Campos de criacao de proposta (Tipo, Valor, Notas, etc.)
+4. **Vendas** - Campos de criacao de venda (Valor, Metodo Pagamento, Notas, etc.)
 
-**2. Reestruturar o layout seguindo o padrao do projeto**
+### Implementacao Tecnica
 
-- Header fixo com borda inferior (`px-6 pr-14 py-4 border-b border-border/50 shrink-0`)
-- Conteudo scrollavel (`flex-1 overflow-y-auto`)
-- Container centrado com largura maxima (`max-w-6xl mx-auto p-4 sm:p-6`)
-- Grid de 2 colunas em desktop (`grid grid-cols-1 lg:grid-cols-5 gap-6`)
+**1. Novo componente wrapper: `src/components/settings/FieldsManagerTabs.tsx`**
 
-**3. Coluna Esquerda (3/5 = 60%) - Formulario Principal**
+- Usa o componente `Tabs` do Radix UI (ja instalado)
+- 4 tabs: Leads, Clientes, Propostas, Vendas
+- Cada tab carrega o seu editor de campos especifico
+- Tab "Clientes" reutiliza o `ClientFieldsEditor` existente
 
-Organizado em Cards tematicos:
-- Card "Empresa": NIF + Nome da Empresa (com banner de cliente existente)
-- Card "Contacto": Nome, Email, Telefone
-- Card "Detalhes": Origem, Temperatura, Tipologia (telecom), Valor/Consumo, Atribuicao
-- Card "Observacoes": Notas + Anexos (telecom)
+**2. Novos tipos: `src/types/field-settings.ts`**
 
-**4. Coluna Direita (2/5 = 40%, sticky) - Resumo e Acoes**
+- Definir tipos genericos para configuracao de campos por modulo (LeadFieldsSettings, ProposalFieldsSettings, SaleFieldsSettings)
+- Cada tipo tem a mesma estrutura: `{ [campo]: { visible, required, label } }`
+- Defaults pre-definidos para cada modulo
 
-- Card com resumo dos dados preenchidos ate ao momento (nome, email, telefone, origem, temperatura, valor)
-- Checkboxes RGPD e Automacao
-- Botoes Cancelar / Criar Lead
+**3. Novos hooks:**
 
-**5. Manter toda a logica existente**
+- `src/hooks/useLeadFieldsSettings.ts` - Le/grava configuracoes de campos de leads na tabela `organizations` (coluna `lead_fields_settings` JSONB)
+- `src/hooks/useProposalFieldsSettings.ts` - Idem para propostas (`proposal_fields_settings`)
+- `src/hooks/useSaleFieldsSettings.ts` - Idem para vendas (`sale_fields_settings`)
 
-- Schema Zod inalterado
-- Pesquisa NIF com auto-preenchimento
-- Campos condicionais (telecom)
-- Upload de ficheiros (telecom)
-- Atribuicao de equipa (admins)
+**4. Novos editores de campos:**
 
-### Resultado
+- `src/components/settings/LeadFieldsEditor.tsx` - Mesmo padrao do ClientFieldsEditor, com os campos do lead (nome, email, telefone, origem, temperatura, valor_estimado, observacoes)
+- `src/components/settings/ProposalFieldsEditor.tsx` - Campos de proposta (tipo, valor, notas, etc.)
+- `src/components/settings/SaleFieldsEditor.tsx` - Campos de venda (valor, metodo_pagamento, notas, etc.)
 
-- Experiencia consistente com o resto do sistema (Vendas, Propostas, Clientes)
-- Desktop: formulario organizado em 2 colunas com resumo sticky
-- Mobile: tela cheia com scroll natural
-- Sem impacto na logica de negocio
+**5. Migracao de base de dados:**
+
+- Adicionar 3 novas colunas JSONB a tabela `organizations`:
+  - `lead_fields_settings` (JSONB, default NULL)
+  - `proposal_fields_settings` (JSONB, default NULL)
+  - `sale_fields_settings` (JSONB, default NULL)
+
+**6. Atualizar Settings.tsx:**
+
+- Na secao `org-fields`, trocar `<ClientFieldsEditor />` por `<FieldsManagerTabs />`
+
+**7. Atualizar MobileSettingsNav.tsx:**
+
+- Alterar descricao de "Campos personalizados" para "Campos por modulo (Leads, Clientes, etc.)"
+
+### Estrutura de cada editor
+
+Cada editor segue o mesmo padrao visual do `ClientFieldsEditor`:
+- Lista de campos com icone, input de label editavel
+- Toggle de visibilidade (olho)
+- Toggle de obrigatoriedade (asterisco)
+- Botao "Guardar Alteracoes"
+- Validacao (pelo menos um campo de identificacao visivel/obrigatorio)
+
+### Campos por Modulo
+
+**Leads:**
+- Nome (obrigatorio por defeito)
+- Email
+- Telefone
+- Origem
+- Temperatura
+- Valor Estimado
+- Observacoes
+
+**Propostas:**
+- Tipo de Proposta
+- Valor Total
+- Data da Proposta
+- Notas
+
+**Vendas:**
+- Valor Total
+- Metodo de Pagamento
+- Data de Vencimento
+- Notas
+
+### Ficheiros Criados/Alterados
+
+- `src/components/settings/FieldsManagerTabs.tsx` (novo)
+- `src/components/settings/LeadFieldsEditor.tsx` (novo)
+- `src/components/settings/ProposalFieldsEditor.tsx` (novo)
+- `src/components/settings/SaleFieldsEditor.tsx` (novo)
+- `src/types/field-settings.ts` (novo)
+- `src/hooks/useLeadFieldsSettings.ts` (novo)
+- `src/hooks/useProposalFieldsSettings.ts` (novo)
+- `src/hooks/useSaleFieldsSettings.ts` (novo)
+- `src/pages/Settings.tsx` (alterado - trocar ClientFieldsEditor por FieldsManagerTabs)
+- `src/components/settings/MobileSettingsNav.tsx` (alterado - atualizar descricao)
+- Migracao SQL (nova - adicionar colunas JSONB)
 
