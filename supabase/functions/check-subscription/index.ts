@@ -12,7 +12,6 @@ const logStep = (step: string, details?: any) => {
   console.log(`[CHECK-SUBSCRIPTION] ${step}${d}`);
 };
 
-// Map Stripe product IDs to internal plan IDs
 const PRODUCT_TO_PLAN: Record<string, string> = {
   "prod_U0wAc7Tuy8w6gA": "starter",
   "prod_U0wGoA4odOBHOZ": "pro",
@@ -57,42 +56,43 @@ serve(async (req) => {
 
     const orgId = memberData?.organization_id;
 
-    // Check billing exemption before touching Stripe
+    // Get org data including trial_ends_at and billing_exempt
+    let orgData: any = null;
     if (orgId) {
-      const { data: orgData } = await supabaseClient
+      const { data } = await supabaseClient
         .from('organizations')
-        .select('billing_exempt')
+        .select('billing_exempt, trial_ends_at')
         .eq('id', orgId)
         .maybeSingle();
+      orgData = data;
+    }
 
-      if (orgData?.billing_exempt === true) {
-        logStep("Organization is billing exempt, returning elite", { orgId });
+    // Check billing exemption
+    if (orgData?.billing_exempt === true) {
+      logStep("Organization is billing exempt, returning elite", { orgId });
+      await supabaseClient
+        .from('organizations')
+        .update({ plan: 'elite' })
+        .eq('id', orgId);
 
-        // Ensure org plan is elite
-        await supabaseClient
-          .from('organizations')
-          .update({ plan: 'elite' })
-          .eq('id', orgId);
-
-        return new Response(JSON.stringify({
-          subscribed: true,
-          plan_id: 'elite',
-          product_id: null,
-          subscription_end: null,
-          billing_exempt: true,
-        }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-          status: 200,
-        });
-      }
+      return new Response(JSON.stringify({
+        subscribed: true,
+        plan_id: 'elite',
+        product_id: null,
+        subscription_end: null,
+        billing_exempt: true,
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      });
     }
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
     const customers = await stripe.customers.list({ email: user.email, limit: 1 });
 
     if (customers.data.length === 0) {
-      logStep("No Stripe customer found");
-      return new Response(JSON.stringify({ subscribed: false, plan_id: null, subscription_end: null }), {
+      logStep("No Stripe customer found, checking trial");
+      return new Response(JSON.stringify(buildTrialResponse(orgData)), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 200,
       });
@@ -101,15 +101,25 @@ serve(async (req) => {
     const customerId = customers.data[0].id;
     logStep("Customer found", { customerId });
 
-    const subscriptions = await stripe.subscriptions.list({
+    // Check active subscriptions
+    let subscriptions = await stripe.subscriptions.list({
       customer: customerId,
       status: "active",
       limit: 1,
     });
 
+    // Also check trialing subscriptions
     if (subscriptions.data.length === 0) {
-      logStep("No active subscription");
-      return new Response(JSON.stringify({ subscribed: false, plan_id: null, subscription_end: null }), {
+      subscriptions = await stripe.subscriptions.list({
+        customer: customerId,
+        status: "trialing",
+        limit: 1,
+      });
+    }
+
+    if (subscriptions.data.length === 0) {
+      logStep("No active/trialing subscription, checking trial");
+      return new Response(JSON.stringify(buildTrialResponse(orgData)), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 200,
       });
@@ -154,3 +164,38 @@ serve(async (req) => {
     });
   }
 });
+
+function buildTrialResponse(orgData: any) {
+  if (!orgData?.trial_ends_at) {
+    return { subscribed: false, plan_id: null, subscription_end: null, on_trial: false, trial_expired: true };
+  }
+
+  const trialEnd = new Date(orgData.trial_ends_at);
+  const now = new Date();
+  const diffMs = trialEnd.getTime() - now.getTime();
+  const daysRemaining = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+
+  if (diffMs > 0) {
+    // Still in trial
+    return {
+      subscribed: false,
+      plan_id: 'starter',
+      subscription_end: null,
+      on_trial: true,
+      trial_ends_at: orgData.trial_ends_at,
+      days_remaining: daysRemaining,
+      trial_expired: false,
+    };
+  } else {
+    // Trial expired
+    return {
+      subscribed: false,
+      plan_id: null,
+      subscription_end: null,
+      on_trial: false,
+      trial_ends_at: orgData.trial_ends_at,
+      days_remaining: 0,
+      trial_expired: true,
+    };
+  }
+}

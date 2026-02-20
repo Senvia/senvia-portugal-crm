@@ -8,6 +8,10 @@ interface SubscriptionStatus {
   product_id: string | null;
   subscription_end: string | null;
   billing_exempt?: boolean;
+  on_trial?: boolean;
+  trial_ends_at?: string;
+  trial_expired?: boolean;
+  days_remaining?: number;
 }
 
 export function useStripeSubscription() {

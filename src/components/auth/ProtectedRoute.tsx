@@ -1,8 +1,11 @@
+import { useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
 import { OrganizationSelector } from './OrganizationSelector';
 import { ChallengeMFA } from './ChallengeMFA';
+import { TrialExpiredBlocker } from './TrialExpiredBlocker';
+import { useStripeSubscription } from '@/hooks/useStripeSubscription';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -11,6 +14,14 @@ interface ProtectedRouteProps {
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const { user, isLoading, needsOrgSelection, organizations, selectOrganization, mfaStatus, completeMfaChallenge } = useAuth();
   const location = useLocation();
+  const { subscriptionStatus, checkSubscription } = useStripeSubscription();
+  const [hasCheckedSub, setHasCheckedSub] = useState(false);
+
+  useEffect(() => {
+    if (user && !needsOrgSelection && !hasCheckedSub) {
+      checkSubscription().then(() => setHasCheckedSub(true));
+    }
+  }, [user, needsOrgSelection, hasCheckedSub, checkSubscription]);
 
   if (isLoading) {
     return (
@@ -37,6 +48,18 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
         onSelect={selectOrganization}
       />
     );
+  }
+
+  // Check trial expired - block all pages except /settings
+  if (
+    hasCheckedSub &&
+    subscriptionStatus &&
+    !subscriptionStatus.subscribed &&
+    !subscriptionStatus.billing_exempt &&
+    subscriptionStatus.trial_expired === true &&
+    !location.pathname.startsWith('/settings')
+  ) {
+    return <TrialExpiredBlocker trialEndsAt={subscriptionStatus.trial_ends_at} />;
   }
 
   return <>{children}</>;
