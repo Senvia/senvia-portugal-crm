@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTeamFilter } from '@/hooks/useTeamFilter';
+import { usePipelineStages } from '@/hooks/usePipelineStages';
 import type { Lead, LeadStatus, LeadTemperature, LeadTipologia } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { Json } from '@/integrations/supabase/types';
@@ -187,6 +188,7 @@ export function useCreateLead() {
 
 export function useLeadStats() {
   const { data: leads } = useLeads();
+  const { data: stages } = usePipelineStages();
   
   if (!leads) {
     return {
@@ -196,13 +198,18 @@ export function useLeadStats() {
       pipelineValue: 0,
     };
   }
+
+  // Get dynamic final stage keys
+  const wonKey = stages?.find(s => s.is_final_positive)?.key || 'won';
+  const lostKey = stages?.find(s => s.is_final_negative)?.key || 'lost';
+  const firstStageKey = stages?.[0]?.key || 'new';
   
   const total = leads.length;
-  const newLeads = leads.filter(l => l.status === 'new').length;
-  const won = leads.filter(l => l.status === 'won').length;
+  const newLeads = leads.filter(l => l.status === firstStageKey).length;
+  const won = leads.filter(l => l.status === wonKey).length;
   const conversionRate = total > 0 ? Math.round((won / total) * 100) : 0;
   const pipelineValue = leads
-    .filter(l => !['won', 'lost'].includes(l.status))
+    .filter(l => ![wonKey, lostKey].includes(l.status || ''))
     .reduce((sum, l) => sum + (l.value || 0), 0);
   
   return {

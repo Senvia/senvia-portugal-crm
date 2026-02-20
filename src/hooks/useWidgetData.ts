@@ -5,6 +5,7 @@ import { useProposals } from "@/hooks/useProposals";
 import { useCalendarEvents } from "@/hooks/useCalendarEvents";
 import { useClients } from "@/hooks/useClients";
 import { useEcommerceStats } from "@/hooks/ecommerce/useEcommerceStats";
+import { usePipelineStages } from "@/hooks/usePipelineStages";
 import { WidgetType } from "@/lib/dashboard-templates";
 import { startOfDay, startOfWeek, endOfWeek, isToday, isThisWeek, subDays, format } from "date-fns";
 
@@ -27,6 +28,7 @@ export function useWidgetData(widgetType: WidgetType): WidgetData {
   const { data: events = [], isLoading: eventsLoading } = useCalendarEvents();
   const { data: clients = [], isLoading: clientsLoading } = useClients();
   const ecommerceStats = useEcommerceStats();
+  const { data: stages = [] } = usePipelineStages();
 
   return useMemo(() => {
     const today = startOfDay(new Date());
@@ -200,8 +202,10 @@ export function useWidgetData(widgetType: WidgetType): WidgetData {
       }
 
       case 'conversion_rate': {
-        // Check for final positive stages or common "won" status patterns
+        // Use dynamic pipeline stages to find "won" leads
+        const wonKey = stages.find(s => s.is_final_positive)?.key;
         const convertedLeads = leads.filter(l => {
+          if (wonKey && l.status === wonKey) return true;
           const status = l.status?.toLowerCase() || '';
           return status === 'won' || status === 'converted' || status.includes('ganho') || status.includes('fechado');
         }).length;
