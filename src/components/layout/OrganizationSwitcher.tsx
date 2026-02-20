@@ -11,15 +11,17 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserOrganizations } from '@/hooks/useUserOrganizations';
+import { useSubscription } from '@/hooks/useSubscription';
 import { cn } from '@/lib/utils';
 
 export function OrganizationSwitcher() {
   const { organization, switchOrganization, signOut } = useAuth();
   const { data: organizations = [], isLoading } = useUserOrganizations();
+  const { canUseFeature } = useSubscription();
   const [open, setOpen] = useState(false);
 
-  // Se só tem 1 organização, mostrar apenas o nome (sem dropdown)
-  if (organizations.length <= 1 && !isLoading) {
+  // If multi_org is disabled OR only 1 org, show name only (no dropdown)
+  if ((!canUseFeature('multi_org') || organizations.length <= 1) && !isLoading) {
     return (
       <div className="flex items-center gap-2 px-2 py-1.5">
         <Building2 className="h-4 w-4 shrink-0 text-sidebar-foreground" />

@@ -68,6 +68,41 @@ serve(async (req) => {
 
     const organizationId = profile.organization_id;
 
+    // ---- Validate user limit based on subscription plan ----
+    // Get org plan
+    const { data: orgData } = await supabaseAdmin
+      .from('organizations')
+      .select('plan')
+      .eq('id', organizationId)
+      .single();
+
+    const planId = orgData?.plan || 'starter';
+
+    // Get plan limits from subscription_plans
+    const { data: planData } = await supabaseAdmin
+      .from('subscription_plans')
+      .select('max_users, name')
+      .eq('id', planId)
+      .single();
+
+    if (planData?.max_users !== null && planData?.max_users !== undefined) {
+      // Count active members
+      const { count: memberCount } = await supabaseAdmin
+        .from('organization_members')
+        .select('id', { count: 'exact', head: true })
+        .eq('organization_id', organizationId)
+        .eq('is_active', true);
+
+      if (memberCount !== null && memberCount >= planData.max_users) {
+        return new Response(
+          JSON.stringify({ 
+            error: `Limite de ${planData.max_users} utilizadores atingido para o plano ${planData.name || planId}. Faça upgrade para adicionar mais membros.` 
+          }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
     // Check if current user is admin of this organization
     const { data: roleData, error: roleError } = await supabaseAdmin
       .from('user_roles')
