@@ -36,7 +36,7 @@ export function AppLayout({ children, userName, organizationName }: AppLayoutPro
           isMenuOpen={isMobileMenuOpen}
           organizationName={organizationName}
         />
-        {showTrialBanner && <div style={{ paddingTop: 'calc(3.5rem + env(safe-area-inset-top))' }}><TrialBanner daysRemaining={subscriptionStatus!.days_remaining!} /></div>}
+        {showTrialBanner && <div style={{ paddingTop: 'calc(3.5rem + env(safe-area-inset-top))' }}><TrialBanner daysRemaining={subscriptionStatus!.days_remaining!} totalDays={14} /></div>}
         <MobileMenu 
           isOpen={isMobileMenuOpen}
           onClose={() => setIsMobileMenuOpen(false)}
