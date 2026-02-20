@@ -1,67 +1,67 @@
 
+## Corrigir Upload de Anexos para Super Admins
 
-## Integrar Definicoes de Campos no AddLeadModal
+### Problema Identificado
 
-### Problema
+O upload de ficheiros falha com erro **403 (RLS policy violation)** no storage.
 
-O formulario de criacao de leads (`AddLeadModal`) tem um schema Zod **fixo** (hardcoded) que exige sempre `name`, `company_nif`, `company_name`, `email` e `phone` como obrigatorios -- independentemente do que o administrador configure nas Definicoes de Campos de Leads.
+**Causa raiz:** O utilizador e super_admin e tem a organizacao "Perfect2Gether" (`96a3950e`) selecionada no UI, mas so tem membership na tabela `organization_members` para "Senvia Agency" (`06fe9e1d`). 
 
-As definicoes guardadas na tabela `organizations` (coluna `lead_fields_settings`) nao estao a ser lidas pelo modal.
+As politicas de storage do bucket `invoices` verificam membership via `is_org_member()` ou `get_user_org_id()` -- ambas retornam a org errada para super_admins que estao a visualizar outra organizacao.
 
 ### Solucao
 
-Tornar o schema Zod **dinamico**, construido a partir das definicoes de campos (`useLeadFieldsSettings`), e esconder campos marcados como nao visiveis.
+Atualizar as **3 politicas RLS de storage** do bucket `invoices` que usam `is_org_member()` para tambem permitir acesso a super_admins. As politicas afetadas sao:
+
+1. **Members can upload lead attachments** (INSERT)
+2. **Members can view lead attachment files** (SELECT)
+3. **Members can delete lead attachment files** (DELETE)
 
 ### Alteracoes
 
-**Ficheiro: `src/components/leads/AddLeadModal.tsx`**
+**Migracao SQL** -- Atualizar as 3 politicas para incluir super_admin:
 
-1. **Importar** `useLeadFieldsSettings` e os tipos necessarios de `field-settings.ts`.
+```sql
+-- DROP e recreate das 3 politicas
 
-2. **Remover o schema Zod estatico** (`addLeadSchema` nas linhas 58-75).
+-- 1. INSERT
+DROP POLICY IF EXISTS "Members can upload lead attachments" ON storage.objects;
+CREATE POLICY "Members can upload lead attachments" ON storage.objects
+  FOR INSERT WITH CHECK (
+    bucket_id = 'invoices' AND (
+      (storage.foldername(name))[1] IN (
+        SELECT organizations.id::text FROM organizations
+        WHERE is_org_member(auth.uid(), organizations.id)
+      )
+      OR has_role(auth.uid(), 'super_admin'::app_role)
+    )
+  );
 
-3. **Criar uma funcao `buildLeadSchema(settings)`** que constroi o schema Zod dinamicamente:
-   - Para cada campo configuravel, se `required = true` aplica `.min(1, ...)` / `.min(2, ...)`, caso contrario usa `.optional()`.
-   - Campos nao visiveis sao simplesmente `.optional()` (nao validados).
-   - Campos fixos como `gdpr_consent` e `automation_enabled` mantêm-se inalterados.
+-- 2. SELECT
+DROP POLICY IF EXISTS "Members can view lead attachment files" ON storage.objects;
+CREATE POLICY "Members can view lead attachment files" ON storage.objects
+  FOR SELECT USING (
+    bucket_id = 'invoices' AND (
+      (storage.foldername(name))[1] IN (
+        SELECT organizations.id::text FROM organizations
+        WHERE is_org_member(auth.uid(), organizations.id)
+      )
+      OR has_role(auth.uid(), 'super_admin'::app_role)
+    )
+  );
 
-4. **Usar `useMemo`** para recalcular o schema quando as definicoes mudarem:
-   ```typescript
-   const { data: fieldSettings } = useLeadFieldsSettings();
-   const schema = useMemo(() => buildLeadSchema(fieldSettings), [fieldSettings]);
-   ```
+-- 3. DELETE
+DROP POLICY IF EXISTS "Members can delete lead attachment files" ON storage.objects;
+CREATE POLICY "Members can delete lead attachment files" ON storage.objects
+  FOR DELETE USING (
+    bucket_id = 'invoices' AND (
+      (storage.foldername(name))[1] IN (
+        SELECT organizations.id::text FROM organizations
+        WHERE is_org_member(auth.uid(), organizations.id)
+      )
+      OR has_role(auth.uid(), 'super_admin'::app_role)
+    )
+  );
+```
 
-5. **Passar o schema dinamico ao `useForm`**:
-   ```typescript
-   const form = useForm({ resolver: zodResolver(schema), ... });
-   ```
-
-6. **Esconder campos no JSX**: Para cada campo configuravel, envolver o bloco JSX numa condicao:
-   ```typescript
-   {fieldSettings?.email?.visible !== false && (
-     <FormField name="email" ... />
-   )}
-   ```
-
-7. **Labels dinamicas**: Usar `fieldSettings?.name?.label ?? 'Nome'` em vez de strings fixas nos `FormLabel`.
-
-8. **Indicador de obrigatorio**: Mostrar `*` junto ao label apenas se o campo estiver configurado como `required`.
-
-### Campos afetados
-
-| Campo | Key no settings | Comportamento atual | Novo comportamento |
-|-------|----------------|---------------------|-------------------|
-| NIF Empresa | `company_nif` | Sempre obrigatorio | Respeita settings |
-| Nome Empresa | `company_name` | Sempre obrigatorio | Respeita settings |
-| Nome | `name` | Sempre obrigatorio | Respeita settings |
-| Email | `email` | Sempre obrigatorio | Respeita settings |
-| Telefone | `phone` | Sempre obrigatorio | Respeita settings |
-| Origem | `source` | Opcional fixo | Respeita visibilidade |
-| Temperatura | `temperature` | Opcional fixo | Respeita visibilidade |
-| Tipologia | `tipologia` | Opcional (telecom) | Respeita visibilidade |
-| Consumo Anual | `consumo_anual` | Opcional (telecom) | Respeita visibilidade |
-| Valor | `value` | Opcional fixo | Respeita visibilidade |
-| Observacoes | `notes` | Opcional fixo | Respeita visibilidade |
-
-Os campos `gdpr_consent`, `automation_enabled` e `assigned_to` nao fazem parte do sistema de campos configuraveis e mantêm-se inalterados.
-
+Nenhuma alteracao de codigo frontend necessaria -- o problema e exclusivamente nas permissoes de storage.
