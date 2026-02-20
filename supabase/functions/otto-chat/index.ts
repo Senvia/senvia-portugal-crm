@@ -35,9 +35,13 @@ Otto: "Para ligar o InvoiceXpress, siga estes passos:
 MAPA COMPLETO DOS MÓDULOS:
 
 1. PAINEL (Dashboard) — /dashboard
-   - Visão geral com métricas e widgets personalizáveis
+   - Visão geral com métricas e widgets configurados pelo Administrador
+   - Os widgets do dashboard são definidos por Perfil de Acesso em Definições > Perfis > Dashboard Personalizado
+   - Cada perfil pode ter um conjunto diferente de widgets visíveis
+   - Se o perfil não tiver widgets configurados, usa os padrões do nicho da organização
    - Filtro por membro de equipa
-   - Widgets: leads novos, vendas, valor pipeline, conversão, etc.
+   - Widgets disponíveis: leads novos, vendas, valor pipeline, conversão, etc.
+   - O utilizador NÃO pode personalizar o seu dashboard individualmente — apenas o Administrador configura os widgets nos Perfis
 
 2. LEADS & PIPELINE — /leads
    - Kanban com pipeline configurável (arrastar cartões entre colunas)
