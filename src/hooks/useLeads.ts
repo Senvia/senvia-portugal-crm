@@ -150,6 +150,7 @@ export function useCreateLead() {
       tipologia?: LeadTipologia;
       consumo_anual?: number;
       company_nif?: string;
+      company_name?: string;
     }) => {
       if (!organization?.id) throw new Error('Sem organização');
       

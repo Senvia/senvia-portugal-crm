@@ -1,3 +1,4 @@
+import { useAuth } from "@/contexts/AuthContext";
 import {
   Dialog,
   DialogContent,
@@ -23,6 +24,7 @@ import {
 import { CrmClient, CLIENT_STATUS_LABELS, CLIENT_STATUS_STYLES, CLIENT_SOURCE_LABELS } from "@/types/clients";
 import { formatDate, formatDateTime, getWhatsAppUrl, formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { LeadAttachments } from "@/components/leads/LeadAttachments";
 
 interface ClientDetailsModalProps {
   client: CrmClient | null;
@@ -32,6 +34,9 @@ interface ClientDetailsModalProps {
 }
 
 export function ClientDetailsModal({ client, open, onOpenChange, onEdit }: ClientDetailsModalProps) {
+  const { organization } = useAuth();
+  const isTelecom = organization?.niche === 'telecom';
+  
   if (!client) return null;
 
   return (
@@ -188,6 +193,13 @@ export function ClientDetailsModal({ client, open, onOpenChange, onEdit }: Clien
                   {client.notes}
                 </p>
               </div>
+            </>
+          )}
+          {/* Faturas Anexadas - Telecom only, via lead_id */}
+          {isTelecom && client.lead_id && (
+            <>
+              <Separator />
+              <LeadAttachments leadId={client.lead_id} readOnly />
             </>
           )}
         </div>

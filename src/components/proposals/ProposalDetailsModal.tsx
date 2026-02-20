@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Trash2, Printer, Mail, Loader2, Router, Zap, Wrench, Pencil, MoreHorizontal, CalendarDays, TrendingUp, FileText, User } from 'lucide-react';
+import { LeadAttachments } from '@/components/leads/LeadAttachments';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -653,6 +654,15 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
                       />
                     </CardContent>
                   </Card>
+
+                  {/* Faturas Anexadas da Lead - Telecom only */}
+                  {orgData?.niche === 'telecom' && proposal.lead_id && (
+                    <Card>
+                      <CardContent className="p-4">
+                        <LeadAttachments leadId={proposal.lead_id} readOnly />
+                      </CardContent>
+                    </Card>
+                  )}
                 </div>
 
                 {/* RIGHT COLUMN (40%) - Sticky */}

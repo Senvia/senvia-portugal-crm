@@ -276,7 +276,12 @@ export function LeadsTableView({
                       </TableCell>
                     )}
                     <TableCell>
-                      <span className="font-medium truncate max-w-[150px]">{lead.name}</span>
+                      <div>
+                        <span className="font-medium truncate max-w-[150px] block">{lead.name}</span>
+                        {lead.company_name && (
+                          <span className="text-xs text-muted-foreground truncate max-w-[150px] block">{lead.company_name}</span>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell className="hidden md:table-cell">
                       <span className="text-muted-foreground truncate max-w-[180px] block">
