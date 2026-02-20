@@ -4,17 +4,21 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
-import { Loader2, User, Mail, Phone, Globe, Thermometer, DollarSign, MessageSquare, Save, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { Loader2, User, Mail, Phone, Globe, Thermometer, DollarSign, MessageSquare, Save, Eye, EyeOff, AlertCircle, FileText, Building2, ClipboardList, Zap } from 'lucide-react';
 import { useLeadFieldsSettings, useUpdateLeadFieldsSettings } from '@/hooks/useLeadFieldsSettings';
 import { LeadFieldKey, LeadFieldsSettings, DEFAULT_LEAD_FIELDS_SETTINGS, LEAD_FIELD_ORDER } from '@/types/field-settings';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 const FIELD_ICONS: Record<LeadFieldKey, React.ReactNode> = {
+  company_nif: <FileText className="h-4 w-4" />,
+  company_name: <Building2 className="h-4 w-4" />,
   name: <User className="h-4 w-4" />,
   email: <Mail className="h-4 w-4" />,
   phone: <Phone className="h-4 w-4" />,
   source: <Globe className="h-4 w-4" />,
   temperature: <Thermometer className="h-4 w-4" />,
+  tipologia: <ClipboardList className="h-4 w-4" />,
+  consumo_anual: <Zap className="h-4 w-4" />,
   value: <DollarSign className="h-4 w-4" />,
   notes: <MessageSquare className="h-4 w-4" />,
 };
