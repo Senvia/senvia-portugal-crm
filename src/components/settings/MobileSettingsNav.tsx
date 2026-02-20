@@ -1,7 +1,7 @@
-import { Building, UsersRound, Package, Link2, Bell, Receipt, Shield, GitBranch, LayoutGrid, FileText, List, KeyRound, UserCog, Network, BellRing, AlertTriangle, Calculator, ShoppingCart } from "lucide-react";
+import { Building, UsersRound, Package, Link2, Bell, Receipt, Shield, GitBranch, LayoutGrid, FileText, List, KeyRound, UserCog, Network, BellRing, AlertTriangle, Calculator, ShoppingCart, CreditCard } from "lucide-react";
 import { SettingsCard } from "./SettingsCard";
 
-export type SettingsSection = "general" | "security" | "team" | "products" | "finance" | "notifications" | "integrations";
+export type SettingsSection = "general" | "security" | "team" | "products" | "finance" | "notifications" | "integrations" | "billing";
 
 export type SettingsSubSection =
   | "org-general" | "org-pipeline" | "org-modules" | "org-forms" | "org-fields" | "org-sales" | "org-matrix"
@@ -10,7 +10,8 @@ export type SettingsSubSection =
   | "products"
   | "finance-expenses" | "finance-fiscal"
   | "notif-push" | "notif-alerts"
-  | "integrations";
+  | "integrations"
+  | "billing";
 
 interface MobileSettingsNavProps {
   activeSection: SettingsSection | null;
@@ -36,6 +37,7 @@ const sections: SectionItem[] = [
   { id: "finance", label: "Financeiro", icon: Receipt, description: "Despesas e configuração fiscal", requiresIntegrations: true },
   { id: "notifications", label: "Notificações", icon: Bell, description: "Push e alertas automáticos" },
   { id: "integrations", label: "Integrações", icon: Link2, description: "WhatsApp, email e faturação", requiresIntegrations: true },
+  { id: "billing", label: "Plano e Faturação", icon: CreditCard, description: "Subscrição e pagamentos" },
 ];
 
 export function MobileSettingsNav({ 
@@ -99,6 +101,7 @@ export const subSectionsMap: Record<SettingsSection, SubSectionItem[]> = {
     { id: "notif-alerts", label: "Alertas", icon: AlertTriangle, description: "Lembretes automáticos" },
   ],
   integrations: [],
+  billing: [],
 };
 
 interface MobileSubSectionNavProps {
@@ -125,7 +128,7 @@ export function MobileSubSectionNav({ group, onSelectSubSection }: MobileSubSect
 }
 
 // Groups that go directly to content (no sub-sections)
-export const directContentGroups: SettingsSection[] = ["security", "products", "integrations"];
+export const directContentGroups: SettingsSection[] = ["security", "products", "integrations", "billing"];
 
 // Section titles
 export const sectionTitles: Record<SettingsSection, string> = {
@@ -136,4 +139,5 @@ export const sectionTitles: Record<SettingsSection, string> = {
   finance: "Financeiro",
   notifications: "Notificações",
   integrations: "Integrações",
+  billing: "Plano e Faturação",
 };

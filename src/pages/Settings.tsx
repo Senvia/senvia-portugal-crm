@@ -25,6 +25,7 @@ import { FiscalSettingsTab } from '@/components/settings/FiscalSettingsTab';
 import { SalesSettingsTab } from '@/components/settings/SalesSettingsTab';
 import { CommissionMatrixTab } from '@/components/settings/CommissionMatrixTab';
 import { PushNotificationsCard } from '@/components/settings/PushNotificationsCard';
+import { BillingTab } from '@/components/settings/BillingTab';
 
 import { ProfilesTab } from '@/components/settings/ProfilesTab';
 import { 
@@ -322,6 +323,7 @@ export default function Settings() {
       case "notif-push": return <PushNotificationsCard organizationId={organization?.id} pushNotifications={pushNotifications} />;
       case "notif-alerts": return <FidelizationAlertsSettings />;
       case "integrations": return <IntegrationsContent {...integrationsContentProps} />;
+      case "billing": return <BillingTab />;
       default: return null;
     }
   };
@@ -332,6 +334,7 @@ export default function Settings() {
       case "security": return "security";
       case "products": return "products";
       case "integrations": return "integrations";
+      case "billing": return "billing";
       default: return "security"; // fallback
     }
   };
