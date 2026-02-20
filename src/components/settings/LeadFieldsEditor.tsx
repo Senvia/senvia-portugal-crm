@@ -30,8 +30,12 @@ export function LeadFieldsEditor() {
   const [hasChanges, setHasChanges] = useState(false);
 
   const hasIdentificationField = useMemo(() => {
-    return settings.name.visible && settings.name.required;
-  }, [settings.name]);
+    return (
+      (settings.name.visible && settings.name.required) ||
+      (settings.company_name.visible && settings.company_name.required) ||
+      (settings.company_nif.visible && settings.company_nif.required)
+    );
+  }, [settings.name, settings.company_name, settings.company_nif]);
 
   useEffect(() => {
     if (savedSettings) {
@@ -112,11 +116,11 @@ export function LeadFieldsEditor() {
         {!hasIdentificationField && (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
-            <AlertDescription>O campo <strong>Nome</strong> deve ser visível e obrigatório para identificar o lead.</AlertDescription>
+            <AlertDescription>Pelo menos um campo de identificação (<strong>Nome</strong>, <strong>Nome Empresa</strong> ou <strong>NIF Empresa</strong>) deve ser visível e obrigatório.</AlertDescription>
           </Alert>
         )}
 
-        <p className="text-xs text-muted-foreground">O campo <strong>Nome</strong> é necessário para identificar cada lead.</p>
+        <p className="text-xs text-muted-foreground">Pelo menos um campo de identificação (<strong>Nome</strong>, <strong>Nome Empresa</strong> ou <strong>NIF</strong>) é necessário para identificar cada lead.</p>
 
         <div className="flex justify-end pt-4">
           <Button onClick={handleSave} disabled={!hasChanges || updateSettings.isPending || !hasIdentificationField}>
