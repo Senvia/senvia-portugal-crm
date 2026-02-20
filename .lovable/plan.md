@@ -1,42 +1,67 @@
 
 
-## Corrigir validacao de campo de identificacao de Leads
+## Integrar Definicoes de Campos no AddLeadModal
 
 ### Problema
 
-A validacao atual exige que o campo **Nome** esteja sempre visivel e obrigatorio. Na realidade, basta que **pelo menos um** dos seguintes campos de identificacao esteja visivel e obrigatorio:
+O formulario de criacao de leads (`AddLeadModal`) tem um schema Zod **fixo** (hardcoded) que exige sempre `name`, `company_nif`, `company_name`, `email` e `phone` como obrigatorios -- independentemente do que o administrador configure nas Definicoes de Campos de Leads.
 
-- Nome (`name`)
-- Nome Empresa (`company_name`)
-- NIF Empresa (`company_nif`)
+As definicoes guardadas na tabela `organizations` (coluna `lead_fields_settings`) nao estao a ser lidas pelo modal.
+
+### Solucao
+
+Tornar o schema Zod **dinamico**, construido a partir das definicoes de campos (`useLeadFieldsSettings`), e esconder campos marcados como nao visiveis.
 
 ### Alteracoes
 
-**Ficheiro: `src/components/settings/LeadFieldsEditor.tsx`**
+**Ficheiro: `src/components/leads/AddLeadModal.tsx`**
 
-1. **Linha 32-34** - Atualizar a logica `hasIdentificationField` para verificar se pelo menos um dos tres campos de identificacao esta visivel E obrigatorio:
+1. **Importar** `useLeadFieldsSettings` e os tipos necessarios de `field-settings.ts`.
 
-```typescript
-const hasIdentificationField = useMemo(() => {
-  return (
-    (settings.name.visible && settings.name.required) ||
-    (settings.company_name.visible && settings.company_name.required) ||
-    (settings.company_nif.visible && settings.company_nif.required)
-  );
-}, [settings.name, settings.company_name, settings.company_nif]);
-```
+2. **Remover o schema Zod estatico** (`addLeadSchema` nas linhas 58-75).
 
-2. **Linha ~105** - Atualizar a mensagem de alerta de erro:
+3. **Criar uma funcao `buildLeadSchema(settings)`** que constroi o schema Zod dinamicamente:
+   - Para cada campo configuravel, se `required = true` aplica `.min(1, ...)` / `.min(2, ...)`, caso contrario usa `.optional()`.
+   - Campos nao visiveis sao simplesmente `.optional()` (nao validados).
+   - Campos fixos como `gdpr_consent` e `automation_enabled` mantêm-se inalterados.
 
-De: `O campo Nome deve ser visível e obrigatório para identificar o lead.`
+4. **Usar `useMemo`** para recalcular o schema quando as definicoes mudarem:
+   ```typescript
+   const { data: fieldSettings } = useLeadFieldsSettings();
+   const schema = useMemo(() => buildLeadSchema(fieldSettings), [fieldSettings]);
+   ```
 
-Para: `Pelo menos um campo de identificação (Nome, Nome Empresa ou NIF Empresa) deve ser visível e obrigatório.`
+5. **Passar o schema dinamico ao `useForm`**:
+   ```typescript
+   const form = useForm({ resolver: zodResolver(schema), ... });
+   ```
 
-3. **Linha ~110** - Atualizar a nota informativa no fundo:
+6. **Esconder campos no JSX**: Para cada campo configuravel, envolver o bloco JSX numa condicao:
+   ```typescript
+   {fieldSettings?.email?.visible !== false && (
+     <FormField name="email" ... />
+   )}
+   ```
 
-De: `O campo Nome é necessário para identificar cada lead.`
+7. **Labels dinamicas**: Usar `fieldSettings?.name?.label ?? 'Nome'` em vez de strings fixas nos `FormLabel`.
 
-Para: `Pelo menos um campo de identificação (Nome, Nome Empresa ou NIF) é necessário para identificar cada lead.`
+8. **Indicador de obrigatorio**: Mostrar `*` junto ao label apenas se o campo estiver configurado como `required`.
 
-Nenhuma outra alteracao necessaria. A logica do botao Guardar ja depende de `hasIdentificationField`, portanto continuara a bloquear caso nenhum campo de identificacao esteja configurado.
+### Campos afetados
+
+| Campo | Key no settings | Comportamento atual | Novo comportamento |
+|-------|----------------|---------------------|-------------------|
+| NIF Empresa | `company_nif` | Sempre obrigatorio | Respeita settings |
+| Nome Empresa | `company_name` | Sempre obrigatorio | Respeita settings |
+| Nome | `name` | Sempre obrigatorio | Respeita settings |
+| Email | `email` | Sempre obrigatorio | Respeita settings |
+| Telefone | `phone` | Sempre obrigatorio | Respeita settings |
+| Origem | `source` | Opcional fixo | Respeita visibilidade |
+| Temperatura | `temperature` | Opcional fixo | Respeita visibilidade |
+| Tipologia | `tipologia` | Opcional (telecom) | Respeita visibilidade |
+| Consumo Anual | `consumo_anual` | Opcional (telecom) | Respeita visibilidade |
+| Valor | `value` | Opcional fixo | Respeita visibilidade |
+| Observacoes | `notes` | Opcional fixo | Respeita visibilidade |
+
+Os campos `gdpr_consent`, `automation_enabled` e `assigned_to` nao fazem parte do sistema de campos configuraveis e mantêm-se inalterados.
 
