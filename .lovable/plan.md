@@ -1,43 +1,79 @@
 
+## Emails Automaticos de Aviso de Expiracao do Trial
 
-## Melhorar o Banner de Trial
+Criar uma edge function que envia emails automaticos via Brevo quando faltam 3 dias e 1 dia para o trial expirar, agendada via pg_cron.
 
-O banner de trial ja existe e funciona (`TrialBanner.tsx` + `AppLayout.tsx`), mas e apenas uma barra de texto clicavel. Vamos melhorar para ser mais visivel e ter um botao dedicado.
+### Como Funciona
+
+A edge function `trial-expiry-reminders` corre diariamente e:
+1. Procura organizacoes onde `trial_ends_at` esta a exatamente 3 dias ou 1 dia de expirar
+2. Para cada organizacao, encontra o admin (owner) e o seu email
+3. Envia um email via Brevo com o aviso e link para escolher plano
+4. Regista o envio numa nova coluna `trial_reminders_sent` (JSONB) na tabela `organizations` para nao enviar duplicados
 
 ### Alteracoes
 
-**Ficheiro: `src/components/layout/TrialBanner.tsx`**
+**1. Migracao SQL**
 
-Redesenhar o banner para incluir:
-- Icone de relogio + texto com os dias restantes (lado esquerdo)
-- Barra de progresso visual mostrando quantos dias ja passaram dos 14
-- Botao "Escolher Plano" estilizado (lado direito)
-- Cores mais visiveis (gradient ou fundo destacado)
-- Responsivo: no mobile o botao fica abaixo do texto
+Adicionar coluna `trial_reminders_sent JSONB DEFAULT '{}'` a tabela `organizations` para rastrear quais lembretes ja foram enviados (ex: `{"3_days": true, "1_day": true}`).
 
-**Ficheiro: `src/components/layout/AppLayout.tsx`**
+**2. Nova Edge Function: `trial-expiry-reminders/index.ts`**
 
-Corrigir o posicionamento no mobile: atualmente o banner tem problemas de padding quando visivel (o conteudo principal perde o padding-top). Ajustar para que o banner fique fixo logo abaixo do header e o conteudo se adapte corretamente.
+- Usa o `BREVO_API_KEY` global (ja configurado como secret) para enviar emails do sistema
+- Remetente: `noreply@senvia.pt` (ou o sender verificado no Brevo global)
+- Query: organizacoes com `billing_exempt = false`, `trial_ends_at` entre 1-3 dias no futuro, e que ainda nao receberam o lembrete correspondente
+- Para cada org encontrada:
+  - Busca o primeiro membro admin e o seu email via `auth.admin.getUserById()`
+  - Envia email via Brevo API com template HTML inline
+  - Atualiza `trial_reminders_sent` para marcar como enviado
+- Template do email inclui:
+  - Logo Senvia
+  - Mensagem personalizada com nome da organizacao
+  - Dias restantes
+  - Botao "Escolher Plano" com link para a app
+  - Aviso sobre eliminacao de dados apos 60 dias
 
-### Design do Banner
+**3. Agendar via pg_cron**
 
-```text
-+---------------------------------------------------------------+
-| [icon] Periodo de teste: 8 dias restantes  [===---] [Escolher Plano] |
-+---------------------------------------------------------------+
-```
+Agendar a funcao para correr diariamente as 08:00 (horario adequado para emails de aviso).
 
-Mobile:
-```text
-+----------------------------------+
-| [icon] 8 dias restantes          |
-| [========------] [Escolher Plano]|
-+----------------------------------+
-```
+**4. Atualizar `supabase/config.toml`**
+
+Adicionar `verify_jwt = false` para a nova funcao.
+
+### Template dos Emails
+
+**Email 3 dias:**
+- Assunto: "O seu periodo de teste termina em 3 dias"
+- Corpo: Lembrete amigavel com botao para escolher plano
+
+**Email 1 dia:**
+- Assunto: "Ultimo dia do seu periodo de teste"
+- Corpo: Urgencia maior, lembrete que amanha perde acesso
 
 ### Detalhes Tecnicos
 
-- Usar `Button` do shadcn com variante `senvia` para o botao
-- Adicionar `Progress` bar com valor `((14 - daysRemaining) / 14) * 100`
-- Manter a navegacao para `/settings?tab=billing`
-- Sem alteracoes na base de dados ou edge functions
+| Ficheiro | Alteracao |
+|----------|-----------|
+| Migracao SQL | Adicionar `trial_reminders_sent JSONB` |
+| `supabase/functions/trial-expiry-reminders/index.ts` | Nova edge function |
+| `supabase/config.toml` | Adicionar config da funcao |
+| pg_cron | Agendar execucao diaria as 08:00 |
+
+### Fluxo
+
+```text
+Dia 11 do trial (faltam 3 dias):
+  -> Cron dispara as 08:00
+  -> Encontra org com trial_ends_at = daqui a 3 dias
+  -> Envia email "3 dias restantes"
+  -> Marca trial_reminders_sent = {"3_days": true}
+
+Dia 13 do trial (falta 1 dia):
+  -> Cron dispara as 08:00
+  -> Encontra org com trial_ends_at = daqui a 1 dia
+  -> Envia email "Ultimo dia"
+  -> Marca trial_reminders_sent = {"3_days": true, "1_day": true}
+
+Dia 14: Trial expira -> Bloqueio
+```
