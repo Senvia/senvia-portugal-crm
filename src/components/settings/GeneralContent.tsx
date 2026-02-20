@@ -92,8 +92,8 @@ export const GeneralContent = ({
             <div>
               <Label>Plano</Label>
               <div className="flex items-center gap-2 mt-2">
-                <Badge variant={organization?.plan === 'pro' ? 'default' : 'secondary'}>
-                  {organization?.plan ? PLAN_LABELS[organization.plan as OrganizationPlan] : 'Básico'}
+                <Badge variant={organization?.plan === 'elite' || organization?.plan === 'pro' ? 'default' : 'secondary'}>
+                  {organization?.plan ? PLAN_LABELS[organization.plan as OrganizationPlan] : 'Starter'}
                 </Badge>
               </div>
             </div>
