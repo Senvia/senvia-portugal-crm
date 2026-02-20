@@ -1,66 +1,59 @@
 
 
-## Problema
+## Adicionar "Nome da Empresa" obrigatorio nas Leads (Template Telecom)
 
-O Otto perde toda a conversa e fecha ao navegar entre paginas porque:
+### Contexto
 
-1. O estado `isOpen` no `OttoFAB.tsx` usa `useState(false)` - reseta a cada navegacao
-2. O estado `messages` no `useOttoChat.ts` usa `useState([])` - perde todo o historico
-3. O `AppLayout` re-renderiza ao mudar de pagina, destruindo ambos os estados
-
-## Solucao
-
-Criar um store global com **Zustand** (ja instalado no projeto) para o Otto, garantindo que tanto o estado aberto/fechado como as mensagens sobrevivem a navegacao entre paginas.
+Atualmente, as leads tem o campo `company_nif` (NIF da empresa) mas nao tem um campo para o **nome da empresa**. Para o template telecom, este campo deve ser obrigatorio.
 
 ### Alteracoes
 
-**1. Criar `src/stores/useOttoStore.ts`** (novo ficheiro)
+**1. Migracaoo de Base de Dados**
 
-Store Zustand com persistencia em `sessionStorage` contendo:
-- `isOpen` - se a janela do Otto esta aberta
-- `messages` - historico completo de mensagens
-- `isLoading` - estado de carregamento
-- Acoes: `setOpen`, `addMessage`, `updateLastMessage`, `clearMessages`, `setLoading`
+Adicionar a coluna `company_name` (text, nullable) na tabela `leads`.
 
-Usamos `sessionStorage` (em vez de `localStorage`) para que a conversa persista durante a sessao de navegacao mas limpe ao fechar o browser - comportamento natural para um chat de suporte.
-
-**2. Refatorar `src/hooks/useOttoChat.ts`**
-
-- Remover os `useState` internos de `messages` e `isLoading`
-- Ler e escrever diretamente no store Zustand
-- Manter toda a logica de streaming SSE e abort inalterada
-
-**3. Atualizar `src/components/otto/OttoFAB.tsx`**
-
-- Remover o `useState(false)` para `isOpen`
-- Usar `isOpen` e `setOpen` do store Zustand
-- O resto do componente fica igual
-
-**4. Atualizar `src/components/otto/OttoChatWindow.tsx`**
-
-- Nenhuma alteracao de logica necessaria - ja recebe tudo via `useOttoChat()`
-- Apenas garantir que o `onClose` chama `setOpen(false)` do store
-
-### Detalhes Tecnicos
-
-```text
-Antes (estado local, perde-se ao navegar):
-  OttoFAB [useState: isOpen] 
-    -> OttoChatWindow 
-      -> useOttoChat [useState: messages]
-
-Depois (estado global, persiste entre paginas):
-  Zustand Store (sessionStorage)
-    isOpen, messages, isLoading
-      |
-  OttoFAB [lê isOpen do store]
-    -> OttoChatWindow
-      -> useOttoChat [lê/escreve messages do store]
+```sql
+ALTER TABLE public.leads ADD COLUMN company_name text;
 ```
+
+**2. Atualizar o Tipo `Lead`** (`src/types/index.ts`)
+
+Adicionar `company_name?: string | null` ao interface `Lead`.
+
+**3. Atualizar `AddLeadModal.tsx`**
+
+- Adicionar campo `company_name` ao schema zod (obrigatorio para todos, ja que o NIF tambem e obrigatorio para todos)
+- Adicionar o campo de input "Nome da Empresa *" logo apos o campo NIF
+- Auto-preencher o nome da empresa quando o NIF encontra um cliente existente (buscar tambem `company` do `crm_clients`)
+- Passar `company_name` no `createLead.mutateAsync()`
+
+**4. Atualizar `useLeads.ts` (`useCreateLead`)**
+
+- Adicionar `company_name` ao tipo dos parametros de criacao
+- Incluir no insert do Supabase
+
+**5. Atualizar `LeadDetailsModal.tsx`**
+
+- Exibir o nome da empresa junto ao NIF na secao de informacoes
+- Permitir editar o nome da empresa inline (mesmo padrao dos outros campos editaveis)
+
+**6. Atualizar `LeadCard.tsx`**
+
+- Mostrar o nome da empresa abaixo do nome do contacto no cartao Kanban (quando disponivel)
+
+**7. Atualizar `submit-lead` Edge Function**
+
+- Aceitar `company_name` no body do request
+- Incluir no insert da lead
+- Incluir no payload do webhook
+
+**8. Atualizar `LeadsTableView.tsx`**
+
+- Adicionar coluna "Empresa" na vista de tabela
 
 ### Resultado
 
-- O Otto mantem a conversa ao navegar entre Leads, Dashboard, Definicoes, etc.
-- O estado aberto/fechado tambem persiste - se o utilizador abre o Otto e muda de pagina, o Otto continua aberto
-- Ao fechar o separador do browser, a conversa limpa-se automaticamente (sessionStorage)
-- O botao "Limpar conversa" (Trash) continua a funcionar normalmente
+- O campo "Nome da Empresa" aparece como obrigatorio no formulario de criacao de leads
+- Ao inserir o NIF, se encontrar um cliente existente, auto-preenche tambem o nome da empresa
+- O nome da empresa e visivel no cartao Kanban, na tabela e nos detalhes da lead
+- Os formularios publicos tambem podem enviar o nome da empresa via edge function
