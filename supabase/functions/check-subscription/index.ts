@@ -46,6 +46,47 @@ serve(async (req) => {
     if (!user?.email) throw new Error("User not authenticated");
     logStep("User authenticated", { email: user.email });
 
+    // Get user's organization
+    const { data: memberData } = await supabaseClient
+      .from('organization_members')
+      .select('organization_id')
+      .eq('user_id', user.id)
+      .eq('is_active', true)
+      .limit(1)
+      .maybeSingle();
+
+    const orgId = memberData?.organization_id;
+
+    // Check billing exemption before touching Stripe
+    if (orgId) {
+      const { data: orgData } = await supabaseClient
+        .from('organizations')
+        .select('billing_exempt')
+        .eq('id', orgId)
+        .maybeSingle();
+
+      if (orgData?.billing_exempt === true) {
+        logStep("Organization is billing exempt, returning elite", { orgId });
+
+        // Ensure org plan is elite
+        await supabaseClient
+          .from('organizations')
+          .update({ plan: 'elite' })
+          .eq('id', orgId);
+
+        return new Response(JSON.stringify({
+          subscribed: true,
+          plan_id: 'elite',
+          product_id: null,
+          subscription_end: null,
+          billing_exempt: true,
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200,
+        });
+      }
+    }
+
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
     const customers = await stripe.customers.list({ email: user.email, limit: 1 });
 
@@ -81,26 +122,17 @@ serve(async (req) => {
 
     logStep("Active subscription found", { productId, planId, subscriptionEnd });
 
-    // Sync plan to organization via user's membership
-    // Get user's org from organization_members
-    const { data: memberData } = await supabaseClient
-      .from('organization_members')
-      .select('organization_id')
-      .eq('user_id', user.id)
-      .eq('is_active', true)
-      .limit(1)
-      .maybeSingle();
-
-    if (memberData?.organization_id) {
+    // Sync plan to organization
+    if (orgId) {
       const { error: updateError } = await supabaseClient
         .from('organizations')
         .update({ plan: planId })
-        .eq('id', memberData.organization_id);
+        .eq('id', orgId);
 
       if (updateError) {
         logStep("Failed to update org plan", { error: updateError.message });
       } else {
-        logStep("Org plan synced", { orgId: memberData.organization_id, plan: planId });
+        logStep("Org plan synced", { orgId, plan: planId });
       }
     }
 
