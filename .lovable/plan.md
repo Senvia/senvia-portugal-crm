@@ -1,77 +1,47 @@
 
 
-## Redesign da Pagina de Plano e Faturacao - Layout Full-Width + Alteracoes de Planos
+## Isentar Senvia Agency e Perfect2Gether do Pagamento
 
-### Resumo
-Mudar o layout de 3 colunas lado a lado para seccoes de largura total empilhadas verticalmente (Starter em cima, Pro no meio, Elite em baixo). Alem disso, adicionar Meta Pixels ao Starter e Stripe ao Elite, tanto na UI como no backend (tabela `subscription_plans`).
+### Problema
+Atualmente, a edge function `check-subscription` verifica o Stripe e pode devolver `subscribed: false` para estas organizacoes, o que potencialmente remove o plano Elite se nao houver subscricao ativa no Stripe.
 
-### Alteracoes
+### Solucao
 
-#### 1. Layout Full-Width (`src/components/settings/BillingTab.tsx`)
+#### 1. Adicionar coluna `billing_exempt` na tabela `organizations` (Migracao SQL)
+- Nova coluna `billing_exempt BOOLEAN DEFAULT false`
+- Marcar as duas organizacoes com `billing_exempt = true`
 
-Substituir o grid de 3 colunas por seccoes verticais de largura total:
-- Cada plano ocupa a largura toda do ecra
-- Header horizontal com nome, preco e badge lado a lado (em desktop)
-- Modulos, Integracoes e Limites dispostos em colunas horizontais dentro de cada seccao (grid de 3 colunas em desktop, empilhado em mobile)
-- Separador visual entre cada plano
-- Botao de acao alinhado no header de cada seccao
+#### 2. Atualizar a edge function `check-subscription`
+- Antes de verificar o Stripe, consultar a organizacao do utilizador
+- Se `billing_exempt = true`, retornar imediatamente `subscribed: true` com `plan_id: 'elite'` e sem data de fim, sem tocar no Stripe
+- Isto garante que nunca sao desgraduadas
 
-#### 2. Alteracoes nos Planos (`src/lib/stripe-plans.ts`)
-
-**Starter**: Adicionar "Meta Pixels" a lista de integracoes
-
-**Elite**: Adicionar "Stripe (Pagamentos)" a lista de integracoes
-
-#### 3. Atualizar Backend - Tabela `subscription_plans` (Migracao SQL)
-
-**Starter**: Alterar `features.integrations.meta_pixels` de `false` para `true`
-
-**Elite**: Adicionar nova chave `features.integrations.stripe` com valor `true`
-
-Pro e Elite tambem precisam de ter `stripe: false` e `stripe: true` respetivamente para consistencia.
-
-#### 4. Atualizar Hook de Subscricao (`src/hooks/useSubscription.ts`)
-
-Adicionar `'stripe'` ao tipo `IntegrationKey`:
-```
-type IntegrationKey = 'whatsapp' | 'invoicing' | 'meta_pixels' | 'stripe';
-```
-
-Atualizar o `DEFAULT_PLAN` para incluir `stripe: false` no objeto de integracoes.
-
-#### 5. Adicionar icone do Stripe (`src/components/settings/BillingTab.tsx`)
-
-Adicionar mapeamento de icone para "Stripe (Pagamentos)" no `INTEGRATION_ICONS` (usar icone `CreditCard` do lucide-react).
-
----
+#### 3. Atualizar o componente `BillingTab`
+- Detetar se a organizacao e isenta (novo campo ou verificar o slug/id)
+- Mostrar uma badge especial (ex: "Plano Vitalicio" ou "Isento") em vez do botao "Fazer Upgrade"
+- Esconder os botoes de checkout e portal do Stripe para estas organizacoes
 
 ### Detalhes Tecnicos
 
-| Ficheiro | Alteracao |
-|----------|-----------|
-| `src/components/settings/BillingTab.tsx` | Layout full-width vertical, adicionar icone Stripe |
-| `src/lib/stripe-plans.ts` | Meta Pixels no Starter, Stripe no Elite |
-| `src/hooks/useSubscription.ts` | Adicionar `stripe` ao IntegrationKey e DEFAULT_PLAN |
-| Migracao SQL | Atualizar JSONB features nos planos starter, pro e elite |
-
-**Migracao SQL prevista:**
+**Migracao SQL:**
 ```sql
--- Starter: ativar meta_pixels, adicionar stripe=false
-UPDATE subscription_plans
-SET features = jsonb_set(
-  jsonb_set(features, '{integrations,meta_pixels}', 'true'),
-  '{integrations,stripe}', 'false'
-)
-WHERE id = 'starter';
-
--- Pro: adicionar stripe=false
-UPDATE subscription_plans
-SET features = jsonb_set(features, '{integrations,stripe}', 'false')
-WHERE id = 'pro';
-
--- Elite: adicionar stripe=true
-UPDATE subscription_plans
-SET features = jsonb_set(features, '{integrations,stripe}', 'true')
-WHERE id = 'elite';
+ALTER TABLE organizations ADD COLUMN billing_exempt BOOLEAN DEFAULT false;
+UPDATE organizations SET billing_exempt = true
+WHERE id IN ('06fe9e1d-9670-45b0-8717-c5a6e90be380', '96a3950e-31be-4c6d-abed-b82968c0d7e9');
 ```
 
+**Edge function `check-subscription`:**
+- Apos autenticar o utilizador, buscar a organizacao via `organization_members`
+- Consultar `billing_exempt` da organizacao
+- Se `true`: retornar `{ subscribed: true, plan_id: 'elite', billing_exempt: true, subscription_end: null }` e nao contactar o Stripe
+
+**Componente `BillingTab`:**
+- O `subscriptionStatus` passa a incluir `billing_exempt`
+- Se `billing_exempt === true`: mostrar badge "Plano Vitalicio" e desativar todos os botoes de checkout/upgrade
+- Manter a visualizacao dos planos para referencia mas sem acoes de compra
+
+| Ficheiro | Alteracao |
+|----------|-----------|
+| Migracao SQL | Adicionar coluna `billing_exempt`, marcar 2 orgs |
+| `supabase/functions/check-subscription/index.ts` | Verificar `billing_exempt` antes do Stripe |
+| `src/components/settings/BillingTab.tsx` | Badge especial e esconder botoes para orgs isentas |
