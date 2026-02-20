@@ -1,59 +1,96 @@
 
 
-## Adicionar "Nome da Empresa" obrigatorio nas Leads (Template Telecom)
+## Anexar Faturas nas Leads (Template Telecom)
 
 ### Contexto
 
-Atualmente, as leads tem o campo `company_nif` (NIF da empresa) mas nao tem um campo para o **nome da empresa**. Para o template telecom, este campo deve ser obrigatorio.
+No fluxo telecom, os clientes enviam faturas de eletricidade/gas para analise antes de receber proposta. Estas faturas precisam de ser anexadas na lead, visiveis nos detalhes da lead, proposta e ficha do cliente.
+
+### Arquitetura
+
+Criar uma tabela `lead_attachments` (em vez de um campo simples) para suportar multiplos ficheiros por lead. Usar o bucket `invoices` existente (privado) para armazenar os ficheiros.
 
 ### Alteracoes
 
-**1. Migracaoo de Base de Dados**
+**1. Migracao de Base de Dados**
 
-Adicionar a coluna `company_name` (text, nullable) na tabela `leads`.
+Criar tabela `lead_attachments`:
+- `id` (uuid, PK)
+- `organization_id` (uuid, NOT NULL)
+- `lead_id` (uuid, NOT NULL, FK -> leads)
+- `file_path` (text, NOT NULL) - caminho no bucket
+- `file_name` (text, NOT NULL) - nome original
+- `file_size` (integer) - tamanho em bytes
+- `file_type` (text) - mime type
+- `uploaded_by` (uuid) - quem fez upload
+- `created_at` (timestamptz)
 
-```sql
-ALTER TABLE public.leads ADD COLUMN company_name text;
-```
+RLS: Membros da organizacao podem ver, inserir e eliminar anexos das suas leads.
 
-**2. Atualizar o Tipo `Lead`** (`src/types/index.ts`)
+**2. Criar componente `LeadAttachments`** (`src/components/leads/LeadAttachments.tsx`)
 
-Adicionar `company_name?: string | null` ao interface `Lead`.
+Componente reutilizavel que:
+- Lista ficheiros anexados a uma lead (com icone, nome, tamanho)
+- Botao para fazer upload (PDF, PNG, JPG, max 10MB)
+- Botao para descarregar (signed URL do bucket privado)
+- Botao para eliminar ficheiro
+- Suporta multiplos ficheiros
 
-**3. Atualizar `AddLeadModal.tsx`**
+**3. Criar hook `useLeadAttachments`** (`src/hooks/useLeadAttachments.ts`)
 
-- Adicionar campo `company_name` ao schema zod (obrigatorio para todos, ja que o NIF tambem e obrigatorio para todos)
-- Adicionar o campo de input "Nome da Empresa *" logo apos o campo NIF
-- Auto-preencher o nome da empresa quando o NIF encontra um cliente existente (buscar tambem `company` do `crm_clients`)
-- Passar `company_name` no `createLead.mutateAsync()`
+- `useLeadAttachments(leadId)` - listar anexos
+- `useUploadLeadAttachment()` - upload para storage + insert na tabela
+- `useDeleteLeadAttachment()` - remove do storage + delete da tabela
+- Funcao `getAttachmentUrl(path)` - gerar signed URL para download
 
-**4. Atualizar `useLeads.ts` (`useCreateLead`)**
+**4. Atualizar `AddLeadModal.tsx`** (apenas telecom)
 
-- Adicionar `company_name` ao tipo dos parametros de criacao
-- Incluir no insert do Supabase
+- Adicionar secao "Anexar Faturas" com zona de drag-and-drop
+- Suportar multiplos ficheiros antes de submeter
+- Apos criar a lead, fazer upload dos ficheiros e inserir na tabela
 
 **5. Atualizar `LeadDetailsModal.tsx`**
 
-- Exibir o nome da empresa junto ao NIF na secao de informacoes
-- Permitir editar o nome da empresa inline (mesmo padrao dos outros campos editaveis)
+- Adicionar secao "Faturas Anexadas" (apenas telecom) com o componente `LeadAttachments`
+- Permitir adicionar mais ficheiros e remover existentes
 
-**6. Atualizar `LeadCard.tsx`**
+**6. Atualizar `ProposalDetailsModal.tsx`**
 
-- Mostrar o nome da empresa abaixo do nome do contacto no cartao Kanban (quando disponivel)
+- Na secao de detalhes, mostrar os anexos da lead associada (read-only)
+- Usar o `lead_id` da proposta para buscar os anexos
 
-**7. Atualizar `submit-lead` Edge Function**
+**7. Atualizar `ClientDetailsModal.tsx`**
 
-- Aceitar `company_name` no body do request
-- Incluir no insert da lead
-- Incluir no payload do webhook
+- Mostrar todos os anexos das leads associadas ao cliente
+- Usar o `lead_id` do cliente para buscar os anexos (ou buscar todas as leads do cliente)
 
-**8. Atualizar `LeadsTableView.tsx`**
+**8. Atualizar `submit-lead` Edge Function**
 
-- Adicionar coluna "Empresa" na vista de tabela
+- Nao precisa de alteracao para ficheiros (os formularios publicos enviam ficheiros diretamente via storage)
+- Alternativa: aceitar ficheiros base64 no payload e guardar - mas para MVP, os formularios publicos podem nao precisar de anexar faturas (isso e feito manualmente pelo comercial)
+
+### Detalhes Tecnicos
+
+```text
+Fluxo de Upload:
+  1. Utilizador seleciona ficheiro(s)
+  2. Upload para storage bucket "invoices" -> path: {org_id}/leads/{lead_id}/{timestamp}-{filename}
+  3. Insert na tabela lead_attachments com o path
+
+Fluxo de Download:
+  1. Gerar signed URL (createSignedUrl) do bucket privado
+  2. Abrir em nova tab
+
+Visibilidade:
+  - Lead Details: Upload + Download + Delete
+  - Proposta Details: Download only (via lead_id)
+  - Cliente Details: Download only (via lead_id do cliente)
+```
 
 ### Resultado
 
-- O campo "Nome da Empresa" aparece como obrigatorio no formulario de criacao de leads
-- Ao inserir o NIF, se encontrar um cliente existente, auto-preenche tambem o nome da empresa
-- O nome da empresa e visivel no cartao Kanban, na tabela e nos detalhes da lead
-- Os formularios publicos tambem podem enviar o nome da empresa via edge function
+- Comerciais telecom podem anexar faturas de eletricidade ao criar ou editar uma lead
+- As faturas ficam acessiveis nos detalhes da lead, na proposta e na ficha do cliente
+- Suporte para multiplos ficheiros por lead
+- Bucket privado garante seguranca dos documentos
+
