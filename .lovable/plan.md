@@ -1,51 +1,66 @@
 
 
-## Reescrever o System Prompt do Otto - Novo Fluxo Obrigatorio
+## Problema
 
-O system prompt atual do Otto e demasiado generico e nao segue o fluxo correto de clarificacao antes de resposta. Vamos substituir completamente o SYSTEM_PROMPT no ficheiro `supabase/functions/otto-chat/index.ts` com as novas instrucoes profissionais.
+O Otto perde toda a conversa e fecha ao navegar entre paginas porque:
 
-### O que muda
+1. O estado `isOpen` no `OttoFAB.tsx` usa `useState(false)` - reseta a cada navegacao
+2. O estado `messages` no `useOttoChat.ts` usa `useState([])` - perde todo o historico
+3. O `AppLayout` re-renderiza ao mudar de pagina, destruindo ambos os estados
 
-O Otto passa de um assistente "informal e amigavel" para um assistente **profissional, direto e eficiente** com um fluxo obrigatorio:
+## Solucao
 
-1. **Interpretar** a intencao do utilizador
-2. **Clarificar** com 2-3 botoes antes de dar a resposta completa
-3. **Instruir** com passos numerados e nomes exatos de menus
-4. **Recusar educadamente** perguntas fora do ambito do Senvia OS
+Criar um store global com **Zustand** (ja instalado no projeto) para o Otto, garantindo que tanto o estado aberto/fechado como as mensagens sobrevivem a navegacao entre paginas.
 
-### Alteracoes Tecnicas
+### Alteracoes
 
-**Ficheiro:** `supabase/functions/otto-chat/index.ts`
+**1. Criar `src/stores/useOttoStore.ts`** (novo ficheiro)
 
-Substituir o bloco `SYSTEM_PROMPT` (linhas 9-116) com o novo prompt que inclui:
+Store Zustand com persistencia em `sessionStorage` contendo:
+- `isOpen` - se a janela do Otto esta aberta
+- `messages` - historico completo de mensagens
+- `isLoading` - estado de carregamento
+- Acoes: `setOpen`, `addMessage`, `updateLastMessage`, `clearMessages`, `setLoading`
 
-- **Identidade**: Assistente tecnico de suporte interno (nao informal/amigavel)
-- **Fluxo obrigatorio em 4 passos**: Interpretacao, Clarificacao com botoes, Instrucao passo-a-passo, Fronteira de conhecimento
-- **Exemplo de interacao perfeita** embutido no prompt para o modelo seguir
-- **Mapeamento completo dos 19 modulos** do Senvia OS:
-  - Painel (Dashboard)
-  - Leads e Pipeline
-  - Clientes
-  - Propostas
-  - Vendas
-  - Agenda (Calendario)
-  - Financeiro (Pagamentos, Faturas, Despesas, Contas Bancarias, Pedidos Internos)
-  - Marketing (Templates, Listas, Campanhas, Relatorios)
-  - E-commerce (Produtos, Encomendas, Inventario, Clientes, Descontos)
-  - Definicoes com todos os separadores: Geral, Pipeline, Formularios, Equipa, Produtos, Integracoes, Perfis, Modulos, Fiscal, Comissoes, Campos de Cliente, Alertas de Fidelizacao, Vendas
-- **Integracoes detalhadas**: n8n/Webhook, WhatsApp (Evolution API), Brevo, InvoiceXpress, KeyInvoice
-- **Faturacao**: dois fornecedores mutuamente exclusivos com instrucoes de configuracao
-- **Regras de formatacao**: maximo 200 palavras, 2-4 botoes, markdown, sem emojis excessivos
+Usamos `sessionStorage` (em vez de `localStorage`) para que a conversa persista durante a sessao de navegacao mas limpe ao fechar o browser - comportamento natural para um chat de suporte.
+
+**2. Refatorar `src/hooks/useOttoChat.ts`**
+
+- Remover os `useState` internos de `messages` e `isLoading`
+- Ler e escrever diretamente no store Zustand
+- Manter toda a logica de streaming SSE e abort inalterada
+
+**3. Atualizar `src/components/otto/OttoFAB.tsx`**
+
+- Remover o `useState(false)` para `isOpen`
+- Usar `isOpen` e `setOpen` do store Zustand
+- O resto do componente fica igual
+
+**4. Atualizar `src/components/otto/OttoChatWindow.tsx`**
+
+- Nenhuma alteracao de logica necessaria - ja recebe tudo via `useOttoChat()`
+- Apenas garantir que o `onClose` chama `setOpen(false)` do store
+
+### Detalhes Tecnicos
+
+```text
+Antes (estado local, perde-se ao navegar):
+  OttoFAB [useState: isOpen] 
+    -> OttoChatWindow 
+      -> useOttoChat [useState: messages]
+
+Depois (estado global, persiste entre paginas):
+  Zustand Store (sessionStorage)
+    isOpen, messages, isLoading
+      |
+  OttoFAB [lê isOpen do store]
+    -> OttoChatWindow
+      -> useOttoChat [lê/escreve messages do store]
+```
 
 ### Resultado
 
-O Otto vai:
-- Nunca dar a resposta completa logo de imediato
-- Sempre clarificar com botoes primeiro
-- Dar instrucoes extremamente precisas com nomes exatos dos menus (ex: "Definicoes > Integracoes > Brevo")
-- Recusar educadamente perguntas fora do Senvia OS
-- Cobrir todos os 19 modulos do sistema com conhecimento atualizado
-
-### Deploy
-
-Apos a alteracao, o edge function `otto-chat` sera reimplantado automaticamente.
+- O Otto mantem a conversa ao navegar entre Leads, Dashboard, Definicoes, etc.
+- O estado aberto/fechado tambem persiste - se o utilizador abre o Otto e muda de pagina, o Otto continua aberto
+- Ao fechar o separador do browser, a conversa limpa-se automaticamente (sessionStorage)
+- O botao "Limpar conversa" (Trash) continua a funcionar normalmente
