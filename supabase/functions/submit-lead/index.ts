@@ -197,7 +197,7 @@ Deno.serve(async (req) => {
         assigned_to: formSettings.assigned_to || null,
         company_nif: body.company_nif?.trim() || null,
         company_name: body.company_name?.trim() || null,
-        name: body.name?.trim() || 'Anónimo',
+        name: body.name?.trim() || body.company_name?.trim() || 'Anónimo',
         email: body.email?.trim()?.toLowerCase() || 'nao-fornecido@placeholder.local',
         phone: cleanPhone || '000000000',
         gdpr_consent: true,
