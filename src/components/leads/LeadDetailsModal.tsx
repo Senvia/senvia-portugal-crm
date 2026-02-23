@@ -62,7 +62,8 @@ import {
   ClipboardList,
   Target,
   UserCircle,
-  Zap
+  Zap,
+  ArrowLeft
 } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { cn } from "@/lib/utils";
@@ -240,7 +241,13 @@ export function LeadDetailsModal({
       <DialogContent variant="fullScreen" className="flex flex-col p-0 gap-0">
         {/* Fixed Header */}
         <div className="border-b bg-background px-4 py-4 sm:px-6">
-          <DialogHeader className="pr-8">
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)} className="shrink-0">
+              <ArrowLeft className="h-4 w-4" />
+              Voltar
+            </Button>
+          </div>
+          <DialogHeader className="pr-8 mt-2">
             <DialogTitle asChild>
               <Input
                 value={editName}
@@ -601,6 +608,12 @@ export function LeadDetailsModal({
                       </Button>
                     </CardContent>
                   </Card>
+
+                  {/* Back Button */}
+                  <Button variant="outline" className="w-full" onClick={() => onOpenChange(false)}>
+                    <ArrowLeft className="h-4 w-4" />
+                    Voltar
+                  </Button>
 
                   {/* Delete Action */}
                   {canDeleteLeads && (
