@@ -247,27 +247,9 @@ export function LeadDetailsModal({
               Voltar
             </Button>
           </div>
-          <DialogHeader className="pr-8 mt-2">
-            <DialogTitle asChild>
-              <Input
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                onFocus={() => setIsEditingName(true)}
-                onBlur={() => {
-                  if (editName.trim() && editName !== lead.name) {
-                    handleFieldSave("name", editName.trim());
-                  } else if (!editName.trim()) {
-                    setEditName(lead.name);
-                  }
-                  setIsEditingName(false);
-                }}
-                className="text-xl font-semibold border-transparent bg-transparent px-0 h-auto w-full focus-visible:ring-1 focus-visible:ring-primary hover:border-muted-foreground/30 transition-colors"
-                placeholder="Nome do lead"
-              />
-            </DialogTitle>
-            <DialogDescription>
-              Lead criada em {formatDate(lead.created_at)}
-            </DialogDescription>
+          <DialogHeader className="sr-only">
+            <DialogTitle>Detalhes do Lead</DialogTitle>
+            <DialogDescription>Detalhes do lead</DialogDescription>
           </DialogHeader>
         </div>
 
@@ -517,6 +499,26 @@ export function LeadDetailsModal({
                       <CardTitle className="text-sm font-semibold">Informações de Contacto</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-3">
+                      {/* Nome editável */}
+                      <div className="flex items-center gap-3 text-sm">
+                        <UserCircle className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                        <Input
+                          value={editName}
+                          onChange={(e) => setEditName(e.target.value)}
+                          onFocus={() => setIsEditingName(true)}
+                          onBlur={() => {
+                            if (editName.trim() && editName !== lead.name) {
+                              handleFieldSave("name", editName.trim());
+                            } else if (!editName.trim()) {
+                              setEditName(lead.name);
+                            }
+                            setIsEditingName(false);
+                          }}
+                          className="h-8 text-sm font-semibold border-transparent bg-transparent px-2 focus-visible:ring-1 focus-visible:ring-primary hover:border-muted-foreground/30 transition-colors"
+                          placeholder="Nome do lead"
+                        />
+                      </div>
+
                       {/* NIF Empresa */}
                       {lead.company_nif && (
                         <div className="flex items-center gap-3 text-sm">
