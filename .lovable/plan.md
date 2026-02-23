@@ -1,47 +1,42 @@
 
 
-## Prevenir leads orfaos no futuro
+# Corrigir botoes de Upgrade/Downgrade na pagina de Plano e Faturacao
 
-### Situacao Atual
+## Problema Atual
 
-Neste momento nao existem leads orfaos na base de dados. A correcao SQL anterior funcionou. No entanto, identifiquei um risco que pode causar o problema novamente:
+- Todos os planos que nao sao o atual mostram o botao "Fazer Upgrade", mesmo que sejam inferiores ao plano atual.
+- Nao existe botao de "Downgrade".
+- Nao ha distincao visual entre subir ou descer de plano.
 
-### Risco: Edge Function `update-lead` com status hardcoded
+## Alteracoes
 
-O ficheiro `supabase/functions/update-lead/index.ts` (usado pelo n8n) tem uma lista fixa de status validos:
+### Ficheiro: `src/components/settings/BillingTab.tsx`
+
+Adicionar logica para determinar a posicao relativa de cada plano face ao atual e ajustar o texto e estilo do botao:
+
+- **Plano atual** -> Botao "Plano Atual" (desativado, como esta)
+- **Plano superior** -> Botao "Fazer Upgrade" (estilo primario)
+- **Plano inferior** -> Botao "Fazer Downgrade" (estilo outline/secondary, com confirmacao)
+
+A logica usa o indice do plano no array `STRIPE_PLANS` para comparar:
 
 ```
-const VALID_STATUSES = ['new', 'contacted', 'scheduled', 'won', 'lost']
+const currentIndex = STRIPE_PLANS.findIndex(p => p.id === currentPlanId);
+const planIndex = STRIPE_PLANS.findIndex(p => p.id === plan.id);
+
+if (planIndex > currentIndex) -> "Fazer Upgrade"
+if (planIndex < currentIndex) -> "Fazer Downgrade"
 ```
 
-Se o n8n tentar atualizar um lead da Perfect2Gether para `'perdido'`, a edge function vai **rejeitar** o pedido porque `'perdido'` nao esta na lista. Isto pode forcar o uso de `'lost'` que depois nao corresponde a nenhuma etapa da pipeline Telecom.
+Para o downgrade, o botao redireciona para o portal do Stripe (via `openCustomerPortal`) em vez de criar um novo checkout, pois o Stripe gere downgrades atraves do portal de cliente.
 
-### Alteracoes
+### Resumo das mudancas
 
-**1. Edge Function `update-lead/index.ts`**
-- Remover a validacao hardcoded de status
-- Substituir por uma consulta a tabela `pipeline_stages` para validar que o status enviado e uma key valida para aquela organizacao
+| Cenario | Texto do Botao | Acao | Estilo |
+|---------|---------------|------|--------|
+| Plano atual | "Plano Atual" | Nenhuma (desativado) | Outline |
+| Plano superior | "Fazer Upgrade" | `createCheckout(priceId)` | Primary/Default |
+| Plano inferior | "Fazer Downgrade" | `openCustomerPortal()` | Secondary/Outline |
+| Organizacao isenta | Sem botoes | -- | -- |
 
-Em vez de:
-```typescript
-const VALID_STATUSES = ['new', 'contacted', 'scheduled', 'won', 'lost'];
-if (!VALID_STATUSES.includes(body.updates.status)) { ... }
-```
-
-Fazer:
-```typescript
-const { data: validStages } = await supabase
-  .from('pipeline_stages')
-  .select('key')
-  .eq('organization_id', body.organization_id);
-const validKeys = validStages?.map(s => s.key) || [];
-if (!validKeys.includes(body.updates.status)) { ... }
-```
-
-**2. Verificacao final**
-- Confirmar que nao ha mais nenhum ponto no sistema que escreva status hardcoded para organizacoes com pipelines personalizadas
-
-### Nota
-
-Se estiveres a ver a coluna "Sem Etapa" neste momento, faz refresh a pagina -- pode ser cache do browser. A base de dados ja esta limpa.
-
+Apenas o ficheiro `BillingTab.tsx` sera alterado. Nao ha alteracoes na base de dados nem em edge functions.
