@@ -1,79 +1,117 @@
 
-# Listas Automaticas Stripe (Senvia Agency)
+
+# Gatilhos e Listas Automaticas para Clientes Trial
 
 ## Resumo
 
-Criar listas de transmissao automaticas relacionadas com eventos Stripe, exclusivas para a organizacao Senvia Agency. Os clientes do SENVIA OS serao automaticamente movidos entre listas conforme o estado da sua subscricao muda.
+Criar listas de transmissao e gatilhos de automacao para clientes em periodo de trial, seguindo o mesmo padrao das listas Stripe ja implementadas. Os clientes serao automaticamente movidos entre listas conforme o seu estado de trial muda.
 
-## Listas a Criar
+## Novas Listas (Senvia Agency)
 
 | Nome da Lista | Descricao |
 |---|---|
-| Plano Starter | Clientes com subscricao Starter ativa |
-| Plano Pro | Clientes com subscricao Pro ativa |
-| Plano Elite | Clientes com subscricao Elite ativa |
-| Pagamento em Atraso | Clientes com pagamento falhado ou past_due |
-| Subscricao Cancelada | Clientes que cancelaram a subscricao |
+| Clientes em Trial | Organizacoes atualmente em periodo de teste gratuito |
+| Trial Expirado | Organizacoes cujo trial expirou sem subscrever um plano |
 
-## Comportamento Automatico
+## Novos Gatilhos de Automacao
 
-- **Novo checkout (qualquer plano)**: Contacto entra na lista do plano correspondente (Starter/Pro/Elite). Removido de "Pagamento em Atraso" e "Subscricao Cancelada".
-- **Subscricao renovada**: Contacto entra na lista do plano. Removido de "Pagamento em Atraso".
-- **Pagamento falhado / past_due**: Contacto entra em "Pagamento em Atraso". Permanece na lista do plano.
-- **Subscricao cancelada**: Contacto removido da lista do plano. Adicionado a "Subscricao Cancelada". Removido de "Pagamento em Atraso".
-- **Upgrade/downgrade**: Contacto removido do plano antigo, adicionado ao plano novo.
+| Gatilho | Descricao |
+|---|---|
+| `trial_started` | Disparado quando uma nova organizacao e criada (inicio do trial de 14 dias) |
+| `trial_expiring_3d` | Disparado 3 dias antes do trial expirar (ja existe via trial-expiry-reminders, agora tambem como gatilho de automacao) |
+| `trial_expiring_1d` | Disparado 1 dia antes do trial expirar |
+| `trial_expired` | Disparado quando o trial expira sem subscricao |
+
+## Comportamento Automatico das Listas
+
+- **Nova organizacao criada**: Contacto (email do admin) entra em "Clientes em Trial"
+- **Trial expira sem plano**: Contacto sai de "Clientes em Trial", entra em "Trial Expirado"
+- **Cliente subscreve plano (checkout)**: Contacto removido de "Clientes em Trial" e "Trial Expirado" (ja entra na lista do plano correspondente pela logica existente)
 
 ## Alteracoes Tecnicas
 
-### 1. Funcao SQL: `ensure_stripe_auto_lists` (Migracao)
+### 1. Migracao SQL
 
-Similar a `ensure_org_auto_lists`, cria as 5 listas Stripe com `is_system = true` para a org Senvia Agency.
+Atualizar a funcao `ensure_stripe_auto_lists` para incluir as 2 novas listas de trial:
 
 ```text
-CREATE OR REPLACE FUNCTION public.ensure_stripe_auto_lists(p_org_id uuid)
-RETURNS void ...
--- Insere as 5 listas se nao existirem
--- Plano Starter, Plano Pro, Plano Elite, Pagamento em Atraso, Subscricao Cancelada
+INSERT INTO client_lists (organization_id, name, description, is_dynamic, is_system)
+SELECT p_org_id, 'Clientes em Trial', 'Organizacoes em periodo de teste gratuito', false, true
+WHERE NOT EXISTS (...);
+
+INSERT INTO client_lists (organization_id, name, description, is_dynamic, is_system)
+SELECT p_org_id, 'Trial Expirado', 'Organizacoes cujo trial expirou sem plano', false, true
+WHERE NOT EXISTS (...);
 ```
 
-Executar `SELECT ensure_stripe_auto_lists('06fe9e1d-...')` na migracao para criar as listas imediatamente.
+Executar imediatamente para a org Senvia Agency.
 
 ### 2. `supabase/functions/stripe-webhook/index.ts`
 
-Adicionar uma funcao helper `syncStripeAutoLists` que:
+No bloco `checkout.session.completed`, apos a logica existente de `syncStripeAutoLists`, adicionar remocao do contacto das listas de trial ("Clientes em Trial" e "Trial Expirado"). Atualizar a funcao `syncStripeAutoLists` para incluir estas listas no mapa e remove-las nos eventos `checkout_completed` e `renewed`.
 
-1. Faz upsert do contacto na tabela `marketing_contacts` (usando email)
-2. Chama `ensure_stripe_auto_lists` para garantir que as listas existem
-3. Conforme o evento, adiciona/remove o contacto das listas certas
+### 3. `src/hooks/useAutomations.ts`
 
-Sera chamada apos cada evento processado, com os parametros:
-- `email` do cliente
-- `plan` atual (starter/pro/elite/null)
-- `eventType` (checkout, renewed, past_due, canceled, payment_failed)
-
-Logica por evento:
+Adicionar os novos gatilhos na lista `STRIPE_TRIGGER_TYPES`:
 
 ```text
-checkout_completed / renewed:
-  -> Adicionar a lista "Plano {X}"
-  -> Remover de "Pagamento em Atraso"
-  -> Remover de "Subscricao Cancelada"
-  -> Remover de outras listas de plano (se upgrade/downgrade)
-
-past_due / payment_failed:
-  -> Adicionar a "Pagamento em Atraso"
-
-subscription_deleted:
-  -> Remover de todas as listas de plano
-  -> Remover de "Pagamento em Atraso"
-  -> Adicionar a "Subscricao Cancelada"
+{ value: 'trial_started', label: 'Trial Iniciado' }
+{ value: 'trial_expiring_3d', label: 'Trial Expira em 3 Dias' }
+{ value: 'trial_expiring_1d', label: 'Trial Expira em 1 Dia' }
+{ value: 'trial_expired', label: 'Trial Expirado' }
 ```
 
-### 3. Sem alteracoes no frontend
+### 4. Funcao SQL: `create_organization_for_current_user`
 
-As listas aparecem automaticamente na pagina de Listas de Transmissao com o badge "Sistema" (ja existente para listas `is_system = true`). Nao podem ser eliminadas pelo utilizador.
+Atualizar para, apos criar a organizacao, fazer dispatch da automacao `trial_started` e adicionar o contacto a lista "Clientes em Trial" na org Senvia Agency. Isto sera feito via `pg_net` (chamada HTTP a edge function `process-automation`), seguindo o padrao existente dos triggers de leads.
+
+**Alternativa mais simples**: Criar um trigger SQL `AFTER INSERT ON organizations` que usa `pg_net` para chamar uma nova edge function ou a `process-automation` com `trigger_type = 'trial_started'`.
+
+### 5. Edge function `cleanup-expired-trials/index.ts`
+
+Antes de eliminar os dados, adicionar logica para:
+- Disparar automacao `trial_expired` para cada org expirada
+- Mover o contacto de "Clientes em Trial" para "Trial Expirado" na org Senvia Agency
+
+**Nota**: O `cleanup-expired-trials` corre 60 dias apos a expiracao. Para o gatilho `trial_expired` ser util (comunicacao imediata), precisamos de um novo cron job ou adaptar o `check-subscription` para detetar trials recem-expirados.
+
+### 6. Novo cron job: `check-trial-status` (recomendado)
+
+Criar uma edge function `check-trial-status` executada diariamente (via pg_cron) que:
+- Encontra orgs com `trial_ends_at` proximo (3 dias, 1 dia)
+- Encontra orgs com `trial_ends_at` ja passado e sem plano
+- Dispara os gatilhos `trial_expiring_3d`, `trial_expiring_1d`, `trial_expired`
+- Atualiza as listas automaticas (move de "Clientes em Trial" para "Trial Expirado")
+- Usa uma coluna JSONB `trial_reminders_sent` (ja existente) para evitar duplicados
 
 ## Ficheiros Alterados
 
-1. **Nova migracao SQL** - Criar funcao `ensure_stripe_auto_lists` + popular listas para Senvia Agency
-2. **`supabase/functions/stripe-webhook/index.ts`** - Adicionar logica de sincronizacao de listas automaticas
+1. **Nova migracao SQL** - Adicionar listas "Clientes em Trial" e "Trial Expirado" a `ensure_stripe_auto_lists`
+2. **Nova migracao SQL** - Trigger `AFTER INSERT ON organizations` para `trial_started`
+3. **`supabase/functions/stripe-webhook/index.ts`** - Remover contacto das listas trial no checkout
+4. **`src/hooks/useAutomations.ts`** - Adicionar 4 novos gatilhos trial
+5. **Nova edge function `check-trial-status`** - Cron diario para detetar expiracao e disparar gatilhos
+6. **`supabase/config.toml`** - Registar a nova edge function (automatico)
+
+## Fluxo Resumido
+
+```text
+Org Criada (trial 14d)
+  -> Contacto entra em "Clientes em Trial"
+  -> Dispara gatilho "trial_started"
+
+3 dias antes de expirar (cron diario)
+  -> Dispara gatilho "trial_expiring_3d"
+
+1 dia antes de expirar (cron diario)
+  -> Dispara gatilho "trial_expiring_1d"
+
+Trial expirou sem plano (cron diario)
+  -> Contacto sai de "Clientes em Trial"
+  -> Contacto entra em "Trial Expirado"
+  -> Dispara gatilho "trial_expired"
+
+Cliente subscreve plano (Stripe checkout)
+  -> Contacto removido de "Clientes em Trial" e "Trial Expirado"
+  -> Entra na lista do plano (logica existente)
+```
