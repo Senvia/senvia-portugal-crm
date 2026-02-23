@@ -1,70 +1,73 @@
 
 
-# Corrigir: Fatura da Ângela Não Aparece em Faturas
+# Adicionar Pesquisa de Notas de Credito ao Otto
 
-## Diagnóstico
+## Problema
+O Otto nao tem nenhuma ferramenta para pesquisar na tabela `credit_notes`. Quando o utilizador pergunta por uma nota de credito (ex: "2/2026"), o Otto so consegue procurar na tabela `invoices`, onde nao encontra nada.
 
-A Ângela Oliveira tem uma venda (código 0003, valor 275EUR) com 3 pagamentos que referenciam faturas-recibo do InvoiceXpress (ex: "FR ATSIRE01FR/3"). No entanto, **nenhuma dessas faturas-recibo existe na tabela `invoices`** (que só tem 5 registos, todos de outros clientes).
+## Solucao
 
-### Causa raiz
+### 1. Nova funcao RPC no banco de dados
+Criar `search_credit_notes_unaccent` seguindo o mesmo padrao das outras 5 funcoes de pesquisa accent-insensitive ja existentes.
 
-O sincronizador (`sync-invoices`) busca documentos do InvoiceXpress via API e tenta associar às vendas/pagamentos locais. Há dois problemas:
+```sql
+CREATE OR REPLACE FUNCTION public.search_credit_notes_unaccent(
+  org_id uuid, search_term text, cn_status text DEFAULT NULL, max_results int DEFAULT 10
+) RETURNS SETOF credit_notes AS $$
+  SELECT * FROM credit_notes
+  WHERE organization_id = org_id
+    AND (cn_status IS NULL OR status = cn_status)
+    AND (
+      immutable_unaccent(lower(COALESCE(reference,''))) LIKE '%' || immutable_unaccent(lower(search_term)) || '%'
+      OR immutable_unaccent(lower(COALESCE(client_name,''))) LIKE '%' || immutable_unaccent(lower(search_term)) || '%'
+    )
+  LIMIT max_results;
+$$ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = 'public';
+```
 
-1. **Sem `invoicexpress_id`**: A venda e os pagamentos da Ângela não têm `invoicexpress_id` preenchido, então o matching por ID falha.
-2. **Matching por referência falha**: Os pagamentos guardam "FR ATSIRE01FR/3" como `invoice_reference`, mas o sync compara usando `ilike` com o `sequence_number` do documento InvoiceXpress, que pode ter formato diferente (ex: "3/2026" vs "FR ATSIRE01FR/3").
+### 2. Alteracoes em `supabase/functions/otto-chat/index.ts`
 
-## Solução
-
-Melhorar o matching no `sync-invoices` para também comparar o `client_name` do InvoiceXpress com os clientes locais, e melhorar o matching de referências.
-
-### Alterações em `supabase/functions/sync-invoices/index.ts`
-
-1. **Adicionar Match 6 -- por client_name**: Quando nenhum match anterior funciona, procurar vendas cujo `client_id` corresponda a um cliente com o mesmo nome que o `client_name` do documento InvoiceXpress (usando `immutable_unaccent` para ignorar acentos).
-
-2. **Melhorar Match por referência**: Normalizar as referências removendo prefixos como "FR ", "FT " antes de comparar. Exemplo: "FR ATSIRE01FR/3" deve ser comparado apenas com "ATSIRE01FR/3" ou o número sequencial "3".
-
-### Detalhe técnico
-
-No ficheiro `supabase/functions/sync-invoices/index.ts`, após o Match 5, adicionar:
-
+**a) Adicionar tool definition** -- novo item no array `TOOLS`:
 ```typescript
-// Match 6: by client_name -> crm_clients -> sales
-if (!matchedSaleId && !matchedPaymentId && docClientName) {
-  const { data: clients } = await supabase
-    .from('crm_clients')
-    .select('id')
-    .eq('organization_id', organization_id)
-    .ilike('name', `%${docClientName}%`)
-    .limit(1)
-  
-  if (clients && clients.length > 0) {
-    const { data: sales } = await supabase
-      .from('sales')
-      .select('id')
-      .eq('organization_id', organization_id)
-      .eq('client_id', clients[0].id)
-      .order('created_at', { ascending: false })
-      .limit(1)
-    
-    if (sales && sales.length > 0) {
-      matchedSaleId = sales[0].id
-    }
-  }
+{
+  type: "function",
+  function: {
+    name: "search_credit_notes",
+    description: "Procurar notas de credito por referencia ou nome do cliente.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Referencia ou nome do cliente" },
+        status: { type: "string", description: "Filtrar por status (opcional)" },
+      },
+      required: ["query"],
+    },
+  },
 }
 ```
 
-Além disso, melhorar o Match 3 para normalizar referências:
-
+**b) Adicionar executor** -- novo `case` no `switch` dentro de `executeTool`:
 ```typescript
-// Antes de comparar, remover prefixos "FR ", "FT ", "FS " da referência
-const cleanRef = docRef.replace(/^(FR|FT|FS)\s+/i, '')
-const seqPart = cleanRef.split('/').pop() || cleanRef
+case "search_credit_notes": {
+  const { data, error } = await supabaseAdmin
+    .rpc("search_credit_notes_unaccent", {
+      org_id: orgId, search_term: args.query,
+      cn_status: args.status || null, max_results: 10,
+    });
+  if (error) return JSON.stringify({ error: error.message });
+  const results = (data || []).map((cn: any) => ({
+    id: cn.id, invoicexpress_id: cn.invoicexpress_id,
+    reference: cn.reference, client_name: cn.client_name,
+    total: cn.total, status: cn.status, date: cn.date,
+    related_invoice_id: cn.related_invoice_id, pdf_path: cn.pdf_path,
+  }));
+  return JSON.stringify({ results, count: results.length });
+}
 ```
 
-### Ação imediata
-
-Depois de corrigir o sync, será necessário re-executar a sincronização para importar as faturas-recibo da Ângela. Isto pode ser feito pelo botão de sync na interface de Faturas.
-
 ### Ficheiros a alterar
-- `supabase/functions/sync-invoices/index.ts` (melhorar matching)
+1. **Nova migracao SQL** -- funcao `search_credit_notes_unaccent`
+2. **`supabase/functions/otto-chat/index.ts`** -- tool definition + executor
 
+### Resultado
+O Otto passara a encontrar "2/2026" na tabela de notas de credito e mostrar: "NC 2/2026 -- Dnr lda -- 611,31 EUR -- Liquidada -- 02/11/2026"
