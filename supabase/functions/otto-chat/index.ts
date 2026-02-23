@@ -226,8 +226,15 @@ const TOOLS = [
     type: "function",
     function: {
       name: "get_finance_summary",
-      description: "Obter resumo financeiro: total faturado, recebido, pendente, despesas e balanço.",
-      parameters: { type: "object", properties: {}, required: [] },
+      description: "Obter resumo financeiro de um período: total faturado, recebido, pendente, despesas e balanço. Se não forem fornecidas datas, usa o mês atual.",
+      parameters: {
+        type: "object",
+        properties: {
+          start_date: { type: "string", description: "Data início no formato YYYY-MM-DD (opcional, default: início do mês atual)" },
+          end_date: { type: "string", description: "Data fim no formato YYYY-MM-DD (opcional, default: fim do mês atual)" },
+        },
+        required: [],
+      },
     },
   },
   {
@@ -417,26 +424,47 @@ async function executeTool(
       }
 
       case "get_finance_summary": {
-        // Total from sales
+        // Calculate date range (default: current month)
+        const now = new Date();
+        const startDate = args.start_date || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+        const endDateDefault = new Date(now.getFullYear(), now.getMonth() + 1, 0); // last day of current month
+        const endDate = args.end_date || `${endDateDefault.getFullYear()}-${String(endDateDefault.getMonth() + 1).padStart(2, '0')}-${String(endDateDefault.getDate()).padStart(2, '0')}`;
+
+        // Sales filtered by sale_date
         const { data: sales } = await supabaseAdmin
           .from("sales")
-          .select("total_value, payment_status")
-          .eq("organization_id", orgId);
-        const totalBilled = (sales || []).reduce((s: number, r: any) => s + (r.total_value || 0), 0);
-        const totalPaid = (sales || []).filter((s: any) => s.payment_status === "paid").reduce((s: number, r: any) => s + (r.total_value || 0), 0);
-        const totalPending = (sales || []).filter((s: any) => s.payment_status !== "paid").reduce((s: number, r: any) => s + (r.total_value || 0), 0);
-        // Expenses
+          .select("id, total_value, sale_date")
+          .eq("organization_id", orgId)
+          .gte("sale_date", startDate)
+          .lte("sale_date", endDate);
+        const totalBilled = (sales || []).reduce((s: number, r: any) => s + Number(r.total_value || 0), 0);
+
+        // Real payments from sale_payments filtered by payment_date
+        const { data: payments } = await supabaseAdmin
+          .from("sale_payments")
+          .select("amount, status")
+          .eq("organization_id", orgId)
+          .gte("payment_date", startDate)
+          .lte("payment_date", endDate);
+        const totalReceived = (payments || []).filter((p: any) => p.status === "paid").reduce((s: number, r: any) => s + Number(r.amount || 0), 0);
+        const totalPending = (payments || []).filter((p: any) => p.status === "pending").reduce((s: number, r: any) => s + Number(r.amount || 0), 0);
+
+        // Expenses filtered by expense_date
         const { data: expenses } = await supabaseAdmin
           .from("expenses")
           .select("amount")
-          .eq("organization_id", orgId);
-        const totalExpenses = (expenses || []).reduce((s: number, r: any) => s + (r.amount || 0), 0);
+          .eq("organization_id", orgId)
+          .gte("expense_date", startDate)
+          .lte("expense_date", endDate);
+        const totalExpenses = (expenses || []).reduce((s: number, r: any) => s + Number(r.amount || 0), 0);
+
         return JSON.stringify({
+          period: { start: startDate, end: endDate },
           total_billed: totalBilled,
-          total_received: totalPaid,
+          total_received: totalReceived,
           total_pending: totalPending,
           total_expenses: totalExpenses,
-          balance: totalPaid - totalExpenses,
+          balance: totalReceived - totalExpenses,
           total_sales_count: sales?.length || 0,
         });
       }
