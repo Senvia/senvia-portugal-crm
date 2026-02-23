@@ -56,6 +56,7 @@ export default function Login() {
   const [activeTab, setActiveTab] = useState(defaultTab);
   
   // Login form state
+  const [loginCompanyCode, setLoginCompanyCode] = useState('');
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   
@@ -531,7 +532,7 @@ export default function Login() {
                     
                     <div className="space-y-2 mt-3">
                       <Label htmlFor="org-slug" className="text-slate-300">
-                        Endereço da sua empresa
+                        Código da Empresa
                       </Label>
                       <div className="relative">
                         <Input
@@ -563,21 +564,6 @@ export default function Login() {
                       )}
                     </div>
                     
-                    <div className="space-y-2 mt-3">
-                      <Label htmlFor="company-code-display" className="text-slate-300">
-                        Código da Empresa
-                      </Label>
-                      <Input
-                        id="company-code-display"
-                        type="text"
-                        value={organizationSlug || ''}
-                        readOnly
-                        className="bg-slate-800/50 border-slate-700 text-slate-300 font-mono cursor-not-allowed"
-                      />
-                      <p className="text-xs text-amber-400">
-                        ⚠️ Anote este código — será necessário para fazer login
-                      </p>
-                    </div>
                     
                   </div>
 
