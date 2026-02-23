@@ -1,4 +1,4 @@
-import { Mail, Send, BarChart3, ArrowRight, Users } from "lucide-react";
+import { Mail, Send, BarChart3, ArrowRight, Users, Zap } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,6 +25,13 @@ const modules = [
     description: "Gira listas de contactos e importe ficheiros XLSX/CSV",
     icon: Users,
     href: "/marketing/lists",
+    available: true,
+  },
+  {
+    title: "Automações",
+    description: "Configure emails automáticos baseados em gatilhos e eventos",
+    icon: Zap,
+    href: "/marketing/automations",
     available: true,
   },
   {

@@ -14,6 +14,67 @@ export type Database = {
   }
   public: {
     Tables: {
+      automation_queue: {
+        Row: {
+          automation_id: string
+          created_at: string
+          id: string
+          organization_id: string
+          recipient_email: string
+          recipient_name: string | null
+          scheduled_for: string
+          status: string
+          template_id: string
+          variables: Json | null
+        }
+        Insert: {
+          automation_id: string
+          created_at?: string
+          id?: string
+          organization_id: string
+          recipient_email: string
+          recipient_name?: string | null
+          scheduled_for: string
+          status?: string
+          template_id: string
+          variables?: Json | null
+        }
+        Update: {
+          automation_id?: string
+          created_at?: string
+          id?: string
+          organization_id?: string
+          recipient_email?: string
+          recipient_name?: string | null
+          scheduled_for?: string
+          status?: string
+          template_id?: string
+          variables?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_queue_automation_id_fkey"
+            columns: ["automation_id"]
+            isOneToOne: false
+            referencedRelation: "email_automations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_queue_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_queue_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "email_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bank_account_transactions: {
         Row: {
           amount: number
@@ -845,6 +906,72 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_automations: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          delay_minutes: number
+          id: string
+          is_active: boolean
+          last_triggered_at: string | null
+          name: string
+          organization_id: string
+          recipient_type: string
+          template_id: string
+          total_triggered: number
+          trigger_config: Json | null
+          trigger_type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          delay_minutes?: number
+          id?: string
+          is_active?: boolean
+          last_triggered_at?: string | null
+          name: string
+          organization_id: string
+          recipient_type?: string
+          template_id: string
+          total_triggered?: number
+          trigger_config?: Json | null
+          trigger_type: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          delay_minutes?: number
+          id?: string
+          is_active?: boolean
+          last_triggered_at?: string | null
+          name?: string
+          organization_id?: string
+          recipient_type?: string
+          template_id?: string
+          total_triggered?: number
+          trigger_config?: Json | null
+          trigger_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_automations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_automations_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "email_templates"
             referencedColumns: ["id"]
           },
         ]
