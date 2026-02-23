@@ -608,8 +608,20 @@ serve(async (req) => {
       }
     }
 
+    // ── Inject current date/time (Lisbon timezone) ──
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('pt-PT', { 
+      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+      timeZone: 'Europe/Lisbon' 
+    });
+    const timeStr = now.toLocaleTimeString('pt-PT', { 
+      hour: '2-digit', minute: '2-digit',
+      timeZone: 'Europe/Lisbon' 
+    });
+    const dateContext = `\n\nDATA E HORA ATUAL: ${dateStr}, ${timeStr} (hora de Lisboa). Usa SEMPRE esta data como referência temporal. "Este mês" = mês atual desta data. "Hoje" = esta data. "Esta semana" = semana atual desta data.`;
+
     // ── Build messages ──
-    const systemContent = SYSTEM_PROMPT + systemPromptExtra + (hasDataAccess ? "" : "\n\nNOTA: O utilizador não está autenticado ou sem organização. Não tens acesso a dados da BD. Responde apenas com conhecimento geral do sistema.");
+    const systemContent = SYSTEM_PROMPT + dateContext + systemPromptExtra + (hasDataAccess ? "" : "\n\nNOTA: O utilizador não está autenticado ou sem organização. Não tens acesso a dados da BD. Responde apenas com conhecimento geral do sistema.");
     const allMessages = [
       { role: "system", content: systemContent },
       ...messages,
