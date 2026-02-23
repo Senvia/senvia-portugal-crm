@@ -158,10 +158,11 @@ serve(async (req) => {
 
     console.log("Starting fidelization alerts check...");
 
-    // Get all organizations with their settings
+    // Get only telecom organizations with their settings
     const { data: organizations, error: orgsError } = await supabase
       .from('organizations')
-      .select('id, name, fidelization_alert_days, fidelization_create_event, fidelization_event_time, fidelization_email_enabled, fidelization_email, brevo_api_key, brevo_sender_email');
+      .select('id, name, niche, fidelization_alert_days, fidelization_create_event, fidelization_event_time, fidelization_email_enabled, fidelization_email, brevo_api_key, brevo_sender_email')
+      .eq('niche', 'telecom');
 
     if (orgsError) {
       throw new Error(`Error fetching organizations: ${orgsError.message}`);
