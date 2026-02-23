@@ -10,6 +10,7 @@ import { PWAInstallButton } from "@/components/pwa/PWAInstallButton";
 
 // Pages
 import Login from "./pages/Login";
+import Landing from "./pages/Landing";
 import Dashboard from "./pages/Dashboard";
 import Leads from "./pages/Leads";
 import Clients from "./pages/Clients";
@@ -59,7 +60,8 @@ const App = () => (
           <PWAInstallButton />
           <Routes>
             {/* Public Routes */}
-            <Route path="/" element={<Login />} />
+            <Route path="/" element={<Landing />} />
+            <Route path="/login" element={<Login />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/f/:slug" element={<PublicLeadForm />} />
             <Route path="/f/:slug/:formSlug" element={<PublicLeadForm />} />
