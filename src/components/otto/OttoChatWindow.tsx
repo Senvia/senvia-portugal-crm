@@ -55,8 +55,8 @@ export function OttoChatWindow({ onClose }: OttoChatWindowProps) {
       transition={{ duration: 0.2 }}
       className={
         isMobile
-          ? "fixed inset-0 z-[60] bg-background flex flex-col"
-          : "fixed bottom-20 right-4 z-[60] w-[380px] h-[520px] bg-background border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+          ? "fixed inset-0 z-[9999] bg-background flex flex-col"
+          : "fixed bottom-20 right-4 z-[9999] w-[380px] h-[520px] bg-background border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden"
       }
     >
       {/* Header */}

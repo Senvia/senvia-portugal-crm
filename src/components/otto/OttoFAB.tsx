@@ -41,7 +41,8 @@ export function OttoFAB() {
         <motion.div
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
-          className={`fixed z-[60] ${
+          data-otto-fab
+          className={`fixed z-[9999] ${
             isMobile ? "bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4" : "bottom-6 right-6"
           }`}
         >
