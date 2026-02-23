@@ -107,6 +107,7 @@ serve(async (req: Request): Promise<Response> => {
             body: {
               organizationId: organization_id,
               templateId: automation.template_id,
+              automationId: automation.id,
               recipients: [{
                 email: recipient.email,
                 name: recipient.name || '',

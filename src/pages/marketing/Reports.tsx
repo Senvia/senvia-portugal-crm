@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowLeft, Mail, Eye, MousePointer, AlertTriangle, Loader2, Send, CheckCircle, ShieldAlert, Ban, RefreshCw } from "lucide-react";
+import { ArrowLeft, Mail, Eye, MousePointer, AlertTriangle, Loader2, Send, CheckCircle, ShieldAlert, Ban, RefreshCw, Bot, Megaphone } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
@@ -10,22 +10,54 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useEmailStats } from "@/hooks/useEmailStats";
 import { useCampaigns } from "@/hooks/useCampaigns";
+import { useAutomations } from "@/hooks/useAutomations";
 import { EMAIL_SEND_STATUS_LABELS, EMAIL_SEND_STATUS_STYLES, type EmailSendStatus } from "@/types/marketing";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
 import { format } from "date-fns";
 import { useQueryClient } from "@tanstack/react-query";
 
 type Period = '7d' | '30d' | '90d';
+type SourceFilter = 'all' | 'campaign' | 'automation';
 
 export default function Reports() {
   const [period, setPeriod] = useState<Period>('30d');
-  const [campaignId, setCampaignId] = useState<string | null>(null);
-  const { data: stats, isLoading } = useEmailStats(period, campaignId);
+  const [source, setSource] = useState<SourceFilter>('all');
+  const [sourceId, setSourceId] = useState<string | null>(null);
+
+  const { data: stats, isLoading } = useEmailStats(period, source, sourceId);
   const { data: campaigns } = useCampaigns();
+  const { automations } = useAutomations();
   const queryClient = useQueryClient();
+
+  const handleSourceChange = (v: SourceFilter) => {
+    setSource(v);
+    setSourceId(null);
+  };
 
   const handleRefresh = () => {
     queryClient.invalidateQueries({ queryKey: ['email-stats'] });
+  };
+
+  const getOriginLabel = (event: any) => {
+    if (event.campaign_id) {
+      const camp = campaigns?.find((c: any) => c.id === event.campaign_id);
+      return (
+        <div className="flex items-center gap-1.5">
+          <Megaphone className="h-3 w-3 text-blue-500" />
+          <span className="truncate max-w-[120px]">{camp?.name || 'Campanha'}</span>
+        </div>
+      );
+    }
+    if ((event as any).automation_id) {
+      const auto = automations?.find((a: any) => a.id === (event as any).automation_id);
+      return (
+        <div className="flex items-center gap-1.5">
+          <Bot className="h-3 w-3 text-purple-500" />
+          <span className="truncate max-w-[120px]">{auto?.name || 'Automação'}</span>
+        </div>
+      );
+    }
+    return <span className="text-muted-foreground">Manual</span>;
   };
 
   const metrics = stats ? [
@@ -73,17 +105,45 @@ export default function Reports() {
 
         {/* Filters */}
         <div className="flex items-center gap-3 flex-wrap">
-          <Select value={campaignId || 'all'} onValueChange={(v) => setCampaignId(v === 'all' ? null : v)}>
-            <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="Todas as campanhas" />
+          <Select value={source} onValueChange={(v) => handleSourceChange(v as SourceFilter)}>
+            <SelectTrigger className="w-[160px]">
+              <SelectValue placeholder="Fonte" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Todas as campanhas</SelectItem>
-              {campaigns?.map(c => (
-                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-              ))}
+              <SelectItem value="all">Todos</SelectItem>
+              <SelectItem value="campaign">Campanhas</SelectItem>
+              <SelectItem value="automation">Automações</SelectItem>
             </SelectContent>
           </Select>
+
+          {source === 'campaign' && (
+            <Select value={sourceId || 'all'} onValueChange={(v) => setSourceId(v === 'all' ? null : v)}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Todas as campanhas" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas as campanhas</SelectItem>
+                {campaigns?.map((c: any) => (
+                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
+          {source === 'automation' && (
+            <Select value={sourceId || 'all'} onValueChange={(v) => setSourceId(v === 'all' ? null : v)}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Todas as automações" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas as automações</SelectItem>
+                {automations?.map((a: any) => (
+                  <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
           <Tabs value={period} onValueChange={(v) => setPeriod(v as Period)}>
             <TabsList>
               <TabsTrigger value="7d">7 dias</TabsTrigger>
@@ -177,6 +237,7 @@ export default function Reports() {
                         <TableRow>
                           <TableHead>Destinatário</TableHead>
                           <TableHead className="hidden md:table-cell">Email</TableHead>
+                          <TableHead>Origem</TableHead>
                           <TableHead>Estado</TableHead>
                           <TableHead className="hidden md:table-cell">Enviado</TableHead>
                           <TableHead className="hidden lg:table-cell">Aberto</TableHead>
@@ -192,6 +253,7 @@ export default function Reports() {
                             <TableCell className="hidden md:table-cell text-muted-foreground truncate max-w-[200px]">
                               {event.recipient_email}
                             </TableCell>
+                            <TableCell>{getOriginLabel(event)}</TableCell>
                             <TableCell>{getStatusBadge(event.status)}</TableCell>
                             <TableCell className="hidden md:table-cell text-muted-foreground text-xs">
                               {event.sent_at ? format(new Date(event.sent_at), "dd/MM HH:mm") : '—'}
