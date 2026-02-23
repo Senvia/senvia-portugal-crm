@@ -481,11 +481,94 @@ serve(async (req) => {
     }
 
     const hasDataAccess = !!userId && !!orgId;
-    const toolsForModel = hasDataAccess ? TOOLS : [];
+
+    // ── Fetch user permissions for tool filtering ──
+    const TOOL_PERMISSION_MAP: Record<string, { module: string; subarea: string; action: string }> = {
+      search_clients:       { module: "clients",   subarea: "list",      action: "view" },
+      get_client_details:   { module: "clients",   subarea: "list",      action: "view" },
+      search_leads:         { module: "leads",     subarea: "kanban",    action: "view" },
+      search_invoices:      { module: "finance",   subarea: "invoices",  action: "view" },
+      search_sales:         { module: "sales",     subarea: "sales",     action: "view" },
+      search_proposals:     { module: "proposals", subarea: "proposals", action: "view" },
+      get_sale_details:     { module: "sales",     subarea: "sales",     action: "view" },
+      get_pipeline_summary: { module: "leads",     subarea: "kanban",    action: "view" },
+      get_finance_summary:  { module: "finance",   subarea: "summary",   action: "view" },
+      get_upcoming_events:  { module: "calendar",  subarea: "events",    action: "view" },
+      search_credit_notes:  { module: "finance",   subarea: "invoices",  action: "view" },
+    };
+
+    function canUseTool(toolName: string, permissions: any, isAdmin: boolean): boolean {
+      if (isAdmin) return true;
+      const req = TOOL_PERMISSION_MAP[toolName];
+      if (!req) return true; // tools not in map are always allowed
+      if (!permissions) return false;
+      const mod = permissions[req.module];
+      if (!mod?.subareas) return false;
+      const sub = mod.subareas[req.subarea];
+      if (!sub) return false;
+      return sub[req.action] === true;
+    }
+
+    let userPermissions: Record<string, any> | null = null;
+    let isAdminUser = false;
+
+    if (hasDataAccess) {
+      // Check admin/super_admin role
+      const { data: adminRole } = await supabaseAdmin
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId!)
+        .in("role", ["admin", "super_admin"]);
+
+      isAdminUser = !!(adminRole && adminRole.length > 0);
+
+      if (!isAdminUser) {
+        const { data: member } = await supabaseAdmin
+          .from("organization_members")
+          .select("profile_id")
+          .eq("user_id", userId!)
+          .eq("organization_id", orgId!)
+          .maybeSingle();
+
+        if (member?.profile_id) {
+          const { data: profile } = await supabaseAdmin
+            .from("organization_profiles")
+            .select("module_permissions")
+            .eq("id", member.profile_id)
+            .maybeSingle();
+
+          userPermissions = profile?.module_permissions || null;
+        }
+      }
+    }
+
+    const toolsForModel = hasDataAccess
+      ? TOOLS.filter(t => canUseTool(t.function.name, userPermissions, isAdminUser))
+      : [];
+
+    // Build system prompt extra for blocked modules
+    let systemPromptExtra = "";
+    if (hasDataAccess && !isAdminUser) {
+      const blockedModules = Object.entries(TOOL_PERMISSION_MAP)
+        .filter(([name]) => !canUseTool(name, userPermissions, isAdminUser))
+        .map(([_, perm]) => perm.module);
+      const uniqueBlocked = [...new Set(blockedModules)];
+
+      if (uniqueBlocked.length > 0) {
+        const moduleLabels: Record<string, string> = {
+          clients: "Clientes", leads: "Leads", finance: "Finanças",
+          sales: "Vendas", proposals: "Propostas", calendar: "Agenda",
+          marketing: "Marketing", ecommerce: "E-commerce", settings: "Definições",
+        };
+        const blockedLabels = uniqueBlocked.map(m => moduleLabels[m] || m);
+        systemPromptExtra = `\n\nRESTRIÇÕES DO PERFIL: Este utilizador NÃO tem acesso aos módulos: ${blockedLabels.join(', ')}. Se perguntar sobre estes módulos, informa educadamente que não tem permissão para aceder a esses dados e sugere contactar o administrador da organização.`;
+      }
+    }
 
     // ── Build messages ──
+    const systemContent = SYSTEM_PROMPT + systemPromptExtra + (hasDataAccess ? "" : "\n\nNOTA: O utilizador não está autenticado ou sem organização. Não tens acesso a dados da BD. Responde apenas com conhecimento geral do sistema.");
     const allMessages = [
-      { role: "system", content: SYSTEM_PROMPT + (hasDataAccess ? "" : "\n\nNOTA: O utilizador não está autenticado ou sem organização. Não tens acesso a dados da BD. Responde apenas com conhecimento geral do sistema.") },
+      { role: "system", content: systemContent },
       ...messages,
     ];
 
