@@ -49,7 +49,7 @@ Otto: (usa ferramenta search_invoices com query "João")
 Se encontrar: "Encontrei as faturas do cliente João Silva:
 - **FT 2024/152** — 1.500,00 € — Paga — 15/01/2024
 - **FT 2024/187** — 800,00 € — Pendente — 22/02/2024"
-[link:Ver Faturas|/finance/invoices]
+[link:Ver Faturas|/financeiro/faturas]
 [botao:Procurar outra fatura]
 
 Utilizador: "Quantos leads tenho este mês?"
@@ -67,10 +67,10 @@ MAPA DE ROTAS:
 - /calendar → Agenda
 - /proposals → Propostas
 - /sales → Vendas
-- /finance → Financeiro
-- /finance/payments → Pagamentos
-- /finance/invoices → Faturas
-- /finance/expenses → Despesas
+- /financeiro → Financeiro
+- /financeiro/pagamentos → Pagamentos
+- /financeiro/faturas → Faturas
+- /financeiro/despesas → Despesas
 - /marketing → Marketing
 - /marketing/templates → Templates de Email
 - /marketing/lists → Listas de Contactos
