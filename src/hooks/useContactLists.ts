@@ -10,6 +10,7 @@ export interface ContactList {
   description: string | null;
   organization_id: string;
   is_dynamic: boolean | null;
+  is_system: boolean;
   created_at: string;
   updated_at: string;
   member_count: number;
