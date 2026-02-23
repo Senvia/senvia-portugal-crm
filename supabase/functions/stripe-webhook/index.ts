@@ -94,7 +94,7 @@ serve(async (req) => {
         }
 
         // Sync auto-lists: add to plan list, remove from overdue & canceled
-        await syncStripeAutoLists(supabase, email, orgName, "checkout_completed", plan || null);
+        await syncStripeAutoLists(supabase, email, orgName, "checkout_completed", plan || null, isReactivation);
         break;
       }
       case "customer.subscription.updated": {
@@ -174,7 +174,8 @@ async function syncStripeAutoLists(
   email: string,
   name: string,
   eventType: ListEventType,
-  plan: string | null
+  plan: string | null,
+  isReactivation: boolean = false
 ) {
   try {
     logStep("Syncing Stripe auto-lists", { email, eventType, plan });
@@ -204,7 +205,7 @@ async function syncStripeAutoLists(
       .select("id, name")
       .eq("organization_id", SENVIA_AGENCY_ORG_ID)
       .eq("is_system", true)
-      .in("name", ["Plano Starter", "Plano Pro", "Plano Elite", "Pagamento em Atraso", "Subscrição Cancelada", "Clientes em Trial", "Trial Expirado"]);
+      .in("name", ["Plano Starter", "Plano Pro", "Plano Elite", "Pagamento em Atraso", "Subscrição Cancelada", "Clientes em Trial", "Trial Expirado", "Subscrição Reativada"]);
 
     if (!lists || lists.length === 0) {
       logStep("No Stripe auto-lists found");
@@ -219,6 +220,7 @@ async function syncStripeAutoLists(
     const canceledListId = listMap["Subscrição Cancelada"];
     const trialListId = listMap["Clientes em Trial"];
     const trialExpiredListId = listMap["Trial Expirado"];
+    const reactivatedListId = listMap["Subscrição Reativada"];
     const currentPlanListId = plan ? listMap[PLAN_LIST_NAMES[plan]] : null;
 
     // Helper: add to list
@@ -258,6 +260,8 @@ async function syncStripeAutoLists(
         if (canceledListId) await removeFromList(canceledListId);
         if (trialListId) await removeFromList(trialListId);
         if (trialExpiredListId) await removeFromList(trialExpiredListId);
+        // Add to reactivated list if applicable
+        if (isReactivation && reactivatedListId) await addToList(reactivatedListId);
         break;
 
       case "past_due":
@@ -271,6 +275,8 @@ async function syncStripeAutoLists(
         await removeFromLists(planListIds);
         // Remove from overdue
         if (overdueListId) await removeFromList(overdueListId);
+        // Remove from reactivated
+        if (reactivatedListId) await removeFromList(reactivatedListId);
         // Add to canceled
         if (canceledListId) await addToList(canceledListId);
         break;
