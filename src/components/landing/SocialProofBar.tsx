@@ -14,7 +14,7 @@ export function SocialProofBar() {
 
   return (
     <section ref={ref} className="py-10 border-y border-slate-800/50 bg-slate-900/30">
-      <div className="container mx-auto px-4">
+      <div className="container mx-auto px-6 sm:px-8">
         <motion.div
           initial={{ opacity: 0 }}
           animate={inView ? { opacity: 1 } : {}}

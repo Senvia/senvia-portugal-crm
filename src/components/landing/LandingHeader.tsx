@@ -34,7 +34,7 @@ export function LandingHeader() {
           : "bg-transparent"
       }`}
     >
-      <div className="container mx-auto px-4 h-16 flex items-center justify-between">
+      <div className="container mx-auto px-6 sm:px-8 h-16 flex items-center justify-between">
         <Link to="/" className="flex-shrink-0">
           <img
             alt="SENVIA"

@@ -17,7 +17,7 @@ export function HeroSection() {
       {/* Background glow */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[500px] bg-primary/10 rounded-full blur-[140px] pointer-events-none" />
 
-      <div className="container mx-auto px-4 relative">
+      <div className="container mx-auto px-6 sm:px-8 relative">
         <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
           {/* Left - Copy */}
           <motion.div

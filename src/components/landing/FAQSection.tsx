@@ -43,7 +43,7 @@ export function FAQSection() {
 
   return (
     <section id="faq" ref={ref} className="py-16 md:py-24">
-      <div className="container mx-auto px-4">
+      <div className="container mx-auto px-6 sm:px-8">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={inView ? { opacity: 1, y: 0 } : {}}

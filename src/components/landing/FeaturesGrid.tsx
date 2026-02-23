@@ -29,7 +29,7 @@ export function FeaturesGrid() {
 
   return (
     <section ref={ref} className="py-16 md:py-24">
-      <div className="container mx-auto px-4">
+      <div className="container mx-auto px-6 sm:px-8">
         <div className="text-center mb-12">
           <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-4">
             Tudo o que precisa.{" "}
