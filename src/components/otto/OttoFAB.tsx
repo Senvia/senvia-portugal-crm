@@ -34,13 +34,16 @@ export function OttoFAB() {
   };
 
   return createPortal(
-    <>
-      <AnimatePresence>{isOpen && <OttoChatWindow onClose={() => setOpen(false)} />}</AnimatePresence>
+    <div style={{ pointerEvents: 'auto' }} className="fixed z-[9999] inset-0 pointer-events-none">
+      <div className="pointer-events-auto">
+        <AnimatePresence>{isOpen && <OttoChatWindow onClose={() => setOpen(false)} />}</AnimatePresence>
+      </div>
 
       {!isOpen && (
         <motion.div
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
+          style={{ pointerEvents: 'auto' }}
           data-otto-fab
           className={`fixed z-[9999] ${
             isMobile ? "bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4" : "bottom-6 right-6"
@@ -82,7 +85,7 @@ export function OttoFAB() {
           </Button>
         </motion.div>
       )}
-    </>,
+    </div>,
     document.body
   );
 }
