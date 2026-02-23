@@ -1,27 +1,53 @@
 
 
-# Fix: Otto Bloqueia Toda a Interface
+# Optimizar Imagem do Otto (Carregamento Lento)
 
 ## Problema
-O wrapper `div` do Otto tem `style={{ pointerEvents: 'auto' }}` E `inset-0` (cobre toda a tela). O inline style tem prioridade sobre a classe `pointer-events-none`, fazendo com que TODO o ecra capture cliques - so o Otto funciona porque esta dentro desse div.
+O ficheiro `otto-mascot.svg` tem aproximadamente **5MB** porque contem dados PNG codificados em base64 dentro do SVG. E utilizado em 4 locais diferentes (FAB, Chat Header, Loading indicator, Quick Actions) em tamanhos muito pequenos (28px a 56px). Carregar 5MB para um icone de 56px e extremamente ineficiente.
 
 ## Solucao
-Remover o `style={{ pointerEvents: 'auto' }}` do wrapper principal. Manter apenas nos elementos filhos (botao FAB e janela de chat) que realmente precisam de receber cliques.
 
-## Alteracao
+### 1. Converter o SVG para PNG optimizado
+- Exportar o SVG actual como PNG em resolucao adequada (112x112px para suportar retina/2x)
+- Comprimir o PNG resultante (ficara com ~10-30KB em vez de 5MB)
+- Guardar como `public/otto-mascot.png`
 
-### Ficheiro: `src/components/otto/OttoFAB.tsx`
-- Remover `style={{ pointerEvents: 'auto' }}` do div wrapper raiz do portal
-- Manter `pointer-events-none` no wrapper (para nao bloquear nada)
-- Os filhos ja tem `pointer-events-auto` (via classe ou inline style), entao continuam clicaveis
+### 2. Actualizar as importacoes nos componentes
 
+**Ficheiros a alterar:**
+- `src/components/otto/OttoFAB.tsx` - mudar import de SVG para PNG
+- `src/components/otto/OttoChatWindow.tsx` - mudar import de SVG para PNG
+- `src/components/otto/OttoQuickActions.tsx` - verificar se usa o mascot
+
+**Alteracao em cada ficheiro:**
 ```text
-// ANTES (quebrado):
-<div style={{ pointerEvents: 'auto' }} className="fixed z-[9999] inset-0 pointer-events-none">
+// De:
+import ottoMascot from "@/assets/otto-mascot.svg";
 
-// DEPOIS (correcto):
-<div className="fixed z-[9999] inset-0 pointer-events-none">
+// Para:
+import ottoMascot from "@/assets/otto-mascot.png";
 ```
 
-Assim o wrapper e transparente a cliques, mas o botao FAB e a janela de chat continuam interativos - mesmo com modais abertos, porque os filhos directos forcam `pointer-events: auto` via inline style.
+### 3. Alternativa (sem converter manualmente)
+Se nao for possivel converter externamente, podemos:
+- Mover o SVG para `/public/otto-mascot.svg` (para nao ser inlined pelo bundler)
+- Referenciar como URL estatico em vez de import
+- Isto evita que o Vite tente processar/inline o ficheiro gigante
 
+```text
+// De:
+import ottoMascot from "@/assets/otto-mascot.svg";
+
+// Para (referencia estatica):
+const ottoMascot = "/otto-mascot.svg";
+```
+
+Esta abordagem e mais rapida de implementar e resolve o problema imediatamente, pois o ficheiro sera servido como asset estatico em vez de ser embutido no bundle JS.
+
+## Recomendacao
+A **alternativa 3** (mover para `/public/`) e a solucao mais rapida e eficaz. O ideal seria tambem optimizar a imagem (alternativa 1+2), mas isso requer ferramentas externas.
+
+## Impacto
+- Reducao do tamanho do bundle JS (o SVG de 5MB esta a ser inlined)
+- Carregamento muito mais rapido do Otto
+- O browser pode fazer cache do ficheiro separadamente
