@@ -1,47 +1,37 @@
 
-
-# Corrigir Links Falsos do Otto
+# Injetar Data e Hora Atual no Otto
 
 ## Problema
-O Otto envia links de navegacao que nao existem na aplicacao. O mapa de rotas no system prompt tem caminhos incorretos que nao correspondem as rotas reais do React Router.
-
-**Rotas erradas no Otto vs rotas reais:**
-
-| Otto envia | Rota real |
-|---|---|
-| /finance | /financeiro |
-| /finance/payments | /financeiro/pagamentos |
-| /finance/invoices | /financeiro/faturas |
-| /finance/expenses | /financeiro/despesas |
-
-As restantes rotas (/dashboard, /leads, /clients, /calendar, /proposals, /sales, /marketing/*, /ecommerce, /settings) estao corretas.
+O system prompt do Otto nao inclui a data atual. O modelo assume que estamos em 2024 (data do treino). Quando o utilizador pergunta "quantos leads tenho este mes?" ou qualquer pergunta temporal, o Otto nao sabe que mes/ano e.
 
 ## Solucao
 
-### 1. Corrigir o MAPA DE ROTAS no system prompt
+Injetar a data e hora real de Portugal no momento da mensagem, adicionando-a ao system prompt dinamicamente.
 
-No ficheiro `supabase/functions/otto-chat/index.ts`, atualizar as 4 rotas de financeiro:
+### Alteracao no ficheiro `supabase/functions/otto-chat/index.ts`
 
+Na zona onde se constroi o `systemContent` (linha ~612), adicionar a data atual formatada em PT-PT antes de enviar ao modelo:
+
+```typescript
+// Gerar data atual em PT-PT (fuso horario de Lisboa)
+const now = new Date();
+const dateStr = now.toLocaleDateString('pt-PT', { 
+  weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+  timeZone: 'Europe/Lisbon' 
+});
+const timeStr = now.toLocaleTimeString('pt-PT', { 
+  hour: '2-digit', minute: '2-digit',
+  timeZone: 'Europe/Lisbon' 
+});
+const dateContext = `\n\nDATA E HORA ATUAL: ${dateStr}, ${timeStr} (hora de Lisboa). Usa SEMPRE esta data como referencia temporal. "Este mes" = mes atual desta data. "Hoje" = esta data.`;
+
+const systemContent = SYSTEM_PROMPT + dateContext + systemPromptExtra + ...;
 ```
-- /financeiro --> Financeiro
-- /financeiro/pagamentos --> Pagamentos
-- /financeiro/faturas --> Faturas
-- /financeiro/despesas --> Despesas
-```
-
-Remover as rotas antigas `/finance`, `/finance/payments`, `/finance/invoices`, `/finance/expenses`.
-
-### 2. Corrigir os exemplos no system prompt
-
-Os exemplos de interacao tambem usam `[link:Ver Faturas|/finance/invoices]` -- corrigir para `[link:Ver Faturas|/financeiro/faturas]`.
-
-### 3. Corrigir o OttoQuickActions.tsx
-
-O mapeamento `PAGE_ACTIONS` usa `/finance` como chave. Alterar para `/financeiro` para que as acoes rapidas aparecam corretamente quando o utilizador esta na pagina de financas.
-
-### Ficheiros a alterar
-1. `supabase/functions/otto-chat/index.ts` -- mapa de rotas + exemplos no system prompt
-2. `src/components/otto/OttoQuickActions.tsx` -- chave `/finance` para `/financeiro`
 
 ### Resultado
-Todos os links enviados pelo Otto apontarao para paginas reais da aplicacao.
+- O Otto sabera sempre a data e hora real
+- Perguntas como "leads deste mes", "vendas de hoje", "faturas desta semana" funcionarao corretamente
+- O fuso horario sera sempre Portugal (Europe/Lisbon)
+
+### Ficheiro a alterar
+- `supabase/functions/otto-chat/index.ts` -- injecao dinamica da data no system prompt
