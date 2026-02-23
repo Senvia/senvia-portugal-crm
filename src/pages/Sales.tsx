@@ -20,7 +20,7 @@ import { pt } from "date-fns/locale";
 import type { DateRange } from "react-day-picker";
 import type { SaleWithDetails, SaleStatus } from "@/types/sales";
 import { SALE_STATUS_LABELS, SALE_STATUS_COLORS, SALE_STATUSES } from "@/types/sales";
-import { AppLayout } from "@/components/layout/AppLayout";
+
 import { useAuth } from "@/contexts/AuthContext";
 import { useTelecomSaleMetrics } from "@/hooks/useTelecomSaleMetrics";
 
@@ -110,8 +110,7 @@ export default function Sales() {
   }, [filteredSales]);
 
   return (
-    <AppLayout userName={profile?.full_name} organizationName={organization?.name}>
-      <div className="flex flex-col min-h-screen bg-background">
+    <div className="flex flex-col min-h-screen bg-background">
         {/* Header */}
       <div className="p-4 md:p-6 border-b border-border/50">
         <div className="flex items-center justify-between gap-3">
@@ -309,7 +308,6 @@ export default function Sales() {
             setPendingSaleId(saleId);
           }}
         />
-      </div>
-    </AppLayout>
+    </div>
   );
 }

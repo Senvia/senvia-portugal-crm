@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { usePersistedState } from "@/hooks/usePersistedState";
-import { AppLayout } from "@/components/layout/AppLayout";
+
 import { ResponsiveKanban } from "@/components/leads/ResponsiveKanban";
 import { LeadsTableView } from "@/components/leads/LeadsTableView";
 import { LeadDetailsModal } from "@/components/leads/LeadDetailsModal";
@@ -426,8 +426,7 @@ export default function Leads() {
   };
 
   return (
-    <AppLayout userName={profile?.full_name} organizationName={organization?.name}>
-      <div className="p-4 lg:p-8">
+    <div className="p-4 lg:p-8">
         <div className="mb-4 lg:mb-6 space-y-3 lg:space-y-4">
           {/* Linha 1: Título + Pesquisa */}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -725,7 +724,6 @@ export default function Leads() {
           leadName={pendingLead?.name || ""}
           onConfirm={handleLostConfirm}
         />
-      </div>
-    </AppLayout>
+    </div>
   );
 }

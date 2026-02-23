@@ -1,6 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
 import { usePersistedState } from "@/hooks/usePersistedState";
-import { AppLayout } from "@/components/layout/AppLayout";
 import { useAuth } from "@/contexts/AuthContext";
 import { SEO } from "@/components/SEO";
 import { Button } from "@/components/ui/button";
@@ -32,7 +31,6 @@ export default function Clients() {
   const [showDetailsDrawer, setShowDetailsDrawer] = useState(false);
   const [filters, setFilters] = usePersistedState<ClientFiltersState>("clients-filters-v1", defaultFilters);
 
-  // Bulk selection state
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showAssignModal, setShowAssignModal] = useState(false);
 
@@ -45,7 +43,6 @@ export default function Clients() {
     if (!clients) return [];
     
     return clients.filter((client) => {
-      // Text search
       if (search.trim()) {
         const searchLower = search.toLowerCase();
         const matchesSearch = 
@@ -59,17 +56,14 @@ export default function Clients() {
         if (!matchesSearch) return false;
       }
 
-      // Status filter
       if (filters.status !== 'all' && client.status !== filters.status) {
         return false;
       }
 
-      // Source filter
       if (filters.source !== 'all' && client.source !== filters.source) {
         return false;
       }
 
-      // Date range filter
       if (filters.dateFrom || filters.dateTo) {
         const clientDate = parseISO(client.created_at);
         const from = filters.dateFrom ? startOfDay(filters.dateFrom) : new Date(0);
@@ -103,7 +97,6 @@ export default function Clients() {
     setFilters(defaultFilters);
   };
 
-  // Clear selection when filters change
   useEffect(() => {
     setSelectedIds([]);
   }, [search, filters]);
@@ -113,7 +106,6 @@ export default function Clients() {
     setShowAssignModal(false);
   };
 
-  // Export handlers
   const handleExportCsv = () => {
     const selectedClients = filteredClients.filter(c => selectedIds.includes(c.id));
     const data = mapClientsForExport(selectedClients);
@@ -129,7 +121,7 @@ export default function Clients() {
   };
 
   return (
-    <AppLayout userName={profile?.full_name} organizationName={organization?.name}>
+    <>
       <SEO 
         title={`${labels.plural} | Senvia OS`}
         description={`Gestão de ${labels.plural.toLowerCase()} CRM`}
@@ -276,7 +268,6 @@ export default function Clients() {
         onEdit={handleEdit}
       />
 
-      {/* Assign Team Member Modal */}
       <AssignTeamMemberModal
         open={showAssignModal}
         onOpenChange={setShowAssignModal}
@@ -284,6 +275,6 @@ export default function Clients() {
         entityType="clients"
         onSuccess={handleAssignSuccess}
       />
-    </AppLayout>
+    </>
   );
 }

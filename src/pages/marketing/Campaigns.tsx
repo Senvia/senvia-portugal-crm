@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ArrowLeft, Plus, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
-import { AppLayout } from "@/components/layout/AppLayout";
+
 import { Button } from "@/components/ui/button";
 import { CampaignsTable } from "@/components/marketing/CampaignsTable";
 import { CreateCampaignModal } from "@/components/marketing/CreateCampaignModal";
@@ -25,8 +25,7 @@ export default function Campaigns() {
   };
 
   return (
-    <AppLayout>
-      <div className="space-y-6 p-4 md:p-6 pb-24 md:pb-6">
+    <div className="space-y-6 p-4 md:p-6 pb-24 md:pb-6">
         {/* Header */}
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -70,7 +69,6 @@ export default function Campaigns() {
           open={!!selectedCampaign}
           onOpenChange={(open) => !open && setSelectedCampaign(null)}
         />
-      </div>
-    </AppLayout>
+    </div>
   );
 }

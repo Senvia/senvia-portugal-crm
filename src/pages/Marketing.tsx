@@ -1,6 +1,6 @@
 import { Mail, Send, BarChart3, ArrowRight, Users } from "lucide-react";
 import { Link } from "react-router-dom";
-import { AppLayout } from "@/components/layout/AppLayout";
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -38,8 +38,7 @@ const modules = [
 
 export default function Marketing() {
   return (
-    <AppLayout>
-      <div className="space-y-6 p-4 md:p-6 pb-24 md:pb-6">
+    <div className="space-y-6 p-4 md:p-6 pb-24 md:pb-6">
         {/* Header */}
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Marketing</h1>
@@ -96,7 +95,6 @@ export default function Marketing() {
             </Card>
           ))}
         </div>
-      </div>
-    </AppLayout>
+    </div>
   );
 }

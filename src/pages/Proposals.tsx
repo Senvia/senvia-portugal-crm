@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { usePersistedState } from "@/hooks/usePersistedState";
-import { AppLayout } from "@/components/layout/AppLayout";
+
 import { useAuth } from "@/contexts/AuthContext";
 import { useProposals, useUpdateProposal } from '@/hooks/useProposals';
 import { useProposalsRealtime } from '@/hooks/useRealtimeSubscription';
@@ -73,7 +73,7 @@ export default function Proposals() {
     .reduce((sum, p) => sum + Number(p.total_value), 0);
 
   return (
-    <AppLayout userName={profile?.full_name} organizationName={organization?.name}>
+    <>
       <div className="p-4 sm:p-6 lg:p-8 space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -238,6 +238,6 @@ export default function Proposals() {
           onOpenChange={(open) => !open && setSelectedProposal(null)}
         />
       )}
-    </AppLayout>
+    </>
   );
 }

@@ -3,16 +3,15 @@ import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SEO } from "@/components/SEO";
-import { AppLayout } from "@/components/layout/AppLayout";
-import { useAuth } from "@/contexts/AuthContext";
+
+
 import { ProductsTable } from "@/components/ecommerce/ProductsTable";
 import { CategoriesTable } from "@/components/ecommerce/CategoriesTable";
 
 export default function EcommerceProducts() {
-  const { profile, organization } = useAuth();
 
   return (
-    <AppLayout userName={profile?.full_name} organizationName={organization?.name}>
+    <>
       <SEO title="Produtos | E-commerce | Senvia OS" description="Gerir catálogo de produtos" />
 
       <div className="space-y-6 p-4 md:p-6 pb-24 md:pb-6">
@@ -41,6 +40,6 @@ export default function EcommerceProducts() {
           </TabsContent>
         </Tabs>
       </div>
-    </AppLayout>
+    </>
   );
 }
