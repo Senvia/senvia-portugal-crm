@@ -13,12 +13,14 @@ export interface EmailAutomation {
   delay_minutes: number;
   is_active: boolean;
   recipient_type: string;
+  list_id: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
   last_triggered_at: string | null;
   total_triggered: number;
   template?: { id: string; name: string; subject: string };
+  list?: { id: string; name: string } | null;
 }
 
 export interface AutomationQueueItem {
@@ -43,11 +45,7 @@ export const TRIGGER_TYPES = [
   { value: 'proposal_created', label: 'Nova Proposta Criada' },
 ] as const;
 
-export const RECIPIENT_TYPES = [
-  { value: 'lead', label: 'Lead' },
-  { value: 'client', label: 'Cliente' },
-  { value: 'assigned_user', label: 'Utilizador Atribuído' },
-] as const;
+// RECIPIENT_TYPES removed — automations now target lists (list_id)
 
 export const DELAY_OPTIONS = [
   { value: 0, label: 'Imediato' },
@@ -72,7 +70,7 @@ export function useAutomations() {
       if (!organization?.id) return [];
       const { data, error } = await supabase
         .from('email_automations' as any)
-        .select('*, template:email_templates(id, name, subject)')
+        .select('*, template:email_templates(id, name, subject), list:client_lists(id, name)')
         .eq('organization_id', organization.id)
         .order('created_at', { ascending: false });
       if (error) throw error;
@@ -104,7 +102,7 @@ export function useAutomations() {
       trigger_config: Record<string, string>;
       template_id: string;
       delay_minutes: number;
-      recipient_type: string;
+      list_id: string;
     }) => {
       if (!organization?.id) throw new Error('Sem organização');
       const { data: userData } = await supabase.auth.getUser();

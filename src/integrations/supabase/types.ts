@@ -918,6 +918,7 @@ export type Database = {
           id: string
           is_active: boolean
           last_triggered_at: string | null
+          list_id: string | null
           name: string
           organization_id: string
           recipient_type: string
@@ -934,6 +935,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           last_triggered_at?: string | null
+          list_id?: string | null
           name: string
           organization_id: string
           recipient_type?: string
@@ -950,6 +952,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           last_triggered_at?: string | null
+          list_id?: string | null
           name?: string
           organization_id?: string
           recipient_type?: string
@@ -960,6 +963,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "email_automations_list_id_fkey"
+            columns: ["list_id"]
+            isOneToOne: false
+            referencedRelation: "client_lists"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "email_automations_organization_id_fkey"
             columns: ["organization_id"]
