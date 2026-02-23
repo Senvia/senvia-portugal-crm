@@ -16,7 +16,7 @@ export function TrustSection() {
 
   return (
     <section ref={ref} className="py-12 md:py-16 bg-slate-900/50 border-y border-slate-800/50">
-      <div className="container mx-auto px-4">
+      <div className="container mx-auto px-6 sm:px-8">
         <motion.div
           initial={{ opacity: 0 }}
           animate={inView ? { opacity: 1 } : {}}

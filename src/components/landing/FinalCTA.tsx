@@ -12,7 +12,7 @@ export function FinalCTA() {
 
   return (
     <section ref={ref} className="py-16 md:py-24 bg-gradient-to-br from-primary/10 via-slate-900 to-slate-950">
-      <div className="container mx-auto px-4 text-center">
+      <div className="container mx-auto px-6 sm:px-8 text-center">
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           animate={inView ? { opacity: 1, y: 0 } : {}}
