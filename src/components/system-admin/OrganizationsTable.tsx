@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { format, differenceInDays } from "date-fns";
 import { pt } from "date-fns/locale";
-import { LogIn } from "lucide-react";
+import { LogIn, CheckCircle2, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -110,6 +110,7 @@ export function OrganizationsTable({
                 <TableHead>Organização</TableHead>
                 <TableHead>Plano</TableHead>
                 <TableHead>Estado</TableHead>
+                <TableHead>Stripe Ativo</TableHead>
                 <TableHead className="hidden sm:table-cell">Stripe</TableHead>
                 <TableHead className="hidden sm:table-cell">Membros</TableHead>
                 <TableHead className="hidden md:table-cell">Trial</TableHead>
@@ -120,7 +121,7 @@ export function OrganizationsTable({
             <TableBody>
               {filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
                     Nenhuma organização encontrada.
                   </TableCell>
                 </TableRow>
@@ -152,6 +153,13 @@ export function OrganizationsTable({
                         <Badge className={cn("text-[10px]", config.className)}>
                           {config.label}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {stripeInfo?.has_stripe_subscription && stripeInfo.stripe_status === "active" ? (
+                          <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                        ) : (
+                          <XCircle className="h-4 w-4 text-muted-foreground" />
+                        )}
                       </TableCell>
                       <TableCell className="hidden sm:table-cell">
                         {stripeInfo?.has_stripe_subscription ? (
