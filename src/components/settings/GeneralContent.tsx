@@ -15,6 +15,8 @@ interface GeneralContentProps {
     name: string;
     plan: string | null;
     slug?: string;
+    trial_ends_at?: string;
+    billing_exempt?: boolean;
   } | null;
   profile: {
     full_name: string;
@@ -45,6 +47,13 @@ export const GeneralContent = ({
 }: GeneralContentProps) => {
   const { toast } = useToast();
   const [copiedSlug, setCopiedSlug] = useState(false);
+
+  const isOnTrial = (() => {
+    if (!organization) return false;
+    if (organization.billing_exempt) return false;
+    if (!organization.trial_ends_at) return false;
+    return new Date(organization.trial_ends_at).getTime() > Date.now();
+  })();
 
   const handleCopySlug = async () => {
     if (!organization?.slug) return;
@@ -92,8 +101,8 @@ export const GeneralContent = ({
             <div>
               <Label>Plano</Label>
               <div className="flex items-center gap-2 mt-2">
-                <Badge variant={organization?.plan === 'elite' || organization?.plan === 'pro' ? 'default' : 'secondary'}>
-                  {organization?.plan ? PLAN_LABELS[organization.plan as OrganizationPlan] : 'Starter'}
+                <Badge variant={isOnTrial ? 'outline' : (organization?.plan === 'elite' || organization?.plan === 'pro' ? 'default' : 'secondary')}>
+                  {isOnTrial ? 'Trial' : (organization?.plan ? PLAN_LABELS[organization.plan as OrganizationPlan] : 'Starter')}
                 </Badge>
               </div>
             </div>

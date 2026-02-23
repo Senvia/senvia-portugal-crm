@@ -42,9 +42,20 @@ const MODULE_REQUIRED_PLAN: Record<string, string> = {
   ecommerce: 'Elite',
 };
 
+function isOrgOnTrial(org: { trial_ends_at?: string; billing_exempt?: boolean } | null): boolean {
+  if (!org) return false;
+  if ((org as any).billing_exempt) return false;
+  const trialEnd = (org as any).trial_ends_at;
+  if (!trialEnd) return false;
+  return new Date(trialEnd).getTime() > Date.now();
+}
+
 export function useSubscription() {
   const { organization } = useAuth();
-  const planId = organization?.plan || 'starter';
+  
+  // If on trial, use 'elite' features; otherwise use the DB plan
+  const onTrial = isOrgOnTrial(organization as any);
+  const planId = onTrial ? 'elite' : (organization?.plan || 'starter');
 
   const { data: plan, isLoading } = useQuery({
     queryKey: ['subscription-plan', planId],
@@ -54,7 +65,6 @@ export function useSubscription() {
 
       // Fallback: direct SQL via rest if rpc not available
       if (error || !data) {
-        // Try direct fetch from table using raw client
         const res = await fetch(
           `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/subscription_plans?id=eq.${planId}&select=*`,
           {
@@ -90,7 +100,7 @@ export function useSubscription() {
       } as SubscriptionPlan;
     },
     enabled: !!organization,
-    staleTime: 1000 * 60 * 10, // 10 min cache
+    staleTime: 1000 * 60 * 10,
   });
 
   const currentPlan = plan || DEFAULT_PLAN;
@@ -120,6 +130,7 @@ export function useSubscription() {
   return {
     plan: currentPlan.id,
     planName: currentPlan.name,
+    onTrial,
     limits: {
       maxUsers: currentPlan.max_users,
       maxForms: currentPlan.max_forms,

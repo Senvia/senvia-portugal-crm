@@ -93,10 +93,6 @@ serve(async (req) => {
     if (customers.data.length === 0) {
     logStep("No Stripe customer found, checking trial");
       const trialResp = buildTrialResponse(orgData);
-      if (orgId && trialResp.on_trial) {
-        await supabaseClient.from('organizations').update({ plan: 'elite' }).eq('id', orgId);
-        logStep("Synced org plan to elite during trial", { orgId });
-      }
       return new Response(JSON.stringify(trialResp), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 200,
@@ -125,10 +121,6 @@ serve(async (req) => {
     if (subscriptions.data.length === 0) {
     logStep("No active/trialing subscription, checking trial");
       const trialResp2 = buildTrialResponse(orgData);
-      if (orgId && trialResp2.on_trial) {
-        await supabaseClient.from('organizations').update({ plan: 'elite' }).eq('id', orgId);
-        logStep("Synced org plan to elite during trial", { orgId });
-      }
       return new Response(JSON.stringify(trialResp2), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 200,
@@ -206,7 +198,7 @@ function buildTrialResponse(orgData: any) {
   if (diffMs > 0) {
     return {
       subscribed: false,
-      plan_id: 'elite',
+      plan_id: null,
       subscription_end: null,
       on_trial: true,
       trial_ends_at: orgData.trial_ends_at,
