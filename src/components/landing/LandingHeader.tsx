@@ -61,7 +61,7 @@ export function LandingHeader() {
             <Link to="/login">Área do Cliente</Link>
           </Button>
           <Button variant="senvia" size="sm" asChild>
-            <Link to="/login">Testar Grátis</Link>
+            <Link to="/login?tab=signup">Testar Grátis</Link>
           </Button>
         </div>
 
@@ -93,7 +93,7 @@ export function LandingHeader() {
                 <Link to="/login">Área do Cliente</Link>
               </Button>
               <Button variant="senvia" className="w-full" asChild>
-                <Link to="/login">Testar Grátis 14 Dias</Link>
+                <Link to="/login?tab=signup">Testar Grátis 14 Dias</Link>
               </Button>
             </div>
           </nav>

@@ -123,7 +123,7 @@ export function PricingSection() {
                 className={`w-full ${!plan.highlighted ? "border-slate-600 text-white hover:bg-slate-700" : ""}`}
                 asChild
               >
-                <Link to="/login">Começar Teste Grátis</Link>
+                <Link to="/login?tab=signup">Começar Teste Grátis</Link>
               </Button>
             </motion.div>
           ))}

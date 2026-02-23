@@ -48,7 +48,7 @@ export function HeroSection() {
 
             <div className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start">
               <Button variant="senvia" size="xl" asChild>
-                <Link to="/login">
+                <Link to="/login?tab=signup">
                   Testar Grátis 14 Dias
                   <ArrowRight className="ml-2 w-5 h-5" />
                 </Link>

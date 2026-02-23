@@ -28,9 +28,6 @@ const signupSchema = z.object({
     .min(2, 'O slug deve ter pelo menos 2 caracteres')
     .max(50, 'O slug deve ter no máximo 50 caracteres')
     .regex(/^[a-z0-9-]+$/, 'O slug só pode conter letras minúsculas, números e hífens'),
-  registrationCode: z.string().refine((val) => val === '4330', {
-    message: 'Código de registo inválido',
-  }),
 }).refine((data) => data.password === data.confirmPassword, {
   message: 'As palavras-passe não coincidem',
   path: ['confirmPassword'],
@@ -72,7 +69,7 @@ export default function Login() {
   const [organizationName, setOrganizationName] = useState('');
   const [organizationSlug, setOrganizationSlug] = useState('');
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
-  const [registrationCode, setRegistrationCode] = useState('');
+  
   
   // Slug availability state
   const [isCheckingSlug, setIsCheckingSlug] = useState(false);
@@ -238,7 +235,6 @@ export default function Login() {
       confirmPassword: signupConfirmPassword,
       organizationName,
       organizationSlug,
-      registrationCode,
     });
     
     if (!result.success) {
@@ -350,9 +346,17 @@ export default function Login() {
 
         <Card className="border-slate-800 bg-slate-900/50 backdrop-blur">
           <CardHeader className="text-center">
-            <CardTitle className="text-white">Aceder à Plataforma</CardTitle>
+            <CardTitle className="text-white">
+              {activeTab === 'signup' ? 'Comece o seu teste grátis' : 'Aceder à Plataforma'}
+            </CardTitle>
             <CardDescription className="text-slate-400">
-              Entre na sua conta ou crie uma nova
+              {activeTab === 'signup' ? (
+                <span className="inline-flex items-center gap-1.5 bg-primary/10 text-primary border border-primary/20 rounded-full px-3 py-1 text-xs font-medium mt-1">
+                  ✨ 14 dias grátis · Sem cartão de crédito
+                </span>
+              ) : (
+                'Entre na sua conta ou crie uma nova'
+              )}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -529,7 +533,7 @@ export default function Login() {
                     
                     <div className="space-y-2 mt-3">
                       <Label htmlFor="org-slug" className="text-slate-300">
-                        Slug (URL da empresa)
+                        Endereço da sua empresa
                       </Label>
                       <div className="relative">
                         <Input
@@ -577,23 +581,6 @@ export default function Login() {
                       </p>
                     </div>
                     
-                    <div className="space-y-2 mt-3">
-                      <Label htmlFor="registration-code" className="text-slate-300">
-                        Código de Registo
-                      </Label>
-                      <Input
-                        id="registration-code"
-                        type="text"
-                        placeholder="Insira o código"
-                        value={registrationCode}
-                        onChange={(e) => setRegistrationCode(e.target.value)}
-                        className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
-                        required
-                      />
-                      <p className="text-xs text-slate-500">
-                        Precisa de um código para se registar. Contacte-nos para obter o seu.
-                      </p>
-                    </div>
                   </div>
 
                   <Button
