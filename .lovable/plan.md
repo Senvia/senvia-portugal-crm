@@ -1,21 +1,61 @@
 
 
-# Gatilho com pesquisa no modal de automacoes
+# Destinatarios de Automacao = Listas de Transmissao
 
-## Problema
-O campo "Gatilho" no modal de criacao de automacoes usa um Select simples (dropdown), sem possibilidade de escrever/pesquisar. O utilizador quer poder filtrar os gatilhos escrevendo.
+## Objetivo
+Alterar o sistema de automacoes para que os destinatarios sejam as **listas de contactos** (listas de transmissao) em vez de destinatarios individuais (lead/cliente/utilizador).
 
-## Solucao
-Substituir o `Select` do campo "Gatilho" pelo componente `SearchableCombobox` que ja existe no projeto (`src/components/ui/searchable-combobox.tsx`). Este componente suporta pesquisa com texto e e consistente com o design do sistema.
+## O que muda
 
-## Alteracoes
+### 1. Base de dados: nova coluna `list_id` na tabela `email_automations`
+- Adicionar coluna `list_id uuid REFERENCES client_lists(id) ON DELETE SET NULL` a tabela `email_automations`.
+- A coluna `recipient_type` deixa de ser usada (pode ficar para retrocompatibilidade, mas sera ignorada).
 
-### Ficheiro: `src/components/marketing/CreateAutomationModal.tsx`
+### 2. Frontend: Modal de criacao (`CreateAutomationModal.tsx`)
+- Remover o campo "Destinatario" com opcoes lead/cliente/utilizador.
+- Substituir por um campo **"Lista de Destinatarios"** que lista as listas de transmissao da organizacao (usando `useContactLists`).
+- Usar `SearchableCombobox` para permitir pesquisa.
+- Guardar o `list_id` na automacao.
 
-- Importar o `SearchableCombobox` e o tipo `ComboboxOption`
-- Converter o array `TRIGGER_TYPES` para o formato `ComboboxOption[]` (com `value` e `label`)
-- Substituir o bloco `Select` do gatilho pelo `SearchableCombobox`
-- Ajustar o `onValueChange` para aceitar `string | null` (o `SearchableCombobox` devolve `null` quando nada esta selecionado)
+### 3. Frontend: Hook `useAutomations.ts`
+- Remover `RECIPIENT_TYPES`.
+- Adicionar `list_id` ao tipo `EmailAutomation` e ao `createAutomation`.
+- Remover `recipient_type` do fluxo de criacao.
 
-A alteracao e isolada a este unico ficheiro e nao afeta nenhum outro componente.
+### 4. Frontend: Tabela de automacoes (`AutomationsTable.tsx`)
+- Mostrar o nome da lista em vez do tipo de destinatario (opcional, pode ser adicionado numa coluna ou no detalhe).
+
+### 5. Backend: Edge Function `process-automation/index.ts`
+- Em vez de resolver um unico destinatario do `record`, buscar todos os membros da lista associada (`list_id`):
+  1. Consultar `marketing_list_members` WHERE `list_id = automation.list_id`
+  2. JOIN com `marketing_contacts` para obter `email` e `name`
+  3. Filtrar apenas contactos com `subscribed = true`
+  4. Enviar (ou agendar) o email para cada membro da lista
+
+### 6. Backend: Edge Function `process-automation-queue/index.ts`
+- Sem alteracoes significativas -- os items na queue ja tem `recipient_email` individual, so muda quem os cria.
+
+## Detalhe Tecnico
+
+### Migracao SQL
+```sql
+ALTER TABLE email_automations ADD COLUMN list_id uuid REFERENCES client_lists(id) ON DELETE SET NULL;
+```
+
+### Fluxo no Edge Function (process-automation)
+```text
+Trigger disparado
+  -> Encontra automacoes ativas para este trigger
+  -> Para cada automacao:
+     -> Busca membros da lista (list_id)
+     -> Para cada membro com email valido e subscribed=true:
+        -> Se delay > 0: insere na automation_queue
+        -> Se delay = 0: envia imediatamente via send-template-email
+```
+
+### Ficheiros alterados
+- `supabase/migrations/xxx.sql` -- nova coluna `list_id`
+- `src/hooks/useAutomations.ts` -- adicionar `list_id`, remover `RECIPIENT_TYPES`
+- `src/components/marketing/CreateAutomationModal.tsx` -- substituir campo destinatario por seletor de lista
+- `supabase/functions/process-automation/index.ts` -- resolver destinatarios a partir da lista
 
