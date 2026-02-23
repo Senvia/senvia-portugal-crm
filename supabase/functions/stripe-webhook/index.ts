@@ -204,7 +204,7 @@ async function syncStripeAutoLists(
       .select("id, name")
       .eq("organization_id", SENVIA_AGENCY_ORG_ID)
       .eq("is_system", true)
-      .in("name", ["Plano Starter", "Plano Pro", "Plano Elite", "Pagamento em Atraso", "Subscrição Cancelada"]);
+      .in("name", ["Plano Starter", "Plano Pro", "Plano Elite", "Pagamento em Atraso", "Subscrição Cancelada", "Clientes em Trial", "Trial Expirado"]);
 
     if (!lists || lists.length === 0) {
       logStep("No Stripe auto-lists found");
@@ -217,6 +217,8 @@ async function syncStripeAutoLists(
     const planListIds = [listMap["Plano Starter"], listMap["Plano Pro"], listMap["Plano Elite"]].filter(Boolean);
     const overdueListId = listMap["Pagamento em Atraso"];
     const canceledListId = listMap["Subscrição Cancelada"];
+    const trialListId = listMap["Clientes em Trial"];
+    const trialExpiredListId = listMap["Trial Expirado"];
     const currentPlanListId = plan ? listMap[PLAN_LIST_NAMES[plan]] : null;
 
     // Helper: add to list
@@ -251,9 +253,11 @@ async function syncStripeAutoLists(
         for (const id of planListIds) {
           if (id !== currentPlanListId) await removeFromList(id);
         }
-        // Remove from overdue & canceled
+        // Remove from overdue, canceled & trial lists
         if (overdueListId) await removeFromList(overdueListId);
         if (canceledListId) await removeFromList(canceledListId);
+        if (trialListId) await removeFromList(trialListId);
+        if (trialExpiredListId) await removeFromList(trialExpiredListId);
         break;
 
       case "past_due":
