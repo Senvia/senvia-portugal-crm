@@ -1,53 +1,66 @@
 
+# Otto: Acoes Rapidas Contextuais por Pagina
 
-# Optimizar Imagem do Otto (Carregamento Lento)
+## Objectivo
+O Otto vai mostrar sugestoes diferentes conforme a pagina onde o utilizador esta. Por exemplo, em `/leads` mostra "Como criar um lead?" e "Configurar pipeline", mas em `/sales` mostra "Criar uma venda" e "Emitir fatura".
 
-## Problema
-O ficheiro `otto-mascot.svg` tem aproximadamente **5MB** porque contem dados PNG codificados em base64 dentro do SVG. E utilizado em 4 locais diferentes (FAB, Chat Header, Loading indicator, Quick Actions) em tamanhos muito pequenos (28px a 56px). Carregar 5MB para um icone de 56px e extremamente ineficiente.
+## Alteracoes
 
-## Solucao
+### 1. `src/components/otto/OttoQuickActions.tsx`
+Refactoring completo para suportar acoes contextuais:
 
-### 1. Converter o SVG para PNG optimizado
-- Exportar o SVG actual como PNG em resolucao adequada (112x112px para suportar retina/2x)
-- Comprimir o PNG resultante (ficara com ~10-30KB em vez de 5MB)
-- Guardar como `public/otto-mascot.png`
+- Criar um mapa `PAGE_ACTIONS` que associa cada rota a um conjunto de acoes rapidas relevantes
+- Usar `useLocation()` do React Router para detectar a pagina actual
+- Fazer match da rota e mostrar as acoes correspondentes
+- Manter um conjunto de acoes "default" como fallback
 
-### 2. Actualizar as importacoes nos componentes
+**Mapa de rotas e acoes:**
 
-**Ficheiros a alterar:**
-- `src/components/otto/OttoFAB.tsx` - mudar import de SVG para PNG
-- `src/components/otto/OttoChatWindow.tsx` - mudar import de SVG para PNG
-- `src/components/otto/OttoQuickActions.tsx` - verificar se usa o mascot
+| Pagina | Acoes |
+|--------|-------|
+| `/dashboard` | Resumo do negocio, Personalizar dashboard, Ver leads recentes |
+| `/leads` | Como criar um lead?, Configurar pipeline, Importar leads, Mover lead de etapa |
+| `/clients` | Criar cliente, Campos personalizados, Converter lead em cliente |
+| `/calendar` | Agendar reuniao, Criar lembrete, Tipos de evento |
+| `/proposals` | Criar proposta, Enviar por email, Converter em venda |
+| `/sales` | Criar venda, Emitir fatura, Registar pagamento, Vendas recorrentes |
+| `/financeiro*` | Registar despesa, Configurar contas, Sincronizar faturas |
+| `/marketing*` | Criar campanha, Gerir templates, Importar contactos |
+| `/ecommerce*` | Adicionar produto, Gerir encomendas, Codigos de desconto |
+| `/settings` | Integrações, Gerir equipa, Pipeline, Plano e faturação |
+| fallback (default) | Como criar um lead?, Gerir pipeline, Enviar proposta, Configuracoes |
 
-**Alteracao em cada ficheiro:**
+### 2. `src/components/otto/OttoChatWindow.tsx`
+- Nenhuma alteracao necessaria -- ja passa `onSelect` para o `OttoQuickActions`
+
+### Detalhe Tecnico
+
 ```text
-// De:
-import ottoMascot from "@/assets/otto-mascot.svg";
+// OttoQuickActions.tsx
+import { useLocation } from "react-router-dom";
 
-// Para:
-import ottoMascot from "@/assets/otto-mascot.png";
+const PAGE_ACTIONS: Record<string, Array<{ label: string; icon: LucideIcon }>> = {
+  "/dashboard": [ ... ],
+  "/leads": [ ... ],
+  "/clients": [ ... ],
+  ...
+};
+
+const DEFAULT_ACTIONS = [ ... ];
+
+function getActionsForPath(pathname: string) {
+  // Match exacto primeiro, depois prefixo (ex: /financeiro/despesas -> /financeiro)
+  if (PAGE_ACTIONS[pathname]) return PAGE_ACTIONS[pathname];
+  const prefix = Object.keys(PAGE_ACTIONS).find(k => pathname.startsWith(k));
+  return prefix ? PAGE_ACTIONS[prefix] : DEFAULT_ACTIONS;
+}
+
+export function OttoQuickActions({ onSelect }) {
+  const { pathname } = useLocation();
+  const actions = getActionsForPath(pathname);
+  // ... render botoes
+}
 ```
 
-### 3. Alternativa (sem converter manualmente)
-Se nao for possivel converter externamente, podemos:
-- Mover o SVG para `/public/otto-mascot.svg` (para nao ser inlined pelo bundler)
-- Referenciar como URL estatico em vez de import
-- Isto evita que o Vite tente processar/inline o ficheiro gigante
-
-```text
-// De:
-import ottoMascot from "@/assets/otto-mascot.svg";
-
-// Para (referencia estatica):
-const ottoMascot = "/otto-mascot.svg";
-```
-
-Esta abordagem e mais rapida de implementar e resolve o problema imediatamente, pois o ficheiro sera servido como asset estatico em vez de ser embutido no bundle JS.
-
-## Recomendacao
-A **alternativa 3** (mover para `/public/`) e a solucao mais rapida e eficaz. O ideal seria tambem optimizar a imagem (alternativa 1+2), mas isso requer ferramentas externas.
-
-## Impacto
-- Reducao do tamanho do bundle JS (o SVG de 5MB esta a ser inlined)
-- Carregamento muito mais rapido do Otto
-- O browser pode fazer cache do ficheiro separadamente
+### Ficheiros alterados
+- `src/components/otto/OttoQuickActions.tsx` -- unico ficheiro a alterar
