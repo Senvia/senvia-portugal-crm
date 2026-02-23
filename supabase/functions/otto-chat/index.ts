@@ -12,14 +12,24 @@ const SYSTEM_PROMPT = `IDENTIDADE: És o Otto, a Inteligência Artificial de sup
 CAPACIDADE DE ACESSO A DADOS:
 Tens acesso à base de dados da organização do utilizador autenticado. Podes pesquisar clientes, leads, faturas, vendas, propostas, eventos da agenda e obter resumos financeiros e do pipeline.
 
-REGRAS DE ACESSO A DADOS:
-- NUNCA inventes dados. Usa APENAS os resultados das ferramentas.
-- REGRA ABSOLUTA ANTI-ALUCINAÇÃO: Se uma ferramenta retornar um erro, falhar, ou retornar zero resultados, diz EXATAMENTE "Não encontrei resultados para [termo pesquisado]" e sugere termos alternativos. NUNCA, em circunstância alguma, inventes registos, referências, nomes de clientes ou valores. Se não tens dados reais, NÃO os fabrica.
+REGRAS DE ACESSO A DADOS (OBRIGATÓRIAS — VIOLAÇÃO = ERRO CRÍTICO):
+- Responde EXCLUSIVAMENTE com dados retornados pelas ferramentas. Zero exceções.
+- Se uma ferramenta retornar erro ou zero resultados, diz EXATAMENTE: "Não encontrei resultados para [termo pesquisado]." e sugere termos alternativos. PONTO FINAL. Não acrescentes dados inventados.
+- NUNCA inventes nomes de clientes, referências, valores, datas ou qualquer outro dado.
+- NUNCA "suponhas" dados. Se não tens resultados reais, NÃO os fabricas.
+- Se o utilizador perguntar algo que exige dados e não tens ferramentas disponíveis, diz que não tens acesso a essa informação.
+- Quando mostras dados, eles TÊM de vir diretamente do resultado da ferramenta executada. Cada nome, cada valor, cada referência TEM de existir no JSON retornado pela ferramenta.
+- Se uma ferramenta retornar um campo "_instruction", segue essa instrução à letra.
 - Faz SEMPRE perguntas de clarificação antes de pesquisar (ex: "Qual o nome do cliente?", "Quer procurar por referência ou nome?").
 - Quando encontras resultados, formata-os de forma clara com **negrito** e listas.
 - Se não encontras resultados, sugere termos alternativos ou ortografias diferentes.
 - Quando mostras registos, inclui links de navegação para a página relevante.
 - Limita as pesquisas — não faças queries desnecessárias.
+
+REFORÇO ANTI-ALUCINAÇÃO (repete-se intencionalmente):
+- É PROIBIDO inventar registos. Se pesquisaste e não encontraste, a resposta é "Não encontrei".
+- É PROIBIDO preencher lacunas com dados fictícios. Dados fictícios = erro grave.
+- Cada dado que apresentas ao utilizador TEM de ter origem verificável numa ferramenta executada nesta conversa.
 
 FLUXO OBRIGATÓRIO (segue SEMPRE estes 4 passos):
 
@@ -212,6 +222,21 @@ const TOOLS = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "search_credit_notes",
+      description: "Procurar notas de crédito por referência ou nome do cliente. Retorna até 10 resultados.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Referência da nota de crédito ou nome do cliente" },
+          status: { type: "string", description: "Filtrar por status (opcional)" },
+        },
+        required: ["query"],
+      },
+    },
+  },
 ];
 
 // ─── Tool Executors ───
@@ -226,11 +251,12 @@ async function executeTool(
       case "search_clients": {
         const { data, error } = await supabaseAdmin
           .rpc("search_clients_unaccent", { org_id: orgId, search_term: args.query, max_results: 10 });
-        if (error) return JSON.stringify({ error: error.message });
+        if (error) return JSON.stringify({ error: error.message, _instruction: "ERRO NA PESQUISA. Informa o utilizador que não foi possível pesquisar. NÃO INVENTES DADOS." });
         const results = (data || []).map((c: any) => ({
           id: c.id, code: c.code, name: c.name, email: c.email, phone: c.phone,
           nif: c.nif, company: c.company, status: c.status, total_sales: c.total_sales, total_value: c.total_value,
         }));
+        if (results.length === 0) return JSON.stringify({ results: [], count: 0, _instruction: "ZERO RESULTADOS encontrados. Informa o utilizador que não encontraste clientes com esse termo. NÃO INVENTES DADOS." });
         return JSON.stringify({ results, count: results.length });
       }
 
@@ -240,11 +266,12 @@ async function executeTool(
             org_id: orgId, search_term: args.query,
             lead_status: args.status || null, max_results: 10,
           });
-        if (error) return JSON.stringify({ error: error.message });
+        if (error) return JSON.stringify({ error: error.message, _instruction: "ERRO NA PESQUISA. Informa o utilizador que não foi possível pesquisar. NÃO INVENTES DADOS." });
         const results = (data || []).map((l: any) => ({
           id: l.id, name: l.name, email: l.email, phone: l.phone, status: l.status,
           source: l.source, assigned_to: l.assigned_to, created_at: l.created_at, value: l.value,
         }));
+        if (results.length === 0) return JSON.stringify({ results: [], count: 0, _instruction: "ZERO RESULTADOS encontrados. Informa o utilizador que não encontraste leads com esse termo. NÃO INVENTES DADOS." });
         return JSON.stringify({ results, count: results.length });
       }
 
@@ -254,12 +281,13 @@ async function executeTool(
             org_id: orgId, search_term: args.query,
             inv_status: args.status || null, max_results: 10,
           });
-        if (error) return JSON.stringify({ error: error.message });
+        if (error) return JSON.stringify({ error: error.message, _instruction: "ERRO NA PESQUISA. Informa o utilizador que não foi possível pesquisar faturas. NÃO INVENTES DADOS." });
         const results = (data || []).map((i: any) => ({
           id: i.id, invoicexpress_id: i.invoicexpress_id, reference: i.reference,
           client_name: i.client_name, total: i.total, status: i.status,
           date: i.date, due_date: i.due_date, document_type: i.document_type, pdf_path: i.pdf_path,
         }));
+        if (results.length === 0) return JSON.stringify({ results: [], count: 0, _instruction: "ZERO RESULTADOS encontrados. Informa o utilizador que não encontraste faturas com esse termo. NÃO INVENTES DADOS." });
         return JSON.stringify({ results, count: results.length });
       }
 
@@ -269,20 +297,19 @@ async function executeTool(
             org_id: orgId, search_term: args.query,
             pay_status: args.payment_status || null, max_results: 10,
           });
-        if (error) return JSON.stringify({ error: error.message });
+        if (error) return JSON.stringify({ error: error.message, _instruction: "ERRO NA PESQUISA. Informa o utilizador que não foi possível pesquisar vendas. NÃO INVENTES DADOS." });
+        if (!data || data.length === 0) return JSON.stringify({ results: [], count: 0, _instruction: "ZERO RESULTADOS encontrados. Informa o utilizador que não encontraste vendas com esse termo. NÃO INVENTES DADOS." });
         // Enrich with client names
-        if (data && data.length > 0) {
-          const clientIds = [...new Set(data.filter((s: any) => s.client_id).map((s: any) => s.client_id))];
-          if (clientIds.length > 0) {
-            const { data: clients } = await supabaseAdmin
-              .from("crm_clients")
-              .select("id, name")
-              .in("id", clientIds);
-            const clientMap = Object.fromEntries((clients || []).map((c: any) => [c.id, c.name]));
-            data.forEach((s: any) => { s.client_name = clientMap[s.client_id] || null; });
-          }
+        const clientIds = [...new Set(data.filter((s: any) => s.client_id).map((s: any) => s.client_id))];
+        if (clientIds.length > 0) {
+          const { data: clients } = await supabaseAdmin
+            .from("crm_clients")
+            .select("id, name")
+            .in("id", clientIds);
+          const clientMap = Object.fromEntries((clients || []).map((c: any) => [c.id, c.name]));
+          data.forEach((s: any) => { s.client_name = clientMap[s.client_id] || null; });
         }
-        return JSON.stringify({ results: data || [], count: data?.length || 0 });
+        return JSON.stringify({ results: data, count: data.length });
       }
 
       case "search_proposals": {
@@ -291,20 +318,19 @@ async function executeTool(
             org_id: orgId, search_term: args.query,
             prop_status: args.status || null, max_results: 10,
           });
-        if (error) return JSON.stringify({ error: error.message });
+        if (error) return JSON.stringify({ error: error.message, _instruction: "ERRO NA PESQUISA. Informa o utilizador que não foi possível pesquisar propostas. NÃO INVENTES DADOS." });
+        if (!data || data.length === 0) return JSON.stringify({ results: [], count: 0, _instruction: "ZERO RESULTADOS encontrados. Informa o utilizador que não encontraste propostas com esse termo. NÃO INVENTES DADOS." });
         // Enrich with client names
-        if (data && data.length > 0) {
-          const clientIds = [...new Set(data.filter((p: any) => p.client_id).map((p: any) => p.client_id))];
-          if (clientIds.length > 0) {
-            const { data: clients } = await supabaseAdmin
-              .from("crm_clients")
-              .select("id, name")
-              .in("id", clientIds);
-            const clientMap = Object.fromEntries((clients || []).map((c: any) => [c.id, c.name]));
-            data.forEach((p: any) => { p.client_name = clientMap[p.client_id] || null; });
-          }
+        const propClientIds = [...new Set(data.filter((p: any) => p.client_id).map((p: any) => p.client_id))];
+        if (propClientIds.length > 0) {
+          const { data: clients } = await supabaseAdmin
+            .from("crm_clients")
+            .select("id, name")
+            .in("id", propClientIds);
+          const clientMap = Object.fromEntries((clients || []).map((c: any) => [c.id, c.name]));
+          data.forEach((p: any) => { p.client_name = clientMap[p.client_id] || null; });
         }
-        return JSON.stringify({ results: data || [], count: data?.length || 0 });
+        return JSON.stringify({ results: data, count: data.length });
       }
 
       case "get_client_details": {
@@ -314,8 +340,8 @@ async function executeTool(
           .eq("organization_id", orgId)
           .eq("id", args.client_id)
           .maybeSingle();
-        if (error) return JSON.stringify({ error: error.message });
-        if (!data) return JSON.stringify({ error: "Cliente não encontrado" });
+        if (error) return JSON.stringify({ error: error.message, _instruction: "ERRO NA PESQUISA. NÃO INVENTES DADOS." });
+        if (!data) return JSON.stringify({ error: "Cliente não encontrado", _instruction: "Cliente não existe na base de dados. Informa o utilizador. NÃO INVENTES DADOS." });
         return JSON.stringify(data);
       }
 
@@ -326,8 +352,8 @@ async function executeTool(
           .eq("organization_id", orgId)
           .eq("id", args.sale_id)
           .maybeSingle();
-        if (error) return JSON.stringify({ error: error.message });
-        if (!sale) return JSON.stringify({ error: "Venda não encontrada" });
+        if (error) return JSON.stringify({ error: error.message, _instruction: "ERRO NA PESQUISA. NÃO INVENTES DADOS." });
+        if (!sale) return JSON.stringify({ error: "Venda não encontrada", _instruction: "Venda não existe na base de dados. Informa o utilizador. NÃO INVENTES DADOS." });
         // Get payments
         const { data: payments } = await supabaseAdmin
           .from("sale_payments")
@@ -405,8 +431,24 @@ async function executeTool(
           .lte("start_time", future)
           .order("start_time")
           .limit(10);
-        if (error) return JSON.stringify({ error: error.message });
-        return JSON.stringify({ events: data || [], count: data?.length || 0 });
+        if (error) return JSON.stringify({ error: error.message, _instruction: "ERRO NA PESQUISA. NÃO INVENTES DADOS." });
+        if (!data || data.length === 0) return JSON.stringify({ events: [], count: 0, _instruction: "ZERO eventos encontrados no período. Informa o utilizador. NÃO INVENTES DADOS." });
+        return JSON.stringify({ events: data, count: data.length });
+      }
+
+      case "search_credit_notes": {
+        const { data, error } = await supabaseAdmin
+          .rpc("search_credit_notes_unaccent", {
+            org_id: orgId, search_term: args.query,
+            cn_status: args.status || null, max_results: 10,
+          });
+        if (error) return JSON.stringify({ error: error.message, _instruction: "ERRO NA PESQUISA. Informa o utilizador que não foi possível pesquisar notas de crédito. NÃO INVENTES DADOS." });
+        const results = (data || []).map((cn: any) => ({
+          id: cn.id, reference: cn.reference, client_name: cn.client_name,
+          total: cn.total, status: cn.status, date: cn.date, pdf_path: cn.pdf_path,
+        }));
+        if (results.length === 0) return JSON.stringify({ results: [], count: 0, _instruction: "ZERO RESULTADOS encontrados. Informa o utilizador que não encontraste notas de crédito com esse termo. NÃO INVENTES DADOS." });
+        return JSON.stringify({ results, count: results.length });
       }
 
       default:
@@ -414,7 +456,7 @@ async function executeTool(
     }
   } catch (e) {
     console.error(`Tool ${toolName} error:`, e);
-    return JSON.stringify({ error: `Erro ao executar ${toolName}` });
+    return JSON.stringify({ error: `Erro ao executar ${toolName}`, _instruction: "ERRO INTERNO na ferramenta. Informa o utilizador que houve um erro técnico. NÃO INVENTES DADOS." });
   }
 }
 
@@ -582,6 +624,7 @@ serve(async (req) => {
         model: "google/gemini-3-flash-preview",
         messages: conversationMessages,
         stream: false,
+        temperature: 0,
       };
       if (toolsForModel.length > 0) {
         payload.tools = toolsForModel;
@@ -662,6 +705,7 @@ serve(async (req) => {
         model: "google/gemini-3-flash-preview",
         messages: conversationMessages,
         stream: true,
+        temperature: 0,
       };
       // Don't include tools in the final streaming call
       const streamResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
