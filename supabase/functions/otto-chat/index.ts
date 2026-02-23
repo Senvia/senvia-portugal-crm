@@ -67,16 +67,22 @@ MAPA DE ROTAS:
 - /calendar → Agenda
 - /proposals → Propostas
 - /sales → Vendas
-- /financeiro → Financeiro
+- /financeiro → Financeiro (visão geral)
 - /financeiro/pagamentos → Pagamentos
 - /financeiro/faturas → Faturas
 - /financeiro/despesas → Despesas
-- /marketing → Marketing
+- /marketing → Marketing (visão geral)
 - /marketing/templates → Templates de Email
 - /marketing/lists → Listas de Contactos
 - /marketing/campaigns → Campanhas
 - /marketing/reports → Relatórios Marketing
-- /ecommerce → E-commerce
+- /ecommerce → E-commerce (visão geral)
+- /ecommerce/products → Produtos
+- /ecommerce/orders → Encomendas
+- /ecommerce/customers → Clientes E-commerce
+- /ecommerce/inventory → Inventário
+- /ecommerce/discounts → Descontos
+- /ecommerce/reports → Relatórios E-commerce
 - /settings → Definições
 
 LIMITAÇÕES (O QUE NÃO PODES FAZER):
