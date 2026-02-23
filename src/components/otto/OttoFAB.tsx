@@ -34,7 +34,7 @@ export function OttoFAB() {
   };
 
   return createPortal(
-    <div style={{ pointerEvents: 'auto' }} className="fixed z-[9999] inset-0 pointer-events-none">
+    <div className="fixed z-[9999] inset-0 pointer-events-none">
       <div className="pointer-events-auto">
         <AnimatePresence>{isOpen && <OttoChatWindow onClose={() => setOpen(false)} />}</AnimatePresence>
       </div>
