@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.8";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -8,312 +9,610 @@ const corsHeaders = {
 
 const SYSTEM_PROMPT = `IDENTIDADE: És o Otto, a Inteligência Artificial de suporte interno do Senvia OS. O teu objetivo é ajudar os utilizadores a navegarem no sistema, configurarem módulos e resolverem dúvidas técnicas de forma rápida e autónoma. És profissional, direto, altamente eficiente e educado. Não usas jargão técnico desnecessário. Não fazes conversa fiada. Falas sempre em Português de Portugal (PT-PT).
 
+CAPACIDADE DE ACESSO A DADOS:
+Tens acesso à base de dados da organização do utilizador autenticado. Podes pesquisar clientes, leads, faturas, vendas, propostas, eventos da agenda e obter resumos financeiros e do pipeline.
+
+REGRAS DE ACESSO A DADOS:
+- NUNCA inventes dados. Usa APENAS os resultados das ferramentas.
+- Faz SEMPRE perguntas de clarificação antes de pesquisar (ex: "Qual o nome do cliente?", "Quer procurar por referência ou nome?").
+- Quando encontras resultados, formata-os de forma clara com **negrito** e listas.
+- Se não encontras resultados, sugere termos alternativos ou ortografias diferentes.
+- Quando mostras registos, inclui links de navegação para a página relevante.
+- Limita as pesquisas — não faças queries desnecessárias.
+
 FLUXO OBRIGATÓRIO (segue SEMPRE estes 4 passos):
 
 1. INTERPRETAÇÃO: Analisa a intenção do utilizador e mapeia-a para os módulos do Senvia OS.
 
-2. CLARIFICAÇÃO (BOTÕES): Nunca dês a resposta completa logo de imediato. Responde com uma frase curta de confirmação e gera 2 a 3 opções (botões) para o utilizador escolher o cenário exato. Formato: [botao:Texto do botão]
+2. CLARIFICAÇÃO (BOTÕES): Nunca dês a resposta completa logo de imediato. Se precisas de mais contexto, responde com uma frase curta e gera 2 a 3 opções (botões) para o utilizador escolher o cenário exato. Formato: [botao:Texto do botão]
+   EXCEÇÃO: Se o utilizador já deu informação suficiente para pesquisar (ex: "mostra a fatura do cliente João Silva"), usa diretamente a ferramenta sem pedir clarificação adicional.
 
 3. INSTRUÇÃO PASSO-A-PASSO: Quando o utilizador escolhe uma opção, fornece instruções em lista numerada, sendo extremamente preciso com os nomes dos menus (ex: "Definições > Integrações > Brevo").
 
 4. FRONTEIRA DE CONHECIMENTO: Se a pergunta não tem a ver com o Senvia OS, responde: "Sou o Otto, o assistente técnico do Senvia OS. Apenas consigo ajudar com dúvidas sobre a utilização desta plataforma."
 
-EXEMPLO DE INTERAÇÃO PERFEITA:
-Utilizador: "quero faturar"
-Otto: "Entendido. Quer configurar a emissão de faturas. Qual é o sistema que utiliza?"
-[botao:Configurar InvoiceXpress]
-[botao:Configurar KeyInvoice]
-[botao:Emitir uma fatura manual]
+EXEMPLOS DE INTERAÇÃO COM DADOS:
 
-(Se clicar em "Configurar InvoiceXpress")
-Otto: "Para ligar o InvoiceXpress, siga estes passos:
-1. No menu lateral, clique em **Definições**.
-2. Escolha o cartão **Integrações**.
-3. Clique em **InvoiceXpress** e insira o 'Account Name' e a 'API Key'.
-4. Ative o toggle para guardar."
+Utilizador: "Preciso da fatura do cliente João"
+Otto: (usa ferramenta search_invoices com query "João")
+Se encontrar: "Encontrei as faturas do cliente João Silva:
+- **FT 2024/152** — 1.500,00 € — Paga — 15/01/2024
+- **FT 2024/187** — 800,00 € — Pendente — 22/02/2024"
+[link:Ver Faturas|/finance/invoices]
+[botao:Procurar outra fatura]
 
-MAPA COMPLETO DOS MÓDULOS:
-
-1. PAINEL (Dashboard) — /dashboard
-   - Visão geral com métricas e widgets configurados pelo Administrador
-   - Os widgets do dashboard são definidos por Perfil de Acesso em Definições > Perfis > Dashboard Personalizado
-   - Cada perfil pode ter um conjunto diferente de widgets visíveis
-   - Se o perfil não tiver widgets configurados, usa os padrões do nicho da organização
-   - Filtro por membro de equipa
-   - Widgets disponíveis: leads novos, vendas, valor pipeline, conversão, etc.
-   - O utilizador NÃO pode personalizar o seu dashboard individualmente — apenas o Administrador configura os widgets nos Perfis
-
-2. LEADS & PIPELINE — /leads
-   - Kanban com pipeline configurável (arrastar cartões entre colunas)
-   - Vista em tabela disponível
-   - Criar lead: botão "+" no topo
-   - Speed-to-Lead: ícone WhatsApp em cada cartão
-   - Configurar pipeline: Definições > Definições Gerais > Pipeline
-   - Formulários públicos: Definições > Definições Gerais > Formulário → cria links /f/slug ou /f/slug/nome-formulario
-   - Formulários conversacionais (com IA): /c/slug ou /c/slug/nome-formulario
-   - Cada formulário pode ter Meta Pixels, regras de IA e templates de mensagem próprios
-   - Atribuição automática ou manual de leads a membros da equipa
-
-3. CLIENTES — /clients
-   - Ficha completa: nome, email, telefone, NIF, morada, empresa, NIF da empresa
-   - Campos personalizáveis: Definições > Definições Gerais > Campos
-   - Converter lead em cliente: na modal do lead → "Converter em Cliente"
-   - Timeline: histórico de comunicações (chamadas, emails, reuniões, notas)
-   - CPEs: gestão de equipamentos/contratos (telecom/energia) com alertas de fidelização
-   - Etiquetas/labels para categorizar
-
-4. PROPOSTAS — /proposals
-   - Criar proposta: associar a cliente, adicionar itens/produtos do catálogo
-   - Estados: Rascunho → Enviada → Aceite → Recusada
-   - Enviar por email: botão na modal da proposta (requer Brevo configurado)
-   - Converter em venda quando aceite
-   - CPEs associados (para telecom/energia)
-
-5. VENDAS — /sales
-   - Criar venda: associar cliente, adicionar itens com preços e quantidades
-   - Pagamentos parciais: registar múltiplos pagamentos por venda
-   - Estados de pagamento: Pendente → Parcial → Pago
-   - Emissão de faturas: automática via InvoiceXpress ou KeyInvoice (conforme o fornecedor ativo)
-   - Tipos de documento: Fatura (FT), Fatura-Recibo (FR), Nota de Crédito
-   - Vendas recorrentes: para serviços mensais/anuais
-   - Agendamento de pagamentos futuros
-
-6. AGENDA (Calendário) — /calendar
-   - Tipos de evento: Reunião, Chamada, Tarefa, Lembrete
-   - Associar a leads ou clientes
-   - Vistas: Dia, Semana, Mês
-   - Lembretes automáticos por notificação push (configurar em Definições > Notificações > Push)
-
-7. FINANCEIRO — /financeiro
-   Página principal com 4 separadores:
-   - **Resumo**: Dashboard financeiro com métricas (faturado, recebido, pendente, atrasados, despesas, balanço), gráfico de fluxo de caixa
-   - **Contas**: Contas bancárias com saldos e extractos detalhados
-   - **Faturas**: Sincronização automática com InvoiceXpress ou KeyInvoice, visualização de PDFs
-   - **Outros**: Pedidos internos (reembolsos e pedidos da equipa)
-   
-   Sub-páginas dedicadas:
-   - Pagamentos: /financeiro/pagamentos — lista completa de todos os pagamentos recebidos
-   - Faturas: /financeiro/faturas — gestão de documentos fiscais
-   - Despesas: /financeiro/despesas — registo de gastos com categorias personalizáveis
-
-8. MARKETING — /marketing
-   Sub-páginas:
-   - **Templates**: /marketing/templates — criar e editar templates de email com editor visual
-   - **Listas**: /marketing/lists — segmentar clientes/leads (listas automáticas e manuais)
-   - **Campanhas**: /marketing/campaigns — enviar emails em massa via Brevo
-   - **Relatórios**: /marketing/reports — métricas de aberturas, cliques, envios
-
-9. E-COMMERCE — /ecommerce
-   Sub-páginas:
-   - **Produtos**: /ecommerce/products — catálogo com variantes e imagens
-   - **Encomendas**: /ecommerce/orders — gestão de pedidos
-   - **Inventário**: /ecommerce/inventory — controlo de stock
-   - **Clientes**: /ecommerce/customers — base de clientes e-commerce (separada do CRM)
-   - **Descontos**: /ecommerce/discounts — códigos de desconto
-   - **Relatórios**: /ecommerce/reports — métricas de vendas online
-
-10. FATURAÇÃO (DOIS FORNECEDORES MUTUAMENTE EXCLUSIVOS):
-    Apenas um pode estar ativo de cada vez. Ativar um desativa automaticamente o outro.
-    
-    - **InvoiceXpress**: Configurar em Definições > Integrações > InvoiceXpress
-      Campos: Account Name + API Key
-      Emite: Faturas (FT), Faturas-Recibo (FR), Notas de Crédito
-      
-    - **KeyInvoice**: Configurar em Definições > Integrações > KeyInvoice
-      Campos: Chave da API + URL da API
-      Mesmas funcionalidades via API 5.0
-      
-    - Os PDFs são guardados localmente e sincronizados automaticamente (sync horário + ao abrir a interface)
-    - Configuração fiscal (IVA): Definições > Financeiro > Fiscal
-
-DEFINIÇÕES — /settings
-A página de Definições usa navegação por cartões em 3 níveis:
-
-Nível 1 — Grupos principais:
-- **Definições Gerais**: Organização, pipeline e formulários
-- **Segurança**: Password e autenticação (MFA)
-- **Equipa e Acessos**: Membros, perfis e equipas
-- **Produtos**: Catálogo de produtos/serviços
-- **Financeiro**: Despesas e configuração fiscal
-- **Notificações**: Push e alertas automáticos
-- **Integrações**: WhatsApp, email, webhook e faturação
-- **Plano e Faturação**: Subscrição, plano ativo e pagamentos Stripe
-
-Nível 2 — Sub-secções (quando aplicável):
-
-Definições Gerais:
-  - Geral: Nome, logotipo, slug da organização
-  - Pipeline: Personalizar etapas do funil de vendas (arrastar para reordenar)
-  - Módulos: Ativar/desativar secções do sistema (Clientes, Propostas, Vendas, etc.)
-  - Formulário: Criar e editar formulários de captura de leads (com Meta Pixels, regras IA, templates de mensagem)
-  - Campos: Campos personalizados na ficha de cliente
-  - Vendas: Configurações de vendas recorrentes e pagamentos parciais
-  - Matriz Comissões: Cálculo automático de comissões para vendedores
-
-Equipa e Acessos:
-  - Acessos: Convidar membros por email, gerir convites
-  - Perfis: Administrador, Vendedor, Visualizador — permissões granulares por módulo
-  - Equipas: Criar equipas com líder, hierarquia organizacional
-
-Financeiro:
-  - Tipos de Despesas: Categorias personalizáveis para despesas
-  - Fiscal: Configuração de IVA (taxa e motivo de isenção)
-
-Notificações:
-  - Push: Notificações push no telemóvel/browser
-  - Alertas: Lembretes automáticos de fim de fidelização (CPEs)
-
-Integrações (acesso direto, sem sub-secções):
-  Organizado por grupos: Automações, Comunicações, Faturação
-  - n8n / Automações: URL do webhook para notificar novos leads
-  - WhatsApp Business: URL do Servidor + Nome da Instância + API Key da Instância (Evolution API)
-  - Email (Brevo): API Key do Brevo + Email Remetente verificado
-  - InvoiceXpress: Account Name + API Key
-  - KeyInvoice: Chave da API + URL da API
-  Cada integração tem um toggle de ativação/desativação independente
-
-Segurança (acesso direto): Alteração de password e MFA
-Produtos (acesso direto): Catálogo interno para propostas e vendas
-Plano e Faturação (acesso direto): Gerir subscrição Stripe, ver plano ativo, alterar plano
-
-PLANOS DE SUBSCRIÇÃO DO SENVIA OS:
-
-O Senvia OS tem 3 planos de subscrição mensal. Cada plano desbloqueia módulos, integrações e limites adicionais. O utilizador pode alterar o plano em Definições > Plano e Faturação.
-
-1. PLANO STARTER — 49€/mês
-   Ideal para começar a organizar leads e clientes.
-   Módulos: CRM Base (Leads + Clientes), Calendário, Propostas
-   Integrações: Meta Pixels
-   Limites: Até 10 utilizadores, 2 formulários
-
-2. PLANO PRO — 99€/mês (Mais popular)
-   Para equipas que querem vender mais com automação.
-   Módulos: Tudo do Starter + Módulo Vendas + Módulo Marketing
-   Integrações: WhatsApp, Meta Pixels
-   Limites: Até 15 utilizadores, 5 formulários
-
-3. PLANO ELITE — 147€/mês
-   Controlo total do negócio, sem limites.
-   Módulos: Tudo do Pro + Módulo Financeiro + Módulo E-commerce
-   Integrações: WhatsApp, Meta Pixels, Faturação (InvoiceXpress/KeyInvoice), Stripe (Pagamentos)
-   Limites: Utilizadores ilimitados, Formulários ilimitados
-
-COMPARAÇÃO RÁPIDA:
-- Quem só precisa de CRM → Starter (49€)
-- Quem quer vendas + marketing + WhatsApp → Pro (99€)
-- Quem quer tudo incluído sem restrições → Elite (147€)
-
-Quando o utilizador perguntar sobre preços, planos ou funcionalidades incluídas, usa esta informação para recomendar o plano mais adequado. Se perguntar "qual plano devo escolher?", faz perguntas sobre as necessidades (número de utilizadores, se precisa de WhatsApp, faturação, etc.) antes de recomendar.
-
-FLUXOS COMUNS:
-- Lead → Cliente → Proposta → Venda → Fatura → Pagamento
-- Formulário público captura lead → notificação push + webhook → contacto WhatsApp
-- Campanha de email Marketing → Leads reengaged → Pipeline
-- CPE com fidelização a expirar → Alerta automático → Proposta de renovação
+Utilizador: "Quantos leads tenho este mês?"
+Otto: (usa ferramenta get_pipeline_summary)
+Mostra resumo com contagens por etapa.
+[link:Ver Pipeline|/leads]
 
 LINKS DE NAVEGAÇÃO:
 Sempre que a resposta envolver uma ação ou página específica do sistema, INCLUI um link direto usando o formato: [link:Texto do botão|/caminho]
-O link aparece como um botão clicável que leva o utilizador diretamente à página.
 
-MAPA DE ROTAS (usa SEMPRE estas rotas exatas):
+MAPA DE ROTAS:
 - /dashboard → Painel principal
-- /leads → Pipeline de Leads (Kanban)
-- /clients → Lista de Clientes
-- /calendar → Agenda / Calendário
+- /leads → Pipeline de Leads
+- /clients → Clientes
+- /calendar → Agenda
 - /proposals → Propostas
 - /sales → Vendas
-- /finance → Financeiro (Resumo)
+- /finance → Financeiro
 - /finance/payments → Pagamentos
 - /finance/invoices → Faturas
 - /finance/expenses → Despesas
 - /marketing → Marketing
 - /marketing/templates → Templates de Email
 - /marketing/lists → Listas de Contactos
-- /marketing/campaigns → Campanhas de Email
-- /marketing/reports → Relatórios de Marketing
+- /marketing/campaigns → Campanhas
+- /marketing/reports → Relatórios Marketing
 - /ecommerce → E-commerce
-- /ecommerce/products → Produtos E-commerce
-- /ecommerce/orders → Encomendas
-- /ecommerce/inventory → Inventário
-- /ecommerce/customers → Clientes E-commerce
-- /ecommerce/discounts → Códigos de Desconto
-- /settings → Definições (página principal)
-
-EXEMPLO DE INTERAÇÃO COM LINKS:
-Utilizador: "quero criar um formulário"
-Otto: "Para criar um formulário de captura de leads, siga estes passos:
-1. Aceda a **Definições > Formulário**
-2. Clique em **Criar Formulário**
-3. Configure os campos, Meta Pixels e regras de IA"
-[link:Abrir Definições|/settings]
-[botao:Quero saber mais sobre formulários]
-
-Utilizador: "onde vejo os meus leads?"
-Otto: "Os seus leads estão no **Pipeline**, organizados em colunas Kanban. Pode arrastar os cartões entre etapas."
-[link:Ver Pipeline de Leads|/leads]
+- /settings → Definições
 
 REGRAS DE FORMATAÇÃO:
 - Máximo 200 palavras por resposta
 - 2 a 4 botões por resposta (formato: [botao:Texto])
-- Inclui SEMPRE pelo menos 1 link de navegação quando a resposta se refere a uma página específica (formato: [link:Texto|/caminho])
+- Inclui SEMPRE pelo menos 1 link quando a resposta se refere a uma página específica
 - Usa markdown: **negrito**, listas numeradas
-- Máximo 1-2 emojis por resposta (com moderação)
-- Sê extremamente preciso nos caminhos dos menus — usa os nomes exatos dos cartões e separadores`;
+- Máximo 1-2 emojis por resposta
+- Sê extremamente preciso nos caminhos dos menus`;
 
+// ─── Tool Definitions ───
+const TOOLS = [
+  {
+    type: "function",
+    function: {
+      name: "search_clients",
+      description: "Procurar clientes por nome, email, NIF ou empresa. Retorna até 10 resultados.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Termo de pesquisa (nome, email, NIF ou empresa)" },
+        },
+        required: ["query"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_leads",
+      description: "Procurar leads por nome, email ou telefone. Retorna até 10 resultados.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Termo de pesquisa (nome, email ou telefone)" },
+          status: { type: "string", description: "Filtrar por status/etapa do pipeline (opcional)" },
+        },
+        required: ["query"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_invoices",
+      description: "Procurar faturas por referência ou nome do cliente. Retorna até 10 resultados.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Referência da fatura ou nome do cliente" },
+          status: { type: "string", description: "Filtrar por status: final, sent, settled, canceled (opcional)" },
+        },
+        required: ["query"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_sales",
+      description: "Procurar vendas por código ou nome do cliente. Retorna até 10 resultados.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Código da venda ou nome do cliente" },
+          payment_status: { type: "string", description: "Filtrar por estado: pending, partial, paid (opcional)" },
+        },
+        required: ["query"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_proposals",
+      description: "Procurar propostas por código ou nome do cliente. Retorna até 10 resultados.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Código da proposta ou nome do cliente" },
+          status: { type: "string", description: "Filtrar por status: draft, sent, accepted, rejected (opcional)" },
+        },
+        required: ["query"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_client_details",
+      description: "Obter detalhes completos de um cliente específico por ID.",
+      parameters: {
+        type: "object",
+        properties: {
+          client_id: { type: "string", description: "UUID do cliente" },
+        },
+        required: ["client_id"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_sale_details",
+      description: "Obter detalhes de uma venda específica incluindo pagamentos.",
+      parameters: {
+        type: "object",
+        properties: {
+          sale_id: { type: "string", description: "UUID da venda" },
+        },
+        required: ["sale_id"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_pipeline_summary",
+      description: "Obter resumo do pipeline de leads: contagem por etapa e total.",
+      parameters: { type: "object", properties: {}, required: [] },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_finance_summary",
+      description: "Obter resumo financeiro: total faturado, recebido, pendente, despesas e balanço.",
+      parameters: { type: "object", properties: {}, required: [] },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_upcoming_events",
+      description: "Obter próximos eventos da agenda nos próximos N dias.",
+      parameters: {
+        type: "object",
+        properties: {
+          days: { type: "number", description: "Número de dias a consultar (default: 7)" },
+        },
+        required: [],
+      },
+    },
+  },
+];
+
+// ─── Tool Executors ───
+async function executeTool(
+  toolName: string,
+  args: Record<string, any>,
+  orgId: string,
+  supabaseAdmin: any
+): Promise<string> {
+  try {
+    switch (toolName) {
+      case "search_clients": {
+        const q = `%${args.query}%`;
+        const { data, error } = await supabaseAdmin
+          .from("crm_clients")
+          .select("id, code, name, email, phone, nif, company, status, total_sales, total_value")
+          .eq("organization_id", orgId)
+          .or(`name.ilike.${q},email.ilike.${q},nif.ilike.${q},company.ilike.${q}`)
+          .limit(10);
+        if (error) return JSON.stringify({ error: error.message });
+        return JSON.stringify({ results: data || [], count: data?.length || 0 });
+      }
+
+      case "search_leads": {
+        const q = `%${args.query}%`;
+        let query = supabaseAdmin
+          .from("leads")
+          .select("id, name, email, phone, status, source, assigned_to, created_at, value")
+          .eq("organization_id", orgId)
+          .or(`name.ilike.${q},email.ilike.${q},phone.ilike.${q}`);
+        if (args.status) query = query.eq("status", args.status);
+        const { data, error } = await query.limit(10);
+        if (error) return JSON.stringify({ error: error.message });
+        return JSON.stringify({ results: data || [], count: data?.length || 0 });
+      }
+
+      case "search_invoices": {
+        const q = `%${args.query}%`;
+        let query = supabaseAdmin
+          .from("invoices")
+          .select("id, invoicexpress_id, reference, client_name, total, status, date, due_date, document_type, pdf_path")
+          .eq("organization_id", orgId)
+          .or(`reference.ilike.${q},client_name.ilike.${q}`);
+        if (args.status) query = query.eq("status", args.status);
+        const { data, error } = await query.order("date", { ascending: false }).limit(10);
+        if (error) return JSON.stringify({ error: error.message });
+        return JSON.stringify({ results: data || [], count: data?.length || 0 });
+      }
+
+      case "search_sales": {
+        const q = `%${args.query}%`;
+        let query = supabaseAdmin
+          .from("sales")
+          .select("id, code, total_value, payment_status, sale_date, client_id, lead_id, notes")
+          .eq("organization_id", orgId)
+          .or(`code.ilike.${q}`);
+        if (args.payment_status) query = query.eq("payment_status", args.payment_status);
+        const { data, error } = await query.order("sale_date", { ascending: false }).limit(10);
+        if (error) return JSON.stringify({ error: error.message });
+        // Try to get client names
+        if (data && data.length > 0) {
+          const clientIds = [...new Set(data.filter((s: any) => s.client_id).map((s: any) => s.client_id))];
+          if (clientIds.length > 0) {
+            const { data: clients } = await supabaseAdmin
+              .from("crm_clients")
+              .select("id, name")
+              .in("id", clientIds);
+            const clientMap = Object.fromEntries((clients || []).map((c: any) => [c.id, c.name]));
+            data.forEach((s: any) => { s.client_name = clientMap[s.client_id] || null; });
+          }
+        }
+        return JSON.stringify({ results: data || [], count: data?.length || 0 });
+      }
+
+      case "search_proposals": {
+        const q = `%${args.query}%`;
+        let query = supabaseAdmin
+          .from("proposals")
+          .select("id, code, total_value, status, valid_until, client_id, notes")
+          .eq("organization_id", orgId)
+          .or(`code.ilike.${q}`);
+        if (args.status) query = query.eq("status", args.status);
+        const { data, error } = await query.order("created_at", { ascending: false }).limit(10);
+        if (error) return JSON.stringify({ error: error.message });
+        if (data && data.length > 0) {
+          const clientIds = [...new Set(data.filter((p: any) => p.client_id).map((p: any) => p.client_id))];
+          if (clientIds.length > 0) {
+            const { data: clients } = await supabaseAdmin
+              .from("crm_clients")
+              .select("id, name")
+              .in("id", clientIds);
+            const clientMap = Object.fromEntries((clients || []).map((c: any) => [c.id, c.name]));
+            data.forEach((p: any) => { p.client_name = clientMap[p.client_id] || null; });
+          }
+        }
+        return JSON.stringify({ results: data || [], count: data?.length || 0 });
+      }
+
+      case "get_client_details": {
+        const { data, error } = await supabaseAdmin
+          .from("crm_clients")
+          .select("id, code, name, email, phone, nif, company, company_nif, address_line1, city, postal_code, country, status, total_sales, total_value, total_proposals, notes, created_at")
+          .eq("organization_id", orgId)
+          .eq("id", args.client_id)
+          .maybeSingle();
+        if (error) return JSON.stringify({ error: error.message });
+        if (!data) return JSON.stringify({ error: "Cliente não encontrado" });
+        return JSON.stringify(data);
+      }
+
+      case "get_sale_details": {
+        const { data: sale, error } = await supabaseAdmin
+          .from("sales")
+          .select("id, code, total_value, payment_status, sale_date, notes, client_id, lead_id")
+          .eq("organization_id", orgId)
+          .eq("id", args.sale_id)
+          .maybeSingle();
+        if (error) return JSON.stringify({ error: error.message });
+        if (!sale) return JSON.stringify({ error: "Venda não encontrada" });
+        // Get payments
+        const { data: payments } = await supabaseAdmin
+          .from("sale_payments")
+          .select("id, amount, payment_date, payment_method, status, invoice_reference")
+          .eq("sale_id", args.sale_id)
+          .eq("organization_id", orgId);
+        // Get client name
+        if (sale.client_id) {
+          const { data: client } = await supabaseAdmin
+            .from("crm_clients")
+            .select("name")
+            .eq("id", sale.client_id)
+            .maybeSingle();
+          sale.client_name = client?.name || null;
+        }
+        return JSON.stringify({ sale, payments: payments || [] });
+      }
+
+      case "get_pipeline_summary": {
+        const { data: stages } = await supabaseAdmin
+          .from("pipeline_stages")
+          .select("key, label")
+          .eq("organization_id", orgId)
+          .order("position");
+        const { data: leads } = await supabaseAdmin
+          .from("leads")
+          .select("status")
+          .eq("organization_id", orgId);
+        const counts: Record<string, number> = {};
+        (leads || []).forEach((l: any) => {
+          counts[l.status] = (counts[l.status] || 0) + 1;
+        });
+        const summary = (stages || []).map((s: any) => ({
+          stage: s.label,
+          key: s.key,
+          count: counts[s.key] || 0,
+        }));
+        return JSON.stringify({ stages: summary, total_leads: leads?.length || 0 });
+      }
+
+      case "get_finance_summary": {
+        // Total from sales
+        const { data: sales } = await supabaseAdmin
+          .from("sales")
+          .select("total_value, payment_status")
+          .eq("organization_id", orgId);
+        const totalBilled = (sales || []).reduce((s: number, r: any) => s + (r.total_value || 0), 0);
+        const totalPaid = (sales || []).filter((s: any) => s.payment_status === "paid").reduce((s: number, r: any) => s + (r.total_value || 0), 0);
+        const totalPending = (sales || []).filter((s: any) => s.payment_status !== "paid").reduce((s: number, r: any) => s + (r.total_value || 0), 0);
+        // Expenses
+        const { data: expenses } = await supabaseAdmin
+          .from("expenses")
+          .select("amount")
+          .eq("organization_id", orgId);
+        const totalExpenses = (expenses || []).reduce((s: number, r: any) => s + (r.amount || 0), 0);
+        return JSON.stringify({
+          total_billed: totalBilled,
+          total_received: totalPaid,
+          total_pending: totalPending,
+          total_expenses: totalExpenses,
+          balance: totalPaid - totalExpenses,
+          total_sales_count: sales?.length || 0,
+        });
+      }
+
+      case "get_upcoming_events": {
+        const days = args.days || 7;
+        const now = new Date().toISOString();
+        const future = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+        const { data, error } = await supabaseAdmin
+          .from("calendar_events")
+          .select("id, title, event_type, start_time, end_time, description, status")
+          .eq("organization_id", orgId)
+          .gte("start_time", now)
+          .lte("start_time", future)
+          .order("start_time")
+          .limit(10);
+        if (error) return JSON.stringify({ error: error.message });
+        return JSON.stringify({ events: data || [], count: data?.length || 0 });
+      }
+
+      default:
+        return JSON.stringify({ error: `Ferramenta desconhecida: ${toolName}` });
+    }
+  } catch (e) {
+    console.error(`Tool ${toolName} error:`, e);
+    return JSON.stringify({ error: `Erro ao executar ${toolName}` });
+  }
+}
+
+// ─── Main Handler ───
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { messages } = await req.json();
+    const { messages, organization_id } = await req.json();
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
+
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+    const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+    // ── Auth: validate user ──
+    const authHeader = req.headers.get("Authorization") || "";
+    let orgId = organization_id || null;
+
+    // Create user-scoped client for auth validation
+    const supabaseAuth = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: { headers: { Authorization: authHeader } },
+    });
+
+    let userId: string | null = null;
+    if (authHeader.startsWith("Bearer ") && authHeader !== `Bearer ${SUPABASE_ANON_KEY}`) {
+      const token = authHeader.replace("Bearer ", "");
+      try {
+        const { data, error } = await supabaseAuth.auth.getUser(token);
+        if (!error && data?.user) {
+          userId = data.user.id;
+        }
+      } catch { /* unauthenticated — tools won't be available */ }
     }
 
-    const response = await fetch(
-      "https://ai.gateway.lovable.dev/v1/chat/completions",
-      {
+    // Create admin client for DB queries
+    const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // Validate org membership if we have a user
+    if (userId && orgId) {
+      const { data: membership } = await supabaseAdmin
+        .from("organization_members")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("organization_id", orgId)
+        .eq("is_active", true)
+        .maybeSingle();
+
+      // Also check super_admin
+      if (!membership) {
+        const { data: superRole } = await supabaseAdmin
+          .from("user_roles")
+          .select("id")
+          .eq("user_id", userId)
+          .eq("role", "super_admin")
+          .maybeSingle();
+        if (!superRole) {
+          orgId = null; // Can't access this org — disable tools
+        }
+      }
+    }
+
+    const hasDataAccess = !!userId && !!orgId;
+    const toolsForModel = hasDataAccess ? TOOLS : [];
+
+    // ── Build messages ──
+    const allMessages = [
+      { role: "system", content: SYSTEM_PROMPT + (hasDataAccess ? "" : "\n\nNOTA: O utilizador não está autenticado ou sem organização. Não tens acesso a dados da BD. Responde apenas com conhecimento geral do sistema.") },
+      ...messages,
+    ];
+
+    // ── Tool-calling loop (max 3 iterations) ──
+    let conversationMessages = [...allMessages];
+    const MAX_ITERATIONS = 3;
+
+    for (let i = 0; i < MAX_ITERATIONS; i++) {
+      const payload: any = {
+        model: "google/gemini-3-flash-preview",
+        messages: conversationMessages,
+        stream: false,
+      };
+      if (toolsForModel.length > 0) {
+        payload.tools = toolsForModel;
+      }
+
+      const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${LOVABLE_API_KEY}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          model: "google/gemini-3-flash-preview",
-          messages: [
-            { role: "system", content: SYSTEM_PROMPT },
-            ...messages,
-          ],
-          stream: true,
-        }),
-      }
-    );
+        body: JSON.stringify(payload),
+      });
 
-    if (!response.ok) {
-      if (response.status === 429) {
+      if (!resp.ok) {
+        const status = resp.status;
+        if (status === 429) {
+          return new Response(
+            JSON.stringify({ error: "O Otto está com muitos pedidos. Tenta novamente em alguns segundos." }),
+            { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        if (status === 402) {
+          return new Response(
+            JSON.stringify({ error: "Créditos de IA esgotados. Contacta o administrador." }),
+            { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        const errorText = await resp.text();
+        console.error("AI gateway error:", status, errorText);
         return new Response(
-          JSON.stringify({ error: "O Otto está com muitos pedidos. Tenta novamente em alguns segundos." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ error: "Erro ao contactar o Otto. Tenta novamente." }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      if (response.status === 402) {
+
+      const result = await resp.json();
+      const choice = result.choices?.[0];
+
+      if (!choice) {
         return new Response(
-          JSON.stringify({ error: "Créditos de IA esgotados. Contacta o administrador." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ error: "Resposta vazia do modelo." }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
-      return new Response(
-        JSON.stringify({ error: "Erro ao contactar o Otto. Tenta novamente." }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+
+      const assistantMessage = choice.message;
+
+      // Check if the model wants to call tools
+      if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
+        // Add assistant message with tool_calls
+        conversationMessages.push(assistantMessage);
+
+        // Execute each tool call
+        for (const toolCall of assistantMessage.tool_calls) {
+          const fnName = toolCall.function.name;
+          let fnArgs: Record<string, any> = {};
+          try {
+            fnArgs = JSON.parse(toolCall.function.arguments || "{}");
+          } catch { fnArgs = {}; }
+
+          console.log(`Executing tool: ${fnName}`, fnArgs);
+          const toolResult = await executeTool(fnName, fnArgs, orgId!, supabaseAdmin);
+
+          conversationMessages.push({
+            role: "tool",
+            tool_call_id: toolCall.id,
+            content: toolResult,
+          });
+        }
+        // Continue loop — model will process tool results
+        continue;
+      }
+
+      // No tool calls — we have the final answer. Stream it back.
+      // Make a streaming call with the final conversation
+      const streamPayload: any = {
+        model: "google/gemini-3-flash-preview",
+        messages: conversationMessages,
+        stream: true,
+      };
+      // Don't include tools in the final streaming call
+      const streamResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(streamPayload),
+      });
+
+      if (!streamResp.ok) {
+        // If the non-tool response already has content, just return it as a simple SSE
+        if (assistantMessage.content) {
+          const simpleSSE = `data: ${JSON.stringify({ choices: [{ delta: { content: assistantMessage.content } }] })}\n\ndata: [DONE]\n\n`;
+          return new Response(simpleSSE, {
+            headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
+          });
+        }
+        return new Response(
+          JSON.stringify({ error: "Erro na resposta do Otto." }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      return new Response(streamResp.body, {
+        headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
+      });
     }
 
-    return new Response(response.body, {
+    // If we hit max iterations, return a fallback message
+    const fallbackSSE = `data: ${JSON.stringify({ choices: [{ delta: { content: "Peço desculpa, não consegui processar o pedido. Tenta reformular a tua pergunta." } }] })}\n\ndata: [DONE]\n\n`;
+    return new Response(fallbackSSE, {
       headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
     });
   } catch (e) {

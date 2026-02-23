@@ -1,6 +1,7 @@
 import { useCallback, useRef } from "react";
 import { toast } from "sonner";
 import { useOttoStore } from "@/stores/useOttoStore";
+import { useAuth } from "@/contexts/AuthContext";
 
 export type { OttoMessage } from "@/stores/useOttoStore";
 
@@ -8,6 +9,7 @@ const OTTO_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/otto-chat`;
 
 export function useOttoChat() {
   const { messages, isLoading, addMessage, updateLastMessage, clearMessages, setLoading } = useOttoStore();
+  const { session, organization } = useAuth();
   const abortRef = useRef<AbortController | null>(null);
 
   const sendMessage = useCallback(async (input: string) => {
@@ -27,13 +29,19 @@ export function useOttoChat() {
       const controller = new AbortController();
       abortRef.current = controller;
 
+      // Use auth token if available, otherwise fall back to anon key
+      const token = session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
       const resp = await fetch(OTTO_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ messages: allMessages }),
+        body: JSON.stringify({
+          messages: allMessages,
+          organization_id: organization?.id || null,
+        }),
         signal: controller.signal,
       });
 
@@ -105,7 +113,7 @@ export function useOttoChat() {
       setLoading(false);
       abortRef.current = null;
     }
-  }, [messages, addMessage, updateLastMessage, setLoading]);
+  }, [messages, addMessage, updateLastMessage, setLoading, session, organization]);
 
   const cancelStream = useCallback(() => {
     abortRef.current?.abort();
