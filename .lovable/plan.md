@@ -1,55 +1,31 @@
 
-# Corrigir Erros de Sincronizacao sem Integracao Configurada
+
+# Restringir Alertas de Fidelizacao ao Nicho Telecom
 
 ## Problema
-Quando o utilizador abre a pagina de Financeiro (Faturas), o sistema tenta automaticamente sincronizar faturas e notas de credito com o InvoiceXpress, mesmo que a integracao nao esteja ativada. Isto causa o erro "Sem acesso a esta organizacao" ou "Credenciais InvoiceXpress nao configuradas".
+Os "Alertas de Fidelizacao" (CPE/CUI a expirar) sao uma funcionalidade exclusiva do nicho telecom, mas actualmente:
+- O widget no Dashboard ja esta correctamente protegido (so aparece se `niche === 'telecom'`)
+- O menu de Definicoes mostra a opcao "Alertas" para **todos** os nichos
+- A edge function `check-fidelization-alerts` pode correr para organizacoes nao-telecom
 
-Os locais que disparam auto-sync:
-- `InvoicesContent.tsx` (linha 89-94): auto-sync de faturas E notas de credito no mount
-- `CreditNotesContent.tsx` (linha 47-51): auto-sync de notas de credito no mount
+## Alteracoes
 
-## Solucao
-Verificar se `integrations_enabled.invoicexpress === true` na organizacao antes de disparar qualquer sincronizacao automatica. Se nao estiver ativada, nao tentar sincronizar.
+### 1. `src/components/settings/MobileSettingsNav.tsx`
+- Receber a prop `isTelecom` (ou `niche`) no componente
+- Filtrar condicionalmente o item `notif-alerts` da seccao "notifications": so mostrar quando o nicho for telecom
+- Para outros nichos, a seccao de notificacoes mostrara apenas "Push"
 
-## Ficheiros a Alterar
+### 2. `src/pages/Settings.tsx`
+- Passar a informacao do nicho da organizacao para o `MobileSettingsNav`
+- Filtrar o item "notif-alerts" no menu desktop tambem, caso exista navegacao desktop que o liste
+- No `renderContent`, manter o case `notif-alerts` (nao causa erro, simplesmente nao sera acessivel pelo menu)
 
-### 1. `src/components/finance/InvoicesContent.tsx`
-- Obter dados da organizacao via `useOrganization()`
-- Verificar `integrations_enabled.invoicexpress` antes do auto-sync
-- So chamar `syncInvoices.mutate()` e `syncCreditNotes.mutate()` se InvoiceXpress estiver ativo
+### 3. `supabase/functions/check-fidelization-alerts/index.ts`
+- Adicionar verificacao no inicio: se a organizacao nao e do nicho `telecom`, retornar imediatamente sem processar
 
-### 2. `src/components/finance/CreditNotesContent.tsx`
-- Obter dados da organizacao via `useOrganization()`
-- Verificar `integrations_enabled.invoicexpress` antes do auto-sync
-- So chamar `syncCreditNotes.mutate()` se InvoiceXpress estiver ativo
-
-### 3. `src/hooks/useCreditNotes.ts`
-- No `useSyncCreditNotes`, suprimir o toast de erro quando a integracao nao esta configurada (erro 400 com mensagem "Credenciais InvoiceXpress nao configuradas")
-
-### 4. `src/hooks/useInvoices.ts`
-- No `useSyncInvoices`, mesma logica de suprimir toast para erros de credenciais nao configuradas
-
-### Detalhe Tecnico
-
-```text
-// InvoicesContent.tsx - antes do auto-sync
-import { useOrganization } from "@/hooks/useOrganization";
-
-const { data: orgData } = useOrganization();
-const isInvoicexpressEnabled = (orgData?.integrations_enabled as any)?.invoicexpress === true;
-
-useEffect(() => {
-  if (!hasSynced.current && isInvoicexpressEnabled && !syncInvoices.isPending && !syncCreditNotes.isPending) {
-    hasSynced.current = true;
-    syncInvoices.mutate(undefined, { onError: () => {} });
-    syncCreditNotes.mutate(undefined, { onError: () => {} });
-  }
-}, [isInvoicexpressEnabled]);
-```
-
-A mesma logica aplica-se ao `CreditNotesContent.tsx`.
-
-## Impacto
-- Elimina erros de sincronizacao quando InvoiceXpress nao esta configurado
-- Nao afecta utilizadores que tem a integracao activa
-- Experiencia limpa para novas contas (sem toasts de erro)
+### Resumo dos ficheiros
+| Ficheiro | O que muda |
+|----------|-----------|
+| `MobileSettingsNav.tsx` | Esconder item "Alertas" se niche != telecom |
+| `Settings.tsx` | Passar niche ao nav e filtrar menu desktop |
+| `check-fidelization-alerts/index.ts` | Early return se niche != telecom |
