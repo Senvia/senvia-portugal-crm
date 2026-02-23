@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Check, Crown, Loader2, ExternalLink, Sparkles, Users, FileText, MessageSquare, BarChart3, Puzzle, Zap, Package, CreditCard } from 'lucide-react';
+import { Check, Crown, Loader2, ExternalLink, Sparkles, Users, FileText, MessageSquare, BarChart3, Puzzle, Zap, Package, CreditCard, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -24,6 +24,8 @@ export function BillingTab() {
 
   const currentPlanId = subscriptionStatus?.plan_id || organization?.plan || 'starter';
   const currentIndex = STRIPE_PLANS.findIndex(p => p.id === currentPlanId);
+  const isOnTrial = subscriptionStatus?.on_trial === true;
+  const hasNoSubscription = subscriptionStatus ? !subscriptionStatus.subscribed : false;
 
   useEffect(() => {
     if (!hasChecked) {
@@ -65,7 +67,23 @@ export function BillingTab() {
         </div>
       )}
 
-      {/* Current Plan Status */}
+      {/* Trial Status */}
+      {isOnTrial && subscriptionStatus?.days_remaining !== undefined && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 md:p-5">
+          <div className="flex items-center gap-2 mb-1">
+            <Clock className="h-4 w-4 text-amber-500" />
+            <span className="font-semibold text-sm">Período de Teste</span>
+            <Badge className="bg-amber-500 text-white text-[10px] px-2.5 py-1">
+              {subscriptionStatus.days_remaining} {subscriptionStatus.days_remaining === 1 ? 'dia restante' : 'dias restantes'}
+            </Badge>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Tem acesso total a todos os módulos. Escolha um plano antes do fim do período de teste.
+          </p>
+        </div>
+      )}
+
+      {/* Current Plan Status - only when subscribed */}
       {!subscriptionStatus?.billing_exempt && subscriptionStatus?.subscribed && subscriptionStatus.subscription_end && (
         <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 md:p-5">
           <div className="flex items-center gap-2 mb-1">
@@ -91,11 +109,11 @@ export function BillingTab() {
       {/* Plans - Full Width Vertical Sections */}
       <div className="space-y-5">
         {STRIPE_PLANS.map((plan) => {
-          const isCurrent = plan.id === currentPlanId;
+          const isCurrent = !hasNoSubscription && plan.id === currentPlanId;
           const isHighlighted = plan.highlighted;
           const planIndex = STRIPE_PLANS.findIndex(p => p.id === plan.id);
-          const isUpgrade = planIndex > currentIndex;
-          const isDowngrade = planIndex < currentIndex;
+          const isUpgrade = !hasNoSubscription && planIndex > currentIndex;
+          const isDowngrade = !hasNoSubscription && planIndex < currentIndex;
 
           return (
             <div
@@ -146,10 +164,12 @@ export function BillingTab() {
                     {!subscriptionStatus?.billing_exempt && (
                       <Button
                         size="lg"
-                        variant={isCurrent ? 'outline' : isDowngrade ? 'secondary' : isHighlighted ? 'default' : 'secondary'}
+                        variant={isCurrent ? 'outline' : hasNoSubscription ? (isHighlighted ? 'default' : 'secondary') : isDowngrade ? 'secondary' : isHighlighted ? 'default' : 'secondary'}
                         disabled={isCurrent || isLoading || checkingPlan === plan.id}
                         onClick={() => {
-                          if (isDowngrade) {
+                          if (hasNoSubscription) {
+                            handleSelectPlan(plan);
+                          } else if (isDowngrade) {
                             openCustomerPortal();
                           } else {
                             handleSelectPlan(plan);
@@ -161,6 +181,8 @@ export function BillingTab() {
                           <Loader2 className="h-4 w-4 animate-spin" />
                         ) : isCurrent ? (
                           'Plano Atual'
+                        ) : hasNoSubscription ? (
+                          'Selecionar'
                         ) : isUpgrade ? (
                           'Fazer Upgrade'
                         ) : (
