@@ -1,50 +1,73 @@
 
 
-# Correcao dos Relatorios de Email - Webhook Brevo
+# Gatilhos de Automacao Stripe (Exclusivos Senvia Agency)
 
-## Problema Identificado
+## Resumo
 
-O email de automacao foi enviado com sucesso (esta na base de dados com `status: "sent"`), mas os eventos de entrega e abertura do Brevo **nunca chegaram** ao sistema. O webhook `brevo-webhook` nao tem nenhum log -- zero chamadas recebidas.
+Adicionar gatilhos de automacao de email relacionados com eventos do Stripe. Estes gatilhos so aparecem para a organizacao "Senvia Agency" (ID: `06fe9e1d-9670-45b0-8717-c5a6e90be380`), permitindo enviar emails automaticos quando clientes do SENVIA OS ativam, renovam ou cancelam subscricoes.
 
-Isto significa que o Brevo nao esta a enviar os webhooks para o URL correto, OU o URL nao esta configurado no painel do Brevo.
+## Novos Gatilhos
 
-## O que Precisa Ser Feito
+| Valor | Label |
+|-------|-------|
+| `stripe_subscription_created` | Subscricao Ativada |
+| `stripe_subscription_renewed` | Subscricao Renovada |
+| `stripe_subscription_canceled` | Subscricao Cancelada |
+| `stripe_subscription_past_due` | Pagamento em Atraso |
+| `stripe_payment_failed` | Pagamento Falhado |
+| `stripe_welcome_starter` | Bem-vindo ao Plano Starter |
+| `stripe_welcome_pro` | Bem-vindo ao Plano Pro |
+| `stripe_welcome_elite` | Bem-vindo ao Plano Elite |
 
-### 1. Configuracao do Webhook no Brevo (Acao Manual Necessaria)
+## Alteracoes Tecnicas
 
-No painel do Brevo (app.brevo.com), e preciso configurar o webhook URL:
+### 1. `src/hooks/useAutomations.ts`
 
-```text
-URL: https://zppcobirzgpfcrnxznwe.supabase.co/functions/v1/brevo-webhook
-```
+- Adicionar os novos trigger types numa lista separada `STRIPE_TRIGGER_TYPES`
+- Exportar ambos: `TRIGGER_TYPES` (base) e `STRIPE_TRIGGER_TYPES` (Stripe)
 
-Eventos a ativar:
-- delivered
-- opened / unique_opened
-- click
-- hard_bounce / soft_bounce
-- blocked
-- spam
-- unsubscribed
+### 2. `src/components/marketing/CreateAutomationModal.tsx`
 
-### 2. Correcao no Codigo - Fallback para Status "sent"
+- Importar `useAuth` para aceder ao `organization`
+- Verificar se `organization?.slug === 'senvia-agency'`
+- Se sim, combinar `TRIGGER_TYPES` + `STRIPE_TRIGGER_TYPES` nas opcoes do combobox
+- Se nao, mostrar apenas os `TRIGGER_TYPES` normais
+- Agrupar visualmente com separador: "CRM" e "Stripe" (labels de grupo no combobox)
 
-Atualmente, se o status do email e apenas `"sent"` (sem webhook de entrega), o sistema conta-o como "enviado" mas nao como "entregue". Isto esta tecnicamente correto, mas causa confusao.
+### 3. `src/components/marketing/AutomationsTable.tsx`
 
-**Alteracao proposta**: Na contagem de "Enviados", ja inclui todos os status validos. Nenhuma mudanca necessaria na logica de contagem -- o problema e 100% o webhook nao estar configurado.
+- Atualizar `getTriggerLabel` para incluir os novos tipos Stripe na resolucao de labels
 
-### 3. Verificacao Rapida (Codigo)
+### 4. `supabase/functions/stripe-webhook/index.ts`
 
-Vou adicionar um aviso visual na pagina de Relatorios quando o webhook parece nao estar a funcionar (ex: todos os emails com status "sent" e zero "delivered" sugere que o webhook nao esta configurado).
+- Apos cada evento processado (checkout.session.completed, subscription.updated, subscription.deleted, invoice.payment_failed), chamar `supabase.functions.invoke("process-automation")` com:
+  - `trigger_type`: o gatilho correspondente (ex: `stripe_subscription_created`)
+  - `organization_id`: o ID da org "Senvia Agency" (`06fe9e1d-9670-45b0-8717-c5a6e90be380`)
+  - `record`: dados relevantes (email do cliente, nome do plano, etc.)
+- Para checkout.session.completed: disparar `stripe_subscription_created` + `stripe_welcome_{plan}`
+- Para subscription.updated com status=active: disparar `stripe_subscription_renewed`
+- Para subscription.updated com status=past_due: disparar `stripe_subscription_past_due`
+- Para subscription.deleted: disparar `stripe_subscription_canceled`
+- Para invoice.payment_failed: disparar `stripe_payment_failed`
 
-### Alteracoes Tecnicas
+### 5. Variaveis Disponiveis nos Templates
 
-**Ficheiro: `src/pages/marketing/Reports.tsx`**
-- Adicionar um alerta/banner quando `stats.sent > 0 && stats.delivered === 0` avisando que o tracking de entregas/aberturas pode nao estar configurado
+Os emails de automacao Stripe terao acesso a estas variaveis (passadas no `record`):
 
-**Ficheiro: `src/components/settings/IntegrationsContent.tsx`** (se existir secao Brevo)
-- Mostrar o URL do webhook para facil copia
+- `{{email}}` - Email do cliente
+- `{{plan}}` - Nome do plano (Starter, Pro, Elite)
+- `{{nome}}` - Nome da organizacao do cliente (quando disponivel)
 
-### Resumo
+## Seguranca
 
-O sistema esta a funcionar corretamente -- o Brevo e que nao esta a enviar os eventos de volta. A solucao principal e configurar o webhook no painel do Brevo. A alteracao no codigo e apenas um aviso amigavel para o utilizador.
+- Os gatilhos Stripe so aparecem no frontend para a org com slug `senvia-agency`
+- O webhook Stripe sempre dispara automacoes com `organization_id` fixo da Senvia Agency
+- Nenhuma alteracao de base de dados necessaria (os trigger_types sao apenas strings na coluna existente)
+
+## Ficheiros Alterados
+
+1. `src/hooks/useAutomations.ts` - Novos trigger types
+2. `src/components/marketing/CreateAutomationModal.tsx` - Filtro por org + gatilhos Stripe
+3. `src/components/marketing/AutomationsTable.tsx` - Labels dos novos triggers
+4. `supabase/functions/stripe-webhook/index.ts` - Disparar automacoes nos eventos Stripe
+
