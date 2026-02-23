@@ -101,6 +101,7 @@ export function OttoChatWindow({ onClose }: OttoChatWindowProps) {
               key={i}
               message={msg}
               onButtonClick={handleQuickAction}
+              onLinkClick={onClose}
               isStreaming={isLoading && i === messages.length - 1 && msg.role === "assistant"}
             />
           ))}

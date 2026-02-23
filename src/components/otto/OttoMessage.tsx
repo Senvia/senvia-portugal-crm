@@ -1,12 +1,14 @@
 import ReactMarkdown from "react-markdown";
-import { User } from "lucide-react";
+import { User, ExternalLink } from "lucide-react";
 const ottoMascot = "/otto-mascot.svg";
 import { Button } from "@/components/ui/button";
+import { useNavigate } from "react-router-dom";
 import type { OttoMessage as OttoMessageType } from "@/hooks/useOttoChat";
 
 interface OttoMessageProps {
   message: OttoMessageType;
   onButtonClick?: (text: string) => void;
+  onLinkClick?: () => void;
   isStreaming?: boolean;
 }
 
@@ -21,11 +23,30 @@ function parseButtons(content: string) {
   return { cleanContent, buttons };
 }
 
-export function OttoMessageComponent({ message, onButtonClick, isStreaming }: OttoMessageProps) {
+function parseLinks(content: string) {
+  const linkRegex = /\[link:(.+?)\|(.+?)\]/g;
+  const links: { label: string; path: string }[] = [];
+  let match;
+  while ((match = linkRegex.exec(content)) !== null) {
+    links.push({ label: match[1], path: match[2] });
+  }
+  const cleanContent = content.replace(linkRegex, "").trim();
+  return { cleanContent, links };
+}
+
+export function OttoMessageComponent({ message, onButtonClick, onLinkClick, isStreaming }: OttoMessageProps) {
   const isUser = message.role === "user";
-  const { cleanContent, buttons } = isUser
-    ? { cleanContent: message.content, buttons: [] }
-    : parseButtons(message.content);
+  const navigate = useNavigate();
+  
+  const parsed = isUser
+    ? { cleanContent: message.content, buttons: [], links: [] }
+    : (() => {
+        const { cleanContent: c1, buttons } = parseButtons(message.content);
+        const { cleanContent: c2, links } = parseLinks(c1);
+        return { cleanContent: c2, buttons, links };
+      })();
+  
+  const { cleanContent, buttons, links } = parsed;
 
   return (
     <div className={`flex gap-2.5 ${isUser ? "flex-row-reverse" : "flex-row"}`}>
@@ -71,6 +92,27 @@ export function OttoMessageComponent({ message, onButtonClick, isStreaming }: Ot
                 onClick={() => onButtonClick?.(btn)}
               >
                 {btn}
+              </Button>
+            ))}
+          </div>
+        )}
+
+        {/* Navigation links */}
+        {links.length > 0 && !isStreaming && (
+          <div className="flex flex-wrap gap-1.5">
+            {links.map((link, i) => (
+              <Button
+                key={i}
+                variant="default"
+                size="sm"
+                className="h-auto py-1.5 px-3 text-xs rounded-full whitespace-normal text-left gap-1.5"
+                onClick={() => {
+                  navigate(link.path);
+                  onLinkClick?.();
+                }}
+              >
+                <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                {link.label}
               </Button>
             ))}
           </div>
