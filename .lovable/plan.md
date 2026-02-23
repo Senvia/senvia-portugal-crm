@@ -1,24 +1,21 @@
 
-
-# Adicionar Botao "Voltar" no Modal de Detalhes do Lead
+# Mover Nome do Lead e Data de Criacao para "Informacoes de Contacto"
 
 ## Problema
-O modal de detalhes do lead (tela cheia) so tem o pequeno "X" no canto superior direito para fechar. Falta um botao "Voltar" visivel e acessivel, especialmente em mobile.
+O nome editavel do lead e a data de criacao estao no header fixo do modal (topo da pagina). Deviam estar dentro do card "Informacoes de Contacto" na coluna lateral direita.
 
-## Solucao
-Adicionar um botao "Voltar" no header fixo do modal e tambem na coluna lateral direita, acima do botao "Eliminar Lead".
+## Alteracoes em `src/components/leads/LeadDetailsModal.tsx`
 
-## Alteracoes
+### 1. Simplificar o Header (linhas 241-272)
+- Remover o `<DialogHeader>` com o `<Input>` do nome e a `<DialogDescription>` com a data
+- Manter apenas o botao "Voltar" e um titulo generico (ex: "Detalhes do Lead") ou apenas o botao Voltar
+- O `<DialogTitle>` precisa existir por acessibilidade, entao colocar um titulo simples como "Detalhes do Lead"
 
-### `src/components/leads/LeadDetailsModal.tsx`
+### 2. Adicionar Nome editavel ao card "Informacoes de Contacto" (linha ~519)
+- Dentro do `<CardContent>` do card "Informacoes de Contacto", adicionar como primeiro campo:
+  - Icone `UserCircle` + Input editavel do nome (o mesmo que esta no header atualmente)
+- A data de criacao ja existe neste card (linha 568-569), entao nao precisa ser duplicada -- apenas remover do header
 
-1. **Header fixo (linha ~242)**: Adicionar um botao com icone `ArrowLeft` + texto "Voltar" no inicio do header, antes do titulo do lead. Ao clicar, fecha o modal (`onOpenChange(false)`).
-
-2. **Coluna lateral direita (linha ~605)**: Adicionar um botao "Voltar" com `variant="outline"` e icone `ArrowLeft` logo acima do botao "Eliminar Lead (RGPD)", para que o utilizador consiga fechar o modal tambem a partir do fundo da pagina.
-
-### Detalhes tecnicos
-- Importar `ArrowLeft` do lucide-react
-- O botao no header sera: `<Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}><ArrowLeft /> Voltar</Button>`
-- O botao na sidebar sera: `<Button variant="outline" className="w-full" onClick={() => onOpenChange(false)}><ArrowLeft /> Voltar</Button>`
-- Ambos os botoes chamam `onOpenChange(false)` para fechar o dialog
-
+### Resultado
+- Header fica limpo: so botao "Voltar" + titulo de acessibilidade
+- Card "Informacoes de Contacto" passa a ter: Nome (editavel), NIF, Telefone, Email, Data de criacao
