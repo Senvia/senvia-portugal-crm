@@ -53,6 +53,7 @@ export function OttoChatWindow({ onClose }: OttoChatWindowProps) {
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: 20, scale: 0.95 }}
       transition={{ duration: 0.2 }}
+      style={{ pointerEvents: 'auto' }}
       className={
         isMobile
           ? "fixed inset-0 z-[9999] bg-background flex flex-col"
