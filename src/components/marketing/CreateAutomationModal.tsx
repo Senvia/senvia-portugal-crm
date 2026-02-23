@@ -5,10 +5,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SearchableCombobox, type ComboboxOption } from '@/components/ui/searchable-combobox';
-import { useAutomations, TRIGGER_TYPES, DELAY_OPTIONS } from '@/hooks/useAutomations';
+import { useAutomations, TRIGGER_TYPES, STRIPE_TRIGGER_TYPES, DELAY_OPTIONS } from '@/hooks/useAutomations';
 import { useEmailTemplates } from '@/hooks/useEmailTemplates';
 import { usePipelineStages } from '@/hooks/usePipelineStages';
 import { useContactLists } from '@/hooks/useContactLists';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Props {
   open: boolean;
@@ -20,6 +21,7 @@ export function CreateAutomationModal({ open, onOpenChange }: Props) {
   const { data: templates } = useEmailTemplates();
   const { data: stages } = usePipelineStages();
   const { data: lists } = useContactLists();
+  const { organization } = useAuth();
 
   const [name, setName] = useState('');
   const [triggerType, setTriggerType] = useState('');
@@ -30,8 +32,12 @@ export function CreateAutomationModal({ open, onOpenChange }: Props) {
   const [toStatus, setToStatus] = useState('');
 
   const showStatusConfig = triggerType === 'lead_status_changed' || triggerType === 'client_status_changed';
+  const isAgency = organization?.slug === 'senvia-agency';
 
-  const triggerOptions: ComboboxOption[] = TRIGGER_TYPES.map(t => ({ value: t.value, label: t.label }));
+  const triggerOptions: ComboboxOption[] = [
+    ...TRIGGER_TYPES.map(t => ({ value: t.value, label: `CRM · ${t.label}` })),
+    ...(isAgency ? STRIPE_TRIGGER_TYPES.map(t => ({ value: t.value, label: `Stripe · ${t.label}` })) : []),
+  ];
   const listOptions: ComboboxOption[] = (lists || []).map(l => ({ value: l.id, label: `${l.name} (${l.member_count})` }));
 
   const handleSubmit = () => {

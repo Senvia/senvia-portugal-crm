@@ -2,6 +2,8 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 
+const SENVIA_AGENCY_ORG_ID = "06fe9e1d-9670-45b0-8717-c5a6e90be380";
+
 const PRODUCT_TO_PLAN: Record<string, string> = {
   "prod_U0wAc7Tuy8w6gA": "starter",
   "prod_U0wGoA4odOBHOZ": "pro",
@@ -61,8 +63,17 @@ serve(async (req) => {
         const productId = sub.items.data[0].price.product as string;
         const plan = PRODUCT_TO_PLAN[productId];
         if (plan) await updateOrgPlan(supabase, email, plan);
-        // Clear payment_failed_at on successful checkout
         await clearPaymentFailed(supabase, email);
+
+        // Get org name for template variables
+        const orgName = await getOrgNameByEmail(supabase, email);
+
+        // Dispatch automation: subscription created
+        await dispatchAutomation(supabase, "stripe_subscription_created", { email, plan: plan || "unknown", nome: orgName });
+        // Dispatch plan-specific welcome
+        if (plan) {
+          await dispatchAutomation(supabase, `stripe_welcome_${plan}`, { email, plan, nome: orgName });
+        }
         break;
       }
       case "customer.subscription.updated": {
@@ -75,24 +86,32 @@ serve(async (req) => {
 
         if (plan && email) await updateOrgPlan(supabase, email, plan);
 
-        // If subscription is past_due, record payment failure
-        if (sub.status === "past_due" && email) {
-          await recordPaymentFailed(supabase, email);
-        }
-        // If subscription is active again, clear payment failure
-        if (sub.status === "active" && email) {
-          await clearPaymentFailed(supabase, email);
+        if (email) {
+          const orgName = await getOrgNameByEmail(supabase, email);
+
+          if (sub.status === "past_due") {
+            await recordPaymentFailed(supabase, email);
+            await dispatchAutomation(supabase, "stripe_subscription_past_due", { email, plan: plan || "unknown", nome: orgName });
+          }
+          if (sub.status === "active") {
+            await clearPaymentFailed(supabase, email);
+            await dispatchAutomation(supabase, "stripe_subscription_renewed", { email, plan: plan || "unknown", nome: orgName });
+          }
         }
         break;
       }
       case "customer.subscription.deleted": {
         const sub = event.data.object as Stripe.Subscription;
+        const productId = sub.items.data[0].price.product as string;
+        const plan = PRODUCT_TO_PLAN[productId];
         const customerId = sub.customer as string;
         const customer = await stripe.customers.retrieve(customerId);
         const email = (customer as Stripe.Customer).email;
         if (email) {
           await updateOrgPlan(supabase, email, null);
           await clearPaymentFailed(supabase, email);
+          const orgName = await getOrgNameByEmail(supabase, email);
+          await dispatchAutomation(supabase, "stripe_subscription_canceled", { email, plan: plan || "unknown", nome: orgName });
         }
         break;
       }
@@ -102,6 +121,8 @@ serve(async (req) => {
         logStep("Payment failed", { customer: invoice.customer, email });
         if (email) {
           await recordPaymentFailed(supabase, email);
+          const orgName = await getOrgNameByEmail(supabase, email);
+          await dispatchAutomation(supabase, "stripe_payment_failed", { email, plan: "unknown", nome: orgName });
         }
         break;
       }
@@ -118,6 +139,36 @@ serve(async (req) => {
     status: 200,
   });
 });
+
+// --- Helper functions ---
+
+async function dispatchAutomation(supabase: any, triggerType: string, record: Record<string, string>) {
+  try {
+    logStep("Dispatching automation", { triggerType, record });
+    const { error } = await supabase.functions.invoke("process-automation", {
+      body: {
+        trigger_type: triggerType,
+        organization_id: SENVIA_AGENCY_ORG_ID,
+        record,
+      },
+    });
+    if (error) logStep("Automation dispatch error", { error: error.message });
+    else logStep("Automation dispatched", { triggerType });
+  } catch (err) {
+    logStep("Automation dispatch failed", { error: (err as Error).message });
+  }
+}
+
+async function getOrgNameByEmail(supabase: any, email: string): Promise<string> {
+  try {
+    const orgId = await findOrgByEmail(supabase, email);
+    if (!orgId) return "";
+    const { data } = await supabase.from("organizations").select("name").eq("id", orgId).maybeSingle();
+    return data?.name || "";
+  } catch {
+    return "";
+  }
+}
 
 async function findOrgByEmail(supabase: any, email: string) {
   const { data: users, error: listErr } = await supabase.auth.admin.listUsers();
@@ -160,7 +211,6 @@ async function recordPaymentFailed(supabase: any, email: string) {
   const orgId = await findOrgByEmail(supabase, email);
   if (!orgId) return;
 
-  // Only set if not already set (preserve original failure date)
   const { error } = await supabase
     .from("organizations")
     .update({ payment_failed_at: new Date().toISOString() })

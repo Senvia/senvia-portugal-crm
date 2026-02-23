@@ -7,7 +7,7 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { EmailAutomation, TRIGGER_TYPES, DELAY_OPTIONS, useAutomations } from '@/hooks/useAutomations';
+import { EmailAutomation, ALL_TRIGGER_TYPES, DELAY_OPTIONS, useAutomations } from '@/hooks/useAutomations';
 
 interface Props {
   automations: EmailAutomation[];
@@ -17,7 +17,7 @@ export function AutomationsTable({ automations }: Props) {
   const { toggleAutomation, deleteAutomation } = useAutomations();
 
   const getTriggerLabel = (type: string) =>
-    TRIGGER_TYPES.find(t => t.value === type)?.label || type;
+    ALL_TRIGGER_TYPES.find(t => t.value === type)?.label || type;
 
   const getDelayLabel = (minutes: number) =>
     DELAY_OPTIONS.find(d => d.value === minutes)?.label || `${minutes} min`;

@@ -45,6 +45,19 @@ export const TRIGGER_TYPES = [
   { value: 'proposal_created', label: 'Nova Proposta Criada' },
 ] as const;
 
+export const STRIPE_TRIGGER_TYPES = [
+  { value: 'stripe_subscription_created', label: 'Subscrição Ativada' },
+  { value: 'stripe_subscription_renewed', label: 'Subscrição Renovada' },
+  { value: 'stripe_subscription_canceled', label: 'Subscrição Cancelada' },
+  { value: 'stripe_subscription_past_due', label: 'Pagamento em Atraso' },
+  { value: 'stripe_payment_failed', label: 'Pagamento Falhado' },
+  { value: 'stripe_welcome_starter', label: 'Bem-vindo ao Plano Starter' },
+  { value: 'stripe_welcome_pro', label: 'Bem-vindo ao Plano Pro' },
+  { value: 'stripe_welcome_elite', label: 'Bem-vindo ao Plano Elite' },
+] as const;
+
+export const ALL_TRIGGER_TYPES = [...TRIGGER_TYPES, ...STRIPE_TRIGGER_TYPES];
+
 // RECIPIENT_TYPES removed — automations now target lists (list_id)
 
 export const DELAY_OPTIONS = [
