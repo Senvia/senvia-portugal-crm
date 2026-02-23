@@ -5,9 +5,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SearchableCombobox, type ComboboxOption } from '@/components/ui/searchable-combobox';
-import { useAutomations, TRIGGER_TYPES, RECIPIENT_TYPES, DELAY_OPTIONS } from '@/hooks/useAutomations';
+import { useAutomations, TRIGGER_TYPES, DELAY_OPTIONS } from '@/hooks/useAutomations';
 import { useEmailTemplates } from '@/hooks/useEmailTemplates';
 import { usePipelineStages } from '@/hooks/usePipelineStages';
+import { useContactLists } from '@/hooks/useContactLists';
 
 interface Props {
   open: boolean;
@@ -18,21 +19,23 @@ export function CreateAutomationModal({ open, onOpenChange }: Props) {
   const { createAutomation } = useAutomations();
   const { data: templates } = useEmailTemplates();
   const { data: stages } = usePipelineStages();
+  const { data: lists } = useContactLists();
 
   const [name, setName] = useState('');
   const [triggerType, setTriggerType] = useState('');
   const [templateId, setTemplateId] = useState('');
   const [delayMinutes, setDelayMinutes] = useState(0);
-  const [recipientType, setRecipientType] = useState('lead');
+  const [listId, setListId] = useState('');
   const [fromStatus, setFromStatus] = useState('');
   const [toStatus, setToStatus] = useState('');
 
   const showStatusConfig = triggerType === 'lead_status_changed' || triggerType === 'client_status_changed';
 
   const triggerOptions: ComboboxOption[] = TRIGGER_TYPES.map(t => ({ value: t.value, label: t.label }));
+  const listOptions: ComboboxOption[] = (lists || []).map(l => ({ value: l.id, label: `${l.name} (${l.member_count})` }));
 
   const handleSubmit = () => {
-    if (!name || !triggerType || !templateId) return;
+    if (!name || !triggerType || !templateId || !listId) return;
 
     const triggerConfig: Record<string, string> = {};
     if (showStatusConfig) {
@@ -41,7 +44,7 @@ export function CreateAutomationModal({ open, onOpenChange }: Props) {
     }
 
     createAutomation.mutate(
-      { name, trigger_type: triggerType, trigger_config: triggerConfig, template_id: templateId, delay_minutes: delayMinutes, recipient_type: recipientType },
+      { name, trigger_type: triggerType, trigger_config: triggerConfig, template_id: templateId, delay_minutes: delayMinutes, list_id: listId },
       {
         onSuccess: () => {
           onOpenChange(false);
@@ -49,7 +52,7 @@ export function CreateAutomationModal({ open, onOpenChange }: Props) {
           setTriggerType('');
           setTemplateId('');
           setDelayMinutes(0);
-          setRecipientType('lead');
+          setListId('');
           setFromStatus('');
           setToStatus('');
         },
@@ -126,6 +129,19 @@ export function CreateAutomationModal({ open, onOpenChange }: Props) {
           </div>
 
           <div>
+            <Label>Lista de Destinatários</Label>
+            <SearchableCombobox
+              options={listOptions}
+              value={listId || null}
+              onValueChange={(val) => setListId(val || '')}
+              placeholder="Selecionar lista"
+              searchPlaceholder="Pesquisar lista..."
+              emptyText="Nenhuma lista encontrada."
+              emptyLabel="Nenhuma"
+            />
+          </div>
+
+          <div>
             <Label>Atraso antes de enviar</Label>
             <Select value={String(delayMinutes)} onValueChange={v => setDelayMinutes(Number(v))}>
               <SelectTrigger><SelectValue /></SelectTrigger>
@@ -137,19 +153,7 @@ export function CreateAutomationModal({ open, onOpenChange }: Props) {
             </Select>
           </div>
 
-          <div>
-            <Label>Destinatário</Label>
-            <Select value={recipientType} onValueChange={setRecipientType}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {RECIPIENT_TYPES.map(r => (
-                  <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <Button onClick={handleSubmit} disabled={!name || !triggerType || !templateId || createAutomation.isPending} className="w-full">
+          <Button onClick={handleSubmit} disabled={!name || !triggerType || !templateId || !listId || createAutomation.isPending} className="w-full">
             {createAutomation.isPending ? 'A criar...' : 'Criar Automação'}
           </Button>
         </div>
