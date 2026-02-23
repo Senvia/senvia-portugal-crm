@@ -166,9 +166,10 @@ async function syncOrganization(supabase: any, organization_id: string, org: any
         }
       }
 
-      // Match 3: by invoice_reference ILIKE on sale_payments
+      // Match 3: by invoice_reference ILIKE on sale_payments (normalized)
       if (!matchedSaleId && !matchedPaymentId && docRef) {
-        const seqPart = docRef.split('/').pop() || docRef
+        const cleanRef = docRef.replace(/^(FR|FT|FS)\s+/i, '')
+        const seqPart = cleanRef.split('/').pop() || cleanRef
         const { data: payments } = await supabase
           .from('sale_payments')
           .select('id, sale_id')
@@ -182,9 +183,10 @@ async function syncOrganization(supabase: any, organization_id: string, org: any
         }
       }
 
-      // Match 4: by invoice_reference on sales
+      // Match 4: by invoice_reference on sales (normalized)
       if (!matchedSaleId && docRef) {
-        const seqPart = docRef.split('/').pop() || docRef
+        const cleanRef4 = docRef.replace(/^(FR|FT|FS)\s+/i, '')
+        const seqPart = cleanRef4.split('/').pop() || cleanRef4
         const { data: sales } = await supabase
           .from('sales')
           .select('id')
@@ -208,6 +210,30 @@ async function syncOrganization(supabase: any, organization_id: string, org: any
         if (payments && payments.length > 0) {
           matchedPaymentId = payments[0].id
           matchedSaleId = payments[0].sale_id || null
+        }
+      }
+
+      // Match 6: by client_name -> crm_clients -> sales
+      if (!matchedSaleId && !matchedPaymentId && docClientName) {
+        const { data: clients } = await supabase
+          .from('crm_clients')
+          .select('id')
+          .eq('organization_id', organization_id)
+          .ilike('name', `%${docClientName}%`)
+          .limit(1)
+
+        if (clients && clients.length > 0) {
+          const { data: sales } = await supabase
+            .from('sales')
+            .select('id')
+            .eq('organization_id', organization_id)
+            .eq('client_id', clients[0].id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+
+          if (sales && sales.length > 0) {
+            matchedSaleId = sales[0].id
+          }
         }
       }
 
