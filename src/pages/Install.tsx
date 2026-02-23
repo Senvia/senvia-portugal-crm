@@ -184,7 +184,7 @@ export default function Install() {
         </div>
 
         <div className="text-center">
-          <Link to="/login" className="text-sm text-primary hover:underline">
+          <Link to="/" className="text-sm text-primary hover:underline">
             Continuar para o Login →
           </Link>
         </div>
