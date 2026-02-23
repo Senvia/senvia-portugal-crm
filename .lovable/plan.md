@@ -1,30 +1,42 @@
 
 
-# Fix: Otto Clicavel por Cima de Modais (Fix Definitivo)
+# Fix Definitivo: Otto Clicavel com Modais Abertos
 
-## Problema
-O `DialogOverlay` tem `fixed inset-0` e captura **todos** os eventos de pointer na tela inteira. O `onPointerDownOutside` no `DialogContent` nao resolve porque o overlay bloqueia o clique antes de chegar ao Otto.
+## Causa Raiz
+O Radix Dialog, ao abrir um modal, aplica automaticamente `pointer-events: none` a **todos os elementos irmaos** do seu portal no `<body>`. Como o Otto tambem e renderizado via `createPortal` no `<body>`, ele e tratado como um irmao e fica bloqueado.
+
+A solucao anterior (pointer-events-none no overlay) nao resolve porque o bloqueio vem do **proprio Radix** a nivel do body, nao do overlay.
 
 ## Solucao
-Tornar o overlay transparente a eventos de pointer (`pointer-events-none`) e adicionar `pointer-events-auto` ao conteudo do dialog.
+Forcar `pointer-events: auto !important` via inline style no container do Otto FAB e na janela de chat. O `!important` sobrescreve o estilo aplicado pelo Radix.
 
 ## Alteracoes
 
-### Ficheiro: `src/components/ui/dialog.tsx`
+### 1. `src/components/otto/OttoFAB.tsx`
+- Adicionar `style={{ pointerEvents: 'auto' }}` ao container raiz do portal (o fragmento nao aceita style, entao envolver num `div`)
+- O div wrapper tera `position: fixed`, `z-index: 9999`, e `pointer-events: auto !important`
 
-1. **DialogOverlay** - Adicionar `pointer-events-none` para que o overlay nao bloqueie cliques em elementos acima dele (como o Otto)
+### 2. `src/components/otto/OttoChatWindow.tsx`
+- Adicionar `style={{ pointerEvents: 'auto' }}` ao container da janela de chat
 
-2. **DialogContent (ambas variantes)** - Adicionar `pointer-events-auto` para que o conteudo do modal continue a receber cliques normalmente
+### 3. `src/components/ui/dialog.tsx`
+- Reverter `pointer-events-none` do overlay (voltar ao original) pois nao era este o problema
+- Manter o `onPointerDownOutside` handler para evitar fechar o dialog ao clicar no Otto
 
 ### Detalhe Tecnico
 
 ```text
-DialogOverlay:  "fixed inset-0 z-50 bg-black/80 pointer-events-none ..."
-DialogContent:  "... z-50 pointer-events-auto ..."
+// OttoFAB.tsx - container do portal
+return createPortal(
+  <div style={{ pointerEvents: 'auto' }} className="fixed z-[9999] ...">
+    ...FAB e ChatWindow...
+  </div>,
+  document.body
+);
+
+// OttoChatWindow.tsx
+<motion.div style={{ pointerEvents: 'auto' }} className="fixed z-[9999] ...">
 ```
 
-O overlay continua visualmente presente (fundo escuro), mas nao intercepta cliques. O conteudo do dialog mantem a interactividade normal. O Otto, com `z-[9999]`, fica totalmente acessivel.
-
-### Efeito colateral a mitigar
-Sem pointer-events no overlay, clicar fora do dialog (no fundo escuro) ja nao fecha o modal automaticamente. Para manter esse comportamento, vamos usar o `onInteractOutside` do Radix que ja esta configurado no `DialogContent`.
+O `style={{ pointerEvents: 'auto' }}` inline sobrescreve qualquer estilo aplicado pelo Radix Dialog, garantindo que o Otto e sempre interativo.
 
