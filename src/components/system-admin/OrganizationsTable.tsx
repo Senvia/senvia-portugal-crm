@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { format, differenceInDays } from "date-fns";
+import { format } from "date-fns";
 import { pt } from "date-fns/locale";
 import { LogIn, CheckCircle2, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -131,7 +131,8 @@ export function OrganizationsTable({
                   const status = getOrgStatus(org, stripeInfo);
                   const config = STATUS_CONFIG[status];
                   const trialEnd = org.trial_ends_at ? new Date(org.trial_ends_at) : null;
-                  const daysLeft = trialEnd ? differenceInDays(trialEnd, now) : null;
+                  const diffMs = trialEnd ? trialEnd.getTime() - now.getTime() : null;
+                  const daysLeft = diffMs !== null ? Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24))) : null;
 
                   // Show Stripe plan if available, otherwise DB plan
                   const displayPlan = stripeInfo?.stripe_plan || org.plan;
