@@ -1,47 +1,29 @@
 
 
-# Trial com Acesso Total + Pagina de Selecao de Plano
+# Corrigir Cores do Onboarding Wizard
 
-## Resumo
+## Problema
+O wizard de onboarding usa tokens CSS do sidebar (`bg-sidebar-background`, `bg-sidebar-accent/50`, `text-sidebar-foreground`, etc.) que sao cores escuras (navy). Mas o componente tem `bg-sidebar-background` no container principal que deveria criar um fundo escuro. O resultado visual mostra cards cinzentos "lavados" num fundo claro, o que indica que o estilo dark do sidebar nao esta a ser aplicado corretamente ao overlay full-screen.
 
-Durante os 14 dias de trial, o cliente tem acesso a **todos os modulos** (como se fosse Elite). A pagina de Plano e Faturacao mostra os 3 planos com botoes "Selecionar" (em vez de "Fazer Upgrade/Downgrade"). Apos os 14 dias sem plano escolhido, o sistema bloqueia (ja funciona assim com o `TrialExpiredBlocker`).
+## Solucao
+Substituir todos os tokens `sidebar-*` no `OnboardingWizard.tsx` por tokens do tema principal (`background`, `foreground`, `card`, `muted`, `border`, `primary`) para que o wizard fique visualmente consistente com o resto da aplicacao. Alternativa: forcar o fundo escuro com classes Tailwind directas (ex: `bg-[hsl(222,47%,8%)]`), mas e mais limpo usar os tokens standard.
 
 ## Alteracoes
 
-### 1. Edge Function `check-subscription` -- trial retorna plan_id = 'elite'
+### Ficheiro: `src/components/onboarding/OnboardingWizard.tsx`
 
-Atualmente, quando o utilizador esta em trial, a funcao `buildTrialResponse` retorna `plan_id: 'starter'`. Alterar para retornar `plan_id: 'elite'` durante o trial, para que todos os modulos fiquem desbloqueados.
+Substituir as classes CSS:
 
-Tambem sincronizar `organizations.plan = 'elite'` enquanto o trial esta ativo, para que o `useSubscription` carregue as features do plano Elite.
+| De (sidebar tokens) | Para (tokens standard) |
+|---|---|
+| `bg-sidebar-background` | `bg-background` |
+| `border-sidebar-border` | `border-border` |
+| `text-sidebar-foreground` | `text-foreground` |
+| `text-sidebar-muted` | `text-muted-foreground` |
+| `bg-sidebar-accent/50` | `bg-card` |
+| `bg-sidebar-accent` | `bg-muted` |
+| `bg-sidebar-background/60` | `bg-background/60` |
 
-### 2. `useSubscription` -- nao bloquear modulos durante trial
+Isto fara com que o wizard use o tema claro da aplicacao (fundo branco, cards brancos com border, texto escuro) - ficando visualmente consistente com o design do Senvia OS.
 
-O hook `useSubscription` usa `organization.plan` para determinar quais modulos estao bloqueados. Como a edge function agora sincroniza `plan = 'elite'` durante o trial, os modulos ficam todos desbloqueados automaticamente. Nao e preciso alterar este hook.
-
-### 3. `BillingTab` -- botoes "Selecionar" quando nao tem subscricao
-
-Alterar a logica dos botoes na pagina de faturacao:
-- Se `subscriptionStatus.subscribed === false` (trial ou trial expirado): todos os planos mostram botao **"Selecionar"** que abre o checkout
-- Se `subscriptionStatus.subscribed === true`: manter logica atual (Plano Atual / Fazer Upgrade / Fazer Downgrade)
-- Remover o badge "Atual" quando o utilizador esta em trial (nao tem plano real)
-
-### 4. Nao mostrar status "Plano Atual: Starter" durante trial
-
-Na secao de status do billing, se o utilizador esta em trial (nao subscrito), nao mostrar o bloco de "Subscricao Ativa". Adicionar um bloco especifico de trial com a informacao dos dias restantes.
-
-## Secao Tecnica
-
-### Ficheiro: `supabase/functions/check-subscription/index.ts`
-- Na funcao `buildTrialResponse`, alterar `plan_id: 'starter'` para `plan_id: 'elite'` quando o trial ainda esta ativo
-- Adicionar sync do plan para 'elite' na org durante o trial (precisa receber orgId como parametro)
-
-### Ficheiro: `src/components/settings/BillingTab.tsx`
-- Adicionar variavel `isOnTrial` baseada em `subscriptionStatus?.on_trial === true`
-- Adicionar variavel `hasNoSubscription` baseada em `!subscriptionStatus?.subscribed`
-- Quando `hasNoSubscription`: botao mostra "Selecionar" para todos os planos e dispara `createCheckout`
-- Quando `hasNoSubscription`: nao mostrar badge "Atual" em nenhum plano
-- Adicionar bloco de trial ativo com dias restantes quando `isOnTrial === true`
-
-### Ficheiro: `supabase/functions/check-subscription/index.ts` (detalhe)
-- Alterar a funcao `buildTrialResponse` e o fluxo principal para passar `orgId` e fazer o update do plan
-
+Os cards de nicho terao fundo branco com border suave, hover com sombra, e o texto sera legivel. As badges de etapas do pipeline mantem as cores proprias (ja vem inline do template).
