@@ -3302,6 +3302,37 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      search_credit_notes_unaccent: {
+        Args: {
+          cn_status?: string
+          max_results?: number
+          org_id: string
+          search_term: string
+        }
+        Returns: {
+          client_name: string | null
+          created_at: string | null
+          date: string | null
+          id: string
+          invoicexpress_id: number
+          organization_id: string
+          payment_id: string | null
+          pdf_path: string | null
+          raw_data: Json | null
+          reference: string | null
+          related_invoice_id: number | null
+          sale_id: string | null
+          status: string | null
+          total: number | null
+          updated_at: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "credit_notes"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       search_invoices_unaccent: {
         Args: {
           inv_status?: string
