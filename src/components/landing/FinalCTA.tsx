@@ -31,7 +31,7 @@ export function FinalCTA() {
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Button variant="senvia" size="xl" asChild>
-              <Link to="/login">
+              <Link to="/login?tab=signup">
                 Começar Teste Grátis
                 <ArrowRight className="ml-2 w-5 h-5" />
               </Link>
