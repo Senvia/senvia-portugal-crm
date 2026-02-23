@@ -47,7 +47,7 @@ const PAGE_ACTIONS: Record<string, QuickAction[]> = {
     { label: "Registar pagamento", icon: CreditCard },
     { label: "Vendas recorrentes", icon: RefreshCw },
   ],
-  "/finance": [
+  "/financeiro": [
     { label: "Registar despesa", icon: Wallet },
     { label: "Configurar contas", icon: Building2 },
     { label: "Sincronizar faturas", icon: RefreshCw },
