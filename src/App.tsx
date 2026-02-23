@@ -26,6 +26,7 @@ import Marketing from "./pages/Marketing";
 import MarketingTemplates from "./pages/marketing/Templates";
 import MarketingCampaigns from "./pages/marketing/Campaigns";
 import MarketingReports from "./pages/marketing/Reports";
+import MarketingAutomations from "./pages/marketing/Automations";
 import MarketingLists from "./pages/marketing/Lists";
 import EcommerceProducts from "./pages/ecommerce/Products";
 import EcommerceOrders from "./pages/ecommerce/Orders";
@@ -96,6 +97,7 @@ const App = () => (
               <Route path="/marketing/campaigns" element={<MarketingCampaigns />} />
               <Route path="/marketing/reports" element={<MarketingReports />} />
               <Route path="/marketing/lists" element={<MarketingLists />} />
+              <Route path="/marketing/automations" element={<MarketingAutomations />} />
             </Route>
 
             {/* Super Admin Routes */}
