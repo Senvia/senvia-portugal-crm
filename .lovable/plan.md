@@ -1,29 +1,19 @@
 
 
-# Corrigir Cores do Onboarding Wizard
+# Tornar o Otto visivel por cima de Modais
 
 ## Problema
-O wizard de onboarding usa tokens CSS do sidebar (`bg-sidebar-background`, `bg-sidebar-accent/50`, `text-sidebar-foreground`, etc.) que sao cores escuras (navy). Mas o componente tem `bg-sidebar-background` no container principal que deveria criar um fundo escuro. O resultado visual mostra cards cinzentos "lavados" num fundo claro, o que indica que o estilo dark do sidebar nao esta a ser aplicado corretamente ao overlay full-screen.
+O Otto FAB usa `z-50` e os modais (Dialog overlay + content) tambem usam `z-50`. Como os modais sao renderizados via portal do Radix (aparecem depois no DOM), ficam por cima do Otto, escondendo-o completamente.
 
 ## Solucao
-Substituir todos os tokens `sidebar-*` no `OnboardingWizard.tsx` por tokens do tema principal (`background`, `foreground`, `card`, `muted`, `border`, `primary`) para que o wizard fique visualmente consistente com o resto da aplicacao. Alternativa: forcar o fundo escuro com classes Tailwind directas (ex: `bg-[hsl(222,47%,8%)]`), mas e mais limpo usar os tokens standard.
+Aumentar o z-index do Otto FAB e da janela de chat para `z-[60]`, garantindo que ficam sempre visiveis, mesmo com modais abertos.
 
 ## Alteracoes
 
-### Ficheiro: `src/components/onboarding/OnboardingWizard.tsx`
+### Ficheiro: `src/components/otto/OttoFAB.tsx`
+- Alterar `z-50` para `z-[60]` no container do botao FAB
 
-Substituir as classes CSS:
+### Ficheiro: `src/components/otto/OttoChatWindow.tsx`
+- Alterar o z-index da janela de chat (se usar `z-50`) para `z-[60]`, para que a janela de conversa tambem fique por cima de modais abertos
 
-| De (sidebar tokens) | Para (tokens standard) |
-|---|---|
-| `bg-sidebar-background` | `bg-background` |
-| `border-sidebar-border` | `border-border` |
-| `text-sidebar-foreground` | `text-foreground` |
-| `text-sidebar-muted` | `text-muted-foreground` |
-| `bg-sidebar-accent/50` | `bg-card` |
-| `bg-sidebar-accent` | `bg-muted` |
-| `bg-sidebar-background/60` | `bg-background/60` |
-
-Isto fara com que o wizard use o tema claro da aplicacao (fundo branco, cards brancos com border, texto escuro) - ficando visualmente consistente com o design do Senvia OS.
-
-Os cards de nicho terao fundo branco com border suave, hover com sombra, e o texto sera legivel. As badges de etapas do pipeline mantem as cores proprias (ja vem inline do template).
+Isto garante que o Otto e sempre acessivel, independentemente de haver modais ou drawers abertos.
