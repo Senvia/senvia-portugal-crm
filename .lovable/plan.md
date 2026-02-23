@@ -1,49 +1,61 @@
 
-# Lista Automática: Subscrição Reativada
+# Corrigir Listas Automáticas Stripe/Trial
 
-## Resumo
+## Problemas Identificados
 
-Adicionar uma nova lista de sistema "Subscrição Reativada" para a organização Senvia Agency, que captura clientes que tiveram a subscrição cancelada/expirada e voltaram a subscrever.
+1. **Variáveis `app.settings` nulas**: A função `create_organization_for_current_user` usa `current_setting('app.settings.supabase_url')` e `current_setting('app.settings.anon_key')` para disparar automações via `pg_net`, mas estas variáveis nunca foram configuradas. Resultado: o gatilho `trial_started` nunca dispara.
 
-## Nova Lista
+2. **Cron `check-trial-status` inexistente**: A edge function foi criada mas o cron job para a executar diariamente nunca foi registado na base de dados. Resultado: os gatilhos `trial_expiring_3d`, `trial_expiring_1d` e `trial_expired` nunca disparam.
 
-| Nome | Descrição |
-|---|---|
-| Subscrição Reativada | Clientes que reativaram a subscrição após cancelamento ou expiração |
+3. **Sem backfill de dados existentes**: As 2 organizações existentes (Perfect2Gether com plano elite, Construpao com plano elite + trial ativo) nunca foram sincronizadas para as listas automáticas.
 
-## Comportamento Automático
+## Solução
 
-- **Reativação detetada (checkout com `isReactivation = true`)**: Contacto entra em "Subscrição Reativada"
-- **Subscrição cancelada**: Contacto removido de "Subscrição Reativada"
-- O contacto permanece simultaneamente na lista do plano correspondente (Starter/Pro/Elite)
+### 1. Migração SQL -- Corrigir tudo de uma vez
 
-## Alterações Técnicas
+Uma única migração que:
 
-### 1. Migração SQL
-
-Atualizar a função `ensure_stripe_auto_lists` para incluir a nova lista:
-
+**a) Configura as variáveis `app.settings`**
 ```text
-('Subscrição Reativada', 'Clientes que reativaram a subscrição')
+ALTER DATABASE postgres SET app.settings.supabase_url = 'https://zppcobirzgpfcrnxznwe.supabase.co';
+```
+Nota: `ALTER DATABASE` não é permitido nas migrações. Alternativa: atualizar a função `create_organization_for_current_user` para usar os valores diretamente (hardcoded), seguindo o mesmo padrão já usado no trigger `notify_automation_trigger` que já tem o URL e chave hardcoded.
+
+**b) Corrige a função `create_organization_for_current_user`**
+
+Substituir as chamadas a `current_setting('app.settings...')` por valores diretos:
+```text
+url := 'https://zppcobirzgpfcrnxznwe.supabase.co/functions/v1/process-automation'
+headers := '{"Content-Type":"application/json","Authorization":"Bearer <anon_key>"}'
 ```
 
-Executar imediatamente para a org Senvia Agency.
+**c) Backfill das organizações existentes nas listas corretas**
 
-### 2. `supabase/functions/stripe-webhook/index.ts`
+Para cada organização existente:
+- Criar/upsert contacto de marketing na org Senvia Agency
+- Se tem plano ativo: adicionar à lista do plano correspondente (Plano Elite)
+- Se está em trial: adicionar à lista "Clientes em Trial"
 
-No `syncStripeAutoLists`:
-- Adicionar `reactivatedListId` ao mapa de listas
-- Receber um novo parâmetro `isReactivation` (boolean)
-- No evento `checkout_completed`: se `isReactivation = true`, adicionar à lista "Subscrição Reativada"
-- No evento `canceled`: remover da lista "Subscrição Reativada"
+### 2. Registar o cron `check-trial-status`
 
-Atualizar a chamada a `syncStripeAutoLists` no bloco `checkout.session.completed` para passar o flag `isReactivation`.
-
-### 3. `src/hooks/useAutomations.ts`
-
-Já existe o gatilho `stripe_subscription_created` (label: "Subscrição Reativada") -- não precisa de alteração no frontend.
+Inserir o cron job via SQL direto (não migração):
+```text
+SELECT cron.schedule(
+  'check-trial-status-daily',
+  '0 8 * * *',
+  $$ SELECT net.http_post(...check-trial-status...) $$
+);
+```
 
 ## Ficheiros Alterados
 
-1. **Nova migração SQL** -- Adicionar "Subscrição Reativada" à função `ensure_stripe_auto_lists`
-2. **`supabase/functions/stripe-webhook/index.ts`** -- Lógica de sincronização da nova lista
+1. **Nova migração SQL** -- Corrigir `create_organization_for_current_user` com URLs diretos + backfill de dados existentes
+2. **SQL direto (cron)** -- Registar o cron job `check-trial-status-daily`
+
+## Resultado Esperado
+
+Após a implementação:
+- Perfect2Gether (elite, sem trial) ira aparecer na lista "Plano Elite"
+- Construpao (elite, trial ativo até 09/03) ira aparecer em "Plano Elite" e "Clientes em Trial"
+- Novas organizações criadas serão automaticamente adicionadas a "Clientes em Trial" e dispararão o gatilho `trial_started`
+- O cron diário ira detetar trials a expirar e mover contactos entre listas
