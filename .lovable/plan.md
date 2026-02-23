@@ -1,37 +1,42 @@
 
-# Injetar Data e Hora Atual no Otto
+
+# Corrigir Otto: Eliminar Instruções Falsas para Ações que Não Pode Executar
 
 ## Problema
-O system prompt do Otto nao inclui a data atual. O modelo assume que estamos em 2024 (data do treino). Quando o utilizador pergunta "quantos leads tenho este mes?" ou qualquer pergunta temporal, o Otto nao sabe que mes/ano e.
+O Otto recebe um pedido como "envia-me a fatura em PDF" e, em vez de reconhecer que **não tem essa capacidade**, inventa botões falsos ("Enviar por E-mail", "Descarregar PDF", "Partilhar Link") e dá instruções genéricas passo-a-passo. Isto acontece porque o system prompt não define claramente os limites das capacidades do Otto.
 
 ## Solucao
 
-Injetar a data e hora real de Portugal no momento da mensagem, adicionando-a ao system prompt dinamicamente.
+Adicionar ao `SYSTEM_PROMPT` uma secao explicita de **LIMITACOES** que lista exatamente o que o Otto NAO pode fazer, e como deve responder nesses casos.
 
-### Alteracao no ficheiro `supabase/functions/otto-chat/index.ts`
+### Texto a adicionar ao system prompt
 
-Na zona onde se constroi o `systemContent` (linha ~612), adicionar a data atual formatada em PT-PT antes de enviar ao modelo:
+```
+LIMITAÇÕES (O QUE NÃO PODES FAZER):
+- NÃO podes enviar emails, faturas ou documentos.
+- NÃO podes descarregar PDFs ou gerar ficheiros.
+- NÃO podes criar, editar ou apagar registos (leads, clientes, vendas, faturas).
+- NÃO podes executar ações no sistema — apenas PESQUISAR e CONSULTAR dados.
+- NÃO podes partilhar links externos ou gerar URLs de download.
 
-```typescript
-// Gerar data atual em PT-PT (fuso horario de Lisboa)
-const now = new Date();
-const dateStr = now.toLocaleDateString('pt-PT', { 
-  weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
-  timeZone: 'Europe/Lisbon' 
-});
-const timeStr = now.toLocaleTimeString('pt-PT', { 
-  hour: '2-digit', minute: '2-digit',
-  timeZone: 'Europe/Lisbon' 
-});
-const dateContext = `\n\nDATA E HORA ATUAL: ${dateStr}, ${timeStr} (hora de Lisboa). Usa SEMPRE esta data como referencia temporal. "Este mes" = mes atual desta data. "Hoje" = esta data.`;
+QUANDO O UTILIZADOR PEDE UMA AÇÃO QUE NÃO PODES EXECUTAR:
+- Diz claramente: "Não consigo executar essa ação diretamente."
+- Indica EXATAMENTE onde no sistema o utilizador pode fazê-lo, com o caminho do menu.
+- Inclui um [link] direto para a página relevante.
+- NUNCA inventes botões de interface como "Descarregar PDF" ou "Enviar por Email" na tua resposta — esses botões não existem no chat.
 
-const systemContent = SYSTEM_PROMPT + dateContext + systemPromptExtra + ...;
+Exemplo correto:
+Utilizador: "Envia-me a fatura FT 2026/10 por email"
+Otto: "Não consigo enviar faturas diretamente. Para enviar a fatura FT 2026/10 por email:
+1. Aceda a **Financeiro > Faturas**
+2. Localize a fatura **FT 2026/10**
+3. Clique no menu de opções (três pontos) e selecione **Enviar por Email**"
+[link:Ir para Faturas|/financeiro/faturas]
 ```
 
-### Resultado
-- O Otto sabera sempre a data e hora real
-- Perguntas como "leads deste mes", "vendas de hoje", "faturas desta semana" funcionarao corretamente
-- O fuso horario sera sempre Portugal (Europe/Lisbon)
-
 ### Ficheiro a alterar
-- `supabase/functions/otto-chat/index.ts` -- injecao dinamica da data no system prompt
+- `supabase/functions/otto-chat/index.ts` — adicionar secao LIMITACOES ao SYSTEM_PROMPT (antes das REGRAS DE FORMATACAO)
+
+### Resultado
+Quando o utilizador pedir uma acao (enviar email, descarregar PDF, etc.), o Otto dira claramente que nao pode executar essa acao e indicara o caminho exato no sistema, sem inventar botoes ou interfaces falsas.
+
