@@ -54,6 +54,10 @@ export const STRIPE_TRIGGER_TYPES = [
   { value: 'stripe_welcome_starter', label: 'Bem-vindo ao Plano Starter' },
   { value: 'stripe_welcome_pro', label: 'Bem-vindo ao Plano Pro' },
   { value: 'stripe_welcome_elite', label: 'Bem-vindo ao Plano Elite' },
+  { value: 'trial_started', label: 'Trial Iniciado' },
+  { value: 'trial_expiring_3d', label: 'Trial Expira em 3 Dias' },
+  { value: 'trial_expiring_1d', label: 'Trial Expira em 1 Dia' },
+  { value: 'trial_expired', label: 'Trial Expirado' },
 ] as const;
 
 export const ALL_TRIGGER_TYPES = [...TRIGGER_TYPES, ...STRIPE_TRIGGER_TYPES];
