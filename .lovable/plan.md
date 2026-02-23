@@ -1,53 +1,60 @@
 
 
-# Corrigir Alucinação do Otto nas Notas de Crédito
+# Reforçar Anti-Alucinação do Otto (Zero Tolerância)
 
 ## Problema
+Apesar de já existir uma regra no system prompt, o modelo continua a inventar dados quando uma ferramenta falha ou não retorna resultados. A regra atual não é suficientemente forte.
 
-O Otto inventou notas de crédito que não existem ("TecnoPrime Lda", "João Paulo Matos", "Global Soluções S.A."). Isto acontece porque:
+## Solução (3 camadas de proteção)
 
-1. A ferramenta `search_credit_notes` foi adicionada ao código do Otto, mas a **função de base de dados** (`search_credit_notes_unaccent`) que ela chama **nunca foi criada** -- a migração ficou pendente.
-2. Quando a ferramenta falha com erro, o modelo de IA **inventa resultados** em vez de dizer "não encontrei".
+### 1. Reescrever as regras anti-alucinação no system prompt
 
-Na realidade, só existem 2 notas de crédito na base de dados (ambas de "Dnr lda").
-
-## Solução (2 passos)
-
-### 1. Criar a função de base de dados em falta
-
-Executar a migração SQL para criar `search_credit_notes_unaccent` -- a função que pesquisa notas de crédito por referência ou nome de cliente, com suporte para acentos.
-
-```sql
-CREATE OR REPLACE FUNCTION public.search_credit_notes_unaccent(
-  org_id uuid,
-  search_term text,
-  cn_status text DEFAULT NULL,
-  max_results int DEFAULT 10
-) RETURNS SETOF credit_notes AS $$
-  SELECT * FROM credit_notes
-  WHERE organization_id = org_id
-    AND (cn_status IS NULL OR status = cn_status)
-    AND (
-      immutable_unaccent(lower(COALESCE(reference, '')))
-        LIKE '%' || immutable_unaccent(lower(search_term)) || '%'
-      OR immutable_unaccent(lower(COALESCE(client_name, '')))
-        LIKE '%' || immutable_unaccent(lower(search_term)) || '%'
-    )
-  ORDER BY date DESC NULLS LAST
-  LIMIT max_results;
-$$ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = 'public';
-```
-
-### 2. Reforçar anti-alucinação no system prompt do Otto
-
-Adicionar uma regra explícita ao `SYSTEM_PROMPT` para que, quando uma ferramenta retorna erro ou zero resultados, o Otto **nunca invente dados**:
+Tornar as regras muito mais explícitas e repetitivas (modelos de IA respondem melhor a instruções repetidas e enfáticas):
 
 ```
-REGRA ABSOLUTA: Se uma ferramenta retornar um erro ou zero resultados,
-diz EXATAMENTE "Não encontrei resultados" e sugere termos alternativos.
-NUNCA inventes registos, referências ou nomes de clientes.
+REGRAS DE ACESSO A DADOS (OBRIGATÓRIAS — VIOLAÇÃO = ERRO CRÍTICO):
+- Responde EXCLUSIVAMENTE com dados retornados pelas ferramentas. Zero exceções.
+- Se uma ferramenta retornar erro ou zero resultados, diz: "Não encontrei resultados para [termo]."
+- NUNCA inventes nomes de clientes, referências, valores, datas ou qualquer outro dado.
+- NUNCA "suponhas" dados. Se não tens resultados reais, NÃO os fabricas.
+- Se o utilizador perguntar algo que exige dados e não tens ferramentas disponíveis, diz que não tens acesso a essa informação.
+- Quando mostras dados, eles TÊM de vir diretamente do resultado da ferramenta executada.
 ```
 
-### Ficheiros a alterar
-1. **Nova migração SQL** -- criar `search_credit_notes_unaccent`
-2. **`supabase/functions/otto-chat/index.ts`** -- reforçar regra anti-alucinação no system prompt
+### 2. Validar tool results antes de enviar ao modelo
+
+Quando uma ferramenta retorna erro, injetar no resultado da ferramenta uma instrução explícita para que o modelo não invente:
+
+```typescript
+// No executeTool, caso de erro:
+if (error) return JSON.stringify({ 
+  error: error.message, 
+  _instruction: "ERRO NA PESQUISA. Informa o utilizador que não foi possível pesquisar. NÃO INVENTES DADOS." 
+});
+
+// Caso de zero resultados:
+if (!data || data.length === 0) return JSON.stringify({ 
+  results: [], 
+  count: 0, 
+  _instruction: "ZERO RESULTADOS. Informa o utilizador que não encontraste resultados. NÃO INVENTES DADOS." 
+});
+```
+
+### 3. Adicionar `temperature: 0` nas chamadas ao modelo
+
+Reduzir a criatividade do modelo a zero para evitar que "preencha lacunas":
+
+```typescript
+const payload = {
+  model: "google/gemini-3-flash-preview",
+  messages: conversationMessages,
+  stream: false,
+  temperature: 0,  // <- novo
+};
+```
+
+## Ficheiros a alterar
+- `supabase/functions/otto-chat/index.ts` -- system prompt + validação de resultados + temperature
+
+## Resultado
+O Otto passará a responder apenas com dados reais do sistema. Se não encontrar, dirá explicitamente que não encontrou, sem inventar.
