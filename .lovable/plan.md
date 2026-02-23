@@ -1,68 +1,47 @@
 
 
-# Onboarding Wizard para Novos Clientes
+# Trial com Acesso Total + Pagina de Selecao de Plano
 
 ## Resumo
-Quando um novo cliente faz login pela primeira vez, se a organização não tem pipeline configurado (0 etapas na tabela `pipeline_stages`), aparece um wizard de onboarding em ecrã inteiro que guia o utilizador por 3 passos:
 
-1. **Selecionar o Pipeline** (tipo de negócio/nicho)
-2. **Tutorial sobre Formulários** (explicação de como funcionam os formulários de captura de leads)
-3. **Criar o primeiro formulário** (configuração básica do formulário principal)
+Durante os 14 dias de trial, o cliente tem acesso a **todos os modulos** (como se fosse Elite). A pagina de Plano e Faturacao mostra os 3 planos com botoes "Selecionar" (em vez de "Fazer Upgrade/Downgrade"). Apos os 14 dias sem plano escolhido, o sistema bloqueia (ja funciona assim com o `TrialExpiredBlocker`).
 
-## Passos do Wizard
+## Alteracoes
 
-### Passo 1 - Escolher o Pipeline
-- Cards visuais com os 6 nichos disponíveis (Genérico, Clínica, Construção, Telecom, E-commerce, Imobiliário)
-- Cada card mostra o ícone, nome, descrição e uma pré-visualização das etapas
-- Ao selecionar, aplica o template de pipeline e módulos associados
+### 1. Edge Function `check-subscription` -- trial retorna plan_id = 'elite'
 
-### Passo 2 - Tutorial de Formulários
-- Explicação visual do que são os formulários de captura
-- Como funciona: Lead preenche -> entra no Kanban automaticamente
-- Mostra o URL público do formulário (ex: `senvia.app/f/slug`)
-- Explicação de que podem usar em Landing Pages e anúncios
+Atualmente, quando o utilizador esta em trial, a funcao `buildTrialResponse` retorna `plan_id: 'starter'`. Alterar para retornar `plan_id: 'elite'` durante o trial, para que todos os modulos fiquem desbloqueados.
 
-### Passo 3 - Criar Primeiro Formulário
-- Nome do formulário (pré-preenchido com base no nicho, ex: "Formulário Principal")
-- O formulário default é criado automaticamente
-- Botão "Concluir" que redireciona para o Dashboard
+Tambem sincronizar `organizations.plan = 'elite'` enquanto o trial esta ativo, para que o `useSubscription` carregue as features do plano Elite.
 
-## Alterações Técnicas
+### 2. `useSubscription` -- nao bloquear modulos durante trial
 
-### 1. Novo componente: `src/components/onboarding/OnboardingWizard.tsx`
-- Componente de ecrã inteiro com os 3 passos
-- Usa `usePipelineStages` para verificar se tem etapas
-- Usa `useApplyNicheTemplate` para aplicar o pipeline selecionado
-- Usa `useCreateForm` para criar o primeiro formulário
-- Design dark mode, mobile-first, estilo consistente com o resto da app
+O hook `useSubscription` usa `organization.plan` para determinar quais modulos estao bloqueados. Como a edge function agora sincroniza `plan = 'elite'` durante o trial, os modulos ficam todos desbloqueados automaticamente. Nao e preciso alterar este hook.
 
-### 2. Alterar: `src/components/auth/ProtectedRoute.tsx`
-- Adicionar verificação: se a organização existe mas não tem pipeline stages (niche não configurado), mostrar o `OnboardingWizard` em vez do conteúdo normal
-- A verificação usa o hook `usePipelineStages` -- se retornar array vazio (e não estiver loading), mostra o wizard
-- O wizard só aparece para utilizadores com role `admin` (quem criou a conta)
+### 3. `BillingTab` -- botoes "Selecionar" quando nao tem subscricao
 
-### 3. Limpar pipeline existente da conta `freethiagosousa@gmail.com`
-- Verificar qual organização pertence e eliminar pipeline_stages existentes (se houver)
-- Resetar o niche para `null` na tabela organizations
+Alterar a logica dos botoes na pagina de faturacao:
+- Se `subscriptionStatus.subscribed === false` (trial ou trial expirado): todos os planos mostram botao **"Selecionar"** que abre o checkout
+- Se `subscriptionStatus.subscribed === true`: manter logica atual (Plano Atual / Fazer Upgrade / Fazer Downgrade)
+- Remover o badge "Atual" quando o utilizador esta em trial (nao tem plano real)
 
-### 4. Alterar: `create_organization_for_current_user` (SQL)
-- Garantir que o niche é criado como `NULL` em vez de `'generic'` para que o wizard seja acionado
-- Não criar pipeline stages automaticamente (já é o caso atual)
+### 4. Nao mostrar status "Plano Atual: Starter" durante trial
 
-## Fluxo Completo
+Na secao de status do billing, se o utilizador esta em trial (nao subscrito), nao mostrar o bloco de "Subscricao Ativa". Adicionar um bloco especifico de trial com a informacao dos dias restantes.
 
-```text
-Login -> ProtectedRoute verifica:
-  1. Autenticado? (se não -> Login)
-  2. MFA pendente? (se sim -> Challenge)
-  3. Múltiplas orgs? (se sim -> Selector)
-  4. Pipeline configurado? (se não + admin -> Onboarding Wizard)
-  5. Trial expirado? (se sim -> Blocker)
-  6. Tudo OK -> Dashboard/Página
-```
+## Secao Tecnica
 
-## O que NAO muda
-- PipelineEditor nas Definições continua a funcionar normalmente
-- Utilizadores convidados (não-admin) não veem o wizard
-- Organizações já configuradas não são afetadas
+### Ficheiro: `supabase/functions/check-subscription/index.ts`
+- Na funcao `buildTrialResponse`, alterar `plan_id: 'starter'` para `plan_id: 'elite'` quando o trial ainda esta ativo
+- Adicionar sync do plan para 'elite' na org durante o trial (precisa receber orgId como parametro)
+
+### Ficheiro: `src/components/settings/BillingTab.tsx`
+- Adicionar variavel `isOnTrial` baseada em `subscriptionStatus?.on_trial === true`
+- Adicionar variavel `hasNoSubscription` baseada em `!subscriptionStatus?.subscribed`
+- Quando `hasNoSubscription`: botao mostra "Selecionar" para todos os planos e dispara `createCheckout`
+- Quando `hasNoSubscription`: nao mostrar badge "Atual" em nenhum plano
+- Adicionar bloco de trial ativo com dias restantes quando `isOnTrial === true`
+
+### Ficheiro: `supabase/functions/check-subscription/index.ts` (detalhe)
+- Alterar a funcao `buildTrialResponse` e o fluxo principal para passar `orgId` e fazer o update do plan
 
