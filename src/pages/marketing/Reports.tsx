@@ -162,6 +162,21 @@ export default function Reports() {
           </div>
         ) : stats ? (
           <>
+            {/* Webhook Warning */}
+            {stats.sent > 0 && stats.delivered === 0 && (
+              <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-4 flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-amber-600 dark:text-amber-400">Tracking de entregas não configurado</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Existem {stats.sent} emails enviados mas 0 entregas registadas. Configure o webhook do Brevo em{' '}
+                    <Link to="/settings" className="underline text-primary">Definições → Integrações → Brevo</Link>{' '}
+                    para ativar o tracking de entregas, aberturas e cliques.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Metric Cards */}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-7 gap-4">
               {metrics.map(m => (
