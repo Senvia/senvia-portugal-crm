@@ -39,8 +39,8 @@ interface OrganizationsTableProps {
 function getOrgStatus(org: Organization) {
   const now = new Date();
   if (org.billing_exempt) return "exempt";
-  if (org.plan && org.plan !== "basic") return "paying";
   if (org.trial_ends_at && new Date(org.trial_ends_at) > now) return "trial";
+  if (org.plan && org.plan !== "basic") return "paying";
   return "expired";
 }
 
