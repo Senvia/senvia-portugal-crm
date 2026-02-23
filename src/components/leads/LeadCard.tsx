@@ -229,9 +229,16 @@ export function LeadCard({
           ) : null
         )}
         
-        <p className="mt-2 text-xs text-muted-foreground">
-          {formatRelativeTime(lead.created_at)}
-        </p>
+        <div className="mt-2 flex items-center gap-2">
+          {lead.source && (
+            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5 font-normal">
+              {lead.source}
+            </Badge>
+          )}
+          <span className="text-xs text-muted-foreground">
+            {formatRelativeTime(lead.created_at)}
+          </span>
+        </div>
       </div>
 
       {/* Actions */}
