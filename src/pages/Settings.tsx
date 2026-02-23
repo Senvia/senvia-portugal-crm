@@ -386,6 +386,7 @@ export default function Settings() {
               onSelectSection={handleGroupSelect}
               canManageTeam={canManageTeam}
               canManageIntegrations={canManageIntegrations}
+              isTelecom={organization?.niche === 'telecom'}
             />
           </>
         ) : activeSub === null ? (
@@ -400,6 +401,7 @@ export default function Settings() {
             <MobileSubSectionNav
               group={activeGroup}
               onSelectSubSection={(sub) => setActiveSub(sub)}
+              isTelecom={organization?.niche === 'telecom'}
             />
           </>
         ) : (

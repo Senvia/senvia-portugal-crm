@@ -18,6 +18,7 @@ interface MobileSettingsNavProps {
   onSelectSection: (section: SettingsSection) => void;
   canManageTeam: boolean;
   canManageIntegrations: boolean;
+  isTelecom?: boolean;
 }
 
 interface SectionItem {
@@ -44,7 +45,8 @@ export function MobileSettingsNav({
   activeSection, 
   onSelectSection, 
   canManageTeam, 
-  canManageIntegrations 
+  canManageIntegrations,
+  isTelecom = false,
 }: MobileSettingsNavProps) {
   const visibleSections = sections.filter(item => {
     if (item.requiresTeam && !canManageTeam) return false;
@@ -107,10 +109,15 @@ export const subSectionsMap: Record<SettingsSection, SubSectionItem[]> = {
 interface MobileSubSectionNavProps {
   group: SettingsSection;
   onSelectSubSection: (sub: SettingsSubSection) => void;
+  isTelecom?: boolean;
 }
 
-export function MobileSubSectionNav({ group, onSelectSubSection }: MobileSubSectionNavProps) {
-  const items = subSectionsMap[group];
+export function MobileSubSectionNav({ group, onSelectSubSection, isTelecom = false }: MobileSubSectionNavProps) {
+  const allItems = subSectionsMap[group];
+  const items = allItems.filter(item => {
+    if (item.id === 'notif-alerts' && !isTelecom) return false;
+    return true;
+  });
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
