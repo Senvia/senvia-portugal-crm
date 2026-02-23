@@ -34,6 +34,12 @@ const DialogContent = React.forwardRef<React.ElementRef<typeof DialogPrimitive.C
           e.preventDefault();
         }
       }}
+      onPointerDownOutside={(e) => {
+        const target = e.target as HTMLElement;
+        if (target?.closest?.("[data-otto-fab]")) {
+          e.preventDefault();
+        }
+      }}
       className={cn(dialogContentVariants[variant], className)} 
       {...props}>
       {children}
