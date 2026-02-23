@@ -1,7 +1,5 @@
-import { DollarSign, Users, Clock, AlertTriangle } from "lucide-react";
+import { DollarSign, Users, Clock, AlertTriangle, CreditCard } from "lucide-react";
 import { MetricCard } from "@/components/dashboard/MetricCard";
-
-const PLAN_PRICES: Record<string, number> = { starter: 49, pro: 99, elite: 147 };
 
 interface Organization {
   id: string;
@@ -10,24 +8,23 @@ interface Organization {
   billing_exempt: boolean | null;
 }
 
-interface AdminMetricsCardsProps {
-  organizations: Organization[];
+interface StripeStats {
+  mrr: number;
+  paying_count: number;
+  total_subscriptions: number;
 }
 
-export function AdminMetricsCards({ organizations }: AdminMetricsCardsProps) {
+interface AdminMetricsCardsProps {
+  organizations: Organization[];
+  stripeStats?: StripeStats | null;
+  stripeLoading?: boolean;
+}
+
+export function AdminMetricsCards({ organizations, stripeStats, stripeLoading }: AdminMetricsCardsProps) {
   const now = new Date();
 
   const isInTrial = (o: Organization) =>
     !o.billing_exempt && o.trial_ends_at && new Date(o.trial_ends_at) > now;
-
-  const mrr = organizations.reduce((sum, org) => {
-    if (org.billing_exempt || isInTrial(org)) return sum;
-    return sum + (PLAN_PRICES[org.plan || ""] || 0);
-  }, 0);
-
-  const paying = organizations.filter(
-    (o) => !o.billing_exempt && !isInTrial(o) && o.plan && o.plan !== "basic"
-  ).length;
 
   const inTrial = organizations.filter((o) => isInTrial(o)).length;
 
@@ -38,19 +35,23 @@ export function AdminMetricsCards({ organizations }: AdminMetricsCardsProps) {
       (!o.plan || o.plan === "basic")
   ).length;
 
+  // Use Stripe real data when available, fallback to local calculation
+  const mrr = stripeStats?.mrr ?? 0;
+  const paying = stripeStats?.paying_count ?? 0;
+
   return (
     <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
       <MetricCard
         title="MRR"
-        value={`€${mrr}`}
-        subtitle="Receita mensal recorrente"
+        value={stripeLoading ? "..." : `€${mrr}`}
+        subtitle={stripeStats ? "Dados reais Stripe" : "A carregar..."}
         icon={<DollarSign className="h-5 w-5 text-primary" />}
       />
       <MetricCard
         title="Clientes Pagantes"
-        value={paying}
-        subtitle="Com plano ativo"
-        icon={<Users className="h-5 w-5 text-primary" />}
+        value={stripeLoading ? "..." : paying}
+        subtitle={stripeStats ? "Subscrição ativa Stripe" : "A carregar..."}
+        icon={<CreditCard className="h-5 w-5 text-primary" />}
       />
       <MetricCard
         title="Em Trial"

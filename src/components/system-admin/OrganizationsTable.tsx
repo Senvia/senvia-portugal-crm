@@ -28,19 +28,33 @@ interface Organization {
   member_count: number;
 }
 
+export interface OrgStripeData {
+  org_id: string;
+  stripe_plan: string | null;
+  stripe_amount: number;
+  stripe_status: string | null;
+  stripe_period_end: string | null;
+  has_stripe_subscription: boolean;
+}
+
 type Filter = "all" | "paying" | "trial" | "expired" | "exempt";
 
 interface OrganizationsTableProps {
   organizations: Organization[];
   currentOrgId?: string;
   onAccessOrg: (orgId: string) => void;
+  stripeData?: OrgStripeData[];
 }
 
-function getOrgStatus(org: Organization) {
+function getOrgStatus(org: Organization, stripeInfo?: OrgStripeData) {
   const now = new Date();
   if (org.billing_exempt) return "exempt";
+  // If has active Stripe subscription -> paying
+  if (stripeInfo?.has_stripe_subscription && stripeInfo.stripe_status === "active") return "paying";
+  // Trial check
   if (org.trial_ends_at && new Date(org.trial_ends_at) > now) return "trial";
-  if (org.plan && org.plan !== "basic") return "paying";
+  // Has trialing subscription on Stripe
+  if (stripeInfo?.has_stripe_subscription && stripeInfo.stripe_status === "trialing") return "trial";
   return "expired";
 }
 
@@ -61,13 +75,17 @@ export function OrganizationsTable({
   organizations,
   currentOrgId,
   onAccessOrg,
+  stripeData,
 }: OrganizationsTableProps) {
   const [filter, setFilter] = useState<Filter>("all");
   const now = new Date();
 
+  const stripeMap = new Map<string, OrgStripeData>();
+  (stripeData || []).forEach(s => stripeMap.set(s.org_id, s));
+
   const filtered = organizations.filter((org) => {
     if (filter === "all") return true;
-    return getOrgStatus(org) === filter;
+    return getOrgStatus(org, stripeMap.get(org.id)) === filter;
   });
 
   return (
@@ -92,6 +110,7 @@ export function OrganizationsTable({
                 <TableHead>Organização</TableHead>
                 <TableHead>Plano</TableHead>
                 <TableHead>Estado</TableHead>
+                <TableHead className="hidden sm:table-cell">Stripe</TableHead>
                 <TableHead className="hidden sm:table-cell">Membros</TableHead>
                 <TableHead className="hidden md:table-cell">Trial</TableHead>
                 <TableHead className="hidden lg:table-cell">Criada em</TableHead>
@@ -101,16 +120,20 @@ export function OrganizationsTable({
             <TableBody>
               {filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                     Nenhuma organização encontrada.
                   </TableCell>
                 </TableRow>
               ) : (
                 filtered.map((org) => {
-                  const status = getOrgStatus(org);
+                  const stripeInfo = stripeMap.get(org.id);
+                  const status = getOrgStatus(org, stripeInfo);
                   const config = STATUS_CONFIG[status];
                   const trialEnd = org.trial_ends_at ? new Date(org.trial_ends_at) : null;
                   const daysLeft = trialEnd ? differenceInDays(trialEnd, now) : null;
+
+                  // Show Stripe plan if available, otherwise DB plan
+                  const displayPlan = stripeInfo?.stripe_plan || org.plan;
 
                   return (
                     <TableRow key={org.id}>
@@ -122,13 +145,27 @@ export function OrganizationsTable({
                       </TableCell>
                       <TableCell>
                         <span className="text-sm font-medium">
-                          {PLAN_LABELS[org.plan || ""] || "—"}
+                          {PLAN_LABELS[displayPlan || ""] || "—"}
                         </span>
                       </TableCell>
                       <TableCell>
                         <Badge className={cn("text-[10px]", config.className)}>
                           {config.label}
                         </Badge>
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell">
+                        {stripeInfo?.has_stripe_subscription ? (
+                          <div className="flex flex-col">
+                            <span className="text-xs font-medium text-emerald-400">
+                              €{stripeInfo.stripe_amount}/mês
+                            </span>
+                            <span className="text-[10px] text-muted-foreground capitalize">
+                              {stripeInfo.stripe_status}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
                       </TableCell>
                       <TableCell className="hidden sm:table-cell">
                         {org.member_count}

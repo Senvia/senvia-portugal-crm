@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { AdminMetricsCards } from "@/components/system-admin/AdminMetricsCards";
 import { OrganizationsTable } from "@/components/system-admin/OrganizationsTable";
+import type { OrgStripeData } from "@/components/system-admin/OrganizationsTable";
 
 interface OrgRow {
   id: string;
@@ -22,20 +23,25 @@ interface OrgWithMembers extends OrgRow {
   member_count: number;
 }
 
+interface StripeStatsResponse {
+  mrr: number;
+  paying_count: number;
+  total_subscriptions: number;
+  org_stats: OrgStripeData[];
+}
+
 export default function SystemAdminDashboard() {
   const { switchOrganization, organization } = useAuth();
 
   const { data: organizations = [], isLoading } = useQuery({
     queryKey: ["super-admin-all-orgs"],
     queryFn: async (): Promise<OrgWithMembers[]> => {
-      // Fetch orgs
       const { data: orgs, error } = await supabase
         .from("organizations")
         .select("id, name, slug, code, plan, trial_ends_at, billing_exempt, created_at")
         .order("created_at", { ascending: false });
       if (error) throw error;
 
-      // Fetch member counts
       const { data: members, error: mErr } = await supabase
         .from("organization_members")
         .select("organization_id");
@@ -53,6 +59,17 @@ export default function SystemAdminDashboard() {
     },
   });
 
+  const { data: stripeStats, isLoading: stripeLoading } = useQuery({
+    queryKey: ["super-admin-stripe-stats"],
+    queryFn: async (): Promise<StripeStatsResponse> => {
+      const { data, error } = await supabase.functions.invoke("admin-stripe-stats");
+      if (error) throw error;
+      return data as StripeStatsResponse;
+    },
+    staleTime: 5 * 60 * 1000, // Cache 5 min
+    retry: 1,
+  });
+
   return (
     <div className="min-h-screen bg-background p-4 lg:p-8">
       <div className="max-w-6xl mx-auto space-y-6">
@@ -65,11 +82,16 @@ export default function SystemAdminDashboard() {
           <div className="text-sm text-muted-foreground">A carregar dados...</div>
         ) : (
           <>
-            <AdminMetricsCards organizations={organizations} />
+            <AdminMetricsCards
+              organizations={organizations}
+              stripeStats={stripeStats ? { mrr: stripeStats.mrr, paying_count: stripeStats.paying_count, total_subscriptions: stripeStats.total_subscriptions } : null}
+              stripeLoading={stripeLoading}
+            />
             <OrganizationsTable
               organizations={organizations}
               currentOrgId={organization?.id}
               onAccessOrg={(id) => switchOrganization(id)}
+              stripeData={stripeStats?.org_stats}
             />
           </>
         )}
