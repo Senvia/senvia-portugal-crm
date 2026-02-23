@@ -6,7 +6,7 @@ import { OttoChatWindow } from "./OttoChatWindow";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { AnimatePresence, motion } from "framer-motion";
 import { useOttoStore } from "@/stores/useOttoStore";
-import ottoMascot from "@/assets/otto-mascot.svg";
+const ottoMascot = "/otto-mascot.svg";
 
 const OTTO_BUBBLE_KEY = "otto-bubble-dismissed";
 
