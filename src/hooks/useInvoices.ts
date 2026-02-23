@@ -112,6 +112,8 @@ export function useSyncInvoices() {
       queryClient.invalidateQueries({ queryKey: ['all-payments'] });
     },
     onError: (error: Error) => {
+      // Suppress toast for unconfigured credentials
+      if (error.message?.includes('não configuradas') || error.message?.includes('not configured')) return;
       toast({
         title: 'Erro na sincronização',
         description: error.message || 'Não foi possível sincronizar faturas.',

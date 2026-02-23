@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { openPdfInNewTab } from "@/lib/download";
 import { InvoiceDetailsModal } from "@/components/sales/InvoiceDetailsModal";
 import { useAuth } from "@/contexts/AuthContext";
+import { useOrganization } from "@/hooks/useOrganization";
 
 interface UnifiedDocument {
   id: string;
@@ -49,6 +50,8 @@ export function InvoicesContent() {
   const { data: invoicesData, isLoading: loadingInvoices } = useInvoices();
   const { data: creditNotesData, isLoading: loadingCreditNotes } = useCreditNotes();
   const { organization } = useAuth();
+  const { data: orgData } = useOrganization();
+  const isInvoicexpressEnabled = (orgData?.integrations_enabled as any)?.invoicexpress === true;
   const syncInvoices = useSyncInvoices();
   const syncCreditNotes = useSyncCreditNotes();
   const hasSynced = useRef(false);
@@ -85,14 +88,14 @@ export function InvoicesContent() {
 
   const isLoading = loadingInvoices || loadingCreditNotes;
 
-  // Auto-sync both on mount
+  // Auto-sync both on mount (only if InvoiceXpress is enabled)
   useEffect(() => {
-    if (!hasSynced.current && !syncInvoices.isPending && !syncCreditNotes.isPending) {
+    if (!hasSynced.current && isInvoicexpressEnabled && !syncInvoices.isPending && !syncCreditNotes.isPending) {
       hasSynced.current = true;
       syncInvoices.mutate(undefined, { onError: () => {} });
       syncCreditNotes.mutate(undefined, { onError: () => {} });
     }
-  }, []);
+  }, [isInvoicexpressEnabled]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {

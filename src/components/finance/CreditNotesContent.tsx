@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useOrganization } from "@/hooks/useOrganization";
 import { toast } from "sonner";
 import { openPdfInNewTab } from "@/lib/download";
 
@@ -34,17 +35,19 @@ const getStatusVariant = (status: string | null): "default" | "secondary" | "des
 
 export function CreditNotesContent() {
   const { data: creditNotes, isLoading } = useCreditNotes();
+  const { data: orgData } = useOrganization();
+  const isInvoicexpressEnabled = (orgData?.integrations_enabled as any)?.invoicexpress === true;
   const [viewingId, setViewingId] = useState<string | null>(null);
   const syncCreditNotes = useSyncCreditNotes();
   const hasSynced = useRef(false);
 
-  // Auto-sync on mount (once per session)
+  // Auto-sync on mount (only if InvoiceXpress is enabled)
   useEffect(() => {
-    if (!hasSynced.current && !syncCreditNotes.isPending) {
+    if (!hasSynced.current && isInvoicexpressEnabled && !syncCreditNotes.isPending) {
       hasSynced.current = true;
-      syncCreditNotes.mutate();
+      syncCreditNotes.mutate(undefined, { onError: () => {} });
     }
-  }, []);
+  }, [isInvoicexpressEnabled]);
 
   const handleViewPdf = async (id: string, pdfPath: string | null) => {
     if (!pdfPath) return;
