@@ -1,74 +1,65 @@
 
 
-# Remover Landing Page e Tornar Login a Pagina Inicial
+# Simplificar Login: Remover Campo "Codigo da Empresa"
 
-## O que muda
+## Problema Atual
+O formulario de login pede 3 campos (email, password, codigo da empresa) mas o sistema ja resolve a organizacao automaticamente apos autenticacao:
+- 1 organizacao: auto-seleciona
+- Multiplas organizacoes: mostra ecra de selecao (OrganizationSelector)
 
-A rota `/` passa a mostrar diretamente a pagina de Login/Registo. A landing page interna e todos os seus componentes sao removidos. Os links que apontavam para `/login` ou `/` continuam a funcionar normalmente.
+O campo "Codigo da Empresa" e redundante e cria friccao desnecessaria.
 
 ## Alteracoes
 
-### 1. Rota principal (`src/App.tsx`)
-- Remover a rota `<Route path="/" element={<Landing />} />`
-- Alterar a rota do Login de `/login` para `/`
-- Manter a rota `/login` como redirect para `/` (para nao partir links existentes)
-- Remover o import do componente `Landing`
+### 1. Simplificar o Login (`src/pages/Login.tsx`)
+- Remover o campo "Codigo da Empresa" do formulario de login
+- Remover o estado `loginCompanyCode`
+- Remover a validacao `companyCode` do schema de login
+- Remover a chamada RPC `verify_user_org_membership` antes do login
+- Simplificar o `handleLogin` para apenas: autenticar com email+password e redirecionar
+- Deixar o AuthContext tratar da selecao de organizacao automaticamente
+- Remover o `localStorage.setItem('senvia_active_organization_id')` manual (o AuthContext ja faz isso)
 
-### 2. Redirects e navegacao
-Atualizar todos os ficheiros que referenciam `/login` ou `/` para garantir consistencia:
+### 2. Atualizar o Schema de Validacao (`src/pages/Login.tsx`)
+- O `loginSchema` passa a ter apenas `email` e `password`
 
-| Ficheiro | Alteracao |
-|----------|-----------|
-| `src/components/auth/ProtectedRoute.tsx` | `Navigate to="/"` -- ja esta correto, agora aponta para login |
-| `src/components/auth/SuperAdminRoute.tsx` | `Navigate to="/"` -- ja esta correto |
-| `src/components/layout/AppSidebar.tsx` | `navigate('/')` no logout -- ja esta correto |
-| `src/components/layout/MobileMenu.tsx` | `navigate('/')` no logout -- ja esta correto |
-| `src/pages/ResetPassword.tsx` | `navigate('/')` -- ja esta correto |
-| `src/pages/InviteRegister.tsx` | Links para `/login` mudam para `/` |
-| `src/pages/Install.tsx` | Link para `/login` muda para `/` |
-| `src/pages/NotFound.tsx` | Link para `/` -- ja esta correto |
-| `src/pages/Privacy.tsx` | Link para `/` -- ja esta correto |
-| `src/pages/Terms.tsx` | Link para `/` -- ja esta correto |
-
-### 3. Remover ficheiros da landing page
-Eliminar todos os componentes que ja nao sao usados:
-
-- `src/pages/Landing.tsx`
-- `src/components/landing/AnnouncementBar.tsx`
-- `src/components/landing/LandingHeader.tsx`
-- `src/components/landing/HeroSection.tsx`
-- `src/components/landing/SocialProofBar.tsx`
-- `src/components/landing/ProblemSection.tsx`
-- `src/components/landing/SolutionSteps.tsx`
-- `src/components/landing/DemoShowcase.tsx`
-- `src/components/landing/FeaturesGrid.tsx`
-- `src/components/landing/AISection.tsx`
-- `src/components/landing/NichesSection.tsx`
-- `src/components/landing/ResultsSection.tsx`
-- `src/components/landing/TestimonialsSection.tsx`
-- `src/components/landing/PricingSection.tsx`
-- `src/components/landing/ComparisonTable.tsx`
-- `src/components/landing/TrustSection.tsx`
-- `src/components/landing/FAQSection.tsx`
-- `src/components/landing/FinalCTA.tsx`
-- `src/components/landing/LandingFooter.tsx`
-
-### 4. Pagina de Login (`src/pages/Login.tsx`)
-- Nenhuma alteracao funcional necessaria -- o componente ja funciona de forma independente
-- O parametro `?tab=signup` continua a funcionar para abrir diretamente no registo
-
-## Resultado final
+### 3. Fluxo Resultante
 
 ```text
-Utilizador acede senvia-portugal-crm.lovable.app
-  -> Ve diretamente a pagina de Login/Registo
-  -> Pode fazer login ou clicar em "Criar Conta" para o trial de 14 dias
-  -> Apos login, vai para /dashboard
-  -> Logout redireciona de volta para /
+Login (email + password)
+  -> AuthContext carrega organizacoes do utilizador
+  -> 1 org: auto-seleciona e vai para /dashboard
+  -> N orgs: mostra OrganizationSelector
+  -> 0 orgs: redireciona para estado sem organizacao
 ```
 
+### 4. Registo (sem alteracoes)
+- O formulario de registo mantem o slug porque e necessario para CRIAR a organizacao
+- O campo "Codigo da Empresa" (read-only) no registo pode ser removido tambem, ja que o slug e mostrado acima dele
+
+## Secao Tecnica
+
+### Ficheiro: `src/pages/Login.tsx`
+
+**Remover:**
+- Estado: `loginCompanyCode`, `setLoginCompanyCode`
+- Schema: campo `companyCode` do `loginSchema`
+- JSX: bloco do input "Codigo da Empresa" no formulario de login
+- Logica: chamada RPC `verify_user_org_membership` e toda a logica de pre-verificacao
+- Logica: `localStorage.setItem('senvia_active_organization_id', membership.organization_id)`
+
+**Simplificar `handleLogin`:**
+- Validar email + password
+- Chamar `signIn(email, password)`
+- Se sucesso, redirecionar para `/dashboard`
+- O AuthContext trata automaticamente da selecao de organizacao
+
+**Opcional - Remover do Registo:**
+- O campo read-only "Codigo da Empresa" no formulario de registo (duplica informacao do slug)
+- A nota "Anote este codigo" ja nao faz sentido se o login nao pede codigo
+
 ## O que NAO muda
-- Todo o fluxo de registo, trial de 14 dias e billing
-- As rotas protegidas e redirects de autenticacao
-- O formulario publico de leads (`/f/:slug`)
-- As paginas de Privacy e Terms
+- Formulario de registo (campos de organizacao mantidos para criacao)
+- OrganizationSelector (continua a funcionar para multi-org)
+- AuthContext (ja gere tudo automaticamente)
+- Funcao RPC `verify_user_org_membership` (pode continuar no banco, nao causa problemas)
