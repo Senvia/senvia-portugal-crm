@@ -1,6 +1,6 @@
 import ReactMarkdown from "react-markdown";
 import { User } from "lucide-react";
-import ottoMascot from "@/assets/otto-mascot.svg";
+const ottoMascot = "/otto-mascot.svg";
 import { Button } from "@/components/ui/button";
 import type { OttoMessage as OttoMessageType } from "@/hooks/useOttoChat";
 

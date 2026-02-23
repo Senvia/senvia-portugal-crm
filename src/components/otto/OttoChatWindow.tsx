@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { X, Send, Trash2 } from "lucide-react";
-import ottoMascot from "@/assets/otto-mascot.svg";
+const ottoMascot = "/otto-mascot.svg";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useOttoChat } from "@/hooks/useOttoChat";
