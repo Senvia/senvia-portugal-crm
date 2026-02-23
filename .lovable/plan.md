@@ -1,67 +1,70 @@
 
 
-# Otto: Pesquisa sem Acentos (Accent-Insensitive)
+# Corrigir: Fatura da Ângela Não Aparece em Faturas
 
-## Problema
-Quando o Otto procura "Joao" na base de dados, nao encontra "João" porque o operador `ilike` do PostgreSQL e sensivel a acentos. Isto afeta todas as pesquisas de clientes, leads, faturas, propostas e vendas.
+## Diagnóstico
 
-## Solucao
-Ativar a extensao `unaccent` do PostgreSQL e criar funcoes de pesquisa dedicadas que removem acentos tanto do termo de pesquisa como dos dados na base de dados.
+A Ângela Oliveira tem uma venda (código 0003, valor 275EUR) com 3 pagamentos que referenciam faturas-recibo do InvoiceXpress (ex: "FR ATSIRE01FR/3"). No entanto, **nenhuma dessas faturas-recibo existe na tabela `invoices`** (que só tem 5 registos, todos de outros clientes).
 
-## Alteracoes
+### Causa raiz
 
-### 1. Migracao SQL
-- Ativar a extensao `unaccent`
-- Criar uma funcao auxiliar `immutable_unaccent(text)` (necessaria para ser usada em indices)
-- Criar 5 funcoes RPC de pesquisa accent-insensitive:
-  - `search_clients_unaccent(org_id, search_term, max_results)`
-  - `search_leads_unaccent(org_id, search_term, lead_status, max_results)`
-  - `search_invoices_unaccent(org_id, search_term, inv_status, max_results)`
-  - `search_sales_unaccent(org_id, search_term, pay_status, max_results)`
-  - `search_proposals_unaccent(org_id, search_term, prop_status, max_results)`
+O sincronizador (`sync-invoices`) busca documentos do InvoiceXpress via API e tenta associar às vendas/pagamentos locais. Há dois problemas:
 
-Cada funcao usa `immutable_unaccent(lower(campo)) LIKE immutable_unaccent(lower(search_term))` para comparar sem acentos.
+1. **Sem `invoicexpress_id`**: A venda e os pagamentos da Ângela não têm `invoicexpress_id` preenchido, então o matching por ID falha.
+2. **Matching por referência falha**: Os pagamentos guardam "FR ATSIRE01FR/3" como `invoice_reference`, mas o sync compara usando `ilike` com o `sequence_number` do documento InvoiceXpress, que pode ter formato diferente (ex: "3/2026" vs "FR ATSIRE01FR/3").
 
-### 2. Edge Function: `supabase/functions/otto-chat/index.ts`
-- Substituir as queries `.from().select().ilike()` por chamadas `.rpc()` as novas funcoes
-- Exemplo: em vez de `.from("crm_clients").or("name.ilike.%joao%")`, usar `.rpc("search_clients_unaccent", { org_id, search_term: "joao" })`
-- Manter a mesma logica de enriquecimento (ex: buscar nomes de clientes para vendas)
-- Sem alteracoes no frontend
+## Solução
 
-## Resultado
-- "Joao" encontra "João"
-- "clinica" encontra "Clínica"
-- "fatura" encontra registos com "Faturação"
-- Funciona em todas as pesquisas do Otto (clientes, leads, faturas, vendas, propostas)
+Melhorar o matching no `sync-invoices` para também comparar o `client_name` do InvoiceXpress com os clientes locais, e melhorar o matching de referências.
 
-## Detalhe Tecnico
+### Alterações em `supabase/functions/sync-invoices/index.ts`
 
-### Funcao auxiliar (necessaria para ser IMMUTABLE):
-```sql
-CREATE OR REPLACE FUNCTION public.immutable_unaccent(text)
-RETURNS text AS $$
-  SELECT public.unaccent($1);
-$$ LANGUAGE sql IMMUTABLE PARALLEL SAFE STRICT;
+1. **Adicionar Match 6 -- por client_name**: Quando nenhum match anterior funciona, procurar vendas cujo `client_id` corresponda a um cliente com o mesmo nome que o `client_name` do documento InvoiceXpress (usando `immutable_unaccent` para ignorar acentos).
+
+2. **Melhorar Match por referência**: Normalizar as referências removendo prefixos como "FR ", "FT " antes de comparar. Exemplo: "FR ATSIRE01FR/3" deve ser comparado apenas com "ATSIRE01FR/3" ou o número sequencial "3".
+
+### Detalhe técnico
+
+No ficheiro `supabase/functions/sync-invoices/index.ts`, após o Match 5, adicionar:
+
+```typescript
+// Match 6: by client_name -> crm_clients -> sales
+if (!matchedSaleId && !matchedPaymentId && docClientName) {
+  const { data: clients } = await supabase
+    .from('crm_clients')
+    .select('id')
+    .eq('organization_id', organization_id)
+    .ilike('name', `%${docClientName}%`)
+    .limit(1)
+  
+  if (clients && clients.length > 0) {
+    const { data: sales } = await supabase
+      .from('sales')
+      .select('id')
+      .eq('organization_id', organization_id)
+      .eq('client_id', clients[0].id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+    
+    if (sales && sales.length > 0) {
+      matchedSaleId = sales[0].id
+    }
+  }
+}
 ```
 
-### Exemplo de funcao de pesquisa:
-```sql
-CREATE OR REPLACE FUNCTION public.search_clients_unaccent(
-  org_id uuid, search_term text, max_results int DEFAULT 10
-) RETURNS SETOF crm_clients AS $$
-  SELECT * FROM crm_clients
-  WHERE organization_id = org_id
-    AND (
-      immutable_unaccent(lower(name)) LIKE '%' || immutable_unaccent(lower(search_term)) || '%'
-      OR immutable_unaccent(lower(COALESCE(email,''))) LIKE '%' || immutable_unaccent(lower(search_term)) || '%'
-      OR immutable_unaccent(lower(COALESCE(nif,''))) LIKE '%' || immutable_unaccent(lower(search_term)) || '%'
-      OR immutable_unaccent(lower(COALESCE(company,''))) LIKE '%' || immutable_unaccent(lower(search_term)) || '%'
-    )
-  LIMIT max_results;
-$$ LANGUAGE sql STABLE SECURITY DEFINER;
+Além disso, melhorar o Match 3 para normalizar referências:
+
+```typescript
+// Antes de comparar, remover prefixos "FR ", "FT ", "FS " da referência
+const cleanRef = docRef.replace(/^(FR|FT|FS)\s+/i, '')
+const seqPart = cleanRef.split('/').pop() || cleanRef
 ```
+
+### Ação imediata
+
+Depois de corrigir o sync, será necessário re-executar a sincronização para importar as faturas-recibo da Ângela. Isto pode ser feito pelo botão de sync na interface de Faturas.
 
 ### Ficheiros a alterar
-1. **Nova migracao SQL** -- extensao + 5 funcoes RPC
-2. **`supabase/functions/otto-chat/index.ts`** -- substituir queries por chamadas `.rpc()`
+- `supabase/functions/sync-invoices/index.ts` (melhorar matching)
 
