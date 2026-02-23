@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { OttoChatWindow } from "./OttoChatWindow";
@@ -32,7 +33,7 @@ export function OttoFAB() {
     if (showBubble) dismissBubble();
   };
 
-  return (
+  return createPortal(
     <>
       <AnimatePresence>{isOpen && <OttoChatWindow onClose={() => setOpen(false)} />}</AnimatePresence>
 
@@ -80,6 +81,7 @@ export function OttoFAB() {
           </Button>
         </motion.div>
       )}
-    </>
+    </>,
+    document.body
   );
 }
