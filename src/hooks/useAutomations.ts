@@ -46,7 +46,7 @@ export const TRIGGER_TYPES = [
 ] as const;
 
 export const STRIPE_TRIGGER_TYPES = [
-  { value: 'stripe_subscription_created', label: 'Subscrição Ativada' },
+  { value: 'stripe_subscription_created', label: 'Subscrição Reativada' },
   { value: 'stripe_subscription_renewed', label: 'Subscrição Renovada' },
   { value: 'stripe_subscription_canceled', label: 'Subscrição Cancelada' },
   { value: 'stripe_subscription_past_due', label: 'Pagamento em Atraso' },

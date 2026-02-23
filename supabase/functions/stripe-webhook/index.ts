@@ -62,15 +62,28 @@ serve(async (req) => {
         const sub = await stripe.subscriptions.retrieve(subId);
         const productId = sub.items.data[0].price.product as string;
         const plan = PRODUCT_TO_PLAN[productId];
+        // Check if reactivation before updating plan
+        const orgId = await findOrgByEmail(supabase, email);
+        let isReactivation = false;
+        if (orgId) {
+          const { data: orgData } = await supabase
+            .from("organizations")
+            .select("plan, payment_failed_at")
+            .eq("id", orgId)
+            .maybeSingle();
+          isReactivation = !!(orgData?.plan || orgData?.payment_failed_at);
+        }
+
         if (plan) await updateOrgPlan(supabase, email, plan);
         await clearPaymentFailed(supabase, email);
 
-        // Get org name for template variables
         const orgName = await getOrgNameByEmail(supabase, email);
 
-        // Dispatch automation: subscription created
-        await dispatchAutomation(supabase, "stripe_subscription_created", { email, plan: plan || "unknown", nome: orgName });
-        // Dispatch plan-specific welcome
+        // Dispatch reactivation only (not first subscription)
+        if (isReactivation) {
+          await dispatchAutomation(supabase, "stripe_subscription_created", { email, plan: plan || "unknown", nome: orgName });
+        }
+        // Welcome dispatches always
         if (plan) {
           await dispatchAutomation(supabase, `stripe_welcome_${plan}`, { email, plan, nome: orgName });
         }
