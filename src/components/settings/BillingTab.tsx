@@ -23,6 +23,7 @@ export function BillingTab() {
   const [hasChecked, setHasChecked] = useState(false);
 
   const currentPlanId = subscriptionStatus?.plan_id || organization?.plan || 'starter';
+  const currentIndex = STRIPE_PLANS.findIndex(p => p.id === currentPlanId);
 
   useEffect(() => {
     if (!hasChecked) {
@@ -92,6 +93,9 @@ export function BillingTab() {
         {STRIPE_PLANS.map((plan) => {
           const isCurrent = plan.id === currentPlanId;
           const isHighlighted = plan.highlighted;
+          const planIndex = STRIPE_PLANS.findIndex(p => p.id === plan.id);
+          const isUpgrade = planIndex > currentIndex;
+          const isDowngrade = planIndex < currentIndex;
 
           return (
             <div
@@ -142,17 +146,25 @@ export function BillingTab() {
                     {!subscriptionStatus?.billing_exempt && (
                       <Button
                         size="lg"
-                        variant={isCurrent ? 'outline' : isHighlighted ? 'default' : 'secondary'}
+                        variant={isCurrent ? 'outline' : isDowngrade ? 'secondary' : isHighlighted ? 'default' : 'secondary'}
                         disabled={isCurrent || isLoading || checkingPlan === plan.id}
-                        onClick={() => handleSelectPlan(plan)}
+                        onClick={() => {
+                          if (isDowngrade) {
+                            openCustomerPortal();
+                          } else {
+                            handleSelectPlan(plan);
+                          }
+                        }}
                         className="min-w-[160px]"
                       >
                         {checkingPlan === plan.id ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
                         ) : isCurrent ? (
                           'Plano Atual'
-                        ) : (
+                        ) : isUpgrade ? (
                           'Fazer Upgrade'
+                        ) : (
+                          'Fazer Downgrade'
                         )}
                       </Button>
                     )}
