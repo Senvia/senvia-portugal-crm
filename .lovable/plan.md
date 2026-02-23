@@ -1,53 +1,86 @@
 
-# Corrigir Classificacao de Organizacoes em Trial no Painel Super Admin
+# Adicionar Stripe Webhook para Sincronizacao Automatica de Planos
 
-## Problema
-A Construpao tem `plan: "elite"` na base de dados porque a edge function `check-subscription` grava `plan = 'elite'` durante o trial para dar acesso total. Mas a logica do painel Super Admin verifica o plano ANTES de verificar o trial, classificando-a incorretamente como "Pago".
+## Objetivo
+Criar uma edge function que recebe eventos do Stripe via webhook e atualiza automaticamente o plano da organizacao na base de dados, sem depender do utilizador voltar ao app.
 
-## Causa Raiz
-Na funcao `getOrgStatus` e no `AdminMetricsCards`, a ordem de verificacao esta errada:
-
-```text
-Atual (errado):
-1. billing_exempt? -> "exempt"
-2. plan != basic?  -> "paying"   <-- Construpao cai aqui (plan=elite)
-3. trial ativo?    -> "trial"
-
-Correto:
-1. billing_exempt? -> "exempt"
-2. trial ativo?    -> "trial"    <-- Construpao deve cair aqui
-3. plan != basic?  -> "paying"
-```
+## Como Funciona Hoje (Problema)
+O plano so e atualizado quando o utilizador abre o app e o frontend chama `check-subscription`. Se o utilizador pagar e fechar o browser, o plano fica desatualizado ate ao proximo login.
 
 ## Solucao
 
-### Ficheiros a alterar
+### 1. Criar Edge Function `stripe-webhook`
 
-**1. `src/components/system-admin/OrganizationsTable.tsx`**
+Ficheiro: `supabase/functions/stripe-webhook/index.ts`
 
-Corrigir a funcao `getOrgStatus` para verificar trial ANTES do plano:
+A funcao vai:
+- Receber eventos POST do Stripe (sem JWT, acesso publico)
+- Verificar a assinatura do webhook usando `STRIPE_WEBHOOK_SECRET`
+- Processar os seguintes eventos:
+  - **`checkout.session.completed`** - Cliente acabou de pagar, ativar plano
+  - **`customer.subscription.updated`** - Mudanca de plano (upgrade/downgrade)
+  - **`customer.subscription.deleted`** - Cancelamento, reverter para plano basico
+  - **`invoice.payment_failed`** - Pagamento falhado (log para monitorizacao)
 
-```typescript
-function getOrgStatus(org: Organization) {
-  const now = new Date();
-  if (org.billing_exempt) return "exempt";
-  // Trial ativo: tem data de trial no futuro E nao tem subscricao Stripe real
-  // (orgs com subscricao real nao tem trial_ends_at ou ja expirou)
-  if (org.trial_ends_at && new Date(org.trial_ends_at) > now) return "trial";
-  if (org.plan && org.plan !== "basic") return "paying";
-  return "expired";
-}
+Logica principal:
+1. Extrair o `customer_email` do evento Stripe
+2. Encontrar o utilizador na tabela `auth.users` pelo email
+3. Encontrar a organizacao via `organization_members`
+4. Mapear o `product_id` do Stripe para o plano (`starter`, `pro`, `elite`) usando o mesmo mapa que ja existe no `check-subscription`
+5. Atualizar a coluna `plan` na tabela `organizations`
+
+### 2. Adicionar Secret `STRIPE_WEBHOOK_SECRET`
+
+Sera necessario configurar o webhook signing secret do Stripe. Este valor e obtido ao criar o webhook endpoint no painel do Stripe.
+
+### 3. Registar no `config.toml`
+
+```toml
+[functions.stripe-webhook]
+verify_jwt = false
 ```
 
-**2. `src/components/system-admin/AdminMetricsCards.tsx`**
+### 4. Configuracao no Stripe (Manual pelo utilizador)
 
-Aplicar a mesma logica corrigida nos filtros de contagem:
+Apos o deploy da funcao, sera necessario:
+1. Ir ao painel do Stripe -> Developers -> Webhooks
+2. Adicionar endpoint: `https://zppcobirzgpfcrnxznwe.supabase.co/functions/v1/stripe-webhook`
+3. Selecionar os eventos: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed`
+4. Copiar o "Signing Secret" (comeca com `whsec_...`)
+5. Guardar esse secret no projeto
 
-- **MRR**: Excluir orgs em trial (com `trial_ends_at` no futuro)
-- **Pagantes**: Excluir orgs em trial
-- **Em Trial**: Verificar apenas `trial_ends_at > now` (independente do `plan`)
+## Detalhes Tecnicos
 
-## Resultado
-- Construpao aparecera como "Trial" com badge azul e "14d restantes"
-- MRR nao incluira os 147EUR falsos da Construpao
-- Contagem de pagantes sera 0 (so existem isentos e trial)
+### Mapeamento de Produtos (reutilizado)
+```text
+prod_U0wAc7Tuy8w6gA -> starter (49 EUR)
+prod_U0wGoA4odOBHOZ -> pro     (99 EUR)
+prod_U0wG6doz0zgZFV -> elite   (147 EUR)
+```
+
+### Fluxo do Webhook
+
+```text
+Stripe --> POST /stripe-webhook
+  |
+  +-- Verificar assinatura (STRIPE_WEBHOOK_SECRET)
+  |
+  +-- Extrair customer email
+  |
+  +-- Encontrar user por email (auth.users via service_role)
+  |
+  +-- Encontrar org via organization_members
+  |
+  +-- Atualizar organizations.plan
+  |
+  +-- Responder 200 OK ao Stripe
+```
+
+### Seguranca
+- Verificacao da assinatura Stripe garante que so o Stripe pode chamar este endpoint
+- Usa `SUPABASE_SERVICE_ROLE_KEY` para acesso administrativo a base de dados
+- Sem JWT (o Stripe nao envia tokens de autenticacao)
+
+## Ficheiros Afetados
+- **Criar**: `supabase/functions/stripe-webhook/index.ts`
+- **Sem alteracoes** nos ficheiros existentes (a funcao `check-subscription` continua a funcionar como fallback)
