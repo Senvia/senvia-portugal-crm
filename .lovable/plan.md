@@ -1,67 +1,74 @@
 
 
-# Corrigir Fluxo de Registo para Novos Clientes (Trial 14 Dias)
+# Remover Landing Page e Tornar Login a Pagina Inicial
 
-## Problema Atual
+## O que muda
 
-O site de vendas diz "Testar Gratis 14 Dias" e envia o utilizador para `/login`. Mas o formulario de registo em `/login` tem dois bloqueios:
+A rota `/` passa a mostrar diretamente a pagina de Login/Registo. A landing page interna e todos os seus componentes sao removidos. Os links que apontavam para `/login` ou `/` continuam a funcionar normalmente.
 
-1. **Codigo de Registo obrigatorio** -- O campo exige o codigo secreto `4330`, que o cliente nao tem. O texto diz "Contacte-nos para obter o seu" -- isto mata completamente a conversao.
-2. **Experiencia confusa** -- O cliente chega a uma pagina de login (tab "Entrar" ativa por defeito) em vez de ver um formulario de registo limpo e focado.
+## Alteracoes
 
-## Solucao
+### 1. Rota principal (`src/App.tsx`)
+- Remover a rota `<Route path="/" element={<Landing />} />`
+- Alterar a rota do Login de `/login` para `/`
+- Manter a rota `/login` como redirect para `/` (para nao partir links existentes)
+- Remover o import do componente `Landing`
 
-### 1. Remover o campo "Codigo de Registo"
-
-Eliminar completamente o campo `registrationCode` do formulario de signup. O registo passa a ser aberto para qualquer pessoa -- exatamente o que o modelo de negocio precisa (trial gratuito de 14 dias, a conversao acontece depois).
-
-- Remover o campo do formulario
-- Remover a validacao `registrationCode` do schema Zod
-- Remover o state `registrationCode`
-
-### 2. CTAs do site apontam para `/login?tab=signup`
-
-Atualmente os botoes "Testar Gratis" apontam para `/login`. O formulario ja suporta o query param `?tab=signup` (linha 59 do Login.tsx), por isso basta alterar todos os links de `/login` para `/login?tab=signup` nos componentes da landing page:
-
-- `HeroSection.tsx` -- CTA principal
-- `PricingSection.tsx` -- Botoes de cada plano
-- `FinalCTA.tsx` -- CTA final
-- `LandingHeader.tsx` -- Botao "Testar Gratis" no header
-
-### 3. Melhorar o formulario de signup
-
-Tornar o formulario mais acolhedor para novos clientes:
-
-- Titulo do card muda para "Comece o seu teste gratis" quando a tab signup esta ativa
-- Adicionar badge "14 dias gratis, sem cartao" no topo do formulario de registo
-- Simplificar a descricao do campo "Slug" para algo mais claro como "Endereco da sua empresa" em vez de "Slug (URL da empresa)"
-
-## Detalhes Tecnicos
-
-### Ficheiros a alterar:
+### 2. Redirects e navegacao
+Atualizar todos os ficheiros que referenciam `/login` ou `/` para garantir consistencia:
 
 | Ficheiro | Alteracao |
 |----------|-----------|
-| `src/pages/Login.tsx` | Remover campo `registrationCode`, remover validacao do schema, melhorar textos |
-| `src/components/landing/HeroSection.tsx` | Link de `/login` para `/login?tab=signup` |
-| `src/components/landing/PricingSection.tsx` | Link de `/login` para `/login?tab=signup` |
-| `src/components/landing/FinalCTA.tsx` | Link de `/login` para `/login?tab=signup` |
-| `src/components/landing/LandingHeader.tsx` | Link de `/login` para `/login?tab=signup` |
+| `src/components/auth/ProtectedRoute.tsx` | `Navigate to="/"` -- ja esta correto, agora aponta para login |
+| `src/components/auth/SuperAdminRoute.tsx` | `Navigate to="/"` -- ja esta correto |
+| `src/components/layout/AppSidebar.tsx` | `navigate('/')` no logout -- ja esta correto |
+| `src/components/layout/MobileMenu.tsx` | `navigate('/')` no logout -- ja esta correto |
+| `src/pages/ResetPassword.tsx` | `navigate('/')` -- ja esta correto |
+| `src/pages/InviteRegister.tsx` | Links para `/login` mudam para `/` |
+| `src/pages/Install.tsx` | Link para `/login` muda para `/` |
+| `src/pages/NotFound.tsx` | Link para `/` -- ja esta correto |
+| `src/pages/Privacy.tsx` | Link para `/` -- ja esta correto |
+| `src/pages/Terms.tsx` | Link para `/` -- ja esta correto |
 
-### Fluxo do novo cliente apos a correcao:
+### 3. Remover ficheiros da landing page
+Eliminar todos os componentes que ja nao sao usados:
+
+- `src/pages/Landing.tsx`
+- `src/components/landing/AnnouncementBar.tsx`
+- `src/components/landing/LandingHeader.tsx`
+- `src/components/landing/HeroSection.tsx`
+- `src/components/landing/SocialProofBar.tsx`
+- `src/components/landing/ProblemSection.tsx`
+- `src/components/landing/SolutionSteps.tsx`
+- `src/components/landing/DemoShowcase.tsx`
+- `src/components/landing/FeaturesGrid.tsx`
+- `src/components/landing/AISection.tsx`
+- `src/components/landing/NichesSection.tsx`
+- `src/components/landing/ResultsSection.tsx`
+- `src/components/landing/TestimonialsSection.tsx`
+- `src/components/landing/PricingSection.tsx`
+- `src/components/landing/ComparisonTable.tsx`
+- `src/components/landing/TrustSection.tsx`
+- `src/components/landing/FAQSection.tsx`
+- `src/components/landing/FinalCTA.tsx`
+- `src/components/landing/LandingFooter.tsx`
+
+### 4. Pagina de Login (`src/pages/Login.tsx`)
+- Nenhuma alteracao funcional necessaria -- o componente ja funciona de forma independente
+- O parametro `?tab=signup` continua a funcionar para abrir diretamente no registo
+
+## Resultado final
 
 ```text
-Site de vendas -> Clica "Testar Gratis 14 Dias"
-  -> /login?tab=signup (tab de registo ja ativa)
-    -> Preenche: Nome, Email, Palavra-passe, Nome da Empresa
-    -> Confirma email (se auto-confirm esta desativado)
-    -> Login -> Organizacao criada com trial_ends_at = now() + 14 dias
-    -> Dashboard com TrialBanner a mostrar "14 dias restantes"
+Utilizador acede senvia-portugal-crm.lovable.app
+  -> Ve diretamente a pagina de Login/Registo
+  -> Pode fazer login ou clicar em "Criar Conta" para o trial de 14 dias
+  -> Apos login, vai para /dashboard
+  -> Logout redireciona de volta para /
 ```
 
-### O que NAO muda:
-- A funcao `create_organization_for_current_user` ja cria a organizacao com `trial_ends_at` automaticamente (coluna tem DEFAULT `now() + interval '14 days'`)
-- O login existente (com codigo da empresa) continua a funcionar para membros de equipa
-- O `TrialBanner` e o `TrialExpiredBlocker` continuam a funcionar normalmente
-- Nenhuma alteracao de base de dados necessaria
-
+## O que NAO muda
+- Todo o fluxo de registo, trial de 14 dias e billing
+- As rotas protegidas e redirects de autenticacao
+- O formulario publico de leads (`/f/:slug`)
+- As paginas de Privacy e Terms
