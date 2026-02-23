@@ -305,6 +305,16 @@ function BrevoForm({ brevoApiKey, setBrevoApiKey, brevoSenderEmail, setBrevoSend
         </div>
         <p className="text-xs text-muted-foreground">Encontre a sua API Key em Brevo → Definições → API Keys.</p>
       </div>
+      <div className="space-y-2">
+        <Label>Webhook URL (Tracking)</Label>
+        <div className="flex items-center gap-2">
+          <Input readOnly value="https://zppcobirzgpfcrnxznwe.supabase.co/functions/v1/brevo-webhook" className="text-xs font-mono bg-muted" />
+          <Button type="button" variant="outline" size="sm" onClick={() => { navigator.clipboard.writeText("https://zppcobirzgpfcrnxznwe.supabase.co/functions/v1/brevo-webhook"); }}>
+            Copiar
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground">Cole este URL no painel do Brevo → Definições → Webhooks para ativar tracking de entregas, aberturas e cliques.</p>
+      </div>
       <Button onClick={handleSaveBrevo} disabled={updateOrganizationIsPending}>
         {updateOrganizationIsPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
         Guardar
