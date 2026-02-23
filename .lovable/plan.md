@@ -1,42 +1,55 @@
 
 
-# Corrigir Otto: Eliminar Instruções Falsas para Ações que Não Pode Executar
+# Corrigir Ferramenta Financeira do Otto: Adicionar Filtros de Data
 
 ## Problema
-O Otto recebe um pedido como "envia-me a fatura em PDF" e, em vez de reconhecer que **não tem essa capacidade**, inventa botões falsos ("Enviar por E-mail", "Descarregar PDF", "Partilhar Link") e dá instruções genéricas passo-a-passo. Isto acontece porque o system prompt não define claramente os limites das capacidades do Otto.
+A ferramenta `get_finance_summary` do Otto:
+1. **Nao aceita parametros de data** -- busca TODAS as vendas/despesas da organizacao, ignorando o periodo pedido pelo utilizador
+2. **Calcula "recebido" de forma errada** -- usa o `payment_status` da venda em vez de somar pagamentos reais da tabela `sale_payments`
+3. **Nao filtra vendas por mes** -- quando o utilizador pergunta "vendas de fevereiro 2026", o Otto nao consegue filtrar
 
 ## Solucao
 
-Adicionar ao `SYSTEM_PROMPT` uma secao explicita de **LIMITACOES** que lista exatamente o que o Otto NAO pode fazer, e como deve responder nesses casos.
+### Alterar a ferramenta `get_finance_summary` no ficheiro `supabase/functions/otto-chat/index.ts`
 
-### Texto a adicionar ao system prompt
+**1. Adicionar parametros de data a definicao da ferramenta:**
 
 ```
-LIMITAÇÕES (O QUE NÃO PODES FAZER):
-- NÃO podes enviar emails, faturas ou documentos.
-- NÃO podes descarregar PDFs ou gerar ficheiros.
-- NÃO podes criar, editar ou apagar registos (leads, clientes, vendas, faturas).
-- NÃO podes executar ações no sistema — apenas PESQUISAR e CONSULTAR dados.
-- NÃO podes partilhar links externos ou gerar URLs de download.
+parameters: {
+  type: "object",
+  properties: {
+    start_date: { type: "string", description: "Data inicio no formato YYYY-MM-DD (opcional, default: inicio do mes atual)" },
+    end_date: { type: "string", description: "Data fim no formato YYYY-MM-DD (opcional, default: fim do mes atual)" },
+  },
+  required: [],
+}
+```
 
-QUANDO O UTILIZADOR PEDE UMA AÇÃO QUE NÃO PODES EXECUTAR:
-- Diz claramente: "Não consigo executar essa ação diretamente."
-- Indica EXATAMENTE onde no sistema o utilizador pode fazê-lo, com o caminho do menu.
-- Inclui um [link] direto para a página relevante.
-- NUNCA inventes botões de interface como "Descarregar PDF" ou "Enviar por Email" na tua resposta — esses botões não existem no chat.
+**2. Reescrever o executor da ferramenta para:**
+- Calcular `start_date` e `end_date` automaticamente (mes atual) se nao fornecidos
+- Filtrar vendas por `sale_date` dentro do intervalo
+- Somar pagamentos reais da tabela `sale_payments` filtrados por `payment_date` no intervalo
+- Filtrar despesas por `expense_date` no intervalo
+- Retornar o periodo usado na resposta para o modelo saber a que se refere
 
-Exemplo correto:
-Utilizador: "Envia-me a fatura FT 2026/10 por email"
-Otto: "Não consigo enviar faturas diretamente. Para enviar a fatura FT 2026/10 por email:
-1. Aceda a **Financeiro > Faturas**
-2. Localize a fatura **FT 2026/10**
-3. Clique no menu de opções (três pontos) e selecione **Enviar por Email**"
-[link:Ir para Faturas|/financeiro/faturas]
+**3. Novo formato de resposta da ferramenta:**
+
+```json
+{
+  "period": { "start": "2026-02-01", "end": "2026-02-28" },
+  "total_billed": 5000,
+  "total_received": 3000,
+  "total_pending": 2000,
+  "total_expenses": 800,
+  "balance": 2200,
+  "total_sales_count": 6
+}
 ```
 
 ### Ficheiro a alterar
-- `supabase/functions/otto-chat/index.ts` — adicionar secao LIMITACOES ao SYSTEM_PROMPT (antes das REGRAS DE FORMATACAO)
+- `supabase/functions/otto-chat/index.ts` -- definicao + executor de `get_finance_summary`
 
 ### Resultado
-Quando o utilizador pedir uma acao (enviar email, descarregar PDF, etc.), o Otto dira claramente que nao pode executar essa acao e indicara o caminho exato no sistema, sem inventar botoes ou interfaces falsas.
-
+- O Otto filtrara dados financeiros pelo periodo correto quando o utilizador perguntar "vendas deste mes", "faturacao de janeiro", etc.
+- Os valores de "recebido" e "pendente" serao calculados com base nos pagamentos reais
+- O modelo sabera sempre a que periodo se referem os dados
