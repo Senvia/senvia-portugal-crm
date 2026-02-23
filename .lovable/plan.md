@@ -1,61 +1,79 @@
 
-# Corrigir Gatilho "Subscricao Ativada" - Apenas Reativacoes
+# Listas Automaticas Stripe (Senvia Agency)
 
-## Problema Atual
+## Resumo
 
-O gatilho `stripe_subscription_created` dispara em TODOS os checkouts, incluindo a primeira subscricao. Isso causa sobreposicao com os gatilhos "Bem-vindo ao Plano X", que ja cobrem o primeiro checkout.
+Criar listas de transmissao automaticas relacionadas com eventos Stripe, exclusivas para a organizacao Senvia Agency. Os clientes do SENVIA OS serao automaticamente movidos entre listas conforme o estado da sua subscricao muda.
 
-## Comportamento Desejado
+## Listas a Criar
 
-- **Primeira subscricao**: Dispara APENAS `stripe_welcome_{plan}` (Bem-vindo ao Plano X)
-- **Reativacao** (pessoa que cancelou/expirou e voltou a subscrever): Dispara `stripe_subscription_created` (Subscricao Reativada)
+| Nome da Lista | Descricao |
+|---|---|
+| Plano Starter | Clientes com subscricao Starter ativa |
+| Plano Pro | Clientes com subscricao Pro ativa |
+| Plano Elite | Clientes com subscricao Elite ativa |
+| Pagamento em Atraso | Clientes com pagamento falhado ou past_due |
+| Subscricao Cancelada | Clientes que cancelaram a subscricao |
 
-## Logica de Detecao
+## Comportamento Automatico
 
-No webhook, antes de disparar `stripe_subscription_created`, verificar na tabela `organizations` se a org ja tinha um plano anterior (ou seja, `plan IS NOT NULL` antes do checkout). Se o plano era `NULL` (primeira vez), e uma subscricao nova. Se ja tinha plano ou tinha `payment_failed_at` preenchido, e uma reativacao.
+- **Novo checkout (qualquer plano)**: Contacto entra na lista do plano correspondente (Starter/Pro/Elite). Removido de "Pagamento em Atraso" e "Subscricao Cancelada".
+- **Subscricao renovada**: Contacto entra na lista do plano. Removido de "Pagamento em Atraso".
+- **Pagamento falhado / past_due**: Contacto entra em "Pagamento em Atraso". Permanece na lista do plano.
+- **Subscricao cancelada**: Contacto removido da lista do plano. Adicionado a "Subscricao Cancelada". Removido de "Pagamento em Atraso".
+- **Upgrade/downgrade**: Contacto removido do plano antigo, adicionado ao plano novo.
 
-## Alteracoes
+## Alteracoes Tecnicas
 
-### 1. `supabase/functions/stripe-webhook/index.ts`
+### 1. Funcao SQL: `ensure_stripe_auto_lists` (Migracao)
 
-No bloco `checkout.session.completed`:
-
-- Antes de chamar `updateOrgPlan`, verificar o plano atual da org
-- Se o plano atual era `NULL` e nao havia `payment_failed_at` -> primeira subscricao, NAO disparar `stripe_subscription_created`
-- Se o plano atual era `NULL` MAS havia historico (payment_failed_at ou outro indicador) -> reativacao, disparar `stripe_subscription_created`
-- Os gatilhos `stripe_welcome_{plan}` continuam a disparar sempre no checkout (primeira vez e reativacoes)
-
-Codigo relevante no bloco `checkout.session.completed`:
+Similar a `ensure_org_auto_lists`, cria as 5 listas Stripe com `is_system = true` para a org Senvia Agency.
 
 ```text
-// Verificar se e reativacao
-const orgId = await findOrgByEmail(supabase, email);
-let isReactivation = false;
-if (orgId) {
-  const { data: orgData } = await supabase
-    .from("organizations")
-    .select("plan, payment_failed_at")
-    .eq("id", orgId)
-    .maybeSingle();
-  // Se ja teve plano ou teve falha de pagamento, e reativacao
-  isReactivation = !!(orgData?.plan || orgData?.payment_failed_at);
-}
-
-// Dispatch apenas se for reativacao
-if (isReactivation) {
-  await dispatchAutomation(supabase, "stripe_subscription_created", ...);
-}
-// Welcome dispara sempre
-if (plan) {
-  await dispatchAutomation(supabase, `stripe_welcome_${plan}`, ...);
-}
+CREATE OR REPLACE FUNCTION public.ensure_stripe_auto_lists(p_org_id uuid)
+RETURNS void ...
+-- Insere as 5 listas se nao existirem
+-- Plano Starter, Plano Pro, Plano Elite, Pagamento em Atraso, Subscricao Cancelada
 ```
 
-### 2. `src/hooks/useAutomations.ts`
+Executar `SELECT ensure_stripe_auto_lists('06fe9e1d-...')` na migracao para criar as listas imediatamente.
 
-Atualizar o label de `stripe_subscription_created` de "Subscricao Ativada" para "Subscricao Reativada" para refletir o comportamento correto.
+### 2. `supabase/functions/stripe-webhook/index.ts`
 
-### Ficheiros Alterados
+Adicionar uma funcao helper `syncStripeAutoLists` que:
 
-1. `supabase/functions/stripe-webhook/index.ts` - Logica de detecao de reativacao
-2. `src/hooks/useAutomations.ts` - Renomear label do gatilho
+1. Faz upsert do contacto na tabela `marketing_contacts` (usando email)
+2. Chama `ensure_stripe_auto_lists` para garantir que as listas existem
+3. Conforme o evento, adiciona/remove o contacto das listas certas
+
+Sera chamada apos cada evento processado, com os parametros:
+- `email` do cliente
+- `plan` atual (starter/pro/elite/null)
+- `eventType` (checkout, renewed, past_due, canceled, payment_failed)
+
+Logica por evento:
+
+```text
+checkout_completed / renewed:
+  -> Adicionar a lista "Plano {X}"
+  -> Remover de "Pagamento em Atraso"
+  -> Remover de "Subscricao Cancelada"
+  -> Remover de outras listas de plano (se upgrade/downgrade)
+
+past_due / payment_failed:
+  -> Adicionar a "Pagamento em Atraso"
+
+subscription_deleted:
+  -> Remover de todas as listas de plano
+  -> Remover de "Pagamento em Atraso"
+  -> Adicionar a "Subscricao Cancelada"
+```
+
+### 3. Sem alteracoes no frontend
+
+As listas aparecem automaticamente na pagina de Listas de Transmissao com o badge "Sistema" (ja existente para listas `is_system = true`). Nao podem ser eliminadas pelo utilizador.
+
+## Ficheiros Alterados
+
+1. **Nova migracao SQL** - Criar funcao `ensure_stripe_auto_lists` + popular listas para Senvia Agency
+2. **`supabase/functions/stripe-webhook/index.ts`** - Adicionar logica de sincronizacao de listas automaticas
