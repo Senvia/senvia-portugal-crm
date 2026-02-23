@@ -12,6 +12,8 @@ interface SubscriptionStatus {
   trial_ends_at?: string;
   trial_expired?: boolean;
   days_remaining?: number;
+  payment_failed_at?: string;
+  payment_overdue?: boolean;
 }
 
 export function useStripeSubscription() {

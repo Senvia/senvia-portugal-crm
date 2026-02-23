@@ -5,6 +5,7 @@ import { Loader2 } from 'lucide-react';
 import { OrganizationSelector } from './OrganizationSelector';
 import { ChallengeMFA } from './ChallengeMFA';
 import { TrialExpiredBlocker } from './TrialExpiredBlocker';
+import { PaymentOverdueBlocker } from './PaymentOverdueBlocker';
 import { useStripeSubscription } from '@/hooks/useStripeSubscription';
 import { usePipelineStages } from '@/hooks/usePipelineStages';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -66,6 +67,15 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     pipelineStages.length === 0
   ) {
     return <OnboardingWizard onComplete={() => setOnboardingComplete(true)} />;
+  }
+
+  // Check payment overdue - block all pages except /settings
+  if (
+    hasCheckedSub &&
+    subscriptionStatus?.payment_overdue === true &&
+    !location.pathname.startsWith('/settings')
+  ) {
+    return <PaymentOverdueBlocker paymentFailedAt={subscriptionStatus.payment_failed_at} />;
   }
 
   // Check trial expired - block all pages except /settings
