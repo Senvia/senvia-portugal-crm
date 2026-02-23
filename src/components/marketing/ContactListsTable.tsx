@@ -1,6 +1,6 @@
 import { format } from "date-fns";
 import { pt } from "date-fns/locale";
-import { MoreHorizontal, Eye, Trash2, Users, Pencil } from "lucide-react";
+import { MoreHorizontal, Eye, Trash2, Users, Bot } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -27,6 +27,18 @@ export function ContactListsTable({ lists, onView, onDelete }: Props) {
     );
   }
 
+  const NameWithBadge = ({ list }: { list: ContactList }) => (
+    <div className="flex items-center gap-2">
+      <span className="font-medium truncate">{list.name}</span>
+      {list.is_system && (
+        <Badge variant="outline" className="text-[10px] px-1.5 py-0 gap-1 shrink-0">
+          <Bot className="h-3 w-3" />
+          Auto
+        </Badge>
+      )}
+    </div>
+  );
+
   if (isMobile) {
     return (
       <div className="space-y-3">
@@ -35,7 +47,7 @@ export function ContactListsTable({ lists, onView, onDelete }: Props) {
             <CardContent className="p-4">
               <div className="flex items-start justify-between">
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium truncate">{list.name}</p>
+                  <NameWithBadge list={list} />
                   {list.description && <p className="text-xs text-muted-foreground truncate mt-0.5">{list.description}</p>}
                   <div className="flex items-center gap-2 mt-2">
                     <Badge variant="secondary">{list.member_count} contacto(s)</Badge>
@@ -52,9 +64,11 @@ export function ContactListsTable({ lists, onView, onDelete }: Props) {
                     <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onView(list); }}>
                       <Eye className="h-4 w-4 mr-2" /> Ver
                     </DropdownMenuItem>
-                    <DropdownMenuItem className="text-destructive" onClick={(e) => { e.stopPropagation(); onDelete(list.id); }}>
-                      <Trash2 className="h-4 w-4 mr-2" /> Eliminar
-                    </DropdownMenuItem>
+                    {!list.is_system && (
+                      <DropdownMenuItem className="text-destructive" onClick={(e) => { e.stopPropagation(); onDelete(list.id); }}>
+                        <Trash2 className="h-4 w-4 mr-2" /> Eliminar
+                      </DropdownMenuItem>
+                    )}
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
@@ -80,7 +94,7 @@ export function ContactListsTable({ lists, onView, onDelete }: Props) {
         <TableBody>
           {lists.map(list => (
             <TableRow key={list.id} className="cursor-pointer" onClick={() => onView(list)}>
-              <TableCell className="font-medium">{list.name}</TableCell>
+              <TableCell><NameWithBadge list={list} /></TableCell>
               <TableCell className="text-muted-foreground text-sm">{list.description || "—"}</TableCell>
               <TableCell className="text-center">
                 <Badge variant="secondary">{list.member_count}</Badge>
@@ -97,9 +111,11 @@ export function ContactListsTable({ lists, onView, onDelete }: Props) {
                     <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onView(list); }}>
                       <Eye className="h-4 w-4 mr-2" /> Ver detalhes
                     </DropdownMenuItem>
-                    <DropdownMenuItem className="text-destructive" onClick={(e) => { e.stopPropagation(); onDelete(list.id); }}>
-                      <Trash2 className="h-4 w-4 mr-2" /> Eliminar
-                    </DropdownMenuItem>
+                    {!list.is_system && (
+                      <DropdownMenuItem className="text-destructive" onClick={(e) => { e.stopPropagation(); onDelete(list.id); }}>
+                        <Trash2 className="h-4 w-4 mr-2" /> Eliminar
+                      </DropdownMenuItem>
+                    )}
                   </DropdownMenuContent>
                 </DropdownMenu>
               </TableCell>
