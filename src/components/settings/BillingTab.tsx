@@ -22,10 +22,12 @@ export function BillingTab() {
   const [checkingPlan, setCheckingPlan] = useState<string | null>(null);
   const [hasChecked, setHasChecked] = useState(false);
 
-  const currentPlanId = subscriptionStatus?.plan_id || organization?.plan || 'starter';
-  const currentIndex = STRIPE_PLANS.findIndex(p => p.id === currentPlanId);
   const isOnTrial = subscriptionStatus?.on_trial === true;
-  const hasNoSubscription = subscriptionStatus ? !subscriptionStatus.subscribed : false;
+  const hasActiveSubscription = subscriptionStatus?.subscribed === true;
+  // Only use plan_id as "current" if user has an active paid subscription (not trial)
+  const currentPlanId = hasActiveSubscription ? (subscriptionStatus?.plan_id || 'starter') : null;
+  const currentIndex = currentPlanId ? STRIPE_PLANS.findIndex(p => p.id === currentPlanId) : -1;
+  const hasNoSubscription = !hasChecked || !hasActiveSubscription;
 
   useEffect(() => {
     if (!hasChecked) {
