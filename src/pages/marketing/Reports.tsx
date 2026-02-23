@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ArrowLeft, Mail, Eye, MousePointer, AlertTriangle, Loader2, Send, CheckCircle, ShieldAlert, Ban, RefreshCw } from "lucide-react";
 import { Link } from "react-router-dom";
-import { AppLayout } from "@/components/layout/AppLayout";
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -55,8 +55,7 @@ export default function Reports() {
   };
 
   return (
-    <AppLayout>
-      <div className="space-y-6 p-4 md:p-6 pb-24 md:pb-6">
+    <div className="space-y-6 p-4 md:p-6 pb-24 md:pb-6">
         {/* Header */}
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3">
@@ -220,7 +219,6 @@ export default function Reports() {
             )}
           </>
         ) : null}
-      </div>
-    </AppLayout>
+    </div>
   );
 }

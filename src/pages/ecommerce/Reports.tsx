@@ -3,7 +3,7 @@ import { ArrowLeft, TrendingUp, Package, Users, DollarSign } from "lucide-react"
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { SEO } from "@/components/SEO";
-import { AppLayout } from "@/components/layout/AppLayout";
+
 import { useAuth } from "@/contexts/AuthContext";
 import { useEcommerceStats } from "@/hooks/ecommerce/useEcommerceStats";
 import { formatCurrency } from "@/lib/format";
@@ -14,7 +14,7 @@ export default function EcommerceReports() {
   const { data: stats, isLoading } = useEcommerceStats();
 
   return (
-    <AppLayout userName={profile?.full_name} organizationName={organization?.name}>
+    <>
       <SEO title="Relatórios | E-commerce | Senvia OS" description="Análise e métricas da loja" />
 
       <div className="space-y-6 p-4 md:p-6 pb-24 md:pb-6">
@@ -140,6 +140,6 @@ export default function EcommerceReports() {
           </CardContent>
         </Card>
       </div>
-    </AppLayout>
+    </>
   );
 }

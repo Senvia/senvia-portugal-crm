@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { usePersistedState } from "@/hooks/usePersistedState";
-import { AppLayout } from '@/components/layout/AppLayout';
+
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -94,7 +94,7 @@ export default function Expenses() {
   };
 
   return (
-    <AppLayout>
+    <>
       <div className="p-4 md:p-6 lg:p-8 space-y-6 pb-20 md:pb-6">
         {/* Header */}
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -263,6 +263,6 @@ export default function Expenses() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </AppLayout>
+    </>
   );
 }

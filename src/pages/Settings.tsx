@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { AppLayout } from "@/components/layout/AppLayout";
+
 import { useAuth } from "@/contexts/AuthContext";
 import { useUpdateOrganization, useTestWebhook } from '@/hooks/useOrganization';
 import { SecuritySettings } from '@/components/settings/SecuritySettings';
@@ -372,8 +372,7 @@ export default function Settings() {
   };
 
   return (
-    <AppLayout userName={profile?.full_name} organizationName={organization?.name}>
-      <div className="p-4 sm:p-6 lg:p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
         {activeGroup === null ? (
           // Level 1: Group cards grid
           <>
@@ -418,7 +417,6 @@ export default function Settings() {
             </div>
           </>
         )}
-      </div>
-    </AppLayout>
+    </div>
   );
 }

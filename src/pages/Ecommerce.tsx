@@ -6,7 +6,7 @@ import { useEcommerceStats } from "@/hooks/ecommerce";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency } from "@/lib/format";
 import { SEO } from "@/components/SEO";
-import { AppLayout } from "@/components/layout/AppLayout";
+
 import { useAuth } from "@/contexts/AuthContext";
 
 export default function Ecommerce() {
@@ -66,8 +66,8 @@ export default function Ecommerce() {
   ];
 
   return (
-    <AppLayout userName={profile?.full_name} organizationName={organization?.name}>
-      <SEO 
+    <>
+      <SEO
         title="E-commerce | Senvia OS"
         description="Gestão completa da sua loja online"
       />
@@ -197,6 +197,6 @@ export default function Ecommerce() {
           </CardContent>
         </Card>
       </div>
-    </AppLayout>
+    </>
   );
 }

@@ -4,7 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
-import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { ProtectedLayoutRoute } from "@/components/auth/ProtectedLayoutRoute";
 import { SuperAdminRoute } from "@/components/auth/SuperAdminRoute";
 import { PWAInstallButton } from "@/components/pwa/PWAInstallButton";
 
@@ -71,122 +71,32 @@ const App = () => (
             <Route path="/terms" element={<Terms />} />
             <Route path="/install" element={<Install />} />
 
-            {/* Protected Routes (Authenticated Users) */}
-            <Route path="/dashboard" element={
-              <ProtectedRoute>
-                <Dashboard />
-              </ProtectedRoute>
-            } />
-            <Route path="/leads" element={
-              <ProtectedRoute>
-                <Leads />
-              </ProtectedRoute>
-            } />
-            <Route path="/clients" element={
-              <ProtectedRoute>
-                <Clients />
-              </ProtectedRoute>
-            } />
-            <Route path="/calendar" element={
-              <ProtectedRoute>
-                <Calendar />
-              </ProtectedRoute>
-            } />
-            <Route path="/proposals" element={
-              <ProtectedRoute>
-                <Proposals />
-              </ProtectedRoute>
-            } />
-            <Route path="/sales" element={
-              <ProtectedRoute>
-                <Sales />
-              </ProtectedRoute>
-            } />
-            <Route path="/financeiro" element={
-              <ProtectedRoute>
-                <Finance />
-              </ProtectedRoute>
-            } />
-            <Route path="/financeiro/pagamentos" element={
-              <ProtectedRoute>
-                <FinancePayments />
-              </ProtectedRoute>
-            } />
-            <Route path="/financeiro/faturas" element={
-              <ProtectedRoute>
-                <FinanceInvoices />
-              </ProtectedRoute>
-            } />
-            <Route path="/financeiro/despesas" element={
-              <ProtectedRoute>
-                <FinanceExpenses />
-              </ProtectedRoute>
-            } />
-            <Route path="/ecommerce" element={
-              <ProtectedRoute>
-                <Ecommerce />
-              </ProtectedRoute>
-            } />
-            <Route path="/ecommerce/products" element={
-              <ProtectedRoute>
-                <EcommerceProducts />
-              </ProtectedRoute>
-            } />
-            <Route path="/ecommerce/orders" element={
-              <ProtectedRoute>
-                <EcommerceOrders />
-              </ProtectedRoute>
-            } />
-            <Route path="/ecommerce/customers" element={
-              <ProtectedRoute>
-                <EcommerceCustomers />
-              </ProtectedRoute>
-            } />
-            <Route path="/ecommerce/inventory" element={
-              <ProtectedRoute>
-                <EcommerceInventory />
-              </ProtectedRoute>
-            } />
-            <Route path="/ecommerce/discounts" element={
-              <ProtectedRoute>
-                <EcommerceDiscounts />
-              </ProtectedRoute>
-            } />
-            <Route path="/ecommerce/reports" element={
-              <ProtectedRoute>
-                <EcommerceReports />
-              </ProtectedRoute>
-            } />
-            <Route path="/settings" element={
-              <ProtectedRoute>
-                <Settings />
-              </ProtectedRoute>
-            } />
-            <Route path="/marketing" element={
-              <ProtectedRoute>
-                <Marketing />
-              </ProtectedRoute>
-            } />
-            <Route path="/marketing/templates" element={
-              <ProtectedRoute>
-                <MarketingTemplates />
-              </ProtectedRoute>
-            } />
-            <Route path="/marketing/campaigns" element={
-              <ProtectedRoute>
-                <MarketingCampaigns />
-              </ProtectedRoute>
-            } />
-            <Route path="/marketing/reports" element={
-              <ProtectedRoute>
-                <MarketingReports />
-              </ProtectedRoute>
-            } />
-            <Route path="/marketing/lists" element={
-              <ProtectedRoute>
-                <MarketingLists />
-              </ProtectedRoute>
-            } />
+            {/* Protected Routes (Persistent Layout) */}
+            <Route element={<ProtectedLayoutRoute />}>
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/leads" element={<Leads />} />
+              <Route path="/clients" element={<Clients />} />
+              <Route path="/calendar" element={<Calendar />} />
+              <Route path="/proposals" element={<Proposals />} />
+              <Route path="/sales" element={<Sales />} />
+              <Route path="/financeiro" element={<Finance />} />
+              <Route path="/financeiro/pagamentos" element={<FinancePayments />} />
+              <Route path="/financeiro/faturas" element={<FinanceInvoices />} />
+              <Route path="/financeiro/despesas" element={<FinanceExpenses />} />
+              <Route path="/ecommerce" element={<Ecommerce />} />
+              <Route path="/ecommerce/products" element={<EcommerceProducts />} />
+              <Route path="/ecommerce/orders" element={<EcommerceOrders />} />
+              <Route path="/ecommerce/customers" element={<EcommerceCustomers />} />
+              <Route path="/ecommerce/inventory" element={<EcommerceInventory />} />
+              <Route path="/ecommerce/discounts" element={<EcommerceDiscounts />} />
+              <Route path="/ecommerce/reports" element={<EcommerceReports />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="/marketing" element={<Marketing />} />
+              <Route path="/marketing/templates" element={<MarketingTemplates />} />
+              <Route path="/marketing/campaigns" element={<MarketingCampaigns />} />
+              <Route path="/marketing/reports" element={<MarketingReports />} />
+              <Route path="/marketing/lists" element={<MarketingLists />} />
+            </Route>
 
             {/* Super Admin Routes */}
             <Route path="/system-admin" element={

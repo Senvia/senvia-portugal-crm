@@ -2,15 +2,14 @@ import { Link } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SEO } from "@/components/SEO";
-import { AppLayout } from "@/components/layout/AppLayout";
-import { useAuth } from "@/contexts/AuthContext";
+
+
 import { DiscountsTable } from "@/components/ecommerce/DiscountsTable";
 
 export default function EcommerceDiscounts() {
-  const { profile, organization } = useAuth();
 
   return (
-    <AppLayout userName={profile?.full_name} organizationName={organization?.name}>
+    <>
       <SEO title="Descontos | E-commerce | Senvia OS" description="Gerir códigos de desconto" />
 
       <div className="space-y-6 p-4 md:p-6 pb-24 md:pb-6">
@@ -28,6 +27,6 @@ export default function EcommerceDiscounts() {
 
         <DiscountsTable />
       </div>
-    </AppLayout>
+    </>
   );
 }

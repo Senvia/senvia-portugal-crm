@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Plus, Upload, Loader2, ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { ContactListsTable } from "@/components/marketing/ContactListsTable";
 import { CreateListModal } from "@/components/marketing/CreateListModal";
@@ -18,7 +17,7 @@ export default function Lists() {
   const [selectedList, setSelectedList] = useState<ContactList | null>(null);
 
   return (
-    <AppLayout>
+    <>
       <div className="space-y-6 p-4 md:p-6 pb-24 md:pb-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -50,6 +49,6 @@ export default function Lists() {
       <CreateListModal open={createOpen} onOpenChange={setCreateOpen} />
       <ListDetailsModal list={selectedList} open={!!selectedList} onOpenChange={(o) => !o && setSelectedList(null)} />
       <ImportContactsModal open={importOpen} onOpenChange={setImportOpen} />
-    </AppLayout>
+    </>
   );
 }

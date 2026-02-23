@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Plus, ArrowLeft } from "lucide-react";
 import { Link } from "react-router-dom";
-import { AppLayout } from "@/components/layout/AppLayout";
+
 import { Button } from "@/components/ui/button";
 import { TemplatesTable } from "@/components/marketing/TemplatesTable";
 import { CreateTemplateModal } from "@/components/marketing/CreateTemplateModal";
@@ -17,8 +17,7 @@ export default function Templates() {
   const { data: templates, isLoading } = useEmailTemplates();
 
   return (
-    <AppLayout>
-      <div className="space-y-6 p-4 md:p-6 pb-24 md:pb-6">
+    <div className="space-y-6 p-4 md:p-6 pb-24 md:pb-6">
         {/* Header */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
@@ -67,7 +66,6 @@ export default function Templates() {
           open={!!sendingTemplate}
           onOpenChange={(open) => !open && setSendingTemplate(null)}
         />
-      </div>
-    </AppLayout>
+    </div>
   );
 }
