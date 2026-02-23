@@ -1,61 +1,57 @@
 
 
-# Destinatarios de Automacao = Listas de Transmissao
+# Relatórios: Incluir Emails de Automações + Filtro por Fonte
 
-## Objetivo
-Alterar o sistema de automacoes para que os destinatarios sejam as **listas de contactos** (listas de transmissao) em vez de destinatarios individuais (lead/cliente/utilizador).
+## Problema Atual
+Os emails enviados por automações são gravados na tabela `email_sends` mas sem qualquer referência à automação que os originou (campo `automation_id` não existe). O filtro de relatórios só permite selecionar campanhas, ignorando completamente os envios de automações.
 
-## O que muda
+## O que vai mudar
 
-### 1. Base de dados: nova coluna `list_id` na tabela `email_automations`
-- Adicionar coluna `list_id uuid REFERENCES client_lists(id) ON DELETE SET NULL` a tabela `email_automations`.
-- A coluna `recipient_type` deixa de ser usada (pode ficar para retrocompatibilidade, mas sera ignorada).
+### 1. Base de dados: nova coluna `automation_id` na tabela `email_sends`
+- Adicionar `automation_id uuid REFERENCES email_automations(id) ON DELETE SET NULL` para rastrear qual automação originou cada envio.
 
-### 2. Frontend: Modal de criacao (`CreateAutomationModal.tsx`)
-- Remover o campo "Destinatario" com opcoes lead/cliente/utilizador.
-- Substituir por um campo **"Lista de Destinatarios"** que lista as listas de transmissao da organizacao (usando `useContactLists`).
-- Usar `SearchableCombobox` para permitir pesquisa.
-- Guardar o `list_id` na automacao.
+### 2. Backend: Edge Functions
+- **`send-template-email`**: Aceitar o novo campo `automationId` no payload e gravá-lo no registo `email_sends`.
+- **`process-automation`**: Passar o `automationId` ao invocar `send-template-email` para envios imediatos.
+- **`process-automation-queue`**: Também passar o `automationId` (será necessário guardar na queue -- a queue já tem `automation_id`).
 
-### 3. Frontend: Hook `useAutomations.ts`
-- Remover `RECIPIENT_TYPES`.
-- Adicionar `list_id` ao tipo `EmailAutomation` e ao `createAutomation`.
-- Remover `recipient_type` do fluxo de criacao.
+### 3. Frontend: Hook `useEmailStats`
+- Aceitar um novo parâmetro de filtro: `source` (all / campaign / automation) e um `sourceId` (ID da campanha ou automação selecionada).
+- Ajustar a query para filtrar por `campaign_id` ou `automation_id` conforme o tipo de fonte.
+- Quando o filtro é "campaign", filtrar emails onde `campaign_id IS NOT NULL`.
+- Quando o filtro é "automation", filtrar emails onde `automation_id IS NOT NULL`.
 
-### 4. Frontend: Tabela de automacoes (`AutomationsTable.tsx`)
-- Mostrar o nome da lista em vez do tipo de destinatario (opcional, pode ser adicionado numa coluna ou no detalhe).
-
-### 5. Backend: Edge Function `process-automation/index.ts`
-- Em vez de resolver um unico destinatario do `record`, buscar todos os membros da lista associada (`list_id`):
-  1. Consultar `marketing_list_members` WHERE `list_id = automation.list_id`
-  2. JOIN com `marketing_contacts` para obter `email` e `name`
-  3. Filtrar apenas contactos com `subscribed = true`
-  4. Enviar (ou agendar) o email para cada membro da lista
-
-### 6. Backend: Edge Function `process-automation-queue/index.ts`
-- Sem alteracoes significativas -- os items na queue ja tem `recipient_email` individual, so muda quem os cria.
+### 4. Frontend: Página de Relatórios (`Reports.tsx`)
+- Substituir o Select de campanhas por dois selects encadeados:
+  1. **Fonte**: "Todos" | "Campanhas" | "Automações"
+  2. **Detalhe**: Ao selecionar "Campanhas" mostra a lista de campanhas; ao selecionar "Automações" mostra a lista de automações; "Todos" esconde o segundo select.
+- Buscar a lista de automações usando `useAutomations`.
+- Mostrar na tabela de eventos uma coluna "Origem" indicando se veio de campanha ou automação.
 
 ## Detalhe Tecnico
 
 ### Migracao SQL
 ```sql
-ALTER TABLE email_automations ADD COLUMN list_id uuid REFERENCES client_lists(id) ON DELETE SET NULL;
+ALTER TABLE public.email_sends 
+ADD COLUMN automation_id uuid REFERENCES public.email_automations(id) ON DELETE SET NULL;
 ```
 
-### Fluxo no Edge Function (process-automation)
+### Fluxo de dados atualizado
 ```text
-Trigger disparado
-  -> Encontra automacoes ativas para este trigger
-  -> Para cada automacao:
-     -> Busca membros da lista (list_id)
-     -> Para cada membro com email valido e subscribed=true:
-        -> Se delay > 0: insere na automation_queue
-        -> Se delay = 0: envia imediatamente via send-template-email
+process-automation
+  -> send-template-email(automationId: automation.id)
+     -> email_sends.insert({ automation_id: automationId })
+
+process-automation-queue
+  -> send-template-email(automationId: item.automation_id)
+     -> email_sends.insert({ automation_id: automationId })
 ```
 
 ### Ficheiros alterados
-- `supabase/migrations/xxx.sql` -- nova coluna `list_id`
-- `src/hooks/useAutomations.ts` -- adicionar `list_id`, remover `RECIPIENT_TYPES`
-- `src/components/marketing/CreateAutomationModal.tsx` -- substituir campo destinatario por seletor de lista
-- `supabase/functions/process-automation/index.ts` -- resolver destinatarios a partir da lista
+- Nova migração SQL (coluna `automation_id`)
+- `supabase/functions/send-template-email/index.ts` -- aceitar e gravar `automationId`
+- `supabase/functions/process-automation/index.ts` -- passar `automationId` no body
+- `supabase/functions/process-automation-queue/index.ts` -- passar `automationId` no body
+- `src/hooks/useEmailStats.ts` -- novo filtro por fonte (campaign/automation/all)
+- `src/pages/marketing/Reports.tsx` -- UI com filtros de fonte + coluna origem na tabela
 
