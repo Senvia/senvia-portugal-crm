@@ -1,60 +1,47 @@
 
 
-# Reforçar Anti-Alucinação do Otto (Zero Tolerância)
+# Corrigir Links Falsos do Otto
 
 ## Problema
-Apesar de já existir uma regra no system prompt, o modelo continua a inventar dados quando uma ferramenta falha ou não retorna resultados. A regra atual não é suficientemente forte.
+O Otto envia links de navegacao que nao existem na aplicacao. O mapa de rotas no system prompt tem caminhos incorretos que nao correspondem as rotas reais do React Router.
 
-## Solução (3 camadas de proteção)
+**Rotas erradas no Otto vs rotas reais:**
 
-### 1. Reescrever as regras anti-alucinação no system prompt
+| Otto envia | Rota real |
+|---|---|
+| /finance | /financeiro |
+| /finance/payments | /financeiro/pagamentos |
+| /finance/invoices | /financeiro/faturas |
+| /finance/expenses | /financeiro/despesas |
 
-Tornar as regras muito mais explícitas e repetitivas (modelos de IA respondem melhor a instruções repetidas e enfáticas):
+As restantes rotas (/dashboard, /leads, /clients, /calendar, /proposals, /sales, /marketing/*, /ecommerce, /settings) estao corretas.
+
+## Solucao
+
+### 1. Corrigir o MAPA DE ROTAS no system prompt
+
+No ficheiro `supabase/functions/otto-chat/index.ts`, atualizar as 4 rotas de financeiro:
 
 ```
-REGRAS DE ACESSO A DADOS (OBRIGATÓRIAS — VIOLAÇÃO = ERRO CRÍTICO):
-- Responde EXCLUSIVAMENTE com dados retornados pelas ferramentas. Zero exceções.
-- Se uma ferramenta retornar erro ou zero resultados, diz: "Não encontrei resultados para [termo]."
-- NUNCA inventes nomes de clientes, referências, valores, datas ou qualquer outro dado.
-- NUNCA "suponhas" dados. Se não tens resultados reais, NÃO os fabricas.
-- Se o utilizador perguntar algo que exige dados e não tens ferramentas disponíveis, diz que não tens acesso a essa informação.
-- Quando mostras dados, eles TÊM de vir diretamente do resultado da ferramenta executada.
+- /financeiro --> Financeiro
+- /financeiro/pagamentos --> Pagamentos
+- /financeiro/faturas --> Faturas
+- /financeiro/despesas --> Despesas
 ```
 
-### 2. Validar tool results antes de enviar ao modelo
+Remover as rotas antigas `/finance`, `/finance/payments`, `/finance/invoices`, `/finance/expenses`.
 
-Quando uma ferramenta retorna erro, injetar no resultado da ferramenta uma instrução explícita para que o modelo não invente:
+### 2. Corrigir os exemplos no system prompt
 
-```typescript
-// No executeTool, caso de erro:
-if (error) return JSON.stringify({ 
-  error: error.message, 
-  _instruction: "ERRO NA PESQUISA. Informa o utilizador que não foi possível pesquisar. NÃO INVENTES DADOS." 
-});
+Os exemplos de interacao tambem usam `[link:Ver Faturas|/finance/invoices]` -- corrigir para `[link:Ver Faturas|/financeiro/faturas]`.
 
-// Caso de zero resultados:
-if (!data || data.length === 0) return JSON.stringify({ 
-  results: [], 
-  count: 0, 
-  _instruction: "ZERO RESULTADOS. Informa o utilizador que não encontraste resultados. NÃO INVENTES DADOS." 
-});
-```
+### 3. Corrigir o OttoQuickActions.tsx
 
-### 3. Adicionar `temperature: 0` nas chamadas ao modelo
+O mapeamento `PAGE_ACTIONS` usa `/finance` como chave. Alterar para `/financeiro` para que as acoes rapidas aparecam corretamente quando o utilizador esta na pagina de financas.
 
-Reduzir a criatividade do modelo a zero para evitar que "preencha lacunas":
+### Ficheiros a alterar
+1. `supabase/functions/otto-chat/index.ts` -- mapa de rotas + exemplos no system prompt
+2. `src/components/otto/OttoQuickActions.tsx` -- chave `/finance` para `/financeiro`
 
-```typescript
-const payload = {
-  model: "google/gemini-3-flash-preview",
-  messages: conversationMessages,
-  stream: false,
-  temperature: 0,  // <- novo
-};
-```
-
-## Ficheiros a alterar
-- `supabase/functions/otto-chat/index.ts` -- system prompt + validação de resultados + temperature
-
-## Resultado
-O Otto passará a responder apenas com dados reais do sistema. Se não encontrar, dirá explicitamente que não encontrou, sem inventar.
+### Resultado
+Todos os links enviados pelo Otto apontarao para paginas reais da aplicacao.
