@@ -1,120 +1,53 @@
 
 
-# Restringir o Otto aos Perfis de Acesso do Colaborador
+# Corrigir Alucinação do Otto nas Notas de Crédito
 
-## Problema Atual
-O Otto tem acesso total a todas as ferramentas de pesquisa (clientes, leads, faturas, vendas, propostas, agenda, finanças) independentemente do perfil de acesso do utilizador logado. Um "Vendedor" sem acesso a Finanças consegue pedir ao Otto dados financeiros.
+## Problema
 
-## Solucao
+O Otto inventou notas de crédito que não existem ("TecnoPrime Lda", "João Paulo Matos", "Global Soluções S.A."). Isto acontece porque:
 
-### Alteracoes em `supabase/functions/otto-chat/index.ts`
+1. A ferramenta `search_credit_notes` foi adicionada ao código do Otto, mas a **função de base de dados** (`search_credit_notes_unaccent`) que ela chama **nunca foi criada** -- a migração ficou pendente.
+2. Quando a ferramenta falha com erro, o modelo de IA **inventa resultados** em vez de dizer "não encontrei".
 
-**1. Buscar o perfil de permissoes do utilizador** (apos validar membership, ~linha 480):
+Na realidade, só existem 2 notas de crédito na base de dados (ambas de "Dnr lda").
 
-Quando temos `userId` e `orgId`, consultar `organization_members.profile_id` e depois `organization_profiles.module_permissions` para obter as permissoes granulares. Tambem verificar se e super_admin/admin (que tem acesso total).
+## Solução (2 passos)
 
-```typescript
-// Fetch user permissions
-let userPermissions: Record<string, any> | null = null;
-let isAdminUser = false;
+### 1. Criar a função de base de dados em falta
 
-if (userId && orgId) {
-  // Check admin role
-  const { data: adminRole } = await supabaseAdmin
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", userId)
-    .in("role", ["admin", "super_admin"]);
-  
-  isAdminUser = (adminRole && adminRole.length > 0);
+Executar a migração SQL para criar `search_credit_notes_unaccent` -- a função que pesquisa notas de crédito por referência ou nome de cliente, com suporte para acentos.
 
-  if (!isAdminUser) {
-    const { data: member } = await supabaseAdmin
-      .from("organization_members")
-      .select("profile_id")
-      .eq("user_id", userId)
-      .eq("organization_id", orgId)
-      .maybeSingle();
-
-    if (member?.profile_id) {
-      const { data: profile } = await supabaseAdmin
-        .from("organization_profiles")
-        .select("module_permissions")
-        .eq("id", member.profile_id)
-        .maybeSingle();
-      
-      userPermissions = profile?.module_permissions || null;
-    }
-  }
-}
+```sql
+CREATE OR REPLACE FUNCTION public.search_credit_notes_unaccent(
+  org_id uuid,
+  search_term text,
+  cn_status text DEFAULT NULL,
+  max_results int DEFAULT 10
+) RETURNS SETOF credit_notes AS $$
+  SELECT * FROM credit_notes
+  WHERE organization_id = org_id
+    AND (cn_status IS NULL OR status = cn_status)
+    AND (
+      immutable_unaccent(lower(COALESCE(reference, '')))
+        LIKE '%' || immutable_unaccent(lower(search_term)) || '%'
+      OR immutable_unaccent(lower(COALESCE(client_name, '')))
+        LIKE '%' || immutable_unaccent(lower(search_term)) || '%'
+    )
+  ORDER BY date DESC NULLS LAST
+  LIMIT max_results;
+$$ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = 'public';
 ```
 
-**2. Filtrar as ferramentas com base nas permissoes:**
+### 2. Reforçar anti-alucinação no system prompt do Otto
 
-Criar um mapeamento de cada tool para o modulo/subarea que requer:
+Adicionar uma regra explícita ao `SYSTEM_PROMPT` para que, quando uma ferramenta retorna erro ou zero resultados, o Otto **nunca invente dados**:
 
-```typescript
-const TOOL_PERMISSION_MAP: Record<string, { module: string; subarea: string; action: string }> = {
-  search_clients:     { module: "clients",   subarea: "list",      action: "view" },
-  get_client_details: { module: "clients",   subarea: "list",      action: "view" },
-  search_leads:       { module: "leads",     subarea: "kanban",    action: "view" },
-  search_invoices:    { module: "finance",   subarea: "invoices",  action: "view" },
-  search_sales:       { module: "sales",     subarea: "sales",     action: "view" },
-  search_proposals:   { module: "proposals", subarea: "proposals", action: "view" },
-  get_sale_details:   { module: "sales",     subarea: "sales",     action: "view" },
-  get_pipeline_summary:  { module: "leads",    subarea: "kanban",  action: "view" },
-  get_finance_summary:   { module: "finance",  subarea: "summary", action: "view" },
-  get_upcoming_events:   { module: "calendar", subarea: "events",  action: "view" },
-  search_credit_notes:   { module: "finance",  subarea: "invoices",action: "view" },
-};
 ```
-
-Funcao helper para verificar permissao:
-
-```typescript
-function canUseTool(toolName: string, permissions: any, isAdmin: boolean): boolean {
-  if (isAdmin) return true;
-  const req = TOOL_PERMISSION_MAP[toolName];
-  if (!req) return true;
-  if (!permissions) return false; // sem perfil = sem acesso
-  const mod = permissions[req.module];
-  if (!mod?.subareas) return false;
-  const sub = mod.subareas[req.subarea];
-  if (!sub) return false;
-  return sub[req.action] === true;
-}
+REGRA ABSOLUTA: Se uma ferramenta retornar um erro ou zero resultados,
+diz EXATAMENTE "Não encontrei resultados" e sugere termos alternativos.
+NUNCA inventes registos, referências ou nomes de clientes.
 ```
-
-**3. Aplicar o filtro antes de enviar ao modelo:**
-
-```typescript
-const toolsForModel = hasDataAccess
-  ? TOOLS.filter(t => canUseTool(t.function.name, userPermissions, isAdminUser))
-  : [];
-```
-
-**4. Informar o Otto sobre as restricoes no system prompt:**
-
-Adicionar ao contexto uma nota sobre os modulos que o utilizador NAO tem acesso, para que o Otto responda adequadamente:
-
-```typescript
-const blockedModules = Object.entries(TOOL_PERMISSION_MAP)
-  .filter(([name]) => !canUseTool(name, userPermissions, isAdminUser))
-  .map(([_, perm]) => perm.module);
-const uniqueBlocked = [...new Set(blockedModules)];
-
-if (uniqueBlocked.length > 0) {
-  systemPromptExtra += `\n\nRESTRIÇÕES DO PERFIL: Este utilizador NÃO tem acesso aos módulos: ${uniqueBlocked.join(', ')}. Se perguntar sobre estes módulos, informa que não tem permissão e sugere contactar o administrador.`;
-}
-```
-
-### Resultado
-
-- Um "Vendedor" que nao tem acesso a Financas, ao perguntar "qual o resumo financeiro?", recebera: "Nao tens permissao para aceder ao modulo Financas. Contacta o teu administrador."
-- Um "Administrador" continua com acesso total.
-- Super admins mantêm acesso total.
-- As ferramentas sao filtradas server-side -- impossivel contornar pelo frontend.
 
 ### Ficheiros a alterar
-- `supabase/functions/otto-chat/index.ts`
-
+1. **Nova migração SQL** -- criar `search_credit_notes_unaccent`
+2. **`supabase/functions/otto-chat/index.ts`** -- reforçar regra anti-alucinação no system prompt
