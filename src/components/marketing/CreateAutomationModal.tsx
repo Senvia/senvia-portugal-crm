@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableCombobox, type ComboboxOption } from '@/components/ui/searchable-combobox';
 import { useAutomations, TRIGGER_TYPES, RECIPIENT_TYPES, DELAY_OPTIONS } from '@/hooks/useAutomations';
 import { useEmailTemplates } from '@/hooks/useEmailTemplates';
 import { usePipelineStages } from '@/hooks/usePipelineStages';
@@ -27,6 +28,8 @@ export function CreateAutomationModal({ open, onOpenChange }: Props) {
   const [toStatus, setToStatus] = useState('');
 
   const showStatusConfig = triggerType === 'lead_status_changed' || triggerType === 'client_status_changed';
+
+  const triggerOptions: ComboboxOption[] = TRIGGER_TYPES.map(t => ({ value: t.value, label: t.label }));
 
   const handleSubmit = () => {
     if (!name || !triggerType || !templateId) return;
@@ -71,14 +74,15 @@ export function CreateAutomationModal({ open, onOpenChange }: Props) {
 
           <div>
             <Label>Gatilho</Label>
-            <Select value={triggerType} onValueChange={setTriggerType}>
-              <SelectTrigger><SelectValue placeholder="Selecionar gatilho" /></SelectTrigger>
-              <SelectContent>
-                {TRIGGER_TYPES.map(t => (
-                  <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SearchableCombobox
+              options={triggerOptions}
+              value={triggerType || null}
+              onValueChange={(val) => setTriggerType(val || '')}
+              placeholder="Selecionar gatilho"
+              searchPlaceholder="Pesquisar gatilho..."
+              emptyText="Nenhum gatilho encontrado."
+              emptyLabel="Nenhum"
+            />
           </div>
 
           {showStatusConfig && (
