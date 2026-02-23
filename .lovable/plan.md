@@ -1,57 +1,27 @@
+# Alterar Nome do Remetente para "SENVIA Software House"
 
+## Resumo
 
-# Relatórios: Incluir Emails de Automações + Filtro por Fonte
+Atualizar o nome de fallback usado nos envios de email para **"SENVIA AI Software House"** em vez de "Senvia" ou qualquer outra variante.
 
-## Problema Atual
-Os emails enviados por automações são gravados na tabela `email_sends` mas sem qualquer referência à automação que os originou (campo `automation_id` não existe). O filtro de relatórios só permite selecionar campanhas, ignorando completamente os envios de automações.
+## Alteracoes
 
-## O que vai mudar
+### 1. `supabase/functions/send-proposal-email/index.ts` (linha 192)
 
-### 1. Base de dados: nova coluna `automation_id` na tabela `email_sends`
-- Adicionar `automation_id uuid REFERENCES email_automations(id) ON DELETE SET NULL` para rastrear qual automação originou cada envio.
+- Alterar o fallback do `senderName` de `"Senvia"` para `"SENVIA Software House"`
+- Antes: `const senderName = orgData?.name || data.orgName || "Senvia";`
+- Depois: `const senderName = orgData?.name || data.orgName || "SENVIA Software House";`
 
-### 2. Backend: Edge Functions
-- **`send-template-email`**: Aceitar o novo campo `automationId` no payload e gravá-lo no registo `email_sends`.
-- **`process-automation`**: Passar o `automationId` ao invocar `send-template-email` para envios imediatos.
-- **`process-automation-queue`**: Também passar o `automationId` (será necessário guardar na queue -- a queue já tem `automation_id`).
+### 2. `supabase/functions/check-fidelization-alerts/index.ts` (linha 114)
 
-### 3. Frontend: Hook `useEmailStats`
-- Aceitar um novo parâmetro de filtro: `source` (all / campaign / automation) e um `sourceId` (ID da campanha ou automação selecionada).
-- Ajustar a query para filtrar por `campaign_id` ou `automation_id` conforme o tipo de fonte.
-- Quando o filtro é "campaign", filtrar emails onde `campaign_id IS NOT NULL`.
-- Quando o filtro é "automation", filtrar emails onde `automation_id IS NOT NULL`.
+- Alterar a assinatura do footer de `"Senvia OS"` para `"SENVIA Software House"`
+- Antes: `Enviado por ${orgName} via Senvia OS`
+- Depois: `Enviado por ${orgName} via SENVIA Software House`
 
-### 4. Frontend: Página de Relatórios (`Reports.tsx`)
-- Substituir o Select de campanhas por dois selects encadeados:
-  1. **Fonte**: "Todos" | "Campanhas" | "Automações"
-  2. **Detalhe**: Ao selecionar "Campanhas" mostra a lista de campanhas; ao selecionar "Automações" mostra a lista de automações; "Todos" esconde o segundo select.
-- Buscar a lista de automações usando `useAutomations`.
-- Mostrar na tabela de eventos uma coluna "Origem" indicando se veio de campanha ou automação.
+### Nota
 
-## Detalhe Tecnico
+Os restantes edge functions (`send-template-email`, `send-access-email`, `send-invoice-email`) usam o nome da organizacao do cliente (`org.name`) como sender name, sem fallback "Senvia Agency". Nao precisam de alteracao -- o nome que aparece e o nome configurado pela organizacao.
 
-### Migracao SQL
-```sql
-ALTER TABLE public.email_sends 
-ADD COLUMN automation_id uuid REFERENCES public.email_automations(id) ON DELETE SET NULL;
-```
+### Deploy
 
-### Fluxo de dados atualizado
-```text
-process-automation
-  -> send-template-email(automationId: automation.id)
-     -> email_sends.insert({ automation_id: automationId })
-
-process-automation-queue
-  -> send-template-email(automationId: item.automation_id)
-     -> email_sends.insert({ automation_id: automationId })
-```
-
-### Ficheiros alterados
-- Nova migração SQL (coluna `automation_id`)
-- `supabase/functions/send-template-email/index.ts` -- aceitar e gravar `automationId`
-- `supabase/functions/process-automation/index.ts` -- passar `automationId` no body
-- `supabase/functions/process-automation-queue/index.ts` -- passar `automationId` no body
-- `src/hooks/useEmailStats.ts` -- novo filtro por fonte (campaign/automation/all)
-- `src/pages/marketing/Reports.tsx` -- UI com filtros de fonte + coluna origem na tabela
-
+Ambas as edge functions serao re-deployed automaticamente apos a alteracao.
