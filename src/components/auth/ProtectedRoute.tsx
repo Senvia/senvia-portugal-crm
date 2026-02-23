@@ -6,16 +6,22 @@ import { OrganizationSelector } from './OrganizationSelector';
 import { ChallengeMFA } from './ChallengeMFA';
 import { TrialExpiredBlocker } from './TrialExpiredBlocker';
 import { useStripeSubscription } from '@/hooks/useStripeSubscription';
+import { usePipelineStages } from '@/hooks/usePipelineStages';
+import { usePermissions } from '@/hooks/usePermissions';
+import { OnboardingWizard } from '@/components/onboarding/OnboardingWizard';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
 }
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { user, isLoading, needsOrgSelection, organizations, selectOrganization, mfaStatus, completeMfaChallenge } = useAuth();
+  const { user, isLoading, needsOrgSelection, organizations, selectOrganization, mfaStatus, completeMfaChallenge, organization } = useAuth();
   const location = useLocation();
   const { subscriptionStatus, checkSubscription } = useStripeSubscription();
   const [hasCheckedSub, setHasCheckedSub] = useState(false);
+  const { data: pipelineStages, isLoading: stagesLoading } = usePipelineStages();
+  const { isAdmin } = usePermissions();
+  const [onboardingComplete, setOnboardingComplete] = useState(false);
 
   useEffect(() => {
     if (user && !needsOrgSelection && !hasCheckedSub) {
@@ -48,6 +54,18 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
         onSelect={selectOrganization}
       />
     );
+  }
+
+  // Onboarding wizard: show if admin, org exists, no pipeline stages, not already completed
+  if (
+    !onboardingComplete &&
+    !stagesLoading &&
+    organization?.id &&
+    isAdmin &&
+    pipelineStages &&
+    pipelineStages.length === 0
+  ) {
+    return <OnboardingWizard onComplete={() => setOnboardingComplete(true)} />;
   }
 
   // Check trial expired - block all pages except /settings
