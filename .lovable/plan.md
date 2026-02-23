@@ -1,66 +1,55 @@
 
-# Otto: Acoes Rapidas Contextuais por Pagina
+# Corrigir Erros de Sincronizacao sem Integracao Configurada
 
-## Objectivo
-O Otto vai mostrar sugestoes diferentes conforme a pagina onde o utilizador esta. Por exemplo, em `/leads` mostra "Como criar um lead?" e "Configurar pipeline", mas em `/sales` mostra "Criar uma venda" e "Emitir fatura".
+## Problema
+Quando o utilizador abre a pagina de Financeiro (Faturas), o sistema tenta automaticamente sincronizar faturas e notas de credito com o InvoiceXpress, mesmo que a integracao nao esteja ativada. Isto causa o erro "Sem acesso a esta organizacao" ou "Credenciais InvoiceXpress nao configuradas".
 
-## Alteracoes
+Os locais que disparam auto-sync:
+- `InvoicesContent.tsx` (linha 89-94): auto-sync de faturas E notas de credito no mount
+- `CreditNotesContent.tsx` (linha 47-51): auto-sync de notas de credito no mount
 
-### 1. `src/components/otto/OttoQuickActions.tsx`
-Refactoring completo para suportar acoes contextuais:
+## Solucao
+Verificar se `integrations_enabled.invoicexpress === true` na organizacao antes de disparar qualquer sincronizacao automatica. Se nao estiver ativada, nao tentar sincronizar.
 
-- Criar um mapa `PAGE_ACTIONS` que associa cada rota a um conjunto de acoes rapidas relevantes
-- Usar `useLocation()` do React Router para detectar a pagina actual
-- Fazer match da rota e mostrar as acoes correspondentes
-- Manter um conjunto de acoes "default" como fallback
+## Ficheiros a Alterar
 
-**Mapa de rotas e acoes:**
+### 1. `src/components/finance/InvoicesContent.tsx`
+- Obter dados da organizacao via `useOrganization()`
+- Verificar `integrations_enabled.invoicexpress` antes do auto-sync
+- So chamar `syncInvoices.mutate()` e `syncCreditNotes.mutate()` se InvoiceXpress estiver ativo
 
-| Pagina | Acoes |
-|--------|-------|
-| `/dashboard` | Resumo do negocio, Personalizar dashboard, Ver leads recentes |
-| `/leads` | Como criar um lead?, Configurar pipeline, Importar leads, Mover lead de etapa |
-| `/clients` | Criar cliente, Campos personalizados, Converter lead em cliente |
-| `/calendar` | Agendar reuniao, Criar lembrete, Tipos de evento |
-| `/proposals` | Criar proposta, Enviar por email, Converter em venda |
-| `/sales` | Criar venda, Emitir fatura, Registar pagamento, Vendas recorrentes |
-| `/financeiro*` | Registar despesa, Configurar contas, Sincronizar faturas |
-| `/marketing*` | Criar campanha, Gerir templates, Importar contactos |
-| `/ecommerce*` | Adicionar produto, Gerir encomendas, Codigos de desconto |
-| `/settings` | Integrações, Gerir equipa, Pipeline, Plano e faturação |
-| fallback (default) | Como criar um lead?, Gerir pipeline, Enviar proposta, Configuracoes |
+### 2. `src/components/finance/CreditNotesContent.tsx`
+- Obter dados da organizacao via `useOrganization()`
+- Verificar `integrations_enabled.invoicexpress` antes do auto-sync
+- So chamar `syncCreditNotes.mutate()` se InvoiceXpress estiver ativo
 
-### 2. `src/components/otto/OttoChatWindow.tsx`
-- Nenhuma alteracao necessaria -- ja passa `onSelect` para o `OttoQuickActions`
+### 3. `src/hooks/useCreditNotes.ts`
+- No `useSyncCreditNotes`, suprimir o toast de erro quando a integracao nao esta configurada (erro 400 com mensagem "Credenciais InvoiceXpress nao configuradas")
+
+### 4. `src/hooks/useInvoices.ts`
+- No `useSyncInvoices`, mesma logica de suprimir toast para erros de credenciais nao configuradas
 
 ### Detalhe Tecnico
 
 ```text
-// OttoQuickActions.tsx
-import { useLocation } from "react-router-dom";
+// InvoicesContent.tsx - antes do auto-sync
+import { useOrganization } from "@/hooks/useOrganization";
 
-const PAGE_ACTIONS: Record<string, Array<{ label: string; icon: LucideIcon }>> = {
-  "/dashboard": [ ... ],
-  "/leads": [ ... ],
-  "/clients": [ ... ],
-  ...
-};
+const { data: orgData } = useOrganization();
+const isInvoicexpressEnabled = (orgData?.integrations_enabled as any)?.invoicexpress === true;
 
-const DEFAULT_ACTIONS = [ ... ];
-
-function getActionsForPath(pathname: string) {
-  // Match exacto primeiro, depois prefixo (ex: /financeiro/despesas -> /financeiro)
-  if (PAGE_ACTIONS[pathname]) return PAGE_ACTIONS[pathname];
-  const prefix = Object.keys(PAGE_ACTIONS).find(k => pathname.startsWith(k));
-  return prefix ? PAGE_ACTIONS[prefix] : DEFAULT_ACTIONS;
-}
-
-export function OttoQuickActions({ onSelect }) {
-  const { pathname } = useLocation();
-  const actions = getActionsForPath(pathname);
-  // ... render botoes
-}
+useEffect(() => {
+  if (!hasSynced.current && isInvoicexpressEnabled && !syncInvoices.isPending && !syncCreditNotes.isPending) {
+    hasSynced.current = true;
+    syncInvoices.mutate(undefined, { onError: () => {} });
+    syncCreditNotes.mutate(undefined, { onError: () => {} });
+  }
+}, [isInvoicexpressEnabled]);
 ```
 
-### Ficheiros alterados
-- `src/components/otto/OttoQuickActions.tsx` -- unico ficheiro a alterar
+A mesma logica aplica-se ao `CreditNotesContent.tsx`.
+
+## Impacto
+- Elimina erros de sincronizacao quando InvoiceXpress nao esta configurado
+- Nao afecta utilizadores que tem a integracao activa
+- Experiencia limpa para novas contas (sem toasts de erro)
