@@ -346,6 +346,7 @@ export type Database = {
           filter_criteria: Json | null
           id: string
           is_dynamic: boolean | null
+          is_system: boolean
           name: string
           organization_id: string
           updated_at: string
@@ -357,6 +358,7 @@ export type Database = {
           filter_criteria?: Json | null
           id?: string
           is_dynamic?: boolean | null
+          is_system?: boolean
           name: string
           organization_id: string
           updated_at?: string
@@ -368,6 +370,7 @@ export type Database = {
           filter_criteria?: Json | null
           id?: string
           is_dynamic?: boolean | null
+          is_system?: boolean
           name?: string
           organization_id?: string
           updated_at?: string
@@ -3337,6 +3340,7 @@ export type Database = {
         Args: { _name: string; _slug: string }
         Returns: string
       }
+      ensure_org_auto_lists: { Args: { p_org_id: string }; Returns: undefined }
       generate_client_code: { Args: { _org_id: string }; Returns: string }
       generate_order_number: { Args: { _org_id: string }; Returns: string }
       generate_product_code: { Args: { _org_id: string }; Returns: string }
