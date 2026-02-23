@@ -1,65 +1,47 @@
 
+# Corrigir Formulario de Registo e Build Errors
 
-# Simplificar Login: Remover Campo "Codigo da Empresa"
+## 1. Corrigir Build Errors no Login (`src/pages/Login.tsx`)
 
-## Problema Atual
-O formulario de login pede 3 campos (email, password, codigo da empresa) mas o sistema ja resolve a organizacao automaticamente apos autenticacao:
-- 1 organizacao: auto-seleciona
-- Multiplas organizacoes: mostra ecra de selecao (OrganizationSelector)
+O ultimo edit removeu o estado `loginCompanyCode` mas deixou referencias orfas no codigo. Preciso:
 
-O campo "Codigo da Empresa" e redundante e cria friccao desnecessaria.
+- **Restaurar** o estado `loginCompanyCode` e a validacao `companyCode` no schema -- o login CONTINUA a usar o codigo da empresa (slug) para autenticar
+- O campo "Codigo da Empresa" no LOGIN fica como esta
 
-## Alteracoes
+## 2. Limpar Formulario de Registo (`src/pages/Login.tsx`)
 
-### 1. Simplificar o Login (`src/pages/Login.tsx`)
-- Remover o campo "Codigo da Empresa" do formulario de login
-- Remover o estado `loginCompanyCode`
-- Remover a validacao `companyCode` do schema de login
-- Remover a chamada RPC `verify_user_org_membership` antes do login
-- Simplificar o `handleLogin` para apenas: autenticar com email+password e redirecionar
-- Deixar o AuthContext tratar da selecao de organizacao automaticamente
-- Remover o `localStorage.setItem('senvia_active_organization_id')` manual (o AuthContext ja faz isso)
+No tab de registo (signup), fazer duas alteracoes:
 
-### 2. Atualizar o Schema de Validacao (`src/pages/Login.tsx`)
-- O `loginSchema` passa a ter apenas `email` e `password`
+### Renomear campo do slug
+- De: "Endereco da sua empresa"
+- Para: "Codigo da Empresa"
+- Manter o input editavel, a verificacao de disponibilidade e o texto `senvia.app/slug`
 
-### 3. Fluxo Resultante
+### Remover campo read-only duplicado (linhas 566-580)
+Eliminar completamente o bloco:
+- Input read-only "Codigo da Empresa" que repete o slug
+- Nota amarela "Anote este codigo -- sera necessario para fazer login"
 
-```text
-Login (email + password)
-  -> AuthContext carrega organizacoes do utilizador
-  -> 1 org: auto-seleciona e vai para /dashboard
-  -> N orgs: mostra OrganizationSelector
-  -> 0 orgs: redireciona para estado sem organizacao
-```
+## Resultado Final
 
-### 4. Registo (sem alteracoes)
-- O formulario de registo mantem o slug porque e necessario para CRIAR a organizacao
-- O campo "Codigo da Empresa" (read-only) no registo pode ser removido tambem, ja que o slug e mostrado acima dele
+**Login**: 3 campos (Codigo da Empresa + Email + Password) -- sem alteracoes
+
+**Registo**: Os campos ficam assim:
+1. Nome Completo
+2. Email
+3. Palavra-passe
+4. Confirmar Palavra-passe
+5. Nome da Empresa
+6. Codigo da Empresa (antigo "Endereco da sua empresa") -- com verificacao de disponibilidade
 
 ## Secao Tecnica
 
 ### Ficheiro: `src/pages/Login.tsx`
 
-**Remover:**
-- Estado: `loginCompanyCode`, `setLoginCompanyCode`
-- Schema: campo `companyCode` do `loginSchema`
-- JSX: bloco do input "Codigo da Empresa" no formulario de login
-- Logica: chamada RPC `verify_user_org_membership` e toda a logica de pre-verificacao
-- Logica: `localStorage.setItem('senvia_active_organization_id', membership.organization_id)`
+**Restaurar (corrigir build errors):**
+- Adicionar de volta `companyCode` ao `loginSchema`
+- Adicionar de volta o estado `const [loginCompanyCode, setLoginCompanyCode] = useState('')`
 
-**Simplificar `handleLogin`:**
-- Validar email + password
-- Chamar `signIn(email, password)`
-- Se sucesso, redirecionar para `/dashboard`
-- O AuthContext trata automaticamente da selecao de organizacao
-
-**Opcional - Remover do Registo:**
-- O campo read-only "Codigo da Empresa" no formulario de registo (duplica informacao do slug)
-- A nota "Anote este codigo" ja nao faz sentido se o login nao pede codigo
-
-## O que NAO muda
-- Formulario de registo (campos de organizacao mantidos para criacao)
-- OrganizationSelector (continua a funcionar para multi-org)
-- AuthContext (ja gere tudo automaticamente)
-- Funcao RPC `verify_user_org_membership` (pode continuar no banco, nao causa problemas)
+**Alterar no signup:**
+- Linha 533: Label de `"Endereco da sua empresa"` para `"Codigo da Empresa"`
+- Linhas 566-580: Remover o bloco inteiro do input read-only e da nota amarela
