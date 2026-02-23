@@ -15,7 +15,6 @@ import senviaLogo from "@/assets/senvia-logo.png";
 const loginSchema = z.object({
   email: z.string().email('Email inválido'),
   password: z.string().min(6, 'A palavra-passe deve ter pelo menos 6 caracteres'),
-  companyCode: z.string().min(2, 'O código da empresa é obrigatório'),
 });
 
 const signupSchema = z.object({
@@ -59,7 +58,6 @@ export default function Login() {
   // Login form state
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
-  const [loginCompanyCode, setLoginCompanyCode] = useState('');
   
   // Signup form state
   const [signupFullName, setSignupFullName] = useState('');
