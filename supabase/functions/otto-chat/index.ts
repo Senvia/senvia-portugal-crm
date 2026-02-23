@@ -74,7 +74,8 @@ REGRAS DE FORMATAÇÃO:
 - Inclui SEMPRE pelo menos 1 link quando a resposta se refere a uma página específica
 - Usa markdown: **negrito**, listas numeradas
 - Máximo 1-2 emojis por resposta
-- Sê extremamente preciso nos caminhos dos menus`;
+- Sê extremamente preciso nos caminhos dos menus
+- NUNCA comeces a resposta com afirmações ou validações como "Claro!", "Com certeza!", "Sem problema!", "Entendido!", "Boa pergunta!", "Ótima escolha!", "Perfeito!", "Excelente!". Vai direto ao assunto sem preâmbulos.`;
 
 // ─── Tool Definitions ───
 const TOOLS = [
