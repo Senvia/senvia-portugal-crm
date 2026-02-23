@@ -77,12 +77,12 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
   ];
 
   return (
-    <div className="fixed inset-0 z-50 bg-sidebar-background flex flex-col overflow-hidden">
+    <div className="fixed inset-0 z-50 bg-background flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 sm:px-8 py-4 border-b border-sidebar-border">
+      <div className="flex items-center justify-between px-4 sm:px-8 py-4 border-b border-border">
         <div className="flex items-center gap-2">
           <Sparkles className="h-5 w-5 text-primary" />
-          <span className="text-lg font-semibold text-sidebar-foreground">Senvia OS</span>
+          <span className="text-lg font-semibold text-foreground">Senvia OS</span>
         </div>
         <div className="flex items-center gap-2">
           {steps.map((s, i) => (
@@ -90,12 +90,12 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
               <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium transition-colors ${
                 i < step ? 'bg-primary text-primary-foreground' :
                 i === step ? 'bg-primary/20 text-primary border border-primary' :
-                'bg-sidebar-accent text-sidebar-muted'
+                'bg-muted text-muted-foreground'
               }`}>
                 {i < step ? <Check className="h-3.5 w-3.5" /> : i + 1}
               </div>
               {i < steps.length - 1 && (
-                <div className={`hidden sm:block w-8 h-0.5 ${i < step ? 'bg-primary' : 'bg-sidebar-accent'}`} />
+                <div className={`hidden sm:block w-8 h-0.5 ${i < step ? 'bg-primary' : 'bg-muted'}`} />
               )}
             </div>
           ))}
@@ -114,10 +114,10 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
               className="max-w-4xl mx-auto px-4 sm:px-8 py-8"
             >
               <div className="text-center mb-8">
-                <h1 className="text-2xl sm:text-3xl font-bold text-sidebar-foreground mb-2">
+                <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">
                   Qual é o seu tipo de negócio?
                 </h1>
-                <p className="text-sidebar-muted text-sm sm:text-base">
+                <p className="text-muted-foreground text-sm sm:text-base">
                   Vamos configurar o seu pipeline de vendas com as etapas ideais para o seu setor.
                 </p>
               </div>
@@ -134,11 +134,11 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
                       className={`relative text-left p-5 rounded-xl border transition-all duration-200 ${
                         isSelected
                           ? 'border-primary bg-primary/10 ring-2 ring-primary/30'
-                          : 'border-sidebar-border bg-sidebar-accent/50 hover:border-sidebar-muted hover:bg-sidebar-accent'
+                          : 'border-border bg-card hover:border-muted-foreground hover:bg-muted'
                       } ${isApplying ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                     >
                       {isApplying && isSelected && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-sidebar-background/60 rounded-xl">
+                        <div className="absolute inset-0 flex items-center justify-center bg-background/60 rounded-xl">
                           <Loader2 className="h-6 w-6 animate-spin text-primary" />
                         </div>
                       )}
@@ -147,8 +147,8 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
                           <IconComp className="h-5 w-5 text-primary" />
                         </div>
                         <div>
-                          <h3 className="font-semibold text-sidebar-foreground">{template.name}</h3>
-                          <p className="text-xs text-sidebar-muted mt-0.5">{template.description}</p>
+                          <h3 className="font-semibold text-foreground">{template.name}</h3>
+                          <p className="text-xs text-muted-foreground mt-0.5">{template.description}</p>
                         </div>
                       </div>
                       <div className="flex flex-wrap gap-1.5">
@@ -163,7 +163,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
                           </Badge>
                         ))}
                         {template.stages.length > 5 && (
-                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-sidebar-border text-sidebar-muted">
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-border text-muted-foreground">
                             +{template.stages.length - 5}
                           </Badge>
                         )}
@@ -184,53 +184,53 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
               className="max-w-2xl mx-auto px-4 sm:px-8 py-8"
             >
               <div className="text-center mb-8">
-                <h1 className="text-2xl sm:text-3xl font-bold text-sidebar-foreground mb-2">
+                <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">
                   Formulários de Captura
                 </h1>
-                <p className="text-sidebar-muted text-sm sm:text-base">
+                <p className="text-muted-foreground text-sm sm:text-base">
                   Os formulários capturam leads automaticamente para o seu Kanban.
                 </p>
               </div>
 
               <div className="space-y-6">
                 {/* Step 1 */}
-                <div className="flex items-start gap-4 p-4 rounded-xl bg-sidebar-accent/50 border border-sidebar-border">
+                <div className="flex items-start gap-4 p-4 rounded-xl bg-card border border-border">
                   <div className="p-2.5 rounded-lg bg-primary/10 shrink-0">
                     <Globe className="h-5 w-5 text-primary" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-sidebar-foreground mb-1">Partilhe o link</h3>
-                    <p className="text-sm text-sidebar-muted">
+                    <h3 className="font-semibold text-foreground mb-1">Partilhe o link</h3>
+                    <p className="text-sm text-muted-foreground">
                       Cada formulário tem um link público que pode usar em anúncios, Landing Pages ou redes sociais.
                     </p>
-                    <div className="mt-2 inline-flex items-center gap-1 px-3 py-1.5 rounded-md bg-sidebar-background border border-sidebar-border">
-                      <span className="text-xs text-sidebar-muted">senvia.app/f/</span>
+                    <div className="mt-2 inline-flex items-center gap-1 px-3 py-1.5 rounded-md bg-muted border border-border">
+                      <span className="text-xs text-muted-foreground">senvia.app/f/</span>
                       <span className="text-xs text-primary font-medium">{orgSlug || 'slug'}</span>
                     </div>
                   </div>
                 </div>
 
                 {/* Step 2 */}
-                <div className="flex items-start gap-4 p-4 rounded-xl bg-sidebar-accent/50 border border-sidebar-border">
+                <div className="flex items-start gap-4 p-4 rounded-xl bg-card border border-border">
                   <div className="p-2.5 rounded-lg bg-primary/10 shrink-0">
                     <FileText className="h-5 w-5 text-primary" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-sidebar-foreground mb-1">Lead preenche o formulário</h3>
-                    <p className="text-sm text-sidebar-muted">
+                    <h3 className="font-semibold text-foreground mb-1">Lead preenche o formulário</h3>
+                    <p className="text-sm text-muted-foreground">
                       O potencial cliente preenche o nome, email e telefone. Os dados são guardados automaticamente.
                     </p>
                   </div>
                 </div>
 
                 {/* Step 3 */}
-                <div className="flex items-start gap-4 p-4 rounded-xl bg-sidebar-accent/50 border border-sidebar-border">
+                <div className="flex items-start gap-4 p-4 rounded-xl bg-card border border-border">
                   <div className="p-2.5 rounded-lg bg-primary/10 shrink-0">
                     <Zap className="h-5 w-5 text-primary" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-sidebar-foreground mb-1">Aparece no seu Kanban</h3>
-                    <p className="text-sm text-sidebar-muted">
+                    <h3 className="font-semibold text-foreground mb-1">Aparece no seu Kanban</h3>
+                    <p className="text-sm text-muted-foreground">
                       O lead entra automaticamente na primeira coluna do seu pipeline. Basta arrastar para avançar!
                     </p>
                   </div>
@@ -241,7 +241,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
                 <Button
                   variant="ghost"
                   onClick={() => setStep(0)}
-                  className="text-sidebar-muted hover:text-sidebar-foreground"
+                  className="text-muted-foreground hover:text-foreground"
                 >
                   <ArrowLeft className="h-4 w-4 mr-2" />
                   Voltar
@@ -263,30 +263,30 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
               className="max-w-md mx-auto px-4 sm:px-8 py-8"
             >
               <div className="text-center mb-8">
-                <h1 className="text-2xl sm:text-3xl font-bold text-sidebar-foreground mb-2">
+                <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">
                   Crie o seu primeiro formulário
                 </h1>
-                <p className="text-sidebar-muted text-sm sm:text-base">
+                <p className="text-muted-foreground text-sm sm:text-base">
                   Vamos criar o formulário principal para começar a captar leads.
                 </p>
               </div>
 
               <div className="space-y-4">
                 <div>
-                  <label className="text-sm font-medium text-sidebar-foreground mb-1.5 block">
+                  <label className="text-sm font-medium text-foreground mb-1.5 block">
                     Nome do formulário
                   </label>
                   <Input
                     value={formName}
                     onChange={(e) => setFormName(e.target.value)}
                     placeholder="Ex: Formulário Principal"
-                    className="bg-sidebar-accent border-sidebar-border text-sidebar-foreground"
+                    className="bg-muted border-border text-foreground"
                   />
                 </div>
 
-                <div className="p-3 rounded-lg bg-sidebar-accent/50 border border-sidebar-border">
-                  <p className="text-xs text-sidebar-muted">
-                    Pode personalizar os campos e o design do formulário mais tarde nas <strong className="text-sidebar-foreground">Definições</strong>.
+                <div className="p-3 rounded-lg bg-card border border-border">
+                  <p className="text-xs text-muted-foreground">
+                    Pode personalizar os campos e o design do formulário mais tarde nas <strong className="text-foreground">Definições</strong>.
                   </p>
                 </div>
               </div>
@@ -295,7 +295,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
                 <Button
                   variant="ghost"
                   onClick={() => setStep(1)}
-                  className="text-sidebar-muted hover:text-sidebar-foreground"
+                  className="text-muted-foreground hover:text-foreground"
                 >
                   <ArrowLeft className="h-4 w-4 mr-2" />
                   Voltar
