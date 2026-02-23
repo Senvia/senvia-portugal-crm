@@ -223,54 +223,53 @@ async function executeTool(
   try {
     switch (toolName) {
       case "search_clients": {
-        const q = `%${args.query}%`;
         const { data, error } = await supabaseAdmin
-          .from("crm_clients")
-          .select("id, code, name, email, phone, nif, company, status, total_sales, total_value")
-          .eq("organization_id", orgId)
-          .or(`name.ilike.${q},email.ilike.${q},nif.ilike.${q},company.ilike.${q}`)
-          .limit(10);
+          .rpc("search_clients_unaccent", { org_id: orgId, search_term: args.query, max_results: 10 });
         if (error) return JSON.stringify({ error: error.message });
-        return JSON.stringify({ results: data || [], count: data?.length || 0 });
+        const results = (data || []).map((c: any) => ({
+          id: c.id, code: c.code, name: c.name, email: c.email, phone: c.phone,
+          nif: c.nif, company: c.company, status: c.status, total_sales: c.total_sales, total_value: c.total_value,
+        }));
+        return JSON.stringify({ results, count: results.length });
       }
 
       case "search_leads": {
-        const q = `%${args.query}%`;
-        let query = supabaseAdmin
-          .from("leads")
-          .select("id, name, email, phone, status, source, assigned_to, created_at, value")
-          .eq("organization_id", orgId)
-          .or(`name.ilike.${q},email.ilike.${q},phone.ilike.${q}`);
-        if (args.status) query = query.eq("status", args.status);
-        const { data, error } = await query.limit(10);
+        const { data, error } = await supabaseAdmin
+          .rpc("search_leads_unaccent", {
+            org_id: orgId, search_term: args.query,
+            lead_status: args.status || null, max_results: 10,
+          });
         if (error) return JSON.stringify({ error: error.message });
-        return JSON.stringify({ results: data || [], count: data?.length || 0 });
+        const results = (data || []).map((l: any) => ({
+          id: l.id, name: l.name, email: l.email, phone: l.phone, status: l.status,
+          source: l.source, assigned_to: l.assigned_to, created_at: l.created_at, value: l.value,
+        }));
+        return JSON.stringify({ results, count: results.length });
       }
 
       case "search_invoices": {
-        const q = `%${args.query}%`;
-        let query = supabaseAdmin
-          .from("invoices")
-          .select("id, invoicexpress_id, reference, client_name, total, status, date, due_date, document_type, pdf_path")
-          .eq("organization_id", orgId)
-          .or(`reference.ilike.${q},client_name.ilike.${q}`);
-        if (args.status) query = query.eq("status", args.status);
-        const { data, error } = await query.order("date", { ascending: false }).limit(10);
+        const { data, error } = await supabaseAdmin
+          .rpc("search_invoices_unaccent", {
+            org_id: orgId, search_term: args.query,
+            inv_status: args.status || null, max_results: 10,
+          });
         if (error) return JSON.stringify({ error: error.message });
-        return JSON.stringify({ results: data || [], count: data?.length || 0 });
+        const results = (data || []).map((i: any) => ({
+          id: i.id, invoicexpress_id: i.invoicexpress_id, reference: i.reference,
+          client_name: i.client_name, total: i.total, status: i.status,
+          date: i.date, due_date: i.due_date, document_type: i.document_type, pdf_path: i.pdf_path,
+        }));
+        return JSON.stringify({ results, count: results.length });
       }
 
       case "search_sales": {
-        const q = `%${args.query}%`;
-        let query = supabaseAdmin
-          .from("sales")
-          .select("id, code, total_value, payment_status, sale_date, client_id, lead_id, notes")
-          .eq("organization_id", orgId)
-          .or(`code.ilike.${q}`);
-        if (args.payment_status) query = query.eq("payment_status", args.payment_status);
-        const { data, error } = await query.order("sale_date", { ascending: false }).limit(10);
+        const { data, error } = await supabaseAdmin
+          .rpc("search_sales_unaccent", {
+            org_id: orgId, search_term: args.query,
+            pay_status: args.payment_status || null, max_results: 10,
+          });
         if (error) return JSON.stringify({ error: error.message });
-        // Try to get client names
+        // Enrich with client names
         if (data && data.length > 0) {
           const clientIds = [...new Set(data.filter((s: any) => s.client_id).map((s: any) => s.client_id))];
           if (clientIds.length > 0) {
@@ -286,15 +285,13 @@ async function executeTool(
       }
 
       case "search_proposals": {
-        const q = `%${args.query}%`;
-        let query = supabaseAdmin
-          .from("proposals")
-          .select("id, code, total_value, status, valid_until, client_id, notes")
-          .eq("organization_id", orgId)
-          .or(`code.ilike.${q}`);
-        if (args.status) query = query.eq("status", args.status);
-        const { data, error } = await query.order("created_at", { ascending: false }).limit(10);
+        const { data, error } = await supabaseAdmin
+          .rpc("search_proposals_unaccent", {
+            org_id: orgId, search_term: args.query,
+            prop_status: args.status || null, max_results: 10,
+          });
         if (error) return JSON.stringify({ error: error.message });
+        // Enrich with client names
         if (data && data.length > 0) {
           const clientIds = [...new Set(data.filter((p: any) => p.client_id).map((p: any) => p.client_id))];
           if (clientIds.length > 0) {

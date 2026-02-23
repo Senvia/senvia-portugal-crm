@@ -3259,11 +3259,215 @@ export type Database = {
         }
         Returns: boolean
       }
+      immutable_unaccent: { Args: { "": string }; Returns: string }
       is_org_member: {
         Args: { _org_id: string; _user_id: string }
         Returns: boolean
       }
       is_slug_available: { Args: { _slug: string }; Returns: boolean }
+      search_clients_unaccent: {
+        Args: { max_results?: number; org_id: string; search_term: string }
+        Returns: {
+          address_line1: string | null
+          address_line2: string | null
+          assigned_to: string | null
+          billing_target: string
+          city: string | null
+          code: string | null
+          company: string | null
+          company_nif: string | null
+          country: string | null
+          created_at: string | null
+          email: string | null
+          id: string
+          lead_id: string | null
+          name: string
+          nif: string | null
+          notes: string | null
+          organization_id: string
+          phone: string | null
+          postal_code: string | null
+          source: string | null
+          status: string | null
+          total_proposals: number | null
+          total_sales: number | null
+          total_value: number | null
+          updated_at: string | null
+          whatsapp: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "crm_clients"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      search_invoices_unaccent: {
+        Args: {
+          inv_status?: string
+          max_results?: number
+          org_id: string
+          search_term: string
+        }
+        Returns: {
+          client_name: string | null
+          created_at: string | null
+          date: string | null
+          document_type: string | null
+          due_date: string | null
+          id: string
+          invoicexpress_id: number
+          organization_id: string
+          payment_id: string | null
+          pdf_path: string | null
+          raw_data: Json | null
+          reference: string | null
+          sale_id: string | null
+          status: string | null
+          total: number | null
+          updated_at: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "invoices"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      search_leads_unaccent: {
+        Args: {
+          lead_status?: string
+          max_results?: number
+          org_id: string
+          search_term: string
+        }
+        Returns: {
+          assigned_to: string | null
+          automation_enabled: boolean
+          company_name: string | null
+          company_nif: string | null
+          consumo_anual: number | null
+          created_at: string | null
+          custom_data: Json | null
+          email: string
+          form_id: string | null
+          gdpr_consent: boolean
+          id: string
+          name: string
+          notes: string | null
+          organization_id: string
+          phone: string
+          source: string | null
+          status: string | null
+          temperature: string | null
+          tipologia: string | null
+          updated_at: string | null
+          value: number | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "leads"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      search_proposals_unaccent: {
+        Args: {
+          max_results?: number
+          org_id: string
+          prop_status?: string
+          search_term: string
+        }
+        Returns: {
+          anos_contrato: number | null
+          client_id: string | null
+          code: string | null
+          comissao: number | null
+          consumo_anual: number | null
+          created_at: string | null
+          created_by: string | null
+          dbl: number | null
+          id: string
+          kwp: number | null
+          lead_id: string | null
+          margem: number | null
+          modelo_servico: string | null
+          negotiation_type: string | null
+          notes: string | null
+          organization_id: string
+          proposal_date: string | null
+          proposal_type: string | null
+          servicos_details: Json | null
+          servicos_produtos: string[] | null
+          status: string
+          total_value: number
+          updated_at: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "proposals"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      search_sales_unaccent: {
+        Args: {
+          max_results?: number
+          org_id: string
+          pay_status?: string
+          search_term: string
+        }
+        Returns: {
+          anos_contrato: number | null
+          client_id: string | null
+          code: string | null
+          comissao: number | null
+          consumo_anual: number | null
+          created_at: string | null
+          created_by: string | null
+          credit_note_id: number | null
+          credit_note_reference: string | null
+          dbl: number | null
+          discount: number | null
+          due_date: string | null
+          has_recurring: boolean | null
+          id: string
+          invoice_pdf_url: string | null
+          invoice_reference: string | null
+          invoicexpress_id: number | null
+          invoicexpress_type: string | null
+          kwp: number | null
+          last_renewal_date: string | null
+          lead_id: string | null
+          margem: number | null
+          modelo_servico: string | null
+          negotiation_type: string | null
+          next_renewal_date: string | null
+          notes: string | null
+          organization_id: string
+          paid_date: string | null
+          payment_method: string | null
+          payment_status: string | null
+          proposal_id: string | null
+          proposal_type: string | null
+          qr_code_url: string | null
+          recurring_status: string | null
+          recurring_value: number | null
+          sale_date: string | null
+          servicos_produtos: string[] | null
+          status: string
+          subtotal: number | null
+          total_value: number
+          updated_at: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "sales"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      unaccent: { Args: { "": string }; Returns: string }
       verify_user_org_membership: {
         Args: { p_email: string; p_org_slug: string }
         Returns: {
