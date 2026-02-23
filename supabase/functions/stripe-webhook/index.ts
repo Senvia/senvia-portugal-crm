@@ -10,6 +10,12 @@ const PRODUCT_TO_PLAN: Record<string, string> = {
   "prod_U0wG6doz0zgZFV": "elite",
 };
 
+const PLAN_LIST_NAMES: Record<string, string> = {
+  starter: "Plano Starter",
+  pro: "Plano Pro",
+  elite: "Plano Elite",
+};
+
 const logStep = (step: string, details?: any) => {
   const d = details ? ` - ${JSON.stringify(details)}` : '';
   console.log(`[STRIPE-WEBHOOK] ${step}${d}`);
@@ -62,6 +68,7 @@ serve(async (req) => {
         const sub = await stripe.subscriptions.retrieve(subId);
         const productId = sub.items.data[0].price.product as string;
         const plan = PRODUCT_TO_PLAN[productId];
+
         // Check if reactivation before updating plan
         const orgId = await findOrgByEmail(supabase, email);
         let isReactivation = false;
@@ -79,14 +86,15 @@ serve(async (req) => {
 
         const orgName = await getOrgNameByEmail(supabase, email);
 
-        // Dispatch reactivation only (not first subscription)
         if (isReactivation) {
           await dispatchAutomation(supabase, "stripe_subscription_created", { email, plan: plan || "unknown", nome: orgName });
         }
-        // Welcome dispatches always
         if (plan) {
           await dispatchAutomation(supabase, `stripe_welcome_${plan}`, { email, plan, nome: orgName });
         }
+
+        // Sync auto-lists: add to plan list, remove from overdue & canceled
+        await syncStripeAutoLists(supabase, email, orgName, "checkout_completed", plan || null);
         break;
       }
       case "customer.subscription.updated": {
@@ -105,10 +113,12 @@ serve(async (req) => {
           if (sub.status === "past_due") {
             await recordPaymentFailed(supabase, email);
             await dispatchAutomation(supabase, "stripe_subscription_past_due", { email, plan: plan || "unknown", nome: orgName });
+            await syncStripeAutoLists(supabase, email, orgName, "past_due", plan || null);
           }
           if (sub.status === "active") {
             await clearPaymentFailed(supabase, email);
             await dispatchAutomation(supabase, "stripe_subscription_renewed", { email, plan: plan || "unknown", nome: orgName });
+            await syncStripeAutoLists(supabase, email, orgName, "renewed", plan || null);
           }
         }
         break;
@@ -125,6 +135,7 @@ serve(async (req) => {
           await clearPaymentFailed(supabase, email);
           const orgName = await getOrgNameByEmail(supabase, email);
           await dispatchAutomation(supabase, "stripe_subscription_canceled", { email, plan: plan || "unknown", nome: orgName });
+          await syncStripeAutoLists(supabase, email, orgName, "canceled", plan || null);
         }
         break;
       }
@@ -136,6 +147,7 @@ serve(async (req) => {
           await recordPaymentFailed(supabase, email);
           const orgName = await getOrgNameByEmail(supabase, email);
           await dispatchAutomation(supabase, "stripe_payment_failed", { email, plan: "unknown", nome: orgName });
+          await syncStripeAutoLists(supabase, email, orgName, "payment_failed", null);
         }
         break;
       }
@@ -152,6 +164,119 @@ serve(async (req) => {
     status: 200,
   });
 });
+
+// --- Stripe Auto-Lists Sync ---
+
+type ListEventType = "checkout_completed" | "renewed" | "past_due" | "payment_failed" | "canceled";
+
+async function syncStripeAutoLists(
+  supabase: any,
+  email: string,
+  name: string,
+  eventType: ListEventType,
+  plan: string | null
+) {
+  try {
+    logStep("Syncing Stripe auto-lists", { email, eventType, plan });
+
+    // 1. Ensure lists exist
+    await supabase.rpc("ensure_stripe_auto_lists", { p_org_id: SENVIA_AGENCY_ORG_ID });
+
+    // 2. Upsert marketing contact
+    const { data: contact, error: contactErr } = await supabase
+      .from("marketing_contacts")
+      .upsert(
+        { organization_id: SENVIA_AGENCY_ORG_ID, email, name: name || email, source: "stripe", subscribed: true },
+        { onConflict: "organization_id,email" }
+      )
+      .select("id")
+      .single();
+
+    if (contactErr || !contact) {
+      logStep("Failed to upsert marketing contact", { error: contactErr?.message });
+      return;
+    }
+    const contactId = contact.id;
+
+    // 3. Get all Stripe system list IDs
+    const { data: lists } = await supabase
+      .from("client_lists")
+      .select("id, name")
+      .eq("organization_id", SENVIA_AGENCY_ORG_ID)
+      .eq("is_system", true)
+      .in("name", ["Plano Starter", "Plano Pro", "Plano Elite", "Pagamento em Atraso", "Subscrição Cancelada"]);
+
+    if (!lists || lists.length === 0) {
+      logStep("No Stripe auto-lists found");
+      return;
+    }
+
+    const listMap: Record<string, string> = {};
+    for (const l of lists) listMap[l.name] = l.id;
+
+    const planListIds = [listMap["Plano Starter"], listMap["Plano Pro"], listMap["Plano Elite"]].filter(Boolean);
+    const overdueListId = listMap["Pagamento em Atraso"];
+    const canceledListId = listMap["Subscrição Cancelada"];
+    const currentPlanListId = plan ? listMap[PLAN_LIST_NAMES[plan]] : null;
+
+    // Helper: add to list
+    const addToList = async (listId: string) => {
+      if (!listId) return;
+      await supabase.from("marketing_list_members").upsert(
+        { list_id: listId, contact_id: contactId },
+        { onConflict: "list_id,contact_id" }
+      );
+    };
+
+    // Helper: remove from list
+    const removeFromList = async (listId: string) => {
+      if (!listId) return;
+      await supabase.from("marketing_list_members")
+        .delete()
+        .eq("list_id", listId)
+        .eq("contact_id", contactId);
+    };
+
+    // Helper: remove from multiple lists
+    const removeFromLists = async (listIds: string[]) => {
+      for (const id of listIds) await removeFromList(id);
+    };
+
+    switch (eventType) {
+      case "checkout_completed":
+      case "renewed":
+        // Add to current plan list
+        if (currentPlanListId) await addToList(currentPlanListId);
+        // Remove from other plan lists (upgrade/downgrade)
+        for (const id of planListIds) {
+          if (id !== currentPlanListId) await removeFromList(id);
+        }
+        // Remove from overdue & canceled
+        if (overdueListId) await removeFromList(overdueListId);
+        if (canceledListId) await removeFromList(canceledListId);
+        break;
+
+      case "past_due":
+      case "payment_failed":
+        // Add to overdue
+        if (overdueListId) await addToList(overdueListId);
+        break;
+
+      case "canceled":
+        // Remove from all plan lists
+        await removeFromLists(planListIds);
+        // Remove from overdue
+        if (overdueListId) await removeFromList(overdueListId);
+        // Add to canceled
+        if (canceledListId) await addToList(canceledListId);
+        break;
+    }
+
+    logStep("Auto-lists synced successfully", { eventType, plan });
+  } catch (err) {
+    logStep("Auto-lists sync failed", { error: (err as Error).message });
+  }
+}
 
 // --- Helper functions ---
 

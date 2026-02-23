@@ -3341,6 +3341,10 @@ export type Database = {
         Returns: string
       }
       ensure_org_auto_lists: { Args: { p_org_id: string }; Returns: undefined }
+      ensure_stripe_auto_lists: {
+        Args: { p_org_id: string }
+        Returns: undefined
+      }
       generate_client_code: { Args: { _org_id: string }; Returns: string }
       generate_order_number: { Args: { _org_id: string }; Returns: string }
       generate_product_code: { Args: { _org_id: string }; Returns: string }
