@@ -1063,6 +1063,7 @@ export type Database = {
       }
       email_sends: {
         Row: {
+          automation_id: string | null
           brevo_message_id: string | null
           campaign_id: string | null
           clicked_at: string | null
@@ -1081,6 +1082,7 @@ export type Database = {
           template_id: string | null
         }
         Insert: {
+          automation_id?: string | null
           brevo_message_id?: string | null
           campaign_id?: string | null
           clicked_at?: string | null
@@ -1099,6 +1101,7 @@ export type Database = {
           template_id?: string | null
         }
         Update: {
+          automation_id?: string | null
           brevo_message_id?: string | null
           campaign_id?: string | null
           clicked_at?: string | null
@@ -1117,6 +1120,13 @@ export type Database = {
           template_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "email_sends_automation_id_fkey"
+            columns: ["automation_id"]
+            isOneToOne: false
+            referencedRelation: "email_automations"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "email_sends_campaign_id_fkey"
             columns: ["campaign_id"]

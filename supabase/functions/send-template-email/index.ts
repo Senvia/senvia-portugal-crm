@@ -18,6 +18,7 @@ interface SendTemplateRequest {
   templateId?: string;
   recipients: Recipient[];
   campaignId?: string;
+  automationId?: string;
   settings?: Record<string, boolean>;
   settingsData?: Record<string, string>;
   subject?: string;
@@ -104,7 +105,7 @@ serve(async (req: Request): Promise<Response> => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const {
-      organizationId, templateId, recipients, campaignId,
+      organizationId, templateId, recipients, campaignId, automationId,
       settings = {}, settingsData = {},
       subject: customSubject, htmlContent: customHtmlContent,
     }: SendTemplateRequest = await req.json();
@@ -242,6 +243,7 @@ serve(async (req: Request): Promise<Response> => {
           organization_id: organizationId,
           template_id: templateId || null,
           campaign_id: campaignId || null,
+          automation_id: automationId || null,
           client_id: recipient.clientId || null,
           recipient_email: recipient.email,
           recipient_name: recipient.name,
@@ -271,6 +273,7 @@ serve(async (req: Request): Promise<Response> => {
           organization_id: organizationId,
           template_id: templateId || null,
           campaign_id: campaignId || null,
+          automation_id: automationId || null,
           client_id: recipient.clientId || null,
           recipient_email: recipient.email,
           recipient_name: recipient.name,

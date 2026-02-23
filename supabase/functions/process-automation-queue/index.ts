@@ -50,6 +50,7 @@ serve(async (req: Request): Promise<Response> => {
           body: {
             organizationId: item.organization_id,
             templateId: item.template_id,
+            automationId: item.automation_id,
             recipients: [{
               email: item.recipient_email,
               name: item.recipient_name || '',

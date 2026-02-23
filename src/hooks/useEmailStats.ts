@@ -4,18 +4,23 @@ import { useAuth } from '@/contexts/AuthContext';
 import { subDays, format } from 'date-fns';
 
 type Period = '7d' | '30d' | '90d';
+type SourceFilter = 'all' | 'campaign' | 'automation';
 
 function getPeriodStart(period: Period): string {
   const days = period === '7d' ? 7 : period === '30d' ? 30 : 90;
   return subDays(new Date(), days).toISOString();
 }
 
-export function useEmailStats(period: Period = '30d', campaignId?: string | null) {
+export function useEmailStats(
+  period: Period = '30d',
+  source: SourceFilter = 'all',
+  sourceId?: string | null,
+) {
   const { organization } = useAuth();
   const organizationId = organization?.id;
 
   return useQuery({
-    queryKey: ['email-stats', organizationId, period, campaignId],
+    queryKey: ['email-stats', organizationId, period, source, sourceId],
     queryFn: async () => {
       if (!organizationId) return null;
 
@@ -27,8 +32,19 @@ export function useEmailStats(period: Period = '30d', campaignId?: string | null
         .eq('organization_id', organizationId)
         .gte('created_at', periodStart);
 
-      if (campaignId) {
-        query = query.eq('campaign_id', campaignId);
+      if (source === 'campaign') {
+        if (sourceId) {
+          query = query.eq('campaign_id', sourceId);
+        } else {
+          query = query.not('campaign_id', 'is', null);
+        }
+      } else if (source === 'automation') {
+        // automation_id is a new column not yet in generated types, use raw filter
+        if (sourceId) {
+          query = query.filter('automation_id', 'eq', sourceId);
+        } else {
+          query = query.filter('automation_id', 'not.is', null);
+        }
       }
 
       const { data, error } = await query;
