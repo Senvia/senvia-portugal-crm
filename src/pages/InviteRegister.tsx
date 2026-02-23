@@ -208,7 +208,7 @@ export default function InviteRegister() {
           </CardHeader>
           <CardContent className="text-center">
             <Button asChild>
-              <Link to="/login">Ir para Login</Link>
+              <Link to="/">Ir para Login</Link>
             </Button>
           </CardContent>
         </Card>
@@ -366,7 +366,7 @@ export default function InviteRegister() {
 
           <p className="text-xs text-muted-foreground text-center mt-4">
             Já tem conta?{' '}
-            <Link to="/login" className="text-primary hover:underline">
+            <Link to="/" className="text-primary hover:underline">
               Faça login
             </Link>
           </p>
