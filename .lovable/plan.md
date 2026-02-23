@@ -1,42 +1,27 @@
 
 
-# Fix Definitivo: Otto Clicavel com Modais Abertos
+# Fix: Otto Bloqueia Toda a Interface
 
-## Causa Raiz
-O Radix Dialog, ao abrir um modal, aplica automaticamente `pointer-events: none` a **todos os elementos irmaos** do seu portal no `<body>`. Como o Otto tambem e renderizado via `createPortal` no `<body>`, ele e tratado como um irmao e fica bloqueado.
-
-A solucao anterior (pointer-events-none no overlay) nao resolve porque o bloqueio vem do **proprio Radix** a nivel do body, nao do overlay.
+## Problema
+O wrapper `div` do Otto tem `style={{ pointerEvents: 'auto' }}` E `inset-0` (cobre toda a tela). O inline style tem prioridade sobre a classe `pointer-events-none`, fazendo com que TODO o ecra capture cliques - so o Otto funciona porque esta dentro desse div.
 
 ## Solucao
-Forcar `pointer-events: auto !important` via inline style no container do Otto FAB e na janela de chat. O `!important` sobrescreve o estilo aplicado pelo Radix.
+Remover o `style={{ pointerEvents: 'auto' }}` do wrapper principal. Manter apenas nos elementos filhos (botao FAB e janela de chat) que realmente precisam de receber cliques.
 
-## Alteracoes
+## Alteracao
 
-### 1. `src/components/otto/OttoFAB.tsx`
-- Adicionar `style={{ pointerEvents: 'auto' }}` ao container raiz do portal (o fragmento nao aceita style, entao envolver num `div`)
-- O div wrapper tera `position: fixed`, `z-index: 9999`, e `pointer-events: auto !important`
-
-### 2. `src/components/otto/OttoChatWindow.tsx`
-- Adicionar `style={{ pointerEvents: 'auto' }}` ao container da janela de chat
-
-### 3. `src/components/ui/dialog.tsx`
-- Reverter `pointer-events-none` do overlay (voltar ao original) pois nao era este o problema
-- Manter o `onPointerDownOutside` handler para evitar fechar o dialog ao clicar no Otto
-
-### Detalhe Tecnico
+### Ficheiro: `src/components/otto/OttoFAB.tsx`
+- Remover `style={{ pointerEvents: 'auto' }}` do div wrapper raiz do portal
+- Manter `pointer-events-none` no wrapper (para nao bloquear nada)
+- Os filhos ja tem `pointer-events-auto` (via classe ou inline style), entao continuam clicaveis
 
 ```text
-// OttoFAB.tsx - container do portal
-return createPortal(
-  <div style={{ pointerEvents: 'auto' }} className="fixed z-[9999] ...">
-    ...FAB e ChatWindow...
-  </div>,
-  document.body
-);
+// ANTES (quebrado):
+<div style={{ pointerEvents: 'auto' }} className="fixed z-[9999] inset-0 pointer-events-none">
 
-// OttoChatWindow.tsx
-<motion.div style={{ pointerEvents: 'auto' }} className="fixed z-[9999] ...">
+// DEPOIS (correcto):
+<div className="fixed z-[9999] inset-0 pointer-events-none">
 ```
 
-O `style={{ pointerEvents: 'auto' }}` inline sobrescreve qualquer estilo aplicado pelo Radix Dialog, garantindo que o Otto e sempre interativo.
+Assim o wrapper e transparente a cliques, mas o botao FAB e a janela de chat continuam interativos - mesmo com modais abertos, porque os filhos directos forcam `pointer-events: auto` via inline style.
 
