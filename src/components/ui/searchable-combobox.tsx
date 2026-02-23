@@ -117,7 +117,7 @@ export function SearchableCombobox({
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <CommandList>
+          <CommandList className="max-h-[200px] overflow-y-auto">
             <CommandEmpty>{emptyText}</CommandEmpty>
             <CommandGroup>
               <CommandItem
