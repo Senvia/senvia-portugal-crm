@@ -17,29 +17,25 @@ interface AdminMetricsCardsProps {
 export function AdminMetricsCards({ organizations }: AdminMetricsCardsProps) {
   const now = new Date();
 
+  const isInTrial = (o: Organization) =>
+    !o.billing_exempt && o.trial_ends_at && new Date(o.trial_ends_at) > now;
+
   const mrr = organizations.reduce((sum, org) => {
-    if (org.billing_exempt) return sum;
+    if (org.billing_exempt || isInTrial(org)) return sum;
     return sum + (PLAN_PRICES[org.plan || ""] || 0);
   }, 0);
 
   const paying = organizations.filter(
-    (o) => o.plan && o.plan !== "basic" && !o.billing_exempt
+    (o) => !o.billing_exempt && !isInTrial(o) && o.plan && o.plan !== "basic"
   ).length;
 
-  const inTrial = organizations.filter(
-    (o) =>
-      o.trial_ends_at &&
-      new Date(o.trial_ends_at) > now &&
-      (!o.plan || o.plan === "basic") &&
-      !o.billing_exempt
-  ).length;
+  const inTrial = organizations.filter((o) => isInTrial(o)).length;
 
   const expired = organizations.filter(
     (o) =>
-      o.trial_ends_at &&
-      new Date(o.trial_ends_at) <= now &&
-      (!o.plan || o.plan === "basic") &&
-      !o.billing_exempt
+      !o.billing_exempt &&
+      !isInTrial(o) &&
+      (!o.plan || o.plan === "basic")
   ).length;
 
   return (
