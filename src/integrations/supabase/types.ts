@@ -2020,6 +2020,7 @@ export type Database = {
           msg_template_warm: string | null
           name: string
           niche: string | null
+          payment_failed_at: string | null
           plan: string | null
           proposal_fields_settings: Json | null
           public_key: string
@@ -2070,6 +2071,7 @@ export type Database = {
           msg_template_warm?: string | null
           name: string
           niche?: string | null
+          payment_failed_at?: string | null
           plan?: string | null
           proposal_fields_settings?: Json | null
           public_key?: string
@@ -2120,6 +2122,7 @@ export type Database = {
           msg_template_warm?: string | null
           name?: string
           niche?: string | null
+          payment_failed_at?: string | null
           plan?: string | null
           proposal_fields_settings?: Json | null
           public_key?: string

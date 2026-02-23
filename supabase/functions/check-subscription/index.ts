@@ -61,7 +61,7 @@ serve(async (req) => {
     if (orgId) {
       const { data } = await supabaseClient
         .from('organizations')
-        .select('billing_exempt, trial_ends_at')
+        .select('billing_exempt, trial_ends_at, payment_failed_at')
         .eq('id', orgId)
         .maybeSingle();
       orgData = data;
@@ -156,11 +156,14 @@ serve(async (req) => {
       }
     }
 
+    const paymentOverdueData = getPaymentOverdueInfo(orgData);
+
     return new Response(JSON.stringify({
       subscribed: true,
       plan_id: planId,
       product_id: productId,
       subscription_end: subscriptionEnd,
+      ...paymentOverdueData,
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
@@ -175,9 +178,24 @@ serve(async (req) => {
   }
 });
 
+function getPaymentOverdueInfo(orgData: any) {
+  if (!orgData?.payment_failed_at) {
+    return { payment_failed_at: null, payment_overdue: false };
+  }
+  const gracePeriodMs = 3 * 24 * 60 * 60 * 1000;
+  const failedAt = new Date(orgData.payment_failed_at);
+  const overdue = (Date.now() - failedAt.getTime()) > gracePeriodMs;
+  return {
+    payment_failed_at: orgData.payment_failed_at,
+    payment_overdue: overdue,
+  };
+}
+
 function buildTrialResponse(orgData: any) {
+  const paymentOverdueData = getPaymentOverdueInfo(orgData);
+
   if (!orgData?.trial_ends_at) {
-    return { subscribed: false, plan_id: null, subscription_end: null, on_trial: false, trial_expired: true };
+    return { subscribed: false, plan_id: null, subscription_end: null, on_trial: false, trial_expired: true, ...paymentOverdueData };
   }
 
   const trialEnd = new Date(orgData.trial_ends_at);
@@ -186,7 +204,6 @@ function buildTrialResponse(orgData: any) {
   const daysRemaining = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
 
   if (diffMs > 0) {
-    // Still in trial
     return {
       subscribed: false,
       plan_id: 'elite',
@@ -195,9 +212,9 @@ function buildTrialResponse(orgData: any) {
       trial_ends_at: orgData.trial_ends_at,
       days_remaining: daysRemaining,
       trial_expired: false,
+      ...paymentOverdueData,
     };
   } else {
-    // Trial expired
     return {
       subscribed: false,
       plan_id: null,
@@ -206,6 +223,7 @@ function buildTrialResponse(orgData: any) {
       trial_ends_at: orgData.trial_ends_at,
       days_remaining: 0,
       trial_expired: true,
+      ...paymentOverdueData,
     };
   }
 }

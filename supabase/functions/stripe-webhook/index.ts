@@ -56,12 +56,13 @@ serve(async (req) => {
         if (session.mode !== "subscription") break;
         const email = session.customer_email || session.customer_details?.email;
         if (!email) { logStep("No email in checkout session"); break; }
-        // Fetch subscription to get product
         const subId = session.subscription as string;
         const sub = await stripe.subscriptions.retrieve(subId);
         const productId = sub.items.data[0].price.product as string;
         const plan = PRODUCT_TO_PLAN[productId];
         if (plan) await updateOrgPlan(supabase, email, plan);
+        // Clear payment_failed_at on successful checkout
+        await clearPaymentFailed(supabase, email);
         break;
       }
       case "customer.subscription.updated": {
@@ -71,7 +72,17 @@ serve(async (req) => {
         const customerId = sub.customer as string;
         const customer = await stripe.customers.retrieve(customerId);
         const email = (customer as Stripe.Customer).email;
+
         if (plan && email) await updateOrgPlan(supabase, email, plan);
+
+        // If subscription is past_due, record payment failure
+        if (sub.status === "past_due" && email) {
+          await recordPaymentFailed(supabase, email);
+        }
+        // If subscription is active again, clear payment failure
+        if (sub.status === "active" && email) {
+          await clearPaymentFailed(supabase, email);
+        }
         break;
       }
       case "customer.subscription.deleted": {
@@ -79,12 +90,19 @@ serve(async (req) => {
         const customerId = sub.customer as string;
         const customer = await stripe.customers.retrieve(customerId);
         const email = (customer as Stripe.Customer).email;
-        if (email) await updateOrgPlan(supabase, email, null);
+        if (email) {
+          await updateOrgPlan(supabase, email, null);
+          await clearPaymentFailed(supabase, email);
+        }
         break;
       }
       case "invoice.payment_failed": {
         const invoice = event.data.object as Stripe.Invoice;
-        logStep("Payment failed", { customer: invoice.customer, email: invoice.customer_email });
+        const email = invoice.customer_email;
+        logStep("Payment failed", { customer: invoice.customer, email });
+        if (email) {
+          await recordPaymentFailed(supabase, email);
+        }
         break;
       }
       default:
@@ -101,17 +119,13 @@ serve(async (req) => {
   });
 });
 
-async function updateOrgPlan(supabase: any, email: string, plan: string | null) {
-  logStep("Updating org plan", { email, plan });
-
-  // Find user by email
+async function findOrgByEmail(supabase: any, email: string) {
   const { data: users, error: listErr } = await supabase.auth.admin.listUsers();
-  if (listErr) { logStep("Error listing users", { error: listErr.message }); return; }
+  if (listErr) { logStep("Error listing users", { error: listErr.message }); return null; }
 
   const user = users.users.find((u: any) => u.email?.toLowerCase() === email.toLowerCase());
-  if (!user) { logStep("User not found", { email }); return; }
+  if (!user) { logStep("User not found", { email }); return null; }
 
-  // Find org
   const { data: member } = await supabase
     .from("organization_members")
     .select("organization_id")
@@ -120,16 +134,59 @@ async function updateOrgPlan(supabase: any, email: string, plan: string | null) 
     .limit(1)
     .maybeSingle();
 
-  if (!member) { logStep("No org membership found", { userId: user.id }); return; }
+  if (!member) { logStep("No org membership found", { userId: user.id }); return null; }
+  return member.organization_id;
+}
+
+async function updateOrgPlan(supabase: any, email: string, plan: string | null) {
+  logStep("Updating org plan", { email, plan });
+  const orgId = await findOrgByEmail(supabase, email);
+  if (!orgId) return;
 
   const { error: updateErr } = await supabase
     .from("organizations")
     .update({ plan: plan || null })
-    .eq("id", member.organization_id);
+    .eq("id", orgId);
 
   if (updateErr) {
     logStep("Failed to update plan", { error: updateErr.message });
   } else {
-    logStep("Plan updated successfully", { orgId: member.organization_id, plan });
+    logStep("Plan updated successfully", { orgId, plan });
+  }
+}
+
+async function recordPaymentFailed(supabase: any, email: string) {
+  logStep("Recording payment failure", { email });
+  const orgId = await findOrgByEmail(supabase, email);
+  if (!orgId) return;
+
+  // Only set if not already set (preserve original failure date)
+  const { error } = await supabase
+    .from("organizations")
+    .update({ payment_failed_at: new Date().toISOString() })
+    .eq("id", orgId)
+    .is("payment_failed_at", null);
+
+  if (error) {
+    logStep("Failed to record payment failure", { error: error.message });
+  } else {
+    logStep("Payment failure recorded", { orgId });
+  }
+}
+
+async function clearPaymentFailed(supabase: any, email: string) {
+  logStep("Clearing payment failure", { email });
+  const orgId = await findOrgByEmail(supabase, email);
+  if (!orgId) return;
+
+  const { error } = await supabase
+    .from("organizations")
+    .update({ payment_failed_at: null })
+    .eq("id", orgId);
+
+  if (error) {
+    logStep("Failed to clear payment failure", { error: error.message });
+  } else {
+    logStep("Payment failure cleared", { orgId });
   }
 }
