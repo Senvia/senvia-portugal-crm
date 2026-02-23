@@ -69,7 +69,7 @@ export const STRIPE_PLANS: StripePlan[] = [
       "Módulo Financeiro",
       "Módulo E-commerce",
     ],
-    integrations: ["WhatsApp", "Meta Pixels", "Faturação (InvoiceXpress)", "Stripe (Pagamentos)"],
+    integrations: ["WhatsApp", "Meta Pixels", "Faturação (KeyInvoice, InvoiceXpress)", "Pagamentos (Stripe)"],
     limits: { users: "Ilimitados", forms: "Ilimitados" },
     features: [
       "Tudo do Pro +",

@@ -12,8 +12,8 @@ import { pt } from 'date-fns/locale';
 const INTEGRATION_ICONS: Record<string, React.ElementType> = {
   WhatsApp: MessageSquare,
   'Meta Pixels': BarChart3,
-  'Faturação (InvoiceXpress)': FileText,
-  'Stripe (Pagamentos)': CreditCard,
+  'Faturação (KeyInvoice, InvoiceXpress)': FileText,
+  'Pagamentos (Stripe)': CreditCard,
 };
 
 export function BillingTab() {
