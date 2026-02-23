@@ -1,86 +1,89 @@
 
-# Adicionar Stripe Webhook para Sincronizacao Automatica de Planos
 
-## Objetivo
-Criar uma edge function que recebe eventos do Stripe via webhook e atualiza automaticamente o plano da organizacao na base de dados, sem depender do utilizador voltar ao app.
+# Revogar Acesso Apos 3 Dias de Pagamento Falhado
 
-## Como Funciona Hoje (Problema)
-O plano so e atualizado quando o utilizador abre o app e o frontend chama `check-subscription`. Se o utilizador pagar e fechar o browser, o plano fica desatualizado ate ao proximo login.
+## Resumo
+Quando o Stripe nao consegue cobrar a renovacao de um cliente, o sistema vai guardar a data da falha e, apos 3 dias sem pagamento, bloquear o acesso -- mostrando um ecra semelhante ao do trial expirado, mas com mensagem especifica de pagamento em atraso.
 
-## Solucao
+## O que muda
 
-### 1. Criar Edge Function `stripe-webhook`
+### 1. Nova coluna na base de dados
+Adicionar `payment_failed_at` (timestamp, nullable) na tabela `organizations` para registar quando o pagamento falhou pela primeira vez.
 
-Ficheiro: `supabase/functions/stripe-webhook/index.ts`
+### 2. Webhook do Stripe (stripe-webhook)
+- **`invoice.payment_failed`**: Registar a data atual em `payment_failed_at` na organizacao do cliente (apenas se ainda estiver NULL, para preservar a data original da falha).
+- **`customer.subscription.updated`** com status `past_due`: Mesmo comportamento -- registar se ainda nao estiver registado.
+- **`checkout.session.completed`** e pagamento bem-sucedido: Limpar `payment_failed_at` (definir como NULL), pois o cliente regularizou.
+- **`customer.subscription.deleted`**: Manter a logica atual (plan = null), e tambem limpar `payment_failed_at`.
 
-A funcao vai:
-- Receber eventos POST do Stripe (sem JWT, acesso publico)
-- Verificar a assinatura do webhook usando `STRIPE_WEBHOOK_SECRET`
-- Processar os seguintes eventos:
-  - **`checkout.session.completed`** - Cliente acabou de pagar, ativar plano
-  - **`customer.subscription.updated`** - Mudanca de plano (upgrade/downgrade)
-  - **`customer.subscription.deleted`** - Cancelamento, reverter para plano basico
-  - **`invoice.payment_failed`** - Pagamento falhado (log para monitorizacao)
+### 3. Edge Function check-subscription
+Retornar dois campos novos na resposta:
+- `payment_failed_at`: a data da falha (se existir)
+- `payment_overdue`: `true` se passaram mais de 3 dias desde `payment_failed_at`
 
-Logica principal:
-1. Extrair o `customer_email` do evento Stripe
-2. Encontrar o utilizador na tabela `auth.users` pelo email
-3. Encontrar a organizacao via `organization_members`
-4. Mapear o `product_id` do Stripe para o plano (`starter`, `pro`, `elite`) usando o mesmo mapa que ja existe no `check-subscription`
-5. Atualizar a coluna `plan` na tabela `organizations`
+### 4. Frontend -- ProtectedRoute
+Verificar se `payment_overdue === true` e, nesse caso, mostrar um bloqueador (semelhante ao `TrialExpiredBlocker`) com:
+- Mensagem: "O seu pagamento falhou ha mais de 3 dias"
+- Botao para ir a pagina de billing / portal do Stripe
+- Permitir acesso apenas a `/settings` (para o cliente poder regularizar)
 
-### 2. Adicionar Secret `STRIPE_WEBHOOK_SECRET`
+### 5. Novo componente PaymentOverdueBlocker
+Ecra de bloqueio com:
+- Icone de alerta
+- Data desde quando o pagamento falhou
+- Botao "Regularizar Pagamento" que abre o portal do Stripe
+- Botao secundario "Ver Planos" que leva a `/settings?tab=billing`
 
-Sera necessario configurar o webhook signing secret do Stripe. Este valor e obtido ao criar o webhook endpoint no painel do Stripe.
+## Secao Tecnica
 
-### 3. Registar no `config.toml`
-
-```toml
-[functions.stripe-webhook]
-verify_jwt = false
+### Migration SQL
+```sql
+ALTER TABLE public.organizations
+ADD COLUMN payment_failed_at timestamptz DEFAULT NULL;
 ```
 
-### 4. Configuracao no Stripe (Manual pelo utilizador)
-
-Apos o deploy da funcao, sera necessario:
-1. Ir ao painel do Stripe -> Developers -> Webhooks
-2. Adicionar endpoint: `https://zppcobirzgpfcrnxznwe.supabase.co/functions/v1/stripe-webhook`
-3. Selecionar os eventos: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed`
-4. Copiar o "Signing Secret" (comeca com `whsec_...`)
-5. Guardar esse secret no projeto
-
-## Detalhes Tecnicos
-
-### Mapeamento de Produtos (reutilizado)
-```text
-prod_U0wAc7Tuy8w6gA -> starter (49 EUR)
-prod_U0wGoA4odOBHOZ -> pro     (99 EUR)
-prod_U0wG6doz0zgZFV -> elite   (147 EUR)
-```
-
-### Fluxo do Webhook
+### Fluxo do Webhook (stripe-webhook/index.ts)
 
 ```text
-Stripe --> POST /stripe-webhook
-  |
-  +-- Verificar assinatura (STRIPE_WEBHOOK_SECRET)
-  |
-  +-- Extrair customer email
-  |
-  +-- Encontrar user por email (auth.users via service_role)
-  |
-  +-- Encontrar org via organization_members
-  |
-  +-- Atualizar organizations.plan
-  |
-  +-- Responder 200 OK ao Stripe
+invoice.payment_failed
+  -> Encontrar org pelo email do customer
+  -> UPDATE organizations SET payment_failed_at = NOW()
+     WHERE id = org_id AND payment_failed_at IS NULL
+
+customer.subscription.updated (status = past_due)
+  -> Mesmo: SET payment_failed_at = NOW() WHERE payment_failed_at IS NULL
+
+checkout.session.completed / subscription volta a active
+  -> UPDATE organizations SET payment_failed_at = NULL
+
+customer.subscription.deleted
+  -> SET plan = NULL, payment_failed_at = NULL
 ```
 
-### Seguranca
-- Verificacao da assinatura Stripe garante que so o Stripe pode chamar este endpoint
-- Usa `SUPABASE_SERVICE_ROLE_KEY` para acesso administrativo a base de dados
-- Sem JWT (o Stripe nao envia tokens de autenticacao)
+### check-subscription (resposta adicional)
+```typescript
+// Apos obter orgData:
+const paymentOverdue = orgData?.payment_failed_at
+  ? (Date.now() - new Date(orgData.payment_failed_at).getTime()) > 3 * 24 * 60 * 60 * 1000
+  : false;
 
-## Ficheiros Afetados
-- **Criar**: `supabase/functions/stripe-webhook/index.ts`
-- **Sem alteracoes** nos ficheiros existentes (a funcao `check-subscription` continua a funcionar como fallback)
+return { ...existingResponse, payment_failed_at: orgData?.payment_failed_at, payment_overdue: paymentOverdue };
+```
+
+### ProtectedRoute (nova condicao)
+```typescript
+if (hasCheckedSub && subscriptionStatus?.payment_overdue === true) {
+  return <PaymentOverdueBlocker paymentFailedAt={subscriptionStatus.payment_failed_at} />;
+}
+```
+
+### Ficheiros a criar/editar
+| Ficheiro | Acao |
+|---|---|
+| Migration SQL | Nova coluna `payment_failed_at` |
+| `supabase/functions/stripe-webhook/index.ts` | Tratar `invoice.payment_failed` e limpar na renovacao |
+| `supabase/functions/check-subscription/index.ts` | Retornar `payment_overdue` |
+| `src/hooks/useStripeSubscription.ts` | Adicionar campos novos ao tipo |
+| `src/components/auth/PaymentOverdueBlocker.tsx` | Novo componente de bloqueio |
+| `src/components/auth/ProtectedRoute.tsx` | Condicao de bloqueio por pagamento em atraso |
+
