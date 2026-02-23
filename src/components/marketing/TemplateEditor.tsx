@@ -171,6 +171,7 @@ function EditorToolbar({ editor }: { editor: ReturnType<typeof useEditor> }) {
 
 export function TemplateEditor({ value, onChange, className }: TemplateEditorProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const htmlTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [activeTab, setActiveTab] = useState("editor");
 
   const editor = useEditor({
@@ -248,8 +249,20 @@ export function TemplateEditor({ value, onChange, className }: TemplateEditorPro
   }, [value]);
 
   const insertVariable = (variable: string) => {
-    if (editor) {
+    if (activeTab === "editor" && editor) {
       editor.chain().focus().insertContent(variable).run();
+    } else if (activeTab === "html" && htmlTextareaRef.current) {
+      const textarea = htmlTextareaRef.current;
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const newValue = value.substring(0, start) + variable + value.substring(end);
+      onChange(newValue);
+      // Restore cursor position after the inserted variable
+      requestAnimationFrame(() => {
+        textarea.focus();
+        const newPos = start + variable.length;
+        textarea.setSelectionRange(newPos, newPos);
+      });
     }
   };
 
@@ -294,6 +307,7 @@ export function TemplateEditor({ value, onChange, className }: TemplateEditorPro
 
         <TabsContent value="html" className="mt-4">
           <Textarea
+            ref={htmlTextareaRef}
             value={value}
             onChange={(e) => onChange(e.target.value)}
             className="min-h-[350px] font-mono text-sm"
