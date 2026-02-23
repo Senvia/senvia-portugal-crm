@@ -1,89 +1,37 @@
 
 
-# Revogar Acesso Apos 3 Dias de Pagamento Falhado
+# Corrigir Discrepancia nos Dias de Trial
 
-## Resumo
-Quando o Stripe nao consegue cobrar a renovacao de um cliente, o sistema vai guardar a data da falha e, apos 3 dias sem pagamento, bloquear o acesso -- mostrando um ecra semelhante ao do trial expirado, mas com mensagem especifica de pagamento em atraso.
+## Problema
+O banner no painel do cliente mostra "14 dias restantes" enquanto a tabela do Super Admin mostra "13d restantes" para a mesma organizacao. A causa e a diferenca de arredondamento:
 
-## O que muda
+- **Edge function (check-subscription)**: usa `Math.ceil` -- arredonda para cima
+- **Super Admin (OrganizationsTable)**: usa `differenceInDays` do date-fns -- trunca (arredonda para baixo)
 
-### 1. Nova coluna na base de dados
-Adicionar `payment_failed_at` (timestamp, nullable) na tabela `organizations` para registar quando o pagamento falhou pela primeira vez.
+Com 13 dias e 18 horas restantes, um mostra 14, o outro mostra 13.
 
-### 2. Webhook do Stripe (stripe-webhook)
-- **`invoice.payment_failed`**: Registar a data atual em `payment_failed_at` na organizacao do cliente (apenas se ainda estiver NULL, para preservar a data original da falha).
-- **`customer.subscription.updated`** com status `past_due`: Mesmo comportamento -- registar se ainda nao estiver registado.
-- **`checkout.session.completed`** e pagamento bem-sucedido: Limpar `payment_failed_at` (definir como NULL), pois o cliente regularizou.
-- **`customer.subscription.deleted`**: Manter a logica atual (plan = null), e tambem limpar `payment_failed_at`.
+## Solucao
+Uniformizar ambos para usarem `Math.ceil`, que e mais correto do ponto de vista do utilizador (enquanto houver horas restantes no dia, conta como 1 dia).
 
-### 3. Edge Function check-subscription
-Retornar dois campos novos na resposta:
-- `payment_failed_at`: a data da falha (se existir)
-- `payment_overdue`: `true` se passaram mais de 3 dias desde `payment_failed_at`
+## Alteracao
 
-### 4. Frontend -- ProtectedRoute
-Verificar se `payment_overdue === true` e, nesse caso, mostrar um bloqueador (semelhante ao `TrialExpiredBlocker`) com:
-- Mensagem: "O seu pagamento falhou ha mais de 3 dias"
-- Botao para ir a pagina de billing / portal do Stripe
-- Permitir acesso apenas a `/settings` (para o cliente poder regularizar)
+### Ficheiro: `src/components/system-admin/OrganizationsTable.tsx`
 
-### 5. Novo componente PaymentOverdueBlocker
-Ecra de bloqueio com:
-- Icone de alerta
-- Data desde quando o pagamento falhou
-- Botao "Regularizar Pagamento" que abre o portal do Stripe
-- Botao secundario "Ver Planos" que leva a `/settings?tab=billing`
-
-## Secao Tecnica
-
-### Migration SQL
-```sql
-ALTER TABLE public.organizations
-ADD COLUMN payment_failed_at timestamptz DEFAULT NULL;
-```
-
-### Fluxo do Webhook (stripe-webhook/index.ts)
-
-```text
-invoice.payment_failed
-  -> Encontrar org pelo email do customer
-  -> UPDATE organizations SET payment_failed_at = NOW()
-     WHERE id = org_id AND payment_failed_at IS NULL
-
-customer.subscription.updated (status = past_due)
-  -> Mesmo: SET payment_failed_at = NOW() WHERE payment_failed_at IS NULL
-
-checkout.session.completed / subscription volta a active
-  -> UPDATE organizations SET payment_failed_at = NULL
-
-customer.subscription.deleted
-  -> SET plan = NULL, payment_failed_at = NULL
-```
-
-### check-subscription (resposta adicional)
+Linha 134, substituir:
 ```typescript
-// Apos obter orgData:
-const paymentOverdue = orgData?.payment_failed_at
-  ? (Date.now() - new Date(orgData.payment_failed_at).getTime()) > 3 * 24 * 60 * 60 * 1000
-  : false;
-
-return { ...existingResponse, payment_failed_at: orgData?.payment_failed_at, payment_overdue: paymentOverdue };
+const daysLeft = trialEnd ? differenceInDays(trialEnd, now) : null;
 ```
 
-### ProtectedRoute (nova condicao)
+Por:
 ```typescript
-if (hasCheckedSub && subscriptionStatus?.payment_overdue === true) {
-  return <PaymentOverdueBlocker paymentFailedAt={subscriptionStatus.payment_failed_at} />;
-}
+const diffMs = trialEnd ? trialEnd.getTime() - now.getTime() : null;
+const daysLeft = diffMs !== null ? Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24))) : null;
 ```
 
-### Ficheiros a criar/editar
-| Ficheiro | Acao |
-|---|---|
-| Migration SQL | Nova coluna `payment_failed_at` |
-| `supabase/functions/stripe-webhook/index.ts` | Tratar `invoice.payment_failed` e limpar na renovacao |
-| `supabase/functions/check-subscription/index.ts` | Retornar `payment_overdue` |
-| `src/hooks/useStripeSubscription.ts` | Adicionar campos novos ao tipo |
-| `src/components/auth/PaymentOverdueBlocker.tsx` | Novo componente de bloqueio |
-| `src/components/auth/ProtectedRoute.tsx` | Condicao de bloqueio por pagamento em atraso |
+Isto alinha o calculo com o que a edge function ja faz, garantindo que ambos os paineis mostram o mesmo numero.
+
+### Impacto
+- Apenas 1 ficheiro alterado
+- Sem alteracoes na base de dados ou edge functions
+- O import de `differenceInDays` do date-fns pode ser removido se nao for usado noutro local do ficheiro
 
