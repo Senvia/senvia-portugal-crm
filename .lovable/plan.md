@@ -1,47 +1,68 @@
 
-# Corrigir Formulario de Registo e Build Errors
 
-## 1. Corrigir Build Errors no Login (`src/pages/Login.tsx`)
+# Onboarding Wizard para Novos Clientes
 
-O ultimo edit removeu o estado `loginCompanyCode` mas deixou referencias orfas no codigo. Preciso:
+## Resumo
+Quando um novo cliente faz login pela primeira vez, se a organização não tem pipeline configurado (0 etapas na tabela `pipeline_stages`), aparece um wizard de onboarding em ecrã inteiro que guia o utilizador por 3 passos:
 
-- **Restaurar** o estado `loginCompanyCode` e a validacao `companyCode` no schema -- o login CONTINUA a usar o codigo da empresa (slug) para autenticar
-- O campo "Codigo da Empresa" no LOGIN fica como esta
+1. **Selecionar o Pipeline** (tipo de negócio/nicho)
+2. **Tutorial sobre Formulários** (explicação de como funcionam os formulários de captura de leads)
+3. **Criar o primeiro formulário** (configuração básica do formulário principal)
 
-## 2. Limpar Formulario de Registo (`src/pages/Login.tsx`)
+## Passos do Wizard
 
-No tab de registo (signup), fazer duas alteracoes:
+### Passo 1 - Escolher o Pipeline
+- Cards visuais com os 6 nichos disponíveis (Genérico, Clínica, Construção, Telecom, E-commerce, Imobiliário)
+- Cada card mostra o ícone, nome, descrição e uma pré-visualização das etapas
+- Ao selecionar, aplica o template de pipeline e módulos associados
 
-### Renomear campo do slug
-- De: "Endereco da sua empresa"
-- Para: "Codigo da Empresa"
-- Manter o input editavel, a verificacao de disponibilidade e o texto `senvia.app/slug`
+### Passo 2 - Tutorial de Formulários
+- Explicação visual do que são os formulários de captura
+- Como funciona: Lead preenche -> entra no Kanban automaticamente
+- Mostra o URL público do formulário (ex: `senvia.app/f/slug`)
+- Explicação de que podem usar em Landing Pages e anúncios
 
-### Remover campo read-only duplicado (linhas 566-580)
-Eliminar completamente o bloco:
-- Input read-only "Codigo da Empresa" que repete o slug
-- Nota amarela "Anote este codigo -- sera necessario para fazer login"
+### Passo 3 - Criar Primeiro Formulário
+- Nome do formulário (pré-preenchido com base no nicho, ex: "Formulário Principal")
+- O formulário default é criado automaticamente
+- Botão "Concluir" que redireciona para o Dashboard
 
-## Resultado Final
+## Alterações Técnicas
 
-**Login**: 3 campos (Codigo da Empresa + Email + Password) -- sem alteracoes
+### 1. Novo componente: `src/components/onboarding/OnboardingWizard.tsx`
+- Componente de ecrã inteiro com os 3 passos
+- Usa `usePipelineStages` para verificar se tem etapas
+- Usa `useApplyNicheTemplate` para aplicar o pipeline selecionado
+- Usa `useCreateForm` para criar o primeiro formulário
+- Design dark mode, mobile-first, estilo consistente com o resto da app
 
-**Registo**: Os campos ficam assim:
-1. Nome Completo
-2. Email
-3. Palavra-passe
-4. Confirmar Palavra-passe
-5. Nome da Empresa
-6. Codigo da Empresa (antigo "Endereco da sua empresa") -- com verificacao de disponibilidade
+### 2. Alterar: `src/components/auth/ProtectedRoute.tsx`
+- Adicionar verificação: se a organização existe mas não tem pipeline stages (niche não configurado), mostrar o `OnboardingWizard` em vez do conteúdo normal
+- A verificação usa o hook `usePipelineStages` -- se retornar array vazio (e não estiver loading), mostra o wizard
+- O wizard só aparece para utilizadores com role `admin` (quem criou a conta)
 
-## Secao Tecnica
+### 3. Limpar pipeline existente da conta `freethiagosousa@gmail.com`
+- Verificar qual organização pertence e eliminar pipeline_stages existentes (se houver)
+- Resetar o niche para `null` na tabela organizations
 
-### Ficheiro: `src/pages/Login.tsx`
+### 4. Alterar: `create_organization_for_current_user` (SQL)
+- Garantir que o niche é criado como `NULL` em vez de `'generic'` para que o wizard seja acionado
+- Não criar pipeline stages automaticamente (já é o caso atual)
 
-**Restaurar (corrigir build errors):**
-- Adicionar de volta `companyCode` ao `loginSchema`
-- Adicionar de volta o estado `const [loginCompanyCode, setLoginCompanyCode] = useState('')`
+## Fluxo Completo
 
-**Alterar no signup:**
-- Linha 533: Label de `"Endereco da sua empresa"` para `"Codigo da Empresa"`
-- Linhas 566-580: Remover o bloco inteiro do input read-only e da nota amarela
+```text
+Login -> ProtectedRoute verifica:
+  1. Autenticado? (se não -> Login)
+  2. MFA pendente? (se sim -> Challenge)
+  3. Múltiplas orgs? (se sim -> Selector)
+  4. Pipeline configurado? (se não + admin -> Onboarding Wizard)
+  5. Trial expirado? (se sim -> Blocker)
+  6. Tudo OK -> Dashboard/Página
+```
+
+## O que NAO muda
+- PipelineEditor nas Definições continua a funcionar normalmente
+- Utilizadores convidados (não-admin) não veem o wizard
+- Organizações já configuradas não são afetadas
+
