@@ -1,50 +1,94 @@
 
 
-## Auditoria: Erros encontrados nos widgets e componentes recentes
+## Otto: Tickets de Suporte via WhatsApp
 
-### Erro 1 - Console: "Function components cannot be given refs" no CalendarAlertsWidget
+### O que vai acontecer
 
-**Causa**: O `DialogHeader` no `dialog.tsx` (linha 53) e uma funcao simples, nao usa `React.forwardRef`. Quando o Radix Dialog tenta passar uma ref para este componente, gera o warning. Isto acontece em ambos os widgets (`CalendarAlertsWidget` e `FidelizationAlertsWidget`).
+Quando um utilizador escrever ao Otto a pedir suporte (ex: "tenho um problema com X", "preciso de ajuda"), o Otto vai:
+1. Recolher os detalhes do problema via conversa
+2. Gravar o ticket na base de dados
+3. Enviar uma mensagem WhatsApp automatica para ti com os detalhes do ticket
 
-**Correcao**: Converter `DialogHeader` para usar `React.forwardRef` no ficheiro `src/components/ui/dialog.tsx`.
+### Alteracoes
 
----
+**1. Nova tabela `support_tickets`**
 
-### Erro 2 - Console: "Missing Description or aria-describedby" nos modais fullScreen
+Guardar os tickets submetidos via Otto:
+- `id`, `organization_id`, `user_id`
+- `subject` (assunto curto)
+- `description` (descricao completa)
+- `status` (open, in_progress, resolved)
+- `priority` (low, medium, high)
+- `created_at`
 
-**Causa**: Os modais fullScreen dos dois widgets usam `DialogTitle` mas nao incluem `DialogDescription`. O Radix Dialog exige que cada `DialogContent` tenha um `DialogDescription` ou um `aria-describedby={undefined}` explicito para acessibilidade.
+RLS: Membros da organizacao podem criar e ver os seus tickets.
 
-**Correcao**: Adicionar `DialogDescription` (pode ser visualmente oculto com `sr-only`) dentro dos `DialogContent` de ambos os widgets, ou passar `aria-describedby={undefined}` ao `DialogContent`.
+**2. Nova ferramenta no Otto: `submit_support_ticket`**
 
----
+Adicionar ao `supabase/functions/otto-chat/index.ts`:
 
-### Erro 3 - `renderEvent` usa `key` dentro do JSX retornado (nao no `.map()`)
+- Nova tool definition com parametros: `subject`, `description`, `priority`
+- No executor da tool:
+  1. Insere o ticket na tabela `support_tickets`
+  2. Busca os dados do WhatsApp da organizacao Senvia Agency (hardcoded, pois os tickets vao sempre para ti)
+  3. Envia mensagem via Evolution API com os dados do ticket
+  4. Retorna confirmacao ao Otto
 
-**Ficheiro**: `CalendarAlertsWidget.tsx`, linha 83
+A mensagem WhatsApp tera este formato:
 
-**Causa**: A funcao `renderEvent` retorna um `<button key={event.id}>`, mas a `key` deve ser passada no ponto onde `.map()` e chamado, nao dentro da funcao. Quando se chama `renderEvent(e, 'today')` dentro de um `.map()`, o React nao reconhece a key corretamente porque esta dentro do componente retornado e nao no callsite do map.
+```text
+-- NOVO TICKET DE SUPORTE --
+Org: [nome da organizacao]
+User: [nome do utilizador]
+Assunto: [subject]
+Descricao: [description]
+Prioridade: [priority]
+Data: [data/hora]
+```
 
-**Correcao**: Remover `key` do `<button>` dentro de `renderEvent` e adicionar `key` ao wrapping do `.map()`, ex: `<React.Fragment key={e.id}>{renderEvent(e, 'today')}</React.Fragment>`.
+**3. Atualizar o System Prompt do Otto**
 
----
+Adicionar instrucoes para o Otto saber quando usar a ferramenta:
+- Quando o utilizador reportar um problema ou pedir suporte
+- Deve recolher assunto e descricao antes de submeter
+- Confirmar com o utilizador antes de enviar
 
-### Erro 4 - Duplo import de `useState` e `useMemo`
+**4. Numero de WhatsApp destino**
 
-**Ficheiro**: `CalendarAlertsWidget.tsx`, linhas 1 e 10
+O numero de destino para onde os tickets serao enviados precisa de ser configurado. Opcoes:
+- Usar um campo na tabela `organizations` (ex: `support_whatsapp_number`) para o numero do admin
+- Ou hardcodar o teu numero pessoal na edge function
 
-**Causa**: `useState` e importado na linha 1 e `useMemo` na linha 10, separados. Nao causa erro de runtime mas e um padrao inconsistente -- os dois podem ser importados no mesmo statement.
+Sera usado o campo existente `whatsapp_number` da organizacao Senvia Agency, ou, caso prefiras, podes indicar o numero diretamente.
 
-**Correcao**: Juntar os imports: `import { useState, useMemo } from 'react'`.
+### Fluxo do utilizador
 
----
+```text
+User: "Tenho um problema com as faturas"
+Otto: "Vou registar o teu pedido de suporte. Podes descrever o problema com mais detalhe?"
+User: "As faturas nao estao a sincronizar com o InvoiceXpress"
+Otto: "Vou submeter o ticket:
+  - Assunto: Sincronizacao de faturas
+  - Descricao: Faturas nao sincronizam com InvoiceXpress
+  Confirmas o envio?"
+  [botao:Sim, enviar][botao:Editar descricao]
+User: "Sim, enviar"
+Otto: (executa submit_support_ticket)
+Otto: "Ticket #1234 criado com sucesso! A equipa de suporte foi notificada via WhatsApp e responderemos brevemente."
+```
 
-### Resumo das alteracoes
+### Detalhes tecnicos
 
-| Ficheiro | Alteracao |
+| Item | Detalhe |
 |---|---|
-| `src/components/ui/dialog.tsx` | Converter `DialogHeader` e `DialogFooter` para `forwardRef` |
-| `src/components/dashboard/CalendarAlertsWidget.tsx` | Adicionar `DialogDescription` ao modal; corrigir keys no `.map()`; juntar imports de React |
-| `src/components/dashboard/FidelizationAlertsWidget.tsx` | Adicionar `DialogDescription` ao modal |
+| Tabela | `support_tickets` com RLS por org |
+| Edge Function | Atualizar `otto-chat/index.ts` com nova tool |
+| WhatsApp API | Evolution API via `https://zap.senvia.pt/` instancia `SenviaAgency` |
+| Endpoint Evolution | `POST {base_url}/message/sendText/{instance}` com header `apikey` |
+| Ficheiros alterados | `supabase/functions/otto-chat/index.ts`, migracao SQL |
+| Numero destino | Precisa ser definido (o teu numero pessoal ou campo da org) |
 
-Todas as correcoes sao menores e nao alteram funcionalidade -- apenas resolvem warnings de consola e melhoram acessibilidade.
+### Pergunta antes de avancar
+
+Preciso saber o numero de WhatsApp para onde os tickets devem ser enviados (formato internacional, ex: `351912345678`). Queres que use um numero fixo ou que busque da tabela organizations?
 
