@@ -140,6 +140,7 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
 
   const [showFulfilledConfirm, setShowFulfilledConfirm] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<SaleStatus | null>(null);
+  const { history: activationHistory, addEntry: addActivationEntry } = useSaleActivationHistory(sale?.id);
 
   useEffect(() => {
     if (sale) {
@@ -173,7 +174,6 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
     updateSale.mutate({ saleId: sale.id, updates: { status: newStatus } });
   };
 
-  const { history: activationHistory, addEntry: addActivationEntry } = useSaleActivationHistory(sale?.id);
 
   const confirmDelivered = () => {
     setStatus('delivered');
