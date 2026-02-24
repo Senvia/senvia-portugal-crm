@@ -105,7 +105,8 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
   const preventPaymentDeletion = !!salesSettings.prevent_payment_deletion;
   const isDeliveredAndLocked = sale?.status === 'delivered' && !isAdmin;
   const isFulfilledAndLocked = lockFulfilledSales && sale?.status === 'fulfilled' && !isAdmin;
-  const isLocked = isDeliveredAndLocked || isFulfilledAndLocked;
+  const isCancelledAndLocked = sale?.status === 'cancelled' && !isAdmin;
+  const isLocked = isDeliveredAndLocked || isFulfilledAndLocked || isCancelledAndLocked;
 
   const { data: saleItems = [] } = useSaleItems(sale?.id);
   const { data: products } = useProducts();
@@ -298,7 +299,7 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                       </div>
                       {isLocked && (
                         <p className="text-xs text-muted-foreground mt-3">
-                          Esta venda está {isDeliveredAndLocked ? 'concluída' : 'entregue'} e não pode ser alterada.
+                          Esta venda está {isDeliveredAndLocked ? 'concluída' : isCancelledAndLocked ? 'cancelada' : 'entregue'} e não pode ser alterada.
                         </p>
                       )}
                     </CardContent>
