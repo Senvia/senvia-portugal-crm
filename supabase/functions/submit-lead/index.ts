@@ -91,7 +91,7 @@ Deno.serve(async (req) => {
     // Validate public_key and get organization_id (including webhook_url and whatsapp config)
     const { data: org, error: orgError } = await supabase
       .from('organizations')
-      .select('id, name, webhook_url, whatsapp_instance, whatsapp_api_key, whatsapp_base_url')
+      .select('id, name, niche, webhook_url, whatsapp_instance, whatsapp_api_key, whatsapp_base_url')
       .eq('public_key', body.public_key)
       .maybeSingle();
 
@@ -197,7 +197,9 @@ Deno.serve(async (req) => {
         assigned_to: formSettings.assigned_to || null,
         company_nif: body.company_nif?.trim() || null,
         company_name: body.company_name?.trim() || null,
-        name: body.name?.trim() || body.company_name?.trim() || 'Anónimo',
+        name: org.niche === 'telecom'
+          ? (body.company_name?.trim() || body.name?.trim() || 'Anónimo')
+          : (body.name?.trim() || body.company_name?.trim() || 'Anónimo'),
         email: body.email?.trim()?.toLowerCase() || 'nao-fornecido@placeholder.local',
         phone: cleanPhone || '000000000',
         gdpr_consent: true,

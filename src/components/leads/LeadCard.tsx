@@ -195,9 +195,17 @@ export function LeadCard({
 
       {/* Content */}
       <div className="mt-3">
-        <h4 className="font-semibold text-card-foreground">{lead.name}</h4>
-        {lead.company_name && (
-          <p className="text-xs text-muted-foreground">{lead.company_name}</p>
+        <h4 className="font-semibold text-card-foreground">
+          {isTelecom ? (lead.company_name || lead.name) : lead.name}
+        </h4>
+        {isTelecom ? (
+          lead.name && lead.name !== lead.company_name && (
+            <p className="text-xs text-muted-foreground">{lead.name}</p>
+          )
+        ) : (
+          lead.company_name && (
+            <p className="text-xs text-muted-foreground">{lead.company_name}</p>
+          )
         )}
         
         {/* Tipologia badge for Telecom */}

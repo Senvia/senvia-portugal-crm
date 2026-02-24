@@ -277,9 +277,17 @@ export function LeadsTableView({
                     )}
                     <TableCell>
                       <div>
-                        <span className="font-medium truncate max-w-[150px] block">{lead.name}</span>
-                        {lead.company_name && (
-                          <span className="text-xs text-muted-foreground truncate max-w-[150px] block">{lead.company_name}</span>
+                        <span className="font-medium truncate max-w-[150px] block">
+                          {isTelecom ? (lead.company_name || lead.name) : lead.name}
+                        </span>
+                        {isTelecom ? (
+                          lead.name && lead.name !== lead.company_name && (
+                            <span className="text-xs text-muted-foreground truncate max-w-[150px] block">{lead.name}</span>
+                          )
+                        ) : (
+                          lead.company_name && (
+                            <span className="text-xs text-muted-foreground truncate max-w-[150px] block">{lead.company_name}</span>
+                          )
                         )}
                       </div>
                     </TableCell>
