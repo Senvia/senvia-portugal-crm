@@ -321,6 +321,7 @@ export default function Leads() {
           lead_id: pendingLead.id,
           user_id: user!.id,
           organization_id: organization!.id,
+          reminder_minutes: 1440,
         })
         .select()
         .single()
