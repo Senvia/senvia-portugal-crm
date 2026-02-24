@@ -19,6 +19,7 @@ import {
   FileDown,
   Mail,
   Info,
+  Clock,
 } from "lucide-react";
 import {
   Dialog,
@@ -76,6 +77,7 @@ import { SendInvoiceEmailModal } from "./SendInvoiceEmailModal";
 import { InvoiceDetailsModal } from "./InvoiceDetailsModal";
 import { CreateCreditNoteModal } from "./CreateCreditNoteModal";
 import { openPdfInNewTab } from "@/lib/download";
+import { useSaleActivationHistory } from "@/hooks/useSaleActivationHistory";
 
 interface SaleDetailsModalProps {
   sale: SaleWithDetails | null;
@@ -171,9 +173,14 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
     updateSale.mutate({ saleId: sale.id, updates: { status: newStatus } });
   };
 
+  const { history: activationHistory, addEntry: addActivationEntry } = useSaleActivationHistory(sale?.id);
+
   const confirmDelivered = () => {
     setStatus('delivered');
     updateSale.mutate({ saleId: sale.id, updates: { status: 'delivered', activation_date: pendingActivationDate || null } });
+    if (pendingActivationDate) {
+      addActivationEntry.mutate({ activationDate: pendingActivationDate, notes: 'Concluída' });
+    }
     setShowDeliveredConfirm(false);
   };
 
@@ -181,6 +188,10 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
     const newStatus = pendingStatus || 'fulfilled';
     setStatus(newStatus as SaleStatus);
     updateSale.mutate({ saleId: sale.id, updates: { status: newStatus as SaleStatus, activation_date: pendingActivationDate || null } });
+    if (pendingActivationDate) {
+      const label = newStatus === 'in_progress' ? 'Em Progresso' : 'Entregue';
+      addActivationEntry.mutate({ activationDate: pendingActivationDate, notes: label });
+    }
     setShowFulfilledConfirm(false);
   };
 
@@ -727,6 +738,45 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                             nextRenewalDate={sale.next_renewal_date}
                             lastRenewalDate={sale.last_renewal_date}
                           />
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {/* Activation History */}
+                    {activationHistory.length > 0 && (
+                      <Card>
+                        <CardHeader className="pb-2 p-4">
+                          <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
+                            <Clock className="h-4 w-4" />
+                            Histórico de Ativação
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-4 pt-0">
+                          <div className="space-y-3">
+                            {activationHistory.map((entry, idx) => (
+                              <div key={entry.id} className="flex gap-3">
+                                <div className="flex flex-col items-center">
+                                  <div className="h-2 w-2 rounded-full bg-primary mt-1.5" />
+                                  {idx < activationHistory.length - 1 && (
+                                    <div className="w-px flex-1 bg-border mt-1" />
+                                  )}
+                                </div>
+                                <div className="pb-3 min-w-0">
+                                  <p className="text-sm font-medium">
+                                    {format(new Date(entry.activation_date), "d MMM yyyy", { locale: pt })}
+                                  </p>
+                                  {entry.notes && (
+                                    <Badge variant="outline" className="text-[10px] mt-0.5">
+                                      {entry.notes}
+                                    </Badge>
+                                  )}
+                                  <p className="text-xs text-muted-foreground mt-0.5">
+                                    {entry.profile?.full_name || 'Sistema'} · {format(new Date(entry.created_at), "d MMM yyyy HH:mm", { locale: pt })}
+                                  </p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
                         </CardContent>
                       </Card>
                     )}
