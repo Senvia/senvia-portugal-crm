@@ -10,16 +10,37 @@ import { toast } from 'sonner';
 import { Calendar, Clock, Video, Loader2 } from 'lucide-react';
 import { REMINDER_OPTIONS } from '@/types/calendar';
 
+
+const HOURS_OPTIONS = [
+  { value: null, label: 'Nunca' },
+  { value: 1, label: '1 hora antes' },
+  { value: 2, label: '2 horas antes' },
+  { value: 3, label: '3 horas antes' },
+  { value: 4, label: '4 horas antes' },
+  { value: 6, label: '6 horas antes' },
+  { value: 12, label: '12 horas antes' },
+];
+
+const DAYS_OPTIONS = [
+  { value: null, label: 'Nunca' },
+  { value: 1, label: '1 dia antes' },
+  { value: 2, label: '2 dias antes' },
+  { value: 3, label: '3 dias antes' },
+  { value: 7, label: '7 dias antes' },
+];
+
 interface CalendarAlertSettings {
   default_reminder_minutes: number | null;
   auto_reminder_meetings: boolean;
-  auto_reminder_minutes: number;
+  auto_reminder_hours: number | null;
+  auto_reminder_days: number | null;
 }
 
 const DEFAULT_SETTINGS: CalendarAlertSettings = {
   default_reminder_minutes: null,
   auto_reminder_meetings: true,
-  auto_reminder_minutes: 60,
+  auto_reminder_hours: 1,
+  auto_reminder_days: null,
 };
 
 export function CalendarAlertsSettings() {
@@ -39,11 +60,23 @@ export function CalendarAlertsSettings() {
 
       if (data) {
         const raw = (data as any).calendar_alert_settings as Record<string, any> | null;
-        if (raw && typeof raw === 'object') {
+      if (raw && typeof raw === 'object') {
+          // Migration: convert old auto_reminder_minutes to new fields
+          let hours: number | null = raw.auto_reminder_hours ?? null;
+          let days: number | null = raw.auto_reminder_days ?? null;
+          if (hours === null && days === null && raw.auto_reminder_minutes != null) {
+            const mins = raw.auto_reminder_minutes as number;
+            if (mins >= 1440) {
+              days = Math.round(mins / 1440);
+            } else {
+              hours = Math.round(mins / 60) || 1;
+            }
+          }
           setSettings({
             default_reminder_minutes: raw.default_reminder_minutes ?? null,
             auto_reminder_meetings: raw.auto_reminder_meetings ?? true,
-            auto_reminder_minutes: raw.auto_reminder_minutes ?? 60,
+            auto_reminder_hours: hours,
+            auto_reminder_days: days,
           });
         }
       }
@@ -154,25 +187,47 @@ export function CalendarAlertsSettings() {
           </div>
 
           {settings.auto_reminder_meetings && (
-            <div className="space-y-2">
-              <Label>Quanto tempo antes</Label>
-              <Select
-                value={settings.auto_reminder_minutes.toString()}
-                onValueChange={(v) =>
-                  setSettings((s) => ({ ...s, auto_reminder_minutes: Number(v) }))
-                }
-              >
-                <SelectTrigger className="w-full sm:w-[220px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {REMINDER_OPTIONS.filter((o) => o.value !== null).map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value!.toString()}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Lembrar horas antes</Label>
+                <Select
+                  value={settings.auto_reminder_hours?.toString() ?? 'never'}
+                  onValueChange={(v) =>
+                    setSettings((s) => ({ ...s, auto_reminder_hours: v === 'never' ? null : Number(v) }))
+                  }
+                >
+                  <SelectTrigger className="w-full sm:w-[220px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {HOURS_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value ?? 'never'} value={opt.value?.toString() ?? 'never'}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Lembrar dias antes</Label>
+                <Select
+                  value={settings.auto_reminder_days?.toString() ?? 'never'}
+                  onValueChange={(v) =>
+                    setSettings((s) => ({ ...s, auto_reminder_days: v === 'never' ? null : Number(v) }))
+                  }
+                >
+                  <SelectTrigger className="w-full sm:w-[220px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DAYS_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value ?? 'never'} value={opt.value?.toString() ?? 'never'}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           )}
         </CardContent>

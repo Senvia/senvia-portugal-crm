@@ -41,7 +41,8 @@ export function CreateEventModal({ open, onOpenChange, selectedDate, event, pres
   const [calendarSettings, setCalendarSettings] = useState<{
     default_reminder_minutes: number | null;
     auto_reminder_meetings: boolean;
-    auto_reminder_minutes: number;
+    auto_reminder_hours: number | null;
+    auto_reminder_days: number | null;
   } | null>(null);
 
   useEffect(() => {
@@ -55,7 +56,15 @@ export function CreateEventModal({ open, onOpenChange, selectedDate, event, pres
       if (data) {
         const raw = (data as any).calendar_alert_settings;
         if (raw && typeof raw === 'object' && Object.keys(raw).length > 0) {
-          setCalendarSettings(raw);
+          // Migration: convert old auto_reminder_minutes to new fields
+          let hours: number | null = raw.auto_reminder_hours ?? null;
+          let days: number | null = raw.auto_reminder_days ?? null;
+          if (hours === null && days === null && raw.auto_reminder_minutes != null) {
+            const mins = raw.auto_reminder_minutes as number;
+            if (mins >= 1440) { days = Math.round(mins / 1440); }
+            else { hours = Math.round(mins / 60) || 1; }
+          }
+          setCalendarSettings({ ...raw, auto_reminder_hours: hours, auto_reminder_days: days });
         }
       }
     }
@@ -168,7 +177,12 @@ export function CreateEventModal({ open, onOpenChange, selectedDate, event, pres
       reminder_minutes: reminderMinutes
         ? parseInt(reminderMinutes)
         : (calendarSettings?.auto_reminder_meetings && (eventType === 'meeting' || eventType === 'call'))
-          ? calendarSettings.auto_reminder_minutes
+          ? (() => {
+              const hoursMins = calendarSettings.auto_reminder_hours != null ? calendarSettings.auto_reminder_hours * 60 : null;
+              const daysMins = calendarSettings.auto_reminder_days != null ? calendarSettings.auto_reminder_days * 1440 : null;
+              if (hoursMins != null && daysMins != null) return Math.min(hoursMins, daysMins);
+              return hoursMins ?? daysMins ?? null;
+            })()
           : null,
     };
 
