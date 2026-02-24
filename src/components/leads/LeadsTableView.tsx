@@ -38,6 +38,7 @@ import { cn } from '@/lib/utils';
 import { usePipelineStages, PipelineStage } from '@/hooks/usePipelineStages';
 import { useLeadProposalValues } from '@/hooks/useLeadProposalValues';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePermissions } from '@/hooks/usePermissions';
 import { Skeleton } from '@/components/ui/skeleton';
 
 interface LeadsTableViewProps {
@@ -72,6 +73,7 @@ export function LeadsTableView({
   const { data: stages = [], isLoading: stagesLoading } = usePipelineStages();
   const { data: proposalValues } = useLeadProposalValues();
   const { organization } = useAuth();
+  const { isAdmin } = usePermissions();
   const isTelecom = organization?.niche === 'telecom';
   
   const [sortField, setSortField] = useState<SortField>('created_at');
@@ -308,9 +310,14 @@ export function LeadsTableView({
                       </Button>
                     </TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>
+                      {(() => {
+                        const isFinal = currentStage?.is_final_positive || currentStage?.is_final_negative;
+                        const isLocked = isFinal && !isAdmin;
+                        return (
                       <Select
                         value={lead.status || ''}
                         onValueChange={(value) => onStatusChange(lead.id, value)}
+                        disabled={isLocked}
                       >
                         <SelectTrigger className="w-[130px] h-8 border-0 bg-transparent p-0">
                           <Badge 
@@ -335,6 +342,8 @@ export function LeadsTableView({
                           ))}
                         </SelectContent>
                       </Select>
+                        );
+                      })()}
                     </TableCell>
                     <TableCell className="hidden sm:table-cell" onClick={(e) => e.stopPropagation()}>
                       <Select

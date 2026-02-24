@@ -4,6 +4,7 @@ import { LeadCard } from "./LeadCard";
 import { cn } from "@/lib/utils";
 import { usePipelineStages, PipelineStage } from "@/hooks/usePipelineStages";
 import { useLeadProposalValues } from "@/hooks/useLeadProposalValues";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertCircle } from "lucide-react";
 
@@ -26,6 +27,7 @@ interface KanbanBoardProps {
 export function KanbanBoard({ leads, leadEvents = {}, onStatusChange, onTemperatureChange, onViewDetails, onDelete }: KanbanBoardProps) {
   const { data: stages, isLoading: stagesLoading } = usePipelineStages();
   const { data: proposalValues } = useLeadProposalValues();
+  const { isAdmin } = usePermissions();
   const [draggedLead, setDraggedLead] = useState<string | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
   
@@ -51,6 +53,11 @@ export function KanbanBoard({ leads, leadEvents = {}, onStatusChange, onTemperat
     }
   };
 
+  const isFinalStatus = (status: string) => {
+    const stage = stages?.find(s => s.key === status);
+    return stage?.is_final_positive || stage?.is_final_negative || false;
+  };
+
   const getLeadsByStatus = (statusKey: string) => 
     leads.filter(lead => lead.status === statusKey);
 
@@ -62,6 +69,12 @@ export function KanbanBoard({ leads, leadEvents = {}, onStatusChange, onTemperat
   };
 
   const handleDragStart = (e: React.DragEvent, leadId: string) => {
+    // Block drag for leads in final stages if not admin
+    const lead = leads.find(l => l.id === leadId);
+    if (lead && isFinalStatus(lead.status || '') && !isAdmin) {
+      e.preventDefault();
+      return;
+    }
     setDraggedLead(leadId);
     e.dataTransfer.effectAllowed = 'move';
   };
@@ -169,7 +182,7 @@ export function KanbanBoard({ leads, leadEvents = {}, onStatusChange, onTemperat
               {orphanLeads.map((lead) => (
                 <div
                   key={lead.id}
-                  draggable
+                  draggable={!isFinalStatus(lead.status || '') || isAdmin}
                   onDragStart={(e) => handleDragStart(e, lead.id)}
                   className="animate-fade-in"
                 >
@@ -183,6 +196,7 @@ export function KanbanBoard({ leads, leadEvents = {}, onStatusChange, onTemperat
                     onDelete={onDelete}
                     isDragging={draggedLead === lead.id}
                     pipelineStages={stages}
+                    isLocked={isFinalStatus(lead.status || '') && !isAdmin}
                   />
                 </div>
               ))}
@@ -227,7 +241,7 @@ export function KanbanBoard({ leads, leadEvents = {}, onStatusChange, onTemperat
                 {columnLeads.map((lead) => (
                   <div
                     key={lead.id}
-                    draggable
+                    draggable={!isFinalStatus(lead.status || '') || isAdmin}
                     onDragStart={(e) => handleDragStart(e, lead.id)}
                     className="animate-fade-in"
                   >
@@ -241,6 +255,7 @@ export function KanbanBoard({ leads, leadEvents = {}, onStatusChange, onTemperat
                       onDelete={onDelete}
                       isDragging={draggedLead === lead.id}
                       pipelineStages={stages}
+                      isLocked={isFinalStatus(lead.status || '') && !isAdmin}
                     />
                   </div>
                 ))}

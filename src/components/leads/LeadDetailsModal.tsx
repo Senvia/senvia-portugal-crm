@@ -95,10 +95,17 @@ export function LeadDetailsModal({
   onUpdate
 }: LeadDetailsModalProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const { canDeleteLeads, canManageTeam } = usePermissions();
+  const { canDeleteLeads, canManageTeam, isAdmin } = usePermissions();
   const { organization } = useAuth();
   const { data: teamMembers } = useTeamMembers();
   const { data: stages } = usePipelineStages();
+
+  // Check if lead is in a final stage
+  const isLeadLocked = (() => {
+    if (!lead || isAdmin) return false;
+    const currentStage = stages?.find(s => s.key === lead.status);
+    return currentStage?.is_final_positive || currentStage?.is_final_negative || false;
+  })();
   // Editable fields state
   const [editValue, setEditValue] = useState<string>("");
   const [editConsumo, setEditConsumo] = useState<string>("");
@@ -273,6 +280,7 @@ export function LeadDetailsModal({
                       <Select
                         value={lead.status}
                         onValueChange={(value) => onStatusChange(lead.id, value as LeadStatus)}
+                        disabled={isLeadLocked}
                       >
                         <SelectTrigger className="w-48">
                           <SelectValue />
@@ -285,6 +293,9 @@ export function LeadDetailsModal({
                           ))}
                         </SelectContent>
                       </Select>
+                      {isLeadLocked && (
+                        <p className="text-xs text-muted-foreground mt-1">🔒 Apenas administradores podem alterar o estado de leads finalizadas</p>
+                      )}
                     </div>
 
                     {/* Temperature */}

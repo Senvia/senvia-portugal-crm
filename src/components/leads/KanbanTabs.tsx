@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { usePipelineStages, PipelineStage } from "@/hooks/usePipelineStages";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useState, useEffect } from "react";
 
@@ -51,6 +52,7 @@ export function KanbanTabs({
   onDelete,
 }: KanbanTabsProps) {
   const { data: stages = [], isLoading } = usePipelineStages();
+  const { isAdmin } = usePermissions();
   const [activeStatus, setActiveStatus] = useState<string>("");
 
   // Set initial active status when stages load
@@ -59,6 +61,11 @@ export function KanbanTabs({
       setActiveStatus(stages[0].key);
     }
   }, [stages, activeStatus]);
+
+  const isFinalStatus = (status: string) => {
+    const stage = stages.find(s => s.key === status);
+    return stage?.is_final_positive || stage?.is_final_negative || false;
+  };
 
   const getLeadsByStatus = (statusKey: string) => {
     return leads.filter((lead) => lead.status === statusKey);
@@ -175,16 +182,17 @@ export function KanbanTabs({
           </div>
         ) : (
           filteredLeads.map((lead) => (
-            <LeadCard
-              key={lead.id}
-              lead={lead}
-              upcomingEvent={leadEvents[lead.id]}
-              onStatusChange={onStatusChange}
-              onTemperatureChange={onTemperatureChange}
-              onViewDetails={onViewDetails}
-              onDelete={onDelete}
-              pipelineStages={stages}
-            />
+              <LeadCard
+                key={lead.id}
+                lead={lead}
+                upcomingEvent={leadEvents[lead.id]}
+                onStatusChange={onStatusChange}
+                onTemperatureChange={onTemperatureChange}
+                onViewDetails={onViewDetails}
+                onDelete={onDelete}
+                pipelineStages={stages}
+                isLocked={isFinalStatus(lead.status || '') && !isAdmin}
+              />
           ))
         )}
       </div>
