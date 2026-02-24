@@ -1,71 +1,92 @@
 
-# Adicionar Widget de Alertas de Agenda no Dashboard
 
-## Problema Atual
+# Adicionar Alertas de Calendario nas Definicoes de Notificacoes
 
-O Dashboard tem apenas o widget "Alertas de Fidelizacao" (exclusivo para nicho telecom). Nao existe nenhum widget que mostre eventos proximos do calendario (reunioes, chamadas, follow-ups, recontactos de leads perdidos). Isto significa que o utilizador nao tem visibilidade no Dashboard sobre compromissos agendados para os proximos dias.
+## Problema
+
+Atualmente, em Definicoes > Notificacoes > Alertas, so existem os "Alertas de Fidelizacao" (exclusivos para telecom). O utilizador precisa de configurar lembretes automaticos para eventos do calendario (reunioes, chamadas, follow-ups), como lembrete de 1 dia antes ou 1 hora antes, e essa opcao nao existe nas definicoes.
 
 ## Solucao
 
-Criar um novo widget **"Alertas de Agenda"** que aparece no Dashboard para **todos os nichos** e mostra:
-- Eventos de **hoje** (urgente, destacado a vermelho/laranja)
-- Eventos dos **proximos 7 dias** (informativo, destacado a azul)
-- Cada evento mostra: titulo, tipo (icone), hora, lead associado (se houver)
-- Clicar num evento navega para `/calendar`
+Separar a secao "Alertas" em duas sub-secoes e criar um novo componente de configuracao de alertas de calendario, disponivel para **todos os nichos**.
+
+### Configuracoes disponiveis no novo componente
+
+1. **Lembrete padrao para novos eventos** -- Selecionar o valor de `reminder_minutes` que sera pre-selecionado ao criar um novo evento (ex: "1 hora antes", "1 dia antes", "Sem lembrete")
+2. **Notificacao push para lembretes** -- Switch para ativar/desativar push notifications em lembretes do calendario (ja funciona via `check-reminders` cron)
+3. **Lembrete automatico para reunioes** -- Switch que garante que eventos do tipo `meeting` e `call` recebem automaticamente um lembrete mesmo que o utilizador se esqueca de configurar
+
+### Armazenamento
+
+Os valores serao guardados numa nova coluna JSONB `calendar_alert_settings` na tabela `organizations`:
+
+```text
+{
+  "default_reminder_minutes": 60,
+  "auto_reminder_meetings": true,
+  "auto_reminder_minutes": 60
+}
+```
 
 ## Alteracoes
 
-### 1. Novo componente: `src/components/dashboard/CalendarAlertsWidget.tsx`
+### 1. Migracao de base de dados
 
-Widget com estrutura semelhante ao `FidelizationAlertsWidget`:
-- Usa `useCalendarEvents` com range de hoje ate +7 dias
-- Filtra apenas eventos com status `pending`
-- Separa em duas secoes: "Hoje" e "Proximos 7 dias"
-- Mostra icone do tipo de evento (reuniao, chamada, tarefa, follow-up)
-- Mostra hora e lead associado
-- Botao "Ver agenda" para navegar ao calendario
-- Card com icone Calendar e titulo "Proximos Eventos"
+Adicionar coluna `calendar_alert_settings` (JSONB, default `{}`) na tabela `organizations`.
 
-### 2. Dashboard.tsx -- Adicionar o widget
+### 2. Novo componente: `CalendarAlertsSettings.tsx`
 
-- Importar `CalendarAlertsWidget`
-- Renderizar junto ao `FidelizationAlertsWidget` (para telecom) ou sozinho (para outros nichos)
-- O widget aparece para todos os nichos, desde que o modulo `calendar` esteja ativo
-- Layout: grid de 2 colunas no desktop, 1 no mobile
+Componente com o mesmo estilo do `FidelizationAlertsSettings`:
+- Card "Lembrete Padrao": Select com opcoes de REMINDER_OPTIONS (15min, 30min, 1h, 1 dia)
+- Card "Reunioes e Chamadas": Switch para ativar lembrete automatico + select para escolher quanto tempo antes
+- Botao "Guardar Definicoes"
+- Le e grava em `organizations.calendar_alert_settings`
 
-### 3. Modulo calendar -- Verificar disponibilidade
+### 3. MobileSettingsNav.tsx -- Nova sub-secao
 
-O `enabled_modules` ja tem `calendar` como modulo. O widget so aparece se o modulo estiver ativo.
+Adicionar `"notif-calendar"` como nova sub-secao dentro de `notifications`:
+- Label: "Calendario"
+- Icone: Calendar
+- Descricao: "Lembretes de eventos e reunioes"
+- Visivel para **todos os nichos** (sem filtro isTelecom)
 
-## Layout no Dashboard (apos alteracao)
+Renomear a sub-secao `notif-alerts` para "Fidelizacao" (mais claro).
 
-```text
-Para telecom (com clientes e calendario ativos):
-[Alertas Fidelizacao] [Alertas Agenda]
-[... widgets dinamicos ...]
+### 4. Settings.tsx -- Renderizar novo componente
 
-Para outros nichos (com calendario ativo):
-[Alertas Agenda]
-[... widgets dinamicos ...]
-```
+Adicionar case `"notif-calendar"` no `renderSubContent` que renderiza `<CalendarAlertsSettings />`.
+
+### 5. CreateEventModal.tsx -- Usar valor padrao
+
+Ao criar um novo evento, ler `organization.calendar_alert_settings.default_reminder_minutes` e pre-selecionar esse valor no select de lembrete (em vez de vazio).
+
+Para eventos tipo `meeting` ou `call`, se `auto_reminder_meetings` estiver ativo e o utilizador nao configurar lembrete manualmente, aplicar automaticamente o valor de `auto_reminder_minutes`.
 
 ## Secao Tecnica
 
 ### Ficheiros criados
-1. **`src/components/dashboard/CalendarAlertsWidget.tsx`** -- Novo widget de alertas de agenda
+1. `src/components/settings/CalendarAlertsSettings.tsx` -- Novo componente de configuracao
 
 ### Ficheiros alterados
-1. **`src/pages/Dashboard.tsx`** -- Adicionar CalendarAlertsWidget na area de alertas
+1. **Migracao SQL** -- Adicionar coluna `calendar_alert_settings` JSONB na tabela `organizations`
+2. `src/components/settings/MobileSettingsNav.tsx` -- Adicionar tipo `"notif-calendar"` e sub-secao
+3. `src/pages/Settings.tsx` -- Importar e renderizar `CalendarAlertsSettings`
+4. `src/components/calendar/CreateEventModal.tsx` -- Ler definicoes da org para pre-preencher lembrete padrao
 
-### Dados utilizados
-- Hook existente `useCalendarEvents(today, today+7days)` para buscar eventos pendentes
-- Tipos e labels existentes em `src/types/calendar.ts` (EVENT_TYPE_LABELS, EVENT_TYPE_COLORS)
-- Nenhuma alteracao de base de dados necessaria
+### Fluxo de dados
 
-### Comportamento do Widget
-- Mostra badge com total de eventos pendentes
-- Secao "Hoje" com fundo laranja/vermelho para eventos do dia
-- Secao "Esta Semana" com fundo azul para eventos futuros
-- Maximo de 3 eventos visiveis por secao, com botao "Ver todos"
-- Estado vazio: "Sem eventos nos proximos 7 dias"
-- Loading state com spinner
+```text
+Definicoes > Notificacoes > Calendario
+         |
+         v
+organizations.calendar_alert_settings (JSONB)
+         |
+         v
+CreateEventModal le o default_reminder_minutes
+         |
+         v
+Evento criado com reminder_minutes pre-preenchido
+         |
+         v
+check-reminders (cron) envia push notification
+```
