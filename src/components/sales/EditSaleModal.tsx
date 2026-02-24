@@ -22,6 +22,7 @@ import { useUpdateSale } from "@/hooks/useSales";
 import { useSaleItems, useCreateSaleItems, useUpdateSaleItem, useDeleteSaleItem } from "@/hooks/useSaleItems";
 import { useCreateSalePayment, useSalePayments, calculatePaymentSummary } from "@/hooks/useSalePayments";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePermissions } from "@/hooks/usePermissions";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { format, parseISO } from "date-fns";
@@ -94,7 +95,9 @@ export function EditSaleModal({
   const createSalePayment = useCreateSalePayment();
 
   const { organization } = useAuth();
+  const { isAdmin } = usePermissions();
   const isTelecom = organization?.niche === 'telecom';
+  const isDeliveredLocked = sale?.status === 'delivered' && !isAdmin;
   
   // Proposal CPEs and client CPEs
   const { data: proposalCpes = [] } = useProposalCpes(sale?.proposal_id ?? undefined);
@@ -134,6 +137,7 @@ export function EditSaleModal({
 
   // Manual total value (for sales without items)
   const [manualTotalValue, setManualTotalValue] = useState<string>("");
+  const [activationDate, setActivationDate] = useState<string>("");
 
   // Editable CPEs state
   const [editableCpes, setEditableCpes] = useState<CreateProposalCpeData[]>([]);
@@ -155,6 +159,7 @@ export function EditSaleModal({
       setKwp(sale.kwp?.toString() || "");
       setServicosProdutos(sale.servicos_produtos || []);
       setManualTotalValue(sale.total_value?.toString() || "0");
+      setActivationDate(sale.activation_date || "");
     }
   }, [open, sale]);
 
@@ -340,6 +345,7 @@ export function EditSaleModal({
           modelo_servico: (modeloServico as ModeloServico) || null,
           kwp: parseFloat(kwp) || null,
           servicos_produtos: servicosProdutos.length > 0 ? servicosProdutos : null,
+          activation_date: activationDate || null,
         },
       });
 
@@ -512,6 +518,18 @@ export function EditSaleModal({
                             </Badge>
                           </div>
                         </div>
+                        {(sale.status === 'fulfilled' || sale.status === 'delivered' || sale.status === 'in_progress') && (
+                          <div className="space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">Data de Ativação</Label>
+                            <Input
+                              type="date"
+                              value={activationDate}
+                              onChange={(e) => setActivationDate(e.target.value)}
+                              className="h-9"
+                              disabled={isDeliveredLocked}
+                            />
+                          </div>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
@@ -1023,13 +1041,19 @@ export function EditSaleModal({
 
           {/* Fixed Footer */}
           <div className="p-4 border-t border-border/50 shrink-0">
+            {isDeliveredLocked && (
+              <div className="flex items-center gap-2 text-amber-500 text-sm mb-3 max-w-6xl mx-auto">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>Esta venda está concluída. Apenas administradores podem editar.</span>
+              </div>
+            )}
             <div className="flex gap-3 max-w-6xl mx-auto">
               <Button
                 type="submit"
                 variant="senvia"
                 className="flex-1"
                 size="lg"
-                disabled={isSubmitting}
+                disabled={isSubmitting || isDeliveredLocked}
               >
                 {isSubmitting ? (
                   <>

@@ -139,6 +139,9 @@ export interface Sale {
   next_renewal_date: string | null;
   last_renewal_date: string | null;
 
+  // Data de Ativação
+  activation_date?: string | null;
+
   // InvoiceXpress
   invoicexpress_id: number | null;
   invoicexpress_type: string | null;
