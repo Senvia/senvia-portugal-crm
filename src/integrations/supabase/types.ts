@@ -3360,6 +3360,7 @@ export type Database = {
       }
       support_tickets: {
         Row: {
+          attachments: Json | null
           created_at: string
           description: string
           id: string
@@ -3370,6 +3371,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          attachments?: Json | null
           created_at?: string
           description: string
           id?: string
@@ -3380,6 +3382,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          attachments?: Json | null
           created_at?: string
           description?: string
           id?: string
