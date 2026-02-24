@@ -1,87 +1,35 @@
 
 
-# Tornar Campos Obrigatorios nas Propostas Telecom
+# Corrigir Erro "column total does not exist" ao Criar Venda
 
-## Resumo
+## Problema
 
-Reforcar a validacao dos formularios de propostas telecom para garantir que todos os campos relevantes sao preenchidos antes de submeter.
+Ao criar uma venda, o sistema retorna erro 42703: `column "total" does not exist`. O insert na tabela `sales` funciona corretamente, mas existe um **trigger de base de dados** (`trigger_update_client_sales_metrics`) que e executado apos o insert e tenta fazer `SUM(total)` quando a coluna correta e `total_value`.
 
-## 1. CPE/CUI (Energia) -- Tudo Obrigatorio
+## Causa Raiz
 
-Atualmente, ao adicionar um CPE a proposta, apenas se valida que existe pelo menos 1 CPE. Os campos individuais (Consumo Anual, Duracao, DBL, Comissao, Inicio/Fim Contrato) nao sao obrigatorios.
+O trigger `update_client_sales_metrics` contem referencias a `SUM(total)` em vez de `SUM(total_value)`. Isto acontece tanto no bloco INSERT/UPDATE como no bloco DELETE:
 
-**Alteracoes:**
+```sql
+-- Errado:
+total_value = (SELECT COALESCE(SUM(total), 0) FROM sales ...)
+-- Correto:
+total_value = (SELECT COALESCE(SUM(total_value), 0) FROM sales ...)
+```
 
-### Ficheiro: `src/components/proposals/ProposalCpeSelector.tsx`
+## Solucao
 
-- **Formulario de adicao (antes de clicar "Adicionar a Proposta")**: O botao "Adicionar a Proposta" so fica ativo quando TODOS os campos estao preenchidos:
-  - Comercializador
-  - Consumo Anual
-  - Duracao (anos)
-  - DBL
-  - Comissao
-  - Inicio Contrato
-  - Fim Contrato
-- Atualizar `canAddExisting` de `selectedExistingCpe !== null` para incluir validacao de todos os campos
-- Adicionar asterisco (*) visual nos labels de todos os campos
-
-### Ficheiro: `src/components/proposals/CreateProposalModal.tsx`
-
-- Atualizar `isEnergiaValid` para verificar que cada CPE adicionado tem todos os campos preenchidos (consumo_anual, duracao_contrato, dbl, comissao, contrato_inicio, contrato_fim)
-- Se algum CPE tiver campos vazios, mostrar mensagem de erro
-
-## 2. Outros Servicos -- Campos da Linha Selecionada Obrigatorios
-
-Atualmente, basta selecionar um produto e que kWp total e comissao total sejam > 0. Os campos individuais de cada produto selecionado nao sao validados.
-
-**Alteracoes:**
-
-### Ficheiro: `src/components/proposals/CreateProposalModal.tsx`
-
-- Atualizar `isServicosValid` para verificar que, para cada produto selecionado (checkbox ativo), TODOS os campos configurados (`config.fields`) estao preenchidos com valor > 0
-- Adicionar asterisco (*) nos labels dos campos de cada produto ativo
-- Mostrar mensagem de erro por campo vazio quando `attempted` e verdadeiro
+Criar uma migracao SQL para substituir a funcao `update_client_sales_metrics` com a referencia correta a coluna `total_value`.
 
 ## Secao Tecnica
 
-### Validacao CPE (`ProposalCpeSelector.tsx`)
+### Migracao SQL
 
-```
-canAddExisting = selectedExistingCpe 
-  && updateConsumoAnual 
-  && updateDuracaoContrato 
-  && updateDbl 
-  && updateComissao 
-  && updateContratoInicio 
-  && updateContratoFim
-  && (updateComercializador && updateComercializador !== '' 
-      || (updateComercializador === 'other' && updateCustomComercializador))
-```
+Recriar a funcao `update_client_sales_metrics()` corrigindo todas as ocorrencias de `SUM(total)` para `SUM(total_value)` nos blocos INSERT/UPDATE e DELETE.
 
-Para CPEs ja adicionados, validacao no `isEnergiaValid`:
-```
-isEnergiaValid = proposalCpes.length > 0 
-  && proposalCpes.every(cpe => 
-    cpe.consumo_anual && cpe.duracao_contrato && cpe.dbl 
-    && cpe.comissao && cpe.contrato_inicio && cpe.contrato_fim
-  )
-```
-
-### Validacao Servicos (`CreateProposalModal.tsx`)
-
-```
-isServicosValid = servicosProdutos.length > 0 
-  && servicosProdutos.every(produto => {
-    const config = SERVICOS_PRODUCT_CONFIGS.find(c => c.name === produto);
-    const detail = servicosDetails[produto] || {};
-    return config?.fields.every(field => 
-      detail[field] !== undefined && detail[field] > 0
-    );
-  })
-```
+A funcao completa sera reescrita com `CREATE OR REPLACE FUNCTION` mantendo toda a logica existente (total_sales, total_value, total_comissao, total_mwh, total_kwp) apenas corrigindo a referencia da coluna.
 
 ### Ficheiros a alterar
 
-- `src/components/proposals/ProposalCpeSelector.tsx` -- validacao do formulario de adicao + asteriscos
-- `src/components/proposals/CreateProposalModal.tsx` -- validacao reforçada em `isEnergiaValid` e `isServicosValid` + asteriscos + mensagens de erro
+- Nenhum ficheiro de codigo -- apenas migracao de base de dados
 
