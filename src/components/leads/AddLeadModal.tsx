@@ -57,11 +57,16 @@ const TEMPERATURE_LABELS: Record<string, { label: string; emoji: string }> = {
   hot: { label: "Quente", emoji: "🔥" },
 };
 
-function buildLeadSchema(settings: LeadFieldsSettings | undefined) {
+function buildLeadSchema(settings: LeadFieldsSettings | undefined, niche?: string | null) {
   const s = settings ?? DEFAULT_LEAD_FIELDS_SETTINGS;
+  const isTelecom = niche === 'telecom';
 
   const strField = (key: keyof LeadFieldsSettings, minLen = 1) => {
     const cfg = s[key];
+    // For telecom, company_name is always required
+    if (key === 'company_name' && isTelecom) {
+      return z.string().min(minLen, `${cfg?.label || 'Nome da Empresa'} é obrigatório`);
+    }
     if (!cfg?.visible || !cfg?.required) return z.string().optional().or(z.literal(""));
     return z.string().min(minLen, `${cfg.label} é obrigatório`);
   };
@@ -106,7 +111,7 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
   const { data: fieldSettings } = useLeadFieldsSettings();
 
   const fs = fieldSettings ?? DEFAULT_LEAD_FIELDS_SETTINGS;
-  const schema = useMemo(() => buildLeadSchema(fieldSettings), [fieldSettings]);
+  const schema = useMemo(() => buildLeadSchema(fieldSettings, organization?.niche), [fieldSettings, organization?.niche]);
 
   const [matchedClient, setMatchedClient] = useState<{ id: string; name: string; email: string | null; phone: string | null; notes: string | null; company: string | null } | null>(null);
   const [isSearching, setIsSearching] = useState(false);
@@ -144,8 +149,10 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
   // Helper: get label
   const getLabel = (key: keyof LeadFieldsSettings, fallback: string) => fs[key]?.label || fallback;
   // Helper: label with optional asterisk
-  const labelText = (key: keyof LeadFieldsSettings, fallback: string) =>
-    `${getLabel(key, fallback)}${isRequired(key) ? ' *' : ''}`;
+  const labelText = (key: keyof LeadFieldsSettings, fallback: string) => {
+    const forced = key === 'company_name' && isTelecom;
+    return `${getLabel(key, fallback)}${(isRequired(key) || forced) ? ' *' : ''}`;
+  };
 
   const searchExistingClient = async (nifValue: string) => {
     if (!nifValue || nifValue.length < 3 || !organization?.id) return;
@@ -182,7 +189,7 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
     const lead = await createLead.mutateAsync({
       company_nif: data.company_nif || undefined,
       company_name: data.company_name || undefined,
-      name: data.name || data.company_name || '',
+      name: isTelecom ? (data.company_name || data.name || '') : (data.name || data.company_name || ''),
       email: data.email || '',
       phone: data.phone || '',
       source: data.source,
@@ -222,7 +229,7 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
   };
 
   // Check if empresa card has any visible fields
-  const showEmpresaCard = isVisible('company_nif') || isVisible('company_name');
+  const showEmpresaCard = isVisible('company_nif') || isVisible('company_name') || isTelecom;
   // Check if contacto card has any visible fields
   const showContactoCard = isVisible('name') || isVisible('email') || isVisible('phone');
 
