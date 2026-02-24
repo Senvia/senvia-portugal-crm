@@ -41,12 +41,19 @@ import {
   FileText,
   AlertCircle,
   RefreshCw,
-  CreditCard
+  CreditCard,
+  Zap,
+  Wrench,
 } from "lucide-react";
 
 import type { SaleWithDetails } from "@/types/sales";
 import { SalePaymentsList } from "./SalePaymentsList";
+import { RecurringSection } from "./RecurringSection";
 import { Progress } from "@/components/ui/progress";
+import { useProposalCpes } from "@/hooks/useProposalCpes";
+import { useCpes } from "@/hooks/useCpes";
+import { NEGOTIATION_TYPE_LABELS, MODELO_SERVICO_LABELS, SERVICOS_PRODUCTS } from "@/types/proposals";
+import { CPE_STATUS_LABELS, CPE_STATUS_STYLES } from "@/types/cpes";
 
 interface SaleItemDraft {
   id: string;
@@ -86,6 +93,20 @@ export function EditSaleModal({
   const { organization } = useAuth();
   const isTelecom = organization?.niche === 'telecom';
   
+  // Proposal CPEs and client CPEs
+  const { data: proposalCpes = [] } = useProposalCpes(sale?.proposal_id ?? undefined);
+  const clientIdForCpes = sale?.client_id || sale?.client?.id || null;
+  const { data: clientCpes = [] } = useCpes(clientIdForCpes);
+  const cpeLabel = isTelecom ? 'CPE/CUI (Pontos de Consumo)' : 'CPEs (Equipamentos)';
+  const serialLabel = isTelecom ? 'Local de Consumo' : 'Nº Série';
+
+  // Check if has energy or service data
+  const hasEnergyData = sale?.proposal_type === 'energia' && (
+    sale.consumo_anual || sale.margem || sale.dbl || sale.anos_contrato || sale.comissao || sale.negotiation_type
+  );
+  const hasServiceData = sale?.proposal_type === 'servicos' && (
+    sale.modelo_servico || sale.kwp || sale.comissao || (sale.servicos_produtos && sale.servicos_produtos.length > 0)
+  );
   // Fiscal info
   const ixActive = isInvoiceXpressActive(organization);
   const orgTaxValue = getOrgTaxValue(organization);
@@ -474,7 +495,204 @@ export function EditSaleModal({
                     </Card>
                   )}
 
-                  {/* Products/Services */}
+                  {/* Energy Data (read-only) */}
+                  {isTelecom && hasEnergyData && (
+                    <Card>
+                      <CardHeader className="pb-2 p-4">
+                        <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
+                          <Zap className="h-4 w-4 text-amber-500" />
+                          Dados de Energia
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-4 pt-0">
+                        <div className="grid grid-cols-2 gap-3">
+                          {sale.negotiation_type && (
+                            <div className="col-span-2">
+                              <p className="text-xs text-muted-foreground">Tipo de Negociação</p>
+                              <p className="text-sm font-medium">
+                                {NEGOTIATION_TYPE_LABELS[sale.negotiation_type as keyof typeof NEGOTIATION_TYPE_LABELS] || sale.negotiation_type}
+                              </p>
+                            </div>
+                          )}
+                          {sale.consumo_anual != null && (
+                            <div>
+                              <p className="text-xs text-muted-foreground">Consumo Anual</p>
+                              <p className="text-sm font-medium">{sale.consumo_anual.toLocaleString('pt-PT')} kWh</p>
+                            </div>
+                          )}
+                          {sale.margem != null && (
+                            <div>
+                              <p className="text-xs text-muted-foreground">Margem</p>
+                              <p className="text-sm font-medium">{sale.margem.toLocaleString('pt-PT', { minimumFractionDigits: 2 })} €/MWh</p>
+                            </div>
+                          )}
+                          {sale.anos_contrato != null && (
+                            <div>
+                              <p className="text-xs text-muted-foreground">Contrato</p>
+                              <p className="text-sm font-medium">{sale.anos_contrato} {sale.anos_contrato === 1 ? 'ano' : 'anos'}</p>
+                            </div>
+                          )}
+                          {sale.dbl != null && (
+                            <div>
+                              <p className="text-xs text-muted-foreground">DBL</p>
+                              <p className="text-sm font-medium">{sale.dbl.toLocaleString('pt-PT', { minimumFractionDigits: 2 })}</p>
+                            </div>
+                          )}
+                          {sale.comissao != null && (
+                            <div className="col-span-2">
+                              <p className="text-xs text-muted-foreground">Comissão</p>
+                              <p className="text-sm font-medium text-green-500">{formatCurrency(sale.comissao)}</p>
+                            </div>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Service Data (read-only) */}
+                  {isTelecom && hasServiceData && (
+                    <Card>
+                      <CardHeader className="pb-2 p-4">
+                        <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
+                          <Wrench className="h-4 w-4 text-blue-500" />
+                          Dados do Serviço
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-4 pt-0">
+                        <div className="grid grid-cols-2 gap-3">
+                          {sale.negotiation_type && (
+                            <div className="col-span-2">
+                              <p className="text-xs text-muted-foreground">Tipo de Negociação</p>
+                              <p className="text-sm font-medium">
+                                {NEGOTIATION_TYPE_LABELS[sale.negotiation_type as keyof typeof NEGOTIATION_TYPE_LABELS] || sale.negotiation_type}
+                              </p>
+                            </div>
+                          )}
+                          {sale.servicos_produtos && sale.servicos_produtos.length > 0 && (
+                            <div className="col-span-2">
+                              <p className="text-xs text-muted-foreground">Serviços/Produtos</p>
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {sale.servicos_produtos.map((s: string) => (
+                                  <Badge key={s} variant="secondary" className="text-xs">{s}</Badge>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {sale.modelo_servico && (
+                            <div>
+                              <p className="text-xs text-muted-foreground">Modelo</p>
+                              <p className="text-sm font-medium">
+                                {MODELO_SERVICO_LABELS[sale.modelo_servico as keyof typeof MODELO_SERVICO_LABELS] || sale.modelo_servico}
+                              </p>
+                            </div>
+                          )}
+                          {sale.kwp != null && (
+                            <div>
+                              <p className="text-xs text-muted-foreground">Potência</p>
+                              <p className="text-sm font-medium">{sale.kwp.toLocaleString('pt-PT', { minimumFractionDigits: 2 })} kWp</p>
+                            </div>
+                          )}
+                          {sale.comissao != null && (
+                            <div className="col-span-2">
+                              <p className="text-xs text-muted-foreground">Comissão</p>
+                              <p className="text-sm font-medium text-green-500">{formatCurrency(sale.comissao)}</p>
+                            </div>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* CPEs (read-only) */}
+                  {isTelecom && (proposalCpes.length > 0 || clientCpes.length > 0) && (
+                    <Card>
+                      <CardHeader className="pb-2 p-4">
+                        <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
+                          <Zap className="h-4 w-4 text-amber-500" />
+                          {cpeLabel}
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-4 pt-0 space-y-2">
+                        {proposalCpes.length > 0 ? (
+                          proposalCpes.map((cpe) => (
+                            <div key={cpe.id} className="p-3 rounded-lg border bg-muted/30 space-y-2">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <Badge variant="outline" className="text-xs">{cpe.equipment_type}</Badge>
+                                <Badge variant="secondary" className="text-xs">{cpe.comercializador}</Badge>
+                                {cpe.existing_cpe_id ? (
+                                  <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-500 border-blue-500/30">Renovação</Badge>
+                                ) : (
+                                  <Badge variant="outline" className="text-xs bg-green-500/10 text-green-500 border-green-500/30">Novo</Badge>
+                                )}
+                              </div>
+                              {cpe.serial_number && (
+                                <div>
+                                  <p className="text-xs text-muted-foreground">{serialLabel}</p>
+                                  <p className="text-sm font-mono">{cpe.serial_number}</p>
+                                </div>
+                              )}
+                              {(cpe.consumo_anual || cpe.margem || cpe.comissao) && (
+                                <div className="grid grid-cols-3 gap-2">
+                                  {cpe.consumo_anual != null && (
+                                    <div>
+                                      <p className="text-xs text-muted-foreground">Consumo</p>
+                                      <p className="text-sm">{cpe.consumo_anual.toLocaleString('pt-PT')} kWh</p>
+                                    </div>
+                                  )}
+                                  {cpe.margem != null && (
+                                    <div>
+                                      <p className="text-xs text-muted-foreground">Margem</p>
+                                      <p className="text-sm">{cpe.margem.toLocaleString('pt-PT', { minimumFractionDigits: 2 })} €/MWh</p>
+                                    </div>
+                                  )}
+                                  {cpe.comissao != null && (
+                                    <div>
+                                      <p className="text-xs text-muted-foreground">Comissão</p>
+                                      <p className="text-sm text-green-500">{formatCurrency(cpe.comissao)}</p>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                              {(cpe.fidelizacao_start || cpe.fidelizacao_end) && (
+                                <div>
+                                  <p className="text-xs text-muted-foreground">Fidelização</p>
+                                  <p className="text-sm">
+                                    {cpe.fidelizacao_start ? format(new Date(cpe.fidelizacao_start), "dd/MM/yyyy", { locale: pt }) : '—'}
+                                    {' → '}
+                                    {cpe.fidelizacao_end ? format(new Date(cpe.fidelizacao_end), "dd/MM/yyyy", { locale: pt }) : '—'}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          ))
+                        ) : (
+                          clientCpes.map((cpe) => {
+                            const statusStyle = CPE_STATUS_STYLES[cpe.status as keyof typeof CPE_STATUS_STYLES];
+                            return (
+                              <div key={cpe.id} className="p-3 rounded-lg border bg-muted/30 space-y-2">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <Badge variant="outline" className="text-xs">{cpe.equipment_type}</Badge>
+                                  <Badge variant="secondary" className="text-xs">{cpe.comercializador}</Badge>
+                                  {statusStyle && (
+                                    <Badge variant="outline" className={`text-xs ${statusStyle.bg} ${statusStyle.text} ${statusStyle.border}`}>
+                                      {CPE_STATUS_LABELS[cpe.status as keyof typeof CPE_STATUS_LABELS]}
+                                    </Badge>
+                                  )}
+                                </div>
+                                {cpe.serial_number && (
+                                  <div>
+                                    <p className="text-xs text-muted-foreground">{serialLabel}</p>
+                                    <p className="text-sm font-mono">{cpe.serial_number}</p>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })
+                        )}
+                      </CardContent>
+                    </Card>
+                  )}
+
                   {canFullEdit && !isTelecom && (
                     <Card>
                       <CardHeader className="pb-2 p-4">
@@ -590,6 +808,22 @@ export function EditSaleModal({
                           organizationId={organization.id}
                           saleTotal={total}
                           readonly={!canFullEdit && sale.status === 'cancelled'}
+                        />
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Recurring Section */}
+                  {sale.has_recurring && organization && (
+                    <Card>
+                      <CardContent className="p-4">
+                        <RecurringSection
+                          saleId={sale.id}
+                          organizationId={organization.id}
+                          recurringValue={sale.recurring_value || 0}
+                          recurringStatus={sale.recurring_status || null}
+                          nextRenewalDate={sale.next_renewal_date || null}
+                          lastRenewalDate={sale.last_renewal_date || null}
                         />
                       </CardContent>
                     </Card>
