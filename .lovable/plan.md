@@ -1,26 +1,40 @@
 
 
-# Corrigir Erro "Rendered more hooks than during the previous render"
+# Bloquear Edição de Vendas Concluídas e Canceladas (Apenas Admin)
 
-## Problema
+## Problema Atual
+A lógica de bloqueio (`isLocked`) apenas considera vendas com estado "Concluída" (delivered) e opcionalmente "Entregue" (fulfilled). Vendas com estado **"Cancelado"** não estão bloqueadas, permitindo que qualquer utilizador as altere.
 
-O componente `SaleDetailsModal` tem um `return null` na linha 151 (`if (!sale) return null;`) **antes** de chamar o hook `useSaleActivationHistory` na linha 176. Isto viola as regras do React - hooks nao podem ser chamados depois de um return condicional.
+## Solução
+Adicionar o estado `cancelled` à lógica de bloqueio, garantindo que vendas Concluídas e Canceladas só podem ser editadas por administradores.
 
-## Solucao
+---
 
-Mover a chamada do `useSaleActivationHistory` para **antes** do `if (!sale) return null;`, junto com os outros hooks (entre as linhas 120-142).
-
-## Seccao Tecnica
+## Secção Técnica
 
 ### Ficheiro: `src/components/sales/SaleDetailsModal.tsx`
 
-**Alteracao 1**: Mover a linha 176:
+**Alteração nas linhas 106-108** - Adicionar verificação de `cancelled`:
+
 ```typescript
-const { history: activationHistory, addEntry: addActivationEntry } = useSaleActivationHistory(sale?.id);
+const isDeliveredAndLocked = sale?.status === 'delivered' && !isAdmin;
+const isFulfilledAndLocked = lockFulfilledSales && sale?.status === 'fulfilled' && !isAdmin;
+const isCancelledAndLocked = sale?.status === 'cancelled' && !isAdmin;
+const isLocked = isDeliveredAndLocked || isFulfilledAndLocked || isCancelledAndLocked;
 ```
 
-Para logo depois da linha 142 (antes do `useEffect` e do early return), por exemplo entre a linha 141 e 142, junto dos outros hooks.
+**Alteração na mensagem de bloqueio (linhas 299-303)** - Incluir texto para canceladas:
 
-**Alteracao 2**: Remover a linha 176 original.
+```typescript
+{isLocked && (
+  <p className="text-xs text-muted-foreground mt-3">
+    Esta venda está {isDeliveredAndLocked ? 'concluída' : isCancelledAndLocked ? 'cancelada' : 'entregue'} e não pode ser alterada.
+  </p>
+)}
+```
 
-Isto garante que todos os hooks sao chamados na mesma ordem em todas as renderizacoes, independentemente de `sale` ser null ou nao. O hook ja lida internamente com `sale?.id` ser undefined (tem `enabled: !!saleId`).
+Estas alterações garantem que:
+- O dropdown de estado fica desativado para vendas canceladas (não-admin)
+- O botão "Editar" fica oculto para vendas canceladas (não-admin)
+- As notas ficam bloqueadas para vendas canceladas (não-admin)
+- Apenas administradores podem reverter ou alterar vendas canceladas
