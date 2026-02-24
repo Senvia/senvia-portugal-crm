@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useCalendarEvents } from '@/hooks/useCalendarEvents';
@@ -7,10 +7,9 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useNavigate } from 'react-router-dom';
 import { format, isToday, startOfDay, endOfDay, addDays } from 'date-fns';
 import { pt } from 'date-fns/locale';
-import { useMemo } from 'react';
 import type { CalendarEvent, EventType } from '@/types/calendar';
 import { EVENT_TYPE_LABELS } from '@/types/calendar';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 const EVENT_TYPE_ICONS: Record<EventType, React.ElementType> = {
   meeting: Users,
@@ -80,7 +79,6 @@ export function CalendarAlertsWidget() {
 
     return (
       <button
-        key={event.id}
         onClick={() => navigate('/calendar')}
         className={`w-full text-left p-3 rounded-md transition-colors border ${bgClass}`}
       >
@@ -149,6 +147,7 @@ export function CalendarAlertsWidget() {
                 <Calendar className="h-5 w-5 text-primary" />
                 Próximos Eventos
               </DialogTitle>
+              <DialogDescription className="sr-only">Lista de eventos pendentes nos próximos 7 dias</DialogDescription>
               <Badge variant="secondary">{totalAlerts}</Badge>
             </div>
           </DialogHeader>
@@ -162,7 +161,7 @@ export function CalendarAlertsWidget() {
                     <Badge variant="destructive" className="text-xs ml-auto">{todayEvents.length}</Badge>
                   </div>
                   <div className="space-y-2">
-                    {todayEvents.map(e => renderEvent(e, 'today'))}
+                    {todayEvents.map(e => <div key={e.id}>{renderEvent(e, 'today')}</div>)}
                   </div>
                 </div>
               )}
@@ -175,7 +174,7 @@ export function CalendarAlertsWidget() {
                     <Badge variant="outline" className="text-xs ml-auto border-blue-500/50 text-blue-500">{upcomingEvents.length}</Badge>
                   </div>
                   <div className="space-y-2">
-                    {upcomingEvents.map(e => renderEvent(e, 'upcoming'))}
+                    {upcomingEvents.map(e => <div key={e.id}>{renderEvent(e, 'upcoming')}</div>)}
                   </div>
                 </div>
               )}
