@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Trash2, Printer, Mail, Loader2, Router, Zap, Wrench, Pencil, MoreHorizontal, CalendarDays, TrendingUp, FileText, User } from 'lucide-react';
@@ -130,14 +131,19 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
     }
   };
 
+  const navigate = useNavigate();
+
   const handleSaleCreated = () => {
     updateProposal.mutate({ id: proposal.id, status: 'accepted' });
-    setStatus('accepted');
-    
+
     if (proposal.lead_id && finalPositiveStage) {
       updateLeadStatus.mutate({ leadId: proposal.lead_id, status: finalPositiveStage.key });
       updateLead.mutate({ leadId: proposal.lead_id, updates: { value: proposal.total_value } });
     }
+
+    setShowSaleModal(false);
+    onOpenChange(false);
+    navigate('/sales');
   };
 
   const handleNotesBlur = () => {
