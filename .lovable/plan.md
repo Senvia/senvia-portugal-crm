@@ -1,39 +1,36 @@
 
+# Bloquear botao "Criar Lead" quando NIF duplicado
 
-# Melhorar Validacao de NIF -- Mostrar Codigo do Cliente
+## Problema
 
-## Situacao Atual
+O modal "Adicionar Lead" mostra um aviso quando o NIF ja existe como cliente, mas o botao "Criar Lead" continua ativo. O utilizador consegue criar o lead mesmo com NIF duplicado.
 
-A validacao de NIF duplicado **ja funciona em tempo real** com debounce de 300ms. Enquanto o utilizador digita, apos parar 300ms o sistema verifica automaticamente se o NIF ja existe. Se existir, bloqueia o botao de gravar e mostra uma mensagem.
+## Causa
 
-Porem, a mensagem atual so mostra o **nome** do cliente. O utilizador quer ver tambem o **codigo** do cliente para identificar mais facilmente.
+O `AddLeadModal` usa uma funcao `searchExistingClient` que apenas mostra um banner informativo. Nao utiliza o hook `useNifValidation` e nao bloqueia a submissao.
 
-## Alteracoes
+## Solucao
 
-### 1. Hook `src/hooks/useNifValidation.ts`
+Integrar o hook `useNifValidation` no `AddLeadModal` para o campo `company_nif` e desativar o botao "Criar Lead" quando for detetado um NIF duplicado na tabela `crm_clients`.
 
-- Adicionar `code` ao SELECT: `.select("id, name, code")`
-- Retornar `existingClientCode` no resultado
+## Secao Tecnica
 
-### 2. Mensagem de alerta nos modais
+### Ficheiro: `src/components/leads/AddLeadModal.tsx`
 
-Atualizar a mensagem em `CreateClientModal.tsx` e `EditClientModal.tsx` de:
+1. Importar o hook `useNifValidation`
+2. Chamar o hook com o valor do campo `company_nif` e o `organization?.id`
+3. Mostrar mensagem de erro abaixo do campo NIF: "Ja existe um cliente com este NIF: [Codigo] - [Nome]" (texto vermelho, `text-xs text-destructive`)
+4. Adicionar `nifValidation.isDuplicate` a condicao `disabled` do botao "Criar Lead" (linha 715)
+
+Resultado: O botao fica desativado em tempo real enquanto o NIF digitado corresponder a um cliente existente, com feedback visual claro.
+
+### Logica do botao (antes vs depois)
 
 ```text
-Ja existe um cliente com este NIF: Joao Silva
+Antes:  disabled={createLead.isPending}
+Depois: disabled={createLead.isPending || nifValidation.isDuplicate}
 ```
-
-Para:
-
-```text
-Ja existe um cliente com este NIF: CLI-0042 - Joao Silva
-```
-
-Se o codigo for nulo, mostra apenas o nome como antes.
 
 ### Ficheiros alterados
 
-- `src/hooks/useNifValidation.ts` -- adicionar `code` ao select e ao retorno
-- `src/components/clients/CreateClientModal.tsx` -- atualizar mensagem de alerta
-- `src/components/clients/EditClientModal.tsx` -- atualizar mensagem de alerta
-
+- `src/components/leads/AddLeadModal.tsx` -- unico ficheiro a alterar
