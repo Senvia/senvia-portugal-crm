@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { usePersistedState } from "@/hooks/usePersistedState";
 import { useAuth } from "@/contexts/AuthContext";
 import { SEO } from "@/components/SEO";
@@ -25,6 +26,7 @@ import { format, isWithinInterval, startOfDay, endOfDay, parseISO } from "date-f
 
 export default function Clients() {
   const { profile, organization } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = usePersistedState("clients-search-v1", "");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedClient, setSelectedClient] = useState<CrmClient | null>(null);
@@ -110,6 +112,18 @@ export default function Clients() {
   useEffect(() => {
     setSelectedIds([]);
   }, [search, filters]);
+
+  // Auto-open client drawer from URL param (e.g. from dashboard widget)
+  useEffect(() => {
+    const highlightId = searchParams.get('highlight');
+    if (highlightId && clients && clients.length > 0) {
+      const client = clients.find(c => c.id === highlightId);
+      if (client) {
+        handleView(client);
+      }
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, clients]);
 
   const handleAssignSuccess = () => {
     setSelectedIds([]);
