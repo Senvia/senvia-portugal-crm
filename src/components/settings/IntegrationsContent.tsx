@@ -348,8 +348,13 @@ function WebhooksManager() {
 function WhatsAppForm({ whatsappBaseUrl, setWhatsappBaseUrl, whatsappInstance, setWhatsappInstance, whatsappApiKey, setWhatsappApiKey, showWhatsappApiKey, setShowWhatsappApiKey, handleSaveWhatsApp, updateOrganizationIsPending }: IntegrationsContentProps) {
   return (
     <>
-      <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-3">
-        <p className="text-sm text-amber-600 dark:text-amber-400">Dados de conexão da Instância do WhatsApp deste cliente.</p>
+      <div className="rounded-lg bg-blue-500/10 border border-blue-500/20 p-3 space-y-2">
+        <p className="text-sm text-blue-600 dark:text-blue-400">
+          📩 Atualmente, a integração do WhatsApp Business tem como único propósito enviar uma mensagem de receção ao novo Lead que acabou de subscrever. Exemplo: <em>"Olá, seja bem-vindo! Recebemos os seus dados e em breve um agente vai entrar em contacto."</em>
+        </p>
+        <p className="text-sm text-blue-600 dark:text-blue-400">
+          🚀 Em breve vamos adicionar novas funcionalidades a esta integração.
+        </p>
       </div>
       <div className="space-y-2">
         <Label htmlFor="whatsapp-base-url">URL do Servidor</Label>
