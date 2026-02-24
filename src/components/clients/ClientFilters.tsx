@@ -24,12 +24,14 @@ export interface ClientFiltersState {
   source: ClientSource | 'all';
   dateFrom: Date | undefined;
   dateTo: Date | undefined;
+  proposalType: 'all' | 'energia' | 'servicos';
 }
 
 interface ClientFiltersProps {
   filters: ClientFiltersState;
   onFiltersChange: (filters: ClientFiltersState) => void;
   onClearFilters: () => void;
+  isTelecom?: boolean;
 }
 
 export const defaultFilters: ClientFiltersState = {
@@ -37,16 +39,18 @@ export const defaultFilters: ClientFiltersState = {
   source: 'all',
   dateFrom: undefined,
   dateTo: undefined,
+  proposalType: 'all',
 };
 
-export function ClientFilters({ filters, onFiltersChange, onClearFilters }: ClientFiltersProps) {
+export function ClientFilters({ filters, onFiltersChange, onClearFilters, isTelecom }: ClientFiltersProps) {
   const labels = useClientLabels();
 
   const hasActiveFilters = 
     filters.status !== 'all' || 
     filters.source !== 'all' || 
     filters.dateFrom !== undefined || 
-    filters.dateTo !== undefined;
+    filters.dateTo !== undefined ||
+    filters.proposalType !== 'all';
 
   const statusOptions: { value: ClientStatus | 'all'; label: string }[] = [
     { value: 'all', label: 'Todos' },
@@ -102,7 +106,23 @@ export function ClientFilters({ filters, onFiltersChange, onClearFilters }: Clie
         </SelectContent>
       </Select>
 
-      {/* Date From */}
+      {/* Proposal Type Filter (Telecom only) */}
+      {isTelecom && (
+        <Select
+          value={filters.proposalType}
+          onValueChange={(value) => onFiltersChange({ ...filters, proposalType: value as 'all' | 'energia' | 'servicos' })}
+        >
+          <SelectTrigger className="w-[160px] h-9">
+            <SelectValue placeholder="Tipo" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os tipos</SelectItem>
+            <SelectItem value="energia">Energia</SelectItem>
+            <SelectItem value="servicos">Outros Serviços</SelectItem>
+          </SelectContent>
+        </Select>
+      )}
+
       <Popover>
         <PopoverTrigger asChild>
           <Button
