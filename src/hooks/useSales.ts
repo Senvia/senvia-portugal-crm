@@ -73,6 +73,7 @@ export function useCreateSale() {
       comissao?: number;
       negotiation_type?: NegotiationType;
       servicos_produtos?: string[];
+      edp_proposal_number?: string;
       // Campos de recorrência
       has_recurring?: boolean;
       recurring_value?: number;
@@ -110,6 +111,7 @@ export function useCreateSale() {
           comissao: data.comissao || null,
           negotiation_type: data.negotiation_type || null,
           servicos_produtos: data.servicos_produtos || null,
+          edp_proposal_number: data.edp_proposal_number || null,
           // Campos de recorrência
           has_recurring: data.has_recurring || false,
           recurring_value: data.recurring_value || 0,
@@ -243,6 +245,7 @@ export function useUpdateSale() {
         comissao?: number | null;
         negotiation_type?: string | null;
         servicos_produtos?: string[] | null;
+        edp_proposal_number?: string | null;
         // Campos de recorrência
         has_recurring?: boolean;
         recurring_value?: number;

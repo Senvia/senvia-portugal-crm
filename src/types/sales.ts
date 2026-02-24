@@ -142,6 +142,9 @@ export interface Sale {
   // Data de Ativação
   activation_date?: string | null;
 
+  // Numero Proposta EDP
+  edp_proposal_number?: string | null;
+
   // InvoiceXpress
   invoicexpress_id: number | null;
   invoicexpress_type: string | null;

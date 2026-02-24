@@ -154,6 +154,7 @@ export function CreateSaleModal({
 
   // Sale status
   const [saleStatus, setSaleStatus] = useState<SaleStatus>("in_progress");
+  const [edpProposalNumber, setEdpProposalNumber] = useState("");
 
   // Draft payments state
   const [draftPayments, setDraftPayments] = useState<DraftPayment[]>([]);
@@ -232,6 +233,7 @@ export function CreateSaleModal({
       
       setSaleDate(new Date());
       setSaleStatus("in_progress");
+      setEdpProposalNumber("");
       setItems([]);
       setDiscount("0");
       setDraftPayments([]);
@@ -517,6 +519,7 @@ export function CreateSaleModal({
           negotiation_type: negotiationType || undefined,
           servicos_produtos: servicosProdutos.length > 0 ? servicosProdutos : undefined,
         } : {}),
+        edp_proposal_number: edpProposalNumber.trim() || undefined,
         has_recurring: hasRecurring,
         recurring_value: recurringValue,
         recurring_status: hasRecurring ? 'active' : undefined,
@@ -1128,6 +1131,21 @@ export function CreateSaleModal({
                           <span className="font-semibold">{formatCurrency(vatCalc.totalWithVat)}</span>
                         </div>
                       )}
+                    </CardContent>
+                  </Card>
+
+                  {/* EDP Proposal Number */}
+                  <Card>
+                    <CardHeader className="pb-2 p-4">
+                      <CardTitle className="text-sm font-medium text-muted-foreground">Numero Proposta EDP *</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-4 pt-0">
+                      <Input
+                        placeholder="Ex: EDP-2024-001234"
+                        value={edpProposalNumber}
+                        onChange={(e) => setEdpProposalNumber(e.target.value)}
+                        required
+                      />
                     </CardContent>
                   </Card>
 

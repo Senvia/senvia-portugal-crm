@@ -4,7 +4,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
-import { Loader2, DollarSign, CreditCard, Calendar, MessageSquare, Save, Eye, EyeOff, ShoppingCart } from 'lucide-react';
+import { Loader2, DollarSign, CreditCard, Calendar, MessageSquare, Save, Eye, EyeOff, ShoppingCart, FileText } from 'lucide-react';
 import { useSaleFieldsSettings, useUpdateSaleFieldsSettings } from '@/hooks/useSaleFieldsSettings';
 import { SaleFieldKey, SaleFieldsSettings, DEFAULT_SALE_FIELDS_SETTINGS, SALE_FIELD_ORDER } from '@/types/field-settings';
 
@@ -13,6 +13,7 @@ const FIELD_ICONS: Record<SaleFieldKey, React.ReactNode> = {
   payment_method: <CreditCard className="h-4 w-4" />,
   due_date: <Calendar className="h-4 w-4" />,
   notes: <MessageSquare className="h-4 w-4" />,
+  edp_proposal_number: <FileText className="h-4 w-4" />,
 };
 
 export function SaleFieldsEditor() {

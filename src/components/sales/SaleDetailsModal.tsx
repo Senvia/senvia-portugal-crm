@@ -288,6 +288,12 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                             </SelectContent>
                           </Select>
                         </div>
+                        {(sale as any).edp_proposal_number && (
+                          <div>
+                            <p className="text-xs text-muted-foreground">Nº Proposta EDP</p>
+                            <p className="text-sm font-medium font-mono">{(sale as any).edp_proposal_number}</p>
+                          </div>
+                        )}
                         {sale.activation_date && (
                           <div>
                             <p className="text-xs text-muted-foreground">Data de Ativação</p>
