@@ -50,9 +50,12 @@ import type { SaleWithDetails } from "@/types/sales";
 import { SalePaymentsList } from "./SalePaymentsList";
 import { RecurringSection } from "./RecurringSection";
 import { Progress } from "@/components/ui/progress";
-import { useProposalCpes } from "@/hooks/useProposalCpes";
+import { useProposalCpes, useUpdateProposalCpes } from "@/hooks/useProposalCpes";
+import type { CreateProposalCpeData } from "@/hooks/useProposalCpes";
 import { useCpes } from "@/hooks/useCpes";
-import { NEGOTIATION_TYPE_LABELS, MODELO_SERVICO_LABELS, SERVICOS_PRODUCTS } from "@/types/proposals";
+import { NEGOTIATION_TYPE_LABELS, NEGOTIATION_TYPES, MODELO_SERVICO_LABELS, SERVICOS_PRODUCTS } from "@/types/proposals";
+import type { NegotiationType, ModeloServico } from "@/types/proposals";
+import { Checkbox } from "@/components/ui/checkbox";
 import { CPE_STATUS_LABELS, CPE_STATUS_STYLES } from "@/types/cpes";
 
 interface SaleItemDraft {
@@ -95,18 +98,12 @@ export function EditSaleModal({
   
   // Proposal CPEs and client CPEs
   const { data: proposalCpes = [] } = useProposalCpes(sale?.proposal_id ?? undefined);
+  const updateProposalCpes = useUpdateProposalCpes();
   const clientIdForCpes = sale?.client_id || sale?.client?.id || null;
   const { data: clientCpes = [] } = useCpes(clientIdForCpes);
   const cpeLabel = isTelecom ? 'CPE/CUI (Pontos de Consumo)' : 'CPEs (Equipamentos)';
   const serialLabel = isTelecom ? 'Local de Consumo' : 'Nº Série';
 
-  // Check if has energy or service data
-  const hasEnergyData = sale?.proposal_type === 'energia' && (
-    sale.consumo_anual || sale.margem || sale.dbl || sale.anos_contrato || sale.comissao || sale.negotiation_type
-  );
-  const hasServiceData = sale?.proposal_type === 'servicos' && (
-    sale.modelo_servico || sale.kwp || sale.comissao || (sale.servicos_produtos && sale.servicos_produtos.length > 0)
-  );
   // Fiscal info
   const ixActive = isInvoiceXpressActive(organization);
   const orgTaxValue = getOrgTaxValue(organization);
@@ -124,15 +121,63 @@ export function EditSaleModal({
   const [notes, setNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Energy/Service editable state
+  const [negotiationType, setNegotiationType] = useState<string>("");
+  const [consumoAnual, setConsumoAnual] = useState<string>("");
+  const [margem, setMargem] = useState<string>("");
+  const [dbl, setDbl] = useState<string>("");
+  const [anosContrato, setAnosContrato] = useState<string>("");
+  const [comissao, setComissao] = useState<string>("");
+  const [modeloServico, setModeloServico] = useState<string>("");
+  const [kwp, setKwp] = useState<string>("");
+  const [servicosProdutos, setServicosProdutos] = useState<string[]>([]);
+
+  // Editable CPEs state
+  const [editableCpes, setEditableCpes] = useState<CreateProposalCpeData[]>([]);
+
   // Initialize form with sale data
   useEffect(() => {
     if (open && sale) {
       setClientId(sale.client_id || "");
-      
       setDiscount(sale.discount?.toString() || "0");
       setNotes(sale.notes || "");
+      // Energy/Service fields
+      setNegotiationType(sale.negotiation_type || "");
+      setConsumoAnual(sale.consumo_anual?.toString() || "");
+      setMargem(sale.margem?.toString() || "");
+      setDbl(sale.dbl?.toString() || "");
+      setAnosContrato(sale.anos_contrato?.toString() || "");
+      setComissao(sale.comissao?.toString() || "");
+      setModeloServico(sale.modelo_servico || "");
+      setKwp(sale.kwp?.toString() || "");
+      setServicosProdutos(sale.servicos_produtos || []);
     }
   }, [open, sale]);
+
+  // Initialize editable CPEs from proposalCpes
+  useEffect(() => {
+    if (open && proposalCpes.length > 0) {
+      setEditableCpes(proposalCpes.map(cpe => ({
+        proposal_id: cpe.proposal_id,
+        existing_cpe_id: cpe.existing_cpe_id,
+        equipment_type: cpe.equipment_type,
+        serial_number: cpe.serial_number,
+        comercializador: cpe.comercializador,
+        fidelizacao_start: cpe.fidelizacao_start,
+        fidelizacao_end: cpe.fidelizacao_end,
+        notes: cpe.notes,
+        consumo_anual: cpe.consumo_anual,
+        duracao_contrato: cpe.duracao_contrato,
+        dbl: cpe.dbl,
+        margem: cpe.margem,
+        comissao: cpe.comissao,
+        contrato_inicio: cpe.contrato_inicio,
+        contrato_fim: cpe.contrato_fim,
+      })));
+    } else if (open) {
+      setEditableCpes([]);
+    }
+  }, [open, proposalCpes]);
 
   // Initialize items when existingItems load
   useEffect(() => {
@@ -276,13 +321,29 @@ export function EditSaleModal({
         saleId: sale.id,
         updates: {
           client_id: clientId || null,
-          
           total_value: total,
           subtotal: subtotal,
           discount: discountValue,
           notes: notes.trim() || null,
+          negotiation_type: negotiationType || null,
+          consumo_anual: parseFloat(consumoAnual) || null,
+          margem: parseFloat(margem) || null,
+          dbl: parseFloat(dbl) || null,
+          anos_contrato: parseInt(anosContrato) || null,
+          comissao: parseFloat(comissao) || null,
+          modelo_servico: (modeloServico as ModeloServico) || null,
+          kwp: parseFloat(kwp) || null,
+          servicos_produtos: servicosProdutos.length > 0 ? servicosProdutos : null,
         },
       });
+
+      // Save CPE changes if proposal exists
+      if (sale.proposal_id && editableCpes.length > 0) {
+        await updateProposalCpes.mutateAsync({
+          proposalId: sale.proposal_id,
+          cpes: editableCpes,
+        });
+      }
 
       const currentItemOriginalIds = items
         .filter(i => i.originalId)
@@ -495,8 +556,8 @@ export function EditSaleModal({
                     </Card>
                   )}
 
-                  {/* Energy Data (read-only) */}
-                  {isTelecom && hasEnergyData && (
+                  {/* Energy Data (editable) */}
+                  {isTelecom && sale?.proposal_type === 'energia' && (
                     <Card>
                       <CardHeader className="pb-2 p-4">
                         <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
@@ -506,51 +567,42 @@ export function EditSaleModal({
                       </CardHeader>
                       <CardContent className="p-4 pt-0">
                         <div className="grid grid-cols-2 gap-3">
-                          {sale.negotiation_type && (
-                            <div className="col-span-2">
-                              <p className="text-xs text-muted-foreground">Tipo de Negociação</p>
-                              <p className="text-sm font-medium">
-                                {NEGOTIATION_TYPE_LABELS[sale.negotiation_type as keyof typeof NEGOTIATION_TYPE_LABELS] || sale.negotiation_type}
-                              </p>
-                            </div>
-                          )}
-                          {sale.consumo_anual != null && (
-                            <div>
-                              <p className="text-xs text-muted-foreground">Consumo Anual</p>
-                              <p className="text-sm font-medium">{sale.consumo_anual.toLocaleString('pt-PT')} kWh</p>
-                            </div>
-                          )}
-                          {sale.margem != null && (
-                            <div>
-                              <p className="text-xs text-muted-foreground">Margem</p>
-                              <p className="text-sm font-medium">{sale.margem.toLocaleString('pt-PT', { minimumFractionDigits: 2 })} €/MWh</p>
-                            </div>
-                          )}
-                          {sale.anos_contrato != null && (
-                            <div>
-                              <p className="text-xs text-muted-foreground">Contrato</p>
-                              <p className="text-sm font-medium">{sale.anos_contrato} {sale.anos_contrato === 1 ? 'ano' : 'anos'}</p>
-                            </div>
-                          )}
-                          {sale.dbl != null && (
-                            <div>
-                              <p className="text-xs text-muted-foreground">DBL</p>
-                              <p className="text-sm font-medium">{sale.dbl.toLocaleString('pt-PT', { minimumFractionDigits: 2 })}</p>
-                            </div>
-                          )}
-                          {sale.comissao != null && (
-                            <div className="col-span-2">
-                              <p className="text-xs text-muted-foreground">Comissão</p>
-                              <p className="text-sm font-medium text-green-500">{formatCurrency(sale.comissao)}</p>
-                            </div>
-                          )}
+                          <div className="col-span-2 space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">Tipo de Negociação</Label>
+                            <Select value={negotiationType} onValueChange={setNegotiationType}>
+                              <SelectTrigger className="h-9"><SelectValue placeholder="Selecionar..." /></SelectTrigger>
+                              <SelectContent>
+                                {NEGOTIATION_TYPES.map(t => (<SelectItem key={t} value={t}>{NEGOTIATION_TYPE_LABELS[t]}</SelectItem>))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">Consumo Anual (kWh)</Label>
+                            <Input type="number" value={consumoAnual} onChange={e => setConsumoAnual(e.target.value)} className="h-9" step="0.01" />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">Margem (€/MWh)</Label>
+                            <Input type="number" value={margem} onChange={e => setMargem(e.target.value)} className="h-9" step="0.01" />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">Anos de Contrato</Label>
+                            <Input type="number" value={anosContrato} onChange={e => setAnosContrato(e.target.value)} className="h-9" step="1" min="0" />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">DBL</Label>
+                            <Input type="number" value={dbl} onChange={e => setDbl(e.target.value)} className="h-9" step="0.01" />
+                          </div>
+                          <div className="col-span-2 space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">Comissão (€)</Label>
+                            <Input type="number" value={comissao} onChange={e => setComissao(e.target.value)} className="h-9" step="0.01" />
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
                   )}
 
-                  {/* Service Data (read-only) */}
-                  {isTelecom && hasServiceData && (
+                  {/* Service Data (editable) */}
+                  {isTelecom && sale?.proposal_type === 'servicos' && (
                     <Card>
                       <CardHeader className="pb-2 p-4">
                         <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
@@ -560,51 +612,103 @@ export function EditSaleModal({
                       </CardHeader>
                       <CardContent className="p-4 pt-0">
                         <div className="grid grid-cols-2 gap-3">
-                          {sale.negotiation_type && (
-                            <div className="col-span-2">
-                              <p className="text-xs text-muted-foreground">Tipo de Negociação</p>
-                              <p className="text-sm font-medium">
-                                {NEGOTIATION_TYPE_LABELS[sale.negotiation_type as keyof typeof NEGOTIATION_TYPE_LABELS] || sale.negotiation_type}
-                              </p>
+                          <div className="col-span-2 space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">Tipo de Negociação</Label>
+                            <Select value={negotiationType} onValueChange={setNegotiationType}>
+                              <SelectTrigger className="h-9"><SelectValue placeholder="Selecionar..." /></SelectTrigger>
+                              <SelectContent>
+                                {NEGOTIATION_TYPES.map(t => (<SelectItem key={t} value={t}>{NEGOTIATION_TYPE_LABELS[t]}</SelectItem>))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="col-span-2 space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">Serviços/Produtos</Label>
+                            <div className="flex flex-wrap gap-3 mt-1">
+                              {SERVICOS_PRODUCTS.map(sp => (
+                                <label key={sp} className="flex items-center gap-2 text-sm cursor-pointer">
+                                  <Checkbox checked={servicosProdutos.includes(sp)} onCheckedChange={(checked) => { if (checked) { setServicosProdutos(prev => [...prev, sp]); } else { setServicosProdutos(prev => prev.filter(s => s !== sp)); } }} />
+                                  {sp}
+                                </label>
+                              ))}
                             </div>
-                          )}
-                          {sale.servicos_produtos && sale.servicos_produtos.length > 0 && (
-                            <div className="col-span-2">
-                              <p className="text-xs text-muted-foreground">Serviços/Produtos</p>
-                              <div className="flex flex-wrap gap-1 mt-1">
-                                {sale.servicos_produtos.map((s: string) => (
-                                  <Badge key={s} variant="secondary" className="text-xs">{s}</Badge>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                          {sale.modelo_servico && (
-                            <div>
-                              <p className="text-xs text-muted-foreground">Modelo</p>
-                              <p className="text-sm font-medium">
-                                {MODELO_SERVICO_LABELS[sale.modelo_servico as keyof typeof MODELO_SERVICO_LABELS] || sale.modelo_servico}
-                              </p>
-                            </div>
-                          )}
-                          {sale.kwp != null && (
-                            <div>
-                              <p className="text-xs text-muted-foreground">Potência</p>
-                              <p className="text-sm font-medium">{sale.kwp.toLocaleString('pt-PT', { minimumFractionDigits: 2 })} kWp</p>
-                            </div>
-                          )}
-                          {sale.comissao != null && (
-                            <div className="col-span-2">
-                              <p className="text-xs text-muted-foreground">Comissão</p>
-                              <p className="text-sm font-medium text-green-500">{formatCurrency(sale.comissao)}</p>
-                            </div>
-                          )}
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">Modelo de Serviço</Label>
+                            <Select value={modeloServico} onValueChange={setModeloServico}>
+                              <SelectTrigger className="h-9"><SelectValue placeholder="Selecionar..." /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="transacional">Transacional</SelectItem>
+                                <SelectItem value="saas">SAAS</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">kWp</Label>
+                            <Input type="number" value={kwp} onChange={e => setKwp(e.target.value)} className="h-9" step="0.01" />
+                          </div>
+                          <div className="col-span-2 space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">Comissão (€)</Label>
+                            <Input type="number" value={comissao} onChange={e => setComissao(e.target.value)} className="h-9" step="0.01" />
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
                   )}
 
-                  {/* CPEs (read-only) */}
-                  {isTelecom && (proposalCpes.length > 0 || clientCpes.length > 0) && (
+                  {/* CPEs (editable) */}
+                  {isTelecom && editableCpes.length > 0 && (
+                    <Card>
+                      <CardHeader className="pb-2 p-4">
+                        <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
+                          <Zap className="h-4 w-4 text-amber-500" />
+                          {cpeLabel}
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-4 pt-0 space-y-3">
+                        {editableCpes.map((cpe, idx) => (
+                          <div key={idx} className="p-3 rounded-lg border bg-muted/30 space-y-3">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Badge variant="outline" className="text-xs">{cpe.equipment_type}</Badge>
+                              {cpe.existing_cpe_id ? (
+                                <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-500 border-blue-500/30">Renovação</Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-xs bg-green-500/10 text-green-500 border-green-500/30">Novo</Badge>
+                              )}
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div className="space-y-1">
+                                <Label className="text-xs text-muted-foreground">Comercializador</Label>
+                                <Input value={cpe.comercializador} onChange={e => { const u = [...editableCpes]; u[idx] = { ...u[idx], comercializador: e.target.value }; setEditableCpes(u); }} className="h-8 text-sm" />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs text-muted-foreground">{serialLabel}</Label>
+                                <Input value={cpe.serial_number || ""} onChange={e => { const u = [...editableCpes]; u[idx] = { ...u[idx], serial_number: e.target.value }; setEditableCpes(u); }} className="h-8 text-sm font-mono" />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs text-muted-foreground">Consumo (kWh)</Label>
+                                <Input type="number" value={cpe.consumo_anual ?? ""} onChange={e => { const u = [...editableCpes]; u[idx] = { ...u[idx], consumo_anual: e.target.value ? parseFloat(e.target.value) : null }; setEditableCpes(u); }} className="h-8 text-sm" step="0.01" />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs text-muted-foreground">Margem (€/MWh)</Label>
+                                <Input type="number" value={cpe.margem ?? ""} onChange={e => { const u = [...editableCpes]; u[idx] = { ...u[idx], margem: e.target.value ? parseFloat(e.target.value) : null }; setEditableCpes(u); }} className="h-8 text-sm" step="0.01" />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs text-muted-foreground">Comissão (€)</Label>
+                                <Input type="number" value={cpe.comissao ?? ""} onChange={e => { const u = [...editableCpes]; u[idx] = { ...u[idx], comissao: e.target.value ? parseFloat(e.target.value) : null }; setEditableCpes(u); }} className="h-8 text-sm" step="0.01" />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs text-muted-foreground">DBL</Label>
+                                <Input type="number" value={cpe.dbl ?? ""} onChange={e => { const u = [...editableCpes]; u[idx] = { ...u[idx], dbl: e.target.value ? parseFloat(e.target.value) : null }; setEditableCpes(u); }} className="h-8 text-sm" step="0.01" />
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Client CPEs (read-only, no proposal) */}
+                  {isTelecom && editableCpes.length === 0 && clientCpes.length > 0 && (
                     <Card>
                       <CardHeader className="pb-2 p-4">
                         <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
@@ -613,16 +717,17 @@ export function EditSaleModal({
                         </CardTitle>
                       </CardHeader>
                       <CardContent className="p-4 pt-0 space-y-2">
-                        {proposalCpes.length > 0 ? (
-                          proposalCpes.map((cpe) => (
+                        {clientCpes.map((cpe) => {
+                          const statusStyle = CPE_STATUS_STYLES[cpe.status as keyof typeof CPE_STATUS_STYLES];
+                          return (
                             <div key={cpe.id} className="p-3 rounded-lg border bg-muted/30 space-y-2">
                               <div className="flex items-center gap-2 flex-wrap">
                                 <Badge variant="outline" className="text-xs">{cpe.equipment_type}</Badge>
                                 <Badge variant="secondary" className="text-xs">{cpe.comercializador}</Badge>
-                                {cpe.existing_cpe_id ? (
-                                  <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-500 border-blue-500/30">Renovação</Badge>
-                                ) : (
-                                  <Badge variant="outline" className="text-xs bg-green-500/10 text-green-500 border-green-500/30">Novo</Badge>
+                                {statusStyle && (
+                                  <Badge variant="outline" className={`text-xs ${statusStyle.bg} ${statusStyle.text} ${statusStyle.border}`}>
+                                    {CPE_STATUS_LABELS[cpe.status as keyof typeof CPE_STATUS_LABELS]}
+                                  </Badge>
                                 )}
                               </div>
                               {cpe.serial_number && (
@@ -631,64 +736,9 @@ export function EditSaleModal({
                                   <p className="text-sm font-mono">{cpe.serial_number}</p>
                                 </div>
                               )}
-                              {(cpe.consumo_anual || cpe.margem || cpe.comissao) && (
-                                <div className="grid grid-cols-3 gap-2">
-                                  {cpe.consumo_anual != null && (
-                                    <div>
-                                      <p className="text-xs text-muted-foreground">Consumo</p>
-                                      <p className="text-sm">{cpe.consumo_anual.toLocaleString('pt-PT')} kWh</p>
-                                    </div>
-                                  )}
-                                  {cpe.margem != null && (
-                                    <div>
-                                      <p className="text-xs text-muted-foreground">Margem</p>
-                                      <p className="text-sm">{cpe.margem.toLocaleString('pt-PT', { minimumFractionDigits: 2 })} €/MWh</p>
-                                    </div>
-                                  )}
-                                  {cpe.comissao != null && (
-                                    <div>
-                                      <p className="text-xs text-muted-foreground">Comissão</p>
-                                      <p className="text-sm text-green-500">{formatCurrency(cpe.comissao)}</p>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                              {(cpe.fidelizacao_start || cpe.fidelizacao_end) && (
-                                <div>
-                                  <p className="text-xs text-muted-foreground">Fidelização</p>
-                                  <p className="text-sm">
-                                    {cpe.fidelizacao_start ? format(new Date(cpe.fidelizacao_start), "dd/MM/yyyy", { locale: pt }) : '—'}
-                                    {' → '}
-                                    {cpe.fidelizacao_end ? format(new Date(cpe.fidelizacao_end), "dd/MM/yyyy", { locale: pt }) : '—'}
-                                  </p>
-                                </div>
-                              )}
                             </div>
-                          ))
-                        ) : (
-                          clientCpes.map((cpe) => {
-                            const statusStyle = CPE_STATUS_STYLES[cpe.status as keyof typeof CPE_STATUS_STYLES];
-                            return (
-                              <div key={cpe.id} className="p-3 rounded-lg border bg-muted/30 space-y-2">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <Badge variant="outline" className="text-xs">{cpe.equipment_type}</Badge>
-                                  <Badge variant="secondary" className="text-xs">{cpe.comercializador}</Badge>
-                                  {statusStyle && (
-                                    <Badge variant="outline" className={`text-xs ${statusStyle.bg} ${statusStyle.text} ${statusStyle.border}`}>
-                                      {CPE_STATUS_LABELS[cpe.status as keyof typeof CPE_STATUS_LABELS]}
-                                    </Badge>
-                                  )}
-                                </div>
-                                {cpe.serial_number && (
-                                  <div>
-                                    <p className="text-xs text-muted-foreground">{serialLabel}</p>
-                                    <p className="text-sm font-mono">{cpe.serial_number}</p>
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })
-                        )}
+                          );
+                        })}
                       </CardContent>
                     </Card>
                   )}
