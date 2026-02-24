@@ -19,6 +19,7 @@ import { AssignTeamMemberModal } from "@/components/shared/AssignTeamMemberModal
 import type { CrmClient } from "@/types/clients";
 import { formatCurrency } from "@/lib/format";
 import { mapClientsForExport, exportToCsv, exportToExcel } from "@/lib/export";
+import { useClientProposalTypes } from "@/hooks/useClientProposalTypes";
 import { toast } from "sonner";
 import { format, isWithinInterval, startOfDay, endOfDay, parseISO } from "date-fns";
 
@@ -38,6 +39,7 @@ export default function Clients() {
   const { stats } = useClientStats();
   const deleteClient = useDeleteClient();
   const labels = useClientLabels();
+  const { clientTypesMap, isTelecom } = useClientProposalTypes();
 
   const filteredClients = useMemo(() => {
     if (!clients) return [];
@@ -74,9 +76,17 @@ export default function Clients() {
         }
       }
 
+      // Proposal type filter (telecom)
+      if (filters.proposalType !== 'all') {
+        const types = clientTypesMap[client.id];
+        if (!types || !types.includes(filters.proposalType)) {
+          return false;
+        }
+      }
+
       return true;
     });
-  }, [clients, search, filters]);
+  }, [clients, search, filters, clientTypesMap]);
 
   const handleEdit = (client: CrmClient) => {
     setSelectedClient(client);
@@ -250,6 +260,7 @@ export default function Clients() {
             filters={filters}
             onFiltersChange={setFilters}
             onClearFilters={handleClearFilters}
+            isTelecom={isTelecom}
           />
         </div>
 
