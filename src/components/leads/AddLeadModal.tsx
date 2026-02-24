@@ -31,6 +31,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { Loader2, Zap, UserCircle, X, User, Upload, FileText, Trash2, Paperclip, Building2, Contact, Settings2, StickyNote, Eye } from "lucide-react";
 import { useCreateLead } from "@/hooks/useLeads";
+import { useNifValidation } from "@/hooks/useNifValidation";
 import { useTeamMembers } from "@/hooks/useTeam";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useAuth } from "@/contexts/AuthContext";
@@ -138,6 +139,12 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
       tipologia: undefined,
       consumo_anual: "",
     },
+  });
+
+  const companyNifValue = useWatch({ control: form.control, name: 'company_nif' }) || '';
+  const nifValidation = useNifValidation({
+    nif: companyNifValue,
+    organizationId: organization?.id,
   });
 
   const watchedValues = useWatch({ control: form.control });
@@ -299,6 +306,11 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
                                     />
                                   </FormControl>
                                   <FormMessage />
+                                  {nifValidation.isDuplicate && (
+                                    <p className="text-xs text-destructive mt-1">
+                                      Já existe um cliente com este NIF: {nifValidation.existingClientCode ? `${nifValidation.existingClientCode} - ` : ''}{nifValidation.existingClientName}
+                                    </p>
+                                  )}
                                 </FormItem>
                               )}
                             />
@@ -712,7 +724,7 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
                       <Button
                         type="submit"
                         className="flex-1"
-                        disabled={createLead.isPending}
+                        disabled={createLead.isPending || nifValidation.isDuplicate}
                         onClick={form.handleSubmit(onSubmit)}
                       >
                         {createLead.isPending ? (
