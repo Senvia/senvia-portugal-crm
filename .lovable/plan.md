@@ -1,60 +1,43 @@
 
-Objetivo: eliminar definitivamente o erro `403 / new row violates row-level security policy` ao submeter um pedido interno em `/financeiro`.
 
-Resumo do diagnóstico (já confirmado com dados reais do backend):
-1. A policy de INSERT está correta e ativa (PERMISSIVE + `WITH CHECK`).
-2. O reload de schema também já foi executado.
-3. O erro persiste porque a validação da policy compara:
-   - `organization_id` enviado no request: `96a3950e-31be-4c6d-abed-b82968c0d7e9`
-   - `get_user_org_id(auth.uid())`: `06fe9e1d-9670-45b0-8717-c5a6e90be380`
-4. O utilizador que está a testar tem role `super_admin`, mas não é membro direto da org `96a...` (acede via privilégios de super admin).
-5. Resultado: o `WITH CHECK` da policy de INSERT falha, logo o `403` continua.
+## Mostrar nome de quem submeteu o pedido
 
-Plano de correção:
-1. Adicionar uma policy dedicada para super admin em `internal_requests` (FOR ALL), permitindo operações em qualquer organização quando `has_role(auth.uid(), 'super_admin') = true`.
-2. Manter as policies atuais para utilizadores normais (sem afrouxar segurança para não-super-admin).
-3. Forçar reload do schema após criar a nova policy para evitar qualquer cache residual.
-4. Validar em dois cenários:
-   - Super admin na org `telecom` consegue submeter pedido.
-   - Utilizador normal continua bloqueado fora da sua organização.
+O problema e claro: a query atual faz `select('*')` na tabela `internal_requests`, que nao inclui o nome do utilizador que submeteu. Quem aprova ve apenas o titulo do pedido, sem saber de quem e.
 
-Detalhe técnico da migração (a implementar):
-```sql
--- Garantir idempotência
-DROP POLICY IF EXISTS "Super admin full access internal_requests" ON public.internal_requests;
+### Alteracoes necessarias
 
-CREATE POLICY "Super admin full access internal_requests"
-ON public.internal_requests
-AS PERMISSIVE
-FOR ALL
-TO authenticated
-USING (
-  public.has_role(auth.uid(), 'super_admin'::app_role)
-)
-WITH CHECK (
-  public.has_role(auth.uid(), 'super_admin'::app_role)
-);
+**1. Hook `useInternalRequests.ts`** -- Alterar o select para fazer join com a tabela `profiles`
 
--- Garantir refresh imediato das policies no API layer
-NOTIFY pgrst, 'reload schema';
+Mudar de:
+```
+.select('*')
+```
+Para:
+```
+.select('*, submitter:profiles!submitted_by(full_name, avatar_url)')
 ```
 
-Ficheiros a alterar:
-- `supabase/migrations/<timestamp>_fix_internal_requests_super_admin_policy.sql` (novo)
+Isto usa a relacao entre `submitted_by` e `profiles.id` para trazer o nome e avatar de quem submeteu.
 
-Sem alterações obrigatórias no frontend para resolver a falha:
-- `SubmitRequestModal.tsx` e `useInternalRequests.ts` podem ficar como estão para este fix.
+**2. Tabela `RequestsTable.tsx`** -- Adicionar coluna "Submetido por"
 
-Validação pós-correção (end-to-end):
-1. Entrar em `/financeiro` na org `telecom`.
-2. Criar “Novo Pedido” (tipo despesa, título e valor).
-3. Confirmar:
-   - request `POST /rest/v1/internal_requests` retorna sucesso (201/200).
-   - toast de sucesso aparece.
-   - linha surge na tabela de pedidos.
-4. Teste de segurança:
-   - com utilizador não super admin, tentar criar pedido noutra org deve continuar a falhar por RLS.
+- Adicionar uma nova coluna `<TableHead>` com label "Submetido por"
+- Em cada linha, mostrar `r.submitter?.full_name` ou "—" como fallback
+- A coluna ficara visivel em desktop e escondida em mobile (`hidden md:table-cell`) para manter a responsividade
 
-Riscos e mitigação:
-- Risco: super admin ganhar permissões amplas nesta tabela.
-- Mitigação: isto já está alinhado com o comportamento esperado no restante sistema (super admin multi-tenant), e não abre acesso para utilizadores normais.
+**3. Modal `ReviewRequestModal.tsx`** -- Mostrar quem submeteu
+
+- Adicionar um campo "Submetido por" na grelha de detalhes do pedido, exibindo `request.submitter?.full_name`
+- Assim, ao abrir qualquer pedido para revisao, o aprovador sabe imediatamente de quem e
+
+### Detalhes tecnicos
+
+- Nao e necessaria nenhuma migracao de base de dados -- a tabela `profiles` ja tem `full_name` e `avatar_url`, e a relacao via `submitted_by` -> `profiles.id` ja existe
+- O tipo `InternalRequest` em `src/types/internal-requests.ts` ja tem o campo opcional `submitter?: { full_name: string; avatar_url: string | null }`, portanto nao precisa de alteracao
+- As RLS policies de `profiles` permitem SELECT para membros da mesma org e super admins, logo o join vai funcionar
+
+### Ficheiros a alterar
+- `src/hooks/useInternalRequests.ts` -- select com join
+- `src/components/finance/RequestsTable.tsx` -- nova coluna
+- `src/components/finance/ReviewRequestModal.tsx` -- campo de submissor nos detalhes
+
