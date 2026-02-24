@@ -103,7 +103,7 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
   const lockDeliveredSales = !!salesSettings.lock_delivered_sales;
   const lockFulfilledSales = !!salesSettings.lock_fulfilled_sales;
   const preventPaymentDeletion = !!salesSettings.prevent_payment_deletion;
-  const isDeliveredAndLocked = sale?.status === 'delivered' && !isAdmin;
+  const isDeliveredAndLocked = lockDeliveredSales && sale?.status === 'delivered' && !isAdmin;
   const isFulfilledAndLocked = lockFulfilledSales && sale?.status === 'fulfilled' && !isAdmin;
   const isCancelledAndLocked = sale?.status === 'cancelled' && !isAdmin;
   const isLocked = isDeliveredAndLocked || isFulfilledAndLocked || isCancelledAndLocked;

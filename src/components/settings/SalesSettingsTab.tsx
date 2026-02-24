@@ -63,7 +63,7 @@ export function SalesSettingsTab() {
               Bloquear edição de vendas concluídas
             </Label>
             <p className="text-xs text-muted-foreground">
-              Vendas com estado "Concluída" não podem ser editadas.
+              Vendas com estado "Concluída" não podem ser editadas por utilizadores sem perfil de administrador.
             </p>
           </div>
         </div>

@@ -23,6 +23,7 @@ import { useSaleItems, useCreateSaleItems, useUpdateSaleItem, useDeleteSaleItem 
 import { useCreateSalePayment, useSalePayments, calculatePaymentSummary } from "@/hooks/useSalePayments";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useOrganization } from "@/hooks/useOrganization";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { format, parseISO } from "date-fns";
@@ -97,7 +98,9 @@ export function EditSaleModal({
   const { organization } = useAuth();
   const { isAdmin } = usePermissions();
   const isTelecom = organization?.niche === 'telecom';
-  const isDeliveredLocked = sale?.status === 'delivered' && !isAdmin;
+  const { data: orgData } = useOrganization();
+  const salesSettings = (orgData?.sales_settings as { lock_delivered_sales?: boolean }) || {};
+  const isDeliveredLocked = !!salesSettings.lock_delivered_sales && sale?.status === 'delivered' && !isAdmin;
   
   // Proposal CPEs and client CPEs
   const { data: proposalCpes = [] } = useProposalCpes(sale?.proposal_id ?? undefined);
