@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { usePersistedState } from "@/hooks/usePersistedState";
-import { ShoppingBag, Search, TrendingUp, Package, CheckCircle, Plus } from "lucide-react";
+import { ShoppingBag, Search, TrendingUp, Package, CheckCircle, Plus, Zap } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -33,6 +33,7 @@ export default function Sales() {
   const { data: telecomMetrics } = useTelecomSaleMetrics();
   const [search, setSearch] = usePersistedState("sales-search-v1", "");
   const [statusFilter, setStatusFilter] = usePersistedState<SaleStatus | "all">("sales-status-v1", "all");
+  const [typeFilter, setTypeFilter] = usePersistedState<'all' | 'energia' | 'servicos'>('sales-type-v1', 'all');
   const [dateRange, setDateRange] = usePersistedState<DateRange | undefined>("sales-date-range-v1", undefined);
   const [selectedSale, setSelectedSale] = useState<SaleWithDetails | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -64,6 +65,7 @@ export default function Sales() {
     
     return sales.filter((sale) => {
       const matchesStatus = statusFilter === "all" || sale.status === statusFilter;
+      const matchesType = typeFilter === 'all' || (sale as any).proposal_type === typeFilter;
       
       const matchesDate = (() => {
         if (!dateRange?.from) return true;
@@ -86,7 +88,7 @@ export default function Sales() {
         sale.code?.toLowerCase().includes(searchLower) ||
         sale.notes?.toLowerCase().includes(searchLower);
       
-      return matchesSearch && matchesStatus && matchesDate;
+      return matchesSearch && matchesStatus && matchesType && matchesDate;
     });
   }, [sales, search, statusFilter, dateRange]);
 
@@ -213,6 +215,19 @@ export default function Sales() {
           </SelectContent>
         </Select>
         <DateRangePicker value={dateRange} onChange={setDateRange} className="w-full sm:w-auto" />
+        {isTelecom && (
+          <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as 'all' | 'energia' | 'servicos')}>
+            <SelectTrigger className="w-full sm:w-[180px] bg-card/50 border-border/50">
+              <Zap className="h-4 w-4 mr-2" />
+              <SelectValue placeholder="Todos os tipos" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os tipos</SelectItem>
+              <SelectItem value="energia">Energia</SelectItem>
+              <SelectItem value="servicos">Outros Serviços</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
       {/* Sales List */}

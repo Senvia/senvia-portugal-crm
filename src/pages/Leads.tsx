@@ -32,13 +32,14 @@ import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Users, Loader2, CalendarIcon, X, Plus, LayoutGrid, List } from "lucide-react";
+import { Search, Users, Loader2, CalendarIcon, X, Plus, LayoutGrid, List, Zap } from "lucide-react";
 import { format, endOfDay } from "date-fns";
 import { pt } from "date-fns/locale";
 import { normalizeString, cn } from "@/lib/utils";
 import { mapLeadsForExport, exportToCsv, exportToExcel } from "@/lib/export";
 import { toast } from "sonner";
-import type { Lead, LeadTemperature } from "@/types";
+import type { Lead, LeadTemperature, LeadTipologia } from "@/types";
+import { TIPOLOGIA_LABELS } from "@/types";
 
 export default function Leads() {
   // Subscribe to realtime updates
@@ -79,6 +80,8 @@ export default function Leads() {
   const [searchQuery, setSearchQuery] = usePersistedState("leads-search-v1", "");
   const [statusFilter, setStatusFilter] = usePersistedState<string[]>("leads-status-v1", []);
   const [dateRange, setDateRange] = usePersistedState<{ from: Date | undefined; to: Date | undefined }>("leads-daterange-v1", { from: undefined, to: undefined });
+  const isTelecom = organization?.niche === 'telecom';
+  const [tipologiaFilter, setTipologiaFilter] = usePersistedState<'all' | LeadTipologia>('leads-tipologia-v1', 'all');
   const [viewMode, setViewMode] = useState<'kanban' | 'table'>(() => {
     const saved = localStorage.getItem('leads-view-mode');
     return (saved === 'table' || saved === 'kanban') ? saved : 'kanban';
@@ -142,7 +145,9 @@ export default function Leads() {
       (!dateRange.from || (leadDate && leadDate >= dateRange.from)) &&
       (!dateRange.to || (leadDate && leadDate <= endOfDay(dateRange.to)));
     
-    return matchesSearch && matchesStatus && matchesDate;
+    const matchesTipologia = tipologiaFilter === 'all' || lead.tipologia === tipologiaFilter;
+    
+    return matchesSearch && matchesStatus && matchesDate && matchesTipologia;
   });
 
   // Check if a stage is of a special type (scheduled or proposal-like)
@@ -577,6 +582,22 @@ export default function Leads() {
                 ))}
               </SelectContent>
             </Select>
+
+            {/* Tipologia Filter (Telecom only) */}
+            {isTelecom && (
+              <Select value={tipologiaFilter} onValueChange={(v) => setTipologiaFilter(v as 'all' | LeadTipologia)}>
+                <SelectTrigger className="w-[140px] h-8 shrink-0">
+                  <Zap className="h-3.5 w-3.5 mr-1" />
+                  <SelectValue placeholder="Tipologia" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas</SelectItem>
+                  {(Object.entries(TIPOLOGIA_LABELS) as [LeadTipologia, string][]).map(([key, label]) => (
+                    <SelectItem key={key} value={key}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
 
             {/* Desktop: Status Filter Badges */}
             <div className="hidden md:flex items-center gap-2">

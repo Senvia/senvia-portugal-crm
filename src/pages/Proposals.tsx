@@ -37,6 +37,7 @@ export default function Proposals() {
   
   const [search, setSearch] = usePersistedState('proposals-search-v1', '');
   const [statusFilter, setStatusFilter] = usePersistedState<ProposalStatus | 'all'>('proposals-status-v1', 'all');
+  const [typeFilter, setTypeFilter] = usePersistedState<'all' | 'energia' | 'servicos'>('proposals-type-v1', 'all');
   const [dateRange, setDateRange] = usePersistedState<DateRange | undefined>('proposals-date-range-v1', undefined);
   const [selectedProposal, setSelectedProposal] = useState<Proposal | null>(null);
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -49,12 +50,13 @@ export default function Proposals() {
       proposal.code?.toLowerCase().includes(searchLower) ||
       proposal.notes?.toLowerCase().includes(searchLower);
     const matchesStatus = statusFilter === 'all' || proposal.status === statusFilter;
+    const matchesType = typeFilter === 'all' || proposal.proposal_type === typeFilter;
     const proposalDate = new Date(proposal.proposal_date);
     const matchesDate = !dateRange?.from || (
       proposalDate >= dateRange.from &&
       (!dateRange.to || proposalDate <= dateRange.to)
     );
-    return matchesSearch && matchesStatus && matchesDate;
+    return matchesSearch && matchesStatus && matchesType && matchesDate;
   });
 
   const formatCurrency = (value: number) => {
@@ -160,6 +162,19 @@ export default function Proposals() {
               ))}
             </SelectContent>
           </Select>
+          {isTelecom && (
+            <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as 'all' | 'energia' | 'servicos')}>
+              <SelectTrigger className="w-full sm:w-48">
+                <Zap className="h-4 w-4 mr-2" />
+                <SelectValue placeholder="Todos os tipos" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os tipos</SelectItem>
+                <SelectItem value="energia">Energia</SelectItem>
+                <SelectItem value="servicos">Outros Serviços</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
         </div>
 
 
