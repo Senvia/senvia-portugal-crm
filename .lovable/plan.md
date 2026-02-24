@@ -1,35 +1,38 @@
 
-
-# Corrigir Erro "column total does not exist" ao Criar Venda
+# Redirecionar para Vendas apos Criar Venda a partir de Proposta
 
 ## Problema
 
-Ao criar uma venda, o sistema retorna erro 42703: `column "total" does not exist`. O insert na tabela `sales` funciona corretamente, mas existe um **trigger de base de dados** (`trigger_update_client_sales_metrics`) que e executado apos o insert e tenta fazer `SUM(total)` quando a coluna correta e `total_value`.
-
-## Causa Raiz
-
-O trigger `update_client_sales_metrics` contem referencias a `SUM(total)` em vez de `SUM(total_value)`. Isto acontece tanto no bloco INSERT/UPDATE como no bloco DELETE:
-
-```sql
--- Errado:
-total_value = (SELECT COALESCE(SUM(total), 0) FROM sales ...)
--- Correto:
-total_value = (SELECT COALESCE(SUM(total_value), 0) FROM sales ...)
-```
+Quando uma venda e criada a partir de uma proposta (via modal "Aceite"), o utilizador permanece na pagina de Propostas com o modal aberto. O comportamento esperado e fechar tudo e redirecionar para a pagina de Vendas.
 
 ## Solucao
 
-Criar uma migracao SQL para substituir a funcao `update_client_sales_metrics` com a referencia correta a coluna `total_value`.
+Alterar o `handleSaleCreated` no `ProposalDetailsModal.tsx` para:
+1. Fechar o modal da venda (`setShowSaleModal(false)`)
+2. Fechar o modal de detalhes da proposta (`onOpenChange(false)`)
+3. Navegar para `/sales` usando `useNavigate`
 
 ## Secao Tecnica
 
-### Migracao SQL
+### Ficheiro: `src/components/proposals/ProposalDetailsModal.tsx`
 
-Recriar a funcao `update_client_sales_metrics()` corrigindo todas as ocorrencias de `SUM(total)` para `SUM(total_value)` nos blocos INSERT/UPDATE e DELETE.
+- Importar `useNavigate` de `react-router-dom`
+- Inicializar `const navigate = useNavigate()` no componente
+- Atualizar `handleSaleCreated`:
 
-A funcao completa sera reescrita com `CREATE OR REPLACE FUNCTION` mantendo toda a logica existente (total_sales, total_value, total_comissao, total_mwh, total_kwp) apenas corrigindo a referencia da coluna.
+```typescript
+const handleSaleCreated = () => {
+  updateProposal.mutate({ id: proposal.id, status: 'accepted' });
 
-### Ficheiros a alterar
+  if (proposal.lead_id && finalPositiveStage) {
+    updateLeadStatus.mutate({ leadId: proposal.lead_id, status: finalPositiveStage.key });
+    updateLead.mutate({ leadId: proposal.lead_id, updates: { value: proposal.total_value } });
+  }
 
-- Nenhum ficheiro de codigo -- apenas migracao de base de dados
+  setShowSaleModal(false);
+  onOpenChange(false);
+  navigate('/sales');
+};
+```
 
+Apenas 1 ficheiro sera alterado.
