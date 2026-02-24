@@ -22,6 +22,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { useCreateClient } from "@/hooks/useClients";
 import { useClientLabels } from "@/hooks/useClientLabels";
+import { useNifValidation } from "@/hooks/useNifValidation";
 import { useTeamMembers } from "@/hooks/useTeam";
 import { useClientFieldsSettings } from "@/hooks/useClientFieldsSettings";
 import { useAuth } from "@/contexts/AuthContext";
@@ -73,6 +74,16 @@ export function CreateClientModal({ open, onOpenChange, onCreated, initialData }
 
   const createClient = useCreateClient();
 
+  const nifValidation = useNifValidation({
+    nif,
+    organizationId: organization?.id,
+  });
+
+  const companyNifValidation = useNifValidation({
+    nif: companyNif,
+    organizationId: organization?.id,
+  });
+
   useEffect(() => {
     if (open && initialData) {
       setName(initialData.name || "");
@@ -92,8 +103,9 @@ export function CreateClientModal({ open, onOpenChange, onCreated, initialData }
     if (settings.company_nif?.visible && settings.company_nif?.required && !companyNif.trim()) return false;
     if (settings.address.visible && settings.address.required && !addressLine1.trim()) return false;
     if (settings.notes.visible && settings.notes.required && !notes.trim()) return false;
+    if (nifValidation.isDuplicate || companyNifValidation.isDuplicate) return false;
     return true;
-  }, [name, email, phone, company, nif, companyNif, addressLine1, notes, settings]);
+  }, [name, email, phone, company, nif, companyNif, addressLine1, notes, settings, nifValidation.isDuplicate, companyNifValidation.isDuplicate]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -226,6 +238,11 @@ export function CreateClientModal({ open, onOpenChange, onCreated, initialData }
                             placeholder="NIF pessoal"
                             required={settings.nif.required}
                           />
+                          {nifValidation.isDuplicate && (
+                            <p className="text-xs text-destructive mt-1">
+                              Já existe um cliente com este NIF: {nifValidation.existingClientName}
+                            </p>
+                          )}
                         </div>
                       )}
                     </div>
@@ -267,6 +284,11 @@ export function CreateClientModal({ open, onOpenChange, onCreated, initialData }
                               placeholder="NIF da empresa"
                               required={settings.company_nif.required}
                             />
+                            {companyNifValidation.isDuplicate && (
+                              <p className="text-xs text-destructive mt-1">
+                                Já existe um cliente com este NIF: {companyNifValidation.existingClientName}
+                              </p>
+                            )}
                           </div>
                         )}
                       </div>
