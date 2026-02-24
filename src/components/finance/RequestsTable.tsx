@@ -69,6 +69,7 @@ export function RequestsTable({ requests, isLoading, onSelect, onDelete, filterT
                 <TableHead>Data</TableHead>
                 <TableHead>Tipo</TableHead>
                 <TableHead>Título</TableHead>
+                <TableHead className="hidden md:table-cell">Submetido por</TableHead>
                 <TableHead className="hidden sm:table-cell">Valor</TableHead>
                 <TableHead>Estado</TableHead>
                 <TableHead className="w-10" />
@@ -80,6 +81,7 @@ export function RequestsTable({ requests, isLoading, onSelect, onDelete, filterT
                   <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{formatDate(r.submitted_at)}</TableCell>
                   <TableCell className="text-xs">{REQUEST_TYPE_LABELS[r.request_type]}</TableCell>
                   <TableCell className="font-medium max-w-[200px] truncate">{r.title}</TableCell>
+                  <TableCell className="hidden md:table-cell text-sm text-muted-foreground">{r.submitter?.full_name || '—'}</TableCell>
                   <TableCell className="hidden sm:table-cell">{r.amount != null ? formatCurrency(r.amount) : '-'}</TableCell>
                   <TableCell>
                     <Badge className={REQUEST_STATUS_COLORS[r.status]} variant="secondary">

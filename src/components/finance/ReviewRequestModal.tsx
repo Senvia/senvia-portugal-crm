@@ -55,6 +55,12 @@ export function ReviewRequestModal({ request, open, onOpenChange, canApprove }: 
 
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3 text-sm">
+            {request.submitter?.full_name && (
+              <div className="col-span-2">
+                <span className="text-muted-foreground">Submetido por:</span>
+                <p className="font-medium">{request.submitter.full_name}</p>
+              </div>
+            )}
             <div>
               <span className="text-muted-foreground">Tipo:</span>
               <p className="font-medium">{REQUEST_TYPE_LABELS[request.request_type]}</p>

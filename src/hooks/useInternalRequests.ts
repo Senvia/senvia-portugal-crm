@@ -29,7 +29,24 @@ export function useInternalRequests(filters?: Filters) {
 
       const { data, error } = await query;
       if (error) throw error;
-      return data as InternalRequest[];
+
+      // Fetch submitter names
+      const userIds = [...new Set((data || []).map(r => r.submitted_by))];
+      let profilesMap: Record<string, { full_name: string; avatar_url: string | null }> = {};
+      if (userIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, full_name, avatar_url')
+          .in('id', userIds);
+        if (profiles) {
+          profilesMap = Object.fromEntries(profiles.map(p => [p.id, { full_name: p.full_name, avatar_url: p.avatar_url }]));
+        }
+      }
+
+      return (data || []).map(r => ({
+        ...r,
+        submitter: profilesMap[r.submitted_by] || undefined,
+      })) as InternalRequest[];
     },
     enabled: !!organizationId && !!session,
   });
