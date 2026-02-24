@@ -2141,6 +2141,47 @@ export type Database = {
           },
         ]
       }
+      organization_webhooks: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          is_system: boolean
+          name: string
+          organization_id: string
+          updated_at: string
+          url: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_system?: boolean
+          name: string
+          organization_id: string
+          updated_at?: string
+          url: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_system?: boolean
+          name?: string
+          organization_id?: string
+          updated_at?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_webhooks_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organizations: {
         Row: {
           ai_qualification_rules: string | null

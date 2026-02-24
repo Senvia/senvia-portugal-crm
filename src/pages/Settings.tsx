@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 
 import { useAuth } from "@/contexts/AuthContext";
-import { useUpdateOrganization, useTestWebhook } from '@/hooks/useOrganization';
+import { useUpdateOrganization } from '@/hooks/useOrganization';
 import { SecuritySettings } from '@/components/settings/SecuritySettings';
 import { useUpdateProfile, useChangePassword } from '@/hooks/useProfile';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -44,7 +44,6 @@ export default function Settings() {
   const { profile, organization } = useAuth();
   const { toast } = useToast();
   const updateOrganization = useUpdateOrganization();
-  const testWebhook = useTestWebhook();
   const updateProfile = useUpdateProfile();
   const changePassword = useChangePassword();
   const { canManageTeam, canManageIntegrations, isAdmin } = usePermissions();
@@ -55,7 +54,6 @@ export default function Settings() {
   const [activeSub, setActiveSub] = useState<SettingsSubSection | null>(null);
 
   
-  const [webhookUrl, setWebhookUrl] = useState('');
   const [isLoadingIntegrations, setIsLoadingIntegrations] = useState(true);
   
   // WhatsApp Business state
@@ -123,7 +121,6 @@ export default function Settings() {
         .single();
       
       if (!error && data) {
-        setWebhookUrl(data.webhook_url || '');
         setWhatsappBaseUrl(data.whatsapp_base_url || '');
         setWhatsappInstance(data.whatsapp_instance || '');
         setWhatsappApiKey(data.whatsapp_api_key || '');
@@ -174,10 +171,6 @@ export default function Settings() {
   };
 
 
-  const handleSaveWebhook = () => {
-    updateOrganization.mutate({ webhook_url: webhookUrl.trim() || null });
-  };
-
   const handleSaveWhatsApp = () => {
     updateOrganization.mutate({
       whatsapp_base_url: whatsappBaseUrl.trim() || null,
@@ -213,19 +206,6 @@ export default function Settings() {
     updateOrganization.mutate({
       tax_config: { tax_name: taxName, tax_value: taxValue, tax_exemption_reason: taxValue === 0 ? taxExemptionReason : null },
     });
-  };
-
-  const handleTestWebhook = () => {
-    if (!webhookUrl.trim()) {
-      toast({ title: 'URL em falta', description: 'Introduza um URL de webhook antes de testar.', variant: 'destructive' });
-      return;
-    }
-    testWebhook.mutate(webhookUrl.trim());
-  };
-
-  const isValidUrl = (url: string) => {
-    if (!url) return true;
-    try { new URL(url); return true; } catch { return false; }
   };
 
   const handleSaveOrgName = () => {
@@ -271,9 +251,7 @@ export default function Settings() {
   };
 
   const integrationsContentProps = {
-    isLoadingIntegrations, webhookUrl, setWebhookUrl, isValidUrl,
-    handleTestWebhook, handleSaveWebhook,
-    testWebhookIsPending: testWebhook.isPending,
+    isLoadingIntegrations,
     updateOrganizationIsPending: updateOrganization.isPending,
     whatsappBaseUrl, setWhatsappBaseUrl, whatsappInstance, setWhatsappInstance,
     whatsappApiKey, setWhatsappApiKey, showWhatsappApiKey, setShowWhatsappApiKey,
