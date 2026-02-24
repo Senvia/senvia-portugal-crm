@@ -1,43 +1,44 @@
 
 
-## Mostrar nome de quem submeteu o pedido
+## Notificar o utilizador quando o pedido e aprovado ou rejeitado
 
-O problema e claro: a query atual faz `select('*')` na tabela `internal_requests`, que nao inclui o nome do utilizador que submeteu. Quem aprova ve apenas o titulo do pedido, sem saber de quem e.
+Quando um administrador aprova ou rejeita um pedido interno, o colaborador que o submeteu deve receber um email automatico com o resultado.
 
-### Alteracoes necessarias
+### Abordagem
 
-**1. Hook `useInternalRequests.ts`** -- Alterar o select para fazer join com a tabela `profiles`
+Criar uma nova edge function `notify-request-status` que envia um email via Brevo ao utilizador que submeteu o pedido, informando se foi aprovado, rejeitado ou pago.
 
-Mudar de:
-```
-.select('*')
-```
-Para:
-```
-.select('*, submitter:profiles!submitted_by(full_name, avatar_url)')
-```
+### Alteracoes
 
-Isto usa a relacao entre `submitted_by` e `profiles.id` para trazer o nome e avatar de quem submeteu.
+**1. Nova Edge Function `supabase/functions/notify-request-status/index.ts`**
 
-**2. Tabela `RequestsTable.tsx`** -- Adicionar coluna "Submetido por"
+- Recebe: `request_id`, `organization_id`, `new_status`, `review_notes` (opcional)
+- Busca o pedido na tabela `internal_requests` para obter o `submitted_by` e o `title`
+- Busca o email do utilizador na tabela `auth.users` (via service role)
+- Busca as credenciais Brevo e nome da organizacao
+- Envia email ao submissor com o estado atualizado e eventuais notas de revisao
+- Template do email com cores diferentes consoante o estado:
+  - Aprovado: verde
+  - Rejeitado: vermelho
+  - Pago: verde escuro
 
-- Adicionar uma nova coluna `<TableHead>` com label "Submetido por"
-- Em cada linha, mostrar `r.submitter?.full_name` ou "—" como fallback
-- A coluna ficara visivel em desktop e escondida em mobile (`hidden md:table-cell`) para manter a responsividade
+**2. Atualizar `src/hooks/useInternalRequests.ts`**
 
-**3. Modal `ReviewRequestModal.tsx`** -- Mostrar quem submeteu
+- No `onSuccess` da mutacao `reviewRequest`, adicionar uma chamada silenciosa (`.catch(() => {})`) a nova edge function, passando o `request_id`, `organization_id`, `new_status` e `review_notes`
+- Apenas dispara para estados `approved`, `rejected` e `paid`
 
-- Adicionar um campo "Submetido por" na grelha de detalhes do pedido, exibindo `request.submitter?.full_name`
-- Assim, ao abrir qualquer pedido para revisao, o aprovador sabe imediatamente de quem e
+**3. Atualizar `supabase/config.toml`** (automatico)
+
+- Adicionar entrada para `notify-request-status` com `verify_jwt = false` (a validacao e feita no codigo)
 
 ### Detalhes tecnicos
 
-- Nao e necessaria nenhuma migracao de base de dados -- a tabela `profiles` ja tem `full_name` e `avatar_url`, e a relacao via `submitted_by` -> `profiles.id` ja existe
-- O tipo `InternalRequest` em `src/types/internal-requests.ts` ja tem o campo opcional `submitter?: { full_name: string; avatar_url: string | null }`, portanto nao precisa de alteracao
-- As RLS policies de `profiles` permitem SELECT para membros da mesma org e super admins, logo o join vai funcionar
+- A edge function usa o `SUPABASE_SERVICE_ROLE_KEY` para aceder ao email do utilizador em `auth.users` e as credenciais Brevo da organizacao
+- Reutiliza o mesmo padrao da `notify-finance-request` existente (auth via Bearer token, Brevo API)
+- Nao requer migracao de base de dados -- toda a informacao necessaria ja existe nas tabelas `internal_requests`, `profiles` e `organizations`
+- Os labels de tipo de pedido (`expense`, `vacation`, `invoice`) sao traduzidos no template do email
 
-### Ficheiros a alterar
-- `src/hooks/useInternalRequests.ts` -- select com join
-- `src/components/finance/RequestsTable.tsx` -- nova coluna
-- `src/components/finance/ReviewRequestModal.tsx` -- campo de submissor nos detalhes
+### Ficheiros a criar/alterar
+- **Criar**: `supabase/functions/notify-request-status/index.ts`
+- **Alterar**: `src/hooks/useInternalRequests.ts` (adicionar chamada no onSuccess do reviewRequest)
 
