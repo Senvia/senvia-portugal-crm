@@ -32,9 +32,9 @@ export function useFidelizationAlerts() {
   return useQuery({
     queryKey: ['fidelization-alerts', organizationId],
     queryFn: async () => {
-      if (!organizationId) return { urgent: [], upcoming: [] };
+      if (!organizationId) return { urgent: [], upcoming: [], expired: [] };
 
-      // Get CPEs expiring within 30 days
+      // Get CPEs expiring within 30 days OR already expired, that haven't been resolved
       const thirtyDaysFromNow = new Date();
       thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
 
@@ -48,6 +48,7 @@ export function useFidelizationAlerts() {
           fidelizacao_end,
           status,
           client_id,
+          renewal_status,
           crm_clients!inner(
             name,
             company,
@@ -58,7 +59,6 @@ export function useFidelizationAlerts() {
         .eq('organization_id', organizationId)
         .eq('status', 'active')
         .not('fidelizacao_end', 'is', null)
-        .gte('fidelizacao_end', new Date().toISOString().split('T')[0])
         .lte('fidelizacao_end', thirtyDaysFromNow.toISOString().split('T')[0])
         .order('fidelizacao_end', { ascending: true });
 
@@ -68,31 +68,34 @@ export function useFidelizationAlerts() {
       }
 
       const now = new Date();
-      const results: CpeWithClient[] = (cpes || []).map((cpe: any) => {
-        const expiryDate = new Date(cpe.fidelizacao_end);
-        const daysUntilExpiry = Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      const results: CpeWithClient[] = (cpes || [])
+        .filter((cpe: any) => !cpe.renewal_status || cpe.renewal_status === 'pending')
+        .map((cpe: any) => {
+          const expiryDate = new Date(cpe.fidelizacao_end);
+          const daysUntilExpiry = Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
         
-        return {
-          id: cpe.id,
-          equipment_type: cpe.equipment_type,
-          serial_number: cpe.serial_number,
-          comercializador: cpe.comercializador,
-          fidelizacao_end: cpe.fidelizacao_end,
-          status: cpe.status,
-          client_id: cpe.client_id,
-          client_name: cpe.crm_clients.name,
-          client_company: cpe.crm_clients.company,
-          client_email: cpe.crm_clients.email,
-          client_phone: cpe.crm_clients.phone,
-          days_until_expiry: daysUntilExpiry,
-        };
-      });
+          return {
+            id: cpe.id,
+            equipment_type: cpe.equipment_type,
+            serial_number: cpe.serial_number,
+            comercializador: cpe.comercializador,
+            fidelizacao_end: cpe.fidelizacao_end,
+            status: cpe.status,
+            client_id: cpe.client_id,
+            client_name: cpe.crm_clients.name,
+            client_company: cpe.crm_clients.company,
+            client_email: cpe.crm_clients.email,
+            client_phone: cpe.crm_clients.phone,
+            days_until_expiry: daysUntilExpiry,
+          };
+        });
 
-      // Split into urgent (<=7 days) and upcoming (8-30 days)
-      const urgent = results.filter(cpe => cpe.days_until_expiry <= 7);
+      // Split into expired (<=0 days), urgent (1-7 days) and upcoming (8-30 days)
+      const expired = results.filter(cpe => cpe.days_until_expiry <= 0);
+      const urgent = results.filter(cpe => cpe.days_until_expiry > 0 && cpe.days_until_expiry <= 7);
       const upcoming = results.filter(cpe => cpe.days_until_expiry > 7);
 
-      return { urgent, upcoming };
+      return { urgent, upcoming, expired };
     },
     enabled: !!organizationId,
   });

@@ -152,6 +152,71 @@ export function useDeleteCpe() {
   });
 }
 
+export function useRenewCpe() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, fidelizacao_end, fidelizacao_start }: { id: string; fidelizacao_end: string; fidelizacao_start?: string }) => {
+      const updates: Record<string, unknown> = {
+        fidelizacao_end,
+        renewal_status: 'renewed',
+        alert_30d_sent: false,
+        alert_7d_sent: false,
+      };
+      if (fidelizacao_start) updates.fidelizacao_start = fidelizacao_start;
+
+      const { data, error } = await supabase
+        .from('cpes')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['cpes'] });
+      queryClient.invalidateQueries({ queryKey: ['fidelization-alerts'] });
+      toast.success('CPE renovado com sucesso');
+    },
+    onError: () => toast.error('Erro ao renovar CPE'),
+  });
+}
+
+export function useSwitchComercializador() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, comercializador, fidelizacao_end, fidelizacao_start }: { id: string; comercializador: string; fidelizacao_end: string; fidelizacao_start?: string }) => {
+      const updates: Record<string, unknown> = {
+        comercializador,
+        fidelizacao_end,
+        renewal_status: 'switched',
+        alert_30d_sent: false,
+        alert_7d_sent: false,
+      };
+      if (fidelizacao_start) updates.fidelizacao_start = fidelizacao_start;
+
+      const { data, error } = await supabase
+        .from('cpes')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['cpes'] });
+      queryClient.invalidateQueries({ queryKey: ['fidelization-alerts'] });
+      toast.success('Comercializador alterado com sucesso');
+    },
+    onError: () => toast.error('Erro ao alterar comercializador'),
+  });
+}
+
 // Stats for a specific client
 export function useClientCpeStats(clientId: string | null) {
   const { data: cpes, isLoading } = useCpes(clientId);

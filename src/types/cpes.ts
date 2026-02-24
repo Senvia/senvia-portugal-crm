@@ -1,5 +1,6 @@
 export type CpeStatus = 'active' | 'inactive' | 'pending' | 'returned';
 export type NivelTensao = 'BTE' | 'BTN' | 'MT';
+export type RenewalStatus = 'pending' | 'renewed' | 'switched';
 
 export interface Cpe {
   id: string;
@@ -13,6 +14,7 @@ export interface Cpe {
   status: CpeStatus;
   nivel_tensao?: NivelTensao | null;
   notes?: string | null;
+  renewal_status?: RenewalStatus | null;
   created_at: string;
   updated_at: string;
 }
