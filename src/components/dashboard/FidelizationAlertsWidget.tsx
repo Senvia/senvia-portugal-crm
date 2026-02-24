@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { useFidelizationAlerts, type CpeWithClient } from '@/hooks/useFidelizationAlerts';
 import { useAuth } from '@/contexts/AuthContext';
 import { Zap, AlertTriangle, Clock, ChevronRight, Loader2, XCircle, RefreshCw, ArrowRightLeft } from 'lucide-react';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
@@ -115,75 +116,61 @@ export function FidelizationAlertsWidget() {
             </Badge>
           </div>
         </CardHeader>
-        <CardContent className="space-y-3">
-          {/* Expired Section */}
-          {expired.length > 0 && (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 text-destructive">
-                <XCircle className="h-3.5 w-3.5" />
-                <span className="text-xs font-medium">Expirados</span>
-                <Badge variant="destructive" className="text-xs ml-auto">
-                  {expired.length}
-                </Badge>
-              </div>
-              <div className="space-y-1.5">
-                {expired.slice(0, 3).map((cpe) => (
-                  <AlertCard key={cpe.id} cpe={cpe} variant="expired" onRenew={setRenewCpe} onSwitch={setSwitchCpe} />
-                ))}
-              </div>
-            </div>
-          )}
+        <CardContent className="p-0">
+          <ScrollArea className="max-h-[300px]">
+            <div className="space-y-3 p-6 pt-0">
+              {expired.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-destructive">
+                    <XCircle className="h-3.5 w-3.5" />
+                    <span className="text-xs font-medium">Expirados</span>
+                    <Badge variant="destructive" className="text-xs ml-auto">
+                      {expired.length}
+                    </Badge>
+                  </div>
+                  <div className="space-y-1.5">
+                    {expired.map((cpe) => (
+                      <AlertCard key={cpe.id} cpe={cpe} variant="expired" onRenew={setRenewCpe} onSwitch={setSwitchCpe} />
+                    ))}
+                  </div>
+                </div>
+              )}
 
-          {/* Urgent Section */}
-          {urgent.length > 0 && (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 text-destructive">
-                <AlertTriangle className="h-3.5 w-3.5" />
-                <span className="text-xs font-medium">Urgente (7 dias)</span>
-                <Badge variant="destructive" className="text-xs ml-auto">
-                  {urgent.length}
-                </Badge>
-              </div>
-              <div className="space-y-1.5">
-                {urgent.slice(0, 3).map((cpe) => (
-                  <AlertCard key={cpe.id} cpe={cpe} variant="urgent" onRenew={setRenewCpe} onSwitch={setSwitchCpe} />
-                ))}
-              </div>
-            </div>
-          )}
+              {urgent.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-destructive">
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    <span className="text-xs font-medium">Urgente (7 dias)</span>
+                    <Badge variant="destructive" className="text-xs ml-auto">
+                      {urgent.length}
+                    </Badge>
+                  </div>
+                  <div className="space-y-1.5">
+                    {urgent.map((cpe) => (
+                      <AlertCard key={cpe.id} cpe={cpe} variant="urgent" onRenew={setRenewCpe} onSwitch={setSwitchCpe} />
+                    ))}
+                  </div>
+                </div>
+              )}
 
-          {/* Upcoming Section */}
-          {upcoming.length > 0 && (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 text-warning">
-                <Clock className="h-3.5 w-3.5" />
-                <span className="text-xs font-medium">Próximos 30 dias</span>
-                <Badge variant="outline" className="text-xs ml-auto border-warning/50 text-warning">
-                  {upcoming.length}
-                </Badge>
-              </div>
-              {(expired.length + urgent.length) === 0 && (
-                <div className="space-y-1.5">
-                  {upcoming.slice(0, 3).map((cpe) => (
-                    <AlertCard key={cpe.id} cpe={cpe} variant="upcoming" onRenew={setRenewCpe} onSwitch={setSwitchCpe} />
-                  ))}
+              {upcoming.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-warning">
+                    <Clock className="h-3.5 w-3.5" />
+                    <span className="text-xs font-medium">Próximos 30 dias</span>
+                    <Badge variant="outline" className="text-xs ml-auto border-warning/50 text-warning">
+                      {upcoming.length}
+                    </Badge>
+                  </div>
+                  <div className="space-y-1.5">
+                    {upcoming.map((cpe) => (
+                      <AlertCard key={cpe.id} cpe={cpe} variant="upcoming" onRenew={setRenewCpe} onSwitch={setSwitchCpe} />
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
-          )}
-
-          {/* View All Button */}
-          {totalAlerts > 3 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-full text-xs"
-              onClick={() => navigate('/clients')}
-            >
-              Ver todos ({totalAlerts})
-              <ChevronRight className="h-3.5 w-3.5 ml-1" />
-            </Button>
-          )}
+          </ScrollArea>
         </CardContent>
       </Card>
 
