@@ -1,50 +1,69 @@
+# Substituir "Valor Total" por Comissao / MWh e kWp nos Clientes (Somente para Telecom)
 
+## Contexto
 
-# Remover "Lembrete Padrao" e aplicar lembretes a todos os tipos de evento
+Atualmente, na pagina de Clientes, existe uma metrica "Valor Total" que soma o `total_value` das vendas. Para o nicho **telecom**, esta metrica nao e relevante -- o que interessa sao:
 
-## Problema
-
-1. O card "Lembrete Padrao" e redundante -- os lembretes de "Reunioes e Chamadas" devem servir para **todos** os tipos de evento (nao so reunioes/chamadas).
-2. E preciso evitar duplicidade: os lembretes automaticos das definicoes so devem ser aplicados quando o evento **nao tem** lembrete configurado manualmente.
+- **Comissao** (soma do campo `comissao` das vendas)
+- **MWh** (soma do campo `consumo_anual` das vendas, convertido de kWh para MWh)
+- **kWp** (soma do campo `kwp` das vendas)
 
 ## Solucao
 
-### O que muda
+### 1. Base de Dados -- Novas Colunas
 
-1. **Remover** o card "Lembrete Padrao" da UI e do modelo de dados
-2. **Renomear** o card para algo mais generico (ex: "Lembretes Automaticos") -- ja que agora se aplica a todos os eventos
-3. **Aplicar** os lembretes automaticos (horas/dias) a **todos os tipos de evento**, nao apenas reunioes e chamadas
-4. **Condicao**: so aplicar se o utilizador **nao** definiu um lembrete manualmente no evento
-
-### Logica no CreateEventModal
+Adicionar 3 novas colunas a tabela `crm_clients`:
 
 ```text
-Se o utilizador definiu reminder_minutes manualmente -> usar esse valor
-Senao, se auto_reminder_meetings esta ativo -> calcular a partir de auto_reminder_hours / auto_reminder_days
-Senao -> null (sem lembrete)
+total_comissao  NUMERIC DEFAULT 0
+total_mwh       NUMERIC DEFAULT 0
+total_kwp       NUMERIC DEFAULT 0
 ```
 
-A unica diferenca e que agora remove-se o filtro `eventType === 'meeting' || eventType === 'call'`. Aplica-se a qualquer tipo.
+### 2. Trigger -- Atualizar Metricas Automaticamente
 
-## Secao tecnica
+Alterar a funcao `update_client_sales_metrics` para tambem acumular:
+
+- `total_comissao` += `sales.comissao`
+- `total_mwh` += `sales.consumo_anual / 1000` (kWh para MWh)
+- `total_kwp` += `sales.kwp`
+
+Criar tambem um script de backfill para recalcular os valores para clientes existentes a partir das vendas ja registadas.
+
+### 3. Interface -- Exibicao Condicional por Nicho
+
+Para nicho **telecom**, substituir o card/coluna "Valor Total" por 3 metricas separadas:
+
+**Pagina Clientes (`Clients.tsx`)** -- Card de stats:
+
+- Substituir o card "Valor Total" por "Comissao Total" (para telecom)
+
+**Detalhes do Cliente (`ClientDetailsDrawer.tsx`)** -- Metricas:
+
+- Telecom: mostrar 3 metricas em vez de "Valor Total":
+  - Comissao (euro)
+  - MWh
+  - kWp
+
+**Modal de Detalhes (`ClientDetailsModal.tsx`)** -- Metricas:
+
+- Mesma logica condicional
+
+Para todos os outros nichos, "Valor Total" continua a funcionar como antes.
+
+### 4. Tipos e Exportacao
+
+- Atualizar `CrmClient` em `src/types/clients.ts` com os 3 novos campos opcionais
+- Atualizar `mapClientsForExport` em `src/lib/export.ts` para incluir estas colunas no telecom
+
+## Secao Tecnica
 
 ### Ficheiros alterados
 
-1. **`src/components/settings/CalendarAlertsSettings.tsx`**
-   - Remover todo o card "Lembrete Padrao" (linhas 124-160)
-   - Remover `default_reminder_minutes` da interface e do DEFAULT_SETTINGS
-   - Renomear titulo do card de "Reunioes e Chamadas" para "Lembretes Automaticos"
-   - Atualizar descricao para: "Aplique automaticamente um lembrete a eventos que nao tenham lembrete configurado manualmente."
-
-2. **`src/components/calendar/CreateEventModal.tsx`**
-   - Remover a logica que aplica `default_reminder_minutes` ao abrir o modal (linhas 128-132)
-   - No handleSubmit, remover o filtro de tipo de evento: em vez de `eventType === 'meeting' || eventType === 'call'`, aplicar a todos os tipos
-   - A condicao `reminderMinutes` (definido manualmente) continua a ter prioridade
-
-3. **`src/types/calendar.ts`**
-   - Sem alteracoes
-
-### Sem migracao de BD necessaria
-
-O campo `calendar_alert_settings` e JSONB. O campo `default_reminder_minutes` simplesmente deixa de ser lido/gravado, sem impacto.
-
+1. **Migracao SQL** -- Adicionar colunas + atualizar trigger + backfill
+2. `**src/types/clients.ts**` -- Adicionar `total_comissao`, `total_mwh`, `total_kwp`
+3. `**src/pages/Clients.tsx**` -- Card de stats condicional (telecom vs generico)
+4. `**src/components/clients/ClientDetailsDrawer.tsx**` -- Metricas condicionais
+5. `**src/components/clients/ClientDetailsModal.tsx**` -- Metricas condicionais
+6. `**src/hooks/useClients.ts**` -- `useClientStats` para incluir totais de comissao/mwh/kwp
+7. `**src/lib/export.ts**` -- Colunas extra na exportacao para telecom
