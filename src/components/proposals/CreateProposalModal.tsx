@@ -162,12 +162,22 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
 
   const isServicosValid = useMemo(() => {
     if (!isTelecom || proposalType !== 'servicos') return true;
-    return servicosProdutos.length > 0 && totalKwp > 0 && totalComissao > 0;
-  }, [isTelecom, proposalType, servicosProdutos, totalKwp, totalComissao]);
+    if (servicosProdutos.length === 0) return false;
+    return servicosProdutos.every(produto => {
+      const config = SERVICOS_PRODUCT_CONFIGS.find(c => c.name === produto);
+      const detail = servicosDetails[produto] || {};
+      return config?.fields.every(field => 
+        detail[field] !== undefined && detail[field] > 0
+      ) ?? false;
+    });
+  }, [isTelecom, proposalType, servicosProdutos, servicosDetails]);
 
   const isEnergiaValid = useMemo(() => {
     if (!isTelecom || proposalType !== 'energia') return true;
-    return proposalCpes.length > 0;
+    return proposalCpes.length > 0 && proposalCpes.every(cpe => 
+      cpe.consumo_anual && cpe.duracao_contrato && cpe.dbl 
+      && cpe.comissao && cpe.contrato_inicio && cpe.contrato_fim
+    );
   }, [isTelecom, proposalType, proposalCpes]);
 
   const isGenericValid = useMemo(() => {
@@ -445,7 +455,11 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
                     <Card>
                       <CardContent className="p-4">
                         {attempted && !isEnergiaValid && (
-                          <p className="text-xs text-destructive mb-2">Adicione pelo menos 1 CPE/CUI</p>
+                          <p className="text-xs text-destructive mb-2">
+                            {proposalCpes.length === 0 
+                              ? 'Adicione pelo menos 1 CPE/CUI' 
+                              : 'Todos os campos de cada CPE são obrigatórios'}
+                          </p>
                         )}
                         <ProposalCpeSelector
                           clientId={selectedClientId}
@@ -518,10 +532,13 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
                                         const isComissaoAuto = field === 'comissao' && isAutoCalculated(config.name);
                                         return (
                                         <div key={field} className="space-y-1 min-w-[100px] flex-1">
-                                          <Label className="text-xs text-muted-foreground">
-                                            {FIELD_LABELS[field]}
-                                            {isComissaoAuto && <span className="ml-1 text-primary">(auto)</span>}
-                                          </Label>
+                          <Label className="text-xs text-muted-foreground">
+                                             {FIELD_LABELS[field]} <span className="text-destructive">*</span>
+                                             {isComissaoAuto && <span className="ml-1 text-primary">(auto)</span>}
+                                           </Label>
+                                           {attempted && (detail[field] === undefined || detail[field] <= 0) && (
+                                             <p className="text-[10px] text-destructive">Obrigatório</p>
+                                           )}
                                           <Input
                                             type="number"
                                             step="0.01"
