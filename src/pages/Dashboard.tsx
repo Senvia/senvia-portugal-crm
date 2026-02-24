@@ -3,6 +3,7 @@ import { useDashboardWidgets } from "@/hooks/useDashboardWidgets";
 import { DynamicWidget } from "@/components/dashboard/DynamicWidget";
 import { TeamMemberFilter } from "@/components/dashboard/TeamMemberFilter";
 import { FidelizationAlertsWidget } from "@/components/dashboard/FidelizationAlertsWidget";
+import { CalendarAlertsWidget } from "@/components/dashboard/CalendarAlertsWidget";
 import { Loader2 } from "lucide-react";
 import { NicheType } from "@/lib/dashboard-templates";
 import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription";
@@ -17,6 +18,7 @@ export default function Dashboard() {
   const { profile, organization } = useAuth();
   const { modules } = useModules();
   const clientsModuleEnabled = modules.clients;
+  const calendarModuleEnabled = modules.calendar !== false;
   const { 
     visibleWidgets, 
     isLoading, 
@@ -48,9 +50,14 @@ export default function Dashboard() {
         </div>
       ) : (
         <div className="space-y-6">
-          {organization?.niche === 'telecom' && clientsModuleEnabled && (
+          {(organization?.niche === 'telecom' && clientsModuleEnabled || calendarModuleEnabled) && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <FidelizationAlertsWidget />
+              {organization?.niche === 'telecom' && clientsModuleEnabled && (
+                <FidelizationAlertsWidget />
+              )}
+              {calendarModuleEnabled && (
+                <CalendarAlertsWidget />
+              )}
             </div>
           )}
           
