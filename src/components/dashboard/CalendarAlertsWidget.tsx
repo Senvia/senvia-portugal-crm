@@ -1,6 +1,6 @@
+import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { useCalendarEvents } from '@/hooks/useCalendarEvents';
 import { Calendar, Phone, Users, CheckSquare, RotateCcw, ChevronRight, Loader2, AlertTriangle, Clock } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -10,6 +10,7 @@ import { pt } from 'date-fns/locale';
 import { useMemo } from 'react';
 import type { CalendarEvent, EventType } from '@/types/calendar';
 import { EVENT_TYPE_LABELS } from '@/types/calendar';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 const EVENT_TYPE_ICONS: Record<EventType, React.ElementType> = {
   meeting: Users,
@@ -20,6 +21,7 @@ const EVENT_TYPE_ICONS: Record<EventType, React.ElementType> = {
 
 export function CalendarAlertsWidget() {
   const navigate = useNavigate();
+  const [modalOpen, setModalOpen] = useState(false);
   const today = useMemo(() => startOfDay(new Date()), []);
   const endRange = useMemo(() => endOfDay(addDays(today, 7)), [today]);
 
@@ -34,6 +36,9 @@ export function CalendarAlertsWidget() {
   }, [events]);
 
   const totalAlerts = todayEvents.length + upcomingEvents.length;
+  const allEvents = [...todayEvents, ...upcomingEvents];
+  const previewItems = allEvents.slice(0, 2);
+  const remaining = totalAlerts - previewItems.length;
 
   if (isLoading) {
     return (
@@ -61,9 +66,7 @@ export function CalendarAlertsWidget() {
           </CardTitle>
         </CardHeader>
         <CardContent className="py-6 text-center">
-          <p className="text-sm text-muted-foreground">
-            Sem eventos nos próximos 7 dias
-          </p>
+          <p className="text-sm text-muted-foreground">Sem eventos nos próximos 7 dias</p>
         </CardContent>
       </Card>
     );
@@ -79,7 +82,7 @@ export function CalendarAlertsWidget() {
       <button
         key={event.id}
         onClick={() => navigate('/calendar')}
-        className={`w-full text-left p-2 rounded-md transition-colors border ${bgClass}`}
+        className={`w-full text-left p-3 rounded-md transition-colors border ${bgClass}`}
       >
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
@@ -109,53 +112,77 @@ export function CalendarAlertsWidget() {
   };
 
   return (
-    <Card className="col-span-2 lg:col-span-1">
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <Calendar className="h-4 w-4 text-primary" />
-            Próximos Eventos
-          </CardTitle>
-          <Badge variant="secondary" className="text-xs">
-            {totalAlerts}
-          </Badge>
-        </div>
-      </CardHeader>
-      <CardContent className="p-0">
-        <ScrollArea className="max-h-[300px]">
-          <div className="space-y-3 p-6 pt-0">
-            {todayEvents.length > 0 && (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-destructive">
-                  <AlertTriangle className="h-3.5 w-3.5" />
-                  <span className="text-xs font-medium">Hoje</span>
-                  <Badge variant="destructive" className="text-xs ml-auto">
-                    {todayEvents.length}
-                  </Badge>
-                </div>
-                <div className="space-y-1.5">
-                  {todayEvents.map(e => renderEvent(e, 'today'))}
-                </div>
-              </div>
-            )}
-
-            {upcomingEvents.length > 0 && (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-blue-500">
-                  <Clock className="h-3.5 w-3.5" />
-                  <span className="text-xs font-medium">Próximos 7 dias</span>
-                  <Badge variant="outline" className="text-xs ml-auto border-blue-500/50 text-blue-500">
-                    {upcomingEvents.length}
-                  </Badge>
-                </div>
-                <div className="space-y-1.5">
-                  {upcomingEvents.map(e => renderEvent(e, 'upcoming'))}
-                </div>
-              </div>
-            )}
+    <>
+      <Card
+        className="col-span-2 lg:col-span-1 cursor-pointer hover:border-primary/30 transition-colors"
+        onClick={() => setModalOpen(true)}
+      >
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <Calendar className="h-4 w-4 text-primary" />
+              Próximos Eventos
+            </CardTitle>
+            <Badge variant="secondary" className="text-xs">{totalAlerts}</Badge>
           </div>
-        </ScrollArea>
-      </CardContent>
-    </Card>
+        </CardHeader>
+        <CardContent className="pt-0 space-y-1.5">
+          {previewItems.map((event) => (
+            <div key={event.id} className="text-sm text-muted-foreground truncate">
+              {event.title} — {event.all_day
+                ? format(new Date(event.start_time), "dd/MM", { locale: pt })
+                : format(new Date(event.start_time), "dd/MM HH:mm", { locale: pt })
+              }
+            </div>
+          ))}
+          {remaining > 0 && (
+            <p className="text-xs text-primary font-medium">+ {remaining} mais...</p>
+          )}
+        </CardContent>
+      </Card>
+
+      <Dialog open={modalOpen} onOpenChange={setModalOpen}>
+        <DialogContent variant="fullScreen" className="flex flex-col overflow-hidden">
+          <DialogHeader className="shrink-0 px-4 pt-4 sm:px-6 sm:pt-6">
+            <div className="flex items-center gap-3">
+              <DialogTitle className="flex items-center gap-2">
+                <Calendar className="h-5 w-5 text-primary" />
+                Próximos Eventos
+              </DialogTitle>
+              <Badge variant="secondary">{totalAlerts}</Badge>
+            </div>
+          </DialogHeader>
+          <ScrollArea className="flex-1 px-4 pb-4 sm:px-6 sm:pb-6">
+            <div className="space-y-6 pt-2">
+              {todayEvents.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-destructive">
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    <span className="text-xs font-medium">Hoje</span>
+                    <Badge variant="destructive" className="text-xs ml-auto">{todayEvents.length}</Badge>
+                  </div>
+                  <div className="space-y-2">
+                    {todayEvents.map(e => renderEvent(e, 'today'))}
+                  </div>
+                </div>
+              )}
+
+              {upcomingEvents.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-blue-500">
+                    <Clock className="h-3.5 w-3.5" />
+                    <span className="text-xs font-medium">Próximos 7 dias</span>
+                    <Badge variant="outline" className="text-xs ml-auto border-blue-500/50 text-blue-500">{upcomingEvents.length}</Badge>
+                  </div>
+                  <div className="space-y-2">
+                    {upcomingEvents.map(e => renderEvent(e, 'upcoming'))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
