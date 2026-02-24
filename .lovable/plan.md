@@ -1,64 +1,62 @@
 
 
-# Telecom: Nome da Empresa como identificador principal da Lead
+# Bloquear alteracao de estado em Leads finais (Ganho/Perdido) para nao-administradores
 
 ## Objetivo
 
-Para organizacoes com nicho "telecom", o campo "Nome da Empresa" (company_name) deve ser **obrigatorio** e deve ser esse nome a aparecer como nome principal da Lead em todo o sistema (Kanban, tabela, detalhes).
+Leads que estejam num estado final (is_final_positive ou is_final_negative) nao podem ter o seu estado alterado, exceto por utilizadores com role de administrador ou super_admin.
+
+## Logica
+
+Utilizar o hook `useFinalStages()` (ja existe em `usePipelineStages.ts`) para verificar se o estado atual da lead e final, e o `usePermissions()` para verificar se o utilizador e admin.
 
 ## Alteracoes
 
-### 1. AddLeadModal.tsx -- Logica de submissao (linha 185)
+### 1. Leads.tsx -- handleStatusChange (linhas 174-272)
 
-Atualmente: `name: data.name || data.company_name || ''`
+No inicio da funcao `handleStatusChange`, adicionar verificacao:
+- Encontrar a lead pelo ID
+- Verificar se o status atual da lead corresponde a uma etapa final (is_final_positive ou is_final_negative)
+- Se for final e o utilizador NAO for admin, mostrar toast de erro e retornar sem fazer nada
 
-Para telecom, inverter a prioridade: `name: isTelecom ? (data.company_name || data.name || '') : (data.name || data.company_name || '')`
+Importar `useFinalStages` e utilizar `isFinalStatus()`.
 
-Isto garante que o campo `name` na base de dados (usado como nome principal em todo o sistema) recebe o nome da empresa no nicho telecom.
+### 2. LeadCard.tsx -- Menu dropdown de "Mover para" (linhas 131-148)
 
-### 2. AddLeadModal.tsx -- Schema dinamico (funcao buildLeadSchema)
+- Receber uma nova prop `isLocked` (boolean) que indica se a lead esta num estado final e o utilizador nao e admin
+- Se `isLocked === true`, nao renderizar as opcoes de "Mover para [etapa]" no dropdown menu
+- Manter a opcao "Ver detalhes" e "Eliminar" (se admin)
 
-Quando o nicho e telecom, forcar `company_name` como obrigatorio independentemente das definicoes de campo. Adicionar o parametro `niche` a funcao `buildLeadSchema` e, se `niche === 'telecom'`, garantir que `company_name` tem `required: true`.
+### 3. KanbanBoard.tsx -- Drag & drop (linhas 64-85)
 
-### 3. LeadCard.tsx -- Display (linhas 198-201)
+- Impedir o drag de leads que estao em etapas finais quando o utilizador nao e admin
+- Na funcao `handleDragStart`, verificar se a lead esta numa etapa final; se sim e nao for admin, cancelar o drag
+- Alternativamente, passar prop ao LeadCard para desativar o drag handle visual
 
-Para telecom, mostrar `company_name` como titulo principal e `name` (contacto pessoal) como texto secundario:
+### 4. KanbanTabs.tsx (mobile) -- Mesma logica
 
-```text
-Telecom:
-  H4: lead.company_name || lead.name
-  Small: lead.name (se diferente de company_name)
+- Aplicar a mesma restricao que o KanbanBoard para a versao mobile
 
-Outros nichos:
-  H4: lead.name
-  Small: lead.company_name (como esta)
-```
+### 5. LeadDetailsModal.tsx -- Select de estado
 
-### 4. LeadsTableView.tsx -- Display (linhas 280-283)
+- Se a lead esta num estado final e o utilizador nao e admin, desativar o Select de alteracao de estado (disabled)
+- Mostrar tooltip ou texto explicativo: "Apenas administradores podem alterar o estado de leads finalizadas"
 
-Mesma logica do LeadCard: para telecom, mostrar `company_name` como nome principal e `name` como secundario.
+### 6. LeadsTableView.tsx -- Se houver controlo de status inline
 
-### 5. Edge Function submit-lead -- Logica de nome (linha ~164)
-
-Na edge function `submit-lead`, quando o lead e criado para uma org telecom, o campo `name` deve usar `company_name` como prioridade. Verificar o nicho da organizacao (ja temos acesso ao `org`) e ajustar:
-
-```text
-name: org.niche === 'telecom'
-  ? (body.company_name?.trim() || body.name?.trim() || 'Anonimo')
-  : (body.name?.trim() || body.company_name?.trim() || 'Anonimo')
-```
-
-Isto requer adicionar `niche` ao SELECT da organizacao na edge function.
+- Aplicar a mesma logica de bloqueio
 
 ## Ficheiros Alterados
 
-1. `src/components/leads/AddLeadModal.tsx` -- Schema forcado + prioridade de nome para telecom
-2. `src/components/leads/LeadCard.tsx` -- Display condicional por nicho
-3. `src/components/leads/LeadsTableView.tsx` -- Display condicional por nicho
-4. `supabase/functions/submit-lead/index.ts` -- Prioridade de nome + SELECT do niche
+1. `src/pages/Leads.tsx` -- Guardar central no handleStatusChange + importar hooks
+2. `src/components/leads/LeadCard.tsx` -- Prop isLocked para esconder opcoes de mover
+3. `src/components/leads/KanbanBoard.tsx` -- Bloquear drag de leads finais
+4. `src/components/leads/KanbanTabs.tsx` -- Mesma logica para mobile
+5. `src/components/leads/LeadDetailsModal.tsx` -- Desativar Select de estado
+6. `src/components/leads/LeadsTableView.tsx` -- Desativar controlo de estado
 
 ## Resultado
 
-- Telecom: company_name obrigatorio, aparece como nome principal em todo o Kanban/tabela/detalhes
-- Outros nichos: comportamento inalterado (nome pessoal e o principal)
-
+- Leads em estados finais (Ganho/Perdido) ficam "bloqueadas" visualmente e funcionalmente
+- Apenas administradores e super_admins podem mover estas leads para outro estado
+- A experiencia e consistente entre desktop (Kanban drag + dropdown) e mobile (tabs + dropdown)
