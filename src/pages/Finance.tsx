@@ -18,10 +18,13 @@ import { DateRange } from "react-day-picker";
 import { InvoicesContent } from "@/components/finance/InvoicesContent";
 import InternalRequests from "@/pages/finance/InternalRequests";
 import { BankAccountsTab } from "@/components/finance/BankAccountsTab";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function Finance() {
+  const { organization } = useAuth();
+  const isTelecom = organization?.niche === 'telecom';
   const [dateRange, setDateRange] = usePersistedState<DateRange | undefined>('finance-daterange-v1', undefined);
-  const [activeTab, setActiveTab] = usePersistedState('finance-tab-v1', 'resumo');
+  const [activeTab, setActiveTab] = usePersistedState('finance-tab-v1', isTelecom ? 'outros' : 'resumo');
   const { stats, isLoading } = useFinanceStats({ dateRange });
   const navigate = useNavigate();
 
@@ -47,9 +50,9 @@ export default function Finance() {
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList>
-            <TabsTrigger value="resumo">Resumo</TabsTrigger>
-            <TabsTrigger value="contas">Contas</TabsTrigger>
-            <TabsTrigger value="faturas">Faturas</TabsTrigger>
+            {!isTelecom && <TabsTrigger value="resumo">Resumo</TabsTrigger>}
+            {!isTelecom && <TabsTrigger value="contas">Contas</TabsTrigger>}
+            {!isTelecom && <TabsTrigger value="faturas">Faturas</TabsTrigger>}
             <TabsTrigger value="outros">Outros</TabsTrigger>
           </TabsList>
 

@@ -2159,6 +2159,7 @@ export type Database = {
           fidelization_email: string | null
           fidelization_email_enabled: boolean | null
           fidelization_event_time: string | null
+          finance_email: string | null
           form_settings: Json | null
           id: string
           integrations_enabled: Json | null
@@ -2211,6 +2212,7 @@ export type Database = {
           fidelization_email?: string | null
           fidelization_email_enabled?: boolean | null
           fidelization_event_time?: string | null
+          finance_email?: string | null
           form_settings?: Json | null
           id?: string
           integrations_enabled?: Json | null
@@ -2263,6 +2265,7 @@ export type Database = {
           fidelization_email?: string | null
           fidelization_email_enabled?: boolean | null
           fidelization_event_time?: string | null
+          finance_email?: string | null
           form_settings?: Json | null
           id?: string
           integrations_enabled?: Json | null
@@ -3479,6 +3482,10 @@ export type Database = {
           organization_name: string
           organization_slug: string
         }[]
+      }
+      has_finance_approve_permission: {
+        Args: { _user_id: string }
+        Returns: boolean
       }
       has_role: {
         Args: {
