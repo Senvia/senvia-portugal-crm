@@ -1,20 +1,19 @@
 
 
-# Corrigir Erro ao Atualizar Estado da Venda
+# Corrigir Constraint da Base de Dados (sales_status_check)
 
 ## Problema
 
-O erro "violates check constraint sales_status_check" acontece porque a base de dados so aceita os estados: `pending`, `in_progress`, `delivered`, `cancelled`. O codigo TypeScript usa `fulfilled` (Entregue) que **nao existe** na restricao da base de dados.
+A base de dados só aceita os estados: `pending`, `in_progress`, `delivered`, `cancelled`.
+O código usa `fulfilled` (Entregue) que não existe na restrição. Por isso dá erro ao mudar o estado.
 
-## Solucao
+## Solução
 
-Atualizar a restricao (CHECK constraint) na base de dados para incluir o estado `fulfilled`.
+Atualizar a constraint na base de dados para incluir `fulfilled`.
 
-## Seccao Tecnica
+## Secção Técnica
 
-### 1. Migracao SQL
-
-Remover a constraint antiga e criar uma nova que inclua `fulfilled`:
+### Migração SQL
 
 ```sql
 ALTER TABLE public.sales DROP CONSTRAINT IF EXISTS sales_status_check;
@@ -22,8 +21,7 @@ ALTER TABLE public.sales ADD CONSTRAINT sales_status_check
   CHECK (status = ANY (ARRAY['pending','in_progress','fulfilled','delivered','cancelled']));
 ```
 
-### Ficheiros editados:
+### Ficheiros editados
 
-1. Migracao SQL (apenas alterar a constraint)
+Apenas 1 migração SQL. Nenhum ficheiro de código precisa de ser alterado.
 
-Nenhum ficheiro de codigo precisa de ser alterado -- o problema e exclusivamente na base de dados.
