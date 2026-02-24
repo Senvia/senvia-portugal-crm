@@ -7,8 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Calendar, Clock, Video, Loader2 } from 'lucide-react';
-import { REMINDER_OPTIONS } from '@/types/calendar';
+import { Calendar, Clock, Loader2 } from 'lucide-react';
 
 
 const HOURS_OPTIONS = [
@@ -30,14 +29,12 @@ const DAYS_OPTIONS = [
 ];
 
 interface CalendarAlertSettings {
-  default_reminder_minutes: number | null;
   auto_reminder_meetings: boolean;
   auto_reminder_hours: number | null;
   auto_reminder_days: number | null;
 }
 
 const DEFAULT_SETTINGS: CalendarAlertSettings = {
-  default_reminder_minutes: null,
   auto_reminder_meetings: true,
   auto_reminder_hours: 1,
   auto_reminder_days: null,
@@ -73,7 +70,6 @@ export function CalendarAlertsSettings() {
             }
           }
           setSettings({
-            default_reminder_minutes: raw.default_reminder_minutes ?? null,
             auto_reminder_meetings: raw.auto_reminder_meetings ?? true,
             auto_reminder_hours: hours,
             auto_reminder_days: days,
@@ -121,53 +117,15 @@ export function CalendarAlertsSettings() {
         </p>
       </div>
 
-      {/* Default Reminder */}
+      {/* Auto Reminders */}
       <Card>
         <CardHeader className="pb-4">
           <CardTitle className="text-base flex items-center gap-2">
             <Clock className="h-4 w-4" />
-            Lembrete Padrão
+            Lembretes Automáticos
           </CardTitle>
           <CardDescription>
-            Valor pré-selecionado ao criar um novo evento no calendário.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            <Label>Lembrar antes de</Label>
-            <Select
-              value={settings.default_reminder_minutes?.toString() ?? 'none'}
-              onValueChange={(v) =>
-                setSettings((s) => ({
-                  ...s,
-                  default_reminder_minutes: v === 'none' ? null : Number(v),
-                }))
-              }
-            >
-              <SelectTrigger className="w-full sm:w-[220px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {REMINDER_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value ?? 'none'} value={opt.value?.toString() ?? 'none'}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Auto Reminder for Meetings */}
-      <Card>
-        <CardHeader className="pb-4">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Video className="h-4 w-4" />
-            Reuniões e Chamadas
-          </CardTitle>
-          <CardDescription>
-            Aplique automaticamente um lembrete a eventos do tipo Reunião e Chamada, mesmo que não seja configurado manualmente.
+            Aplique automaticamente um lembrete a eventos que não tenham lembrete configurado manualmente.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

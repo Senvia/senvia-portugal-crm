@@ -124,12 +124,7 @@ export function CreateEventModal({ open, onOpenChange, selectedDate, event, pres
       setStartDate(format(selectedDate, 'yyyy-MM-dd'));
       setEndDate(format(selectedDate, 'yyyy-MM-dd'));
       setEndTimeManuallySet(false);
-      // Apply default reminder from org settings
-      if (calendarSettings?.default_reminder_minutes != null) {
-        setReminderMinutes(calendarSettings.default_reminder_minutes.toString());
-      } else {
-        setReminderMinutes('');
-      }
+      setReminderMinutes('');
     }
     
     // Pre-select lead if provided (from Kanban drop)
@@ -176,7 +171,7 @@ export function CreateEventModal({ open, onOpenChange, selectedDate, event, pres
       lead_id: leadId || undefined,
       reminder_minutes: reminderMinutes
         ? parseInt(reminderMinutes)
-        : (calendarSettings?.auto_reminder_meetings && (eventType === 'meeting' || eventType === 'call'))
+        : (calendarSettings?.auto_reminder_meetings)
           ? (() => {
               const hoursMins = calendarSettings.auto_reminder_hours != null ? calendarSettings.auto_reminder_hours * 60 : null;
               const daysMins = calendarSettings.auto_reminder_days != null ? calendarSettings.auto_reminder_days * 1440 : null;
