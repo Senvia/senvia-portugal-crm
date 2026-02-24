@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Search, Users, Crown, UserMinus, Euro, Shield, Zap } from "lucide-react";
+import { Plus, Search, Users, Crown, UserMinus, Euro, Shield } from "lucide-react";
 import { useClients, useClientStats, useDeleteClient } from "@/hooks/useClients";
 import { useClientLabels } from "@/hooks/useClientLabels";
 import { ClientsTable } from "@/components/clients/ClientsTable";
@@ -143,7 +143,7 @@ export default function Clients() {
         </div>
 
         {/* Stats Cards */}
-        <div className={`grid grid-cols-2 gap-4 ${organization?.niche === 'telecom' ? 'md:grid-cols-4 lg:grid-cols-7' : 'md:grid-cols-5'}`}>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
@@ -201,47 +201,22 @@ export default function Clients() {
           </Card>
 
           {organization?.niche === 'telecom' ? (
-            <>
-              <Card>
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-success/10">
-                      <Euro className="h-5 w-5 text-success" />
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold">{formatCurrency(stats.totalComissao)}</p>
-                      <p className="text-xs text-muted-foreground">Comissão</p>
-                    </div>
+            <Card className="col-span-2 md:col-span-1">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-success/10">
+                    <Euro className="h-5 w-5 text-success" />
                   </div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                      <Zap className="h-5 w-5 text-primary" />
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold">{stats.totalMwh.toFixed(2)}</p>
-                      <p className="text-xs text-muted-foreground">MWh</p>
-                    </div>
+                  <div>
+                    <p className="text-2xl font-bold">{formatCurrency(stats.totalComissao)}</p>
+                    <p className="text-xs text-muted-foreground">Comissão Total</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {stats.totalMwh.toFixed(1)} MWh · {stats.totalKwp.toFixed(1)} kWp
+                    </p>
                   </div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-warning/10">
-                      <Zap className="h-5 w-5 text-warning" />
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold">{stats.totalKwp.toFixed(2)}</p>
-                      <p className="text-xs text-muted-foreground">kWp</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </>
+                </div>
+              </CardContent>
+            </Card>
           ) : (
             <Card className="col-span-2 md:col-span-1">
               <CardContent className="p-4">
