@@ -17,14 +17,18 @@ export function useProposals() {
         .select(`
           *,
           lead:leads(id, name, email, phone, assigned_to),
-          client:crm_clients(id, name, email, phone)
+          client:crm_clients(id, name, email, phone),
+          linked_sales:sales!sales_proposal_id_fkey(id)
         `)
         .eq('organization_id', organization!.id)
         .order('created_at', { ascending: false });
       
       if (error) throw error;
       
-      let result = data as (Proposal & { lead?: { assigned_to?: string } })[];
+      let result = (data as any[]).map(({ linked_sales, ...rest }) => ({
+        ...rest,
+        has_sale: Array.isArray(linked_sales) && linked_sales.length > 0,
+      })) as (Proposal & { lead?: { assigned_to?: string }; has_sale?: boolean })[];
       
       // Filter by user IDs (admin/leader/single user)
       if (effectiveUserIds) {
@@ -34,7 +38,7 @@ export function useProposals() {
         );
       }
       
-      return result as Proposal[];
+      return result as (Proposal & { has_sale?: boolean })[];
     },
     enabled: !!organization?.id,
   });
