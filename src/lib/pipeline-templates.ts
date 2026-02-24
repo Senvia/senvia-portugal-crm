@@ -84,10 +84,8 @@ export const NICHE_TEMPLATES: NicheTemplate[] = [
       { name: 'Lead', key: 'new', color: '#3B82F6', position: 1, is_final_positive: false, is_final_negative: false },
       { name: 'Contactado', key: 'contactado', color: '#A855F7', position: 2, is_final_positive: false, is_final_negative: false },
       { name: 'Agendado', key: 'scheduled', color: '#F59E0B', position: 3, is_final_positive: false, is_final_negative: false },
-      { name: 'Proposta', key: 'proposal', color: '#06B6D4', position: 4, is_final_positive: false, is_final_negative: false },
-      { name: 'Instalação', key: 'installation', color: '#8B5CF6', position: 5, is_final_positive: false, is_final_negative: false },
-      { name: 'Ativo', key: 'active', color: '#22C55E', position: 6, is_final_positive: true, is_final_negative: false },
-      { name: 'Perdido', key: 'perdido', color: '#6B7280', position: 7, is_final_positive: false, is_final_negative: true },
+      { name: 'Ganho', key: 'won', color: '#22C55E', position: 4, is_final_positive: true, is_final_negative: false },
+      { name: 'Perdido', key: 'perdido', color: '#6B7280', position: 5, is_final_positive: false, is_final_negative: true },
     ],
   },
   {
