@@ -877,7 +877,7 @@ export function EditSaleModal({
                   )}
 
                   {/* Payments */}
-                  {organization && (
+                  {organization && !isTelecom && (
                     <Card>
                       <CardContent className="p-4">
                         <SalePaymentsList
