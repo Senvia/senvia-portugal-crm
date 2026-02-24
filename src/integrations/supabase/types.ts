@@ -2869,6 +2869,58 @@ export type Database = {
           },
         ]
       }
+      sale_activation_history: {
+        Row: {
+          activation_date: string
+          changed_by: string | null
+          created_at: string
+          id: string
+          notes: string | null
+          organization_id: string
+          sale_id: string
+        }
+        Insert: {
+          activation_date: string
+          changed_by?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          organization_id: string
+          sale_id: string
+        }
+        Update: {
+          activation_date?: string
+          changed_by?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          organization_id?: string
+          sale_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sale_activation_history_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sale_activation_history_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sale_activation_history_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sale_items: {
         Row: {
           created_at: string | null
