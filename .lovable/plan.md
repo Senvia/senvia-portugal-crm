@@ -1,78 +1,55 @@
 
 
-# Adicionar Filtro de Tipo (Energia / Outros Servicos) nos Modulos
+# Bloquear Criacao de Lead quando NIF pertence a Cliente Existente
 
 ## Resumo
 
-Adicionar um filtro "Tipo" (Energia / Outros Servicos) nas paginas de Propostas, Vendas, Leads e Clientes. Este filtro so sera visivel para organizacoes do nicho **telecom**, pois e o unico nicho que utiliza `proposal_type`.
+Quando o utilizador digita um NIF no modal "Adicionar Lead" e esse NIF ja pertence a um cliente existente (`crm_clients`), o formulario deve:
 
-## Mapeamento por modulo
+1. Mostrar os dados do cliente (ja acontece)
+2. **Bloquear completamente** a criacao -- o botao "Criar Lead" fica desativado e aparece uma mensagem clara a explicar que nao e possivel criar um lead para um NIF que ja e cliente
 
-| Modulo | Campo filtrado | Valores |
-|--------|---------------|---------|
-| Propostas | `proposal.proposal_type` | energia / servicos |
-| Vendas | `sale.proposal_type` | energia / servicos |
-| Leads | `lead.tipologia` | ee, gas, servicos, ee_servicos (agrupados em Energia vs Servicos) |
-| Clientes | Sem campo direto -- filtro nao aplicavel neste modulo |
+## Logica
 
-**Nota sobre Clientes:** A tabela `crm_clients` nao tem campo `proposal_type` nem `tipologia`. Para filtrar clientes por tipo seria necessario cruzar com propostas/vendas associadas, o que adicionaria complexidade significativa. Recomenda-se aplicar o filtro apenas nas Propostas, Vendas e Leads.
+Se o NIF ja existe na tabela `crm_clients`, significa que essa entidade ja passou por um estado final da pipeline (ganho/perdido) e foi convertida em cliente. Criar um novo lead com o mesmo NIF nao faz sentido.
 
-## Secao Tecnica
+## Situacao Atual
 
-### 1. Propostas (`src/pages/Proposals.tsx`)
+- O hook `useNifValidation` ja deteta NIFs duplicados na `crm_clients` e bloqueia o botao
+- Porem, o `searchExistingClient` (onBlur) preenche campos automaticamente e mostra um banner informativo que da a entender que e possivel continuar
 
-- Novo state: `typeFilter` com valores `'all' | 'energia' | 'servicos'`
-- Persistido com `usePersistedState('proposals-type-v1', 'all')`
-- Adicionado ao bloco de filtros como um `Select` com 3 opcoes: "Todos os tipos", "Energia", "Outros Servicos"
-- Filtro aplicado: `matchesType = typeFilter === 'all' || proposal.proposal_type === typeFilter`
-- Visivel apenas quando `isTelecom === true`
+## Alteracoes
 
-### 2. Vendas (`src/pages/Sales.tsx`)
+### Ficheiro: `src/components/leads/AddLeadModal.tsx`
 
-- Novo state: `typeFilter` com valores `'all' | 'energia' | 'servicos'`
-- Persistido com `usePersistedState('sales-type-v1', 'all')`
-- Adicionado ao bloco de filtros apos o filtro de estado
-- Filtro aplicado: `matchesType = typeFilter === 'all' || sale.proposal_type === typeFilter`
-- Visivel apenas quando `isTelecom === true`
+1. **Banner de cliente existente** -- Alterar o banner amarelo (`matchedClient`) para vermelho/destrutivo quando o NIF pertence a um cliente, com mensagem clara: "Este NIF ja pertence a um cliente existente. Nao e possivel criar um novo lead."
 
-### 3. Leads (`src/pages/Leads.tsx`)
+2. **Nao preencher campos automaticamente** -- Quando `nifValidation.isDuplicate` e verdadeiro, os campos do formulario nao devem ser preenchidos automaticamente (remover o auto-fill do `searchExistingClient` quando ha match)
 
-- Novo state: `tipologiaFilter` com valores `'all' | 'ee' | 'gas' | 'servicos' | 'ee_servicos'`
-- Persistido com `usePersistedState('leads-tipologia-v1', 'all')`
-- Adicionado ao bloco de filtros existente
-- Filtro aplicado: `matchesTipologia = tipologiaFilter === 'all' || lead.tipologia === tipologiaFilter`
-- Labels ja existem em `TIPOLOGIA_LABELS` (`src/types/index.ts`)
-- Visivel apenas quando `isTelecom === true`
+3. **Botao "Criar Lead"** -- Ja esta bloqueado por `nifValidation.isDuplicate` (implementado anteriormente). Manter.
 
-### 4. Clientes -- Nao aplicavel
+4. **Mensagem junto ao NIF** -- A mensagem vermelha abaixo do campo NIF ja existe. Reforcar com texto mais explicito: "Este NIF pertence ao cliente {codigo} - {nome}. Nao e possivel criar leads duplicados."
 
-A tabela `crm_clients` nao possui campo de tipo/tipologia. Este filtro nao sera adicionado a este modulo.
+### Resultado esperado
+
+- Utilizador digita NIF -> sistema verifica em tempo real (300ms debounce)
+- Se NIF pertence a cliente: banner vermelho + mensagem no campo + botao bloqueado
+- Campos do formulario NAO sao preenchidos automaticamente (para nao dar a impressao de que pode editar/submeter)
+
+### Secao Tecnica
+
+**Alteracoes no `searchExistingClient`:**
+- Adicionar verificacao: se `nifValidation.isDuplicate`, nao fazer auto-fill dos campos
+- Ou alternativamente, deixar o `searchExistingClient` preencher mas tornar todos os campos `disabled` quando ha duplicado (para mostrar os dados sem permitir edicao)
+
+**Opcao escolhida:** Mostrar os dados preenchidos mas com todos os inputs `disabled` quando `nifValidation.isDuplicate === true`. Isto permite ao utilizador ver a quem pertence o NIF sem poder editar ou submeter.
+
+**Logica concreta:**
+- Quando `nifValidation.isDuplicate` e `true`, adicionar `disabled` a todos os inputs do formulario
+- Alterar o banner de amarelo para vermelho com icone de alerta
+- Alterar texto da mensagem abaixo do NIF para ser mais explicito sobre o bloqueio
 
 ### Ficheiros a alterar
 
-- `src/pages/Proposals.tsx` -- adicionar Select de tipo + logica de filtragem
-- `src/pages/Sales.tsx` -- adicionar Select de tipo + logica de filtragem
-- `src/pages/Leads.tsx` -- adicionar Select de tipologia + logica de filtragem
-
-### Aspeto visual do filtro
-
-Sera um `Select` compacto, consistente com os filtros existentes:
-
-```text
-[Icone Zap] Todos os tipos  v
-  - Todos os tipos
-  - Energia
-  - Outros Servicos
-```
-
-Para Leads, usara as tipologias ja definidas:
-
-```text
-Todas as tipologias  v
-  - Todas
-  - EE
-  - Gas
-  - Servicos
-  - EE + Servicos
-```
+- `src/components/leads/AddLeadModal.tsx` -- unico ficheiro
 
