@@ -151,8 +151,8 @@ export default function Clients() {
                   <Users className="h-5 w-5 text-primary" />
                 </div>
                 <div>
+                  <p className="text-sm text-muted-foreground">{labels.total}</p>
                   <p className="text-2xl font-bold">{stats.total}</p>
-                  <p className="text-xs text-muted-foreground">{labels.total}</p>
                 </div>
               </div>
             </CardContent>
@@ -165,8 +165,8 @@ export default function Clients() {
                   <Shield className="h-5 w-5 text-blue-500" />
                 </div>
                 <div>
+                  <p className="text-sm text-muted-foreground">{labels.active}</p>
                   <p className="text-2xl font-bold">{stats.active}</p>
-                  <p className="text-xs text-muted-foreground">{labels.active}</p>
                 </div>
               </div>
             </CardContent>
@@ -179,8 +179,8 @@ export default function Clients() {
                   <Crown className="h-5 w-5 text-warning" />
                 </div>
                 <div>
+                  <p className="text-sm text-muted-foreground">{labels.vip}</p>
                   <p className="text-2xl font-bold">{stats.vip}</p>
-                  <p className="text-xs text-muted-foreground">{labels.vip}</p>
                 </div>
               </div>
             </CardContent>
@@ -193,8 +193,8 @@ export default function Clients() {
                   <UserMinus className="h-5 w-5 text-muted-foreground" />
                 </div>
                 <div>
+                  <p className="text-sm text-muted-foreground">{labels.inactive}</p>
                   <p className="text-2xl font-bold">{stats.inactive}</p>
-                  <p className="text-xs text-muted-foreground">{labels.inactive}</p>
                 </div>
               </div>
             </CardContent>
@@ -208,8 +208,8 @@ export default function Clients() {
                     <Euro className="h-5 w-5 text-success" />
                   </div>
                   <div>
+                    <p className="text-sm text-muted-foreground">Comissão Total</p>
                     <p className="text-2xl font-bold">{formatCurrency(stats.totalComissao)}</p>
-                    <p className="text-xs text-muted-foreground">Comissão Total</p>
                     <p className="text-xs text-muted-foreground mt-1">
                       {stats.totalMwh.toFixed(1)} MWh · {stats.totalKwp.toFixed(1)} kWp
                     </p>
@@ -225,8 +225,8 @@ export default function Clients() {
                     <Euro className="h-5 w-5 text-success" />
                   </div>
                   <div>
+                    <p className="text-sm text-muted-foreground">Valor Total</p>
                     <p className="text-2xl font-bold">{formatCurrency(stats.totalValue)}</p>
-                    <p className="text-xs text-muted-foreground">Valor Total</p>
                   </div>
                 </div>
               </CardContent>
