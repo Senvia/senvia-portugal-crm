@@ -236,6 +236,9 @@ export function useClientStats() {
     vip: clients?.filter(c => c.status === 'vip').length || 0,
     inactive: clients?.filter(c => c.status === 'inactive').length || 0,
     totalValue: clients?.reduce((sum, c) => sum + (c.total_value || 0), 0) || 0,
+    totalComissao: clients?.reduce((sum, c) => sum + (c.total_comissao || 0), 0) || 0,
+    totalMwh: clients?.reduce((sum, c) => sum + (c.total_mwh || 0), 0) || 0,
+    totalKwp: clients?.reduce((sum, c) => sum + (c.total_kwp || 0), 0) || 0,
   };
 
   return { stats, isLoading };

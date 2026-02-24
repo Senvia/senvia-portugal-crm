@@ -157,13 +157,33 @@ export function ClientDetailsModal({ client, open, onOpenChange, onEdit }: Clien
                 <p className="text-xs text-muted-foreground">Vendas</p>
               </div>
               
-              <div className="rounded-lg bg-muted/50 p-3 text-center">
-                <div className="flex items-center justify-center gap-1 text-muted-foreground mb-1">
-                  <Euro className="h-3 w-3" />
+              {isTelecom ? (
+                <>
+                  <div className="rounded-lg bg-muted/50 p-3 text-center">
+                    <div className="flex items-center justify-center gap-1 text-muted-foreground mb-1">
+                      <Euro className="h-3 w-3" />
+                    </div>
+                    <p className="text-lg font-semibold">{formatCurrency(client.total_comissao || 0)}</p>
+                    <p className="text-xs text-muted-foreground">Comissão</p>
+                  </div>
+                  <div className="rounded-lg bg-muted/50 p-3 text-center">
+                    <p className="text-lg font-semibold">{(client.total_mwh || 0).toFixed(2)}</p>
+                    <p className="text-xs text-muted-foreground">MWh</p>
+                  </div>
+                  <div className="rounded-lg bg-muted/50 p-3 text-center">
+                    <p className="text-lg font-semibold">{(client.total_kwp || 0).toFixed(2)}</p>
+                    <p className="text-xs text-muted-foreground">kWp</p>
+                  </div>
+                </>
+              ) : (
+                <div className="rounded-lg bg-muted/50 p-3 text-center">
+                  <div className="flex items-center justify-center gap-1 text-muted-foreground mb-1">
+                    <Euro className="h-3 w-3" />
+                  </div>
+                  <p className="text-lg font-semibold">{formatCurrency(client.total_value)}</p>
+                  <p className="text-xs text-muted-foreground">Valor Total</p>
                 </div>
-                <p className="text-lg font-semibold">{formatCurrency(client.total_value)}</p>
-                <p className="text-xs text-muted-foreground">Valor Total</p>
-              </div>
+              )}
             </div>
           </div>
 

@@ -34,6 +34,9 @@ export interface CrmClient {
   total_proposals: number;
   total_sales: number;
   total_value: number;
+  total_comissao?: number;
+  total_mwh?: number;
+  total_kwp?: number;
   
   created_at: string;
   updated_at: string;
