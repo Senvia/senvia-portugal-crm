@@ -182,7 +182,18 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
     cpe => !cpes.find(c => c.existing_cpe_id === cpe.id)
   );
 
-  const canAddExisting = selectedExistingCpe !== null;
+  const hasValidComercializador = updateComercializador === 'other' 
+    ? !!updateCustomComercializador.trim() 
+    : (!!updateComercializador && updateComercializador !== '');
+
+  const canAddExisting = selectedExistingCpe !== null
+    && !!updateConsumoAnual
+    && !!updateDuracaoContrato
+    && !!updateDbl
+    && !!updateComissao
+    && !!updateContratoInicio
+    && !!updateContratoFim
+    && hasValidComercializador;
 
   const formatCurrency = (value: string) => {
     const num = parseFloat(value) || 0;
@@ -394,7 +405,7 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
               <>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <div className="space-y-1">
-                    <Label className="text-xs">Novo Comercializador</Label>
+                    <Label className="text-xs">Novo Comercializador <span className="text-destructive">*</span></Label>
                     <Select value={updateComercializador} onValueChange={setUpdateComercializador}>
                       <SelectTrigger className="h-9">
                         <SelectValue placeholder="Manter atual..." />
@@ -417,7 +428,7 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
                     )}
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Início Contrato</Label>
+                    <Label className="text-xs">Início Contrato <span className="text-destructive">*</span></Label>
                     <Input
                       type="date"
                       value={updateContratoInicio}
@@ -426,7 +437,7 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
                     />
                   </div>
                    <div className="space-y-1">
-                    <Label className="text-xs">Fim Contrato</Label>
+                    <Label className="text-xs">Fim Contrato <span className="text-destructive">*</span></Label>
                     <Input
                       type="date"
                       value={updateContratoFim}
@@ -441,7 +452,7 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
                 {/* Energy fields */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   <div className="space-y-1">
-                    <Label className="text-xs">Consumo Anual (kWh)</Label>
+                    <Label className="text-xs">Consumo Anual (kWh) <span className="text-destructive">*</span></Label>
                     <Input
                       type="number"
                       step="1"
@@ -455,7 +466,7 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
                   <div className="space-y-1">
                     <Label className="text-xs flex items-center gap-1">
                       <Calculator className="h-3 w-3" />
-                      Duração (anos)
+                      Duração (anos) <span className="text-destructive">*</span>
                     </Label>
                     <Input
                       type="number"
@@ -468,7 +479,7 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">DBL (€/MWh)</Label>
+                    <Label className="text-xs">DBL (€/MWh) <span className="text-destructive">*</span></Label>
                     <Input
                       type="number"
                       step="0.01"
@@ -494,7 +505,7 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="text-xs">Comissão (€)</Label>
+                  <Label className="text-xs">Comissão (€) <span className="text-destructive">*</span></Label>
                   <Input
                     type="number"
                     step="0.01"
