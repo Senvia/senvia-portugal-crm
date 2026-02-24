@@ -89,8 +89,14 @@ LIMITAÇÕES (O QUE NÃO PODES FAZER):
 - NÃO podes enviar emails, faturas ou documentos.
 - NÃO podes descarregar PDFs ou gerar ficheiros.
 - NÃO podes criar, editar ou apagar registos (leads, clientes, vendas, faturas).
-- NÃO podes executar ações no sistema — apenas PESQUISAR e CONSULTAR dados.
+- NÃO podes executar ações no sistema — apenas PESQUISAR, CONSULTAR dados e SUBMETER TICKETS DE SUPORTE.
 - NÃO podes partilhar links externos ou gerar URLs de download.
+
+TICKETS DE SUPORTE:
+- Quando o utilizador reportar um problema, bug ou pedir ajuda/suporte técnico, usa a ferramenta submit_support_ticket.
+- ANTES de submeter, recolhe: assunto (frase curta) e descrição detalhada do problema.
+- Confirma SEMPRE com o utilizador antes de enviar, mostrando o resumo do ticket com botões [botao:Sim, enviar][botao:Editar descrição].
+- Após submissão bem-sucedida, informa que o ticket foi criado e que a equipa de suporte foi notificada via WhatsApp.
 
 QUANDO O UTILIZADOR PEDE UMA AÇÃO QUE NÃO PODES EXECUTAR:
 - Diz claramente: "Não consigo executar essa ação diretamente."
@@ -272,6 +278,22 @@ const TOOLS = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "submit_support_ticket",
+      description: "Submeter um ticket de suporte técnico. A equipa será notificada via WhatsApp. Usa APENAS quando o utilizador confirmar o envio.",
+      parameters: {
+        type: "object",
+        properties: {
+          subject: { type: "string", description: "Assunto curto do ticket" },
+          description: { type: "string", description: "Descrição detalhada do problema" },
+          priority: { type: "string", enum: ["low", "medium", "high"], description: "Prioridade: low, medium, high (default: medium)" },
+        },
+        required: ["subject", "description"],
+      },
+    },
+  },
 ];
 
 // ─── Tool Executors ───
@@ -279,7 +301,8 @@ async function executeTool(
   toolName: string,
   args: Record<string, any>,
   orgId: string,
-  supabaseAdmin: any
+  supabaseAdmin: any,
+  userId?: string | null
 ): Promise<string> {
   try {
     switch (toolName) {
@@ -505,6 +528,96 @@ async function executeTool(
         }));
         if (results.length === 0) return JSON.stringify({ results: [], count: 0, _instruction: "ZERO RESULTADOS encontrados. Informa o utilizador que não encontraste notas de crédito com esse termo. NÃO INVENTES DADOS." });
         return JSON.stringify({ results, count: results.length });
+      }
+
+      case "submit_support_ticket": {
+        const priority = args.priority || "medium";
+        
+        // Insert ticket
+        const { data: ticket, error: ticketError } = await supabaseAdmin
+          .from("support_tickets")
+          .insert({
+            organization_id: orgId,
+            user_id: userId,
+            subject: args.subject,
+            description: args.description,
+            priority,
+          })
+          .select("id, created_at")
+          .single();
+        
+        if (ticketError) {
+          console.error("Ticket insert error:", ticketError);
+          return JSON.stringify({ error: ticketError.message, _instruction: "ERRO ao criar ticket. Informa o utilizador que houve um problema técnico." });
+        }
+
+        // Get org name and user name for WhatsApp message
+        const { data: org } = await supabaseAdmin
+          .from("organizations")
+          .select("name")
+          .eq("id", orgId)
+          .single();
+        
+        const { data: profile } = await supabaseAdmin
+          .from("profiles")
+          .select("full_name")
+          .eq("id", userId)
+          .single();
+
+        const orgName = org?.name || "Desconhecida";
+        const userName = profile?.full_name || "Desconhecido";
+        const createdAt = new Date(ticket.created_at).toLocaleString("pt-PT", { timeZone: "Europe/Lisbon" });
+
+        // Send WhatsApp notification via Evolution API
+        const SUPPORT_WHATSAPP = "351939135114";
+        const EVOLUTION_BASE_URL = "https://zap.senvia.pt";
+        const EVOLUTION_INSTANCE = "SenviaAgency";
+        
+        // Get Evolution API key from Senvia Agency org
+        const SENVIA_AGENCY_ID = "06fe9e1d-9670-45b0-8717-c5a6e90be380";
+        const { data: senviaOrg } = await supabaseAdmin
+          .from("organizations")
+          .select("whatsapp_api_key")
+          .eq("id", SENVIA_AGENCY_ID)
+          .single();
+
+        if (senviaOrg?.whatsapp_api_key) {
+          const whatsappMessage = `🎫 *NOVO TICKET DE SUPORTE*\n\n` +
+            `*Org:* ${orgName}\n` +
+            `*User:* ${userName}\n` +
+            `*Assunto:* ${args.subject}\n` +
+            `*Descrição:* ${args.description}\n` +
+            `*Prioridade:* ${priority}\n` +
+            `*Data:* ${createdAt}\n` +
+            `*Ticket ID:* ${ticket.id.slice(0, 8)}`;
+
+          try {
+            const waResp = await fetch(`${EVOLUTION_BASE_URL}/message/sendText/${EVOLUTION_INSTANCE}`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                apikey: senviaOrg.whatsapp_api_key,
+              },
+              body: JSON.stringify({
+                number: SUPPORT_WHATSAPP,
+                text: whatsappMessage,
+              }),
+            });
+            if (!waResp.ok) {
+              console.error("WhatsApp send error:", await waResp.text());
+            }
+          } catch (waErr) {
+            console.error("WhatsApp send failed:", waErr);
+          }
+        } else {
+          console.warn("No WhatsApp API key found for Senvia Agency");
+        }
+
+        return JSON.stringify({ 
+          success: true, 
+          ticket_id: ticket.id.slice(0, 8),
+          _instruction: `Ticket criado com sucesso! Informa o utilizador: "Ticket #${ticket.id.slice(0, 8)} criado com sucesso! A equipa de suporte foi notificada via WhatsApp e responderemos brevemente." NÃO INVENTES dados adicionais.`
+        });
       }
 
       default:
@@ -755,7 +868,7 @@ serve(async (req) => {
           } catch { fnArgs = {}; }
 
           console.log(`Executing tool: ${fnName}`, fnArgs);
-          const toolResult = await executeTool(fnName, fnArgs, orgId!, supabaseAdmin);
+          const toolResult = await executeTool(fnName, fnArgs, orgId!, supabaseAdmin, userId);
 
           conversationMessages.push({
             role: "tool",
