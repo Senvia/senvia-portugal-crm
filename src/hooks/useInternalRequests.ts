@@ -114,6 +114,17 @@ export function useInternalRequests(filters?: Filters) {
       const labels = { approved: 'aprovado', rejected: 'rejeitado', paid: 'marcado como pago' };
       toast.success(`Pedido ${labels[vars.status]}`);
       queryClient.invalidateQueries({ queryKey: ['internal-requests'] });
+      // Notify submitter via email
+      if (['approved', 'rejected', 'paid'].includes(vars.status)) {
+        supabase.functions.invoke('notify-request-status', {
+          body: {
+            request_id: vars.id,
+            organization_id: organizationId,
+            new_status: vars.status,
+            review_notes: vars.review_notes,
+          },
+        }).catch(() => {});
+      }
     },
     onError: () => toast.error('Erro ao processar pedido'),
   });
