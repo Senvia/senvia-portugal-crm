@@ -1,62 +1,52 @@
 
 
-# Bloquear alteracao de estado em Leads finais (Ganho/Perdido) para nao-administradores
+# Adicionar card "Clientes Bronze" (Ativos) na pagina de Clientes
 
-## Objetivo
+## Contexto
 
-Leads que estejam num estado final (is_final_positive ou is_final_negative) nao podem ter o seu estado alterado, exceto por utilizadores com role de administrador ou super_admin.
+A pagina de Clientes tem atualmente 4 cards de estatisticas: Total, VIP/Ouro, Inativos/Prata e Valor Total. Falta o card para clientes com status "active", que no nicho Telecom se chama "Bronze".
 
-## Logica
-
-Utilizar o hook `useFinalStages()` (ja existe em `usePipelineStages.ts`) para verificar se o estado atual da lead e final, e o `usePermissions()` para verificar se o utilizador e admin.
+O sistema de labels por nicho ja esta configurado corretamente:
+- Telecom: active = "Bronze", inactive = "Prata", vip = "Ouro"
+- Outros nichos: active = "Ativo", inactive = "Inativo", vip = "VIP"
 
 ## Alteracoes
 
-### 1. Leads.tsx -- handleStatusChange (linhas 174-272)
+### 1. Clients.tsx -- Adicionar card Bronze/Ativos
 
-No inicio da funcao `handleStatusChange`, adicionar verificacao:
-- Encontrar a lead pelo ID
-- Verificar se o status atual da lead corresponde a uma etapa final (is_final_positive ou is_final_negative)
-- Se for final e o utilizador NAO for admin, mostrar toast de erro e retornar sem fazer nada
+Adicionar um novo card na grelha de estatisticas entre o card "Total" e o card "VIP/Ouro". Este card mostra o numero de clientes com status `active`, usando o label dinamico do nicho (ex: "Clientes Bronze" para telecom, "Clientes Ativos" para outros).
 
-Importar `useFinalStages` e utilizar `isFinalStatus()`.
+- Icone: Shield ou UserCheck (representacao de nivel basico/ativo)
+- Cor: Azul (bg-blue-500/10, text-blue-500) para diferenciar dos outros cards
+- Valor: `stats.active` (ja existe no hook `useClientStats`)
 
-### 2. LeadCard.tsx -- Menu dropdown de "Mover para" (linhas 131-148)
+A grelha passa de 4 para 5 cards. Para manter responsividade mobile-first:
+- Mobile: `grid-cols-2` (2x3, ultimo card ocupa largura total ou grid de 2)
+- Desktop: `grid-cols-5`
 
-- Receber uma nova prop `isLocked` (boolean) que indica se a lead esta num estado final e o utilizador nao e admin
-- Se `isLocked === true`, nao renderizar as opcoes de "Mover para [etapa]" no dropdown menu
-- Manter a opcao "Ver detalhes" e "Eliminar" (se admin)
+### 2. useClientStats -- Sem alteracao necessaria
 
-### 3. KanbanBoard.tsx -- Drag & drop (linhas 64-85)
+O hook `useClientStats` ja calcula `stats.active`, portanto nao precisa de alteracao.
 
-- Impedir o drag de leads que estao em etapas finais quando o utilizador nao e admin
-- Na funcao `handleDragStart`, verificar se a lead esta numa etapa final; se sim e nao for admin, cancelar o drag
-- Alternativamente, passar prop ao LeadCard para desativar o drag handle visual
+### 3. Niche labels -- Sem alteracao necessaria
 
-### 4. KanbanTabs.tsx (mobile) -- Mesma logica
+Os labels ja estao configurados em `niche-labels.ts` com `active: 'Clientes Bronze'` para telecom.
 
-- Aplicar a mesma restricao que o KanbanBoard para a versao mobile
+## Secao tecnica
 
-### 5. LeadDetailsModal.tsx -- Select de estado
+### Ficheiros alterados
 
-- Se a lead esta num estado final e o utilizador nao e admin, desativar o Select de alteracao de estado (disabled)
-- Mostrar tooltip ou texto explicativo: "Apenas administradores podem alterar o estado de leads finalizadas"
+1. **`src/pages/Clients.tsx`** -- Adicionar novo `<Card>` na grelha de stats com `stats.active` e `labels.active`
 
-### 6. LeadsTableView.tsx -- Se houver controlo de status inline
+### Layout da grelha (apos alteracao)
 
-- Aplicar a mesma logica de bloqueio
+```text
+Mobile (grid-cols-2):
+[Total]   [Bronze]
+[Ouro]    [Prata]
+[Valor Total - col-span-2]
 
-## Ficheiros Alterados
+Desktop (grid-cols-5):
+[Total] [Bronze] [Ouro] [Prata] [Valor Total]
+```
 
-1. `src/pages/Leads.tsx` -- Guardar central no handleStatusChange + importar hooks
-2. `src/components/leads/LeadCard.tsx` -- Prop isLocked para esconder opcoes de mover
-3. `src/components/leads/KanbanBoard.tsx` -- Bloquear drag de leads finais
-4. `src/components/leads/KanbanTabs.tsx` -- Mesma logica para mobile
-5. `src/components/leads/LeadDetailsModal.tsx` -- Desativar Select de estado
-6. `src/components/leads/LeadsTableView.tsx` -- Desativar controlo de estado
-
-## Resultado
-
-- Leads em estados finais (Ganho/Perdido) ficam "bloqueadas" visualmente e funcionalmente
-- Apenas administradores e super_admins podem mover estas leads para outro estado
-- A experiencia e consistente entre desktop (Kanban drag + dropdown) e mobile (tabs + dropdown)
