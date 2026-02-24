@@ -3,6 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useCalendarEvents } from '@/hooks/useCalendarEvents';
 import { Calendar, Phone, Users, CheckSquare, RotateCcw, ChevronRight, Loader2, AlertTriangle, Clock } from 'lucide-react';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { useNavigate } from 'react-router-dom';
 import { format, isToday, startOfDay, endOfDay, addDays } from 'date-fns';
 import { pt } from 'date-fns/locale';
@@ -120,50 +121,40 @@ export function CalendarAlertsWidget() {
           </Badge>
         </div>
       </CardHeader>
-      <CardContent className="space-y-3">
-        {todayEvents.length > 0 && (
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-destructive">
-              <AlertTriangle className="h-3.5 w-3.5" />
-              <span className="text-xs font-medium">Hoje</span>
-              <Badge variant="destructive" className="text-xs ml-auto">
-                {todayEvents.length}
-              </Badge>
-            </div>
-            <div className="space-y-1.5">
-              {todayEvents.slice(0, 3).map(e => renderEvent(e, 'today'))}
-            </div>
-          </div>
-        )}
+      <CardContent className="p-0">
+        <ScrollArea className="max-h-[300px]">
+          <div className="space-y-3 p-6 pt-0">
+            {todayEvents.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-destructive">
+                  <AlertTriangle className="h-3.5 w-3.5" />
+                  <span className="text-xs font-medium">Hoje</span>
+                  <Badge variant="destructive" className="text-xs ml-auto">
+                    {todayEvents.length}
+                  </Badge>
+                </div>
+                <div className="space-y-1.5">
+                  {todayEvents.map(e => renderEvent(e, 'today'))}
+                </div>
+              </div>
+            )}
 
-        {upcomingEvents.length > 0 && (
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-blue-500">
-              <Clock className="h-3.5 w-3.5" />
-              <span className="text-xs font-medium">Próximos 7 dias</span>
-              <Badge variant="outline" className="text-xs ml-auto border-blue-500/50 text-blue-500">
-                {upcomingEvents.length}
-              </Badge>
-            </div>
-            {todayEvents.length === 0 && (
-              <div className="space-y-1.5">
-                {upcomingEvents.slice(0, 3).map(e => renderEvent(e, 'upcoming'))}
+            {upcomingEvents.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-blue-500">
+                  <Clock className="h-3.5 w-3.5" />
+                  <span className="text-xs font-medium">Próximos 7 dias</span>
+                  <Badge variant="outline" className="text-xs ml-auto border-blue-500/50 text-blue-500">
+                    {upcomingEvents.length}
+                  </Badge>
+                </div>
+                <div className="space-y-1.5">
+                  {upcomingEvents.map(e => renderEvent(e, 'upcoming'))}
+                </div>
               </div>
             )}
           </div>
-        )}
-
-        {totalAlerts > 3 && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="w-full text-xs"
-            onClick={() => navigate('/calendar')}
-          >
-            Ver agenda ({totalAlerts})
-            <ChevronRight className="h-3.5 w-3.5 ml-1" />
-          </Button>
-        )}
+        </ScrollArea>
       </CardContent>
     </Card>
   );
