@@ -1,48 +1,87 @@
 
 
-# Adicionar Filtro "Tipo" (Energia / Outros Servicos) nos Clientes
+# Tornar Campos Obrigatorios nas Propostas Telecom
 
-## Problema
+## Resumo
 
-A pagina de Clientes nao tem o filtro de Tipo (Energia / Outros Servicos) que ja existe nas Propostas, Vendas e Leads.
+Reforcar a validacao dos formularios de propostas telecom para garantir que todos os campos relevantes sao preenchidos antes de submeter.
 
-## Desafio Tecnico
+## 1. CPE/CUI (Energia) -- Tudo Obrigatorio
 
-A tabela `crm_clients` nao tem uma coluna `proposal_type`. Contudo, as tabelas `proposals` e `sales` estao ligadas aos clientes via `client_id` e possuem o campo `proposal_type`. A solucao e criar um hook que carrega os `proposal_type` distintos por cliente e filtra no frontend.
+Atualmente, ao adicionar um CPE a proposta, apenas se valida que existe pelo menos 1 CPE. Os campos individuais (Consumo Anual, Duracao, DBL, Comissao, Inicio/Fim Contrato) nao sao obrigatorios.
 
-## Abordagem
+**Alteracoes:**
 
-Criar um hook `useClientProposalTypes` que faz um query leve para buscar os tipos de propostas/vendas associados a cada cliente. Com base nisso, o filtro funciona assim:
+### Ficheiro: `src/components/proposals/ProposalCpeSelector.tsx`
 
-- **"Energia"**: Mostra clientes que tem pelo menos uma proposta/venda do tipo `energia`
-- **"Outros Servicos"**: Mostra clientes que tem pelo menos uma proposta/venda do tipo `servicos`
-- **"Todos os tipos"**: Sem filtro
+- **Formulario de adicao (antes de clicar "Adicionar a Proposta")**: O botao "Adicionar a Proposta" so fica ativo quando TODOS os campos estao preenchidos:
+  - Comercializador
+  - Consumo Anual
+  - Duracao (anos)
+  - DBL
+  - Comissao
+  - Inicio Contrato
+  - Fim Contrato
+- Atualizar `canAddExisting` de `selectedExistingCpe !== null` para incluir validacao de todos os campos
+- Adicionar asterisco (*) visual nos labels de todos os campos
+
+### Ficheiro: `src/components/proposals/CreateProposalModal.tsx`
+
+- Atualizar `isEnergiaValid` para verificar que cada CPE adicionado tem todos os campos preenchidos (consumo_anual, duracao_contrato, dbl, comissao, contrato_inicio, contrato_fim)
+- Se algum CPE tiver campos vazios, mostrar mensagem de erro
+
+## 2. Outros Servicos -- Campos da Linha Selecionada Obrigatorios
+
+Atualmente, basta selecionar um produto e que kWp total e comissao total sejam > 0. Os campos individuais de cada produto selecionado nao sao validados.
+
+**Alteracoes:**
+
+### Ficheiro: `src/components/proposals/CreateProposalModal.tsx`
+
+- Atualizar `isServicosValid` para verificar que, para cada produto selecionado (checkbox ativo), TODOS os campos configurados (`config.fields`) estao preenchidos com valor > 0
+- Adicionar asterisco (*) nos labels dos campos de cada produto ativo
+- Mostrar mensagem de erro por campo vazio quando `attempted` e verdadeiro
 
 ## Secao Tecnica
 
-### 1. Novo hook: `src/hooks/useClientProposalTypes.ts`
+### Validacao CPE (`ProposalCpeSelector.tsx`)
 
-- Query a tabela `proposals` agrupando por `client_id` e `proposal_type` para obter um mapa: `{ [clientId]: Set<'energia' | 'servicos'> }`
-- Utiliza `useQuery` com chave `['client-proposal-types', organizationId]`
-- Apenas ativo quando `isTelecom === true`
+```
+canAddExisting = selectedExistingCpe 
+  && updateConsumoAnual 
+  && updateDuracaoContrato 
+  && updateDbl 
+  && updateComissao 
+  && updateContratoInicio 
+  && updateContratoFim
+  && (updateComercializador && updateComercializador !== '' 
+      || (updateComercializador === 'other' && updateCustomComercializador))
+```
 
-### 2. Ficheiro: `src/components/clients/ClientFilters.tsx`
+Para CPEs ja adicionados, validacao no `isEnergiaValid`:
+```
+isEnergiaValid = proposalCpes.length > 0 
+  && proposalCpes.every(cpe => 
+    cpe.consumo_anual && cpe.duracao_contrato && cpe.dbl 
+    && cpe.comissao && cpe.contrato_inicio && cpe.contrato_fim
+  )
+```
 
-- Adicionar `proposalType: 'all' | 'energia' | 'servicos'` ao `ClientFiltersState`
-- Atualizar `defaultFilters` com `proposalType: 'all'`
-- Receber prop `isTelecom` para renderizar condicionalmente o Select de tipo
-- Atualizar `hasActiveFilters` para incluir `proposalType`
+### Validacao Servicos (`CreateProposalModal.tsx`)
 
-### 3. Ficheiro: `src/pages/Clients.tsx`
+```
+isServicosValid = servicosProdutos.length > 0 
+  && servicosProdutos.every(produto => {
+    const config = SERVICOS_PRODUCT_CONFIGS.find(c => c.name === produto);
+    const detail = servicosDetails[produto] || {};
+    return config?.fields.every(field => 
+      detail[field] !== undefined && detail[field] > 0
+    );
+  })
+```
 
-- Importar e usar `useClientProposalTypes`
-- Determinar `isTelecom` a partir de `organization?.niche === 'telecom'`
-- Passar `isTelecom` ao componente `ClientFilters`
-- Adicionar logica de filtragem: verificar se o `clientId` aparece no mapa de tipos para o tipo selecionado
+### Ficheiros a alterar
 
-### Ficheiros a alterar/criar
-
-- `src/hooks/useClientProposalTypes.ts` (novo)
-- `src/components/clients/ClientFilters.tsx` (alterar)
-- `src/pages/Clients.tsx` (alterar)
+- `src/components/proposals/ProposalCpeSelector.tsx` -- validacao do formulario de adicao + asteriscos
+- `src/components/proposals/CreateProposalModal.tsx` -- validacao reforçada em `isEnergiaValid` e `isServicosValid` + asteriscos + mensagens de erro
 
