@@ -1,37 +1,51 @@
 
 
-## Botao fixo "Abrir Ticket de Suporte" no Otto
+## Fluxo de Ticket de Suporte Passo-a-Passo no Otto
 
-### O que muda
+### Objetivo
 
-Adicionar um botao permanente na zona de input do Otto (acima do campo de texto) que, ao ser clicado, envia automaticamente a mensagem "Preciso de abrir um ticket de suporte" ao Otto, iniciando o fluxo de recolha de dados do ticket.
+Alterar o comportamento do Otto para que, ao abrir um ticket de suporte, siga um fluxo sequencial obrigatorio:
+
+1. **Passo 1** - Perguntar o assunto do ticket
+2. **Passo 2** - Apos resposta, perguntar a descricao detalhada
+3. **Passo 3** - Apos resposta, perguntar se tem anexos para juntar ao ticket
+4. **Passo 4** - Mostrar resumo e pedir confirmacao antes de submeter
 
 ### Alteracao
 
-**Ficheiro: `src/components/otto/OttoChatWindow.tsx`**
+**Ficheiro: `supabase/functions/otto-chat/index.ts`**
 
-- Adicionar um botao com icone `Headset` (ou `LifeBuoy`) e texto "Abrir Ticket de Suporte" entre a area de mensagens e o input
-- O botao fica sempre visivel, acima do campo de texto, dentro da zona de input
-- Ao clicar, chama `sendMessage("Preciso de abrir um ticket de suporte")`
-- Fica desativado enquanto o Otto esta a processar (`isLoading`)
-- Estilo: botao `outline` com cor de destaque, `rounded-full`, tamanho pequeno
+Atualizar a seccao `TICKETS DE SUPORTE` no system prompt (linhas 95-99) para incluir instrucoes explicitas de fluxo sequencial:
 
-### Detalhe tecnico
+```
+TICKETS DE SUPORTE — FLUXO OBRIGATORIO PASSO-A-PASSO:
+Quando o utilizador pedir para abrir um ticket de suporte, segue RIGOROSAMENTE estes passos, UM DE CADA VEZ:
 
-Adicionar na `div` do input (linha 126), antes do campo de texto, uma linha com o botao:
+PASSO 1 — ASSUNTO:
+Pergunta: "Qual e o assunto do teu ticket? (uma frase curta que resuma o problema)"
+Espera pela resposta. NAO avances para o passo seguinte sem resposta.
 
-```tsx
-<Button
-  variant="outline"
-  size="sm"
-  className="w-full rounded-full gap-2 text-xs"
-  onClick={() => handleQuickAction("Preciso de abrir um ticket de suporte")}
-  disabled={isLoading}
->
-  <LifeBuoy className="w-3.5 h-3.5" />
-  Abrir Ticket de Suporte
-</Button>
+PASSO 2 — DESCRICAO:
+Pergunta: "Descreve o problema com mais detalhe. O que aconteceu? O que esperavas que acontecesse?"
+Espera pela resposta. NAO avances para o passo seguinte sem resposta.
+
+PASSO 3 — ANEXOS:
+Pergunta: "Tens algum anexo (screenshot, ficheiro) que queiras juntar ao ticket?"
+Oferece botoes: [botao:Nao, pode enviar assim][botao:Sim, mas nao consigo anexar aqui]
+Se o utilizador disser que tem anexos mas nao consegue enviar, informa que a equipa de suporte entrara em contacto para receber os ficheiros.
+
+PASSO 4 — CONFIRMACAO:
+Mostra o resumo completo do ticket:
+- **Assunto:** (assunto recolhido)
+- **Descricao:** (descricao recolhida)
+- **Anexos:** Sim/Nao
+Pergunta: "Confirmas o envio deste ticket?"
+[botao:Sim, enviar][botao:Editar assunto][botao:Editar descricao]
+
+SO apos confirmacao explicita ("Sim, enviar") e que chamas a ferramenta submit_support_ticket.
+NUNCA saltes passos. NUNCA recolhas assunto e descricao na mesma mensagem.
 ```
 
-Import adicional: `LifeBuoy` do `lucide-react`.
+### Resultado esperado
 
+O Otto guiara o utilizador passo-a-passo, tornando o processo mais claro e organizado, especialmente para utilizadores menos tecnicos.
