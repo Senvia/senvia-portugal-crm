@@ -11,7 +11,7 @@ import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { RenewCpeModal } from '@/components/clients/RenewCpeModal';
 import { SwitchComercializadorModal } from '@/components/clients/SwitchComercializadorModal';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 function AlertCard({ cpe, variant, onRenew, onSwitch }: { 
   cpe: CpeWithClient; 
@@ -138,6 +138,7 @@ export function FidelizationAlertsWidget() {
                 <Zap className="h-5 w-5 text-primary" />
                 {title}
               </DialogTitle>
+              <DialogDescription className="sr-only">Lista de alertas de fidelização a expirar</DialogDescription>
               <Badge variant="secondary">{totalAlerts}</Badge>
             </div>
           </DialogHeader>
