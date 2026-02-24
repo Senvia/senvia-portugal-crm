@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { X, Send, Trash2 } from "lucide-react";
+import { X, Send, Trash2, LifeBuoy } from "lucide-react";
 const ottoMascot = "/otto-mascot.svg";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -124,6 +124,16 @@ export function OttoChatWindow({ onClose }: OttoChatWindowProps) {
 
       {/* Input */}
       <div className={`p-3 border-t border-border bg-muted/20 ${isMobile ? "pb-safe" : ""}`}>
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full rounded-full gap-2 text-xs mb-2"
+          onClick={() => handleQuickAction("Preciso de abrir um ticket de suporte")}
+          disabled={isLoading}
+        >
+          <LifeBuoy className="w-3.5 h-3.5" />
+          Abrir Ticket de Suporte
+        </Button>
         <div className="flex items-center gap-2">
           <input
             ref={inputRef}
