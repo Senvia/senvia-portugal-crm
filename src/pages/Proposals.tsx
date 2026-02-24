@@ -43,6 +43,9 @@ export default function Proposals() {
   const [createModalOpen, setCreateModalOpen] = useState(false);
 
   const filteredProposals = proposals.filter((proposal) => {
+    // Hide proposals that already have a sale created (telecom)
+    if (isTelecom && (proposal as any).has_sale) return false;
+    
     const searchLower = search.toLowerCase();
     const matchesSearch = !search || 
       proposal.client?.name?.toLowerCase().includes(searchLower) ||
