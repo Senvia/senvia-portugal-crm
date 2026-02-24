@@ -103,22 +103,36 @@ PASSO 2 — DESCRIÇÃO:
 Pergunta: "Descreve o problema com mais detalhe. O que aconteceu? O que esperavas que acontecesse?"
 Espera pela resposta. NÃO avances para o passo seguinte sem resposta.
 
-PASSO 3 — ANEXOS:
+PASSO 3 — DADOS DE CONTACTO:
+Antes de avançar, usa a ferramenta get_my_contact_info para verificar que dados de contacto já existem na base de dados.
+Precisas de 3 dados: Nome, WhatsApp e Email.
+- Se TODOS os 3 campos já existirem na BD, avança diretamente para o PASSO 4 sem perguntar nada.
+- Se algum campo estiver em falta, pergunta UM DE CADA VEZ pela seguinte ordem:
+  1. Nome (se em falta): "Qual é o teu nome completo?"
+  2. WhatsApp (se em falta): "Qual é o teu número de WhatsApp? (com indicativo, ex: 351912345678)"
+  3. Email (se em falta): "Qual é o teu email de contacto?"
+NUNCA perguntes mais do que um campo por mensagem.
+Guarda os valores recolhidos para incluir no ticket.
+
+PASSO 4 — ANEXOS:
 Pergunta: "Tens algum anexo (screenshot, ficheiro) que queiras juntar ao ticket?"
 Oferece botões: [botao:Não, pode enviar assim][botao:Sim, vou anexar agora]
 Se o utilizador clicar "Sim, vou anexar agora", responde: "Usa o botão de clip (📎) junto ao campo de texto para anexar os teus ficheiros (imagens JPG/PNG ou PDF, até 10MB cada, máx. 5 ficheiros). Quando estiverem prontos, escreve 'pronto' ou clica no botão abaixo."
 [botao:Pronto, já anexei]
-Se o utilizador enviar "pronto" ou clicar no botão, avança para o PASSO 4 normalmente.
+Se o utilizador enviar "pronto" ou clicar no botão, avança para o PASSO 5 normalmente.
 
-PASSO 4 — CONFIRMAÇÃO:
+PASSO 5 — CONFIRMAÇÃO:
 Mostra o resumo completo do ticket:
 - **Assunto:** (assunto recolhido)
 - **Descrição:** (descrição recolhida)
+- **Nome:** (nome)
+- **WhatsApp:** (whatsapp)
+- **Email:** (email)
 - **Anexos:** Sim (X ficheiros) / Não
 Pergunta: "Confirmas o envio deste ticket?"
 [botao:Sim, enviar][botao:Editar assunto][botao:Editar descrição]
 
-SÓ após confirmação explícita ("Sim, enviar") é que chamas a ferramenta submit_support_ticket.
+SÓ após confirmação explícita ("Sim, enviar") é que chamas a ferramenta submit_support_ticket com os campos contact_name, contact_whatsapp e contact_email.
 NUNCA saltes passos. NUNCA recolhas assunto e descrição na mesma mensagem.
 - Após submissão bem-sucedida, informa que o ticket foi criado e que a equipa de suporte foi notificada via WhatsApp.
 
@@ -305,6 +319,14 @@ const TOOLS = [
   {
     type: "function",
     function: {
+      name: "get_my_contact_info",
+      description: "Obter os dados de contacto do utilizador atual (nome, email, whatsapp) guardados na base de dados. Usa antes de pedir dados de contacto para o ticket de suporte.",
+      parameters: { type: "object", properties: {}, required: [] },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "submit_support_ticket",
       description: "Submeter um ticket de suporte técnico. A equipa será notificada via WhatsApp. Usa APENAS quando o utilizador confirmar o envio. Se o utilizador anexou ficheiros, eles são enviados automaticamente pelo sistema — inclui has_attachments=true.",
       parameters: {
@@ -314,8 +336,11 @@ const TOOLS = [
           description: { type: "string", description: "Descrição detalhada do problema" },
           priority: { type: "string", enum: ["low", "medium", "high"], description: "Prioridade: low, medium, high (default: medium)" },
           has_attachments: { type: "boolean", description: "Se o utilizador indicou que anexou ficheiros" },
+          contact_name: { type: "string", description: "Nome completo do utilizador que reporta o problema" },
+          contact_whatsapp: { type: "string", description: "Número de WhatsApp do utilizador (com indicativo)" },
+          contact_email: { type: "string", description: "Email de contacto do utilizador" },
         },
-        required: ["subject", "description"],
+        required: ["subject", "description", "contact_name", "contact_whatsapp", "contact_email"],
       },
     },
   },
@@ -555,6 +580,43 @@ async function executeTool(
         return JSON.stringify({ results, count: results.length });
       }
 
+      case "get_my_contact_info": {
+        // Fetch user's name from profiles
+        const { data: contactProfile } = await supabaseAdmin
+          .from("profiles")
+          .select("full_name")
+          .eq("id", userId)
+          .single();
+        
+        // Fetch user's email from auth
+        let userEmail: string | null = null;
+        try {
+          const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(userId!);
+          userEmail = authUser?.user?.email || null;
+        } catch { /* ignore */ }
+
+        // Check if org has any phone/whatsapp for this user (from organization_members or other sources)
+        // For now, we don't store phone on profiles, so it will be null
+        const contactName = contactProfile?.full_name || null;
+        
+        const result: any = {
+          name: contactName,
+          email: userEmail,
+          whatsapp: null, // Not stored in profiles table currently
+          missing_fields: [] as string[],
+        };
+        if (!contactName) result.missing_fields.push("name");
+        if (!userEmail) result.missing_fields.push("email");
+        result.missing_fields.push("whatsapp"); // Always ask for WhatsApp as it's not stored
+        
+        return JSON.stringify({
+          ...result,
+          _instruction: result.missing_fields.length > 0
+            ? `Dados encontrados: Nome=${contactName || 'NÃO ENCONTRADO'}, Email=${userEmail || 'NÃO ENCONTRADO'}, WhatsApp=NÃO ENCONTRADO. Pergunta os campos em falta UM DE CADA VEZ.`
+            : `Todos os dados de contacto encontrados. Avança para o passo dos anexos.`
+        });
+      }
+
       case "submit_support_ticket": {
         const priority = args.priority || "medium";
         
@@ -614,9 +676,16 @@ async function executeTool(
           const attachmentInfo = ticketAttachments.length > 0 
             ? `\n*Anexos:* ${ticketAttachments.length} ficheiro(s)` 
             : "";
+          const contactName = args.contact_name || userName;
+          const contactWhatsapp = args.contact_whatsapp || "Não fornecido";
+          const contactEmail = args.contact_email || "Não fornecido";
           const whatsappMessage = `🎫 *NOVO TICKET DE SUPORTE*\n\n` +
             `*Org:* ${orgName}\n` +
-            `*User:* ${userName}\n` +
+            `*User:* ${userName}\n\n` +
+            `📞 *DADOS DE CONTACTO:*\n` +
+            `*Nome:* ${contactName}\n` +
+            `*WhatsApp:* ${contactWhatsapp}\n` +
+            `*Email:* ${contactEmail}\n\n` +
             `*Assunto:* ${args.subject}\n` +
             `*Descrição:* ${args.description}\n` +
             `*Prioridade:* ${priority}\n` +
