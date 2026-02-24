@@ -1,57 +1,77 @@
 
 
-# Mostrar Todos os Dados ao Editar uma Venda
+# Tornar Editaveis os Dados de Energia e CPE/CUI no Modal de Edicao de Venda
 
 ## Problema
 
-O modal de edicao de vendas (`EditSaleModal`) esta incompleto em comparacao com o modal de detalhes (`SaleDetailsModal`). Quando o utilizador abre a edicao, faltam os seguintes dados:
-
-- **Dados de Energia**: Tipo de Negociacao, Consumo Anual, Margem, DBL, Anos de Contrato, Comissao
-- **Dados de Servicos**: Modelo de Servico, kWp, Produtos/Servicos selecionados, Comissao
-- **CPEs da Proposta**: Equipamentos/Pontos de consumo associados
-- **Dados de Recorrencia**: Valor recorrente, estado, proxima renovacao
-- **Data da Venda**: Nao e editavel atualmente
+Os campos "Dados de Energia" (Tipo de Negociacao, Consumo Anual, Margem, DBL, Anos de Contrato, Comissao) e "CPE/CUI" estao a aparecer como **somente leitura** no modal de edicao de vendas. O utilizador precisa de poder editar estes valores diretamente.
 
 ## Solucao
 
-Adicionar as seccoes em falta ao `EditSaleModal`, consistentes com o que e mostrado no `SaleDetailsModal`.
+Converter as seccoes read-only em campos editaveis com inputs, selects e a possibilidade de editar/adicionar/remover CPEs.
 
 ## Seccao Tecnica
 
 ### Ficheiro: `src/components/sales/EditSaleModal.tsx`
 
-**1. Importar dependencias em falta:**
-- `useProposalCpes` hook
-- `useCpes` hook
-- `NEGOTIATION_TYPE_LABELS`, `MODELO_SERVICO_LABELS`, `SERVICOS_PRODUCTS` de `@/types/proposals`
-- Icones `Zap`, `Wrench`
-- `RecurringSection` component
-- Tipos CPE (`CPE_STATUS_LABELS`, `CPE_STATUS_STYLES`)
+**1. Adicionar estado local para campos de energia/servico:**
 
-**2. Adicionar hooks de dados:**
-- `useProposalCpes(sale?.proposal_id)` para buscar CPEs da proposta
-- `useCpes(clientId)` para buscar CPEs do cliente
+Novos estados no componente:
+- `negotiationType` (select com opcoes: Angariacao, Angariacao Indexado, Renovacao, Ang sem Volume)
+- `consumoAnual` (input numerico)
+- `margem` (input numerico)
+- `dbl` (input numerico)
+- `anosContrato` (input numerico)
+- `comissao` (input numerico)
+- `modeloServico` (select: Transacional, SAAS)
+- `kwp` (input numerico)
+- `servicosProdutos` (checkboxes: Solar, Carregadores/Baterias, Condensadores, Coberturas)
 
-**3. Adicionar seccao "Dados de Energia" (read-only):**
-- Aparece quando `proposal_type === 'energia'` e existe dados relevantes
-- Mostra: Tipo de Negociacao, Consumo Anual, Margem, Anos Contrato, DBL, Comissao
-- Apresentado como Card read-only (igual ao SaleDetailsModal)
+Inicializar todos no `useEffect` que ja existe (linhas 128-135) a partir dos dados da `sale`.
 
-**4. Adicionar seccao "Dados de Servicos" (read-only):**
-- Aparece quando `proposal_type === 'servicos'`
-- Mostra: Modelo de Servico, kWp, Produtos/Servicos selecionados, Comissao
+**2. Converter seccao "Dados de Energia" (linhas 498-549) de read-only para editavel:**
 
-**5. Adicionar seccao "CPEs da Proposta" (read-only):**
-- Aparece quando existem CPEs na proposta associada
-- Mostra: Comercializador, Consumo, Margem, Comissao por CPE
+Substituir os `<p>` por inputs editaveis:
+- Tipo de Negociacao: `<Select>` com as opcoes de `NEGOTIATION_TYPES`
+- Consumo Anual: `<Input type="number">` com sufixo "kWh"
+- Margem: `<Input type="number">` com sufixo "EUR/MWh"
+- Anos de Contrato: `<Input type="number">`
+- DBL: `<Input type="number">`
+- Comissao: `<Input type="number">` com sufixo "EUR"
 
-**6. Adicionar seccao "Recorrencia":**
-- Aparece quando `sale.has_recurring` e verdadeiro
-- Mostra o `RecurringSection` component (ja existente)
+**3. Converter seccao "Dados do Servico" (linhas 552-603) de read-only para editavel:**
 
-**7. Posicionamento:**
-- As novas seccoes ficam entre o card de "Proposta associada" e o card de "Produtos/Servicos"
-- Ordem: Dados da Venda > Cliente > Proposta > Dados Energia/Servicos > CPEs > Produtos > Recorrencia > Pagamentos
+- Tipo de Negociacao: `<Select>`
+- Modelo de Servico: `<Select>` (Transacional/SAAS)
+- kWp: `<Input type="number">`
+- Servicos/Produtos: Checkboxes para cada item de `SERVICOS_PRODUCTS`
+- Comissao: `<Input type="number">`
 
-Total: 1 ficheiro editado.
+**4. Converter seccao "CPEs" (linhas 606-693) para editavel:**
+
+Para CPEs da proposta (`proposal_cpes`):
+- Permitir editar: `comercializador`, `consumo_anual`, `margem`, `comissao`, `serial_number`
+- Usar o hook `useUpdateProposalCpes` que ja existe para guardar alteracoes
+- Adicionar estado local `editableCpes` inicializado a partir de `proposalCpes`
+
+**5. Incluir campos novos no `handleSubmit` (linhas 268-393):**
+
+Adicionar ao objecto `updates` passado ao `updateSale.mutateAsync`:
+```
+negotiation_type: negotiationType || null,
+consumo_anual: parseFloat(consumoAnual) || null,
+margem: parseFloat(margem) || null,
+dbl: parseFloat(dbl) || null,
+anos_contrato: parseInt(anosContrato) || null,
+comissao: parseFloat(comissao) || null,
+modelo_servico: modeloServico || null,
+kwp: parseFloat(kwp) || null,
+servicos_produtos: servicosProdutos.length > 0 ? servicosProdutos : null,
+```
+
+Para os CPEs, chamar `useUpdateProposalCpes` apos guardar a venda.
+
+**Resultado:** Todos os campos de Energia, Servico e CPE passam a ser editaveis diretamente no modal de edicao, com os dados a serem guardados na base de dados ao submeter.
+
+Total: 1 ficheiro editado (`EditSaleModal.tsx`).
 
