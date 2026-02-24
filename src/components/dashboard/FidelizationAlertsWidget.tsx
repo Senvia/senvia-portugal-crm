@@ -11,6 +11,7 @@ import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { RenewCpeModal } from '@/components/clients/RenewCpeModal';
 import { SwitchComercializadorModal } from '@/components/clients/SwitchComercializadorModal';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 function AlertCard({ cpe, variant, onRenew, onSwitch }: { 
   cpe: CpeWithClient; 
@@ -24,7 +25,7 @@ function AlertCard({ cpe, variant, onRenew, onSwitch }: {
     : 'bg-warning/5 border-warning/20';
 
   return (
-    <div className={`p-2 rounded-md transition-colors border ${bgClass}`}>
+    <div className={`p-3 rounded-md transition-colors border ${bgClass}`}>
       <button
         onClick={() => navigate(`/clients?highlight=${cpe.client_id}`)}
         className="w-full text-left"
@@ -57,8 +58,7 @@ function AlertCard({ cpe, variant, onRenew, onSwitch }: {
 export function FidelizationAlertsWidget() {
   const { data, isLoading } = useFidelizationAlerts();
   const { organization } = useAuth();
-  const navigate = useNavigate();
-
+  const [modalOpen, setModalOpen] = useState(false);
   const [renewCpe, setRenewCpe] = useState<CpeWithClient | null>(null);
   const [switchCpe, setSwitchCpe] = useState<CpeWithClient | null>(null);
 
@@ -83,6 +83,9 @@ export function FidelizationAlertsWidget() {
 
   const { urgent = [], upcoming = [], expired = [] } = data || {};
   const totalAlerts = expired.length + urgent.length + upcoming.length;
+  const allItems = [...expired, ...urgent, ...upcoming];
+  const previewItems = allItems.slice(0, 2);
+  const remaining = totalAlerts - previewItems.length;
 
   if (totalAlerts === 0) {
     return (
@@ -94,9 +97,7 @@ export function FidelizationAlertsWidget() {
           </CardTitle>
         </CardHeader>
         <CardContent className="py-6 text-center">
-          <p className="text-sm text-muted-foreground">
-            Sem alertas pendentes
-          </p>
+          <p className="text-sm text-muted-foreground">Sem alertas pendentes</p>
         </CardContent>
       </Card>
     );
@@ -104,31 +105,52 @@ export function FidelizationAlertsWidget() {
 
   return (
     <>
-      <Card className="col-span-2 lg:col-span-1">
+      <Card
+        className="col-span-2 lg:col-span-1 cursor-pointer hover:border-primary/30 transition-colors"
+        onClick={() => setModalOpen(true)}
+      >
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
               <Zap className="h-4 w-4 text-primary" />
               {title}
             </CardTitle>
-            <Badge variant="secondary" className="text-xs">
-              {totalAlerts}
-            </Badge>
+            <Badge variant="secondary" className="text-xs">{totalAlerts}</Badge>
           </div>
         </CardHeader>
-        <CardContent className="p-0">
-          <ScrollArea className="max-h-[300px]">
-            <div className="space-y-3 p-6 pt-0">
+        <CardContent className="pt-0 space-y-1.5">
+          {previewItems.map((cpe) => (
+            <div key={cpe.id} className="text-sm text-muted-foreground truncate">
+              {cpe.client_name} — {format(new Date(cpe.fidelizacao_end), 'dd/MM/yyyy', { locale: pt })}
+            </div>
+          ))}
+          {remaining > 0 && (
+            <p className="text-xs text-primary font-medium">+ {remaining} mais...</p>
+          )}
+        </CardContent>
+      </Card>
+
+      <Dialog open={modalOpen} onOpenChange={setModalOpen}>
+        <DialogContent variant="fullScreen" className="flex flex-col overflow-hidden">
+          <DialogHeader className="shrink-0 px-4 pt-4 sm:px-6 sm:pt-6">
+            <div className="flex items-center gap-3">
+              <DialogTitle className="flex items-center gap-2">
+                <Zap className="h-5 w-5 text-primary" />
+                {title}
+              </DialogTitle>
+              <Badge variant="secondary">{totalAlerts}</Badge>
+            </div>
+          </DialogHeader>
+          <ScrollArea className="flex-1 px-4 pb-4 sm:px-6 sm:pb-6">
+            <div className="space-y-6 pt-2">
               {expired.length > 0 && (
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 text-destructive">
                     <XCircle className="h-3.5 w-3.5" />
                     <span className="text-xs font-medium">Expirados</span>
-                    <Badge variant="destructive" className="text-xs ml-auto">
-                      {expired.length}
-                    </Badge>
+                    <Badge variant="destructive" className="text-xs ml-auto">{expired.length}</Badge>
                   </div>
-                  <div className="space-y-1.5">
+                  <div className="space-y-2">
                     {expired.map((cpe) => (
                       <AlertCard key={cpe.id} cpe={cpe} variant="expired" onRenew={setRenewCpe} onSwitch={setSwitchCpe} />
                     ))}
@@ -141,11 +163,9 @@ export function FidelizationAlertsWidget() {
                   <div className="flex items-center gap-2 text-destructive">
                     <AlertTriangle className="h-3.5 w-3.5" />
                     <span className="text-xs font-medium">Urgente (7 dias)</span>
-                    <Badge variant="destructive" className="text-xs ml-auto">
-                      {urgent.length}
-                    </Badge>
+                    <Badge variant="destructive" className="text-xs ml-auto">{urgent.length}</Badge>
                   </div>
-                  <div className="space-y-1.5">
+                  <div className="space-y-2">
                     {urgent.map((cpe) => (
                       <AlertCard key={cpe.id} cpe={cpe} variant="urgent" onRenew={setRenewCpe} onSwitch={setSwitchCpe} />
                     ))}
@@ -158,11 +178,9 @@ export function FidelizationAlertsWidget() {
                   <div className="flex items-center gap-2 text-warning">
                     <Clock className="h-3.5 w-3.5" />
                     <span className="text-xs font-medium">Próximos 30 dias</span>
-                    <Badge variant="outline" className="text-xs ml-auto border-warning/50 text-warning">
-                      {upcoming.length}
-                    </Badge>
+                    <Badge variant="outline" className="text-xs ml-auto border-warning/50 text-warning">{upcoming.length}</Badge>
                   </div>
-                  <div className="space-y-1.5">
+                  <div className="space-y-2">
                     {upcoming.map((cpe) => (
                       <AlertCard key={cpe.id} cpe={cpe} variant="upcoming" onRenew={setRenewCpe} onSwitch={setSwitchCpe} />
                     ))}
@@ -171,8 +189,8 @@ export function FidelizationAlertsWidget() {
               )}
             </div>
           </ScrollArea>
-        </CardContent>
-      </Card>
+        </DialogContent>
+      </Dialog>
 
       {renewCpe && (
         <RenewCpeModal
