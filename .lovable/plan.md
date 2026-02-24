@@ -1,41 +1,60 @@
 
+Objetivo: eliminar definitivamente o erro `403 / new row violates row-level security policy` ao submeter um pedido interno em `/financeiro`.
 
-# Corrigir INSERT em Pedidos Internos (Cache PostgREST)
+Resumo do diagnóstico (já confirmado com dados reais do backend):
+1. A policy de INSERT está correta e ativa (PERMISSIVE + `WITH CHECK`).
+2. O reload de schema também já foi executado.
+3. O erro persiste porque a validação da policy compara:
+   - `organization_id` enviado no request: `96a3950e-31be-4c6d-abed-b82968c0d7e9`
+   - `get_user_org_id(auth.uid())`: `06fe9e1d-9670-45b0-8717-c5a6e90be380`
+4. O utilizador que está a testar tem role `super_admin`, mas não é membro direto da org `96a...` (acede via privilégios de super admin).
+5. Resultado: o `WITH CHECK` da policy de INSERT falha, logo o `403` continua.
 
-## Problema
-A policy de INSERT na tabela `internal_requests` ja esta correta na base de dados (PERMISSIVE), mas o PostgREST (camada de API) pode estar a usar uma versao em cache das policies. Isto acontece quando uma migracao altera policies mas o PostgREST nao recarrega o schema automaticamente.
+Plano de correção:
+1. Adicionar uma policy dedicada para super admin em `internal_requests` (FOR ALL), permitindo operações em qualquer organização quando `has_role(auth.uid(), 'super_admin') = true`.
+2. Manter as policies atuais para utilizadores normais (sem afrouxar segurança para não-super-admin).
+3. Forçar reload do schema após criar a nova policy para evitar qualquer cache residual.
+4. Validar em dois cenários:
+   - Super admin na org `telecom` consegue submeter pedido.
+   - Utilizador normal continua bloqueado fora da sua organização.
 
-## Solucao
-Criar uma migracao que:
-1. Faz DROP e recria a policy INSERT (para garantir que e aplicada de forma limpa)
-2. Envia um `NOTIFY pgrst, 'reload schema'` para forcar o PostgREST a recarregar as policies
-
----
-
-## Seccao Tecnica
-
-### Migracao SQL
-
+Detalhe técnico da migração (a implementar):
 ```sql
--- Forcar recriacao da policy INSERT
-DROP POLICY IF EXISTS "Authenticated users can create requests" ON internal_requests;
+-- Garantir idempotência
+DROP POLICY IF EXISTS "Super admin full access internal_requests" ON public.internal_requests;
 
-CREATE POLICY "Authenticated users can create requests"
-ON internal_requests FOR INSERT
+CREATE POLICY "Super admin full access internal_requests"
+ON public.internal_requests
+AS PERMISSIVE
+FOR ALL
 TO authenticated
+USING (
+  public.has_role(auth.uid(), 'super_admin'::app_role)
+)
 WITH CHECK (
-  organization_id = get_user_org_id(auth.uid())
-  AND submitted_by = auth.uid()
+  public.has_role(auth.uid(), 'super_admin'::app_role)
 );
 
--- Forcar PostgREST a recarregar o schema/policies
+-- Garantir refresh imediato das policies no API layer
 NOTIFY pgrst, 'reload schema';
 ```
 
-### Ficheiros a alterar
-| Ficheiro | Acao |
-|---|---|
-| Migracao SQL | Criar -- recriar policy + NOTIFY pgrst |
+Ficheiros a alterar:
+- `supabase/migrations/<timestamp>_fix_internal_requests_super_admin_policy.sql` (novo)
 
-Nenhum ficheiro de codigo precisa de ser alterado.
+Sem alterações obrigatórias no frontend para resolver a falha:
+- `SubmitRequestModal.tsx` e `useInternalRequests.ts` podem ficar como estão para este fix.
 
+Validação pós-correção (end-to-end):
+1. Entrar em `/financeiro` na org `telecom`.
+2. Criar “Novo Pedido” (tipo despesa, título e valor).
+3. Confirmar:
+   - request `POST /rest/v1/internal_requests` retorna sucesso (201/200).
+   - toast de sucesso aparece.
+   - linha surge na tabela de pedidos.
+4. Teste de segurança:
+   - com utilizador não super admin, tentar criar pedido noutra org deve continuar a falhar por RLS.
+
+Riscos e mitigação:
+- Risco: super admin ganhar permissões amplas nesta tabela.
+- Mitigação: isto já está alinhado com o comportamento esperado no restante sistema (super admin multi-tenant), e não abre acesso para utilizadores normais.
