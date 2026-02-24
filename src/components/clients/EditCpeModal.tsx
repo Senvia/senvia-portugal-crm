@@ -84,6 +84,12 @@ export function EditCpeModal({ cpe, open, onOpenChange, isTelecom = false }: Edi
     }
   }, [cpe, open, isTelecom]);
 
+  const originalComercializador = cpe.comercializador;
+  const comercializadorChanged = (() => {
+    const finalCom = comercializador === 'Outro' ? customComercializador : comercializador;
+    return finalCom !== originalComercializador;
+  })();
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -91,8 +97,9 @@ export function EditCpeModal({ cpe, open, onOpenChange, isTelecom = false }: Edi
     const finalComercializador = comercializador === 'Outro' ? customComercializador : comercializador;
 
     if (!finalEquipmentType || !finalComercializador) return;
+    if (comercializadorChanged && !fidelizacaoEnd) return;
 
-    updateCpe.mutate({
+    const updateData: Record<string, unknown> = {
       id: cpe.id,
       equipment_type: finalEquipmentType,
       serial_number: serialNumber || null,
@@ -102,7 +109,16 @@ export function EditCpeModal({ cpe, open, onOpenChange, isTelecom = false }: Edi
       status,
       nivel_tensao: isTelecom && nivelTensao ? nivelTensao : null,
       notes: notes || null,
-    }, {
+    };
+
+    // If comercializador changed, mark as switched and reset alerts
+    if (comercializadorChanged) {
+      updateData.renewal_status = 'switched';
+      updateData.alert_30d_sent = false;
+      updateData.alert_7d_sent = false;
+    }
+
+    updateCpe.mutate(updateData as any, {
       onSuccess: () => {
         onOpenChange(false);
       }
@@ -110,7 +126,8 @@ export function EditCpeModal({ cpe, open, onOpenChange, isTelecom = false }: Edi
   };
 
   const isValid = (equipmentType === 'Outro' ? customEquipmentType : equipmentType) && 
-                  (comercializador === 'Outro' ? customComercializador : comercializador);
+                  (comercializador === 'Outro' ? customComercializador : comercializador) &&
+                  (!comercializadorChanged || fidelizacaoEnd);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -177,6 +194,13 @@ export function EditCpeModal({ cpe, open, onOpenChange, isTelecom = false }: Edi
             )}
           </div>
 
+          {/* Warning when comercializador changed */}
+          {comercializadorChanged && (
+            <div className="rounded-md bg-warning/10 border border-warning/20 p-3 text-xs text-warning">
+              ⚠️ Ao alterar o comercializador, é obrigatório definir a nova data de fim de fidelização.
+            </div>
+          )}
+
           {/* Fidelização */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
@@ -188,11 +212,12 @@ export function EditCpeModal({ cpe, open, onOpenChange, isTelecom = false }: Edi
               />
             </div>
             <div className="space-y-2">
-              <Label>Fim Fidelização</Label>
+              <Label>Fim Fidelização {comercializadorChanged ? '*' : ''}</Label>
               <Input
                 type="date"
                 value={fidelizacaoEnd}
                 onChange={(e) => setFidelizacaoEnd(e.target.value)}
+                required={comercializadorChanged}
               />
             </div>
           </div>

@@ -399,6 +399,7 @@ export type Database = {
           nivel_tensao: string | null
           notes: string | null
           organization_id: string
+          renewal_status: string | null
           serial_number: string | null
           status: string
           updated_at: string
@@ -416,6 +417,7 @@ export type Database = {
           nivel_tensao?: string | null
           notes?: string | null
           organization_id: string
+          renewal_status?: string | null
           serial_number?: string | null
           status?: string
           updated_at?: string
@@ -433,6 +435,7 @@ export type Database = {
           nivel_tensao?: string | null
           notes?: string | null
           organization_id?: string
+          renewal_status?: string | null
           serial_number?: string | null
           status?: string
           updated_at?: string
