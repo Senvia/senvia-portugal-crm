@@ -1,4 +1,4 @@
-import { Building, UsersRound, Package, Link2, Bell, Receipt, Shield, GitBranch, LayoutGrid, FileText, List, KeyRound, UserCog, Network, BellRing, AlertTriangle, Calculator, ShoppingCart, CreditCard, Calendar } from "lucide-react";
+import { Building, UsersRound, Package, Link2, Bell, Receipt, Shield, GitBranch, LayoutGrid, FileText, List, KeyRound, UserCog, Network, BellRing, AlertTriangle, Calculator, ShoppingCart, CreditCard, Calendar, Mail } from "lucide-react";
 import { SettingsCard } from "./SettingsCard";
 
 export type SettingsSection = "general" | "security" | "team" | "products" | "finance" | "notifications" | "integrations" | "billing";
@@ -9,7 +9,7 @@ export type SettingsSubSection =
   | "team-access" | "team-profiles" | "team-teams"
   | "products"
   | "finance-expenses" | "finance-fiscal"
-  | "notif-push" | "notif-alerts" | "notif-calendar"
+  | "notif-push" | "notif-alerts" | "notif-calendar" | "notif-email"
   | "integrations"
   | "billing";
 
@@ -101,6 +101,7 @@ export const subSectionsMap: Record<SettingsSection, SubSectionItem[]> = {
   notifications: [
     { id: "notif-push", label: "Push", icon: BellRing, description: "Notificações no telemóvel" },
     { id: "notif-calendar", label: "Calendário", icon: Calendar, description: "Lembretes de eventos e reuniões" },
+    { id: "notif-email", label: "Email", icon: Mail, description: "Alertas por email para todas as notificações" },
     { id: "notif-alerts", label: "Fidelização", icon: AlertTriangle, description: "Alertas de contratos CPE/CUI" },
   ],
   integrations: [],

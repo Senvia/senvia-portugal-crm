@@ -6,7 +6,7 @@ import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { useFidelizationSettings, useUpdateFidelizationSettings } from '@/hooks/useFidelizationAlerts';
 import { toast } from 'sonner';
-import { Bell, Calendar, Mail, Loader2, Zap } from 'lucide-react';
+import { Bell, Calendar, Loader2, Zap } from 'lucide-react';
 
 export function FidelizationAlertsSettings() {
   const { data: settings, isLoading } = useFidelizationSettings();
@@ -16,8 +16,6 @@ export function FidelizationAlertsSettings() {
   const [secondAlertDays, setSecondAlertDays] = useState(7);
   const [createEvent, setCreateEvent] = useState(true);
   const [eventTime, setEventTime] = useState('10:00');
-  const [emailEnabled, setEmailEnabled] = useState(false);
-  const [alertEmail, setAlertEmail] = useState('');
 
   useEffect(() => {
     if (settings) {
@@ -26,22 +24,10 @@ export function FidelizationAlertsSettings() {
       setSecondAlertDays(days[1] || 7);
       setCreateEvent(settings.fidelization_create_event);
       setEventTime(settings.fidelization_event_time?.slice(0, 5) || '10:00');
-      setEmailEnabled(settings.fidelization_email_enabled);
-      setAlertEmail(settings.fidelization_email || '');
     }
   }, [settings]);
 
   const handleSave = () => {
-    if (emailEnabled && !alertEmail.trim()) {
-      toast.error('Introduza um email para receber os alertas');
-      return;
-    }
-
-    if (emailEnabled && !alertEmail.includes('@')) {
-      toast.error('Email inválido');
-      return;
-    }
-
     if (firstAlertDays <= secondAlertDays) {
       toast.error('O primeiro alerta deve ser mais dias antes que o segundo');
       return;
@@ -51,8 +37,6 @@ export function FidelizationAlertsSettings() {
       fidelization_alert_days: [firstAlertDays, secondAlertDays],
       fidelization_create_event: createEvent,
       fidelization_event_time: eventTime,
-      fidelization_email_enabled: emailEnabled,
-      fidelization_email: emailEnabled ? alertEmail.trim() : null,
     }, {
       onSuccess: () => {
         toast.success('Definições de alertas guardadas');
@@ -164,46 +148,6 @@ export function FidelizationAlertsSettings() {
                 value={eventTime}
                 onChange={(e) => setEventTime(e.target.value)}
                 className="w-32"
-              />
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Email Configuration */}
-      <Card>
-        <CardHeader className="pb-4">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Mail className="h-4 w-4" />
-            Alertas por Email
-          </CardTitle>
-          <CardDescription>
-            Receba notificações por email quando há expiração.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label>Receber alertas por email</Label>
-              <p className="text-xs text-muted-foreground">
-                Usa as definições Brevo da organização
-              </p>
-            </div>
-            <Switch
-              checked={emailEnabled}
-              onCheckedChange={setEmailEnabled}
-            />
-          </div>
-          
-          {emailEnabled && (
-            <div className="space-y-2">
-              <Label htmlFor="alert-email">Email para alertas</Label>
-              <Input
-                id="alert-email"
-                type="email"
-                value={alertEmail}
-                onChange={(e) => setAlertEmail(e.target.value)}
-                placeholder="comercial@empresa.pt"
               />
             </div>
           )}
