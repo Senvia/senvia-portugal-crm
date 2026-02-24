@@ -2139,6 +2139,7 @@ export type Database = {
           billing_provider: string
           brevo_api_key: string | null
           brevo_sender_email: string | null
+          calendar_alert_settings: Json | null
           client_fields_settings: Json | null
           code: string | null
           commission_matrix: Json | null
@@ -2190,6 +2191,7 @@ export type Database = {
           billing_provider?: string
           brevo_api_key?: string | null
           brevo_sender_email?: string | null
+          calendar_alert_settings?: Json | null
           client_fields_settings?: Json | null
           code?: string | null
           commission_matrix?: Json | null
@@ -2241,6 +2243,7 @@ export type Database = {
           billing_provider?: string
           brevo_api_key?: string | null
           brevo_sender_email?: string | null
+          calendar_alert_settings?: Json | null
           client_fields_settings?: Json | null
           code?: string | null
           commission_matrix?: Json | null

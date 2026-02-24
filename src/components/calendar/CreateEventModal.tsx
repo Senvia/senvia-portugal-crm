@@ -9,6 +9,8 @@ import { SearchableCombobox, type ComboboxOption } from '@/components/ui/searcha
 import { Switch } from '@/components/ui/switch';
 import { useCreateEvent, useUpdateEvent } from '@/hooks/useCalendarEvents';
 import { useLeads } from '@/hooks/useLeads';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { EVENT_TYPE_LABELS, REMINDER_OPTIONS, type CalendarEvent, type EventType } from '@/types/calendar';
 import { format } from 'date-fns';
 import { Video, Phone, CheckSquare, RefreshCw, Loader2 } from 'lucide-react';
@@ -31,8 +33,34 @@ interface CreateEventModalProps {
 
 export function CreateEventModal({ open, onOpenChange, selectedDate, event, preselectedLeadId, onSuccess }: CreateEventModalProps) {
   const { data: leads = [] } = useLeads();
+  const { organization } = useAuth();
   const createEvent = useCreateEvent();
   const updateEvent = useUpdateEvent();
+
+  // Calendar alert settings from organization
+  const [calendarSettings, setCalendarSettings] = useState<{
+    default_reminder_minutes: number | null;
+    auto_reminder_meetings: boolean;
+    auto_reminder_minutes: number;
+  } | null>(null);
+
+  useEffect(() => {
+    async function fetchSettings() {
+      if (!organization?.id) return;
+      const { data } = await supabase
+        .from('organizations')
+        .select('calendar_alert_settings')
+        .eq('id', organization.id)
+        .single();
+      if (data) {
+        const raw = (data as any).calendar_alert_settings;
+        if (raw && typeof raw === 'object' && Object.keys(raw).length > 0) {
+          setCalendarSettings(raw);
+        }
+      }
+    }
+    fetchSettings();
+  }, [organization?.id]);
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -86,7 +114,13 @@ export function CreateEventModal({ open, onOpenChange, selectedDate, event, pres
     } else if (selectedDate) {
       setStartDate(format(selectedDate, 'yyyy-MM-dd'));
       setEndDate(format(selectedDate, 'yyyy-MM-dd'));
-      setEndTimeManuallySet(false); // Reset for new events
+      setEndTimeManuallySet(false);
+      // Apply default reminder from org settings
+      if (calendarSettings?.default_reminder_minutes != null) {
+        setReminderMinutes(calendarSettings.default_reminder_minutes.toString());
+      } else {
+        setReminderMinutes('');
+      }
     }
     
     // Pre-select lead if provided (from Kanban drop)
@@ -94,7 +128,7 @@ export function CreateEventModal({ open, onOpenChange, selectedDate, event, pres
       setLeadId(preselectedLeadId);
       setEventType('meeting'); // Default to meeting for scheduled leads
     }
-  }, [event, selectedDate, open, preselectedLeadId]);
+  }, [event, selectedDate, open, preselectedLeadId, calendarSettings]);
 
   const resetForm = () => {
     setTitle('');
@@ -131,7 +165,11 @@ export function CreateEventModal({ open, onOpenChange, selectedDate, event, pres
       end_time: endDateTime,
       all_day: allDay,
       lead_id: leadId || undefined,
-      reminder_minutes: reminderMinutes ? parseInt(reminderMinutes) : null,
+      reminder_minutes: reminderMinutes
+        ? parseInt(reminderMinutes)
+        : (calendarSettings?.auto_reminder_meetings && (eventType === 'meeting' || eventType === 'call'))
+          ? calendarSettings.auto_reminder_minutes
+          : null,
     };
 
     if (isEditing && event) {

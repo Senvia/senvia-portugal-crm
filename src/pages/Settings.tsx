@@ -20,6 +20,7 @@ import { GeneralContent } from '@/components/settings/GeneralContent';
 import { IntegrationsContent } from '@/components/settings/IntegrationsContent';
 import { FieldsManagerTabs } from '@/components/settings/FieldsManagerTabs';
 import { FidelizationAlertsSettings } from '@/components/settings/FidelizationAlertsSettings';
+import { CalendarAlertsSettings } from '@/components/settings/CalendarAlertsSettings';
 import { ExpenseCategoriesTab } from '@/components/settings/ExpenseCategoriesTab';
 import { FiscalSettingsTab } from '@/components/settings/FiscalSettingsTab';
 import { SalesSettingsTab } from '@/components/settings/SalesSettingsTab';
@@ -321,6 +322,7 @@ export default function Settings() {
         />
       );
       case "notif-push": return <PushNotificationsCard organizationId={organization?.id} pushNotifications={pushNotifications} />;
+      case "notif-calendar": return <CalendarAlertsSettings />;
       case "notif-alerts": return <FidelizationAlertsSettings />;
       case "integrations": return <IntegrationsContent {...integrationsContentProps} />;
       case "billing": return <BillingTab />;
