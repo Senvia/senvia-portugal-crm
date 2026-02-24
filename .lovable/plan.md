@@ -1,32 +1,79 @@
 
 
-## Tornar os widgets de alertas scrollaveis e mostrar todos os itens
+## Widgets compactos com modal de detalhe ao clicar
 
-### Problema
+### Conceito
 
-Ambos os widgets (CPE/CUI a Expirar e Proximos Eventos) cortam a lista a 3 itens por secao com `.slice(0, 3)`. Alem disso, no widget de Eventos, a secao "Proximos 7 dias" so mostra itens se a secao "Hoje" estiver vazia. Resultado: quando ha muitos alertas, o utilizador nao consegue ver todos.
-
-### Solucao
-
-1. Remover os `.slice(0, 3)` -- mostrar todos os itens
-2. Mostrar sempre todas as secoes (Hoje + Proximos / Expirados + Urgentes + Proximos)
-3. Adicionar `ScrollArea` com altura maxima para que o widget nao cresça infinitamente e permita scroll interno
+Voltar aos widgets pequenos e compactos no dashboard -- mostrando apenas um resumo (titulo + contagem total + preview dos primeiros 2-3 itens). Ao clicar no widget inteiro, abre um modal fullScreen com a lista completa organizada por secoes, com scroll e todas as acoes disponiveis.
 
 ### Alteracoes
 
 **Ficheiro: `src/components/dashboard/FidelizationAlertsWidget.tsx`**
 
-- Envolver o `CardContent` com `ScrollArea` (max-height ~300px)
-- Remover os `.slice(0, 3)` das 3 secoes (expired, urgent, upcoming)
-- Remover a condicao que esconde o conteudo de "upcoming" quando existem itens expired/urgent
+1. Tornar o widget compacto:
+   - Card pequeno mostrando apenas o titulo, badge com total de alertas, e um resumo dos primeiros 2 itens (apenas nome do cliente + data)
+   - Remover o `ScrollArea` e a listagem completa do card
+   - Todo o card e clicavel (cursor pointer)
+
+2. Adicionar estado `modalOpen` para controlar o modal
+
+3. Criar o modal (fullScreen) com:
+   - Header com titulo e badge total
+   - `ScrollArea` com todas as 3 secoes (Expirados, Urgentes, Proximos 30 dias)
+   - Cada item com os botoes de "Renovar" e "Alterar Comercializador"
+   - Cada item clicavel para navegar ao cliente
 
 **Ficheiro: `src/components/dashboard/CalendarAlertsWidget.tsx`**
 
-- Envolver o `CardContent` com `ScrollArea` (max-height ~300px)
-- Remover os `.slice(0, 3)` das 2 secoes (today, upcoming)
-- Remover a condicao `todayEvents.length === 0` que escondia os itens de "Proximos 7 dias"
+1. Tornar o widget compacto:
+   - Card pequeno mostrando titulo, badge total, e preview dos primeiros 2 eventos (apenas titulo + hora)
+   - Remover o `ScrollArea` e listagem completa
+   - Todo o card e clicavel
 
-### Resultado esperado
+2. Adicionar estado `modalOpen`
 
-Ambos os widgets mostram **todos** os alertas/eventos, organizados por secao, com scroll interno quando a lista ultrapassa a altura maxima do card.
+3. Criar o modal (fullScreen) com:
+   - Header com titulo e badge
+   - `ScrollArea` com as 2 secoes (Hoje, Proximos 7 dias)
+   - Cada evento clicavel para navegar ao calendario
 
+### Estrutura do widget compacto
+
+```text
++--------------------------------------+
+| [icon] CPE/CUI a Expirar        [12] |
+| ------------------------------------ |
+| Cliente A - 28/02/2026               |
+| Cliente B - 01/03/2026               |
+| + 10 mais...                         |
++--------------------------------------+
+```
+
+### Estrutura do modal
+
+```text
++------------------------------------------+
+| [X]  CPE/CUI a Expirar            [12]  |
+|------------------------------------------|
+| -- Expirados (3)                         |
+|   [card com acoes]                       |
+|   [card com acoes]                       |
+|   [card com acoes]                       |
+|                                          |
+| -- Urgente 7 dias (4)                    |
+|   [card com acoes]                       |
+|   ...                                    |
+|                                          |
+| -- Proximos 30 dias (5)                  |
+|   [card com acoes]                       |
+|   ...                                    |
++------------------------------------------+
+```
+
+### Detalhes tecnicos
+
+- Usar `Dialog` com `variant="fullScreen"` (ja existe no projeto)
+- Manter toda a logica de dados existente (hooks, tipos)
+- Os modais de Renovar/Alterar continuam a funcionar dentro do modal de lista
+- Preview no widget: `.slice(0, 2)` apenas para o resumo visual
+- Texto "Ver todos" ou "+ N mais..." como indicador de que ha mais itens
