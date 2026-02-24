@@ -1,60 +1,52 @@
+# Data de Ativação e Bloqueio de Edição por Estado
 
+## Resumo
 
-# Corrigir Valor Zerado ao Editar Venda
+Adicionar um campo "Data de Ativação" às vendas que aparece quando o estado muda para **Entregue, Progresso** ou **Concluída**. Quando a venda passa a **Concluída**, apenas administradores podem continuar a editar.
 
-## Problema
+## O que muda para ti
 
-Quando abres uma venda para editar, o valor total fica **zerado** (0,00 EUR). Isto acontece porque:
+1. Quando mudas o estado de uma venda para **Entregue**, aparece um campo para definir a **Data de Ativação**
+2. Quando mudas para **Concluída**, podes corrigir a Data de Ativação nesse momento
+3. Depois de **Concluída**, a venda fica **bloqueada** para edição -- apenas Administradores podem alterar
+4. Na ficha de detalhes da venda, a Data de Ativação aparece junto aos outros dados
 
-1. O `total_value` e calculado a partir dos **itens/produtos** da venda (soma das quantidades x precos)
-2. Muitas vendas (especialmente as criadas a partir de propostas de energia) **nao tem itens** - o valor foi definido diretamente
-3. Sem itens, a soma da 0, e ao guardar, o sistema grava 0 como valor total
+## Secção Técnica
 
-## Solucao
+### 1. Migração da base de dados
 
-Usar o valor original da venda como fallback quando nao existem itens. Se existirem itens, calcular normalmente. Se nao existirem, manter o valor original.
+Adicionar coluna `activation_date` (tipo `date`, nullable) à tabela `sales`.
 
-## Seccao Tecnica
-
-### Ficheiro: `src/components/sales/EditSaleModal.tsx`
-
-**1. Adicionar estado para o valor total manual (para vendas sem itens):**
-
-Novo estado:
-```typescript
-const [manualTotalValue, setManualTotalValue] = useState<string>("");
+```sql
+ALTER TABLE public.sales ADD COLUMN activation_date date;
 ```
 
-Inicializar no useEffect existente (linha 139-155):
-```typescript
-setManualTotalValue(sale.total_value?.toString() || "0");
-```
+### 2. Tipos TypeScript -- `src/types/sales.ts`
 
-**2. Alterar o calculo do total (linhas 231-236):**
+- Adicionar `activation_date?: string | null` ao interface `Sale`
 
-De:
-```typescript
-const subtotal = items.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
-const total = Math.max(0, subtotal - discountValue);
-```
+### 3. Hook `useSales.ts`
 
-Para:
-```typescript
-const itemsSubtotal = items.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
-const hasItems = items.length > 0;
-const subtotal = hasItems ? itemsSubtotal : parseFloat(manualTotalValue) || 0;
-const total = hasItems ? Math.max(0, subtotal - discountValue) : subtotal;
-```
+- Adicionar `activation_date` ao objeto `updates` aceite por `useUpdateSale`
 
-**3. Mostrar input de valor total quando nao ha itens:**
+### 4. `SaleDetailsModal.tsx` -- Alteração de estado com Data de Ativação
 
-Se `items.length === 0`, mostrar um campo editavel "Valor Total" no formulario para o utilizador poder ajustar o valor manualmente. Caso contrario, manter o calculo automatico a partir dos itens.
+- Quando o utilizador muda o estado para `fulfilled` (Entregue) ou `delivered` (Concluída), mostrar um campo de Data de Ativação no diálogo de confirmação
+- Guardar a `activation_date` junto com o novo estado
+- Mostrar a Data de Ativação na ficha de detalhes (read-only)
+- **Bloqueio:** quando `status === 'delivered'`, desabilitar o select de estado e o botão de editar para utilizadores não-admin (usando `usePermissions().isAdmin`)
 
-**4. No handleSubmit (linha 324):**
+### 5. `EditSaleModal.tsx` -- Campo editável + bloqueio
 
-A logica ja usa `total_value: total`, que agora vai refletir o valor correto (manual ou calculado).
+- Adicionar estado local `activationDate` e input de data no card "Dados da Venda"
+- Campo visível quando `status` é `fulfilled` ou `delivered`
+- Incluir `activation_date` no `handleSubmit`
+- **Bloqueio total:** quando `sale.status === 'delivered'` e o utilizador **não é admin**, mostrar aviso e desabilitar o botão "Guardar Alterações"
 
-**Resultado:** O valor da venda nunca mais fica zerado. Vendas com itens calculam automaticamente; vendas sem itens preservam e permitem editar o valor original.
+### Ficheiros editados:
 
-Total: 1 ficheiro editado (`EditSaleModal.tsx`).
-
+1. Migração SQL (nova coluna `activation_date`)
+2. `src/types/sales.ts`
+3. `src/hooks/useSales.ts`
+4. `src/components/sales/SaleDetailsModal.tsx`
+5. `src/components/sales/EditSaleModal.tsx`
