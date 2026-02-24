@@ -220,7 +220,7 @@ export function EditClientModal({ client, open, onOpenChange }: EditClientModalP
                           />
                           {nifValidation.isDuplicate && (
                             <p className="text-xs text-destructive mt-1">
-                              Já existe um cliente com este NIF: {nifValidation.existingClientName}
+                              Já existe um cliente com este NIF: {nifValidation.existingClientCode ? `${nifValidation.existingClientCode} - ` : ''}{nifValidation.existingClientName}
                             </p>
                           )}
                         </div>
@@ -266,7 +266,7 @@ export function EditClientModal({ client, open, onOpenChange }: EditClientModalP
                             />
                             {companyNifValidation.isDuplicate && (
                               <p className="text-xs text-destructive mt-1">
-                                Já existe um cliente com este NIF: {companyNifValidation.existingClientName}
+                                Já existe um cliente com este NIF: {companyNifValidation.existingClientCode ? `${companyNifValidation.existingClientCode} - ` : ''}{companyNifValidation.existingClientName}
                               </p>
                             )}
                           </div>

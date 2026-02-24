@@ -11,6 +11,7 @@ interface UseNifValidationProps {
 interface NifValidationResult {
   isDuplicate: boolean;
   existingClientName: string | null;
+  existingClientCode: string | null;
 }
 
 export function useNifValidation({
@@ -32,7 +33,7 @@ export function useNifValidation({
 
       let query = supabase
         .from("crm_clients")
-        .select("id, name")
+        .select("id, name, code")
         .eq("organization_id", organizationId)
         .or(`nif.eq.${debouncedNif},company_nif.eq.${debouncedNif}`)
         .limit(1);
@@ -51,5 +52,6 @@ export function useNifValidation({
   return {
     isDuplicate: !!data,
     existingClientName: data?.name || null,
+    existingClientCode: data?.code || null,
   };
 }
