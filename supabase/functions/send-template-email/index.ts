@@ -182,11 +182,31 @@ serve(async (req: Request): Promise<Response> => {
 
     for (const recipient of recipients) {
       try {
+        // Resolve vendedor (assigned_to) from client record
+        let vendedorName = '';
+        if (recipient.clientId) {
+          const { data: clientData } = await supabase
+            .from('crm_clients')
+            .select('assigned_to')
+            .eq('id', recipient.clientId)
+            .single();
+
+          if (clientData?.assigned_to) {
+            const { data: profileData } = await supabase
+              .from('profiles')
+              .select('full_name')
+              .eq('id', clientData.assigned_to)
+              .single();
+            vendedorName = profileData?.full_name || '';
+          }
+        }
+
         const variables: Record<string, string> = {
           nome: recipient.name || '',
           email: recipient.email || '',
           organizacao: org.name || '',
           data: formatDate(),
+          vendedor: vendedorName,
           ...recipient.variables,
         };
 
