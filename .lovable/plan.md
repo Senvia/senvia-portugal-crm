@@ -1,55 +1,48 @@
 
 
-# Bloquear Criacao de Lead quando NIF pertence a Cliente Existente
+# Adicionar Filtro "Tipo" (Energia / Outros Servicos) nos Clientes
 
-## Resumo
+## Problema
 
-Quando o utilizador digita um NIF no modal "Adicionar Lead" e esse NIF ja pertence a um cliente existente (`crm_clients`), o formulario deve:
+A pagina de Clientes nao tem o filtro de Tipo (Energia / Outros Servicos) que ja existe nas Propostas, Vendas e Leads.
 
-1. Mostrar os dados do cliente (ja acontece)
-2. **Bloquear completamente** a criacao -- o botao "Criar Lead" fica desativado e aparece uma mensagem clara a explicar que nao e possivel criar um lead para um NIF que ja e cliente
+## Desafio Tecnico
 
-## Logica
+A tabela `crm_clients` nao tem uma coluna `proposal_type`. Contudo, as tabelas `proposals` e `sales` estao ligadas aos clientes via `client_id` e possuem o campo `proposal_type`. A solucao e criar um hook que carrega os `proposal_type` distintos por cliente e filtra no frontend.
 
-Se o NIF ja existe na tabela `crm_clients`, significa que essa entidade ja passou por um estado final da pipeline (ganho/perdido) e foi convertida em cliente. Criar um novo lead com o mesmo NIF nao faz sentido.
+## Abordagem
 
-## Situacao Atual
+Criar um hook `useClientProposalTypes` que faz um query leve para buscar os tipos de propostas/vendas associados a cada cliente. Com base nisso, o filtro funciona assim:
 
-- O hook `useNifValidation` ja deteta NIFs duplicados na `crm_clients` e bloqueia o botao
-- Porem, o `searchExistingClient` (onBlur) preenche campos automaticamente e mostra um banner informativo que da a entender que e possivel continuar
+- **"Energia"**: Mostra clientes que tem pelo menos uma proposta/venda do tipo `energia`
+- **"Outros Servicos"**: Mostra clientes que tem pelo menos uma proposta/venda do tipo `servicos`
+- **"Todos os tipos"**: Sem filtro
 
-## Alteracoes
+## Secao Tecnica
 
-### Ficheiro: `src/components/leads/AddLeadModal.tsx`
+### 1. Novo hook: `src/hooks/useClientProposalTypes.ts`
 
-1. **Banner de cliente existente** -- Alterar o banner amarelo (`matchedClient`) para vermelho/destrutivo quando o NIF pertence a um cliente, com mensagem clara: "Este NIF ja pertence a um cliente existente. Nao e possivel criar um novo lead."
+- Query a tabela `proposals` agrupando por `client_id` e `proposal_type` para obter um mapa: `{ [clientId]: Set<'energia' | 'servicos'> }`
+- Utiliza `useQuery` com chave `['client-proposal-types', organizationId]`
+- Apenas ativo quando `isTelecom === true`
 
-2. **Nao preencher campos automaticamente** -- Quando `nifValidation.isDuplicate` e verdadeiro, os campos do formulario nao devem ser preenchidos automaticamente (remover o auto-fill do `searchExistingClient` quando ha match)
+### 2. Ficheiro: `src/components/clients/ClientFilters.tsx`
 
-3. **Botao "Criar Lead"** -- Ja esta bloqueado por `nifValidation.isDuplicate` (implementado anteriormente). Manter.
+- Adicionar `proposalType: 'all' | 'energia' | 'servicos'` ao `ClientFiltersState`
+- Atualizar `defaultFilters` com `proposalType: 'all'`
+- Receber prop `isTelecom` para renderizar condicionalmente o Select de tipo
+- Atualizar `hasActiveFilters` para incluir `proposalType`
 
-4. **Mensagem junto ao NIF** -- A mensagem vermelha abaixo do campo NIF ja existe. Reforcar com texto mais explicito: "Este NIF pertence ao cliente {codigo} - {nome}. Nao e possivel criar leads duplicados."
+### 3. Ficheiro: `src/pages/Clients.tsx`
 
-### Resultado esperado
+- Importar e usar `useClientProposalTypes`
+- Determinar `isTelecom` a partir de `organization?.niche === 'telecom'`
+- Passar `isTelecom` ao componente `ClientFilters`
+- Adicionar logica de filtragem: verificar se o `clientId` aparece no mapa de tipos para o tipo selecionado
 
-- Utilizador digita NIF -> sistema verifica em tempo real (300ms debounce)
-- Se NIF pertence a cliente: banner vermelho + mensagem no campo + botao bloqueado
-- Campos do formulario NAO sao preenchidos automaticamente (para nao dar a impressao de que pode editar/submeter)
+### Ficheiros a alterar/criar
 
-### Secao Tecnica
-
-**Alteracoes no `searchExistingClient`:**
-- Adicionar verificacao: se `nifValidation.isDuplicate`, nao fazer auto-fill dos campos
-- Ou alternativamente, deixar o `searchExistingClient` preencher mas tornar todos os campos `disabled` quando ha duplicado (para mostrar os dados sem permitir edicao)
-
-**Opcao escolhida:** Mostrar os dados preenchidos mas com todos os inputs `disabled` quando `nifValidation.isDuplicate === true`. Isto permite ao utilizador ver a quem pertence o NIF sem poder editar ou submeter.
-
-**Logica concreta:**
-- Quando `nifValidation.isDuplicate` e `true`, adicionar `disabled` a todos os inputs do formulario
-- Alterar o banner de amarelo para vermelho com icone de alerta
-- Alterar texto da mensagem abaixo do NIF para ser mais explicito sobre o bloqueio
-
-### Ficheiros a alterar
-
-- `src/components/leads/AddLeadModal.tsx` -- unico ficheiro
+- `src/hooks/useClientProposalTypes.ts` (novo)
+- `src/components/clients/ClientFilters.tsx` (alterar)
+- `src/pages/Clients.tsx` (alterar)
 
