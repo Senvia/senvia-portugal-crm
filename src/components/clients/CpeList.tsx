@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { format, differenceInDays, isPast } from 'date-fns';
 import { pt } from 'date-fns/locale';
-import { Router, Plus, Pencil, Trash2, AlertTriangle, Calendar, Zap } from 'lucide-react';
+import { Router, Plus, Pencil, Trash2, AlertTriangle, Calendar, Zap, RefreshCw, ArrowLeftRight, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -21,6 +21,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { CPE_STATUS_LABELS, CPE_STATUS_STYLES, NIVEL_TENSAO_LABELS, NIVEL_TENSAO_STYLES, type Cpe, type NivelTensao } from '@/types/cpes';
 import { CreateCpeModal } from './CreateCpeModal';
 import { EditCpeModal } from './EditCpeModal';
+import { RenewCpeModal } from './RenewCpeModal';
+import { SwitchComercializadorModal } from './SwitchComercializadorModal';
 
 interface CpeListProps {
   clientId: string;
@@ -34,6 +36,8 @@ export function CpeList({ clientId }: CpeListProps) {
   const [createOpen, setCreateOpen] = useState(false);
   const [editingCpe, setEditingCpe] = useState<Cpe | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [renewCpe, setRenewCpe] = useState<Cpe | null>(null);
+  const [switchCpe, setSwitchCpe] = useState<Cpe | null>(null);
   
   // Telecom niche uses energy-specific labels
   const isTelecom = organization?.niche === 'telecom';
@@ -119,6 +123,18 @@ export function CpeList({ clientId }: CpeListProps) {
                             {CPE_STATUS_LABELS[cpe.status as keyof typeof CPE_STATUS_LABELS]}
                           </Badge>
                         )}
+                        {cpe.renewal_status === 'renewed' && (
+                          <Badge variant="outline" className="text-xs bg-green-500/10 text-green-600 border-green-500/20">
+                            <CheckCircle className="h-3 w-3 mr-1" />
+                            Renovado
+                          </Badge>
+                        )}
+                        {cpe.renewal_status === 'switched' && (
+                          <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-600 border-blue-500/20">
+                            <ArrowLeftRight className="h-3 w-3 mr-1" />
+                            Comercializador alterado
+                          </Badge>
+                        )}
                       </div>
 
                       {/* Details */}
@@ -152,6 +168,30 @@ export function CpeList({ clientId }: CpeListProps) {
                           <p className="text-xs italic">{cpe.notes}</p>
                         )}
                       </div>
+
+                      {/* Quick actions for expiring/expired CPEs */}
+                      {fidelizacao && (fidelizacao.variant === 'destructive' || (cpe.fidelizacao_end && differenceInDays(new Date(cpe.fidelizacao_end), new Date()) <= 30)) && cpe.renewal_status !== 'renewed' && cpe.renewal_status !== 'switched' && (
+                        <div className="flex items-center gap-2 pt-1">
+                          <Button
+                            size="sm"
+                            variant="default"
+                            className="h-7 text-xs"
+                            onClick={() => setRenewCpe(cpe)}
+                          >
+                            <RefreshCw className="h-3 w-3 mr-1" />
+                            Renovar
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs"
+                            onClick={() => setSwitchCpe(cpe)}
+                          >
+                            <ArrowLeftRight className="h-3 w-3 mr-1" />
+                            Alterar Comercializador
+                          </Button>
+                        </div>
+                      )}
                     </div>
 
                     {/* Actions */}
@@ -196,6 +236,26 @@ export function CpeList({ clientId }: CpeListProps) {
           open={!!editingCpe}
           onOpenChange={(open) => !open && setEditingCpe(null)}
           isTelecom={isTelecom}
+        />
+      )}
+
+      {/* Renew Modal */}
+      {renewCpe && renewCpe.fidelizacao_end && (
+        <RenewCpeModal
+          cpeId={renewCpe.id}
+          currentEnd={renewCpe.fidelizacao_end}
+          open={!!renewCpe}
+          onOpenChange={(open) => !open && setRenewCpe(null)}
+        />
+      )}
+
+      {/* Switch Comercializador Modal */}
+      {switchCpe && (
+        <SwitchComercializadorModal
+          cpeId={switchCpe.id}
+          currentComercializador={switchCpe.comercializador}
+          open={!!switchCpe}
+          onOpenChange={(open) => !open && setSwitchCpe(null)}
         />
       )}
 
