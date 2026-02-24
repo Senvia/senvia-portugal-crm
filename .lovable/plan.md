@@ -1,12 +1,14 @@
 
 
-# Corrigir Erro ao Submeter Pedido em "Outros"
+# Corrigir INSERT em Pedidos Internos (Cache PostgREST)
 
 ## Problema
-A policy de INSERT na tabela `internal_requests` esta configurada como **RESTRICTIVE** (nao permissiva). No PostgreSQL, para uma operacao ser permitida, e necessario que pelo menos uma policy **PERMISSIVE** conceda acesso. Se todas as policies forem RESTRICTIVE, nenhum INSERT e permitido, independentemente das condicoes.
+A policy de INSERT na tabela `internal_requests` ja esta correta na base de dados (PERMISSIVE), mas o PostgREST (camada de API) pode estar a usar uma versao em cache das policies. Isto acontece quando uma migracao altera policies mas o PostgREST nao recarrega o schema automaticamente.
 
 ## Solucao
-Recriar a policy de INSERT como **PERMISSIVE** em vez de RESTRICTIVE. A condicao de seguranca permanece a mesma (o utilizador so pode criar pedidos na sua organizacao e com o seu proprio ID).
+Criar uma migracao que:
+1. Faz DROP e recria a policy INSERT (para garantir que e aplicada de forma limpa)
+2. Envia um `NOTIFY pgrst, 'reload schema'` para forcar o PostgREST a recarregar as policies
 
 ---
 
@@ -15,10 +17,9 @@ Recriar a policy de INSERT como **PERMISSIVE** em vez de RESTRICTIVE. A condicao
 ### Migracao SQL
 
 ```sql
--- Remover a policy RESTRICTIVE existente
+-- Forcar recriacao da policy INSERT
 DROP POLICY IF EXISTS "Authenticated users can create requests" ON internal_requests;
 
--- Recriar como PERMISSIVE (que e o default do CREATE POLICY)
 CREATE POLICY "Authenticated users can create requests"
 ON internal_requests FOR INSERT
 TO authenticated
@@ -26,14 +27,15 @@ WITH CHECK (
   organization_id = get_user_org_id(auth.uid())
   AND submitted_by = auth.uid()
 );
-```
 
-A unica diferenca e remover a flag RESTRICTIVE -- a condicao de seguranca (`WITH CHECK`) permanece identica.
+-- Forcar PostgREST a recarregar o schema/policies
+NOTIFY pgrst, 'reload schema';
+```
 
 ### Ficheiros a alterar
 | Ficheiro | Acao |
 |---|---|
-| Migracao SQL | Criar -- recriar policy INSERT como PERMISSIVE |
+| Migracao SQL | Criar -- recriar policy + NOTIFY pgrst |
 
-Nenhum ficheiro de codigo precisa de ser alterado. O problema e exclusivamente na configuracao da base de dados.
+Nenhum ficheiro de codigo precisa de ser alterado.
 
