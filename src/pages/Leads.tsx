@@ -302,6 +302,7 @@ export default function Leads() {
     followUpTime: string;
     eventType: "call" | "meeting";
     scheduleFollowUp: boolean;
+    reminderMinutes: number | null;
   }) => {
     if (!pendingLostStatus || !pendingLead) return;
 
@@ -337,7 +338,7 @@ export default function Leads() {
           lead_id: pendingLead.id,
           user_id: user!.id,
           organization_id: organization!.id,
-          reminder_minutes: 1440,
+          reminder_minutes: data.reminderMinutes,
         })
         .select()
         .single()

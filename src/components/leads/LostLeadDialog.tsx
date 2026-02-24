@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { CalendarClock, Phone, Users } from "lucide-react";
+import { REMINDER_OPTIONS } from "@/types/calendar";
 
 const LOSS_REASONS = [
   { value: "price", label: "Preço" },
@@ -46,6 +47,7 @@ interface LostLeadDialogProps {
     followUpTime: string;
     eventType: "call" | "meeting";
     scheduleFollowUp: boolean;
+    reminderMinutes: number | null;
   }) => void;
 }
 
@@ -60,6 +62,7 @@ export function LostLeadDialog({
   const [followUpDate, setFollowUpDate] = useState("");
   const [followUpTime, setFollowUpTime] = useState("10:00");
   const [eventType, setEventType] = useState<"call" | "meeting">("call");
+  const [reminderMinutes, setReminderMinutes] = useState<string>("");
 
   const handleQuickDate = (days: number) => {
     const date = addDays(new Date(), days);
@@ -68,13 +71,22 @@ export function LostLeadDialog({
 
   const handleConfirm = () => {
     if (!lossReason || !followUpDate) return;
-    onConfirm({ lossReason, notes, followUpDate, followUpTime, eventType, scheduleFollowUp: true });
+    onConfirm({
+      lossReason,
+      notes,
+      followUpDate,
+      followUpTime,
+      eventType,
+      scheduleFollowUp: true,
+      reminderMinutes: reminderMinutes ? parseInt(reminderMinutes) : null,
+    });
     // Reset
     setLossReason("");
     setNotes("");
     setFollowUpDate("");
     setFollowUpTime("10:00");
     setEventType("call");
+    setReminderMinutes("");
   };
 
   const handleClose = (open: boolean) => {
@@ -84,6 +96,7 @@ export function LostLeadDialog({
       setFollowUpDate("");
       setFollowUpTime("10:00");
       setEventType("call");
+      setReminderMinutes("");
     }
     onOpenChange(open);
   };
@@ -198,6 +211,23 @@ export function LostLeadDialog({
                     </Button>
                   ))}
                 </div>
+              </div>
+
+              {/* Reminder */}
+              <div className="space-y-2">
+                <Label>Lembrete</Label>
+                <Select value={reminderMinutes || "none"} onValueChange={(v) => setReminderMinutes(v === "none" ? "" : v)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Sem lembrete" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {REMINDER_OPTIONS.map((option) => (
+                      <SelectItem key={option.value ?? 'none'} value={option.value?.toString() ?? 'none'}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
         </div>
 
