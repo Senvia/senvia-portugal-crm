@@ -263,9 +263,12 @@ function WebhooksManager() {
 
   return (
     <div className="space-y-4">
-      <p className="text-xs text-muted-foreground">
-        Cada webhook receberá um POST com os dados do lead sempre que um novo contacto for registado.
-      </p>
+      <div className="rounded-lg bg-blue-500/10 border border-blue-500/20 p-4">
+        <h4 className="font-medium text-sm text-blue-900 dark:text-blue-300 mb-1">🔗 O que são Webhooks?</h4>
+        <p className="text-sm text-blue-600 dark:text-blue-400">
+          Webhooks permitem notificar automaticamente sistemas externos (como CRMs, ferramentas de automação ou o n8n) sempre que um novo lead é registado. Cada webhook configurado recebe um pedido HTTP POST com os dados do lead em tempo real, permitindo integrar o Senvia OS com qualquer plataforma.
+        </p>
+      </div>
 
       {/* Webhook list */}
       {webhooks.length > 0 && (
