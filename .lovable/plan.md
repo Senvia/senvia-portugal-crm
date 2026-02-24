@@ -1,61 +1,29 @@
 
 
-# Separar Trial do Plano: Acesso Total sem "plan = elite"
+# Atualizar Pipeline Padrao de Telecomunicacoes
 
-## Problema
+## Alteracao
 
-Quando um cliente esta em trial, o sistema define `plan = 'elite'` na base de dados. Isto causa:
-- Adição incorreta a listas de planos pagos (ex: "Plano Elite")
-- Confusao entre clientes que pagam e clientes em trial
-- Problemas futuros com qualquer logica que dependa da coluna `plan`
+O pipeline atual de Telecom tem 7 etapas:
+Lead -> Contactado -> Agendado -> Proposta -> Instalacao -> Ativo -> Perdido
 
-## Solucao
+O novo pipeline tera 5 etapas:
+Lead -> Contactado -> Agendado -> Ganho -> Perdido
 
-Manter `plan = null` durante o trial. O acesso total e garantido verificando o estado do trial em vez de simular um plano pago.
+## Ficheiro Alterado
 
-## Alteracoes
+**`src/lib/pipeline-templates.ts`** (linhas 83-90)
 
-### 1. Edge Function `check-subscription` (2 alteracoes)
-
-Remover as duas linhas que fazem `update({ plan: 'elite' })` durante o trial (linhas 97 e 129). A resposta JSON ja retorna `on_trial: true` e `plan_id: 'elite'` para o frontend -- isto nao muda. Apenas deixa de gravar `elite` na coluna `plan` da DB.
-
-Tambem na funcao `buildTrialResponse`, o campo `plan_id` no JSON passara a ser `null` em vez de `'elite'`. O controlo de acesso passara a ser feito pelo campo `on_trial`.
-
-### 2. Hook `useSubscription.ts`
-
-Atualmente le `organization.plan` (que vem da DB). Precisa de ser alterado para:
-- Se o utilizador esta em trial (`on_trial === true`), carregar as features do plano `elite` da tabela `subscription_plans` (acesso total)
-- Se nao, usar `organization.plan` normalmente
-
-Isto requer acesso ao estado de trial. A abordagem mais simples: importar/consultar o `subscriptionStatus` do `useStripeSubscription` ou ler o `trial_ends_at` da organizacao.
-
-### 3. Correcao de dados (SQL)
-
-Atualizar organizacoes que estao em trial para ter `plan = null`:
+Substituir as stages do template `telecom` por:
 
 ```text
-UPDATE organizations
-SET plan = null
-WHERE trial_ends_at > now()
-  AND billing_exempt = false
-  AND plan = 'elite';
+{ name: 'Lead',       key: 'new',        color: '#3B82F6', position: 1, is_final_positive: false, is_final_negative: false }
+{ name: 'Contactado', key: 'contactado', color: '#A855F7', position: 2, is_final_positive: false, is_final_negative: false }
+{ name: 'Agendado',   key: 'scheduled',  color: '#F59E0B', position: 3, is_final_positive: false, is_final_negative: false }
+{ name: 'Ganho',      key: 'won',        color: '#22C55E', position: 4, is_final_positive: true,  is_final_negative: false }
+{ name: 'Perdido',    key: 'perdido',    color: '#6B7280', position: 5, is_final_positive: false, is_final_negative: true  }
 ```
 
-### 4. Validar GeneralContent.tsx
+## Nota
 
-O badge de plano nas definicoes gerais mostra `organization.plan`. Com `plan = null`, mostrara "Starter" (fallback). Ajustar para mostrar "Trial" quando em trial.
-
-## Ficheiros Alterados
-
-1. `supabase/functions/check-subscription/index.ts` -- Remover sync de plan=elite durante trial; alterar plan_id no JSON de trial
-2. `src/hooks/useSubscription.ts` -- Verificar trial para conceder acesso total sem depender de plan=elite na DB
-3. `src/components/settings/GeneralContent.tsx` -- Mostrar badge "Trial" quando em trial
-4. SQL direto -- Limpar plan=elite de organizacoes em trial
-
-## Resultado
-
-- Trial: `plan = null` na DB, acesso total via logica de trial
-- Pagamento Stripe: `plan = starter/pro/elite` na DB (como antes)
-- Billing exempt: `plan = elite` na DB (como antes)
-- Listas automaticas: nunca mais adicionam clientes em trial a listas de planos pagos
-
+Esta alteracao afeta apenas o template padrao para novas organizacoes Telecom ou ao reaplicar o template. Organizacoes existentes mantem o seu pipeline atual ate reaplicarem manualmente.
