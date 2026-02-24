@@ -132,6 +132,9 @@ export function EditSaleModal({
   const [kwp, setKwp] = useState<string>("");
   const [servicosProdutos, setServicosProdutos] = useState<string[]>([]);
 
+  // Manual total value (for sales without items)
+  const [manualTotalValue, setManualTotalValue] = useState<string>("");
+
   // Editable CPEs state
   const [editableCpes, setEditableCpes] = useState<CreateProposalCpeData[]>([]);
 
@@ -151,6 +154,7 @@ export function EditSaleModal({
       setModeloServico(sale.modelo_servico || "");
       setKwp(sale.kwp?.toString() || "");
       setServicosProdutos(sale.servicos_produtos || []);
+      setManualTotalValue(sale.total_value?.toString() || "0");
     }
   }, [open, sale]);
 
@@ -228,12 +232,14 @@ export function EditSaleModal({
   }, [products, items]);
 
   // Calculate totals
-  const subtotal = useMemo(() => {
+  const hasItems = items.length > 0;
+  const itemsSubtotal = useMemo(() => {
     return items.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
   }, [items]);
 
+  const subtotal = hasItems ? itemsSubtotal : parseFloat(manualTotalValue) || 0;
   const discountValue = parseFloat(discount) || 0;
-  const total = Math.max(0, subtotal - discountValue);
+  const total = hasItems ? Math.max(0, subtotal - discountValue) : subtotal;
 
   // VAT calculation
   const vatCalc = useVatCalculation({
@@ -892,26 +898,45 @@ export function EditSaleModal({
                             Resumo
                           </CardTitle>
                         </CardHeader>
-                        <CardContent className="p-4 pt-0 space-y-3">
-                          <div className="flex justify-between text-sm">
-                            <span className="text-muted-foreground">Subtotal</span>
-                            <span>{formatCurrency(subtotal)}</span>
-                          </div>
-                          
-                          <div className="flex items-center justify-between gap-4">
-                            <Label className="text-sm text-muted-foreground">Desconto</Label>
-                            <div className="flex items-center gap-2">
-                              <span className="text-muted-foreground">€</span>
-                              <Input
-                                type="number"
-                                value={discount}
-                                onChange={(e) => setDiscount(e.target.value)}
-                                className="w-24 h-8 text-right"
-                                step="0.01"
-                                min="0"
-                              />
+                         <CardContent className="p-4 pt-0 space-y-3">
+                          {!hasItems ? (
+                            <div className="space-y-1.5">
+                              <Label className="text-sm text-muted-foreground">Valor Total</Label>
+                              <div className="flex items-center gap-2">
+                                <span className="text-muted-foreground">€</span>
+                                <Input
+                                  type="number"
+                                  value={manualTotalValue}
+                                  onChange={(e) => setManualTotalValue(e.target.value)}
+                                  className="h-8 text-right"
+                                  step="0.01"
+                                  min="0"
+                                />
+                              </div>
                             </div>
-                          </div>
+                          ) : (
+                            <div className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">Subtotal</span>
+                              <span>{formatCurrency(subtotal)}</span>
+                            </div>
+                          )}
+                          
+                          {hasItems && (
+                            <div className="flex items-center justify-between gap-4">
+                              <Label className="text-sm text-muted-foreground">Desconto</Label>
+                              <div className="flex items-center gap-2">
+                                <span className="text-muted-foreground">€</span>
+                                <Input
+                                  type="number"
+                                  value={discount}
+                                  onChange={(e) => setDiscount(e.target.value)}
+                                  className="w-24 h-8 text-right"
+                                  step="0.01"
+                                  min="0"
+                                />
+                              </div>
+                            </div>
+                          )}
                           
                           <Separator />
 
