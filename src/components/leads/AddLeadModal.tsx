@@ -29,7 +29,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PhoneInput } from "@/components/ui/phone-input";
-import { Loader2, Zap, UserCircle, X, User, Upload, FileText, Trash2, Paperclip, Building2, Contact, Settings2, StickyNote, Eye } from "lucide-react";
+import { Loader2, Zap, UserCircle, X, User, Upload, FileText, Trash2, Paperclip, Building2, Contact, Settings2, StickyNote, Eye, AlertTriangle } from "lucide-react";
 import { useCreateLead } from "@/hooks/useLeads";
 import { useNifValidation } from "@/hooks/useNifValidation";
 import { useTeamMembers } from "@/hooks/useTeam";
@@ -175,11 +175,14 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
 
       if (data) {
         setMatchedClient(data);
-        if (!form.getValues('name')) form.setValue('name', data.name);
-        if (!form.getValues('company_name') && data.company) form.setValue('company_name', data.company);
-        if (!form.getValues('email') && data.email) form.setValue('email', data.email);
-        if (!form.getValues('phone') && data.phone) form.setValue('phone', data.phone);
-        if (!form.getValues('notes') && data.notes) form.setValue('notes', data.notes);
+        // Don't auto-fill if NIF belongs to existing client (blocked)
+        if (!nifValidation.isDuplicate) {
+          if (!form.getValues('name')) form.setValue('name', data.name);
+          if (!form.getValues('company_name') && data.company) form.setValue('company_name', data.company);
+          if (!form.getValues('email') && data.email) form.setValue('email', data.email);
+          if (!form.getValues('phone') && data.phone) form.setValue('phone', data.phone);
+          if (!form.getValues('notes') && data.notes) form.setValue('notes', data.notes);
+        }
       } else {
         setMatchedClient(null);
       }
@@ -257,8 +260,18 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
               <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
                 {/* Left Column - Form */}
                 <div className="lg:col-span-3 space-y-6">
-                  {/* Matched client banner */}
-                  {matchedClient && (
+                  {/* Blocked: NIF belongs to existing client */}
+                  {nifValidation.isDuplicate && (
+                    <div className="flex items-center gap-2 rounded-md border border-destructive bg-destructive/10 p-3">
+                      <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
+                      <span className="text-sm text-destructive flex-1">
+                        Este NIF já pertence ao cliente <strong>{nifValidation.existingClientCode ? `${nifValidation.existingClientCode} - ` : ''}{nifValidation.existingClientName}</strong>. Não é possível criar um novo lead.
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Matched client banner (info only, when not blocked) */}
+                  {matchedClient && !nifValidation.isDuplicate && (
                     <div className="flex items-center gap-2 rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700 p-3">
                       <User className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
                       <span className="text-sm text-amber-800 dark:text-amber-300 flex-1">
@@ -306,11 +319,11 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
                                     />
                                   </FormControl>
                                   <FormMessage />
-                                  {nifValidation.isDuplicate && (
-                                    <p className="text-xs text-destructive mt-1">
-                                      Já existe um cliente com este NIF: {nifValidation.existingClientCode ? `${nifValidation.existingClientCode} - ` : ''}{nifValidation.existingClientName}
-                                    </p>
-                                  )}
+                                   {nifValidation.isDuplicate && (
+                                     <p className="text-xs text-destructive mt-1 font-medium">
+                                       Este NIF pertence ao cliente {nifValidation.existingClientCode ? `${nifValidation.existingClientCode} - ` : ''}{nifValidation.existingClientName}. Não é possível criar leads duplicados.
+                                     </p>
+                                   )}
                                 </FormItem>
                               )}
                             />
@@ -323,7 +336,7 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
                                 <FormItem>
                                   <FormLabel>{labelText('company_name', 'Nome da Empresa')}</FormLabel>
                                   <FormControl>
-                                    <Input placeholder="Empresa Exemplo, Lda" {...field} />
+                                    <Input placeholder="Empresa Exemplo, Lda" disabled={nifValidation.isDuplicate} {...field} />
                                   </FormControl>
                                   <FormMessage />
                                 </FormItem>
@@ -353,7 +366,7 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
                               <FormItem>
                                 <FormLabel>{labelText('name', 'Nome Completo')}</FormLabel>
                                 <FormControl>
-                                  <Input placeholder="João Silva" {...field} />
+                                  <Input placeholder="João Silva" disabled={nifValidation.isDuplicate} {...field} />
                                 </FormControl>
                                 <FormMessage />
                               </FormItem>
@@ -369,7 +382,7 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
                                 <FormItem>
                                   <FormLabel>{labelText('email', 'Email')}</FormLabel>
                                   <FormControl>
-                                    <Input type="email" placeholder="joao@exemplo.pt" {...field} />
+                                    <Input type="email" placeholder="joao@exemplo.pt" disabled={nifValidation.isDuplicate} {...field} />
                                   </FormControl>
                                   <FormMessage />
                                 </FormItem>
@@ -384,7 +397,7 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
                                 <FormItem>
                                   <FormLabel>{labelText('phone', 'Telemóvel')}</FormLabel>
                                   <FormControl>
-                                    <PhoneInput value={field.value} onChange={field.onChange} />
+                                    <PhoneInput value={field.value} onChange={field.onChange} disabled={nifValidation.isDuplicate} />
                                   </FormControl>
                                   <FormMessage />
                                 </FormItem>
@@ -571,6 +584,7 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
                                   placeholder="Notas adicionais sobre o lead..."
                                   className="resize-none"
                                   rows={3}
+                                  disabled={nifValidation.isDuplicate}
                                   {...field}
                                 />
                               </FormControl>
