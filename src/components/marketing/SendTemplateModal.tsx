@@ -106,6 +106,8 @@ export function SendTemplateModal({ template, open, onOpenChange }: SendTemplate
       },
     }));
 
+    // Note: {{vendedor}} is resolved server-side from client's assigned_to field
+
     await sendTemplate.mutateAsync({
       templateId: template.id,
       recipients,
