@@ -3069,6 +3069,7 @@ export type Database = {
           dbl: number | null
           discount: number | null
           due_date: string | null
+          edp_proposal_number: string | null
           has_recurring: boolean | null
           id: string
           invoice_pdf_url: string | null
@@ -3113,6 +3114,7 @@ export type Database = {
           dbl?: number | null
           discount?: number | null
           due_date?: string | null
+          edp_proposal_number?: string | null
           has_recurring?: boolean | null
           id?: string
           invoice_pdf_url?: string | null
@@ -3157,6 +3159,7 @@ export type Database = {
           dbl?: number | null
           discount?: number | null
           due_date?: string | null
+          edp_proposal_number?: string | null
           has_recurring?: boolean | null
           id?: string
           invoice_pdf_url?: string | null
@@ -3690,6 +3693,7 @@ export type Database = {
           dbl: number | null
           discount: number | null
           due_date: string | null
+          edp_proposal_number: string | null
           has_recurring: boolean | null
           id: string
           invoice_pdf_url: string | null

@@ -41,7 +41,7 @@ export const DEFAULT_PROPOSAL_FIELDS_SETTINGS: ProposalFieldsSettings = {
 export const PROPOSAL_FIELD_ORDER: ProposalFieldKey[] = ['type', 'value', 'date', 'notes'];
 
 // ==================== VENDAS ====================
-export type SaleFieldKey = 'value' | 'payment_method' | 'due_date' | 'notes';
+export type SaleFieldKey = 'value' | 'payment_method' | 'due_date' | 'notes' | 'edp_proposal_number';
 
 export type SaleFieldsSettings = Record<SaleFieldKey, FieldConfig>;
 
@@ -50,6 +50,7 @@ export const DEFAULT_SALE_FIELDS_SETTINGS: SaleFieldsSettings = {
   payment_method: { visible: true, required: false, label: 'Método de Pagamento' },
   due_date: { visible: true, required: false, label: 'Data de Vencimento' },
   notes: { visible: true, required: false, label: 'Notas' },
+  edp_proposal_number: { visible: true, required: true, label: 'Numero Proposta EDP' },
 };
 
-export const SALE_FIELD_ORDER: SaleFieldKey[] = ['value', 'payment_method', 'due_date', 'notes'];
+export const SALE_FIELD_ORDER: SaleFieldKey[] = ['value', 'payment_method', 'due_date', 'notes', 'edp_proposal_number'];

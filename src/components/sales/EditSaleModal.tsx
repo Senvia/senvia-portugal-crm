@@ -138,6 +138,7 @@ export function EditSaleModal({
   // Manual total value (for sales without items)
   const [manualTotalValue, setManualTotalValue] = useState<string>("");
   const [activationDate, setActivationDate] = useState<string>("");
+  const [edpProposalNumber, setEdpProposalNumber] = useState<string>("");
 
   // Editable CPEs state
   const [editableCpes, setEditableCpes] = useState<CreateProposalCpeData[]>([]);
@@ -160,6 +161,7 @@ export function EditSaleModal({
       setServicosProdutos(sale.servicos_produtos || []);
       setManualTotalValue(sale.total_value?.toString() || "0");
       setActivationDate(sale.activation_date || "");
+      setEdpProposalNumber((sale as any).edp_proposal_number || "");
     }
   }, [open, sale]);
 
@@ -346,6 +348,7 @@ export function EditSaleModal({
           kwp: parseFloat(kwp) || null,
           servicos_produtos: servicosProdutos.length > 0 ? servicosProdutos : null,
           activation_date: activationDate || null,
+          edp_proposal_number: edpProposalNumber.trim() || null,
         },
       });
 
@@ -1018,6 +1021,21 @@ export function EditSaleModal({
                     )}
 
                     {/* Notes */}
+                    {/* EDP Proposal Number */}
+                    <Card>
+                      <CardHeader className="pb-2 p-4">
+                        <CardTitle className="text-sm font-medium text-muted-foreground">Numero Proposta EDP *</CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-4 pt-0">
+                        <Input
+                          placeholder="Ex: EDP-2024-001234"
+                          value={edpProposalNumber}
+                          onChange={(e) => setEdpProposalNumber(e.target.value)}
+                          required
+                        />
+                      </CardContent>
+                    </Card>
+
                     <Card>
                       <CardHeader className="pb-2 p-4">
                         <CardTitle className="text-sm font-medium text-muted-foreground">Notas</CardTitle>
