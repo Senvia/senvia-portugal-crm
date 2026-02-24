@@ -1,79 +1,50 @@
 
 
-## Widgets compactos com modal de detalhe ao clicar
+## Auditoria: Erros encontrados nos widgets e componentes recentes
 
-### Conceito
+### Erro 1 - Console: "Function components cannot be given refs" no CalendarAlertsWidget
 
-Voltar aos widgets pequenos e compactos no dashboard -- mostrando apenas um resumo (titulo + contagem total + preview dos primeiros 2-3 itens). Ao clicar no widget inteiro, abre um modal fullScreen com a lista completa organizada por secoes, com scroll e todas as acoes disponiveis.
+**Causa**: O `DialogHeader` no `dialog.tsx` (linha 53) e uma funcao simples, nao usa `React.forwardRef`. Quando o Radix Dialog tenta passar uma ref para este componente, gera o warning. Isto acontece em ambos os widgets (`CalendarAlertsWidget` e `FidelizationAlertsWidget`).
 
-### Alteracoes
+**Correcao**: Converter `DialogHeader` para usar `React.forwardRef` no ficheiro `src/components/ui/dialog.tsx`.
 
-**Ficheiro: `src/components/dashboard/FidelizationAlertsWidget.tsx`**
+---
 
-1. Tornar o widget compacto:
-   - Card pequeno mostrando apenas o titulo, badge com total de alertas, e um resumo dos primeiros 2 itens (apenas nome do cliente + data)
-   - Remover o `ScrollArea` e a listagem completa do card
-   - Todo o card e clicavel (cursor pointer)
+### Erro 2 - Console: "Missing Description or aria-describedby" nos modais fullScreen
 
-2. Adicionar estado `modalOpen` para controlar o modal
+**Causa**: Os modais fullScreen dos dois widgets usam `DialogTitle` mas nao incluem `DialogDescription`. O Radix Dialog exige que cada `DialogContent` tenha um `DialogDescription` ou um `aria-describedby={undefined}` explicito para acessibilidade.
 
-3. Criar o modal (fullScreen) com:
-   - Header com titulo e badge total
-   - `ScrollArea` com todas as 3 secoes (Expirados, Urgentes, Proximos 30 dias)
-   - Cada item com os botoes de "Renovar" e "Alterar Comercializador"
-   - Cada item clicavel para navegar ao cliente
+**Correcao**: Adicionar `DialogDescription` (pode ser visualmente oculto com `sr-only`) dentro dos `DialogContent` de ambos os widgets, ou passar `aria-describedby={undefined}` ao `DialogContent`.
 
-**Ficheiro: `src/components/dashboard/CalendarAlertsWidget.tsx`**
+---
 
-1. Tornar o widget compacto:
-   - Card pequeno mostrando titulo, badge total, e preview dos primeiros 2 eventos (apenas titulo + hora)
-   - Remover o `ScrollArea` e listagem completa
-   - Todo o card e clicavel
+### Erro 3 - `renderEvent` usa `key` dentro do JSX retornado (nao no `.map()`)
 
-2. Adicionar estado `modalOpen`
+**Ficheiro**: `CalendarAlertsWidget.tsx`, linha 83
 
-3. Criar o modal (fullScreen) com:
-   - Header com titulo e badge
-   - `ScrollArea` com as 2 secoes (Hoje, Proximos 7 dias)
-   - Cada evento clicavel para navegar ao calendario
+**Causa**: A funcao `renderEvent` retorna um `<button key={event.id}>`, mas a `key` deve ser passada no ponto onde `.map()` e chamado, nao dentro da funcao. Quando se chama `renderEvent(e, 'today')` dentro de um `.map()`, o React nao reconhece a key corretamente porque esta dentro do componente retornado e nao no callsite do map.
 
-### Estrutura do widget compacto
+**Correcao**: Remover `key` do `<button>` dentro de `renderEvent` e adicionar `key` ao wrapping do `.map()`, ex: `<React.Fragment key={e.id}>{renderEvent(e, 'today')}</React.Fragment>`.
 
-```text
-+--------------------------------------+
-| [icon] CPE/CUI a Expirar        [12] |
-| ------------------------------------ |
-| Cliente A - 28/02/2026               |
-| Cliente B - 01/03/2026               |
-| + 10 mais...                         |
-+--------------------------------------+
-```
+---
 
-### Estrutura do modal
+### Erro 4 - Duplo import de `useState` e `useMemo`
 
-```text
-+------------------------------------------+
-| [X]  CPE/CUI a Expirar            [12]  |
-|------------------------------------------|
-| -- Expirados (3)                         |
-|   [card com acoes]                       |
-|   [card com acoes]                       |
-|   [card com acoes]                       |
-|                                          |
-| -- Urgente 7 dias (4)                    |
-|   [card com acoes]                       |
-|   ...                                    |
-|                                          |
-| -- Proximos 30 dias (5)                  |
-|   [card com acoes]                       |
-|   ...                                    |
-+------------------------------------------+
-```
+**Ficheiro**: `CalendarAlertsWidget.tsx`, linhas 1 e 10
 
-### Detalhes tecnicos
+**Causa**: `useState` e importado na linha 1 e `useMemo` na linha 10, separados. Nao causa erro de runtime mas e um padrao inconsistente -- os dois podem ser importados no mesmo statement.
 
-- Usar `Dialog` com `variant="fullScreen"` (ja existe no projeto)
-- Manter toda a logica de dados existente (hooks, tipos)
-- Os modais de Renovar/Alterar continuam a funcionar dentro do modal de lista
-- Preview no widget: `.slice(0, 2)` apenas para o resumo visual
-- Texto "Ver todos" ou "+ N mais..." como indicador de que ha mais itens
+**Correcao**: Juntar os imports: `import { useState, useMemo } from 'react'`.
+
+---
+
+### Resumo das alteracoes
+
+| Ficheiro | Alteracao |
+|---|---|
+| `src/components/ui/dialog.tsx` | Converter `DialogHeader` e `DialogFooter` para `forwardRef` |
+| `src/components/dashboard/CalendarAlertsWidget.tsx` | Adicionar `DialogDescription` ao modal; corrigir keys no `.map()`; juntar imports de React |
+| `src/components/dashboard/FidelizationAlertsWidget.tsx` | Adicionar `DialogDescription` ao modal |
+
+Todas as correcoes sao menores e nao alteram funcionalidade -- apenas resolvem warnings de consola e melhoram acessibilidade.
+
