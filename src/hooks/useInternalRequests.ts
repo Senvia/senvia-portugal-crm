@@ -52,10 +52,19 @@ export function useInternalRequests(filters?: Filters) {
         ...input,
       });
       if (error) throw error;
+      return input;
     },
-    onSuccess: () => {
+    onSuccess: (_, input) => {
       toast.success('Pedido submetido com sucesso');
       queryClient.invalidateQueries({ queryKey: ['internal-requests'] });
+      // Notify finance email silently
+      supabase.functions.invoke('notify-finance-request', {
+        body: {
+          organization_id: organizationId,
+          title: input.title,
+          request_type: input.request_type,
+        },
+      }).catch(() => {});
     },
     onError: () => toast.error('Erro ao submeter pedido'),
   });

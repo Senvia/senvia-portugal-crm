@@ -15,10 +15,10 @@ interface Props {
   request: InternalRequest | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  isAdmin: boolean;
+  canApprove: boolean;
 }
 
-export function ReviewRequestModal({ request, open, onOpenChange, isAdmin }: Props) {
+export function ReviewRequestModal({ request, open, onOpenChange, canApprove }: Props) {
   const { reviewRequest } = useInternalRequests();
   const [notes, setNotes] = useState('');
   const [paymentRef, setPaymentRef] = useState('');
@@ -27,7 +27,7 @@ export function ReviewRequestModal({ request, open, onOpenChange, isAdmin }: Pro
 
   const isPending = request.status === 'pending';
   const isApproved = request.status === 'approved';
-  const canReview = isAdmin && (isPending || isApproved);
+  const canReview = canApprove && (isPending || isApproved);
 
   const handleAction = async (status: 'approved' | 'rejected' | 'paid') => {
     await reviewRequest.mutateAsync({

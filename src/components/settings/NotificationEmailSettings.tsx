@@ -5,15 +5,19 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { useFidelizationSettings, useUpdateFidelizationSettings } from '@/hooks/useFidelizationAlerts';
+import { useOrganization, useUpdateOrganization } from '@/hooks/useOrganization';
 import { toast } from 'sonner';
-import { Mail, Loader2 } from 'lucide-react';
+import { Mail, Loader2, Banknote } from 'lucide-react';
 
 export function NotificationEmailSettings() {
   const { data: settings, isLoading } = useFidelizationSettings();
   const updateSettings = useUpdateFidelizationSettings();
+  const { data: orgData, isLoading: orgLoading } = useOrganization();
+  const updateOrg = useUpdateOrganization();
 
   const [emailEnabled, setEmailEnabled] = useState(false);
   const [alertEmail, setAlertEmail] = useState('');
+  const [financeEmail, setFinanceEmail] = useState('');
 
   useEffect(() => {
     if (settings) {
@@ -21,6 +25,12 @@ export function NotificationEmailSettings() {
       setAlertEmail(settings.fidelization_email || '');
     }
   }, [settings]);
+
+  useEffect(() => {
+    if (orgData) {
+      setFinanceEmail((orgData as any).finance_email || '');
+    }
+  }, [orgData]);
 
   const handleSave = () => {
     if (emailEnabled && !alertEmail.trim()) {
@@ -42,7 +52,18 @@ export function NotificationEmailSettings() {
     });
   };
 
-  if (isLoading) {
+  const handleSaveFinance = () => {
+    if (financeEmail && !financeEmail.includes('@')) {
+      toast.error('Email financeiro inválido');
+      return;
+    }
+
+    updateOrg.mutate({
+      finance_email: financeEmail.trim() || null,
+    } as any);
+  };
+
+  if (isLoading || orgLoading) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -58,7 +79,7 @@ export function NotificationEmailSettings() {
           Alertas por Email
         </h2>
         <p className="text-sm text-muted-foreground">
-          Configure o email para receber alertas automáticos (calendário, fidelização, etc.).
+          Configure os emails para receber alertas automáticos (calendário, fidelização, financeiro, etc.).
         </p>
       </div>
 
@@ -98,17 +119,53 @@ export function NotificationEmailSettings() {
               />
             </div>
           )}
+
+          <Button
+            onClick={handleSave}
+            disabled={updateSettings.isPending}
+            className="w-full sm:w-auto"
+          >
+            {updateSettings.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            Guardar
+          </Button>
         </CardContent>
       </Card>
 
-      <Button
-        onClick={handleSave}
-        disabled={updateSettings.isPending}
-        className="w-full sm:w-auto"
-      >
-        {updateSettings.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-        Guardar Definições
-      </Button>
+      <Card>
+        <CardHeader className="pb-4">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Banknote className="h-4 w-4" />
+            Email Financeiro
+          </CardTitle>
+          <CardDescription>
+            Este email recebe notificações quando um colaborador submete um pedido interno (despesas, faturas, férias).
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="finance-email">Email do responsável financeiro</Label>
+            <Input
+              id="finance-email"
+              type="email"
+              value={financeEmail}
+              onChange={(e) => setFinanceEmail(e.target.value)}
+              placeholder="financeiro@empresa.pt"
+            />
+            <p className="text-xs text-muted-foreground">
+              Deixe em branco para desativar as notificações financeiras.
+            </p>
+          </div>
+
+          <Button
+            onClick={handleSaveFinance}
+            disabled={updateOrg.isPending}
+            className="w-full sm:w-auto"
+          >
+            {updateOrg.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            Guardar
+          </Button>
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -24,14 +24,15 @@ export default function InternalRequests() {
   const { requests, isLoading, deleteRequest, pendingCount } = useInternalRequests(
     Object.keys(filters).length > 0 ? filters as { type?: RequestType; status?: RequestStatus } : undefined
   );
-  const { isAdmin } = usePermissions();
+  const { can } = usePermissions();
+  const canApprove = can('finance', 'requests', 'approve');
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold">Pedidos Internos</h2>
-          {isAdmin && pendingCount > 0 && (
+          {canApprove && pendingCount > 0 && (
             <p className="text-sm text-muted-foreground">{pendingCount} pedido(s) pendente(s)</p>
           )}
         </div>
@@ -56,7 +57,7 @@ export default function InternalRequests() {
         request={selectedRequest}
         open={!!selectedRequest}
         onOpenChange={(open) => !open && setSelectedRequest(null)}
-        isAdmin={isAdmin}
+        canApprove={canApprove}
       />
     </div>
   );
