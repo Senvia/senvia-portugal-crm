@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { X, Send, Trash2, LifeBuoy } from "lucide-react";
+import { X, Send, Trash2, LifeBuoy, Paperclip, FileText, Image as ImageIcon } from "lucide-react";
 const ottoMascot = "/otto-mascot.svg";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -7,20 +7,26 @@ import { useOttoChat } from "@/hooks/useOttoChat";
 import { OttoMessageComponent } from "./OttoMessage";
 import { OttoQuickActions } from "./OttoQuickActions";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useOttoStore } from "@/stores/useOttoStore";
 import { motion } from "framer-motion";
+import { toast } from "sonner";
 
 interface OttoChatWindowProps {
   onClose: () => void;
 }
 
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
+
 export function OttoChatWindow({ onClose }: OttoChatWindowProps) {
   const { messages, isLoading, sendMessage, clearMessages } = useOttoChat();
+  const { pendingAttachments, addAttachment, removeAttachment, clearAttachments } = useOttoStore();
   const [input, setInput] = useState("");
   const isMobile = useIsMobile();
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Auto-scroll on new messages
   useEffect(() => {
     const el = scrollRef.current;
     if (el) {
@@ -45,6 +51,35 @@ export function OttoChatWindow({ onClose }: OttoChatWindowProps) {
       e.preventDefault();
       handleSend();
     }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      if (!ACCEPTED_TYPES.includes(file.type)) {
+        toast.error(`Tipo não suportado: ${file.name}. Usa JPG, PNG, WebP ou PDF.`);
+        continue;
+      }
+      if (file.size > MAX_FILE_SIZE) {
+        toast.error(`Ficheiro demasiado grande: ${file.name}. Máximo 10MB.`);
+        continue;
+      }
+      if (pendingAttachments.length >= 5) {
+        toast.error("Máximo de 5 anexos por vez.");
+        break;
+      }
+      addAttachment(file);
+    }
+    // Reset input so same file can be selected again
+    e.target.value = "";
+  };
+
+  const getFileIcon = (file: File) => {
+    if (file.type === "application/pdf") return <FileText className="w-3.5 h-3.5" />;
+    return <ImageIcon className="w-3.5 h-3.5" />;
   };
 
   return (
@@ -134,7 +169,48 @@ export function OttoChatWindow({ onClose }: OttoChatWindowProps) {
           <LifeBuoy className="w-3.5 h-3.5" />
           Abrir Ticket de Suporte
         </Button>
+
+        {/* Attachment previews */}
+        {pendingAttachments.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {pendingAttachments.map((file, i) => (
+              <div
+                key={i}
+                className="flex items-center gap-1.5 bg-muted rounded-lg px-2 py-1 text-xs max-w-[160px]"
+              >
+                {getFileIcon(file)}
+                <span className="truncate flex-1">{file.name}</span>
+                <button
+                  onClick={() => removeAttachment(i)}
+                  className="text-muted-foreground hover:text-foreground flex-shrink-0"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
         <div className="flex items-center gap-2">
+          {/* Hidden file input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".jpg,.jpeg,.png,.webp,.pdf"
+            multiple
+            className="hidden"
+            onChange={handleFileSelect}
+          />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-10 w-10 rounded-xl flex-shrink-0"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isLoading}
+            title="Anexar ficheiro"
+          >
+            <Paperclip className="w-4 h-4" />
+          </Button>
           <input
             ref={inputRef}
             type="text"

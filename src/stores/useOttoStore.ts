@@ -10,11 +10,15 @@ interface OttoStore {
   isOpen: boolean;
   messages: OttoMessage[];
   isLoading: boolean;
+  pendingAttachments: File[];
   setOpen: (open: boolean) => void;
   addMessage: (msg: OttoMessage) => void;
   updateLastMessage: (content: string) => void;
   clearMessages: () => void;
   setLoading: (loading: boolean) => void;
+  addAttachment: (file: File) => void;
+  removeAttachment: (index: number) => void;
+  clearAttachments: () => void;
 }
 
 export const useOttoStore = create<OttoStore>()(
@@ -23,6 +27,7 @@ export const useOttoStore = create<OttoStore>()(
       isOpen: false,
       messages: [],
       isLoading: false,
+      pendingAttachments: [],
       setOpen: (open) => set({ isOpen: open }),
       addMessage: (msg) => set((s) => ({ messages: [...s.messages, msg] })),
       updateLastMessage: (content) =>
@@ -36,8 +41,13 @@ export const useOttoStore = create<OttoStore>()(
           }
           return { messages: msgs };
         }),
-      clearMessages: () => set({ messages: [] }),
+      clearMessages: () => set({ messages: [], pendingAttachments: [] }),
       setLoading: (loading) => set({ isLoading: loading }),
+      addAttachment: (file) => set((s) => ({ pendingAttachments: [...s.pendingAttachments, file] })),
+      removeAttachment: (index) => set((s) => ({
+        pendingAttachments: s.pendingAttachments.filter((_, i) => i !== index),
+      })),
+      clearAttachments: () => set({ pendingAttachments: [] }),
     }),
     {
       name: "otto-chat-store",

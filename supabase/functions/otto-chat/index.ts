@@ -105,14 +105,16 @@ Espera pela resposta. NÃO avances para o passo seguinte sem resposta.
 
 PASSO 3 — ANEXOS:
 Pergunta: "Tens algum anexo (screenshot, ficheiro) que queiras juntar ao ticket?"
-Oferece botões: [botao:Não, pode enviar assim][botao:Sim, mas não consigo anexar aqui]
-Se o utilizador disser que tem anexos mas não consegue enviar, informa que a equipa de suporte entrará em contacto para receber os ficheiros.
+Oferece botões: [botao:Não, pode enviar assim][botao:Sim, vou anexar agora]
+Se o utilizador clicar "Sim, vou anexar agora", responde: "Usa o botão de clip (📎) junto ao campo de texto para anexar os teus ficheiros (imagens JPG/PNG ou PDF, até 10MB cada, máx. 5 ficheiros). Quando estiverem prontos, escreve 'pronto' ou clica no botão abaixo."
+[botao:Pronto, já anexei]
+Se o utilizador enviar "pronto" ou clicar no botão, avança para o PASSO 4 normalmente.
 
 PASSO 4 — CONFIRMAÇÃO:
 Mostra o resumo completo do ticket:
 - **Assunto:** (assunto recolhido)
 - **Descrição:** (descrição recolhida)
-- **Anexos:** Sim/Não
+- **Anexos:** Sim (X ficheiros) / Não
 Pergunta: "Confirmas o envio deste ticket?"
 [botao:Sim, enviar][botao:Editar assunto][botao:Editar descrição]
 
@@ -304,13 +306,14 @@ const TOOLS = [
     type: "function",
     function: {
       name: "submit_support_ticket",
-      description: "Submeter um ticket de suporte técnico. A equipa será notificada via WhatsApp. Usa APENAS quando o utilizador confirmar o envio.",
+      description: "Submeter um ticket de suporte técnico. A equipa será notificada via WhatsApp. Usa APENAS quando o utilizador confirmar o envio. Se o utilizador anexou ficheiros, eles são enviados automaticamente pelo sistema — inclui has_attachments=true.",
       parameters: {
         type: "object",
         properties: {
           subject: { type: "string", description: "Assunto curto do ticket" },
           description: { type: "string", description: "Descrição detalhada do problema" },
           priority: { type: "string", enum: ["low", "medium", "high"], description: "Prioridade: low, medium, high (default: medium)" },
+          has_attachments: { type: "boolean", description: "Se o utilizador indicou que anexou ficheiros" },
         },
         required: ["subject", "description"],
       },
@@ -555,7 +558,10 @@ async function executeTool(
       case "submit_support_ticket": {
         const priority = args.priority || "medium";
         
-        // Insert ticket
+        // Get attachment_paths from the request context (passed via closure)
+        const ticketAttachments = (args as any)._attachment_paths || [];
+        
+        // Insert ticket with attachments
         const { data: ticket, error: ticketError } = await supabaseAdmin
           .from("support_tickets")
           .insert({
@@ -564,6 +570,7 @@ async function executeTool(
             subject: args.subject,
             description: args.description,
             priority,
+            attachments: ticketAttachments,
           })
           .select("id, created_at")
           .single();
@@ -604,6 +611,9 @@ async function executeTool(
           .single();
 
         if (senviaOrg?.whatsapp_api_key) {
+          const attachmentInfo = ticketAttachments.length > 0 
+            ? `\n*Anexos:* ${ticketAttachments.length} ficheiro(s)` 
+            : "";
           const whatsappMessage = `🎫 *NOVO TICKET DE SUPORTE*\n\n` +
             `*Org:* ${orgName}\n` +
             `*User:* ${userName}\n` +
@@ -611,7 +621,8 @@ async function executeTool(
             `*Descrição:* ${args.description}\n` +
             `*Prioridade:* ${priority}\n` +
             `*Data:* ${createdAt}\n` +
-            `*Ticket ID:* ${ticket.id.slice(0, 8)}`;
+            `*Ticket ID:* ${ticket.id.slice(0, 8)}` +
+            attachmentInfo;
 
           try {
             const waResp = await fetch(`${EVOLUTION_BASE_URL}/message/sendText/${EVOLUTION_INSTANCE}`, {
@@ -631,14 +642,58 @@ async function executeTool(
           } catch (waErr) {
             console.error("WhatsApp send failed:", waErr);
           }
+
+          // Send each attachment as a separate media message
+          if (ticketAttachments.length > 0) {
+            for (const attachPath of ticketAttachments) {
+              try {
+                // Generate signed URL (valid for 1 hour)
+                const { data: signedData, error: signedError } = await supabaseAdmin.storage
+                  .from("support-attachments")
+                  .createSignedUrl(attachPath, 3600);
+
+                if (signedError || !signedData?.signedUrl) {
+                  console.error("Signed URL error:", signedError);
+                  continue;
+                }
+
+                const fileName = attachPath.split("/").pop() || "ficheiro";
+                const isPdf = fileName.toLowerCase().endsWith(".pdf");
+                const mediaType = isPdf ? "document" : "image";
+
+                const mediaResp = await fetch(`${EVOLUTION_BASE_URL}/message/sendMedia/${EVOLUTION_INSTANCE}`, {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    apikey: senviaOrg.whatsapp_api_key,
+                  },
+                  body: JSON.stringify({
+                    number: SUPPORT_WHATSAPP,
+                    mediatype: mediaType,
+                    media: signedData.signedUrl,
+                    caption: `📎 Anexo do Ticket #${ticket.id.slice(0, 8)}: ${fileName}`,
+                    fileName: isPdf ? fileName : undefined,
+                  }),
+                });
+                if (!mediaResp.ok) {
+                  console.error("WhatsApp media send error:", await mediaResp.text());
+                }
+              } catch (mediaErr) {
+                console.error("WhatsApp media send failed:", mediaErr);
+              }
+            }
+          }
         } else {
           console.warn("No WhatsApp API key found for Senvia Agency");
         }
 
+        const attachmentMsg = ticketAttachments.length > 0
+          ? ` com ${ticketAttachments.length} anexo(s)`
+          : "";
         return JSON.stringify({ 
           success: true, 
           ticket_id: ticket.id.slice(0, 8),
-          _instruction: `Ticket criado com sucesso! Informa o utilizador: "Ticket #${ticket.id.slice(0, 8)} criado com sucesso! A equipa de suporte foi notificada via WhatsApp e responderemos brevemente." NÃO INVENTES dados adicionais.`
+          _instruction: `Ticket criado com sucesso! Informa o utilizador: "Ticket #${ticket.id.slice(0, 8)} criado com sucesso${attachmentMsg}! A equipa de suporte foi notificada via WhatsApp e responderemos brevemente." NÃO INVENTES dados adicionais.`
         });
       }
 
@@ -658,7 +713,7 @@ serve(async (req) => {
   }
 
   try {
-    const { messages, organization_id } = await req.json();
+    const { messages, organization_id, attachment_paths } = await req.json();
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
@@ -888,6 +943,11 @@ serve(async (req) => {
           try {
             fnArgs = JSON.parse(toolCall.function.arguments || "{}");
           } catch { fnArgs = {}; }
+
+          // Inject attachment_paths for submit_support_ticket
+          if (fnName === "submit_support_ticket" && attachment_paths && attachment_paths.length > 0) {
+            fnArgs._attachment_paths = attachment_paths;
+          }
 
           console.log(`Executing tool: ${fnName}`, fnArgs);
           const toolResult = await executeTool(fnName, fnArgs, orgId!, supabaseAdmin, userId);
