@@ -108,14 +108,14 @@ export default function Clients() {
 
   const handleExportCsv = () => {
     const selectedClients = filteredClients.filter(c => selectedIds.includes(c.id));
-    const data = mapClientsForExport(selectedClients);
+    const data = mapClientsForExport(selectedClients, organization?.niche === 'telecom');
     exportToCsv(data, `clientes_${format(new Date(), 'yyyy-MM-dd')}`);
     toast.success(`${selectedClients.length} clientes exportados para CSV`);
   };
 
   const handleExportExcel = () => {
     const selectedClients = filteredClients.filter(c => selectedIds.includes(c.id));
-    const data = mapClientsForExport(selectedClients);
+    const data = mapClientsForExport(selectedClients, organization?.niche === 'telecom');
     exportToExcel(data, `clientes_${format(new Date(), 'yyyy-MM-dd')}`);
     toast.success(`${selectedClients.length} clientes exportados para Excel`);
   };
@@ -207,8 +207,15 @@ export default function Clients() {
                   <Euro className="h-5 w-5 text-success" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{formatCurrency(stats.totalValue)}</p>
-                  <p className="text-xs text-muted-foreground">Valor Total</p>
+                  <p className="text-2xl font-bold">
+                    {organization?.niche === 'telecom' 
+                      ? formatCurrency(stats.totalComissao)
+                      : formatCurrency(stats.totalValue)
+                    }
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {organization?.niche === 'telecom' ? 'Comissão Total' : 'Valor Total'}
+                  </p>
                 </div>
               </div>
             </CardContent>

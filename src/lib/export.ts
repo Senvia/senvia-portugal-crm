@@ -37,20 +37,31 @@ export function mapLeadsForExport(leads: Lead[]) {
 }
 
 // Map clients data for export
-export function mapClientsForExport(clients: CrmClient[]) {
-  return clients.map(client => ({
-    'Código': client.code || '',
-    'Nome': client.name,
-    'Email': client.email || '',
-    'Telefone': client.phone || '',
-    'Empresa': client.company || '',
-    'NIF': client.nif || '',
-    'Estado': CLIENT_STATUS_LABELS[client.status || ''] || client.status || '',
-    'Total Propostas': client.total_proposals || 0,
-    'Total Vendas': client.total_sales || 0,
-    'Valor Total': client.total_value || 0,
-    'Data de Criação': formatExportDate(client.created_at),
-  }));
+export function mapClientsForExport(clients: CrmClient[], isTelecom = false) {
+  return clients.map(client => {
+    const base: Record<string, unknown> = {
+      'Código': client.code || '',
+      'Nome': client.name,
+      'Email': client.email || '',
+      'Telefone': client.phone || '',
+      'Empresa': client.company || '',
+      'NIF': client.nif || '',
+      'Estado': CLIENT_STATUS_LABELS[client.status || ''] || client.status || '',
+      'Total Propostas': client.total_proposals || 0,
+      'Total Vendas': client.total_sales || 0,
+    };
+
+    if (isTelecom) {
+      base['Comissão'] = client.total_comissao || 0;
+      base['MWh'] = client.total_mwh || 0;
+      base['kWp'] = client.total_kwp || 0;
+    } else {
+      base['Valor Total'] = client.total_value || 0;
+    }
+
+    base['Data de Criação'] = formatExportDate(client.created_at);
+    return base;
+  });
 }
 
 // Helper to download file

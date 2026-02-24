@@ -553,6 +553,9 @@ export type Database = {
           postal_code: string | null
           source: string | null
           status: string | null
+          total_comissao: number | null
+          total_kwp: number | null
+          total_mwh: number | null
           total_proposals: number | null
           total_sales: number | null
           total_value: number | null
@@ -581,6 +584,9 @@ export type Database = {
           postal_code?: string | null
           source?: string | null
           status?: string | null
+          total_comissao?: number | null
+          total_kwp?: number | null
+          total_mwh?: number | null
           total_proposals?: number | null
           total_sales?: number | null
           total_value?: number | null
@@ -609,6 +615,9 @@ export type Database = {
           postal_code?: string | null
           source?: string | null
           status?: string | null
+          total_comissao?: number | null
+          total_kwp?: number | null
+          total_mwh?: number | null
           total_proposals?: number | null
           total_sales?: number | null
           total_value?: number | null
@@ -3450,6 +3459,9 @@ export type Database = {
           postal_code: string | null
           source: string | null
           status: string | null
+          total_comissao: number | null
+          total_kwp: number | null
+          total_mwh: number | null
           total_proposals: number | null
           total_sales: number | null
           total_value: number | null
