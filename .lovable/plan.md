@@ -1,49 +1,64 @@
 
 
-# Mover "Alertas por Email" para uma sub-secao geral em Notificacoes
+# Separar Lembretes de Reunioes/Chamadas em Horas e Dias
 
 ## Problema
 
-Atualmente, a configuracao de "Alertas por Email" esta dentro de Notificacoes > Fidelizacao, mas deveria ser uma configuracao geral que se aplica a todas as notificacoes (Calendario, Fidelizacao, e futuras).
+Atualmente, o lembrete automatico para Reunioes e Chamadas tem apenas **um** select com opcoes misturadas (15min, 30min, 1h, 1 dia). O utilizador quer poder configurar **dois lembretes separados**:
+
+1. **Lembrete por horas** -- ex: "2 horas antes", "1 hora antes", ou "Nunca"
+2. **Lembrete por dias** -- ex: "1 dia antes", "2 dias antes", ou "Nunca"
+
+Ambos podem estar ativos ao mesmo tempo (ex: lembrar 1 dia antes E 2 horas antes).
 
 ## Solucao
 
-Criar uma nova sub-secao **"Email"** dentro de Notificacoes que centraliza a configuracao de alertas por email para todos os tipos de notificacao.
-
-### Estrutura final de Notificacoes
+### Estrutura do Card "Reunioes e Chamadas"
 
 ```text
-Notificacoes
-  |-- Push (notificacoes no telemovel)
-  |-- Calendario (lembretes de eventos)
-  |-- Email (configuracao geral de alertas por email)
-  |-- Fidelizacao (apenas telecom - dias, eventos calendario)
+Reunioes e Chamadas
+  |-- Switch: Lembrete automatico (ativar/desativar)
+  |
+  |-- (se ativo):
+  |     |-- Lembrar horas antes: [Nunca | 1h | 2h | 3h | 4h | 6h | 12h]
+  |     |-- Lembrar dias antes:  [Nunca | 1 dia | 2 dias | 3 dias | 7 dias]
 ```
 
-### O que muda
+### Dados guardados (JSONB)
 
-1. **Remover** o card "Alertas por Email" do `FidelizationAlertsSettings.tsx` (fica so com Dias de Antecedencia + Evento de Calendario)
-2. **Criar** novo componente `NotificationEmailSettings.tsx` com:
-   - Switch para ativar/desativar alertas por email
-   - Campo de email destinatario
-   - Nota: "Aplica-se a todos os alertas (calendario, fidelizacao, etc.)"
-   - Usa os mesmos campos da BD (`fidelization_email_enabled` e `fidelization_email`) -- renomear seria breaking change, por isso mantemos os campos existentes
-3. **Adicionar** sub-secao `"notif-email"` no `MobileSettingsNav.tsx` (icone Mail, visivel para todos os nichos)
-4. **Registar** o case `"notif-email"` no `Settings.tsx`
+O campo `auto_reminder_minutes` atual (numero unico) sera substituido por dois campos:
 
-## Secao tecnica
+```text
+{
+  "default_reminder_minutes": 60,
+  "auto_reminder_meetings": true,
+  "auto_reminder_hours": 2,        (horas antes, null = Nunca)
+  "auto_reminder_days": 1           (dias antes, null = Nunca)
+}
+```
 
-### Ficheiros criados
+O campo antigo `auto_reminder_minutes` deixa de ser usado, mantendo retrocompatibilidade (se existir, e convertido para os novos campos na leitura).
 
-1. `src/components/settings/NotificationEmailSettings.tsx` -- Componente de configuracao geral de email para notificacoes
+## Secao Tecnica
 
 ### Ficheiros alterados
 
-1. `src/components/settings/FidelizationAlertsSettings.tsx` -- Remover o card "Alertas por Email" e os estados/logica associados (emailEnabled, alertEmail)
-2. `src/components/settings/MobileSettingsNav.tsx` -- Adicionar `"notif-email"` como sub-secao e tipo
-3. `src/pages/Settings.tsx` -- Importar e renderizar `NotificationEmailSettings` no case `"notif-email"`
+1. **`src/components/settings/CalendarAlertsSettings.tsx`**
+   - Alterar a interface `CalendarAlertSettings` para ter `auto_reminder_hours: number | null` e `auto_reminder_days: number | null` em vez de `auto_reminder_minutes: number`
+   - Adicionar logica de migracao na leitura: se existir `auto_reminder_minutes` antigo, converter (ex: 60 -> hours=1, 1440 -> days=1)
+   - Substituir o select unico por dois selects: "Lembrar horas antes" e "Lembrar dias antes"
+   - Criar opcoes de horas: Nunca, 1h, 2h, 3h, 4h, 6h, 12h
+   - Criar opcoes de dias: Nunca, 1 dia, 2 dias, 3 dias, 7 dias
 
-### Campos da BD (sem alteracao)
+2. **`src/components/calendar/CreateEventModal.tsx`**
+   - Adaptar a logica que aplica lembrete automatico para usar os novos campos
+   - Quando `auto_reminder_meetings` esta ativo, aplicar o menor dos dois valores (horas/dias) como `reminder_minutes` do evento
+   - Ex: se hours=2 e days=1, aplica 120 minutos (2h) como lembrete principal
 
-Os campos `fidelization_email_enabled` e `fidelization_email` na tabela `organizations` continuam a ser usados, mas agora sao lidos/gravados pelo novo componente geral. Nao e necessaria migracao.
+3. **`src/types/calendar.ts`**
+   - Sem alteracoes necessarias (REMINDER_OPTIONS continua a ser usado no "Lembrete Padrao")
+
+### Sem migracao de BD necessaria
+
+O campo `calendar_alert_settings` ja e JSONB, por isso os novos campos sao simplesmente adicionados ao objeto JSON existente. A retrocompatibilidade e tratada no codigo (leitura do valor antigo e conversao).
 
