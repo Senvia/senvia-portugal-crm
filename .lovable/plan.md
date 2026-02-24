@@ -1,64 +1,50 @@
 
 
-# Separar Lembretes de Reunioes/Chamadas em Horas e Dias
+# Remover "Lembrete Padrao" e aplicar lembretes a todos os tipos de evento
 
 ## Problema
 
-Atualmente, o lembrete automatico para Reunioes e Chamadas tem apenas **um** select com opcoes misturadas (15min, 30min, 1h, 1 dia). O utilizador quer poder configurar **dois lembretes separados**:
-
-1. **Lembrete por horas** -- ex: "2 horas antes", "1 hora antes", ou "Nunca"
-2. **Lembrete por dias** -- ex: "1 dia antes", "2 dias antes", ou "Nunca"
-
-Ambos podem estar ativos ao mesmo tempo (ex: lembrar 1 dia antes E 2 horas antes).
+1. O card "Lembrete Padrao" e redundante -- os lembretes de "Reunioes e Chamadas" devem servir para **todos** os tipos de evento (nao so reunioes/chamadas).
+2. E preciso evitar duplicidade: os lembretes automaticos das definicoes so devem ser aplicados quando o evento **nao tem** lembrete configurado manualmente.
 
 ## Solucao
 
-### Estrutura do Card "Reunioes e Chamadas"
+### O que muda
+
+1. **Remover** o card "Lembrete Padrao" da UI e do modelo de dados
+2. **Renomear** o card para algo mais generico (ex: "Lembretes Automaticos") -- ja que agora se aplica a todos os eventos
+3. **Aplicar** os lembretes automaticos (horas/dias) a **todos os tipos de evento**, nao apenas reunioes e chamadas
+4. **Condicao**: so aplicar se o utilizador **nao** definiu um lembrete manualmente no evento
+
+### Logica no CreateEventModal
 
 ```text
-Reunioes e Chamadas
-  |-- Switch: Lembrete automatico (ativar/desativar)
-  |
-  |-- (se ativo):
-  |     |-- Lembrar horas antes: [Nunca | 1h | 2h | 3h | 4h | 6h | 12h]
-  |     |-- Lembrar dias antes:  [Nunca | 1 dia | 2 dias | 3 dias | 7 dias]
+Se o utilizador definiu reminder_minutes manualmente -> usar esse valor
+Senao, se auto_reminder_meetings esta ativo -> calcular a partir de auto_reminder_hours / auto_reminder_days
+Senao -> null (sem lembrete)
 ```
 
-### Dados guardados (JSONB)
+A unica diferenca e que agora remove-se o filtro `eventType === 'meeting' || eventType === 'call'`. Aplica-se a qualquer tipo.
 
-O campo `auto_reminder_minutes` atual (numero unico) sera substituido por dois campos:
-
-```text
-{
-  "default_reminder_minutes": 60,
-  "auto_reminder_meetings": true,
-  "auto_reminder_hours": 2,        (horas antes, null = Nunca)
-  "auto_reminder_days": 1           (dias antes, null = Nunca)
-}
-```
-
-O campo antigo `auto_reminder_minutes` deixa de ser usado, mantendo retrocompatibilidade (se existir, e convertido para os novos campos na leitura).
-
-## Secao Tecnica
+## Secao tecnica
 
 ### Ficheiros alterados
 
 1. **`src/components/settings/CalendarAlertsSettings.tsx`**
-   - Alterar a interface `CalendarAlertSettings` para ter `auto_reminder_hours: number | null` e `auto_reminder_days: number | null` em vez de `auto_reminder_minutes: number`
-   - Adicionar logica de migracao na leitura: se existir `auto_reminder_minutes` antigo, converter (ex: 60 -> hours=1, 1440 -> days=1)
-   - Substituir o select unico por dois selects: "Lembrar horas antes" e "Lembrar dias antes"
-   - Criar opcoes de horas: Nunca, 1h, 2h, 3h, 4h, 6h, 12h
-   - Criar opcoes de dias: Nunca, 1 dia, 2 dias, 3 dias, 7 dias
+   - Remover todo o card "Lembrete Padrao" (linhas 124-160)
+   - Remover `default_reminder_minutes` da interface e do DEFAULT_SETTINGS
+   - Renomear titulo do card de "Reunioes e Chamadas" para "Lembretes Automaticos"
+   - Atualizar descricao para: "Aplique automaticamente um lembrete a eventos que nao tenham lembrete configurado manualmente."
 
 2. **`src/components/calendar/CreateEventModal.tsx`**
-   - Adaptar a logica que aplica lembrete automatico para usar os novos campos
-   - Quando `auto_reminder_meetings` esta ativo, aplicar o menor dos dois valores (horas/dias) como `reminder_minutes` do evento
-   - Ex: se hours=2 e days=1, aplica 120 minutos (2h) como lembrete principal
+   - Remover a logica que aplica `default_reminder_minutes` ao abrir o modal (linhas 128-132)
+   - No handleSubmit, remover o filtro de tipo de evento: em vez de `eventType === 'meeting' || eventType === 'call'`, aplicar a todos os tipos
+   - A condicao `reminderMinutes` (definido manualmente) continua a ter prioridade
 
 3. **`src/types/calendar.ts`**
-   - Sem alteracoes necessarias (REMINDER_OPTIONS continua a ser usado no "Lembrete Padrao")
+   - Sem alteracoes
 
 ### Sem migracao de BD necessaria
 
-O campo `calendar_alert_settings` ja e JSONB, por isso os novos campos sao simplesmente adicionados ao objeto JSON existente. A retrocompatibilidade e tratada no codigo (leitura do valor antigo e conversao).
+O campo `calendar_alert_settings` e JSONB. O campo `default_reminder_minutes` simplesmente deixa de ser lido/gravado, sem impacto.
 
