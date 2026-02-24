@@ -1,52 +1,71 @@
 
+# Adicionar Widget de Alertas de Agenda no Dashboard
 
-# Adicionar card "Clientes Bronze" (Ativos) na pagina de Clientes
+## Problema Atual
 
-## Contexto
+O Dashboard tem apenas o widget "Alertas de Fidelizacao" (exclusivo para nicho telecom). Nao existe nenhum widget que mostre eventos proximos do calendario (reunioes, chamadas, follow-ups, recontactos de leads perdidos). Isto significa que o utilizador nao tem visibilidade no Dashboard sobre compromissos agendados para os proximos dias.
 
-A pagina de Clientes tem atualmente 4 cards de estatisticas: Total, VIP/Ouro, Inativos/Prata e Valor Total. Falta o card para clientes com status "active", que no nicho Telecom se chama "Bronze".
+## Solucao
 
-O sistema de labels por nicho ja esta configurado corretamente:
-- Telecom: active = "Bronze", inactive = "Prata", vip = "Ouro"
-- Outros nichos: active = "Ativo", inactive = "Inativo", vip = "VIP"
+Criar um novo widget **"Alertas de Agenda"** que aparece no Dashboard para **todos os nichos** e mostra:
+- Eventos de **hoje** (urgente, destacado a vermelho/laranja)
+- Eventos dos **proximos 7 dias** (informativo, destacado a azul)
+- Cada evento mostra: titulo, tipo (icone), hora, lead associado (se houver)
+- Clicar num evento navega para `/calendar`
 
 ## Alteracoes
 
-### 1. Clients.tsx -- Adicionar card Bronze/Ativos
+### 1. Novo componente: `src/components/dashboard/CalendarAlertsWidget.tsx`
 
-Adicionar um novo card na grelha de estatisticas entre o card "Total" e o card "VIP/Ouro". Este card mostra o numero de clientes com status `active`, usando o label dinamico do nicho (ex: "Clientes Bronze" para telecom, "Clientes Ativos" para outros).
+Widget com estrutura semelhante ao `FidelizationAlertsWidget`:
+- Usa `useCalendarEvents` com range de hoje ate +7 dias
+- Filtra apenas eventos com status `pending`
+- Separa em duas secoes: "Hoje" e "Proximos 7 dias"
+- Mostra icone do tipo de evento (reuniao, chamada, tarefa, follow-up)
+- Mostra hora e lead associado
+- Botao "Ver agenda" para navegar ao calendario
+- Card com icone Calendar e titulo "Proximos Eventos"
 
-- Icone: Shield ou UserCheck (representacao de nivel basico/ativo)
-- Cor: Azul (bg-blue-500/10, text-blue-500) para diferenciar dos outros cards
-- Valor: `stats.active` (ja existe no hook `useClientStats`)
+### 2. Dashboard.tsx -- Adicionar o widget
 
-A grelha passa de 4 para 5 cards. Para manter responsividade mobile-first:
-- Mobile: `grid-cols-2` (2x3, ultimo card ocupa largura total ou grid de 2)
-- Desktop: `grid-cols-5`
+- Importar `CalendarAlertsWidget`
+- Renderizar junto ao `FidelizationAlertsWidget` (para telecom) ou sozinho (para outros nichos)
+- O widget aparece para todos os nichos, desde que o modulo `calendar` esteja ativo
+- Layout: grid de 2 colunas no desktop, 1 no mobile
 
-### 2. useClientStats -- Sem alteracao necessaria
+### 3. Modulo calendar -- Verificar disponibilidade
 
-O hook `useClientStats` ja calcula `stats.active`, portanto nao precisa de alteracao.
+O `enabled_modules` ja tem `calendar` como modulo. O widget so aparece se o modulo estiver ativo.
 
-### 3. Niche labels -- Sem alteracao necessaria
-
-Os labels ja estao configurados em `niche-labels.ts` com `active: 'Clientes Bronze'` para telecom.
-
-## Secao tecnica
-
-### Ficheiros alterados
-
-1. **`src/pages/Clients.tsx`** -- Adicionar novo `<Card>` na grelha de stats com `stats.active` e `labels.active`
-
-### Layout da grelha (apos alteracao)
+## Layout no Dashboard (apos alteracao)
 
 ```text
-Mobile (grid-cols-2):
-[Total]   [Bronze]
-[Ouro]    [Prata]
-[Valor Total - col-span-2]
+Para telecom (com clientes e calendario ativos):
+[Alertas Fidelizacao] [Alertas Agenda]
+[... widgets dinamicos ...]
 
-Desktop (grid-cols-5):
-[Total] [Bronze] [Ouro] [Prata] [Valor Total]
+Para outros nichos (com calendario ativo):
+[Alertas Agenda]
+[... widgets dinamicos ...]
 ```
 
+## Secao Tecnica
+
+### Ficheiros criados
+1. **`src/components/dashboard/CalendarAlertsWidget.tsx`** -- Novo widget de alertas de agenda
+
+### Ficheiros alterados
+1. **`src/pages/Dashboard.tsx`** -- Adicionar CalendarAlertsWidget na area de alertas
+
+### Dados utilizados
+- Hook existente `useCalendarEvents(today, today+7days)` para buscar eventos pendentes
+- Tipos e labels existentes em `src/types/calendar.ts` (EVENT_TYPE_LABELS, EVENT_TYPE_COLORS)
+- Nenhuma alteracao de base de dados necessaria
+
+### Comportamento do Widget
+- Mostra badge com total de eventos pendentes
+- Secao "Hoje" com fundo laranja/vermelho para eventos do dia
+- Secao "Esta Semana" com fundo azul para eventos futuros
+- Maximo de 3 eventos visiveis por secao, com botao "Ver todos"
+- Estado vazio: "Sem eventos nos proximos 7 dias"
+- Loading state com spinner
