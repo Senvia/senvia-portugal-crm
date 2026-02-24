@@ -1,44 +1,78 @@
 
 
-## Notificar o utilizador quando o pedido e aprovado ou rejeitado
+## Reestruturar a secao de Webhooks nas Integracoes
 
-Quando um administrador aprova ou rejeita um pedido interno, o colaborador que o submeteu deve receber um email automatico com o resultado.
+### Contexto
 
-### Abordagem
+Atualmente, na pagina de Integracoes existe um card chamado "n8n / Automacoes" que permite configurar um unico webhook_url na tabela `organizations`. Esse webhook e usado internamente pela edge function `submit-lead` para enviar dados dos formularios ao n8n.
 
-Criar uma nova edge function `notify-request-status` que envia um email via Brevo ao utilizador que submeteu o pedido, informando se foi aprovado, rejeitado ou pago.
+O pedido tem 3 partes:
+
+1. **Renomear** "n8n / Automacoes" para "Webhooks"
+2. **Permitir multiplos webhooks** com nome, URL e switch ativar/desativar
+3. **Tornar o webhook do Senvia OS fixo e invisivel** -- o URL `https://n8n-n8n.tx2a4o.easypanel.host/webhook/senvia-os` e usado internamente pelo sistema para os formularios e nao deve ser editavel pelo cliente
 
 ### Alteracoes
 
-**1. Nova Edge Function `supabase/functions/notify-request-status/index.ts`**
+#### 1. Nova tabela `organization_webhooks`
 
-- Recebe: `request_id`, `organization_id`, `new_status`, `review_notes` (opcional)
-- Busca o pedido na tabela `internal_requests` para obter o `submitted_by` e o `title`
-- Busca o email do utilizador na tabela `auth.users` (via service role)
-- Busca as credenciais Brevo e nome da organizacao
-- Envia email ao submissor com o estado atualizado e eventuais notas de revisao
-- Template do email com cores diferentes consoante o estado:
-  - Aprovado: verde
-  - Rejeitado: vermelho
-  - Pago: verde escuro
+Criar tabela para armazenar multiplos webhooks por organizacao:
 
-**2. Atualizar `src/hooks/useInternalRequests.ts`**
+```text
+organization_webhooks
+- id (uuid, PK)
+- organization_id (uuid, FK -> organizations)
+- name (text, NOT NULL) -- ex: "Notificacao CRM", "Zapier"
+- url (text, NOT NULL)
+- is_active (boolean, default true)
+- is_system (boolean, default false) -- webhooks internos nao editaveis
+- created_at (timestamptz)
+- updated_at (timestamptz)
+```
 
-- No `onSuccess` da mutacao `reviewRequest`, adicionar uma chamada silenciosa (`.catch(() => {})`) a nova edge function, passando o `request_id`, `organization_id`, `new_status` e `review_notes`
-- Apenas dispara para estados `approved`, `rejected` e `paid`
+RLS: membros da org podem SELECT; admins podem INSERT/UPDATE/DELETE (exceto is_system=true); super_admin acesso total.
 
-**3. Atualizar `supabase/config.toml`** (automatico)
+#### 2. Migracao de dados
 
-- Adicionar entrada para `notify-request-status` com `verify_jwt = false` (a validacao e feita no codigo)
+- Migrar o `webhook_url` existente de cada organizacao para a nova tabela como um webhook normal (is_system=false)
+- O webhook fixo do Senvia OS sera adicionado via codigo na edge function `submit-lead`, nao precisa estar na tabela -- mantendo-o completamente invisivel
 
-### Detalhes tecnicos
+#### 3. Novo hook `useOrganizationWebhooks`
 
-- A edge function usa o `SUPABASE_SERVICE_ROLE_KEY` para aceder ao email do utilizador em `auth.users` e as credenciais Brevo da organizacao
-- Reutiliza o mesmo padrao da `notify-finance-request` existente (auth via Bearer token, Brevo API)
-- Nao requer migracao de base de dados -- toda a informacao necessaria ja existe nas tabelas `internal_requests`, `profiles` e `organizations`
-- Os labels de tipo de pedido (`expense`, `vacation`, `invoice`) sao traduzidos no template do email
+- CRUD completo para a tabela `organization_webhooks`
+- Filtro para nao mostrar webhooks com `is_system = true`
 
-### Ficheiros a criar/alterar
-- **Criar**: `supabase/functions/notify-request-status/index.ts`
-- **Alterar**: `src/hooks/useInternalRequests.ts` (adicionar chamada no onSuccess do reviewRequest)
+#### 4. Atualizar `IntegrationsContent.tsx`
+
+- Renomear o card de "n8n / Automacoes" para "Webhooks"
+- Substituir o formulario de URL unico por uma lista de webhooks:
+  - Cada webhook mostra: nome, URL (truncado), switch ativar/desativar, botao eliminar
+  - Botao "Adicionar Webhook" que abre campos inline (nome + URL)
+  - Botao "Testar" em cada webhook individual
+- O grupo "Automacoes" passa a chamar-se "Webhooks e Automacoes" ou simplesmente manter "Automacoes"
+
+#### 5. Atualizar `submit-lead/index.ts`
+
+- Alem de enviar para os webhooks da tabela `organization_webhooks` (onde `is_active = true`), tambem enviar sempre para o webhook fixo do Senvia OS
+- O webhook fixo sera guardado como constante no codigo da edge function, nunca exposto ao frontend
+- Remover a dependencia do campo `webhook_url` da tabela `organizations` (manter o campo por retrocompatibilidade mas deixar de o usar)
+
+#### 6. Atualizar `useTestWebhook` em `useOrganization.ts`
+
+- Adaptar para receber o URL do webhook individual em vez de ler de `webhookUrl` state global
+
+#### 7. Atualizar `Settings.tsx`
+
+- Remover o state `webhookUrl` e as props relacionadas, ja que os webhooks passam a ser geridos pelo novo hook
+- Simplificar as props passadas a `IntegrationsContent`
+
+### Ficheiros a criar
+- `src/hooks/useOrganizationWebhooks.ts`
+- Migracao SQL (nova tabela + RLS + migracao de dados)
+
+### Ficheiros a alterar
+- `src/components/settings/IntegrationsContent.tsx` -- novo UI de lista de webhooks
+- `src/pages/Settings.tsx` -- remover state do webhook antigo
+- `supabase/functions/submit-lead/index.ts` -- ler da nova tabela + webhook fixo
+- `src/hooks/useOrganization.ts` -- adaptar useTestWebhook
 
