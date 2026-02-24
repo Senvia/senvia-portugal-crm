@@ -1,36 +1,78 @@
 
-# Bloquear botao "Criar Lead" quando NIF duplicado
 
-## Problema
+# Adicionar Filtro de Tipo (Energia / Outros Servicos) nos Modulos
 
-O modal "Adicionar Lead" mostra um aviso quando o NIF ja existe como cliente, mas o botao "Criar Lead" continua ativo. O utilizador consegue criar o lead mesmo com NIF duplicado.
+## Resumo
 
-## Causa
+Adicionar um filtro "Tipo" (Energia / Outros Servicos) nas paginas de Propostas, Vendas, Leads e Clientes. Este filtro so sera visivel para organizacoes do nicho **telecom**, pois e o unico nicho que utiliza `proposal_type`.
 
-O `AddLeadModal` usa uma funcao `searchExistingClient` que apenas mostra um banner informativo. Nao utiliza o hook `useNifValidation` e nao bloqueia a submissao.
+## Mapeamento por modulo
 
-## Solucao
+| Modulo | Campo filtrado | Valores |
+|--------|---------------|---------|
+| Propostas | `proposal.proposal_type` | energia / servicos |
+| Vendas | `sale.proposal_type` | energia / servicos |
+| Leads | `lead.tipologia` | ee, gas, servicos, ee_servicos (agrupados em Energia vs Servicos) |
+| Clientes | Sem campo direto -- filtro nao aplicavel neste modulo |
 
-Integrar o hook `useNifValidation` no `AddLeadModal` para o campo `company_nif` e desativar o botao "Criar Lead" quando for detetado um NIF duplicado na tabela `crm_clients`.
+**Nota sobre Clientes:** A tabela `crm_clients` nao tem campo `proposal_type` nem `tipologia`. Para filtrar clientes por tipo seria necessario cruzar com propostas/vendas associadas, o que adicionaria complexidade significativa. Recomenda-se aplicar o filtro apenas nas Propostas, Vendas e Leads.
 
 ## Secao Tecnica
 
-### Ficheiro: `src/components/leads/AddLeadModal.tsx`
+### 1. Propostas (`src/pages/Proposals.tsx`)
 
-1. Importar o hook `useNifValidation`
-2. Chamar o hook com o valor do campo `company_nif` e o `organization?.id`
-3. Mostrar mensagem de erro abaixo do campo NIF: "Ja existe um cliente com este NIF: [Codigo] - [Nome]" (texto vermelho, `text-xs text-destructive`)
-4. Adicionar `nifValidation.isDuplicate` a condicao `disabled` do botao "Criar Lead" (linha 715)
+- Novo state: `typeFilter` com valores `'all' | 'energia' | 'servicos'`
+- Persistido com `usePersistedState('proposals-type-v1', 'all')`
+- Adicionado ao bloco de filtros como um `Select` com 3 opcoes: "Todos os tipos", "Energia", "Outros Servicos"
+- Filtro aplicado: `matchesType = typeFilter === 'all' || proposal.proposal_type === typeFilter`
+- Visivel apenas quando `isTelecom === true`
 
-Resultado: O botao fica desativado em tempo real enquanto o NIF digitado corresponder a um cliente existente, com feedback visual claro.
+### 2. Vendas (`src/pages/Sales.tsx`)
 
-### Logica do botao (antes vs depois)
+- Novo state: `typeFilter` com valores `'all' | 'energia' | 'servicos'`
+- Persistido com `usePersistedState('sales-type-v1', 'all')`
+- Adicionado ao bloco de filtros apos o filtro de estado
+- Filtro aplicado: `matchesType = typeFilter === 'all' || sale.proposal_type === typeFilter`
+- Visivel apenas quando `isTelecom === true`
+
+### 3. Leads (`src/pages/Leads.tsx`)
+
+- Novo state: `tipologiaFilter` com valores `'all' | 'ee' | 'gas' | 'servicos' | 'ee_servicos'`
+- Persistido com `usePersistedState('leads-tipologia-v1', 'all')`
+- Adicionado ao bloco de filtros existente
+- Filtro aplicado: `matchesTipologia = tipologiaFilter === 'all' || lead.tipologia === tipologiaFilter`
+- Labels ja existem em `TIPOLOGIA_LABELS` (`src/types/index.ts`)
+- Visivel apenas quando `isTelecom === true`
+
+### 4. Clientes -- Nao aplicavel
+
+A tabela `crm_clients` nao possui campo de tipo/tipologia. Este filtro nao sera adicionado a este modulo.
+
+### Ficheiros a alterar
+
+- `src/pages/Proposals.tsx` -- adicionar Select de tipo + logica de filtragem
+- `src/pages/Sales.tsx` -- adicionar Select de tipo + logica de filtragem
+- `src/pages/Leads.tsx` -- adicionar Select de tipologia + logica de filtragem
+
+### Aspeto visual do filtro
+
+Sera um `Select` compacto, consistente com os filtros existentes:
 
 ```text
-Antes:  disabled={createLead.isPending}
-Depois: disabled={createLead.isPending || nifValidation.isDuplicate}
+[Icone Zap] Todos os tipos  v
+  - Todos os tipos
+  - Energia
+  - Outros Servicos
 ```
 
-### Ficheiros alterados
+Para Leads, usara as tipologias ja definidas:
 
-- `src/components/leads/AddLeadModal.tsx` -- unico ficheiro a alterar
+```text
+Todas as tipologias  v
+  - Todas
+  - EE
+  - Gas
+  - Servicos
+  - EE + Servicos
+```
+
