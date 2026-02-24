@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { usePersistedState } from "@/hooks/usePersistedState";
+import { usePermissions } from "@/hooks/usePermissions";
 
 import { ResponsiveKanban } from "@/components/leads/ResponsiveKanban";
 import { LeadsTableView } from "@/components/leads/LeadsTableView";
@@ -44,6 +45,7 @@ export default function Leads() {
   useLeadsRealtime();
   useProposalsRealtime();
   const { user, profile, organization } = useAuth();
+  const { isAdmin } = usePermissions();
   const { data: leads = [], isLoading } = useLeads();
   const { data: proposals = [] } = useProposals();
   const { data: clients = [] } = useClients();
@@ -157,6 +159,12 @@ export default function Leads() {
     return stage && proposalKeywords.some(kw => stage.name.toLowerCase().includes(kw));
   };
 
+  // Check if a status is final (won/lost)
+  const isFinalStatus = (status: string) => {
+    const stage = stages.find(s => s.key === status);
+    return stage?.is_final_positive || stage?.is_final_negative || false;
+  };
+
   const isLostStage = (stageKey: string) => {
     const stage = stages.find(s => s.key === stageKey);
     if (stage?.is_final_negative) return true;
@@ -173,6 +181,14 @@ export default function Leads() {
 
   const handleStatusChange = (leadId: string, newStatus: string) => {
     const lead = leads.find(l => l.id === leadId);
+    
+    // Block status change on final leads for non-admins
+    if (lead && isFinalStatus(lead.status || '')) {
+      if (!isAdmin) {
+        toast.error('Apenas administradores podem alterar o estado de leads finalizadas.');
+        return;
+      }
+    }
     
     // Intercept drops on scheduling stages -> open event modal (create or view existing)
     if (isScheduledStage(newStatus)) {

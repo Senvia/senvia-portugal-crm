@@ -33,6 +33,7 @@ interface LeadCardProps {
   onDelete?: (leadId: string) => void;
   isDragging?: boolean;
   pipelineStages?: PipelineStage[];
+  isLocked?: boolean;
 }
 
 export function LeadCard({ 
@@ -44,7 +45,8 @@ export function LeadCard({
   onViewDetails, 
   onDelete,
   isDragging,
-  pipelineStages = []
+  pipelineStages = [],
+  isLocked = false,
 }: LeadCardProps) {
   const { canDeleteLeads } = usePermissions();
   const { organization } = useAuth();
@@ -130,7 +132,7 @@ export function LeadCard({
               Ver detalhes
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            {pipelineStages.map((stage) => (
+            {!isLocked && pipelineStages.map((stage) => (
               <DropdownMenuItem 
                 key={stage.key}
                 onClick={(e) => { 
@@ -146,6 +148,11 @@ export function LeadCard({
                 Mover para {stage.name}
               </DropdownMenuItem>
             ))}
+            {isLocked && (
+              <DropdownMenuItem disabled className="text-xs text-muted-foreground">
+                🔒 Estado bloqueado (apenas admin)
+              </DropdownMenuItem>
+            )}
             {canDeleteLeads && (
               <>
                 <DropdownMenuSeparator />
