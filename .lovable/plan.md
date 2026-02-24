@@ -1,69 +1,48 @@
-# Substituir "Valor Total" por Comissao / MWh e kWp nos Clientes (Somente para Telecom)
 
-## Contexto
 
-Atualmente, na pagina de Clientes, existe uma metrica "Valor Total" que soma o `total_value` das vendas. Para o nicho **telecom**, esta metrica nao e relevante -- o que interessa sao:
+# Corrigir Cards de Estatísticas na Página de Clientes (Telecom)
 
-- **Comissao** (soma do campo `comissao` das vendas)
-- **MWh** (soma do campo `consumo_anual` das vendas, convertido de kWh para MWh)
-- **kWp** (soma do campo `kwp` das vendas)
+## Problema
+
+Na pagina `/clients`, o ultimo card de stats so mostra "Comissao Total" para o nicho telecom. Faltam os cards de **MWh** e **kWp** que o utilizador espera ver.
 
 ## Solucao
 
-### 1. Base de Dados -- Novas Colunas
+Substituir o card unico "Comissao Total" por **3 cards separados** quando o nicho e telecom:
+- Comissao (euro)
+- MWh
+- kWp
 
-Adicionar 3 novas colunas a tabela `crm_clients`:
-
-```text
-total_comissao  NUMERIC DEFAULT 0
-total_mwh       NUMERIC DEFAULT 0
-total_kwp       NUMERIC DEFAULT 0
-```
-
-### 2. Trigger -- Atualizar Metricas Automaticamente
-
-Alterar a funcao `update_client_sales_metrics` para tambem acumular:
-
-- `total_comissao` += `sales.comissao`
-- `total_mwh` += `sales.consumo_anual / 1000` (kWh para MWh)
-- `total_kwp` += `sales.kwp`
-
-Criar tambem um script de backfill para recalcular os valores para clientes existentes a partir das vendas ja registadas.
-
-### 3. Interface -- Exibicao Condicional por Nicho
-
-Para nicho **telecom**, substituir o card/coluna "Valor Total" por 3 metricas separadas:
-
-**Pagina Clientes (`Clients.tsx`)** -- Card de stats:
-
-- Substituir o card "Valor Total" por "Comissao Total" (para telecom)
-
-**Detalhes do Cliente (`ClientDetailsDrawer.tsx`)** -- Metricas:
-
-- Telecom: mostrar 3 metricas em vez de "Valor Total":
-  - Comissao (euro)
-  - MWh
-  - kWp
-
-**Modal de Detalhes (`ClientDetailsModal.tsx`)** -- Metricas:
-
-- Mesma logica condicional
-
-Para todos os outros nichos, "Valor Total" continua a funcionar como antes.
-
-### 4. Tipos e Exportacao
-
-- Atualizar `CrmClient` em `src/types/clients.ts` com os 3 novos campos opcionais
-- Atualizar `mapClientsForExport` em `src/lib/export.ts` para incluir estas colunas no telecom
+Para outros nichos, manter o card "Valor Total" como esta.
 
 ## Secao Tecnica
 
-### Ficheiros alterados
+### Ficheiro alterado
 
-1. **Migracao SQL** -- Adicionar colunas + atualizar trigger + backfill
-2. `**src/types/clients.ts**` -- Adicionar `total_comissao`, `total_mwh`, `total_kwp`
-3. `**src/pages/Clients.tsx**` -- Card de stats condicional (telecom vs generico)
-4. `**src/components/clients/ClientDetailsDrawer.tsx**` -- Metricas condicionais
-5. `**src/components/clients/ClientDetailsModal.tsx**` -- Metricas condicionais
-6. `**src/hooks/useClients.ts**` -- `useClientStats` para incluir totais de comissao/mwh/kwp
-7. `**src/lib/export.ts**` -- Colunas extra na exportacao para telecom
+**`src/pages/Clients.tsx`** (linhas 203-222)
+
+Substituir o card unico condicional por 3 cards para telecom:
+
+```text
+Antes (telecom):
+  [Total] [Ativos] [VIP] [Inativos] [Comissao Total]
+
+Depois (telecom):
+  [Total] [Ativos] [VIP] [Inativos] [Comissao] [MWh] [kWp]
+```
+
+- Mudar a grid de `grid-cols-2 md:grid-cols-5` para `grid-cols-2 md:grid-cols-5 lg:grid-cols-7` quando telecom, ou usar renderizacao condicional com 3 cards pequenos
+- Alternativa mais simples: manter a grid de 5 colunas em desktop, mas para telecom substituir o ultimo card por 3 mini-cards empilhados ou usar uma grid adaptada com `col-span`
+
+A abordagem mais limpa:
+- Para telecom: grid com 7 colunas em desktop (`grid-cols-2 md:grid-cols-4 lg:grid-cols-7`) com os 3 cards extras
+- Para generico: manter `grid-cols-2 md:grid-cols-5` com o card "Valor Total"
+
+Cada card tera:
+1. **Comissao** -- icone Euro, cor success, valor `formatCurrency(stats.totalComissao)`
+2. **MWh** -- icone Zap, valor `stats.totalMwh.toFixed(2)`
+3. **kWp** -- icone Zap, valor `stats.totalKwp.toFixed(2)`
+
+### Hook `useClientStats`
+
+Verificar que `totalMwh` e `totalKwp` ja estao a ser calculados (foram adicionados na implementacao anterior).
