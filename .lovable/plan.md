@@ -1,28 +1,32 @@
 
 
-## Adicionar botoes "Renovar" e "Alterar Comercializador" na ficha do cliente
+## Tornar os widgets de alertas scrollaveis e mostrar todos os itens
 
 ### Problema
 
-Na ficha do cliente (drawer de detalhes), a lista de CPE/CUI so tem botoes de "Editar" e "Remover". Nao existe forma de renovar um CPE ou alterar o comercializador diretamente a partir da ficha do cliente -- essas acoes so estao disponiveis no widget do dashboard.
+Ambos os widgets (CPE/CUI a Expirar e Proximos Eventos) cortam a lista a 3 itens por secao com `.slice(0, 3)`. Alem disso, no widget de Eventos, a secao "Proximos 7 dias" so mostra itens se a secao "Hoje" estiver vazia. Resultado: quando ha muitos alertas, o utilizador nao consegue ver todos.
 
 ### Solucao
 
-Adicionar botoes de acao rapida nos cartoes de CPE dentro do `CpeList.tsx`, especialmente quando a fidelizacao esta proxima de expirar ou ja expirou. Reutilizar os modais `RenewCpeModal` e `SwitchComercializadorModal` que ja existem.
+1. Remover os `.slice(0, 3)` -- mostrar todos os itens
+2. Mostrar sempre todas as secoes (Hoje + Proximos / Expirados + Urgentes + Proximos)
+3. Adicionar `ScrollArea` com altura maxima para que o widget nao cresça infinitamente e permita scroll interno
 
 ### Alteracoes
 
-**Ficheiro: `src/components/clients/CpeList.tsx`**
+**Ficheiro: `src/components/dashboard/FidelizationAlertsWidget.tsx`**
 
-1. Importar `RenewCpeModal` e `SwitchComercializadorModal`
-2. Adicionar estados `renewCpe` e `switchCpe` para controlar a abertura dos modais
-3. Para CPEs com fidelizacao proxima de expirar (<=30 dias) ou ja expirada, mostrar botoes de acao:
-   - Botao "Renovar" (icone de refresh) -- abre o `RenewCpeModal`
-   - Botao "Alterar Comercializador" (icone de troca) -- abre o `SwitchComercializadorModal`
-4. Os botoes aparecem junto aos botoes de Editar/Remover, com destaque visual (cor primaria para Renovar, outline para Alterar)
-5. Para CPEs que ja foram renovados ou tiveram o comercializador alterado (`renewal_status = 'renewed'` ou `'switched'`), mostrar um badge indicativo
+- Envolver o `CardContent` com `ScrollArea` (max-height ~300px)
+- Remover os `.slice(0, 3)` das 3 secoes (expired, urgent, upcoming)
+- Remover a condicao que esconde o conteudo de "upcoming" quando existem itens expired/urgent
+
+**Ficheiro: `src/components/dashboard/CalendarAlertsWidget.tsx`**
+
+- Envolver o `CardContent` com `ScrollArea` (max-height ~300px)
+- Remover os `.slice(0, 3)` das 2 secoes (today, upcoming)
+- Remover a condicao `todayEvents.length === 0` que escondia os itens de "Proximos 7 dias"
 
 ### Resultado esperado
 
-O utilizador pode renovar ou alterar o comercializador de um CPE diretamente na ficha do cliente, sem precisar de ir ao dashboard ou usar o modal de edicao generico.
+Ambos os widgets mostram **todos** os alertas/eventos, organizados por secao, com scroll interno quando a lista ultrapassa a altura maxima do card.
 
