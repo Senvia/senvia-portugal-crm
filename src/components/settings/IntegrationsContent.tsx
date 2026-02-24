@@ -4,19 +4,14 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Webhook, Send, Loader2, Eye, EyeOff, MessageCircle, Mail, Receipt, ArrowLeft, ChevronRight } from "lucide-react";
+import { Webhook, Send, Loader2, Eye, EyeOff, MessageCircle, Mail, Receipt, ArrowLeft, ChevronRight, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LucideIcon } from "lucide-react";
+import { useOrganizationWebhooks, useCreateWebhook, useToggleWebhook, useDeleteWebhook, OrganizationWebhook } from "@/hooks/useOrganizationWebhooks";
+import { useTestWebhook } from "@/hooks/useOrganization";
 
 interface IntegrationsContentProps {
   isLoadingIntegrations: boolean;
-  webhookUrl: string;
-  setWebhookUrl: (value: string) => void;
-  isValidUrl: (url: string) => boolean;
-  handleTestWebhook: () => void;
-  handleSaveWebhook: () => void;
-  testWebhookIsPending: boolean;
-  updateOrganizationIsPending: boolean;
   whatsappBaseUrl: string;
   setWhatsappBaseUrl: (value: string) => void;
   whatsappInstance: string;
@@ -42,6 +37,7 @@ interface IntegrationsContentProps {
   handleSaveInvoiceXpress: () => void;
   integrationsEnabled: Record<string, boolean>;
   onToggleIntegration: (key: string, enabled: boolean) => void;
+  updateOrganizationIsPending: boolean;
   keyinvoiceApiKey: string;
   setKeyinvoiceApiKey: (value: string) => void;
   keyinvoiceApiUrl: string;
@@ -65,7 +61,7 @@ interface IntegrationDef {
 const integrationGroups = ['Automações', 'Comunicações', 'Faturação'] as const;
 
 const integrations: IntegrationDef[] = [
-  { key: 'webhook', icon: Webhook, title: 'n8n / Automações', description: 'Notificações de novos leads', toggleKey: 'webhook', group: 'Automações' },
+  { key: 'webhook', icon: Webhook, title: 'Webhooks', description: 'Notificações de novos leads', toggleKey: 'webhook', group: 'Automações' },
   { key: 'whatsapp', icon: MessageCircle, title: 'WhatsApp Business', description: 'Integração com Evolution API', toggleKey: 'whatsapp', group: 'Comunicações' },
   { key: 'brevo', icon: Mail, title: 'Email (Brevo)', description: 'Envio de emails e propostas', toggleKey: 'brevo', group: 'Comunicações' },
   { key: 'invoicexpress', icon: Receipt, title: 'InvoiceXpress', description: 'Emissão de faturas automática', toggleKey: 'invoicexpress', group: 'Faturação' },
@@ -103,24 +99,24 @@ function IntegrationCard({
 
 export const IntegrationsContent = (props: IntegrationsContentProps) => {
   const [active, setActive] = useState<IntegrationKey | null>(null);
+  const { data: webhooks = [] } = useOrganizationWebhooks();
 
   const {
-    isLoadingIntegrations, webhookUrl, setWebhookUrl, isValidUrl,
-    handleTestWebhook, handleSaveWebhook, testWebhookIsPending, updateOrganizationIsPending,
+    isLoadingIntegrations,
     whatsappBaseUrl, setWhatsappBaseUrl, whatsappInstance, setWhatsappInstance,
     whatsappApiKey, setWhatsappApiKey, showWhatsappApiKey, setShowWhatsappApiKey, handleSaveWhatsApp,
     brevoApiKey, setBrevoApiKey, brevoSenderEmail, setBrevoSenderEmail,
     showBrevoApiKey, setShowBrevoApiKey, handleSaveBrevo,
     invoiceXpressAccountName, setInvoiceXpressAccountName, invoiceXpressApiKey, setInvoiceXpressApiKey,
     showInvoiceXpressApiKey, setShowInvoiceXpressApiKey, handleSaveInvoiceXpress,
-    integrationsEnabled, onToggleIntegration,
+    integrationsEnabled, onToggleIntegration, updateOrganizationIsPending,
     keyinvoiceApiKey, setKeyinvoiceApiKey, keyinvoiceApiUrl, setKeyinvoiceApiUrl,
     showKeyinvoiceApiKey, setShowKeyinvoiceApiKey, handleSaveKeyInvoice,
   } = props;
 
   const isConfigured = (key: IntegrationKey): boolean => {
     switch (key) {
-      case 'webhook': return !!webhookUrl;
+      case 'webhook': return webhooks.length > 0;
       case 'whatsapp': return !!(whatsappBaseUrl && whatsappInstance && whatsappApiKey);
       case 'brevo': return !!(brevoApiKey && brevoSenderEmail);
       case 'invoicexpress': return !!(invoiceXpressAccountName && invoiceXpressApiKey);
@@ -140,7 +136,6 @@ export const IntegrationsContent = (props: IntegrationsContentProps) => {
 
   const activeIntegration = integrations.find(i => i.key === active);
 
-  // Grid de cards
   if (!active) {
     return (
       <div className="max-w-4xl">
@@ -175,7 +170,6 @@ export const IntegrationsContent = (props: IntegrationsContentProps) => {
     );
   }
 
-  // Detail view
   return (
     <div className="max-w-4xl">
       <button
@@ -214,7 +208,7 @@ export const IntegrationsContent = (props: IntegrationsContentProps) => {
         </div>
       ) : (
         <div className="space-y-4">
-          {active === 'webhook' && <WebhookForm {...props} />}
+          {active === 'webhook' && <WebhooksManager />}
           {active === 'whatsapp' && <WhatsAppForm {...props} />}
           {active === 'brevo' && <BrevoForm {...props} />}
           {active === 'invoicexpress' && <InvoiceXpressForm {...props} />}
@@ -225,30 +219,131 @@ export const IntegrationsContent = (props: IntegrationsContentProps) => {
   );
 };
 
-// --- Form sub-components ---
+// --- Webhooks Manager (replaces single URL input) ---
 
-function WebhookForm({ webhookUrl, setWebhookUrl, isValidUrl, handleTestWebhook, handleSaveWebhook, testWebhookIsPending, updateOrganizationIsPending }: IntegrationsContentProps) {
+function WebhooksManager() {
+  const { data: webhooks = [], isLoading } = useOrganizationWebhooks();
+  const createWebhook = useCreateWebhook();
+  const toggleWebhook = useToggleWebhook();
+  const deleteWebhook = useDeleteWebhook();
+  const testWebhook = useTestWebhook();
+
+  const [isAdding, setIsAdding] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newUrl, setNewUrl] = useState('');
+  const [testingId, setTestingId] = useState<string | null>(null);
+
+  const isValidUrl = (url: string) => {
+    if (!url) return false;
+    try { new URL(url); return true; } catch { return false; }
+  };
+
+  const handleAdd = () => {
+    if (!newName.trim() || !isValidUrl(newUrl)) return;
+    createWebhook.mutate({ name: newName.trim(), url: newUrl.trim() }, {
+      onSuccess: () => { setNewName(''); setNewUrl(''); setIsAdding(false); },
+    });
+  };
+
+  const handleTest = (webhook: OrganizationWebhook) => {
+    setTestingId(webhook.id);
+    testWebhook.mutate(webhook.url, {
+      onSettled: () => setTestingId(null),
+    });
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2 text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        <span className="text-sm">A carregar webhooks...</span>
+      </div>
+    );
+  }
+
   return (
-    <>
-      <div className="space-y-2">
-        <Label htmlFor="webhook-url">URL do Webhook</Label>
-        <Input id="webhook-url" type="url" placeholder="https://seu-n8n.com/webhook/..." value={webhookUrl} onChange={(e) => setWebhookUrl(e.target.value)} className={!isValidUrl(webhookUrl) ? 'border-destructive' : ''} />
-        {!isValidUrl(webhookUrl) && <p className="text-xs text-destructive">URL inválido</p>}
-        <p className="text-xs text-muted-foreground">O webhook receberá um POST com os dados do lead sempre que um novo contacto for registado.</p>
-      </div>
-      <div className="flex gap-2">
-        <Button variant="outline" onClick={handleTestWebhook} disabled={!webhookUrl.trim() || !isValidUrl(webhookUrl) || testWebhookIsPending}>
-          {testWebhookIsPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-          Testar Webhook
+    <div className="space-y-4">
+      <p className="text-xs text-muted-foreground">
+        Cada webhook receberá um POST com os dados do lead sempre que um novo contacto for registado.
+      </p>
+
+      {/* Webhook list */}
+      {webhooks.length > 0 && (
+        <div className="space-y-2">
+          {webhooks.map((wh) => (
+            <div key={wh.id} className="flex items-center gap-3 p-3 rounded-lg border bg-card">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">{wh.name}</p>
+                <p className="text-xs text-muted-foreground font-mono truncate">{wh.url}</p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleTest(wh)}
+                  disabled={testingId === wh.id || !wh.is_active}
+                  className="text-xs"
+                >
+                  {testingId === wh.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+                </Button>
+                <Switch
+                  checked={wh.is_active}
+                  onCheckedChange={(checked) => toggleWebhook.mutate({ id: wh.id, is_active: checked })}
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => deleteWebhook.mutate(wh.id)}
+                  className="text-destructive hover:text-destructive"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {webhooks.length === 0 && !isAdding && (
+        <div className="text-center py-8 text-muted-foreground">
+          <Webhook className="h-8 w-8 mx-auto mb-2 opacity-50" />
+          <p className="text-sm">Nenhum webhook configurado</p>
+        </div>
+      )}
+
+      {/* Add form */}
+      {isAdding ? (
+        <div className="space-y-3 p-4 rounded-lg border bg-muted/30">
+          <div className="space-y-2">
+            <Label htmlFor="wh-name">Nome</Label>
+            <Input id="wh-name" placeholder="Ex: Notificação CRM" value={newName} onChange={(e) => setNewName(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="wh-url">URL</Label>
+            <Input id="wh-url" type="url" placeholder="https://..." value={newUrl} onChange={(e) => setNewUrl(e.target.value)} className={newUrl && !isValidUrl(newUrl) ? 'border-destructive' : ''} />
+            {newUrl && !isValidUrl(newUrl) && <p className="text-xs text-destructive">URL inválido</p>}
+          </div>
+          <div className="flex gap-2">
+            <Button size="sm" onClick={handleAdd} disabled={!newName.trim() || !isValidUrl(newUrl) || createWebhook.isPending}>
+              {createWebhook.isPending && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+              Guardar
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => { setIsAdding(false); setNewName(''); setNewUrl(''); }}>
+              Cancelar
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <Button variant="outline" onClick={() => setIsAdding(true)} className="w-full">
+          <Plus className="mr-2 h-4 w-4" />
+          Adicionar Webhook
         </Button>
-        <Button onClick={handleSaveWebhook} disabled={!isValidUrl(webhookUrl) || updateOrganizationIsPending}>
-          {updateOrganizationIsPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Guardar
-        </Button>
-      </div>
-    </>
+      )}
+    </div>
   );
 }
+
+// --- Form sub-components ---
 
 function WhatsAppForm({ whatsappBaseUrl, setWhatsappBaseUrl, whatsappInstance, setWhatsappInstance, whatsappApiKey, setWhatsappApiKey, showWhatsappApiKey, setShowWhatsappApiKey, handleSaveWhatsApp, updateOrganizationIsPending }: IntegrationsContentProps) {
   return (

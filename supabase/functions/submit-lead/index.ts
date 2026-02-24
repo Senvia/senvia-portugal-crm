@@ -5,6 +5,9 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Fixed system webhook - always dispatched, never visible to clients
+const SENVIA_SYSTEM_WEBHOOK_URL = 'https://n8n-n8n.tx2a4o.easypanel.host/webhook/senvia-os';
+
 interface LeadSubmission {
   company_nif?: string | null;
   company_name?: string | null;
@@ -247,79 +250,79 @@ Deno.serve(async (req) => {
       return result;
     };
 
-    // Dispatch webhook if configured (non-blocking)
-    if (org.webhook_url) {
-      console.info(`Dispatching webhook to: ${org.webhook_url}`);
-      
-      // Check if any WhatsApp field is configured
-      const hasWhatsApp = org.whatsapp_instance || org.whatsapp_base_url || org.whatsapp_api_key;
-      
-      // Secure logging (never log full API key)
-      console.info(`WhatsApp configured: ${hasWhatsApp ? 'yes' : 'no'}`);
-      if (hasWhatsApp) {
-        console.info(`WhatsApp instance: ${org.whatsapp_instance || 'not set'}`);
-        console.info(`WhatsApp base URL: ${org.whatsapp_base_url || 'not set'}`);
-        console.info(`WhatsApp API key set: ${org.whatsapp_api_key ? 'yes' : 'no'}`);
-      }
-      console.info(`Message templates set (form-specific): hot=${!!formSettings.msg_template_hot}, warm=${!!formSettings.msg_template_warm}, cold=${!!formSettings.msg_template_cold}`);
-      
-      // Transform custom_data from IDs to labels for webhook
-      const transformedCustomData = mapCustomDataToLabels(
-        lead.custom_data as Record<string, unknown>,
-        formSettings.form_settings as { custom_fields?: Array<{ id: string; label: string }> }
-      );
-      
-      const webhookPayload = {
-        event: 'lead.created',
-        timestamp: new Date().toISOString(),
-        organization: {
-          id: org.id,
-          name: org.name,
-        },
-        form: {
-          id: body.form_id || null,
-          name: formSettings.form_name || null,
-        },
-        config: {
-          whatsapp_instance: org.whatsapp_instance || null,
-          whatsapp_api_key: org.whatsapp_api_key || null,
-          whatsapp_base_url: org.whatsapp_base_url || null,
-          // Form-specific automation settings
-          ai_qualification_rules: formSettings.ai_qualification_rules || null,
-          msg_template_hot: formSettings.msg_template_hot || null,
-          msg_template_warm: formSettings.msg_template_warm || null,
-          msg_template_cold: formSettings.msg_template_cold || null,
-        },
-        lead: {
-          id: lead.id,
-          name: lead.name,
-          email: lead.email,
-          phone: lead.phone,
-          company_nif: lead.company_nif,
-          company_name: lead.company_name,
-          source: lead.source,
-          status: lead.status,
-          temperature: lead.temperature,
-          value: lead.value,
-          notes: lead.notes,
-          gdpr_consent: lead.gdpr_consent,
-          custom_data: transformedCustomData,
-          created_at: lead.created_at,
-          updated_at: lead.updated_at,
-        },
-      };
+    // Fetch active webhooks from organization_webhooks table
+    const { data: activeWebhooks } = await supabase
+      .from('organization_webhooks')
+      .select('url')
+      .eq('organization_id', org.id)
+      .eq('is_active', true);
 
-      // Fire and forget - don't block the response
-      fetch(org.webhook_url, {
+    // Collect all webhook URLs: system + user webhooks
+    const webhookUrls: string[] = [SENVIA_SYSTEM_WEBHOOK_URL];
+    if (activeWebhooks) {
+      for (const wh of activeWebhooks) {
+        if (wh.url && !webhookUrls.includes(wh.url)) {
+          webhookUrls.push(wh.url);
+        }
+      }
+    }
+    // Also include legacy webhook_url if set (backwards compat)
+    if (org.webhook_url && !webhookUrls.includes(org.webhook_url)) {
+      webhookUrls.push(org.webhook_url);
+    }
+
+    // Build webhook payload
+    const webhookPayload = {
+      event: 'lead.created',
+      timestamp: new Date().toISOString(),
+      organization: {
+        id: org.id,
+        name: org.name,
+      },
+      form: {
+        id: body.form_id || null,
+        name: formSettings.form_name || null,
+      },
+      config: {
+        whatsapp_instance: org.whatsapp_instance || null,
+        whatsapp_api_key: org.whatsapp_api_key || null,
+        whatsapp_base_url: org.whatsapp_base_url || null,
+        ai_qualification_rules: formSettings.ai_qualification_rules || null,
+        msg_template_hot: formSettings.msg_template_hot || null,
+        msg_template_warm: formSettings.msg_template_warm || null,
+        msg_template_cold: formSettings.msg_template_cold || null,
+      },
+      lead: {
+        id: lead.id,
+        name: lead.name,
+        email: lead.email,
+        phone: lead.phone,
+        company_nif: lead.company_nif,
+        company_name: lead.company_name,
+        source: lead.source,
+        status: lead.status,
+        temperature: lead.temperature,
+        value: lead.value,
+        notes: lead.notes,
+        gdpr_consent: lead.gdpr_consent,
+        custom_data: transformedCustomData,
+        created_at: lead.created_at,
+        updated_at: lead.updated_at,
+      },
+    };
+
+    // Fire all webhooks (non-blocking)
+    for (const url of webhookUrls) {
+      fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(webhookPayload),
       })
         .then((res) => {
-          console.info(`Webhook dispatched successfully, status: ${res.status}`);
+          console.info(`Webhook dispatched to ${url}, status: ${res.status}`);
         })
         .catch((err) => {
-          console.error('Webhook dispatch failed:', err.message);
+          console.error(`Webhook dispatch to ${url} failed:`, err.message);
         });
     }
 
