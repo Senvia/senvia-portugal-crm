@@ -248,7 +248,9 @@ export function useUpdateSale() {
         recurring_value?: number;
         next_renewal_date?: string | null;
         recurring_status?: 'active' | 'cancelled' | 'paused' | null;
-      } 
+        // Data de ativação
+        activation_date?: string | null;
+      }
     }) => {
       const { error } = await supabase
         .from("sales")

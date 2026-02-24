@@ -44,12 +44,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useUpdateSale } from "@/hooks/useSales";
 import { useOrganization } from "@/hooks/useOrganization";
 import { InvoiceDraftModal } from "./InvoiceDraftModal";
@@ -90,15 +92,17 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
   const [invoiceEmailModal, setInvoiceEmailModal] = useState(false);
   const [invoiceDetailsModal, setInvoiceDetailsModal] = useState(false);
   const [invoiceCreditNoteModal, setInvoiceCreditNoteModal] = useState(false);
+  const [pendingActivationDate, setPendingActivationDate] = useState("");
 
   const { organization } = useAuth();
+  const { isAdmin } = usePermissions();
   const { data: orgData } = useOrganization();
   const salesSettings = (orgData?.sales_settings as { lock_delivered_sales?: boolean; lock_fulfilled_sales?: boolean; prevent_payment_deletion?: boolean }) || {};
   const lockDeliveredSales = !!salesSettings.lock_delivered_sales;
   const lockFulfilledSales = !!salesSettings.lock_fulfilled_sales;
   const preventPaymentDeletion = !!salesSettings.prevent_payment_deletion;
-  const isDeliveredAndLocked = lockDeliveredSales && sale?.status === 'delivered';
-  const isFulfilledAndLocked = lockFulfilledSales && sale?.status === 'fulfilled';
+  const isDeliveredAndLocked = sale?.status === 'delivered' && !isAdmin;
+  const isFulfilledAndLocked = lockFulfilledSales && sale?.status === 'fulfilled' && !isAdmin;
   const isLocked = isDeliveredAndLocked || isFulfilledAndLocked;
 
   const { data: saleItems = [] } = useSaleItems(sale?.id);
@@ -145,13 +149,21 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
   if (!sale) return null;
 
   const handleStatusChange = (newStatus: SaleStatus) => {
-    if (newStatus === 'delivered' && lockDeliveredSales) {
+    if (newStatus === 'delivered') {
       setPendingStatus('delivered');
+      setPendingActivationDate(sale.activation_date || new Date().toISOString().split('T')[0]);
       setShowDeliveredConfirm(true);
       return;
     }
-    if (newStatus === 'fulfilled' && lockFulfilledSales) {
+    if (newStatus === 'fulfilled') {
       setPendingStatus('fulfilled');
+      setPendingActivationDate(sale.activation_date || new Date().toISOString().split('T')[0]);
+      setShowFulfilledConfirm(true);
+      return;
+    }
+    if (newStatus === 'in_progress') {
+      setPendingStatus('in_progress');
+      setPendingActivationDate(sale.activation_date || new Date().toISOString().split('T')[0]);
       setShowFulfilledConfirm(true);
       return;
     }
@@ -161,13 +173,14 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
 
   const confirmDelivered = () => {
     setStatus('delivered');
-    updateSale.mutate({ saleId: sale.id, updates: { status: 'delivered' } });
+    updateSale.mutate({ saleId: sale.id, updates: { status: 'delivered', activation_date: pendingActivationDate || null } });
     setShowDeliveredConfirm(false);
   };
 
   const confirmFulfilled = () => {
-    setStatus('fulfilled');
-    updateSale.mutate({ saleId: sale.id, updates: { status: 'fulfilled' } });
+    const newStatus = pendingStatus || 'fulfilled';
+    setStatus(newStatus as SaleStatus);
+    updateSale.mutate({ saleId: sale.id, updates: { status: newStatus as SaleStatus, activation_date: pendingActivationDate || null } });
     setShowFulfilledConfirm(false);
   };
 
@@ -263,10 +276,18 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                             </SelectContent>
                           </Select>
                         </div>
+                        {sale.activation_date && (
+                          <div>
+                            <p className="text-xs text-muted-foreground">Data de Ativação</p>
+                            <p className="text-sm font-medium">
+                              {format(new Date(sale.activation_date), "d MMM yyyy", { locale: pt })}
+                            </p>
+                          </div>
+                        )}
                       </div>
                       {isLocked && (
                         <p className="text-xs text-muted-foreground mt-3">
-                          Esta venda está {isFulfilledAndLocked ? 'entregue' : 'concluída'} e não pode ser alterada.
+                          Esta venda está {isDeliveredAndLocked ? 'concluída' : 'entregue'} e não pode ser alterada.
                         </p>
                       )}
                     </CardContent>
@@ -855,9 +876,18 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
           <AlertDialogHeader>
             <AlertDialogTitle>Concluir Venda</AlertDialogTitle>
             <AlertDialogDescription>
-              Ao concluir esta venda, ela não poderá mais ser editada. Deseja continuar?
+              Ao concluir esta venda, ela não poderá mais ser editada (exceto por administradores). Defina a Data de Ativação.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <div className="py-2">
+            <Label className="text-sm font-medium">Data de Ativação</Label>
+            <Input
+              type="date"
+              value={pendingActivationDate}
+              onChange={(e) => setPendingActivationDate(e.target.value)}
+              className="mt-1.5"
+            />
+          </div>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={confirmDelivered}>
@@ -867,15 +897,26 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Fulfilled Confirmation Dialog */}
+      {/* Fulfilled / In Progress Confirmation Dialog */}
       <AlertDialog open={showFulfilledConfirm} onOpenChange={setShowFulfilledConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Marcar como Entregue</AlertDialogTitle>
+            <AlertDialogTitle>
+              {pendingStatus === 'in_progress' ? 'Marcar como Em Progresso' : 'Marcar como Entregue'}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              Ao marcar esta venda como entregue, ela não poderá mais ser editada por utilizadores sem perfil de administrador. Deseja continuar?
+              Defina ou corrija a Data de Ativação para esta venda.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <div className="py-2">
+            <Label className="text-sm font-medium">Data de Ativação</Label>
+            <Input
+              type="date"
+              value={pendingActivationDate}
+              onChange={(e) => setPendingActivationDate(e.target.value)}
+              className="mt-1.5"
+            />
+          </div>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={confirmFulfilled}>

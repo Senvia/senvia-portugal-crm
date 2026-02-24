@@ -3004,6 +3004,7 @@ export type Database = {
       }
       sales: {
         Row: {
+          activation_date: string | null
           anos_contrato: number | null
           client_id: string | null
           code: string | null
@@ -3047,6 +3048,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          activation_date?: string | null
           anos_contrato?: number | null
           client_id?: string | null
           code?: string | null
@@ -3090,6 +3092,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          activation_date?: string | null
           anos_contrato?: number | null
           client_id?: string | null
           code?: string | null
@@ -3622,6 +3625,7 @@ export type Database = {
           search_term: string
         }
         Returns: {
+          activation_date: string | null
           anos_contrato: number | null
           client_id: string | null
           code: string | null
