@@ -149,7 +149,7 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
       }
       // Auto-calc comissao via matrix
       if (field !== 'comissao') {
-        const calc = calculateCommission(produto, detail);
+        const calc = calculateCommission(produto, detail, modeloServico);
         if (calc !== null) detail.comissao = Math.round(calc * 100) / 100;
       }
       return { ...prev, [produto]: detail };
