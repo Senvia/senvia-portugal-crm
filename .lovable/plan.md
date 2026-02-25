@@ -1,54 +1,57 @@
 
 
-## Corrigir Total em Tempo Real (Propostas e Vendas Telecom)
+## Problema: Comissão não calcula acima de 1000 kWp
 
-### Problema
+### Causa Raiz
 
-Na imagem, a Proposta 0015 mostra kWp=78 e Comissão=508 (auto-calculado), e o campo "Comissão Total" no fundo mostra 508, mas o **"Total da Proposta"** no Resumo continua a mostrar **330,00€** (o valor antigo guardado na base de dados). A correção anterior (usar `totalComissao` em vez de `servicosComissao`) está correcta em termos de lógica de save, mas o display do "Total da Proposta" pode não estar a reagir porque `servicosDetails` é inicializado a partir de dados legacy que já contêm `comissao: 330`.
+A matriz de comissões de **Solar** usa o método `tiered_kwp`. O último escalão configurado na base de dados é:
 
-Na verdade, o problema é mais subtil: quando o modal abre, o `useEffect` na linha 86 inicializa `servicosDetails` com os dados da proposta (que têm `comissao: 330`). O `totalComissao` calcula correctamente 330 a partir desses dados. Quando o utilizador muda o kWp para 78, `handleUpdateProductDetail` recalcula a comissão para 508 e actualiza `servicosDetails`. O `totalComissao` deveria reagir e mostrar 508. **A correcção anterior está correcta** — se o total ainda mostra 330, é porque o preview ainda não tinha sido reconstruído no momento do screenshot.
-
-No entanto, há um segundo problema no **EditSaleModal**: para vendas telecom de serviços, quando a comissão recalcula (via `setComissao`), o `manualTotalValue` não acompanha. O `total` é derivado de `manualTotalValue`, logo o valor guardado fica desactualizado. E o utilizador quer que o total seja **automático e bloqueado** (sem edição manual).
-
-### Alterações
-
-#### 1. `src/components/sales/EditSaleModal.tsx`
-
-**Sync manualTotalValue para vendas de serviços** — adicionar lógica ao `useEffect` existente (linha 220-227) para também sincronizar quando `comissao` muda em vendas de serviços:
-
-```typescript
-useEffect(() => {
-  if (!open || !sale || !isTelecom) return;
-  if (sale.proposal_type === 'energia' && editableCpes.length > 0) {
-    const margemTotal = editableCpes.reduce((sum, cpe) => sum + (cpe.margem || 0), 0);
-    setManualTotalValue(margemTotal.toString());
-  } else if (sale.proposal_type === 'servicos' && comissao) {
-    setManualTotalValue(comissao);
-  }
-}, [open, sale, isTelecom, editableCpes, comissao]);
+```
+kwpMin: 500, kwpMax: 1000
 ```
 
-**Bloquear edição manual do total para vendas telecom** — no campo de "Valor Total" no Resumo (linha 978-985), tornar o input `readOnly` quando `isTelecom`:
-
+A função `findTier` (linha 37-38) usa a condição:
 ```typescript
-<Input
-  type="number"
-  value={manualTotalValue}
-  onChange={(e) => setManualTotalValue(e.target.value)}
-  className="h-8 text-right"
-  step="0.01"
-  min="0"
-  readOnly={isTelecom}
-/>
+kwp >= t.kwpMin && kwp < t.kwpMax  // NOTA: kwpMax é EXCLUSIVO
 ```
 
-#### 2. `src/components/proposals/EditProposalModal.tsx`
+Quando o utilizador coloca **kWp = 1000**, o valor não entra em nenhum escalão porque:
+- O último tier tem `kwpMax: 1000`, e a condição é `kwp < 1000` (falso para 1000)
+- Não existe tier para `kwpMin: 1000`
 
-A correcção anterior (usar `totalComissao` reactivo) já está aplicada e é correcta. Nenhuma alteração adicional necessária — o "Total da Proposta" no Resumo já usa `formatCurrency(totalValue)` que agora depende de `totalComissao`.
+Resultado: `findTier` retorna `null`, e a comissão fica com o valor do último cálculo válido (872, que é o `baseAas` do tier 100-250 — na verdade é o base do tier 500-1000).
 
-### Ficheiros a alterar
+Na imagem: kWp=1000, modelo SAAS → deveria estar no tier 500-1000 (baseAas=3380) mas `1000 < 1000` é falso, então retorna `null`.
 
-| Ficheiro | O que muda |
+### Solução
+
+Alterar a condição de `findTier` para usar `<=` no `kwpMax`, tornando o limite superior **inclusivo**:
+
+```typescript
+function findTier(tiers: SolarTier[], kwp: number): SolarTier | null {
+  return tiers.find(t => kwp >= t.kwpMin && kwp <= t.kwpMax) ?? null;
+}
+```
+
+**Problema potencial**: com `<=`, o valor exacto de fronteira (ex: 100) pertenceria a dois tiers (50-100 e 100-250). Para evitar overlap, a melhor abordagem é manter `<` mas tratar o **último tier** como inclusivo, ou simplesmente usar `<=` no max sabendo que o `find` retorna o **primeiro** match (o tier anterior), o que é correcto.
+
+Na verdade, analisando os tiers:
+- 0 → 1.2, 1.2 → 4.1, 4.1 → 15, 15 → 25, 25 → 50, 50 → 100, 100 → 250, 250 → 500, 500 → 1000
+
+Com `<=`, o valor 1.2 cairia no tier 0-1.2 (primeiro match via `find`), o que é correcto. Valor 1000 cairia no tier 500-1000, correcto. Não há problema de overlap porque `find` retorna o primeiro match.
+
+Alternativamente, melhor ainda: para o **último tier**, estender o `kwpMax` para `Infinity`. Mas isso requer alterar os dados na DB. A solução mais simples e menos intrusiva é mudar `<` para `<=`.
+
+### Ficheiro a alterar
+
+| Ficheiro | Alteração |
 |---|---|
-| `src/components/sales/EditSaleModal.tsx` | Sincronizar `manualTotalValue` com `comissao` para serviços; bloquear edição manual do total para telecom |
+| `src/hooks/useCommissionMatrix.ts` | Linha 38: mudar `kwp < t.kwpMax` para `kwp <= t.kwpMax` |
+
+### Detalhe Técnico
+
+- A função `Array.find` retorna o **primeiro** elemento que satisfaz a condição
+- Com `<=`, valores de fronteira (ex: 100) pertencem ao tier anterior (50-100), pois aparece primeiro no array — comportamento correcto
+- Para valores acima de 1000 (último tier), continuará a retornar `null` — o que é expectável pois não existe configuração para esse intervalo
+- Se no futuro quiserem suportar valores acima de 1000, basta adicionar um novo tier na configuração
 
