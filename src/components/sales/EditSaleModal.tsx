@@ -1075,7 +1075,7 @@ export function EditSaleModal({
 
                     {/* Notes */}
                     {/* EDP Proposal Number */}
-                    <Card>
+                    {isTelecom && (<Card>
                       <CardHeader className="pb-2 p-4">
                         <CardTitle className="text-sm font-medium text-muted-foreground">Numero Proposta EDP *</CardTitle>
                       </CardHeader>
@@ -1086,8 +1086,8 @@ export function EditSaleModal({
                           onChange={(e) => setEdpProposalNumber(e.target.value)}
                           required
                         />
-                      </CardContent>
-                    </Card>
+                    </CardContent>
+                    </Card>)}
 
                     <Card>
                       <CardHeader className="pb-2 p-4">
