@@ -55,8 +55,9 @@ import {
   CreditCard,
   Trash2
 } from "lucide-react";
-import type { Proposal } from "@/types/proposals";
-import { NEGOTIATION_TYPE_LABELS, SERVICOS_PRODUCTS } from "@/types/proposals";
+import type { Proposal, ServicosProductDetail } from "@/types/proposals";
+import { NEGOTIATION_TYPE_LABELS, SERVICOS_PRODUCTS, SERVICOS_PRODUCT_CONFIGS } from "@/types/proposals";
+import { useCommissionMatrix } from "@/hooks/useCommissionMatrix";
 import { 
   type ProposalType,
   type ModeloServico,
@@ -112,6 +113,7 @@ export function CreateSaleModal({
   const updateLeadStatus = useUpdateLeadStatus();
   const { organization } = useAuth();
   const isTelecom = organization?.niche === 'telecom';
+  const { calculateCommission, isAutoCalculated } = useCommissionMatrix();
   
   // Fiscal info
   const ixActive = isInvoiceXpressActive(organization);
@@ -163,6 +165,27 @@ export function CreateSaleModal({
   const [showDraftScheduleModal, setShowDraftScheduleModal] = useState(false);
   
 
+  // Helper to recalculate commission from proposal data using matrix
+  const recalcComissaoFromProposal = (proposal: Proposal): number | null => {
+    if (proposal.proposal_type !== 'servicos') return null;
+    const produtos = proposal.servicos_produtos || [];
+    const details = (proposal as any).servicos_details || {};
+    const ms = proposal.modelo_servico || null;
+    let total = 0;
+    let anyCalc = false;
+    for (const prodName of produtos) {
+      const detail: ServicosProductDetail = details[prodName] || { kwp: proposal.kwp, valor: proposal.total_value };
+      const calc = calculateCommission(prodName, detail, ms ?? undefined);
+      if (calc !== null) {
+        total += Math.round(calc * 100) / 100;
+        anyCalc = true;
+      } else if (detail.comissao != null) {
+        total += detail.comissao;
+      }
+    }
+    return anyCalc ? total : null;
+  };
+
   // Reset form when modal opens
   useEffect(() => {
     if (open) {
@@ -197,9 +220,12 @@ export function CreateSaleModal({
         setAnosContrato(prefillProposal.anos_contrato?.toString() || "");
         setModeloServico(prefillProposal.modelo_servico || null);
         setKwp(prefillProposal.kwp?.toString() || "");
-        setComissao(prefillProposal.comissao?.toString() || "");
         setNegotiationType(prefillProposal.negotiation_type || null);
         setServicosProdutos(prefillProposal.servicos_produtos || []);
+        
+        // Recalculate commission using matrix
+        const recalcedComissao = recalcComissaoFromProposal(prefillProposal);
+        setComissao(recalcedComissao !== null ? recalcedComissao.toString() : (prefillProposal.comissao?.toString() || ""));
       } else if (prefillClientId) {
         setClientId(prefillClientId);
         setSelectedProposalId(null);
@@ -417,9 +443,12 @@ export function CreateSaleModal({
       setAnosContrato(proposal.anos_contrato?.toString() || "");
       setModeloServico(proposal.modelo_servico || null);
       setKwp(proposal.kwp?.toString() || "");
-      setComissao(proposal.comissao?.toString() || "");
       setNegotiationType(proposal.negotiation_type || null);
       setServicosProdutos(proposal.servicos_produtos || []);
+      
+      // Recalculate commission using matrix
+      const recalcedComissao = recalcComissaoFromProposal(proposal);
+      setComissao(recalcedComissao !== null ? recalcedComissao.toString() : (proposal.comissao?.toString() || ""));
       
       setItems([]);
     }
