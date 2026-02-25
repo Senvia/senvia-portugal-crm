@@ -1,78 +1,54 @@
 
 
-## Corrigir Total da Proposta/Venda que Não Guarda ao Editar
+## Corrigir Total em Tempo Real (Propostas e Vendas Telecom)
 
-### Problema Identificado
+### Problema
 
-O bug esta no calculo de `totalValue` dentro do **EditProposalModal**.
+Na imagem, a Proposta 0015 mostra kWp=78 e Comissão=508 (auto-calculado), e o campo "Comissão Total" no fundo mostra 508, mas o **"Total da Proposta"** no Resumo continua a mostrar **330,00€** (o valor antigo guardado na base de dados). A correção anterior (usar `totalComissao` em vez de `servicosComissao`) está correcta em termos de lógica de save, mas o display do "Total da Proposta" pode não estar a reagir porque `servicosDetails` é inicializado a partir de dados legacy que já contêm `comissao: 330`.
 
-**EditProposalModal (linhas 166-175):**
-```typescript
-const totalValue = useMemo(() => {
-  if (isTelecom) {
-    if (proposalType === 'energia') {
-      return proposalCpes.reduce(...); // OK - reactivo
-    }
-    return parseFloat(servicosComissao) || 0; // BUG - stale!
-  }
-  ...
-}, [isTelecom, proposalType, proposalCpes, servicosComissao, selectedProducts]);
-```
+Na verdade, o problema é mais subtil: quando o modal abre, o `useEffect` na linha 86 inicializa `servicosDetails` com os dados da proposta (que têm `comissao: 330`). O `totalComissao` calcula correctamente 330 a partir desses dados. Quando o utilizador muda o kWp para 78, `handleUpdateProductDetail` recalcula a comissão para 508 e actualiza `servicosDetails`. O `totalComissao` deveria reagir e mostrar 508. **A correcção anterior está correcta** — se o total ainda mostra 330, é porque o preview ainda não tinha sido reconstruído no momento do screenshot.
 
-Para propostas de **servicos**, o `totalValue` usa `servicosComissao` — uma variavel de estado inicializada **uma unica vez** a partir de `proposal.comissao` (linha 97). Quando o utilizador altera detalhes dos produtos (kwp, modelo, etc.), o `servicosDetails` actualiza e o `totalComissao` recalcula correctamente, **mas** `servicosComissao` nunca muda. Resultado: o `total_value` guardado e sempre o valor antigo.
+No entanto, há um segundo problema no **EditSaleModal**: para vendas telecom de serviços, quando a comissão recalcula (via `setComissao`), o `manualTotalValue` não acompanha. O `total` é derivado de `manualTotalValue`, logo o valor guardado fica desactualizado. E o utilizador quer que o total seja **automático e bloqueado** (sem edição manual).
 
-Em **CreateProposalModal** (linha 112), para servicos retorna `0` e guarda `comissao: totalComissao`. O Edit esta inconsistente.
+### Alterações
 
-Para **EditSaleModal**, a mesma logica aplica-se: `manualTotalValue` e inicializado uma vez e nao sincroniza com alteracoes de CPEs ou comissao.
+#### 1. `src/components/sales/EditSaleModal.tsx`
 
-### Solucao
-
-#### 1. `src/components/proposals/EditProposalModal.tsx`
-
-Alterar o `totalValue` para servicos: usar `totalComissao` em vez de `servicosComissao` (que e stale). Isto garante que quando a comissao recalcula (ao mudar modelo, kwp, etc.), o total guardado reflecte o novo valor.
+**Sync manualTotalValue para vendas de serviços** — adicionar lógica ao `useEffect` existente (linha 220-227) para também sincronizar quando `comissao` muda em vendas de serviços:
 
 ```typescript
-const totalValue = useMemo(() => {
-  if (isTelecom) {
-    if (proposalType === 'energia') {
-      return proposalCpes.reduce((sum, cpe) => sum + (parseFloat(cpe.margem) || 0), 0);
-    }
-    return totalComissao; // FIX: usar totalComissao reactivo
-  }
-  const productsTotal = selectedProducts.reduce((sum, p) => sum + getProductTotal(p), 0);
-  return productsTotal;
-}, [isTelecom, proposalType, proposalCpes, totalComissao, selectedProducts]);
-```
-
-**Nota:** `totalValue` depende de `totalComissao` que depende de `servicosDetails` — o useMemo de `totalComissao` e declarado ANTES de `totalValue`, portanto nao ha problema de ordering. Confirmar isto no codigo (linha 177 vs 166).
-
-Problema de ordering: `totalComissao` e declarado na **linha 177**, mas `totalValue` na **linha 166**. `totalValue` referencia `totalComissao` que ainda nao foi declarado. Solucao: mover o `useMemo` de `totalComissao` para ANTES do `totalValue`, ou inverter a ordem dos dois.
-
-#### 2. `src/components/sales/EditSaleModal.tsx`
-
-Para vendas telecom, sincronizar `manualTotalValue` quando os CPEs editaveis mudam (energia) ou quando a comissao recalcula (servicos). Adicionar `useEffect`:
-
-```typescript
-// Sync manualTotalValue when editable CPEs change (energia sales)
 useEffect(() => {
   if (!open || !sale || !isTelecom) return;
   if (sale.proposal_type === 'energia' && editableCpes.length > 0) {
     const margemTotal = editableCpes.reduce((sum, cpe) => sum + (cpe.margem || 0), 0);
     setManualTotalValue(margemTotal.toString());
+  } else if (sale.proposal_type === 'servicos' && comissao) {
+    setManualTotalValue(comissao);
   }
-}, [open, sale, isTelecom, editableCpes]);
+}, [open, sale, isTelecom, editableCpes, comissao]);
 ```
+
+**Bloquear edição manual do total para vendas telecom** — no campo de "Valor Total" no Resumo (linha 978-985), tornar o input `readOnly` quando `isTelecom`:
+
+```typescript
+<Input
+  type="number"
+  value={manualTotalValue}
+  onChange={(e) => setManualTotalValue(e.target.value)}
+  className="h-8 text-right"
+  step="0.01"
+  min="0"
+  readOnly={isTelecom}
+/>
+```
+
+#### 2. `src/components/proposals/EditProposalModal.tsx`
+
+A correcção anterior (usar `totalComissao` reactivo) já está aplicada e é correcta. Nenhuma alteração adicional necessária — o "Total da Proposta" no Resumo já usa `formatCurrency(totalValue)` que agora depende de `totalComissao`.
 
 ### Ficheiros a alterar
 
 | Ficheiro | O que muda |
 |---|---|
-| `src/components/proposals/EditProposalModal.tsx` | Reordenar `totalComissao` antes de `totalValue`; alterar `totalValue` para servicos usar `totalComissao` em vez de `servicosComissao` stale |
-| `src/components/sales/EditSaleModal.tsx` | Adicionar `useEffect` para sincronizar `manualTotalValue` quando CPEs editaveis ou comissao mudam |
-
-### Detalhe Tecnico
-
-- A variavel `servicosComissao` pode ser mantida para inicializar o display, mas **nao deve ser usada** no calculo do total guardado
-- O `totalComissao` ja existe e calcula correctamente a soma das comissoes de todos os produtos activos em `servicosDetails`
-- Para vendas, o `comissao` state ja e sincronizado pelo `useEffect` existente (linha 221-242), mas o `total_value` (via `manualTotalValue`) nao acompanha
+| `src/components/sales/EditSaleModal.tsx` | Sincronizar `manualTotalValue` com `comissao` para serviços; bloquear edição manual do total para telecom |
 
