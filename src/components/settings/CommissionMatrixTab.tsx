@@ -47,27 +47,20 @@ function getFormulaPreview(rule: CommissionRule): string {
     case 'tiered_kwp':
       return 'Comissão = Base + (kWp - kWpMin) × Adicional (por escalão, Transaccional ou AAS)';
     case 'base_plus_per_kwp':
-      return `Comissão = ${rule.base}€ + (${rule.ratePerKwp}€ × kWp)`;
+      return 'Comissão = Base + (Adicional × kWp total) — por escalão, Trans. ou AAS';
     case 'percentage_valor':
-      return `Comissão = Valor × ${rule.rate}%`;
+      return 'Comissão = Valor × Base% — por escalão, Trans. ou AAS';
     case 'per_kwp':
-      return `Comissão = kWp × ${rule.rate}€`;
+      return 'Comissão = kWp × Base (€/kWp) — por escalão, Trans. ou AAS';
     case 'fixed':
-      return `Comissão = ${rule.rate}€ (fixo)`;
+      return 'Comissão = Base (€ fixo) — por escalão, Trans. ou AAS';
     case 'manual':
       return 'Preenchimento manual';
   }
 }
 
 function getDefaultRule(method: string): CommissionRule {
-  switch (method) {
-    case 'tiered_kwp': return { method: 'tiered_kwp', tiers: [] };
-    case 'base_plus_per_kwp': return { method: 'base_plus_per_kwp', base: 0, ratePerKwp: 0 };
-    case 'percentage_valor': return { method: 'percentage_valor', rate: 0 };
-    case 'per_kwp': return { method: 'per_kwp', rate: 0 };
-    case 'fixed': return { method: 'fixed', rate: 0 };
-    default: return { method: 'manual' };
-  }
+  return { method: method as CommissionRule['method'], tiers: [] };
 }
 
 function getTierCount(rule: CommissionRule): number | null {
@@ -87,7 +80,7 @@ export function CommissionMatrixTab() {
     const saved = (org as any)?.commission_matrix as CommissionMatrix | null;
     const initial: CommissionMatrix = {};
     SERVICOS_PRODUCTS.forEach((p) => {
-      initial[p] = saved?.[p] ?? { method: 'manual' };
+      initial[p] = saved?.[p] ?? { method: 'manual', tiers: [] };
     });
     setLocalMatrix(initial);
   }, [org]);
@@ -111,7 +104,7 @@ export function CommissionMatrixTab() {
       {/* Grid of product cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
         {SERVICOS_PRODUCTS.map((product) => {
-          const rule = localMatrix[product] ?? { method: 'manual' as const };
+          const rule = localMatrix[product] ?? { method: 'manual' as const, tiers: [] };
           const Icon = getProductIcon(product);
           const tierCount = getTierCount(rule);
 
@@ -142,7 +135,7 @@ export function CommissionMatrixTab() {
       {openProduct && (
         <ProductModal
           product={openProduct}
-          rule={localMatrix[openProduct] ?? { method: 'manual' }}
+          rule={localMatrix[openProduct] ?? { method: 'manual', tiers: [] }}
           onMethodChange={(m) =>
             setLocalMatrix((prev) => ({ ...prev, [openProduct]: getDefaultRule(m) }))
           }
@@ -206,47 +199,9 @@ function ProductModal({
             </Select>
           </div>
 
-          {/* Tiered kWp — table */}
-          {rule.method === 'tiered_kwp' && (
+          {/* Tiered table — shown for all methods except manual */}
+          {rule.method !== 'manual' && (
             <TieredTableEditor rule={rule} onChange={onRuleChange} />
-          )}
-
-          {/* Base + Per kWp */}
-          {rule.method === 'base_plus_per_kwp' && (
-            <div className="grid grid-cols-2 gap-3 max-w-md">
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Valor Base (€)</Label>
-                <DecimalInput className="h-9" value={rule.base ?? 0} onChange={(v) => onRuleChange({ ...rule, base: v })} />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Taxa por kWp (€)</Label>
-                <DecimalInput className="h-9" value={rule.ratePerKwp ?? 0} onChange={(v) => onRuleChange({ ...rule, ratePerKwp: v })} />
-              </div>
-            </div>
-          )}
-
-          {/* Percentage */}
-          {rule.method === 'percentage_valor' && (
-            <div className="max-w-xs space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Percentagem (%)</Label>
-              <DecimalInput className="h-9" value={rule.rate ?? 0} onChange={(v) => onRuleChange({ ...rule, rate: v })} />
-            </div>
-          )}
-
-          {/* Per kWp */}
-          {rule.method === 'per_kwp' && (
-            <div className="max-w-xs space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Taxa (€/kWp)</Label>
-              <DecimalInput className="h-9" value={rule.rate ?? 0} onChange={(v) => onRuleChange({ ...rule, rate: v })} />
-            </div>
-          )}
-
-          {/* Fixed */}
-          {rule.method === 'fixed' && (
-            <div className="max-w-xs space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Valor Fixo (€)</Label>
-              <DecimalInput className="h-9" value={rule.rate ?? 0} onChange={(v) => onRuleChange({ ...rule, rate: v })} />
-            </div>
           )}
 
           {/* Formula preview */}
@@ -277,7 +232,7 @@ function TieredTableEditor({
   rule,
   onChange,
 }: {
-  rule: { method: 'tiered_kwp'; tiers: SolarTier[] };
+  rule: CommissionRule;
   onChange: (rule: CommissionRule) => void;
 }) {
   const tiers = rule.tiers || [];

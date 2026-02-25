@@ -3,7 +3,7 @@ import { useOrganization } from './useOrganization';
 import type { ServicosProductDetail } from '@/types/proposals';
 import type { ModeloServico } from '@/types/proposals';
 
-// --- Types for the new configurable commission matrix ---
+// --- Unified commission types ---
 
 export interface SolarTier {
   kwpMin: number;
@@ -14,45 +14,16 @@ export interface SolarTier {
   adicAas: number;
 }
 
-export interface TieredKwpRule {
-  method: 'tiered_kwp';
+export interface CommissionRule {
+  method: 'tiered_kwp' | 'base_plus_per_kwp' | 'percentage_valor' | 'per_kwp' | 'fixed' | 'manual';
   tiers: SolarTier[];
 }
 
-export interface BasePlusPerKwpRule {
-  method: 'base_plus_per_kwp';
-  base: number;
-  ratePerKwp: number;
-}
-
-export interface PercentageValorRule {
-  method: 'percentage_valor';
-  rate: number;
-}
-
-export interface PerKwpRule {
-  method: 'per_kwp';
-  rate: number;
-}
-
-export interface FixedRule {
-  method: 'fixed';
-  rate: number;
-}
-
-export interface ManualRule {
-  method: 'manual';
-}
-
-export type CommissionRule =
-  | TieredKwpRule
-  | BasePlusPerKwpRule
-  | PercentageValorRule
-  | PerKwpRule
-  | FixedRule
-  | ManualRule;
-
 export type CommissionMatrix = Record<string, CommissionRule>;
+
+function findTier(tiers: SolarTier[], kwp: number): SolarTier | null {
+  return tiers.find(t => kwp >= t.kwpMin && kwp < t.kwpMax) ?? null;
+}
 
 export function useCommissionMatrix() {
   const { data: org } = useOrganization();
@@ -63,33 +34,48 @@ export function useCommissionMatrix() {
     (productName: string, detail: ServicosProductDetail, modeloServico?: ModeloServico): number | null => {
       if (!matrix) return null;
       const rule = matrix[productName];
-      if (!rule || rule.method === 'manual') return null;
+      if (!rule || rule.method === 'manual' || !rule.tiers?.length) return null;
+
+      const kwp = detail.kwp;
+      const isAas = modeloServico === 'saas';
 
       switch (rule.method) {
         case 'tiered_kwp': {
-          if (detail.kwp == null || !rule.tiers?.length) return null;
-          const kwp = detail.kwp;
-          const tier = rule.tiers.find(t => kwp >= t.kwpMin && kwp < t.kwpMax);
+          if (kwp == null) return null;
+          const tier = findTier(rule.tiers, kwp);
           if (!tier) return null;
-          const isAas = modeloServico === 'saas';
           const base = isAas ? tier.baseAas : tier.baseTransaccional;
           const adic = isAas ? tier.adicAas : tier.adicTransaccional;
           return base + (kwp - tier.kwpMin) * adic;
         }
         case 'base_plus_per_kwp': {
-          if (detail.kwp == null) return null;
-          return rule.base + rule.ratePerKwp * detail.kwp;
+          if (kwp == null) return null;
+          const tier = findTier(rule.tiers, kwp);
+          if (!tier) return null;
+          const base = isAas ? tier.baseAas : tier.baseTransaccional;
+          const rate = isAas ? tier.adicAas : tier.adicTransaccional;
+          return base + rate * kwp;
         }
         case 'percentage_valor': {
           if (detail.valor == null) return null;
-          return (detail.valor * rule.rate) / 100;
+          // Use first tier's base as percentage rate, or find by kwp if available
+          const tier = kwp != null ? findTier(rule.tiers, kwp) : rule.tiers[0];
+          if (!tier) return null;
+          const rate = isAas ? tier.baseAas : tier.baseTransaccional;
+          return (detail.valor * rate) / 100;
         }
         case 'per_kwp': {
-          if (detail.kwp == null) return null;
-          return detail.kwp * rule.rate;
+          if (kwp == null) return null;
+          const tier = findTier(rule.tiers, kwp);
+          if (!tier) return null;
+          const rate = isAas ? tier.baseAas : tier.baseTransaccional;
+          return kwp * rate;
         }
-        case 'fixed':
-          return rule.rate;
+        case 'fixed': {
+          const tier = kwp != null ? findTier(rule.tiers, kwp) : rule.tiers[0];
+          if (!tier) return null;
+          return isAas ? tier.baseAas : tier.baseTransaccional;
+        }
         default:
           return null;
       }
