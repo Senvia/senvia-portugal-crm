@@ -1,64 +1,78 @@
 
 
-## Recalcular Comissões de Propostas e Vendas Existentes (Perfect2Gether)
+## Corrigir Total da Proposta/Venda que Não Guarda ao Editar
 
-### Dados Analisados
+### Problema Identificado
 
-Consultei a base de dados e identifiquei os registos de **Outros Serviços** que precisam de recalcular comissões usando a matriz configurada.
+O bug esta no calculo de `totalValue` dentro do **EditProposalModal**.
 
-### Matriz de Comissões Actual (Solar - tiered_kwp)
-
-```text
-Tier          | baseTrans | adicTrans | baseAas | adicAas
-0 - 1.2 kWp   |     0     |     0     |    0    |    0
-1.2 - 4.1     |    42     |     0     |   34    |    0
-4.1 - 15      |    42     |    10     |   34    |   14
-15 - 25       |   140     |     7     |  190    |   11
-25 - 50       |   210     |     6     |  320    |   10
-50 - 100      |   340     |     6     |  542    |    7
-100 - 250     |   600     |     5     |  872    |    6
-250 - 500     |  1320     |     5     | 1826    |    6
-500 - 1000    |  2440     |     4     | 3380    |    6
+**EditProposalModal (linhas 166-175):**
+```typescript
+const totalValue = useMemo(() => {
+  if (isTelecom) {
+    if (proposalType === 'energia') {
+      return proposalCpes.reduce(...); // OK - reactivo
+    }
+    return parseFloat(servicosComissao) || 0; // BUG - stale!
+  }
+  ...
+}, [isTelecom, proposalType, proposalCpes, servicosComissao, selectedProducts]);
 ```
 
-### Recalculos Necessarios
+Para propostas de **servicos**, o `totalValue` usa `servicosComissao` — uma variavel de estado inicializada **uma unica vez** a partir de `proposal.comissao` (linha 97). Quando o utilizador altera detalhes dos produtos (kwp, modelo, etc.), o `servicosDetails` actualiza e o `totalComissao` recalcula correctamente, **mas** `servicosComissao` nunca muda. Resultado: o `total_value` guardado e sempre o valor antigo.
 
-#### Propostas de Servicos
+Em **CreateProposalModal** (linha 112), para servicos retorna `0` e guarda `comissao: totalComissao`. O Edit esta inconsistente.
 
-| Proposta | Produto | kWp | Modelo | Comissao Actual | Comissao Correcta | Calculo |
-|---|---|---|---|---|---|---|
-| 0015 | Solar | 45 | Transacional | 300 | **330** | Tier 25-50: 210 + (45-25)*6 = 330 |
-| 0016 | Solar | 28 | Transacional | 200 | **228** | Tier 25-50: 210 + (28-25)*6 = 228 |
-| 0019 | Solar+Baterias | 10+10 | SAAS | 146.6 | **146.6** (correcto) | Solar: 34+(10-4.1)*14=116.6 + Bat: 10+2*10=30 |
+Para **EditSaleModal**, a mesma logica aplica-se: `manualTotalValue` e inicializado uma vez e nao sincroniza com alteracoes de CPEs ou comissao.
 
-#### Vendas de Servicos
+### Solucao
 
-| Venda | Produto | kWp | Modelo | Comissao Actual | Comissao Correcta |
-|---|---|---|---|---|---|
-| 0003 | Solar | 28 | Transacional | 200 | **228** |
-| 0005 | Solar | 28 | Transacional | 200 | **228** |
-| 0008 | Solar | 28 | Transacional | 200 | **228** |
+#### 1. `src/components/proposals/EditProposalModal.tsx`
 
-#### Propostas de Energia
-As propostas de energia (0001-0014, 0017-0018, 0020-0021) usam comissao por CPE, nao pela matriz de servicos — os valores dos CPEs ja estao correctos na tabela `proposal_cpes`.
+Alterar o `totalValue` para servicos: usar `totalComissao` em vez de `servicosComissao` (que e stale). Isto garante que quando a comissao recalcula (ao mudar modelo, kwp, etc.), o total guardado reflecte o novo valor.
 
-### Implementacao
+```typescript
+const totalValue = useMemo(() => {
+  if (isTelecom) {
+    if (proposalType === 'energia') {
+      return proposalCpes.reduce((sum, cpe) => sum + (parseFloat(cpe.margem) || 0), 0);
+    }
+    return totalComissao; // FIX: usar totalComissao reactivo
+  }
+  const productsTotal = selectedProducts.reduce((sum, p) => sum + getProductTotal(p), 0);
+  return productsTotal;
+}, [isTelecom, proposalType, proposalCpes, totalComissao, selectedProducts]);
+```
 
-Criar uma edge function temporaria `recalc-commissions` que:
+**Nota:** `totalValue` depende de `totalComissao` que depende de `servicosDetails` — o useMemo de `totalComissao` e declarado ANTES de `totalValue`, portanto nao ha problema de ordering. Confirmar isto no codigo (linha 177 vs 166).
 
-1. Actualiza **Proposta 0015**: comissao=330, servicos_details={"Solar": {"kwp": 45, "comissao": 330}}
-2. Actualiza **Proposta 0016**: comissao=228, servicos_details={"Solar": {"kwp": 28, "comissao": 228}}
-3. Actualiza **Venda 0003**: comissao=228
-4. Actualiza **Venda 0005**: comissao=228
-5. Actualiza **Venda 0008**: comissao=228
+Problema de ordering: `totalComissao` e declarado na **linha 177**, mas `totalValue` na **linha 166**. `totalValue` referencia `totalComissao` que ainda nao foi declarado. Solucao: mover o `useMemo` de `totalComissao` para ANTES do `totalValue`, ou inverter a ordem dos dois.
 
-Tambem migra `servicos_details` para as propostas 0015 e 0016 que tinham dados legacy (kwp no nivel superior sem servicos_details).
+#### 2. `src/components/sales/EditSaleModal.tsx`
 
-### Ficheiros
+Para vendas telecom, sincronizar `manualTotalValue` quando os CPEs editaveis mudam (energia) ou quando a comissao recalcula (servicos). Adicionar `useEffect`:
+
+```typescript
+// Sync manualTotalValue when editable CPEs change (energia sales)
+useEffect(() => {
+  if (!open || !sale || !isTelecom) return;
+  if (sale.proposal_type === 'energia' && editableCpes.length > 0) {
+    const margemTotal = editableCpes.reduce((sum, cpe) => sum + (cpe.margem || 0), 0);
+    setManualTotalValue(margemTotal.toString());
+  }
+}, [open, sale, isTelecom, editableCpes]);
+```
+
+### Ficheiros a alterar
 
 | Ficheiro | O que muda |
 |---|---|
-| `supabase/functions/recalc-commissions/index.ts` | Edge function temporaria para executar os updates |
+| `src/components/proposals/EditProposalModal.tsx` | Reordenar `totalComissao` antes de `totalValue`; alterar `totalValue` para servicos usar `totalComissao` em vez de `servicosComissao` stale |
+| `src/components/sales/EditSaleModal.tsx` | Adicionar `useEffect` para sincronizar `manualTotalValue` quando CPEs editaveis ou comissao mudam |
 
-Apos execucao com sucesso, a edge function sera eliminada.
+### Detalhe Tecnico
+
+- A variavel `servicosComissao` pode ser mantida para inicializar o display, mas **nao deve ser usada** no calculo do total guardado
+- O `totalComissao` ja existe e calcula correctamente a soma das comissoes de todos os produtos activos em `servicosDetails`
+- Para vendas, o `comissao` state ja e sincronizado pelo `useEffect` existente (linha 221-242), mas o `total_value` (via `manualTotalValue`) nao acompanha
 
