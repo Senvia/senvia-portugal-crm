@@ -23,16 +23,20 @@ export function OttoChatWindow({ onClose }: OttoChatWindowProps) {
   const { pendingAttachments, addAttachment, removeAttachment, clearAttachments } = useOttoStore();
   const [input, setInput] = useState("");
   const isMobile = useIsMobile();
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const el = scrollRef.current;
-    if (el) {
-      el.scrollTop = el.scrollHeight;
+    const viewport = scrollAreaRef.current?.querySelector(
+      '[data-radix-scroll-area-viewport]'
+    );
+    if (viewport) {
+      setTimeout(() => {
+        viewport.scrollTo({ top: viewport.scrollHeight, behavior: 'smooth' });
+      }, 50);
     }
-  }, [messages]);
+  }, [messages, isLoading]);
 
   const handleSend = () => {
     const text = input.trim();
@@ -119,8 +123,8 @@ export function OttoChatWindow({ onClose }: OttoChatWindowProps) {
       </div>
 
       {/* Messages */}
-      <ScrollArea className="flex-1">
-        <div ref={scrollRef} className="p-4 space-y-4">
+      <ScrollArea ref={scrollAreaRef} className="flex-1">
+        <div className="p-4 space-y-4">
           {messages.length === 0 && (
             <div className="flex gap-2.5">
               <div className="flex-shrink-0 w-7 h-7 rounded-full overflow-hidden">
