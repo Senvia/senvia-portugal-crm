@@ -1,42 +1,69 @@
 
 
-## Manter Foco no Input Após Enviar Mensagem
+## Criar Secção "Suporte" nas Definições + Corrigir Instruções do Otto
 
 ### Problema
 
-Quando o utilizador envia uma mensagem com Enter, o `handleSend` limpa o input e chama `sendMessage`, mas nada re-foca o campo de texto. O React re-renderiza o componente (nova mensagem + `isLoading` muda) e o foco perde-se.
+O Otto diz ao utilizador para ir a **Definições > Suporte > Os Meus Tickets**, mas essa secção não existe. A tabela `support_tickets` existe na base de dados, mas não há UI para consultar tickets.
 
 ### Solução
 
-Adicionar `inputRef.current?.focus()` no final do `handleSend`, para que após enviar, o cursor volte automaticamente ao campo de texto. Também adicionar um `useEffect` que re-foca o input quando `isLoading` passa de `true` para `false` (ou seja, quando o Otto termina de responder), para o utilizador poder continuar a escrever imediatamente.
+Criar a secção "Suporte" nas Definições e actualizar o prompt do Otto com o caminho correcto.
 
-### Alteração — `src/components/otto/OttoChatWindow.tsx`
+---
 
-1. No `handleSend` (linha 41-46), adicionar `inputRef.current?.focus()` após o `sendMessage`:
+### 1. Novo componente — `src/components/settings/SupportTicketsTab.tsx`
 
-```tsx
-const handleSend = () => {
-  const text = input.trim();
-  if (!text || isLoading) return;
-  setInput("");
-  sendMessage(text);
-  setTimeout(() => inputRef.current?.focus(), 0);
-};
+Componente que lista os tickets de suporte da organização:
+- Busca tickets da tabela `support_tickets` filtrados por `organization_id`
+- Mostra tabela com: Código (`ticket_code`), Assunto, Prioridade (badge colorido), Estado (badge), Data de criação
+- Ordenados por data (mais recente primeiro)
+- Estado vazio com mensagem "Nenhum ticket de suporte encontrado"
+- Clique num ticket expande para ver a descrição completa
+- Responsivo (cards em mobile, tabela em desktop)
+
+### 2. Actualizar — `src/components/settings/MobileSettingsNav.tsx`
+
+- Adicionar `"support"` ao tipo `SettingsSection`
+- Adicionar `"support-tickets"` ao tipo `SettingsSubSection`
+- Adicionar card na lista `sections`:
+  ```
+  { id: "support", label: "Suporte", icon: LifeBuoy, description: "Tickets e pedidos de ajuda" }
+  ```
+- Adicionar ao `subSectionsMap` (vazio, conteúdo directo)
+- Adicionar ao `directContentGroups`: `"support"`
+- Adicionar ao `sectionTitles`: `support: "Suporte"`
+
+### 3. Actualizar — `src/pages/Settings.tsx`
+
+- Importar `SupportTicketsTab`
+- Adicionar case `"support-tickets"` no `renderSubContent`
+- Adicionar case `"support"` no `getDirectSub`
+
+### 4. Actualizar — `supabase/functions/otto-chat/index.ts`
+
+No `SYSTEM_PROMPT`, após a submissão do ticket, adicionar instrução:
+```
+- Após submissão, informa: "Podes consultar o estado dos teus tickets em **Definições > Suporte**."
 ```
 
-2. Adicionar um `useEffect` para re-focar quando `isLoading` volta a `false`:
+Actualizar o MAPA DE ROTAS para incluir a rota correcta.
 
-```tsx
-useEffect(() => {
-  if (!isLoading) {
-    inputRef.current?.focus();
-  }
-}, [isLoading]);
-```
+### 5. Hook — `src/hooks/useSupportTickets.ts`
 
-### Ficheiros a alterar
+Hook simples com React Query para buscar tickets:
+- Query: `supabase.from('support_tickets').select('*').eq('organization_id', orgId).order('created_at', { ascending: false })`
+- Retorna `{ tickets, isLoading }`
 
-| Ficheiro | Alteração |
+---
+
+### Ficheiros a criar/alterar
+
+| Ficheiro | Acção |
 |---|---|
-| `src/components/otto/OttoChatWindow.tsx` | Adicionar focus no handleSend + useEffect para re-focar após resposta |
+| `src/components/settings/SupportTicketsTab.tsx` | **Criar** — Lista de tickets |
+| `src/hooks/useSupportTickets.ts` | **Criar** — Hook de dados |
+| `src/components/settings/MobileSettingsNav.tsx` | **Alterar** — Adicionar secção "Suporte" |
+| `src/pages/Settings.tsx` | **Alterar** — Registar novo conteúdo |
+| `supabase/functions/otto-chat/index.ts` | **Alterar** — Corrigir instruções pós-ticket |
 
