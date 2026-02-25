@@ -1,35 +1,49 @@
 
 
-## Analise dos Calculos da Matriz de Comissoes
+## Copiar Escalões Solar para Carregadores, Condensadores e Coberturas
 
-Revisei o hook `useCommissionMatrix.ts` e a forma como e usado nos modais de proposta (`CreateProposalModal.tsx` e `EditProposalModal.tsx`). Aqui esta o estado actual:
+### Situação actual
 
-### Os calculos estao correctos
+A organização `Perfect2Gether` tem 9 escalões configurados no produto **Solar** (método `tiered_kwp`), enquanto **Carregadores/Baterias**, **Condensadores** e **Coberturas** estão em modo `manual`.
 
-Sim, a logica de calculo segue exactamente as regras configuradas na matriz:
+### O que vou fazer
 
-| Metodo | Formula implementada | Correcto? |
-|--------|---------------------|-----------|
-| **tiered_kwp** (Solar) | `base + (kwp - kwpMin) × adicional` com diferenciacao Transaccional vs AAS (saas) | Sim |
-| **base_plus_per_kwp** (Baterias) | `base + ratePerKwp × kwp` | Sim |
-| **percentage_valor** | `valor × rate / 100` | Sim |
-| **per_kwp** | `kwp × rate` | Sim |
-| **fixed** | `rate` (valor fixo) | Sim |
-| **manual** | Retorna `null` (preenchimento livre) | Sim |
+Alterar o `CommissionMatrixTab.tsx` para não ser necessário — isto é uma alteração de **dados**, não de código. Vou actualizar directamente o campo `commission_matrix` na base de dados, copiando a regra Solar (com todos os 9 escalões) para os outros 3 produtos.
 
-### Integracao com Propostas
+### Dados a copiar (Solar → todos)
 
-Nos modais `CreateProposalModal` e `EditProposalModal`, quando o utilizador altera qualquer campo de um produto (excepto a propria comissao), o sistema:
+| kWp Min | kWp Max | Base Trans. | Adic. Trans. | Base AAS | Adic. AAS |
+|---------|---------|-------------|--------------|----------|-----------|
+| 0       | 1.2     | 0           | 0            | 0        | 0         |
+| 1.2     | 4.1     | 42          | 10           | 34       | 14        |
+| 4.1     | 15      | 42          | 10           | 34       | 14        |
+| 15      | 25      | 140         | 7            | 190      | 11        |
+| 25      | 50      | 210         | 6            | 320      | 10        |
+| 50      | 100     | 340         | 6            | 542      | 7         |
+| 100     | 250     | 600         | 5            | 872      | 6         |
+| 250     | 500     | 1320        | 5            | 1826     | 6         |
+| 500     | 1000    | 2440        | 4            | 3380     | 6         |
 
-1. Chama `calculateCommission(produto, detail, modeloServico)`
-2. Se o resultado nao for `null`, arredonda a 2 casas decimais e preenche automaticamente o campo `comissao`
-3. Se o metodo for `manual`, o campo fica editavel livremente
+### Alteração
 
-### Ponto de atencao no tiered_kwp
+Uma única query SQL que copia os tiers do Solar para os outros 3 produtos no JSONB `commission_matrix`, mantendo o Solar intacto.
 
-A condicao de procura do escalao e `kwp >= kwpMin && kwp < kwpMax` — usa `<` no maximo, ou seja, o valor exacto do `kwpMax` cai no escalao seguinte. Isto e o comportamento standard de intervalos semi-abertos `[min, max)`. Se o ultimo escalao tiver `kwpMax = 100` e o kWp for exactamente `100`, nao encontra escalao. Se quiser cobrir esse caso, o ultimo escalao deveria ter um `kwpMax` muito alto (ex: `9999`).
+### Detalhe técnico
 
-### Conclusao
+```sql
+UPDATE organizations
+SET commission_matrix = jsonb_set(
+  jsonb_set(
+    jsonb_set(
+      commission_matrix,
+      '{Carregadores/Baterias}', commission_matrix->'Solar'
+    ),
+    '{Condensadores}', commission_matrix->'Solar'
+  ),
+  '{Coberturas}', commission_matrix->'Solar'
+)
+WHERE id = '96a3950e-31be-4c6d-abed-b82968c0d7e9';
+```
 
-Os calculos estao implementados correctamente com base na matriz configurada. Nao ha bugs na logica — tudo funciona de acordo com o desenho.
+Nenhum ficheiro de código será alterado. Apenas dados na base de dados.
 
