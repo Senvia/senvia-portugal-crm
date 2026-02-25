@@ -211,6 +211,26 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
     });
   };
 
+  // Recalculate commissions when modeloServico changes (Transacional <-> SAAS)
+  useEffect(() => {
+    if (proposalType !== 'servicos' || servicosProdutos.length === 0) return;
+    setServicosDetails(prev => {
+      const updated = { ...prev };
+      for (const prodName of servicosProdutos) {
+        const detail = { ...updated[prodName] };
+        const config = SERVICOS_PRODUCT_CONFIGS.find(c => c.name === prodName);
+        if (config?.kwpAuto) {
+          const autoKwp = config.kwpAuto(detail);
+          if (autoKwp !== null) detail.kwp = Math.round(autoKwp * 100) / 100;
+        }
+        const calc = calculateCommission(prodName, detail, modeloServico);
+        if (calc !== null) detail.comissao = Math.round(calc * 100) / 100;
+        updated[prodName] = detail;
+      }
+      return updated;
+    });
+  }, [modeloServico]);
+
   const totalKwp = useMemo(() => {
     return Object.values(servicosDetails).reduce((sum, d) => sum + (d.kwp || 0), 0);
   }, [servicosDetails]);
