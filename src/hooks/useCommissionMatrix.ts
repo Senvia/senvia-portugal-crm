@@ -55,11 +55,20 @@ export function useCommissionMatrix() {
         case 'tiered_kwp': {
           const kwp = detail.kwp;
           if (kwp == null || !rule.tiers?.length) return null;
-          const tier = findTier(rule.tiers, kwp);
+          let tier = findTier(rule.tiers, kwp);
+          let effectiveKwp = kwp;
+          // Cap: se kWp excede todos os escalões, usar ultimo tier com teto
+          if (!tier) {
+            const lastTier = rule.tiers[rule.tiers.length - 1];
+            if (kwp > lastTier.kwpMax) {
+              tier = lastTier;
+              effectiveKwp = lastTier.kwpMax;
+            }
+          }
           if (!tier) return null;
           const base = isAas ? tier.baseAas : tier.baseTransaccional;
           const adic = isAas ? tier.adicAas : tier.adicTransaccional;
-          return base + (kwp - tier.kwpMin) * adic;
+          return base + (effectiveKwp - tier.kwpMin) * adic;
         }
         case 'base_plus_per_kwp': {
           const kwp = detail.kwp;
