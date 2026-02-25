@@ -57,11 +57,6 @@ function getDefaultRule(method: string): CommissionRule {
   return { method: method as CommissionRule['method'], tiers: [] };
 }
 
-/** Returns whether Base columns represent percentages */
-function isPercentageMethod(method: string): boolean {
-  return method === 'formula_percentage' || method === 'percentage_valor';
-}
-
 // ─── Main Component ───
 
 export function CommissionMatrixTab() {
@@ -218,6 +213,50 @@ function ProductModal({
 
 // ─── Tiered Table Editor ───
 
+interface ColumnDef {
+  field: keyof SolarTier;
+  label: string;
+}
+
+function getColumnsForMethod(method: string): ColumnDef[] {
+  switch (method) {
+    case 'tiered_kwp':
+      return [
+        { field: 'kwpMin', label: 'kWp Min' },
+        { field: 'kwpMax', label: 'kWp Max' },
+        { field: 'baseTransaccional', label: 'Base Trans. (€)' },
+        { field: 'adicTransaccional', label: 'Adic. Trans. (€/kWp)' },
+        { field: 'baseAas', label: 'Base AAS (€)' },
+        { field: 'adicAas', label: 'Adic. AAS (€/kWp)' },
+      ];
+    case 'base_plus_per_kwp':
+      return [
+        { field: 'kwpMin', label: 'kWp Min' },
+        { field: 'kwpMax', label: 'kWp Max' },
+        { field: 'baseTransaccional', label: 'Base Trans. (€)' },
+        { field: 'adicTransaccional', label: 'Taxa Trans. (€/kWp)' },
+        { field: 'baseAas', label: 'Base AAS (€)' },
+        { field: 'adicAas', label: 'Taxa AAS (€/kWp)' },
+      ];
+    case 'formula_percentage':
+      return [
+        { field: 'kwpMin', label: 'kWp Min' },
+        { field: 'kwpMax', label: 'kWp Max' },
+        { field: 'baseTransaccional', label: '% Trans.' },
+        { field: 'baseAas', label: '% AAS' },
+      ];
+    case 'percentage_valor':
+      return [
+        { field: 'kwpMin', label: 'Valor Min (€)' },
+        { field: 'kwpMax', label: 'Valor Max (€)' },
+        { field: 'baseTransaccional', label: '% Trans.' },
+        { field: 'baseAas', label: '% AAS' },
+      ];
+    default:
+      return [];
+  }
+}
+
 function TieredTableEditor({
   rule,
   onChange,
@@ -227,12 +266,7 @@ function TieredTableEditor({
 }) {
   const tiers = rule.tiers || [];
   const fileRef = useRef<HTMLInputElement>(null);
-  const isPct = isPercentageMethod(rule.method);
-
-  const baseTransLabel = isPct ? '% Trans.' : 'Base Trans. (€)';
-  const adicTransLabel = isPct ? 'Adic. Trans.' : 'Adic. Trans. (€/kWp)';
-  const baseAasLabel = isPct ? '% AAS' : 'Base AAS (€)';
-  const adicAasLabel = isPct ? 'Adic. AAS' : 'Adic. AAS (€/kWp)';
+  const columns = getColumnsForMethod(rule.method);
 
   const updateTier = (index: number, field: keyof SolarTier, value: number) => {
     const newTiers = tiers.map((t, i) => (i === index ? { ...t, [field]: value } : t));
@@ -319,43 +353,31 @@ function TieredTableEditor({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="text-xs whitespace-nowrap">kWp Min</TableHead>
-              <TableHead className="text-xs whitespace-nowrap">kWp Max</TableHead>
-              <TableHead className="text-xs whitespace-nowrap">{baseTransLabel}</TableHead>
-              <TableHead className="text-xs whitespace-nowrap">{adicTransLabel}</TableHead>
-              <TableHead className="text-xs whitespace-nowrap">{baseAasLabel}</TableHead>
-              <TableHead className="text-xs whitespace-nowrap">{adicAasLabel}</TableHead>
+              {columns.map((col) => (
+                <TableHead key={col.field} className="text-xs whitespace-nowrap">{col.label}</TableHead>
+              ))}
               <TableHead className="w-10" />
             </TableRow>
           </TableHeader>
           <TableBody>
             {tiers.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-6">
+                <TableCell colSpan={columns.length + 1} className="text-center text-sm text-muted-foreground py-6">
                   Nenhum escalão configurado. Adicione uma linha ou importe um ficheiro.
                 </TableCell>
               </TableRow>
             )}
             {tiers.map((tier, idx) => (
               <TableRow key={idx}>
-                <TableCell className="p-1.5">
-                  <DecimalInput className="h-8 text-xs w-20" value={tier.kwpMin} onChange={(v) => updateTier(idx, 'kwpMin', v)} />
-                </TableCell>
-                <TableCell className="p-1.5">
-                  <DecimalInput className="h-8 text-xs w-20" value={tier.kwpMax} onChange={(v) => updateTier(idx, 'kwpMax', v)} />
-                </TableCell>
-                <TableCell className="p-1.5">
-                  <DecimalInput className="h-8 text-xs w-24" value={tier.baseTransaccional} onChange={(v) => updateTier(idx, 'baseTransaccional', v)} />
-                </TableCell>
-                <TableCell className="p-1.5">
-                  <DecimalInput className="h-8 text-xs w-24" value={tier.adicTransaccional} onChange={(v) => updateTier(idx, 'adicTransaccional', v)} />
-                </TableCell>
-                <TableCell className="p-1.5">
-                  <DecimalInput className="h-8 text-xs w-24" value={tier.baseAas} onChange={(v) => updateTier(idx, 'baseAas', v)} />
-                </TableCell>
-                <TableCell className="p-1.5">
-                  <DecimalInput className="h-8 text-xs w-24" value={tier.adicAas} onChange={(v) => updateTier(idx, 'adicAas', v)} />
-                </TableCell>
+                {columns.map((col) => (
+                  <TableCell key={col.field} className="p-1.5">
+                    <DecimalInput
+                      className={`h-8 text-xs ${col.field === 'kwpMin' || col.field === 'kwpMax' ? 'w-20' : 'w-24'}`}
+                      value={tier[col.field]}
+                      onChange={(v) => updateTier(idx, col.field, v)}
+                    />
+                  </TableCell>
+                ))}
                 <TableCell className="p-1.5">
                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeTier(idx)}>
                     <Trash2 className="h-3.5 w-3.5 text-destructive" />

@@ -71,7 +71,8 @@ export function useCommissionMatrix() {
         }
         case 'percentage_valor': {
           if (detail.valor == null) return null;
-          const tier = kwp != null ? findTier(rule.tiers, kwp) : rule.tiers[0];
+          // kwpMin/kwpMax are reinterpreted as valor ranges
+          const tier = findTier(rule.tiers, detail.valor);
           if (!tier) return null;
           const rate = isAas ? tier.baseAas : tier.baseTransaccional;
           return (detail.valor * rate) / 100;
