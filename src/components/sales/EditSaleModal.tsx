@@ -55,7 +55,8 @@ import { Progress } from "@/components/ui/progress";
 import { useProposalCpes, useUpdateProposalCpes } from "@/hooks/useProposalCpes";
 import type { CreateProposalCpeData } from "@/hooks/useProposalCpes";
 import { useCpes } from "@/hooks/useCpes";
-import { NEGOTIATION_TYPE_LABELS, NEGOTIATION_TYPES, MODELO_SERVICO_LABELS, SERVICOS_PRODUCTS } from "@/types/proposals";
+import { NEGOTIATION_TYPE_LABELS, NEGOTIATION_TYPES, MODELO_SERVICO_LABELS, SERVICOS_PRODUCTS, SERVICOS_PRODUCT_CONFIGS } from "@/types/proposals";
+import { useCommissionMatrix } from "@/hooks/useCommissionMatrix";
 import type { NegotiationType, ModeloServico } from "@/types/proposals";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CPE_STATUS_LABELS, CPE_STATUS_STYLES } from "@/types/cpes";
@@ -98,6 +99,7 @@ export function EditSaleModal({
   const { organization } = useAuth();
   const { isAdmin } = usePermissions();
   const isTelecom = organization?.niche === 'telecom';
+  const { calculateCommission, isAutoCalculated } = useCommissionMatrix();
   const { data: orgData } = useOrganization();
   const salesSettings = (orgData?.sales_settings as { lock_delivered_sales?: boolean }) || {};
   const isDeliveredLocked = !!salesSettings.lock_delivered_sales && sale?.status === 'delivered' && !isAdmin;
@@ -214,6 +216,30 @@ export function EditSaleModal({
       setOriginalItemIds([]);
     }
   }, [open, existingItems]);
+
+  // Auto-recalculate commission when relevant fields change (servicos only)
+  useEffect(() => {
+    if (!open || sale?.proposal_type !== 'servicos' || servicosProdutos.length === 0) return;
+    
+    let total = 0;
+    let anyCalc = false;
+    const kwpVal = parseFloat(kwp) || undefined;
+    const valorVal = parseFloat(manualTotalValue) || undefined;
+    const ms = (modeloServico as 'transacional' | 'saas') || undefined;
+    
+    for (const prodName of servicosProdutos) {
+      const detail = { kwp: kwpVal, valor: valorVal };
+      const calc = calculateCommission(prodName, detail, ms);
+      if (calc !== null) {
+        total += Math.round(calc * 100) / 100;
+        anyCalc = true;
+      }
+    }
+    
+    if (anyCalc) {
+      setComissao(total.toString());
+    }
+  }, [open, sale?.proposal_type, servicosProdutos, kwp, modeloServico, manualTotalValue, calculateCommission]);
 
   // Check if sale can be fully edited
   const canFullEdit = sale?.status !== 'delivered' && sale?.status !== 'cancelled' && sale?.status !== 'fulfilled';
@@ -677,8 +703,20 @@ export function EditSaleModal({
                             <Input type="number" value={kwp} onChange={e => setKwp(e.target.value)} className="h-9" step="0.01" />
                           </div>
                           <div className="col-span-2 space-y-1.5">
-                            <Label className="text-xs text-muted-foreground">Comissão (€)</Label>
-                            <Input type="number" value={comissao} onChange={e => setComissao(e.target.value)} className="h-9" step="0.01" />
+                            <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+                              Comissão (€)
+                              {servicosProdutos.some(p => isAutoCalculated(p)) && (
+                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-primary/10 text-primary border-primary/20">Auto</Badge>
+                              )}
+                            </Label>
+                            <Input 
+                              type="number" 
+                              value={comissao} 
+                              onChange={e => setComissao(e.target.value)} 
+                              className="h-9" 
+                              step="0.01"
+                              readOnly={servicosProdutos.some(p => isAutoCalculated(p))}
+                            />
                           </div>
                         </div>
                       </CardContent>
