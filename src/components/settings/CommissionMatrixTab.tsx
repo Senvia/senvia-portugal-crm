@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, forwardRef } from 'react';
 import { Calculator, Info, Plus, Trash2, Sun, Battery, Gauge, Home, Save, FileSpreadsheet } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
@@ -45,11 +45,11 @@ function getFormulaPreview(rule: CommissionRule): string {
     case 'tiered_kwp':
       return 'Comissão = Base + (kWp - kWpMin) × Adicional (por escalão, Trans. ou AAS)';
     case 'base_plus_per_kwp':
-      return 'Comissão = Base + (Adicional × kWp total) — por escalão, Trans. ou AAS';
+      return 'Comissão = Base (€) + (€/kWp × kWp da proposta)';
     case 'formula_percentage':
-      return 'kWp = (Valor × Factor) / Divisor → Comissão = kWp × %Base (por escalão, Trans. ou AAS)';
+      return 'kWp = (Valor × Factor) / Divisor → Comissão = kWp resultado × %';
     case 'percentage_valor':
-      return 'Comissão = Valor da Proposta × % (por escalão, Trans. ou AAS)';
+      return 'Comissão = Valor da proposta × %';
   }
 }
 
@@ -70,7 +70,6 @@ export function CommissionMatrixTab() {
     const initial: CommissionMatrix = {};
     SERVICOS_PRODUCTS.forEach((p) => {
       const existing = saved?.[p];
-      // Migrate legacy methods to percentage_valor
       if (existing && !ALL_METHODS.includes(existing.method as any)) {
         initial[p] = { method: 'percentage_valor', tiers: existing.tiers || [] };
       } else {
@@ -100,7 +99,7 @@ export function CommissionMatrixTab() {
         {SERVICOS_PRODUCTS.map((product) => {
           const rule = localMatrix[product] ?? { method: 'tiered_kwp' as const, tiers: [] };
           const Icon = getProductIcon(product);
-          const tierCount = rule.tiers?.length ?? 0;
+          const tierCount = rule.method === 'tiered_kwp' ? (rule.tiers?.length ?? 0) : null;
 
           return (
             <Card
@@ -114,9 +113,11 @@ export function CommissionMatrixTab() {
                 <Badge variant="secondary" className="text-[10px]">
                   {METHOD_LABELS[rule.method] ?? rule.method}
                 </Badge>
-                <span className="text-[10px] text-muted-foreground">
-                  {tierCount} escalão(ões)
-                </span>
+                {tierCount !== null && (
+                  <span className="text-[10px] text-muted-foreground">
+                    {tierCount} escalão(ões)
+                  </span>
+                )}
               </CardContent>
             </Card>
           );
@@ -163,6 +164,21 @@ function ProductModal({
 }) {
   const Icon = getProductIcon(product);
 
+  const renderEditor = () => {
+    switch (rule.method) {
+      case 'tiered_kwp':
+        return <TieredTableEditor rule={rule} onChange={onRuleChange} />;
+      case 'base_plus_per_kwp':
+        return <BasePlusKwpEditor rule={rule} onChange={onRuleChange} />;
+      case 'formula_percentage':
+        return <FormulaPercentageEditor rule={rule} onChange={onRuleChange} />;
+      case 'percentage_valor':
+        return <PercentageValorEditor rule={rule} onChange={onRuleChange} />;
+      default:
+        return null;
+    }
+  };
+
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent variant="fullScreen" className="flex flex-col overflow-hidden">
@@ -189,7 +205,7 @@ function ProductModal({
             </Select>
           </div>
 
-          <TieredTableEditor rule={rule} onChange={onRuleChange} />
+          {renderEditor()}
 
           <div className="flex items-start gap-2 rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
             <Info className="h-4 w-4 shrink-0 mt-0.5 text-primary" />
@@ -211,51 +227,146 @@ function ProductModal({
   );
 }
 
-// ─── Tiered Table Editor ───
+// ─── Base + € × kWp Editor ───
+
+function BasePlusKwpEditor({ rule, onChange }: { rule: CommissionRule; onChange: (r: CommissionRule) => void }) {
+  const update = (field: keyof CommissionRule, value: number) => onChange({ ...rule, [field]: value });
+
+  return (
+    <div className="space-y-5">
+      <div className="text-sm font-medium">Configuração da Fórmula</div>
+
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <Label className="text-xs text-muted-foreground">Transacional</Label>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm text-muted-foreground">Base (€)</span>
+            <DecimalInput className="h-9 w-24" value={rule.baseTrans ?? 0} onChange={(v) => update('baseTrans', v)} />
+            <span className="text-sm text-muted-foreground">+</span>
+            <span className="text-sm text-muted-foreground">€/kWp</span>
+            <DecimalInput className="h-9 w-24" value={rule.ratePerKwpTrans ?? 0} onChange={(v) => update('ratePerKwpTrans', v)} />
+            <span className="text-sm text-muted-foreground">×</span>
+            <Badge variant="outline" className="text-xs">kWp (auto)</Badge>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label className="text-xs text-muted-foreground">AAS</Label>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm text-muted-foreground">Base (€)</span>
+            <DecimalInput className="h-9 w-24" value={rule.baseAas ?? 0} onChange={(v) => update('baseAas', v)} />
+            <span className="text-sm text-muted-foreground">+</span>
+            <span className="text-sm text-muted-foreground">€/kWp</span>
+            <DecimalInput className="h-9 w-24" value={rule.ratePerKwpAas ?? 0} onChange={(v) => update('ratePerKwpAas', v)} />
+            <span className="text-sm text-muted-foreground">×</span>
+            <Badge variant="outline" className="text-xs">kWp (auto)</Badge>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Fórmula kWp + % Editor ───
+
+function FormulaPercentageEditor({ rule, onChange }: { rule: CommissionRule; onChange: (r: CommissionRule) => void }) {
+  const update = (field: keyof CommissionRule, value: number) => onChange({ ...rule, [field]: value });
+
+  return (
+    <div className="space-y-5">
+      <div className="text-sm font-medium">Derivação do kWp</div>
+
+      <div className="space-y-4">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-sm text-muted-foreground">kWp =</span>
+          <span className="text-sm text-muted-foreground">(</span>
+          <Badge variant="outline" className="text-xs">Valor (auto)</Badge>
+          <span className="text-sm text-muted-foreground">×</span>
+          <DecimalInput className="h-9 w-24" value={rule.factor ?? 0} onChange={(v) => update('factor', v)} />
+          <span className="text-sm text-muted-foreground">)</span>
+          <span className="text-sm text-muted-foreground">/</span>
+          <DecimalInput className="h-9 w-24" value={rule.divisor ?? 0} onChange={(v) => update('divisor', v)} />
+        </div>
+
+        <div className="text-sm font-medium pt-2">Comissão</div>
+
+        <div className="space-y-2">
+          <Label className="text-xs text-muted-foreground">Transacional</Label>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm text-muted-foreground">Comissão =</span>
+            <Badge variant="outline" className="text-xs">kWp resultado</Badge>
+            <span className="text-sm text-muted-foreground">×</span>
+            <DecimalInput className="h-9 w-20" value={rule.pctTrans ?? 0} onChange={(v) => update('pctTrans', v)} />
+            <span className="text-sm text-muted-foreground">%</span>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label className="text-xs text-muted-foreground">AAS</Label>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm text-muted-foreground">Comissão =</span>
+            <Badge variant="outline" className="text-xs">kWp resultado</Badge>
+            <span className="text-sm text-muted-foreground">×</span>
+            <DecimalInput className="h-9 w-20" value={rule.pctAas ?? 0} onChange={(v) => update('pctAas', v)} />
+            <span className="text-sm text-muted-foreground">%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── % da Venda/Proposta Editor ───
+
+function PercentageValorEditor({ rule, onChange }: { rule: CommissionRule; onChange: (r: CommissionRule) => void }) {
+  const update = (field: keyof CommissionRule, value: number) => onChange({ ...rule, [field]: value });
+
+  return (
+    <div className="space-y-5">
+      <div className="text-sm font-medium">Percentagem sobre o Valor</div>
+
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <Label className="text-xs text-muted-foreground">Transacional</Label>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Badge variant="outline" className="text-xs">Valor (auto)</Badge>
+            <span className="text-sm text-muted-foreground">×</span>
+            <DecimalInput className="h-9 w-20" value={rule.pctTrans ?? 0} onChange={(v) => update('pctTrans', v)} />
+            <span className="text-sm text-muted-foreground">%</span>
+            <span className="text-sm text-muted-foreground">→ Comissão</span>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label className="text-xs text-muted-foreground">AAS</Label>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Badge variant="outline" className="text-xs">Valor (auto)</Badge>
+            <span className="text-sm text-muted-foreground">×</span>
+            <DecimalInput className="h-9 w-20" value={rule.pctAas ?? 0} onChange={(v) => update('pctAas', v)} />
+            <span className="text-sm text-muted-foreground">%</span>
+            <span className="text-sm text-muted-foreground">→ Comissão</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Tiered Table Editor (only for tiered_kwp) ───
 
 interface ColumnDef {
   field: keyof SolarTier;
   label: string;
 }
 
-function getColumnsForMethod(method: string): ColumnDef[] {
-  switch (method) {
-    case 'tiered_kwp':
-      return [
-        { field: 'kwpMin', label: 'kWp Min' },
-        { field: 'kwpMax', label: 'kWp Max' },
-        { field: 'baseTransaccional', label: 'Base Trans. (€)' },
-        { field: 'adicTransaccional', label: 'Adic. Trans. (€/kWp)' },
-        { field: 'baseAas', label: 'Base AAS (€)' },
-        { field: 'adicAas', label: 'Adic. AAS (€/kWp)' },
-      ];
-    case 'base_plus_per_kwp':
-      return [
-        { field: 'kwpMin', label: 'kWp Min' },
-        { field: 'kwpMax', label: 'kWp Max' },
-        { field: 'baseTransaccional', label: 'Base Trans. (€)' },
-        { field: 'adicTransaccional', label: 'Taxa Trans. (€/kWp)' },
-        { field: 'baseAas', label: 'Base AAS (€)' },
-        { field: 'adicAas', label: 'Taxa AAS (€/kWp)' },
-      ];
-    case 'formula_percentage':
-      return [
-        { field: 'kwpMin', label: 'kWp Min' },
-        { field: 'kwpMax', label: 'kWp Max' },
-        { field: 'baseTransaccional', label: '% Trans.' },
-        { field: 'baseAas', label: '% AAS' },
-      ];
-    case 'percentage_valor':
-      return [
-        { field: 'kwpMin', label: 'Valor Min (€)' },
-        { field: 'kwpMax', label: 'Valor Max (€)' },
-        { field: 'baseTransaccional', label: '% Trans.' },
-        { field: 'baseAas', label: '% AAS' },
-      ];
-    default:
-      return [];
-  }
-}
+const TIERED_COLUMNS: ColumnDef[] = [
+  { field: 'kwpMin', label: 'kWp Min' },
+  { field: 'kwpMax', label: 'kWp Max' },
+  { field: 'baseTransaccional', label: 'Base Trans. (€)' },
+  { field: 'adicTransaccional', label: 'Adic. Trans. (€/kWp)' },
+  { field: 'baseAas', label: 'Base AAS (€)' },
+  { field: 'adicAas', label: 'Adic. AAS (€/kWp)' },
+];
 
 function TieredTableEditor({
   rule,
@@ -266,7 +377,6 @@ function TieredTableEditor({
 }) {
   const tiers = rule.tiers || [];
   const fileRef = useRef<HTMLInputElement>(null);
-  const columns = getColumnsForMethod(rule.method);
 
   const updateTier = (index: number, field: keyof SolarTier, value: number) => {
     const newTiers = tiers.map((t, i) => (i === index ? { ...t, [field]: value } : t));
@@ -353,7 +463,7 @@ function TieredTableEditor({
         <Table>
           <TableHeader>
             <TableRow>
-              {columns.map((col) => (
+              {TIERED_COLUMNS.map((col) => (
                 <TableHead key={col.field} className="text-xs whitespace-nowrap">{col.label}</TableHead>
               ))}
               <TableHead className="w-10" />
@@ -362,14 +472,14 @@ function TieredTableEditor({
           <TableBody>
             {tiers.length === 0 && (
               <TableRow>
-                <TableCell colSpan={columns.length + 1} className="text-center text-sm text-muted-foreground py-6">
+                <TableCell colSpan={TIERED_COLUMNS.length + 1} className="text-center text-sm text-muted-foreground py-6">
                   Nenhum escalão configurado. Adicione uma linha ou importe um ficheiro.
                 </TableCell>
               </TableRow>
             )}
             {tiers.map((tier, idx) => (
               <TableRow key={idx}>
-                {columns.map((col) => (
+                {TIERED_COLUMNS.map((col) => (
                   <TableCell key={col.field} className="p-1.5">
                     <DecimalInput
                       className={`h-8 text-xs ${col.field === 'kwpMin' || col.field === 'kwpMax' ? 'w-20' : 'w-24'}`}
@@ -422,15 +532,11 @@ function TieredTableEditor({
 
 // ─── Decimal Input ───
 
-function DecimalInput({
-  value,
-  onChange,
-  className,
-}: {
+const DecimalInput = forwardRef<HTMLInputElement, {
   value: number;
   onChange: (v: number) => void;
   className?: string;
-}) {
+}>(({ value, onChange, className }, ref) => {
   const format = (n: number) => (n === 0 ? '0' : String(n).replace('.', ','));
   const [text, setText] = useState(() => format(value));
   const [focused, setFocused] = useState(false);
@@ -455,6 +561,7 @@ function DecimalInput({
 
   return (
     <Input
+      ref={ref}
       type="text"
       inputMode="decimal"
       className={className}
@@ -464,4 +571,5 @@ function DecimalInput({
       onBlur={handleBlur}
     />
   );
-}
+});
+DecimalInput.displayName = 'DecimalInput';
