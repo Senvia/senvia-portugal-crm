@@ -1,94 +1,118 @@
 
 
-## Anexos no Ticket de Suporte via Otto
+## Matriz de Comissoes Configuravel pela Empresa
 
 ### Objetivo
 
-Permitir que o utilizador anexe ficheiros (screenshots, PDFs, imagens) diretamente no chat do Otto durante o fluxo de ticket de suporte, e enviar esses ficheiros junto com o ticket via WhatsApp.
+Redesenhar a pagina de Matriz de Comissoes nas Definicoes para que a empresa telecom possa inserir todos os dados da tabela (escaloes Solar, taxas de Baterias, percentagens, etc.) e o sistema calcule automaticamente as comissoes nas propostas com base nesses dados guardados.
 
-### Arquitetura
+### Estrutura de dados no JSONB `commission_matrix`
 
-1. **Storage bucket** `support-attachments` (privado) para guardar os ficheiros
-2. **Botao de anexo** no chat do Otto (icone de clip) ao lado do input de texto
-3. **Upload no frontend** direto para o bucket via Supabase Storage SDK
-4. **URLs dos ficheiros** enviados como parametro na ferramenta `submit_support_ticket`
-5. **WhatsApp**: enviar imagens/documentos via Evolution API (`sendMedia` endpoint) alem da mensagem de texto
+A coluna `organizations.commission_matrix` (ja existe) passara a guardar uma estrutura mais rica:
+
+```text
+{
+  "Solar": {
+    "method": "tiered_kwp",
+    "tiers": [
+      { "kwpMin": 0, "kwpMax": 1.2, "baseTransaccional": 0, "adicTransaccional": 0, "baseAas": 0, "adicAas": 0 },
+      { "kwpMin": 1.2, "kwpMax": 4.1, "baseTransaccional": 42, "adicTransaccional": 0, "baseAas": 34, "adicAas": 0 },
+      { "kwpMin": 4.1, "kwpMax": 15, "baseTransaccional": 42, "adicTransaccional": 10, "baseAas": 34, "adicAas": 14 },
+      ...
+    ]
+  },
+  "Carregadores/Baterias": {
+    "method": "base_plus_per_kwp",
+    "base": 10,
+    "ratePerKwp": 2
+  },
+  "Condensadores": {
+    "method": "percentage_valor",
+    "rate": 5
+  },
+  "Coberturas": {
+    "method": "percentage_valor",
+    "rate": 5
+  }
+}
+```
+
+Nao ha migracao SQL necessaria — a coluna `commission_matrix` (jsonb) ja existe.
 
 ### Alteracoes por ficheiro
 
-**1. Migracao SQL** - Criar bucket `support-attachments`
+**1. `src/hooks/useCommissionMatrix.ts`** — Redesenho dos tipos e calculo
 
-```sql
-INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-VALUES ('support-attachments', 'support-attachments', false, 10485760, 
-  ARRAY['image/jpeg','image/png','image/webp','application/pdf'])
-ON CONFLICT (id) DO NOTHING;
+- Novos tipos de regras:
+  - `tiered_kwp` — tabela de escaloes com colunas Transaccional e AAS (para Solar)
+  - `base_plus_per_kwp` — valor base + taxa por kWp (para Baterias)
+  - `percentage_valor` — percentagem do valor (mantido)
+  - `per_kwp` — taxa fixa por kWp (mantido)
+  - `fixed` — valor fixo (mantido)
+  - `manual` — sem calculo (mantido)
+- `calculateCommission` passa a aceitar `modeloServico?: 'transacional' | 'saas'` como terceiro parametro
+- Logica `tiered_kwp`: encontra o escalao correto pelo kWp, aplica `Base + (kWp - kWpMin) × Adicional` usando a coluna correta (transaccional ou aas)
+- Logica `base_plus_per_kwp`: `base + (ratePerKwp × kWp)`
 
--- RLS: membros autenticados podem inserir
-CREATE POLICY "Users upload support attachments"
-ON storage.objects FOR INSERT
-WITH CHECK (bucket_id = 'support-attachments' AND auth.role() = 'authenticated');
+**2. `src/components/settings/CommissionMatrixTab.tsx`** — Redesenho completo da UI
 
--- RLS: service role pode ler (para enviar via WhatsApp na edge function)
-CREATE POLICY "Service role reads support attachments"
-ON storage.objects FOR SELECT
-USING (bucket_id = 'support-attachments');
+A pagina tera seccoes distintas para cada produto:
+
+- **Solar** — Seccao com tabela editavel de escaloes:
+  - Botao "Adicionar Escalao"
+  - Cada linha: kWp Min, kWp Max, Base Transaccional (EUR), Adicional Transaccional (EUR/kWp), Base AAS (EUR), Adicional AAS (EUR/kWp)
+  - Botao para remover linha
+  - Preview da formula: "Comissao = Base + (kWp - kWpMin) × Adicional"
+
+- **Carregadores/Baterias** — Dois campos:
+  - Valor Base (EUR): ex. 10
+  - Taxa por kWp (EUR): ex. 2
+  - Preview: "Comissao = 10€ + (2€ × kWp)"
+
+- **Condensadores** — Um campo:
+  - Percentagem (%): ex. 5
+  - Preview: "Comissao = Valor × 5%"
+
+- **Coberturas** — Um campo:
+  - Percentagem (%): ex. 5
+  - Preview: "Comissao = Valor × 5%"
+
+Cada produto tem um selector de metodo de calculo (dropdown) para que a empresa possa escolher o tipo de formula. Quando seleciona "Escaloes por kWp" aparece a tabela; quando seleciona "Base + Taxa/kWp" aparecem os dois campos; etc.
+
+Todos os dados sao guardados no `organizations.commission_matrix` ao clicar "Guardar Matriz".
+
+**3. `src/components/proposals/CreateProposalModal.tsx`** — Passar `modeloServico`
+
+Alterar a chamada:
+```
+calculateCommission(produto, detail)
+```
+para:
+```
+calculateCommission(produto, detail, modeloServico)
 ```
 
-**2. Coluna na tabela `support_tickets`** - Adicionar campo `attachments` (jsonb) para guardar os paths dos ficheiros.
+Onde `modeloServico` e o valor seleccionado na proposta (transacional/saas).
 
-**3. `src/stores/useOttoStore.ts`** - Adicionar estado para anexos pendentes:
-- `pendingAttachments: File[]`
-- `addAttachment(file: File)`
-- `removeAttachment(index: number)`
-- `clearAttachments()`
+**4. `src/components/proposals/EditProposalModal.tsx`** — Mesma alteracao
 
-**4. `src/hooks/useOttoChat.ts`** - Alterar `sendMessage` para:
-- Aceitar um parametro opcional `attachments?: File[]`
-- Fazer upload dos ficheiros para `support-attachments/{org_id}/{timestamp}_{filename}`
-- Incluir os paths no corpo do pedido ao edge function quando a mensagem confirma o envio do ticket
-
-**5. `src/components/otto/OttoChatWindow.tsx`** - Adicionar:
-- Botao de anexo (icone `Paperclip`) ao lado do input
-- Input file oculto (aceita imagens e PDFs)
-- Preview dos ficheiros selecionados acima do input (com botao de remover cada um)
-- Upload dos ficheiros quando o utilizador envia a mensagem de confirmacao
-
-**6. `supabase/functions/otto-chat/index.ts`** - Alterar:
-- Aceitar `attachment_paths` no body do request
-- Atualizar a ferramenta `submit_support_ticket` para aceitar parametro `attachment_paths`
-- Guardar os paths na coluna `attachments` do ticket
-- Gerar signed URLs para cada ficheiro
-- Enviar ficheiros via Evolution API endpoint `sendMedia` (para imagens) ou `sendDocument` (para PDFs) ao WhatsApp de suporte, alem da mensagem de texto
-- Atualizar o prompt do PASSO 3 para informar que o utilizador pode anexar ficheiros diretamente no chat
-
-**7. `src/components/otto/OttoMessage.tsx`** - (Sem alteracao) Os botoes do passo 3 serao atualizados no prompt:
-- `[botao:Nao, pode enviar assim]` mantem-se
-- `[botao:Sim, mas nao consigo anexar aqui]` muda para `[botao:Sim, vou anexar agora]` — quando o utilizador clica, o Otto instrui a usar o botao de clip no input
+Passar `modeloServico` ao `calculateCommission`.
 
 ### Fluxo do utilizador
 
 ```text
-1. Utilizador clica "Abrir Ticket de Suporte"
-2. Otto pergunta o assunto
-3. Utilizador responde
-4. Otto pergunta a descricao
-5. Utilizador responde
-6. Otto pergunta se tem anexos
-   -> Utilizador clica "Sim, vou anexar agora"
-   -> Otto responde: "Usa o botao de clip (📎) junto ao campo de texto para anexar os teus ficheiros. Quando estiverem prontos, escreve 'pronto' ou clica no botao abaixo."
-   -> Utilizador anexa ficheiros e envia "pronto"
-7. Otto mostra resumo com lista de anexos
-8. Utilizador confirma -> ticket criado + ficheiros enviados por WhatsApp
+1. Admin vai a Definicoes > Matriz de Comissoes
+2. Para Solar: adiciona os escaloes kWp com os valores Base e Adicional para cada modelo
+3. Para Baterias: define o valor base e a taxa por kWp
+4. Para Condensadores/Coberturas: define a percentagem
+5. Clica "Guardar Matriz"
+6. Ao criar/editar uma proposta de Outros Servicos, as comissoes sao calculadas automaticamente com base nos dados inseridos
 ```
 
-### Detalhes tecnicos do envio WhatsApp
+### Detalhes tecnicos
 
-A Evolution API suporta o endpoint `/message/sendMedia/{instance}` que aceita:
-- `number`: numero destino
-- `mediatype`: "image" ou "document"  
-- `media`: URL publica do ficheiro (signed URL)
-- `caption`: legenda opcional
-
-Cada anexo sera enviado como mensagem individual apos a mensagem de texto do ticket.
+- A tabela de escaloes Solar sera renderizada com componente responsivo (cards empilhados em mobile, tabela em desktop)
+- Validacao: kWp Max de um escalao deve ser igual ao kWp Min do seguinte (continuidade)
+- Se a matriz nao estiver configurada, o campo comissao fica em modo manual (comportamento atual)
+- O calculo do Solar depende do `modeloServico` da proposta — se nao houver modelo seleccionado, usa Transaccional por defeito
 
