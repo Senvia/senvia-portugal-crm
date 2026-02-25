@@ -28,6 +28,7 @@ import { SalesSettingsTab } from '@/components/settings/SalesSettingsTab';
 import { CommissionMatrixTab } from '@/components/settings/CommissionMatrixTab';
 import { PushNotificationsCard } from '@/components/settings/PushNotificationsCard';
 import { BillingTab } from '@/components/settings/BillingTab';
+import { SupportTicketsTab } from '@/components/settings/SupportTicketsTab';
 
 import { ProfilesTab } from '@/components/settings/ProfilesTab';
 import { 
@@ -306,6 +307,7 @@ export default function Settings() {
       case "notif-alerts": return <FidelizationAlertsSettings />;
       case "integrations": return <IntegrationsContent {...integrationsContentProps} />;
       case "billing": return <BillingTab />;
+      case "support-tickets": return <SupportTicketsTab />;
       default: return null;
     }
   };
@@ -317,6 +319,7 @@ export default function Settings() {
       case "products": return "products";
       case "integrations": return "integrations";
       case "billing": return "billing";
+      case "support": return "support-tickets";
       default: return "security"; // fallback
     }
   };

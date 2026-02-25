@@ -1,7 +1,7 @@
-import { Building, UsersRound, Package, Link2, Bell, Receipt, Shield, GitBranch, LayoutGrid, FileText, List, KeyRound, UserCog, Network, BellRing, AlertTriangle, Calculator, ShoppingCart, CreditCard, Calendar, Mail } from "lucide-react";
+import { Building, UsersRound, Package, Link2, Bell, Receipt, Shield, GitBranch, LayoutGrid, FileText, List, KeyRound, UserCog, Network, BellRing, AlertTriangle, Calculator, ShoppingCart, CreditCard, Calendar, Mail, LifeBuoy } from "lucide-react";
 import { SettingsCard } from "./SettingsCard";
 
-export type SettingsSection = "general" | "security" | "team" | "products" | "finance" | "notifications" | "integrations" | "billing";
+export type SettingsSection = "general" | "security" | "team" | "products" | "finance" | "notifications" | "integrations" | "billing" | "support";
 
 export type SettingsSubSection =
   | "org-general" | "org-pipeline" | "org-modules" | "org-forms" | "org-fields" | "org-sales" | "org-matrix"
@@ -11,7 +11,8 @@ export type SettingsSubSection =
   | "finance-expenses" | "finance-fiscal"
   | "notif-push" | "notif-alerts" | "notif-calendar" | "notif-email"
   | "integrations"
-  | "billing";
+  | "billing"
+  | "support-tickets";
 
 interface MobileSettingsNavProps {
   activeSection: SettingsSection | null;
@@ -39,6 +40,7 @@ const sections: SectionItem[] = [
   { id: "notifications", label: "Notificações", icon: Bell, description: "Push e alertas automáticos" },
   { id: "integrations", label: "Integrações", icon: Link2, description: "WhatsApp, email e faturação", requiresIntegrations: true },
   { id: "billing", label: "Plano e Faturação", icon: CreditCard, description: "Subscrição e pagamentos" },
+  { id: "support", label: "Suporte", icon: LifeBuoy, description: "Tickets e pedidos de ajuda" },
 ];
 
 export function MobileSettingsNav({ 
@@ -106,6 +108,7 @@ export const subSectionsMap: Record<SettingsSection, SubSectionItem[]> = {
   ],
   integrations: [],
   billing: [],
+  support: [],
 };
 
 interface MobileSubSectionNavProps {
@@ -137,7 +140,7 @@ export function MobileSubSectionNav({ group, onSelectSubSection, isTelecom = fal
 }
 
 // Groups that go directly to content (no sub-sections)
-export const directContentGroups: SettingsSection[] = ["security", "products", "integrations", "billing"];
+export const directContentGroups: SettingsSection[] = ["security", "products", "integrations", "billing", "support"];
 
 // Section titles
 export const sectionTitles: Record<SettingsSection, string> = {
@@ -149,4 +152,5 @@ export const sectionTitles: Record<SettingsSection, string> = {
   notifications: "Notificações",
   integrations: "Integrações",
   billing: "Plano e Faturação",
+  support: "Suporte",
 };
