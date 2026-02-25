@@ -1,49 +1,41 @@
 
 
-## Corrigir Comissao acima de 1000 kWp (Teto no ultimo escalao)
+## Mostrar "Numero Proposta EDP" apenas para Telecom
 
 ### Problema
 
-Os tiers de Solar na base de dados vao de 0 ate 1000. Quando o utilizador coloca kWp=1500, `findTier` retorna `null` porque nenhum tier inclui 1500. A comissao fica "presa" no ultimo valor calculado (ex: 1172 quando digitou 150 antes de 1500).
+O campo "Numero Proposta EDP" aparece em **todos os nichos** nos modais de Criar Venda, Editar Venda e Detalhes da Venda. Deveria ser visível **apenas para o nicho telecom**.
 
-O `findTier` com `<=` resolveu o caso exacto de 1000, mas valores **acima** de 1000 continuam sem tier.
+### Alterações
 
-### Solucao
+Todos os 3 ficheiros já têm a variável `isTelecom` disponível.
 
-No calculo `tiered_kwp` em `useCommissionMatrix.ts`, quando `findTier` retorna `null`, verificar se o kWp excede o maximo de todos os tiers. Se sim, usar o ultimo tier com o kWp limitado ao `kwpMax` desse tier (teto).
+| Ficheiro | Linha(s) | Alteração |
+|---|---|---|
+| `src/components/sales/CreateSaleModal.tsx` | 1166-1179 | Envolver o bloco do card "Numero Proposta EDP" com `{isTelecom && (...)}` |
+| `src/components/sales/EditSaleModal.tsx` | 1077-1090 | Envolver o bloco do card "Numero Proposta EDP" com `{isTelecom && (...)}` |
+| `src/components/sales/SaleDetailsModal.tsx` | 291-296 | Já está condicionado por `{(sale as any).edp_proposal_number && (...)}` — só aparece se tiver valor, o que está correcto. Mas para consistência, adicionar também `isTelecom &&` à condição |
 
-### Alteracao
+### Detalhe
 
-**Ficheiro: `src/hooks/useCommissionMatrix.ts`**
-
-Alterar o case `tiered_kwp` (linhas 55-63):
-
-```typescript
-case 'tiered_kwp': {
-  const kwp = detail.kwp;
-  if (kwp == null || !rule.tiers?.length) return null;
-  let tier = findTier(rule.tiers, kwp);
-  let effectiveKwp = kwp;
-  // Cap: se kWp excede todos os escaloes, usar ultimo tier com teto
-  if (!tier) {
-    const lastTier = rule.tiers[rule.tiers.length - 1];
-    if (kwp > lastTier.kwpMax) {
-      tier = lastTier;
-      effectiveKwp = lastTier.kwpMax;
-    }
-  }
-  if (!tier) return null;
-  const base = isAas ? tier.baseAas : tier.baseTransaccional;
-  const adic = isAas ? tier.adicAas : tier.adicTransaccional;
-  return base + (effectiveKwp - tier.kwpMin) * adic;
-}
+Em `CreateSaleModal.tsx` (linhas 1166-1179):
+```tsx
+{isTelecom && (
+  <Card>
+    <CardHeader className="pb-2 p-4">
+      <CardTitle className="text-sm font-medium text-muted-foreground">Numero Proposta EDP *</CardTitle>
+    </CardHeader>
+    <CardContent className="p-4 pt-0">
+      <Input ... />
+    </CardContent>
+  </Card>
+)}
 ```
 
-Isto garante que para kWp=1500, a comissao sera a mesma que para kWp=1000 (o maximo do tier 500-1000).
+Mesma lógica para `EditSaleModal.tsx` (linhas 1077-1090).
 
-### Ficheiros
-
-| Ficheiro | Alteracao |
-|---|---|
-| `src/hooks/useCommissionMatrix.ts` | Adicionar logica de teto no ultimo escalao quando kWp excede todos os tiers |
+Em `SaleDetailsModal.tsx` (linha 291):
+```tsx
+{isTelecom && (sale as any).edp_proposal_number && (
+```
 
