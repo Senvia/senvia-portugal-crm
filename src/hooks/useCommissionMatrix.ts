@@ -35,7 +35,7 @@ export interface CommissionRule {
 export type CommissionMatrix = Record<string, CommissionRule>;
 
 function findTier(tiers: SolarTier[], kwp: number): SolarTier | null {
-  return tiers.find(t => kwp >= t.kwpMin && kwp < t.kwpMax) ?? null;
+  return tiers.find(t => kwp >= t.kwpMin && kwp <= t.kwpMax) ?? null;
 }
 
 export function useCommissionMatrix() {
