@@ -217,6 +217,15 @@ export function EditSaleModal({
     }
   }, [open, existingItems]);
 
+  // Sync manualTotalValue when editable CPEs change (energia sales)
+  useEffect(() => {
+    if (!open || !sale || !isTelecom) return;
+    if (sale.proposal_type === 'energia' && editableCpes.length > 0) {
+      const margemTotal = editableCpes.reduce((sum, cpe) => sum + (cpe.margem || 0), 0);
+      setManualTotalValue(margemTotal.toString());
+    }
+  }, [open, sale, isTelecom, editableCpes]);
+
   // Auto-recalculate commission when relevant fields change (servicos only)
   useEffect(() => {
     if (!open || sale?.proposal_type !== 'servicos' || servicosProdutos.length === 0) return;

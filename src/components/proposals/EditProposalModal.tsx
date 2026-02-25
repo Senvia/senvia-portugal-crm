@@ -163,23 +163,23 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
     return Math.max(0, subtotal - product.discount_value);
   };
 
-  const totalValue = useMemo(() => {
-    if (isTelecom) {
-      if (proposalType === 'energia') {
-        return proposalCpes.reduce((sum, cpe) => sum + (parseFloat(cpe.margem) || 0), 0);
-      }
-      return parseFloat(servicosComissao) || 0;
-    }
-    const productsTotal = selectedProducts.reduce((sum, p) => sum + getProductTotal(p), 0);
-    return productsTotal;
-  }, [isTelecom, proposalType, proposalCpes, servicosComissao, selectedProducts]);
-
   const totalComissao = useMemo(() => {
     if (proposalType === 'energia') {
       return proposalCpes.reduce((sum, cpe) => sum + (parseFloat(cpe.comissao) || 0), 0);
     }
     return servicosProdutos.reduce((sum, p) => sum + (servicosDetails[p]?.comissao || 0), 0);
   }, [proposalType, proposalCpes, servicosProdutos, servicosDetails]);
+
+  const totalValue = useMemo(() => {
+    if (isTelecom) {
+      if (proposalType === 'energia') {
+        return proposalCpes.reduce((sum, cpe) => sum + (parseFloat(cpe.margem) || 0), 0);
+      }
+      return totalComissao;
+    }
+    const productsTotal = selectedProducts.reduce((sum, p) => sum + getProductTotal(p), 0);
+    return productsTotal;
+  }, [isTelecom, proposalType, proposalCpes, totalComissao, selectedProducts]);
 
   const handleClientCreated = (newClientId: string) => {
     setSelectedClientId(newClientId);
