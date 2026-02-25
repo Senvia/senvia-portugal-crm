@@ -1,47 +1,58 @@
 
 
-## Simplificar Métodos de Comissão para 4 Tipos
+## Colunas Dinâmicas por Método de Cálculo
 
-### Entendimento
+### Problema
 
-Reduzir os 6 métodos actuais para apenas **4 métodos**, todos usando a tabela de escalões por kWp. Remover `per_kwp`, `fixed` e `manual`.
+Actualmente, todos os 4 métodos mostram as mesmas 6 colunas (kWp Min, kWp Max, Base Trans., Adic. Trans., Base AAS, Adic. AAS). Mas cada método usa campos diferentes na fórmula, então as colunas devem reflectir isso.
 
-### Os 4 Métodos
+### Colunas por Método
 
-1. **Escalões por kWp** (`tiered_kwp`)
-   - Fórmula: `Comissão = Base + (kWp - kWpMin) × Adicional`
-   - Tabela com escalões kWp, valores Base e Adicional (Trans. e AAS)
+```text
+┌─────────────────────────┬──────────────────────────────────────────────────┐
+│ Método                  │ Colunas da Tabela                                │
+├─────────────────────────┼──────────────────────────────────────────────────┤
+│ Escalões por kWp        │ kWp Min │ kWp Max │ Base Trans. (€) │            │
+│                         │ Adic. Trans. (€/kWp) │ Base AAS (€) │            │
+│                         │ Adic. AAS (€/kWp)                                │
+│                         │ → 6 colunas (actual, mantém)                     │
+├─────────────────────────┼──────────────────────────────────────────────────┤
+│ Base + € × kWp          │ kWp Min │ kWp Max │ Base Trans. (€) │            │
+│                         │ Taxa Trans. (€/kWp) │ Base AAS (€) │             │
+│                         │ Taxa AAS (€/kWp)                                 │
+│                         │ → 6 colunas (labels diferentes)                  │
+├─────────────────────────┼──────────────────────────────────────────────────┤
+│ Fórmula kWp + %         │ kWp Min │ kWp Max │ % Trans. │ % AAS            │
+│                         │ → 4 colunas (sem "Adic", só percentagem)         │
+├─────────────────────────┼──────────────────────────────────────────────────┤
+│ % da Venda/Proposta     │ Valor Min (€) │ Valor Max (€) │ % Trans. │ % AAS│
+│                         │ → 4 colunas (não usa kWp, usa valor)             │
+└─────────────────────────┴──────────────────────────────────────────────────┘
+```
 
-2. **Base + € × kWp** (`base_plus_per_kwp`)
-   - Fórmula: `Comissão = Base + (Taxa × kWp total)`
-   - Mesma tabela de escalões
+### O que muda
 
-3. **Fórmula kWp + Percentagem** (`formula_percentage`) — NOVO
-   - kWp é calculado por fórmula: `(Valor × Factor) / Divisor` (configurável por produto, ex: Condensadores `(valor × 0.67) / 1000`)
-   - Comissão = percentagem a definir na tabela, aplicada ao resultado
-   - Mesma tabela de escalões (Base Trans. = % Trans., Base AAS = % AAS)
+**`src/components/settings/CommissionMatrixTab.tsx`** — `TieredTableEditor`
 
-4. **% da Venda/Proposta** (`percentage_valor`)
-   - Fórmula: `Comissão = Valor da Proposta × %`
-   - Mesma tabela de escalões (Base = percentagem)
+1. Criar uma configuração de colunas por método que define:
+   - Quais campos mostrar (das 6 propriedades do `SolarTier`)
+   - Qual o label de cada coluna
+   - Qual o placeholder/sufixo (€, %, €/kWp)
 
-### Ficheiros a alterar
+2. Para `percentage_valor`: os campos `kwpMin`/`kwpMax` passam a ter label "Valor Min (€)" / "Valor Max (€)" — reutilizam os mesmos campos do tier mas com significado diferente (range de valor em vez de range de kWp)
 
-**`src/hooks/useCommissionMatrix.ts`**
-- Remover métodos `per_kwp`, `fixed`, `manual` do tipo `CommissionRule`
-- Adicionar `formula_percentage` ao tipo
-- Implementar cálculo: usa `kwpAuto` do `SERVICOS_PRODUCT_CONFIGS` para derivar kWp, depois aplica percentagem do tier
+3. Para `formula_percentage`: esconder as colunas `adicTransaccional` e `adicAas` (não se usam — a comissão é só a percentagem)
 
-**`src/components/settings/CommissionMatrixTab.tsx`**
-- `ALL_METHODS` passa a ter 4 entradas
-- `METHOD_LABELS` actualizado
-- `getFormulaPreview` actualizado
-- `getTierCount` mostra contagem para todos os métodos (não só `tiered_kwp`)
-- Título da tabela muda conforme o método (ex: "Base Trans. (%)" para métodos de percentagem)
+4. O `colSpan` do estado vazio e a importação Excel adaptam-se ao número de colunas visíveis
+
+**`src/hooks/useCommissionMatrix.ts`** — `calculateCommission`
+
+- Para `percentage_valor`: o `findTier` passa a usar o `valor` da proposta (em vez de kWp) para encontrar o escalão correcto — o campo `kwpMin`/`kwpMax` do tier é interpretado como "valorMin"/"valorMax"
 
 ### Detalhe técnico
 
-Para o método 3 (`formula_percentage`), a fórmula de cálculo do kWp já existe no `SERVICOS_PRODUCT_CONFIGS` (campo `kwpAuto`). Os cabeçalhos da tabela para este método mostrarão "% Trans." e "% AAS" em vez de "Base Trans. (€)" e "Base AAS (€)", dado que o valor é uma percentagem.
-
-Os dados existentes no banco (9 escalões do Solar) mantêm-se intactos. Produtos que usavam `per_kwp`, `fixed` ou `manual` serão tratados como `percentage_valor` por defeito.
+Os dados continuam guardados na mesma estrutura `SolarTier` com 6 campos. A diferença é apenas na UI:
+- Métodos com 4 colunas simplesmente não mostram os campos que não se aplicam (ficam a 0 no banco)
+- O `percentage_valor` reinterpreta `kwpMin`/`kwpMax` como ranges de valor monetário
+- A lógica de cálculo no hook já está correcta para cada método; apenas o `findTier` do `percentage_valor` precisa de usar `detail.valor` em vez de `kwp`
 
