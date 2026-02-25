@@ -3368,6 +3368,7 @@ export type Database = {
           priority: string
           status: string
           subject: string
+          ticket_code: string | null
           user_id: string
         }
         Insert: {
@@ -3379,6 +3380,7 @@ export type Database = {
           priority?: string
           status?: string
           subject: string
+          ticket_code?: string | null
           user_id: string
         }
         Update: {
@@ -3390,6 +3392,7 @@ export type Database = {
           priority?: string
           status?: string
           subject?: string
+          ticket_code?: string | null
           user_id?: string
         }
         Relationships: [

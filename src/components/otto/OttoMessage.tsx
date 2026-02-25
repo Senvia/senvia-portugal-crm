@@ -1,5 +1,5 @@
 import ReactMarkdown from "react-markdown";
-import { User, ExternalLink } from "lucide-react";
+import { User, ExternalLink, MessageCircle } from "lucide-react";
 const ottoMascot = "/otto-mascot.svg";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
@@ -34,19 +34,31 @@ function parseLinks(content: string) {
   return { cleanContent, links };
 }
 
+function parseWhatsAppLinks(content: string) {
+  const regex = /\[whatsapp:(.+?)\|(.+?)\]/g;
+  const waLinks: { label: string; url: string }[] = [];
+  let match;
+  while ((match = regex.exec(content)) !== null) {
+    waLinks.push({ label: match[1], url: match[2] });
+  }
+  const cleanContent = content.replace(regex, "").trim();
+  return { cleanContent, waLinks };
+}
+
 export function OttoMessageComponent({ message, onButtonClick, onLinkClick, isStreaming }: OttoMessageProps) {
   const isUser = message.role === "user";
   const navigate = useNavigate();
   
   const parsed = isUser
-    ? { cleanContent: message.content, buttons: [], links: [] }
+    ? { cleanContent: message.content, buttons: [], links: [], waLinks: [] }
     : (() => {
         const { cleanContent: c1, buttons } = parseButtons(message.content);
         const { cleanContent: c2, links } = parseLinks(c1);
-        return { cleanContent: c2, buttons, links };
+        const { cleanContent: c3, waLinks } = parseWhatsAppLinks(c2);
+        return { cleanContent: c3, buttons, links, waLinks };
       })();
   
-  const { cleanContent, buttons, links } = parsed;
+  const { cleanContent, buttons, links, waLinks } = parsed;
 
   return (
     <div className={`flex gap-2.5 ${isUser ? "flex-row-reverse" : "flex-row"}`}>
@@ -113,6 +125,24 @@ export function OttoMessageComponent({ message, onButtonClick, onLinkClick, isSt
               >
                 <ExternalLink className="w-3 h-3 flex-shrink-0" />
                 {link.label}
+              </Button>
+            ))}
+          </div>
+        )}
+
+        {/* WhatsApp links */}
+        {waLinks.length > 0 && !isStreaming && (
+          <div className="flex flex-wrap gap-1.5">
+            {waLinks.map((wa, i) => (
+              <Button
+                key={i}
+                variant="whatsapp"
+                size="sm"
+                className="h-auto py-2 px-4 text-xs rounded-full whitespace-normal text-left gap-1.5"
+                onClick={() => window.open(wa.url, '_blank')}
+              >
+                <MessageCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                {wa.label}
               </Button>
             ))}
           </div>

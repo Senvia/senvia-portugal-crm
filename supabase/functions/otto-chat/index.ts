@@ -114,27 +114,19 @@ Precisas de 3 dados: Nome, WhatsApp e Email.
 NUNCA perguntes mais do que um campo por mensagem.
 Guarda os valores recolhidos para incluir no ticket.
 
-PASSO 4 — ANEXOS:
-Pergunta: "Tens algum anexo (screenshot, ficheiro) que queiras juntar ao ticket?"
-Oferece botões: [botao:Não, pode enviar assim][botao:Sim, vou anexar agora]
-Se o utilizador clicar "Sim, vou anexar agora", responde: "Usa o botão de clip (📎) junto ao campo de texto para anexar os teus ficheiros (imagens JPG/PNG ou PDF, até 10MB cada, máx. 5 ficheiros). Quando estiverem prontos, escreve 'pronto' ou clica no botão abaixo."
-[botao:Pronto, já anexei]
-Se o utilizador enviar "pronto" ou clicar no botão, avança para o PASSO 5 normalmente.
-
-PASSO 5 — CONFIRMAÇÃO:
+PASSO 4 — CONFIRMAÇÃO:
 Mostra o resumo completo do ticket:
 - **Assunto:** (assunto recolhido)
 - **Descrição:** (descrição recolhida)
 - **Nome:** (nome)
 - **WhatsApp:** (whatsapp)
 - **Email:** (email)
-- **Anexos:** Sim (X ficheiros) / Não
 Pergunta: "Confirmas o envio deste ticket?"
 [botao:Sim, enviar][botao:Editar assunto][botao:Editar descrição]
 
 SÓ após confirmação explícita ("Sim, enviar") é que chamas a ferramenta submit_support_ticket com os campos contact_name, contact_whatsapp e contact_email.
 NUNCA saltes passos. NUNCA recolhas assunto e descrição na mesma mensagem.
-- Após submissão bem-sucedida, informa que o ticket foi criado e que a equipa de suporte foi notificada via WhatsApp.
+- Após submissão bem-sucedida, mostra o código do ticket e o botão WhatsApp que o sistema retorna para o utilizador enviar directamente.
 
 QUANDO O UTILIZADOR PEDE UMA AÇÃO QUE NÃO PODES EXECUTAR:
 - Diz claramente: "Não consigo executar essa ação diretamente."
@@ -328,14 +320,13 @@ const TOOLS = [
     type: "function",
     function: {
       name: "submit_support_ticket",
-      description: "Submeter um ticket de suporte técnico. A equipa será notificada via WhatsApp. Usa APENAS quando o utilizador confirmar o envio. Se o utilizador anexou ficheiros, eles são enviados automaticamente pelo sistema — inclui has_attachments=true.",
+      description: "Submeter um ticket de suporte técnico. O sistema cria o ticket e retorna um botão WhatsApp para o utilizador enviar a mensagem directamente. Usa APENAS quando o utilizador confirmar o envio.",
       parameters: {
         type: "object",
         properties: {
           subject: { type: "string", description: "Assunto curto do ticket" },
           description: { type: "string", description: "Descrição detalhada do problema" },
           priority: { type: "string", enum: ["low", "medium", "high"], description: "Prioridade: low, medium, high (default: medium)" },
-          has_attachments: { type: "boolean", description: "Se o utilizador indicou que anexou ficheiros" },
           contact_name: { type: "string", description: "Nome completo do utilizador que reporta o problema" },
           contact_whatsapp: { type: "string", description: "Número de WhatsApp do utilizador (com indicativo)" },
           contact_email: { type: "string", description: "Email de contacto do utilizador" },
@@ -620,10 +611,7 @@ async function executeTool(
       case "submit_support_ticket": {
         const priority = args.priority || "medium";
         
-        // Get attachment_paths from the request context (passed via closure)
-        const ticketAttachments = (args as any)._attachment_paths || [];
-        
-        // Insert ticket with attachments
+        // Insert ticket (trigger auto-generates ticket_code)
         const { data: ticket, error: ticketError } = await supabaseAdmin
           .from("support_tickets")
           .insert({
@@ -632,9 +620,8 @@ async function executeTool(
             subject: args.subject,
             description: args.description,
             priority,
-            attachments: ticketAttachments,
           })
-          .select("id, created_at")
+          .select("id, ticket_code, created_at")
           .single();
         
         if (ticketError) {
@@ -642,127 +629,39 @@ async function executeTool(
           return JSON.stringify({ error: ticketError.message, _instruction: "ERRO ao criar ticket. Informa o utilizador que houve um problema técnico." });
         }
 
-        // Get org name and user name for WhatsApp message
+        // Get org name for WhatsApp message
         const { data: org } = await supabaseAdmin
           .from("organizations")
           .select("name")
           .eq("id", orgId)
           .single();
-        
-        const { data: profile } = await supabaseAdmin
-          .from("profiles")
-          .select("full_name")
-          .eq("id", userId)
-          .single();
 
         const orgName = org?.name || "Desconhecida";
-        const userName = profile?.full_name || "Desconhecido";
         const createdAt = new Date(ticket.created_at).toLocaleString("pt-PT", { timeZone: "Europe/Lisbon" });
+        const contactName = args.contact_name || "Desconhecido";
+        const contactWhatsapp = args.contact_whatsapp || "Não fornecido";
+        const contactEmail = args.contact_email || "Não fornecido";
 
-        // Send WhatsApp notification via Evolution API
+        // Build WhatsApp message
         const SUPPORT_WHATSAPP = "351939135114";
-        const EVOLUTION_BASE_URL = "https://zap.senvia.pt";
-        const EVOLUTION_INSTANCE = "SenviaAgency";
-        
-        // Get Evolution API key from Senvia Agency org
-        const SENVIA_AGENCY_ID = "06fe9e1d-9670-45b0-8717-c5a6e90be380";
-        const { data: senviaOrg } = await supabaseAdmin
-          .from("organizations")
-          .select("whatsapp_api_key")
-          .eq("id", SENVIA_AGENCY_ID)
-          .single();
+        const waMessage = `🎫 *TICKET ${ticket.ticket_code}*\n\n` +
+          `*Org:* ${orgName}\n\n` +
+          `📞 *DADOS DE CONTACTO:*\n` +
+          `*Nome:* ${contactName}\n` +
+          `*WhatsApp:* ${contactWhatsapp}\n` +
+          `*Email:* ${contactEmail}\n\n` +
+          `*Assunto:* ${args.subject}\n` +
+          `*Descrição:* ${args.description}\n` +
+          `*Prioridade:* ${priority}\n` +
+          `*Data:* ${createdAt}`;
 
-        if (senviaOrg?.whatsapp_api_key) {
-          const attachmentInfo = ticketAttachments.length > 0 
-            ? `\n*Anexos:* ${ticketAttachments.length} ficheiro(s)` 
-            : "";
-          const contactName = args.contact_name || userName;
-          const contactWhatsapp = args.contact_whatsapp || "Não fornecido";
-          const contactEmail = args.contact_email || "Não fornecido";
-          const whatsappMessage = `🎫 *NOVO TICKET DE SUPORTE*\n\n` +
-            `*Org:* ${orgName}\n` +
-            `*User:* ${userName}\n\n` +
-            `📞 *DADOS DE CONTACTO:*\n` +
-            `*Nome:* ${contactName}\n` +
-            `*WhatsApp:* ${contactWhatsapp}\n` +
-            `*Email:* ${contactEmail}\n\n` +
-            `*Assunto:* ${args.subject}\n` +
-            `*Descrição:* ${args.description}\n` +
-            `*Prioridade:* ${priority}\n` +
-            `*Data:* ${createdAt}\n` +
-            `*Ticket ID:* ${ticket.id.slice(0, 8)}` +
-            attachmentInfo;
+        const waUrl = `https://wa.me/${SUPPORT_WHATSAPP}?text=${encodeURIComponent(waMessage)}`;
 
-          try {
-            const waResp = await fetch(`${EVOLUTION_BASE_URL}/message/sendText/${EVOLUTION_INSTANCE}`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                apikey: senviaOrg.whatsapp_api_key,
-              },
-              body: JSON.stringify({
-                number: SUPPORT_WHATSAPP,
-                text: whatsappMessage,
-              }),
-            });
-            if (!waResp.ok) {
-              console.error("WhatsApp send error:", await waResp.text());
-            }
-          } catch (waErr) {
-            console.error("WhatsApp send failed:", waErr);
-          }
-
-          // Send each attachment as a separate media message
-          if (ticketAttachments.length > 0) {
-            for (const attachPath of ticketAttachments) {
-              try {
-                // Generate signed URL (valid for 1 hour)
-                const { data: signedData, error: signedError } = await supabaseAdmin.storage
-                  .from("support-attachments")
-                  .createSignedUrl(attachPath, 3600);
-
-                if (signedError || !signedData?.signedUrl) {
-                  console.error("Signed URL error:", signedError);
-                  continue;
-                }
-
-                const fileName = attachPath.split("/").pop() || "ficheiro";
-                const isPdf = fileName.toLowerCase().endsWith(".pdf");
-                const mediaType = isPdf ? "document" : "image";
-
-                const mediaResp = await fetch(`${EVOLUTION_BASE_URL}/message/sendMedia/${EVOLUTION_INSTANCE}`, {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                    apikey: senviaOrg.whatsapp_api_key,
-                  },
-                  body: JSON.stringify({
-                    number: SUPPORT_WHATSAPP,
-                    mediatype: mediaType,
-                    media: signedData.signedUrl,
-                    caption: `📎 Anexo do Ticket #${ticket.id.slice(0, 8)}: ${fileName}`,
-                    fileName: isPdf ? fileName : undefined,
-                  }),
-                });
-                if (!mediaResp.ok) {
-                  console.error("WhatsApp media send error:", await mediaResp.text());
-                }
-              } catch (mediaErr) {
-                console.error("WhatsApp media send failed:", mediaErr);
-              }
-            }
-          }
-        } else {
-          console.warn("No WhatsApp API key found for Senvia Agency");
-        }
-
-        const attachmentMsg = ticketAttachments.length > 0
-          ? ` com ${ticketAttachments.length} anexo(s)`
-          : "";
         return JSON.stringify({ 
           success: true, 
-          ticket_id: ticket.id.slice(0, 8),
-          _instruction: `Ticket criado com sucesso! Informa o utilizador: "Ticket #${ticket.id.slice(0, 8)} criado com sucesso${attachmentMsg}! A equipa de suporte foi notificada via WhatsApp e responderemos brevemente." NÃO INVENTES dados adicionais.`
+          ticket_code: ticket.ticket_code,
+          whatsapp_url: waUrl,
+          _instruction: `Ticket criado com sucesso! Informa o utilizador: "Ticket **${ticket.ticket_code}** registado com sucesso! Clica no botão abaixo para enviar os detalhes ao suporte via WhatsApp." [whatsapp:📩 Enviar Ticket via WhatsApp|${waUrl}]`
         });
       }
 
