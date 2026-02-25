@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Calculator, Info, Plus, Trash2, Sun, Battery, Gauge, Home, Save, X, FileSpreadsheet } from 'lucide-react';
+import { Calculator, Info, Plus, Trash2, Sun, Battery, Gauge, Home, Save, FileSpreadsheet } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/card';
@@ -16,14 +16,12 @@ import type { CommissionMatrix, CommissionRule, SolarTier } from '@/hooks/useCom
 
 const METHOD_LABELS: Record<string, string> = {
   tiered_kwp: 'Escalões por kWp',
-  base_plus_per_kwp: 'Base + Taxa/kWp',
-  percentage_valor: '% do Valor',
-  per_kwp: 'EUR / kWp',
-  fixed: 'Valor Fixo (€)',
-  manual: 'Manual',
+  base_plus_per_kwp: 'Base + € × kWp',
+  formula_percentage: 'Fórmula kWp + %',
+  percentage_valor: '% da Venda/Proposta',
 };
 
-const ALL_METHODS = ['tiered_kwp', 'base_plus_per_kwp', 'percentage_valor', 'per_kwp', 'fixed', 'manual'] as const;
+const ALL_METHODS = ['tiered_kwp', 'base_plus_per_kwp', 'formula_percentage', 'percentage_valor'] as const;
 
 const DEFAULT_TIER: SolarTier = { kwpMin: 0, kwpMax: 0, baseTransaccional: 0, adicTransaccional: 0, baseAas: 0, adicAas: 0 };
 
@@ -45,17 +43,13 @@ function getProductIcon(product: string) {
 function getFormulaPreview(rule: CommissionRule): string {
   switch (rule.method) {
     case 'tiered_kwp':
-      return 'Comissão = Base + (kWp - kWpMin) × Adicional (por escalão, Transaccional ou AAS)';
+      return 'Comissão = Base + (kWp - kWpMin) × Adicional (por escalão, Trans. ou AAS)';
     case 'base_plus_per_kwp':
       return 'Comissão = Base + (Adicional × kWp total) — por escalão, Trans. ou AAS';
+    case 'formula_percentage':
+      return 'kWp = (Valor × Factor) / Divisor → Comissão = kWp × %Base (por escalão, Trans. ou AAS)';
     case 'percentage_valor':
-      return 'Comissão = Valor × Base% — por escalão, Trans. ou AAS';
-    case 'per_kwp':
-      return 'Comissão = kWp × Base (€/kWp) — por escalão, Trans. ou AAS';
-    case 'fixed':
-      return 'Comissão = Base (€ fixo) — por escalão, Trans. ou AAS';
-    case 'manual':
-      return 'Preenchimento manual';
+      return 'Comissão = Valor da Proposta × % (por escalão, Trans. ou AAS)';
   }
 }
 
@@ -63,9 +57,9 @@ function getDefaultRule(method: string): CommissionRule {
   return { method: method as CommissionRule['method'], tiers: [] };
 }
 
-function getTierCount(rule: CommissionRule): number | null {
-  if (rule.method === 'tiered_kwp') return rule.tiers?.length ?? 0;
-  return null;
+/** Returns whether Base columns represent percentages */
+function isPercentageMethod(method: string): boolean {
+  return method === 'formula_percentage' || method === 'percentage_valor';
 }
 
 // ─── Main Component ───
@@ -80,7 +74,13 @@ export function CommissionMatrixTab() {
     const saved = (org as any)?.commission_matrix as CommissionMatrix | null;
     const initial: CommissionMatrix = {};
     SERVICOS_PRODUCTS.forEach((p) => {
-      initial[p] = saved?.[p] ?? { method: 'manual', tiers: [] };
+      const existing = saved?.[p];
+      // Migrate legacy methods to percentage_valor
+      if (existing && !ALL_METHODS.includes(existing.method as any)) {
+        initial[p] = { method: 'percentage_valor', tiers: existing.tiers || [] };
+      } else {
+        initial[p] = existing ?? { method: 'tiered_kwp', tiers: [] };
+      }
     });
     setLocalMatrix(initial);
   }, [org]);
@@ -101,12 +101,11 @@ export function CommissionMatrixTab() {
         Configure como a comissão é calculada para cada produto. Clique num card para editar.
       </p>
 
-      {/* Grid of product cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
         {SERVICOS_PRODUCTS.map((product) => {
-          const rule = localMatrix[product] ?? { method: 'manual' as const, tiers: [] };
+          const rule = localMatrix[product] ?? { method: 'tiered_kwp' as const, tiers: [] };
           const Icon = getProductIcon(product);
-          const tierCount = getTierCount(rule);
+          const tierCount = rule.tiers?.length ?? 0;
 
           return (
             <Card
@@ -118,24 +117,21 @@ export function CommissionMatrixTab() {
                 <Icon className="h-8 w-8 text-primary" />
                 <span className="text-sm font-medium leading-tight">{product}</span>
                 <Badge variant="secondary" className="text-[10px]">
-                  {METHOD_LABELS[rule.method]}
+                  {METHOD_LABELS[rule.method] ?? rule.method}
                 </Badge>
-                {tierCount !== null && (
-                  <span className="text-[10px] text-muted-foreground">
-                    {tierCount} escalão(ões)
-                  </span>
-                )}
+                <span className="text-[10px] text-muted-foreground">
+                  {tierCount} escalão(ões)
+                </span>
               </CardContent>
             </Card>
           );
         })}
       </div>
 
-      {/* Product modal */}
       {openProduct && (
         <ProductModal
           product={openProduct}
-          rule={localMatrix[openProduct] ?? { method: 'manual', tiers: [] }}
+          rule={localMatrix[openProduct] ?? { method: 'tiered_kwp', tiers: [] }}
           onMethodChange={(m) =>
             setLocalMatrix((prev) => ({ ...prev, [openProduct]: getDefaultRule(m) }))
           }
@@ -184,7 +180,6 @@ function ProductModal({
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-6">
-          {/* Method selector */}
           <div className="space-y-1.5 max-w-xs">
             <Label className="text-xs text-muted-foreground">Método de Cálculo</Label>
             <Select value={rule.method} onValueChange={onMethodChange}>
@@ -199,19 +194,14 @@ function ProductModal({
             </Select>
           </div>
 
-          {/* Tiered table — shown for all methods except manual */}
-          {rule.method !== 'manual' && (
-            <TieredTableEditor rule={rule} onChange={onRuleChange} />
-          )}
+          <TieredTableEditor rule={rule} onChange={onRuleChange} />
 
-          {/* Formula preview */}
           <div className="flex items-start gap-2 rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
             <Info className="h-4 w-4 shrink-0 mt-0.5 text-primary" />
             <span>{getFormulaPreview(rule)}</span>
           </div>
         </div>
 
-        {/* Footer */}
         <div className="shrink-0 border-t px-4 sm:px-6 py-3 flex justify-end gap-2">
           <Button variant="outline" onClick={onClose} disabled={isSaving}>
             Cancelar
@@ -237,6 +227,12 @@ function TieredTableEditor({
 }) {
   const tiers = rule.tiers || [];
   const fileRef = useRef<HTMLInputElement>(null);
+  const isPct = isPercentageMethod(rule.method);
+
+  const baseTransLabel = isPct ? '% Trans.' : 'Base Trans. (€)';
+  const adicTransLabel = isPct ? 'Adic. Trans.' : 'Adic. Trans. (€/kWp)';
+  const baseAasLabel = isPct ? '% AAS' : 'Base AAS (€)';
+  const adicAasLabel = isPct ? 'Adic. AAS' : 'Adic. AAS (€/kWp)';
 
   const updateTier = (index: number, field: keyof SolarTier, value: number) => {
     const newTiers = tiers.map((t, i) => (i === index ? { ...t, [field]: value } : t));
@@ -317,7 +313,7 @@ function TieredTableEditor({
 
   return (
     <div className="space-y-3">
-      <div className="text-sm font-medium">Escalões Solar</div>
+      <div className="text-sm font-medium">Escalões</div>
 
       <div className="relative w-full overflow-x-auto rounded-md border">
         <Table>
@@ -325,10 +321,10 @@ function TieredTableEditor({
             <TableRow>
               <TableHead className="text-xs whitespace-nowrap">kWp Min</TableHead>
               <TableHead className="text-xs whitespace-nowrap">kWp Max</TableHead>
-              <TableHead className="text-xs whitespace-nowrap">Base Trans. (€)</TableHead>
-              <TableHead className="text-xs whitespace-nowrap">Adic. Trans. (€/kWp)</TableHead>
-              <TableHead className="text-xs whitespace-nowrap">Base AAS (€)</TableHead>
-              <TableHead className="text-xs whitespace-nowrap">Adic. AAS (€/kWp)</TableHead>
+              <TableHead className="text-xs whitespace-nowrap">{baseTransLabel}</TableHead>
+              <TableHead className="text-xs whitespace-nowrap">{adicTransLabel}</TableHead>
+              <TableHead className="text-xs whitespace-nowrap">{baseAasLabel}</TableHead>
+              <TableHead className="text-xs whitespace-nowrap">{adicAasLabel}</TableHead>
               <TableHead className="w-10" />
             </TableRow>
           </TableHeader>
