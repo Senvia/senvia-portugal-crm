@@ -96,7 +96,22 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
       setKwp(proposal.kwp?.toString() || '');
       setServicosComissao(proposal.comissao?.toString() || '');
       setServicosProdutos(proposal.servicos_produtos || []);
-      setServicosDetails((proposal as any).servicos_details || {});
+      
+      // Migrar dados legacy: se servicos_details é null mas tem kwp/comissao no nível superior
+      const details = (proposal as any).servicos_details || {};
+      if (
+        Object.keys(details).length === 0 &&
+        proposal.servicos_produtos?.length &&
+        proposal.servicos_produtos.length > 0 &&
+        (proposal.kwp || proposal.comissao)
+      ) {
+        const prodName = proposal.servicos_produtos[0];
+        details[prodName] = {
+          kwp: proposal.kwp || undefined,
+          comissao: proposal.comissao || undefined,
+        };
+      }
+      setServicosDetails(details);
       
       if (!isTelecom && existingProducts.length > 0) {
         setSelectedProducts(existingProducts.map(pp => ({
