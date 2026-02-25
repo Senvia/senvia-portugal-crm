@@ -1164,7 +1164,7 @@ export function CreateSaleModal({
                   </Card>
 
                   {/* EDP Proposal Number */}
-                  <Card>
+                  {isTelecom && (<Card>
                     <CardHeader className="pb-2 p-4">
                       <CardTitle className="text-sm font-medium text-muted-foreground">Numero Proposta EDP *</CardTitle>
                     </CardHeader>
@@ -1176,7 +1176,7 @@ export function CreateSaleModal({
                         required
                       />
                     </CardContent>
-                  </Card>
+                  </Card>)}
 
                   {/* Notes */}
                   <Card>
