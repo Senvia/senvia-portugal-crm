@@ -28,11 +28,11 @@ const ALL_METHODS = ['tiered_kwp', 'base_plus_per_kwp', 'percentage_valor', 'per
 const DEFAULT_TIER: SolarTier = { kwpMin: 0, kwpMax: 0, baseTransaccional: 0, adicTransaccional: 0, baseAas: 0, adicAas: 0 };
 
 const PRODUCT_ICONS: Record<string, React.ElementType> = {
-  'Solar': Sun,
-  'Baterias': Battery,
-  'Condensadores': Gauge,
-  'Coberturas': Home,
-  'Carregadores': Battery,
+  Solar: Sun,
+  Baterias: Battery,
+  Carregadores: Battery,
+  Condensadores: Gauge,
+  Coberturas: Home,
 };
 
 function getProductIcon(product: string) {
