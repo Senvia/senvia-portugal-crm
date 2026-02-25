@@ -153,7 +153,7 @@ function ProductRuleEditor({
             <Label className="text-xs text-muted-foreground">Valor Base (€)</Label>
             <Input
               type="number" step="0.01" min="0" className="h-9"
-              value={rule.base || ''}
+              value={rule.base ?? ''}
               onChange={(e) => onRuleChange({ ...rule, base: parseFloat(e.target.value) || 0 })}
             />
           </div>
@@ -161,7 +161,7 @@ function ProductRuleEditor({
             <Label className="text-xs text-muted-foreground">Taxa por kWp (€)</Label>
             <Input
               type="number" step="0.01" min="0" className="h-9"
-              value={rule.ratePerKwp || ''}
+              value={rule.ratePerKwp ?? ''}
               onChange={(e) => onRuleChange({ ...rule, ratePerKwp: parseFloat(e.target.value) || 0 })}
             />
           </div>
@@ -174,7 +174,7 @@ function ProductRuleEditor({
           <Label className="text-xs text-muted-foreground">Percentagem (%)</Label>
           <Input
             type="number" step="0.01" min="0" className="h-9"
-            value={rule.rate || ''}
+            value={rule.rate ?? ''}
             onChange={(e) => onRuleChange({ ...rule, rate: parseFloat(e.target.value) || 0 })}
           />
         </div>
@@ -186,7 +186,7 @@ function ProductRuleEditor({
           <Label className="text-xs text-muted-foreground">Taxa (€/kWp)</Label>
           <Input
             type="number" step="0.01" min="0" className="h-9"
-            value={rule.rate || ''}
+            value={rule.rate ?? ''}
             onChange={(e) => onRuleChange({ ...rule, rate: parseFloat(e.target.value) || 0 })}
           />
         </div>
@@ -198,7 +198,7 @@ function ProductRuleEditor({
           <Label className="text-xs text-muted-foreground">Valor Fixo (€)</Label>
           <Input
             type="number" step="0.01" min="0" className="h-9"
-            value={rule.rate || ''}
+            value={rule.rate ?? ''}
             onChange={(e) => onRuleChange({ ...rule, rate: parseFloat(e.target.value) || 0 })}
           />
         </div>
@@ -285,7 +285,7 @@ function TierField({ label, value, onChange }: { label: string; value: number; o
         step="0.01"
         min="0"
         className="h-8 text-xs"
-        value={value || ''}
+        value={value ?? ''}
         onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
       />
     </div>
