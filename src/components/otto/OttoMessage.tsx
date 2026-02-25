@@ -134,9 +134,12 @@ export function OttoMessageComponent({ message, onButtonClick, onLinkClick, isSt
         {waLinks.length > 0 && !isStreaming && (
           <div className="flex flex-col gap-2 w-full">
             {waLinks.map((wa, i) => (
-              <button
+              <a
                 key={i}
-                onClick={() => window.open(wa.url, '_blank')}
+                href={wa.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
                 className="w-full flex items-center gap-3 bg-[#25D366] hover:bg-[#1ebe5d] 
                   text-white rounded-xl p-3.5 transition-all duration-200 
                   hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]"
@@ -151,7 +154,7 @@ export function OttoMessageComponent({ message, onButtonClick, onLinkClick, isSt
                   </p>
                 </div>
                 <ExternalLink className="w-4 h-4 text-white/60 flex-shrink-0" />
-              </button>
+              </a>
             ))}
           </div>
         )}
