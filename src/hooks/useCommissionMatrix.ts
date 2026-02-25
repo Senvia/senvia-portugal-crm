@@ -17,7 +17,19 @@ export interface SolarTier {
 
 export interface CommissionRule {
   method: 'tiered_kwp' | 'base_plus_per_kwp' | 'formula_percentage' | 'percentage_valor';
+  // Only used for tiered_kwp
   tiers: SolarTier[];
+  // Used in base_plus_per_kwp
+  baseTrans?: number;
+  ratePerKwpTrans?: number;
+  baseAas?: number;
+  ratePerKwpAas?: number;
+  // Used in formula_percentage
+  factor?: number;
+  divisor?: number;
+  pctTrans?: number;
+  pctAas?: number;
+  // percentage_valor reuses pctTrans / pctAas
 }
 
 export type CommissionMatrix = Record<string, CommissionRule>;
@@ -35,16 +47,14 @@ export function useCommissionMatrix() {
     (productName: string, detail: ServicosProductDetail, modeloServico?: ModeloServico): number | null => {
       if (!matrix) return null;
       const rule = matrix[productName];
-      if (!rule || !rule.tiers?.length) return null;
+      if (!rule) return null;
 
       const isAas = modeloServico === 'saas';
 
-      // For formula_percentage, derive kWp from product config
-      let kwp = detail.kwp;
-
       switch (rule.method) {
         case 'tiered_kwp': {
-          if (kwp == null) return null;
+          const kwp = detail.kwp;
+          if (kwp == null || !rule.tiers?.length) return null;
           const tier = findTier(rule.tiers, kwp);
           if (!tier) return null;
           const base = isAas ? tier.baseAas : tier.baseTransaccional;
@@ -52,30 +62,25 @@ export function useCommissionMatrix() {
           return base + (kwp - tier.kwpMin) * adic;
         }
         case 'base_plus_per_kwp': {
+          const kwp = detail.kwp;
           if (kwp == null) return null;
-          const tier = findTier(rule.tiers, kwp);
-          if (!tier) return null;
-          const base = isAas ? tier.baseAas : tier.baseTransaccional;
-          const rate = isAas ? tier.adicAas : tier.adicTransaccional;
+          const base = isAas ? (rule.baseAas ?? 0) : (rule.baseTrans ?? 0);
+          const rate = isAas ? (rule.ratePerKwpAas ?? 0) : (rule.ratePerKwpTrans ?? 0);
           return base + rate * kwp;
         }
         case 'formula_percentage': {
-          // Derive kWp via product config's kwpAuto if available
-          const config = SERVICOS_PRODUCT_CONFIGS.find(c => c.name === productName);
-          const derivedKwp = config?.kwpAuto ? config.kwpAuto(detail) : kwp;
-          if (derivedKwp == null) return null;
-          const tier = findTier(rule.tiers, derivedKwp);
-          if (!tier) return null;
-          const pct = isAas ? tier.baseAas : tier.baseTransaccional;
+          if (detail.valor == null) return null;
+          const factor = rule.factor ?? 1;
+          const divisor = rule.divisor ?? 1;
+          if (divisor === 0) return null;
+          const derivedKwp = (detail.valor * factor) / divisor;
+          const pct = isAas ? (rule.pctAas ?? 0) : (rule.pctTrans ?? 0);
           return (derivedKwp * pct) / 100;
         }
         case 'percentage_valor': {
           if (detail.valor == null) return null;
-          // kwpMin/kwpMax are reinterpreted as valor ranges
-          const tier = findTier(rule.tiers, detail.valor);
-          if (!tier) return null;
-          const rate = isAas ? tier.baseAas : tier.baseTransaccional;
-          return (detail.valor * rate) / 100;
+          const pct = isAas ? (rule.pctAas ?? 0) : (rule.pctTrans ?? 0);
+          return (detail.valor * pct) / 100;
         }
         default:
           return null;
@@ -88,7 +93,10 @@ export function useCommissionMatrix() {
     (productName: string): boolean => {
       if (!matrix) return false;
       const rule = matrix[productName];
-      return !!rule && !!rule.tiers?.length;
+      if (!rule) return false;
+      if (rule.method === 'tiered_kwp') return !!rule.tiers?.length;
+      // For non-tiered methods, considered configured if any value is set
+      return true;
     },
     [matrix]
   );
