@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Calculator, Info, Plus, Trash2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -151,18 +151,18 @@ function ProductRuleEditor({
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
             <Label className="text-xs text-muted-foreground">Valor Base (€)</Label>
-            <Input
-              type="number" step="0.01" min="0" className="h-9"
-              value={rule.base ?? ''}
-              onChange={(e) => onRuleChange({ ...rule, base: parseFloat(e.target.value) || 0 })}
+            <DecimalInput
+              className="h-9"
+              value={rule.base ?? 0}
+              onChange={(v) => onRuleChange({ ...rule, base: v })}
             />
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs text-muted-foreground">Taxa por kWp (€)</Label>
-            <Input
-              type="number" step="0.01" min="0" className="h-9"
-              value={rule.ratePerKwp ?? ''}
-              onChange={(e) => onRuleChange({ ...rule, ratePerKwp: parseFloat(e.target.value) || 0 })}
+            <DecimalInput
+              className="h-9"
+              value={rule.ratePerKwp ?? 0}
+              onChange={(v) => onRuleChange({ ...rule, ratePerKwp: v })}
             />
           </div>
         </div>
@@ -172,10 +172,10 @@ function ProductRuleEditor({
       {rule.method === 'percentage_valor' && (
         <div className="max-w-xs space-y-1.5">
           <Label className="text-xs text-muted-foreground">Percentagem (%)</Label>
-          <Input
-            type="number" step="0.01" min="0" className="h-9"
-            value={rule.rate ?? ''}
-            onChange={(e) => onRuleChange({ ...rule, rate: parseFloat(e.target.value) || 0 })}
+          <DecimalInput
+            className="h-9"
+            value={rule.rate ?? 0}
+            onChange={(v) => onRuleChange({ ...rule, rate: v })}
           />
         </div>
       )}
@@ -184,10 +184,10 @@ function ProductRuleEditor({
       {rule.method === 'per_kwp' && (
         <div className="max-w-xs space-y-1.5">
           <Label className="text-xs text-muted-foreground">Taxa (€/kWp)</Label>
-          <Input
-            type="number" step="0.01" min="0" className="h-9"
-            value={rule.rate ?? ''}
-            onChange={(e) => onRuleChange({ ...rule, rate: parseFloat(e.target.value) || 0 })}
+          <DecimalInput
+            className="h-9"
+            value={rule.rate ?? 0}
+            onChange={(v) => onRuleChange({ ...rule, rate: v })}
           />
         </div>
       )}
@@ -196,10 +196,10 @@ function ProductRuleEditor({
       {rule.method === 'fixed' && (
         <div className="max-w-xs space-y-1.5">
           <Label className="text-xs text-muted-foreground">Valor Fixo (€)</Label>
-          <Input
-            type="number" step="0.01" min="0" className="h-9"
-            value={rule.rate ?? ''}
-            onChange={(e) => onRuleChange({ ...rule, rate: parseFloat(e.target.value) || 0 })}
+          <DecimalInput
+            className="h-9"
+            value={rule.rate ?? 0}
+            onChange={(v) => onRuleChange({ ...rule, rate: v })}
           />
         </div>
       )}
@@ -280,14 +280,58 @@ function TierField({ label, value, onChange }: { label: string; value: number; o
   return (
     <div className="space-y-1">
       <Label className="text-[10px] text-muted-foreground leading-tight">{label}</Label>
-      <Input
-        type="number"
-        step="0.01"
-        min="0"
+      <DecimalInput
         className="h-8 text-xs"
-        value={value ?? ''}
-        onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
+        value={value}
+        onChange={onChange}
       />
     </div>
+  );
+}
+
+/** Text-based decimal input: allows typing freely with dot/comma, displays comma, parses on blur */
+function DecimalInput({
+  value,
+  onChange,
+  className,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  className?: string;
+}) {
+  const format = (n: number) => (n === 0 ? '0' : String(n).replace('.', ','));
+  const [text, setText] = useState(() => format(value));
+  const [focused, setFocused] = useState(false);
+
+  // Sync from parent when not focused
+  useEffect(() => {
+    if (!focused) setText(format(value));
+  }, [value, focused]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Allow digits, comma, dot, and empty
+    const raw = e.target.value.replace(/[^0-9.,]/g, '');
+    setText(raw);
+  };
+
+  const handleBlur = () => {
+    setFocused(false);
+    const normalized = text.replace(',', '.');
+    const parsed = parseFloat(normalized);
+    const final = isNaN(parsed) ? 0 : parsed;
+    onChange(final);
+    setText(format(final));
+  };
+
+  return (
+    <Input
+      type="text"
+      inputMode="decimal"
+      className={className}
+      value={text}
+      onFocus={() => setFocused(true)}
+      onChange={handleChange}
+      onBlur={handleBlur}
+    />
   );
 }
