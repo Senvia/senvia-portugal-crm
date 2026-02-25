@@ -1,69 +1,91 @@
 
 
-## Criar Secção "Suporte" nas Definições + Corrigir Instruções do Otto
+## Corrigir Pipeline Telecom: Exactamente 5 Estados
 
-### Problema
+### Situação Actual
 
-O Otto diz ao utilizador para ir a **Definições > Suporte > Os Meus Tickets**, mas essa secção não existe. A tabela `support_tickets` existe na base de dados, mas não há UI para consultar tickets.
+A organização Telecom ("Perfect2Gether") tem **7 etapas** na base de dados:
 
-### Solução
+```text
+1. Lead (new)
+2. Contactado (contactado)
+3. Agendado (scheduled)
+4. Proposta (proposal)       ← REMOVER
+5. Instalação (installation) ← REMOVER
+6. Ativo (active)            ← REMOVER (is_final_positive)
+7. Perdido (perdido)         ← MANTER (is_final_negative)
+```
 
-Criar a secção "Suporte" nas Definições e actualizar o prompt do Otto com o caminho correcto.
+O utilizador quer **apenas 5**:
+
+```text
+1. Lead
+2. Contactado
+3. Agendado
+4. Ganha (is_final_positive) ← renomear de "Ativo" para "Ganha", key "won"
+5. Perdido (is_final_negative)
+```
+
+### Leads Afectados
+
+Existem **2 leads com status `active`** (Nuno Dias, totallink) que precisam ser migrados para o novo status `won` (Ganha). Nenhum lead tem status `proposal` ou `installation`.
 
 ---
 
-### 1. Novo componente — `src/components/settings/SupportTicketsTab.tsx`
+### Plano de Alterações
 
-Componente que lista os tickets de suporte da organização:
-- Busca tickets da tabela `support_tickets` filtrados por `organization_id`
-- Mostra tabela com: Código (`ticket_code`), Assunto, Prioridade (badge colorido), Estado (badge), Data de criação
-- Ordenados por data (mais recente primeiro)
-- Estado vazio com mensagem "Nenhum ticket de suporte encontrado"
-- Clique num ticket expande para ver a descrição completa
-- Responsivo (cards em mobile, tabela em desktop)
+#### 1. Base de Dados — Migração SQL
 
-### 2. Actualizar — `src/components/settings/MobileSettingsNav.tsx`
+- **Eliminar** as etapas `proposal`, `installation` e `active` da tabela `pipeline_stages` para a org Telecom
+- **Inserir** (ou actualizar) a etapa "Ganha" com key `won`, position 4, `is_final_positive = true`
+- **Actualizar** a position do "Perdido" para 5
+- **Migrar** os 2 leads com `status = 'active'` para `status = 'won'`
 
-- Adicionar `"support"` ao tipo `SettingsSection`
-- Adicionar `"support-tickets"` ao tipo `SettingsSubSection`
-- Adicionar card na lista `sections`:
-  ```
-  { id: "support", label: "Suporte", icon: LifeBuoy, description: "Tickets e pedidos de ajuda" }
-  ```
-- Adicionar ao `subSectionsMap` (vazio, conteúdo directo)
-- Adicionar ao `directContentGroups`: `"support"`
-- Adicionar ao `sectionTitles`: `support: "Suporte"`
+Concretamente:
+```sql
+-- 1. Migrar leads de 'active' para 'won'
+UPDATE leads SET status = 'won' WHERE organization_id = '<telecom_org_id>' AND status = 'active';
 
-### 3. Actualizar — `src/pages/Settings.tsx`
+-- 2. Eliminar etapas removidas
+DELETE FROM pipeline_stages WHERE organization_id = '<telecom_org_id>' AND key IN ('proposal', 'installation', 'active');
 
-- Importar `SupportTicketsTab`
-- Adicionar case `"support-tickets"` no `renderSubContent`
-- Adicionar case `"support"` no `getDirectSub`
+-- 3. Inserir etapa "Ganha"
+INSERT INTO pipeline_stages (organization_id, key, name, color, position, is_final_positive, is_final_negative)
+VALUES ('<telecom_org_id>', 'won', 'Ganha', '#22C55E', 4, true, false);
 
-### 4. Actualizar — `supabase/functions/otto-chat/index.ts`
-
-No `SYSTEM_PROMPT`, após a submissão do ticket, adicionar instrução:
-```
-- Após submissão, informa: "Podes consultar o estado dos teus tickets em **Definições > Suporte**."
+-- 4. Actualizar position do Perdido
+UPDATE pipeline_stages SET position = 5 WHERE organization_id = '<telecom_org_id>' AND key = 'perdido';
 ```
 
-Actualizar o MAPA DE ROTAS para incluir a rota correcta.
+#### 2. Template — `src/lib/pipeline-templates.ts`
 
-### 5. Hook — `src/hooks/useSupportTickets.ts`
+Actualizar o template `telecom` para reflectir exactamente os 5 estados, para que novas organizações Telecom sejam criadas com o pipeline correcto:
 
-Hook simples com React Query para buscar tickets:
-- Query: `supabase.from('support_tickets').select('*').eq('organization_id', orgId).order('created_at', { ascending: false })`
-- Retorna `{ tickets, isLoading }`
+```typescript
+// telecom stages
+stages: [
+  { name: 'Lead', key: 'new', color: '#3B82F6', position: 1, is_final_positive: false, is_final_negative: false },
+  { name: 'Contactado', key: 'contactado', color: '#A855F7', position: 2, is_final_positive: false, is_final_negative: false },
+  { name: 'Agendado', key: 'scheduled', color: '#F59E0B', position: 3, is_final_positive: false, is_final_negative: false },
+  { name: 'Ganha', key: 'won', color: '#22C55E', position: 4, is_final_positive: true, is_final_negative: false },
+  { name: 'Perdido', key: 'perdido', color: '#6B7280', position: 5, is_final_positive: false, is_final_negative: true },
+],
+```
+
+#### 3. Memory — Pipeline Telecom
+
+Actualizar a referência para "5 etapas: Lead, Contactado, Agendado, Ganha, Perdido" (em vez da descrição anterior).
 
 ---
 
-### Ficheiros a criar/alterar
+### Ficheiros a alterar
 
 | Ficheiro | Acção |
 |---|---|
-| `src/components/settings/SupportTicketsTab.tsx` | **Criar** — Lista de tickets |
-| `src/hooks/useSupportTickets.ts` | **Criar** — Hook de dados |
-| `src/components/settings/MobileSettingsNav.tsx` | **Alterar** — Adicionar secção "Suporte" |
-| `src/pages/Settings.tsx` | **Alterar** — Registar novo conteúdo |
-| `supabase/functions/otto-chat/index.ts` | **Alterar** — Corrigir instruções pós-ticket |
+| Base de dados (migração) | Eliminar 3 etapas, inserir "Ganha", migrar 2 leads |
+| `src/lib/pipeline-templates.ts` | Actualizar template telecom para 5 etapas |
+
+### Nota
+
+Como o sistema já usa flags dinâmicas (`is_final_positive`/`is_final_negative`) em vez de strings hardcoded, o Kanban, dashboard e conversão de leads vão funcionar automaticamente com o novo pipeline sem necessidade de alterar mais ficheiros.
 
