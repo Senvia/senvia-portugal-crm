@@ -1,74 +1,34 @@
 
 
-## Verificacao da Matriz de Comissoes vs Especificacao
+## Todos os Produtos Usam a Tabela de Escalões
 
-Comparei o print com o estado actual da base de dados e do codigo. Ha **erros significativos** que precisam de ser corrigidos.
+### Entendimento
 
-### Estado Actual vs Especificacao
+Actualmente, apenas o método `tiered_kwp` (Solar) mostra a tabela de escalões. Os outros métodos (base_plus_per_kwp, percentage_valor, etc.) mostram campos simples. O utilizador quer que **todos os produtos** usem a mesma tabela de escalões — a diferença entre produtos é apenas a **fórmula de cálculo** aplicada aos valores da tabela.
 
-| Produto | Print (Correcto) | Base de Dados (Actual) | Estado |
-|---------|-----------------|----------------------|--------|
-| **Solar** | `tiered_kwp`: Base + (Kwp - KwpMin) * Adicional | `tiered_kwp` com 9 escaloes | CORRECTO |
-| **Baterias** | `base_plus_per_kwp`: 10€ + (2€ * Kwp) | `tiered_kwp` (copia do Solar) | ERRADO |
-| **Condensadores** | `percentage_valor`: 5% do Valor | `tiered_kwp` (copia do Solar) | ERRADO |
-| **Carregadores** | `percentage_valor`: 5% do Valor | `tiered_kwp` (copia do Solar) | ERRADO |
-| **Coberturas** | `percentage_valor`: 5% do Valor (sem kWp) | `tiered_kwp` (copia do Solar) | ERRADO |
+### O que muda
 
-### Problema Adicional: Produtos Separados vs Combinados
+1. **`src/components/settings/CommissionMatrixTab.tsx`**
+   - Remover a condicional `{rule.method === 'tiered_kwp' && ...}` — a `TieredTableEditor` aparece **sempre** (excepto `manual`)
+   - Remover os blocos de UI separados para `base_plus_per_kwp`, `percentage_valor`, `per_kwp` e `fixed` (os campos simples)
+   - Manter o selector de método e o preview da fórmula
 
-No print, **Baterias** e **Carregadores** sao produtos separados com formulas diferentes:
-- Baterias = 10€ + 2€ * Kwp
-- Carregadores = 5% do Valor
+2. **`src/hooks/useCommissionMatrix.ts`**
+   - Ajustar os métodos `base_plus_per_kwp`, `percentage_valor`, `per_kwp` e `fixed` para ler valores a partir de `rule.tiers` em vez de `rule.base`/`rule.rate`/`rule.ratePerKwp`
+   - A lógica de lookup do tier pelo kWp aplica-se a todos; o que muda é como o `base`/`adic` são usados na fórmula final
 
-Mas no sistema estao combinados como **"Carregadores/Baterias"** com uma unica formula. Para aplicar as regras correctas, e necessario separa-los em dois produtos distintos.
+3. **Tipos (`src/hooks/useCommissionMatrix.ts`)**
+   - Todos os `CommissionRule` passam a ter `tiers: SolarTier[]` — simplificar para um tipo único com `method` + `tiers`
+   - Remover `base`, `rate`, `ratePerKwp` dos tipos separados (já estão nos tiers)
 
-### Bug no Codigo: Formula kWp dos Condensadores
+4. **Base de dados**
+   - Converter os valores actuais (Baterias: base=10, ratePerKwp=2; Condensadores/Carregadores/Coberturas: rate=5) para o formato de tiers
+   - Exemplo Baterias: cada tier terá `baseTransaccional=10, adicTransaccional=2`
+   - Exemplo Condensadores: cada tier terá os campos adaptados à percentagem
 
-No ficheiro `src/types/proposals.ts` linha 153, a formula esta invertida:
-- Actual: `(d.valor / 0.67) / 1000` (divide por 0.67)
-- Correcto: `(d.valor * 0.67) / 1000` (multiplica por 0.67)
+### Detalhe técnico
 
-### Bug no Codigo: Coberturas tem campo kWp
+Antes de implementar, preciso confirmar: os 9 escalões do Solar (com os mesmos ranges kWp) são copiados para todos os produtos, mas com valores diferentes nas colunas Base/Adic? Ou cada produto pode ter ranges kWp diferentes?
 
-O print diz "Coberturas = Valor... nao tem Kwp", mas o codigo na linha 155 inclui `kwp` nos campos. Deve ser removido.
-
-### Bug no Codigo: Carregadores deveria ter kwpAuto
-
-O print mostra que Carregadores tambem usa `KWP = (Valor * 0.67) / 1000`, mas no codigo nao tem `kwpAuto` configurado.
-
----
-
-### Plano de Correcao
-
-#### 1. Separar "Carregadores/Baterias" em dois produtos
-
-**`src/types/proposals.ts`**:
-- Alterar `SERVICOS_PRODUCTS` para `['Solar', 'Baterias', 'Carregadores', 'Condensadores', 'Coberturas']`
-- Alterar `SERVICOS_PRODUCT_CONFIGS`:
-  - Baterias: campos `['kwp', 'comissao']`
-  - Carregadores: campos `['valor', 'kwp', 'comissao']` com `kwpAuto: (d) => d.valor ? (d.valor * 0.67) / 1000 : null`
-  - Condensadores: corrigir formula para `(d.valor * 0.67) / 1000`
-  - Coberturas: remover `kwp` dos campos, ficar `['valor', 'comissao']`
-
-#### 2. Corrigir a commission_matrix na base de dados
-
-```sql
-UPDATE organizations
-SET commission_matrix = jsonb_build_object(
-  'Solar', commission_matrix->'Solar',
-  'Baterias', '{"method":"base_plus_per_kwp","base":10,"ratePerKwp":2}'::jsonb,
-  'Carregadores', '{"method":"percentage_valor","rate":5}'::jsonb,
-  'Condensadores', '{"method":"percentage_valor","rate":5}'::jsonb,
-  'Coberturas', '{"method":"percentage_valor","rate":5}'::jsonb
-)
-WHERE commission_matrix IS NOT NULL;
-```
-
-#### 3. Actualizar icones no CommissionMatrixTab
-
-**`src/components/settings/CommissionMatrixTab.tsx`**: Ajustar o `PRODUCT_ICONS` para os novos nomes separados.
-
-### Detalhe Tecnico
-
-A separacao de "Carregadores/Baterias" pode afectar propostas e vendas existentes que referenciam esse nome. Sera necessario verificar se ha dados guardados com esse valor e migra-los.
+A implementação assume que a tabela é igual para todos (6 colunas: kWp Min, kWp Max, Base Trans., Adic. Trans., Base AAS, Adic. AAS) e o método define como esses valores alimentam a fórmula.
 
