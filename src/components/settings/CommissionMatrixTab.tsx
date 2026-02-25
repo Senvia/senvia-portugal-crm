@@ -1,5 +1,7 @@
-import { useState, useEffect } from 'react';
-import { Calculator, Info, Plus, Trash2, Sun, Battery, Gauge, Home, Save, X } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Calculator, Info, Plus, Trash2, Sun, Battery, Gauge, Home, Save, X, FileSpreadsheet } from 'lucide-react';
+import * as XLSX from 'xlsx';
+import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -279,6 +281,7 @@ function TieredTableEditor({
   onChange: (rule: CommissionRule) => void;
 }) {
   const tiers = rule.tiers || [];
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const updateTier = (index: number, field: keyof SolarTier, value: number) => {
     const newTiers = tiers.map((t, i) => (i === index ? { ...t, [field]: value } : t));
@@ -293,6 +296,69 @@ function TieredTableEditor({
   const removeTier = (index: number) => {
     onChange({ ...rule, tiers: tiers.filter((_, i) => i !== index) });
   };
+
+  const COLUMN_MAP: Record<string, keyof SolarTier> = {};
+  const addMapping = (keys: string[], field: keyof SolarTier) => {
+    keys.forEach((k) => { COLUMN_MAP[k.toLowerCase().replace(/[\s._]/g, '')] = field; });
+  };
+  addMapping(['kWp Min', 'kwpmin', 'kwp_min', 'kwpMin', 'kWpMin'], 'kwpMin');
+  addMapping(['kWp Max', 'kwpmax', 'kwp_max', 'kwpMax', 'kWpMax'], 'kwpMax');
+  addMapping(['Base Trans', 'Base Trans.', 'base_transaccional', 'baseTransaccional', 'basetrans'], 'baseTransaccional');
+  addMapping(['Adic Trans', 'Adic. Trans.', 'Adic Trans.', 'adic_transaccional', 'adicTransaccional', 'adictrans'], 'adicTransaccional');
+  addMapping(['Base AAS', 'base_aas', 'baseAas', 'baseaas'], 'baseAas');
+  addMapping(['Adic AAS', 'Adic. AAS', 'adic_aas', 'adicAas', 'adicaas'], 'adicAas');
+
+  const resolveField = (header: string): keyof SolarTier | null => {
+    const normalized = header.toLowerCase().replace(/[\s._]/g, '');
+    return COLUMN_MAP[normalized] ?? null;
+  };
+
+  const parseNum = (val: any): number => {
+    if (typeof val === 'number') return val;
+    if (!val) return 0;
+    const s = String(val).replace(',', '.');
+    const n = parseFloat(s);
+    return isNaN(n) ? 0 : n;
+  };
+
+  const handleImportFile = useCallback((file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer);
+        const wb = XLSX.read(data, { type: 'array' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const json = XLSX.utils.sheet_to_json<Record<string, any>>(ws, { defval: '' });
+        if (json.length === 0) { toast.error('Ficheiro vazio'); return; }
+
+        const headers = Object.keys(json[0]);
+        const fieldMap: Record<string, keyof SolarTier> = {};
+        headers.forEach((h) => {
+          const field = resolveField(h);
+          if (field) fieldMap[h] = field;
+        });
+
+        if (Object.keys(fieldMap).length === 0) {
+          toast.error('Nenhuma coluna reconhecida. Use: kWp Min, kWp Max, Base Trans., Adic. Trans., Base AAS, Adic. AAS');
+          return;
+        }
+
+        const imported: SolarTier[] = json.map((row) => {
+          const tier: SolarTier = { ...DEFAULT_TIER };
+          Object.entries(fieldMap).forEach(([header, field]) => {
+            (tier as any)[field] = parseNum(row[header]);
+          });
+          return tier;
+        });
+
+        onChange({ ...rule, tiers: [...tiers, ...imported] });
+        toast.success(`${imported.length} escalão(ões) importados`);
+      } catch {
+        toast.error('Erro ao ler o ficheiro');
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }, [tiers, rule, onChange]);
 
   return (
     <div className="space-y-3">
@@ -315,7 +381,7 @@ function TieredTableEditor({
             {tiers.length === 0 && (
               <TableRow>
                 <TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-6">
-                  Nenhum escalão configurado. Adicione uma linha abaixo.
+                  Nenhum escalão configurado. Adicione uma linha ou importe um ficheiro.
                 </TableCell>
               </TableRow>
             )}
@@ -350,10 +416,33 @@ function TieredTableEditor({
         </Table>
       </div>
 
-      <Button type="button" variant="outline" size="sm" onClick={addTier} className="gap-1.5">
-        <Plus className="h-3.5 w-3.5" />
-        Adicionar Linha
-      </Button>
+      <div className="flex items-center gap-2">
+        <Button type="button" variant="outline" size="sm" onClick={addTier} className="gap-1.5">
+          <Plus className="h-3.5 w-3.5" />
+          Adicionar Linha
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => fileRef.current?.click()}
+          className="gap-1.5"
+        >
+          <FileSpreadsheet className="h-3.5 w-3.5" />
+          Importar Escalões
+        </Button>
+        <input
+          ref={fileRef}
+          type="file"
+          className="hidden"
+          accept=".xlsx,.xls,.csv"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) handleImportFile(f);
+            e.target.value = '';
+          }}
+        />
+      </div>
     </div>
   );
 }
