@@ -132,18 +132,26 @@ export function OttoMessageComponent({ message, onButtonClick, onLinkClick, isSt
 
         {/* WhatsApp links */}
         {waLinks.length > 0 && !isStreaming && (
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-col gap-2 w-full">
             {waLinks.map((wa, i) => (
-              <Button
+              <button
                 key={i}
-                variant="whatsapp"
-                size="sm"
-                className="h-auto py-2 px-4 text-xs rounded-full whitespace-normal text-left gap-1.5"
                 onClick={() => window.open(wa.url, '_blank')}
+                className="w-full flex items-center gap-3 bg-[#25D366] hover:bg-[#1ebe5d] 
+                  text-white rounded-xl p-3.5 transition-all duration-200 
+                  hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]"
               >
-                <MessageCircle className="w-3.5 h-3.5 flex-shrink-0" />
-                {wa.label}
-              </Button>
+                <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+                  <MessageCircle className="w-5 h-5" />
+                </div>
+                <div className="text-left flex-1 min-w-0">
+                  <p className="font-semibold text-sm">{wa.label}</p>
+                  <p className="text-[11px] text-white/80">
+                    Toca para abrir o WhatsApp e enviar
+                  </p>
+                </div>
+                <ExternalLink className="w-4 h-4 text-white/60 flex-shrink-0" />
+              </button>
             ))}
           </div>
         )}
