@@ -43,7 +43,14 @@ export function OttoChatWindow({ onClose }: OttoChatWindowProps) {
     if (!text || isLoading) return;
     setInput("");
     sendMessage(text);
+    setTimeout(() => inputRef.current?.focus(), 0);
   };
+
+  useEffect(() => {
+    if (!isLoading) {
+      inputRef.current?.focus();
+    }
+  }, [isLoading]);
 
   const handleQuickAction = (text: string) => {
     if (isLoading) return;
