@@ -1,64 +1,60 @@
 
 
-## Auto-Scroll nas Conversas do Otto
+## Melhorar o Botão WhatsApp do Otto — Mais Visual e Claro
 
 ### Problema
 
-O `scrollRef` está no `div` interior dentro do `ScrollArea`, mas o elemento que realmente faz scroll é o **viewport** do Radix ScrollArea. Atribuir `scrollTop` ao div interior não tem efeito.
+O botão WhatsApp actual é pequeno (`text-xs`, `py-2 px-4`, `rounded-full`) e parece um link discreto dentro da conversa. O utilizador não percebe que é para clicar e enviar.
 
 ### Solução
 
-Mudar a abordagem para encontrar o viewport real do ScrollArea e fazer scroll nele.
+Transformar o botão WhatsApp num **card de acção destacado** com:
+- Largura total (`w-full`)
+- Ícone WhatsApp grande e reconhecível
+- Texto principal a bold ("Enviar via WhatsApp")
+- Subtexto explicativo ("Toca para abrir o WhatsApp e enviar o ticket")
+- Fundo verde WhatsApp com padding generoso
+- Animação subtil de pulso para chamar atenção
 
-### Alteração — `src/components/otto/OttoChatWindow.tsx`
+### Alteração — `src/components/otto/OttoMessage.tsx`
 
-1. Trocar o `scrollRef` de `HTMLDivElement` para apontar ao `ScrollArea` root
-2. No `useEffect`, navegar até o viewport real (`.querySelector('[data-radix-scroll-area-viewport]')`) e fazer `scrollTo({ top: scrollHeight, behavior: 'smooth' })`
-3. Adicionar `isLoading` como dependência do useEffect para também fazer scroll quando o indicador de "a escrever..." aparecer
-
-```tsx
-// Antes:
-const scrollRef = useRef<HTMLDivElement>(null);
-
-useEffect(() => {
-  const el = scrollRef.current;
-  if (el) {
-    el.scrollTop = el.scrollHeight;
-  }
-}, [messages]);
-
-// Depois:
-const scrollAreaRef = useRef<HTMLDivElement>(null);
-
-useEffect(() => {
-  const viewport = scrollAreaRef.current?.querySelector(
-    '[data-radix-scroll-area-viewport]'
-  );
-  if (viewport) {
-    setTimeout(() => {
-      viewport.scrollTo({ top: viewport.scrollHeight, behavior: 'smooth' });
-    }, 50);
-  }
-}, [messages, isLoading]);
-```
-
-4. Mover o `ref` do `div` interior para o `ScrollArea`:
+Substituir o render dos `waLinks` (linhas 133-149) por um card mais proeminente:
 
 ```tsx
-// Antes:
-<ScrollArea className="flex-1">
-  <div ref={scrollRef} className="p-4 space-y-4">
-
-// Depois:
-<ScrollArea ref={scrollAreaRef} className="flex-1">
-  <div className="p-4 space-y-4">
+{waLinks.length > 0 && !isStreaming && (
+  <div className="flex flex-col gap-2 w-full">
+    {waLinks.map((wa, i) => (
+      <button
+        key={i}
+        onClick={() => window.open(wa.url, '_blank')}
+        className="w-full flex items-center gap-3 bg-[#25D366] hover:bg-[#1ebe5d] 
+          text-white rounded-xl p-3.5 transition-all duration-200 
+          hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]
+          animate-[pulse_2s_ease-in-out_1]"
+      >
+        <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+          <MessageCircle className="w-5 h-5" />
+        </div>
+        <div className="text-left flex-1 min-w-0">
+          <p className="font-semibold text-sm">{wa.label}</p>
+          <p className="text-[11px] text-white/80">
+            Toca para abrir o WhatsApp e enviar
+          </p>
+        </div>
+        <ExternalLink className="w-4 h-4 text-white/60 flex-shrink-0" />
+      </p>
+    ))}
+  </div>
+)}
 ```
 
-O `setTimeout` de 50ms garante que o DOM já renderizou o conteúdo novo antes de calcular o `scrollHeight`. O `behavior: 'smooth'` dá uma animação suave.
+### Resultado
+
+Em vez de um botãozinho discreto, o utilizador vê um **card verde grande** com ícone do WhatsApp, texto explicativo e uma seta — impossível não perceber que é para clicar.
 
 ### Ficheiro a alterar
 
 | Ficheiro | Alteração |
 |---|---|
-| `src/components/otto/OttoChatWindow.tsx` | Trocar ref para ScrollArea, usar viewport real para scroll |
+| `src/components/otto/OttoMessage.tsx` | Substituir botão WhatsApp por card de acção destacado |
 
