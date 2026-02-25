@@ -122,7 +122,8 @@ export const NEGOTIATION_TYPES: NegotiationType[] = ['angariacao', 'angariacao_i
 // Produtos fixos para Outros Serviços (telecom)
 export const SERVICOS_PRODUCTS = [
   'Solar',
-  'Carregadores/Baterias',
+  'Baterias',
+  'Carregadores',
   'Condensadores',
   'Coberturas',
 ];
@@ -146,13 +147,18 @@ export interface ServicosProductConfig {
 
 export const SERVICOS_PRODUCT_CONFIGS: ServicosProductConfig[] = [
   { name: 'Solar', fields: ['duracao', 'kwp', 'comissao'] },
-  { name: 'Carregadores/Baterias', fields: ['kwp', 'comissao'] },
+  { name: 'Baterias', fields: ['kwp', 'comissao'] },
+  { 
+    name: 'Carregadores', 
+    fields: ['valor', 'kwp', 'comissao'],
+    kwpAuto: (d) => d.valor ? (d.valor * 0.67) / 1000 : null,
+  },
   { 
     name: 'Condensadores', 
     fields: ['duracao', 'valor', 'kwp', 'comissao'],
-    kwpAuto: (d) => d.valor ? (d.valor / 0.67) / 1000 : null,
+    kwpAuto: (d) => d.valor ? (d.valor * 0.67) / 1000 : null,
   },
-  { name: 'Coberturas', fields: ['valor', 'kwp', 'comissao'] },
+  { name: 'Coberturas', fields: ['valor', 'comissao'] },
 ];
 
 export const FIELD_LABELS: Record<string, string> = {
