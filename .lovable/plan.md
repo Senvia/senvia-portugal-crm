@@ -1,49 +1,74 @@
 
 
-## Copiar Escalões Solar para Carregadores, Condensadores e Coberturas
+## Verificacao da Matriz de Comissoes vs Especificacao
 
-### Situação actual
+Comparei o print com o estado actual da base de dados e do codigo. Ha **erros significativos** que precisam de ser corrigidos.
 
-A organização `Perfect2Gether` tem 9 escalões configurados no produto **Solar** (método `tiered_kwp`), enquanto **Carregadores/Baterias**, **Condensadores** e **Coberturas** estão em modo `manual`.
+### Estado Actual vs Especificacao
 
-### O que vou fazer
+| Produto | Print (Correcto) | Base de Dados (Actual) | Estado |
+|---------|-----------------|----------------------|--------|
+| **Solar** | `tiered_kwp`: Base + (Kwp - KwpMin) * Adicional | `tiered_kwp` com 9 escaloes | CORRECTO |
+| **Baterias** | `base_plus_per_kwp`: 10€ + (2€ * Kwp) | `tiered_kwp` (copia do Solar) | ERRADO |
+| **Condensadores** | `percentage_valor`: 5% do Valor | `tiered_kwp` (copia do Solar) | ERRADO |
+| **Carregadores** | `percentage_valor`: 5% do Valor | `tiered_kwp` (copia do Solar) | ERRADO |
+| **Coberturas** | `percentage_valor`: 5% do Valor (sem kWp) | `tiered_kwp` (copia do Solar) | ERRADO |
 
-Alterar o `CommissionMatrixTab.tsx` para não ser necessário — isto é uma alteração de **dados**, não de código. Vou actualizar directamente o campo `commission_matrix` na base de dados, copiando a regra Solar (com todos os 9 escalões) para os outros 3 produtos.
+### Problema Adicional: Produtos Separados vs Combinados
 
-### Dados a copiar (Solar → todos)
+No print, **Baterias** e **Carregadores** sao produtos separados com formulas diferentes:
+- Baterias = 10€ + 2€ * Kwp
+- Carregadores = 5% do Valor
 
-| kWp Min | kWp Max | Base Trans. | Adic. Trans. | Base AAS | Adic. AAS |
-|---------|---------|-------------|--------------|----------|-----------|
-| 0       | 1.2     | 0           | 0            | 0        | 0         |
-| 1.2     | 4.1     | 42          | 10           | 34       | 14        |
-| 4.1     | 15      | 42          | 10           | 34       | 14        |
-| 15      | 25      | 140         | 7            | 190      | 11        |
-| 25      | 50      | 210         | 6            | 320      | 10        |
-| 50      | 100     | 340         | 6            | 542      | 7         |
-| 100     | 250     | 600         | 5            | 872      | 6         |
-| 250     | 500     | 1320        | 5            | 1826     | 6         |
-| 500     | 1000    | 2440        | 4            | 3380     | 6         |
+Mas no sistema estao combinados como **"Carregadores/Baterias"** com uma unica formula. Para aplicar as regras correctas, e necessario separa-los em dois produtos distintos.
 
-### Alteração
+### Bug no Codigo: Formula kWp dos Condensadores
 
-Uma única query SQL que copia os tiers do Solar para os outros 3 produtos no JSONB `commission_matrix`, mantendo o Solar intacto.
+No ficheiro `src/types/proposals.ts` linha 153, a formula esta invertida:
+- Actual: `(d.valor / 0.67) / 1000` (divide por 0.67)
+- Correcto: `(d.valor * 0.67) / 1000` (multiplica por 0.67)
 
-### Detalhe técnico
+### Bug no Codigo: Coberturas tem campo kWp
+
+O print diz "Coberturas = Valor... nao tem Kwp", mas o codigo na linha 155 inclui `kwp` nos campos. Deve ser removido.
+
+### Bug no Codigo: Carregadores deveria ter kwpAuto
+
+O print mostra que Carregadores tambem usa `KWP = (Valor * 0.67) / 1000`, mas no codigo nao tem `kwpAuto` configurado.
+
+---
+
+### Plano de Correcao
+
+#### 1. Separar "Carregadores/Baterias" em dois produtos
+
+**`src/types/proposals.ts`**:
+- Alterar `SERVICOS_PRODUCTS` para `['Solar', 'Baterias', 'Carregadores', 'Condensadores', 'Coberturas']`
+- Alterar `SERVICOS_PRODUCT_CONFIGS`:
+  - Baterias: campos `['kwp', 'comissao']`
+  - Carregadores: campos `['valor', 'kwp', 'comissao']` com `kwpAuto: (d) => d.valor ? (d.valor * 0.67) / 1000 : null`
+  - Condensadores: corrigir formula para `(d.valor * 0.67) / 1000`
+  - Coberturas: remover `kwp` dos campos, ficar `['valor', 'comissao']`
+
+#### 2. Corrigir a commission_matrix na base de dados
 
 ```sql
 UPDATE organizations
-SET commission_matrix = jsonb_set(
-  jsonb_set(
-    jsonb_set(
-      commission_matrix,
-      '{Carregadores/Baterias}', commission_matrix->'Solar'
-    ),
-    '{Condensadores}', commission_matrix->'Solar'
-  ),
-  '{Coberturas}', commission_matrix->'Solar'
+SET commission_matrix = jsonb_build_object(
+  'Solar', commission_matrix->'Solar',
+  'Baterias', '{"method":"base_plus_per_kwp","base":10,"ratePerKwp":2}'::jsonb,
+  'Carregadores', '{"method":"percentage_valor","rate":5}'::jsonb,
+  'Condensadores', '{"method":"percentage_valor","rate":5}'::jsonb,
+  'Coberturas', '{"method":"percentage_valor","rate":5}'::jsonb
 )
-WHERE id = '96a3950e-31be-4c6d-abed-b82968c0d7e9';
+WHERE commission_matrix IS NOT NULL;
 ```
 
-Nenhum ficheiro de código será alterado. Apenas dados na base de dados.
+#### 3. Actualizar icones no CommissionMatrixTab
+
+**`src/components/settings/CommissionMatrixTab.tsx`**: Ajustar o `PRODUCT_ICONS` para os novos nomes separados.
+
+### Detalhe Tecnico
+
+A separacao de "Carregadores/Baterias" pode afectar propostas e vendas existentes que referenciam esse nome. Sera necessario verificar se ha dados guardados com esse valor e migra-los.
 
