@@ -1,75 +1,47 @@
 
 
-## Redesenho da Pagina Matriz de Comissoes — Modais por Produto + Tabela de Escaloes
+## Importar Escaloes via Excel/CSV
 
-### Problema actual
+### O que muda
 
-Todos os produtos (Solar, Carregadores/Baterias, Condensadores, Coberturas) aparecem empilhados verticalmente na pagina. Com muitos escaloes Solar, a pagina fica enorme e dificil de gerir. Alem disso, os escaloes usam cards individuais em vez de uma tabela compacta.
+Adicionar um botao **"Importar Escaloes"** (com icone FileSpreadsheet) ao lado do botao "Adicionar Linha" no `TieredTableEditor`. Ao clicar, o utilizador seleciona um ficheiro `.xlsx`, `.xls` ou `.csv` e as linhas sao automaticamente convertidas em escaloes na tabela.
 
-### Solucao
+### Como funciona
 
-Redesenhar `CommissionMatrixTab.tsx` com duas alteracoes principais:
+1. O utilizador clica em "Importar Escaloes"
+2. Abre o file picker nativo (aceita `.xlsx`, `.xls`, `.csv`)
+3. O ficheiro e lido com a biblioteca `xlsx` (ja instalada no projecto)
+4. O sistema procura colunas pelo nome (case-insensitive, com mapeamento flexivel):
+   - `kWp Min` / `kwpmin` / `kwp_min` → `kwpMin`
+   - `kWp Max` / `kwpmax` / `kwp_max` → `kwpMax`
+   - `Base Trans` / `base_transaccional` → `baseTransaccional`
+   - `Adic Trans` / `adic_transaccional` → `adicTransaccional`
+   - `Base AAS` / `base_aas` → `baseAas`
+   - `Adic AAS` / `adic_aas` → `adicAas`
+5. Cada linha do ficheiro vira uma nova linha na tabela (adicionada as existentes)
+6. Toast de sucesso: "X escaloes importados"
+7. Se nenhuma coluna for reconhecida, toast de erro com instrucoes
 
-**1. Pagina principal: Grid de cards compactos (um por produto)**
+### Ficheiro alterado
 
-Cada produto aparece como um card pequeno com:
-- Icone representativo (Sun para Solar, Battery para Baterias, Gauge para Condensadores, Home para Coberturas)
-- Nome do produto
-- Metodo de calculo actual (badge)
-- Numero de escaloes configurados (se aplicavel)
-- Botao/click para abrir o modal de edicao
+**`src/components/settings/CommissionMatrixTab.tsx`**
 
-**2. Modal fullScreen por produto**
+- Importar `FileSpreadsheet` do lucide e `XLSX` (ja usado no projecto em `ImportStep1Upload.tsx`)
+- Adicionar funcao `handleImportTiers` dentro do `TieredTableEditor`:
+  - Le o ficheiro com `XLSX.read()`
+  - Mapeia colunas para os campos do `SolarTier`
+  - Faz `onChange({ ...rule, tiers: [...tiers, ...importedTiers] })`
+- Adicionar `<input type="file" ref={...} className="hidden">` e botao "Importar Escaloes" ao lado de "Adicionar Linha"
 
-Ao clicar num card, abre um modal `fullScreen` (padrao do projeto) com:
-- Selector de metodo de calculo
-- Para `tiered_kwp`: **tabela horizontal** com colunas fixas (kWp Min, kWp Max, Base Trans., Adic. Trans., Base AAS, Adic. AAS, Acoes) e cada escalao como uma **linha da tabela**
-  - Em mobile: tabela com scroll horizontal
-  - Botao "Adicionar Linha" abaixo da tabela
-  - Abaixo da tabela: formula de calculo (Info box)
-- Para outros metodos: campos normais (Base, Taxa, Percentagem) + formula
-- Botao "Guardar" no footer do modal
-
-### Alteracoes por ficheiro
-
-**`src/components/settings/CommissionMatrixTab.tsx`** — Redesenho completo
-
-- Pagina principal: grid `grid-cols-2 sm:grid-cols-4` de cards clicaveis
-- Estado `openProduct: string | null` para controlar qual modal esta aberto
-- Componente `ProductModal`: Dialog fullScreen com o conteudo de edicao
-- `TieredEditor` redesenhado: usa `Table` / `TableHeader` / `TableBody` / `TableRow` / `TableCell` do shadcn em vez de cards empilhados
-  - Colunas: kWp Min | kWp Max | Base Trans. (EUR) | Adic. Trans. (EUR/kWp) | Base AAS (EUR) | Adic. AAS (EUR/kWp) | (trash icon)
-  - Cada escalao = uma linha
-  - Em mobile: wrapper com `overflow-x-auto` para scroll horizontal
-- Abaixo da tabela: bloco com icone Info + texto da formula
-- `DecimalInput` mantido sem alteracoes
-
-### Icones por produto
+### Formato esperado do Excel
 
 ```text
-Solar          → Sun (lucide)
-Carregadores   → Battery (lucide)  
-Condensadores  → Gauge (lucide)
-Coberturas     → Home (lucide)
+| kWp Min | kWp Max | Base Trans. | Adic. Trans. | Base AAS | Adic. AAS |
+|---------|---------|-------------|--------------|----------|-----------|
+| 0       | 3,5     | 200         | 50           | 150      | 40        |
+| 3,5     | 7       | 300         | 45           | 250      | 35        |
+| 7       | 15      | 400         | 40           | 350      | 30        |
 ```
 
-### Fluxo do utilizador
-
-```text
-1. Entra em Definicoes > Matriz de Comissoes
-2. Ve 4 cards compactos (Solar, Baterias, Condensadores, Coberturas)
-3. Clica no card "Solar"
-4. Abre modal fullscreen com tabela de escaloes
-5. Adiciona/edita linhas na tabela
-6. Ve a formula abaixo da tabela
-7. Clica "Guardar"
-8. Modal fecha, card actualiza o resumo
-```
-
-### Detalhes tecnicos
-
-- Apenas 1 ficheiro alterado: `CommissionMatrixTab.tsx`
-- Reutiliza componentes existentes: `Dialog`, `Table`, `DecimalInput`
-- O `DecimalInput` (com suporte a 0 e virgulas) nao e alterado
-- Dados continuam guardados no mesmo `commission_matrix` JSONB
+Nenhuma dependencia nova necessaria — `xlsx` ja esta instalado.
 
