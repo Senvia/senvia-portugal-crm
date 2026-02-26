@@ -1,32 +1,24 @@
 
-## Problema: Modais fullScreen tapam o menu lateral
 
-### Causa
-O variant `fullScreen` do `DialogContent` usa `fixed inset-0` — ocupa o ecrã todo, cobrindo a sidebar (que tem `z-40`, o dialog tem `z-50`).
+## Problema: Campos desalinhados na secção de energia do CPE
+
+A label "Consumo Anual (kWh)" ocupa duas linhas enquanto "Duração (anos)", "DBL (€/MWh)" e "Margem (€)" cabem numa só linha. Isto empurra o input do Consumo Anual para baixo, desalinhando os campos.
 
 ### Solução
 
-**Ficheiro:** `src/components/ui/dialog.tsx`
+**Ficheiro:** `src/components/proposals/ProposalCpeSelector.tsx`
 
-Alterar o variant `fullScreen` para respeitar a sidebar no desktop:
+Na grid de campos de energia (linha ~299), adicionar `items-end` ao contentor `grid` para que todos os inputs se alinhem pelo fundo, independentemente da altura das labels:
 
-```
-fullScreen: "pointer-events-auto fixed inset-0 z-50 w-full h-full max-w-none bg-background ... md:left-64 md:w-[calc(100%-16rem)]"
-```
-
-Isto faz com que:
-- **Mobile** (`< md`): modal ocupa o ecrã todo (correcto, não há sidebar)
-- **Desktop** (`≥ md`): modal começa depois da sidebar (`left-64`) e tem largura ajustada
-
-Também ajustar o `DialogOverlay` para o mesmo comportamento no desktop, para que o overlay escuro não cubra a sidebar:
-
-```
-md:left-64 md:w-[calc(100%-16rem)]
+```diff
+- <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2">
++ <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2 items-end">
 ```
 
-Alternativamente, manter o overlay a cobrir tudo (visual) mas garantir que o conteúdo do dialog fica ao lado da sidebar.
+Isto alinha os 4 campos (Consumo Anual, Duração, DBL, Margem) pela base, resolvendo o desalinhamento visual.
 
 ### Ficheiros afetados
 | Ficheiro | Ação |
 |---|---|
-| `src/components/ui/dialog.tsx` | Ajustar classes do variant `fullScreen` para respeitar sidebar no desktop |
+| `src/components/proposals/ProposalCpeSelector.tsx` | Adicionar `items-end` à grid dos campos de energia |
+
