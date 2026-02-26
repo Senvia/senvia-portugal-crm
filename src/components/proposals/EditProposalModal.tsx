@@ -82,6 +82,7 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
   }>>([]);
   
   const [isCreateClientOpen, setIsCreateClientOpen] = useState(false);
+  const [attempted, setAttempted] = useState(false);
 
   useEffect(() => {
     if (open && proposal) {
@@ -235,6 +236,20 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
     return Object.values(servicosDetails).reduce((sum, d) => sum + (d.kwp || 0), 0);
   }, [servicosDetails]);
 
+  const isServicosValid = useMemo(() => {
+    if (!isTelecom || proposalType !== 'servicos') return true;
+    if (servicosProdutos.length === 0) return false;
+    return servicosProdutos.every(produto => {
+      const config = SERVICOS_PRODUCT_CONFIGS.find(c => c.name === produto);
+      const detail = servicosDetails[produto] || {};
+      return config?.fields.every(field => 
+        detail[field] !== undefined && detail[field] > 0
+      ) ?? false;
+    });
+  }, [isTelecom, proposalType, servicosProdutos, servicosDetails]);
+
+  const isFormValid = isServicosValid && !!selectedClientId;
+
   const handleAddProduct = (productId: string) => {
     const product = products.find(p => p.id === productId);
     if (!product) return;
@@ -295,6 +310,8 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setAttempted(true);
+    if (!isFormValid) return;
 
     await updateProposal.mutateAsync({
       id: proposal.id,
@@ -569,7 +586,7 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
                                         return (
                                         <div key={field} className="space-y-1 min-w-[100px] flex-1">
                                           <Label className="text-xs text-muted-foreground">
-                                            {FIELD_LABELS[field]}
+                                            {FIELD_LABELS[field]} <span className="text-destructive">*</span>
                                             {isComissaoAuto && <span className="ml-1 text-primary">(auto)</span>}
                                           </Label>
                                           <Input
@@ -579,9 +596,12 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
                                             value={detail[field] ?? ''}
                                             onChange={(e) => handleUpdateProductDetail(config.name, field, e.target.value ? parseFloat(e.target.value) : undefined)}
                                             placeholder={field === 'kwp' && config.kwpAuto ? 'Auto' : '0'}
-                                            className="h-8"
+                                            className={`h-8 ${attempted && (detail[field] === undefined || detail[field] <= 0) ? 'border-destructive' : ''}`}
                                             readOnly={(field === 'kwp' && !!config.kwpAuto && detail.valor !== undefined) || isComissaoAuto}
                                           />
+                                          {attempted && (detail[field] === undefined || detail[field] <= 0) && (
+                                            <p className="text-[10px] text-destructive">Obrigatório</p>
+                                          )}
                                         </div>
                                         );
                                       })}
@@ -823,7 +843,7 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
                 className="flex-1"
                 size="lg"
                 onClick={handleSubmit}
-                disabled={isSubmitting}
+                disabled={isSubmitting || (attempted && !isFormValid)}
               >
                 {isSubmitting ? (
                   <>

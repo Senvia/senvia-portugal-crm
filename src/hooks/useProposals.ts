@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTeamFilter } from '@/hooks/useTeamFilter';
 import { useToast } from '@/hooks/use-toast';
+import { validateServicosDetails } from '@/lib/proposal-servicos-validation';
 import type { Proposal, ProposalProduct, ProposalStatus } from '@/types/proposals';
 
 export function useProposals() {
@@ -137,6 +138,14 @@ export function useCreateProposal() {
 
   return useMutation({
     mutationFn: async (data: CreateProposalData) => {
+      // Guardrail: validate servicos details before insert
+      if (data.proposal_type === 'servicos' && data.servicos_produtos?.length) {
+        const errors = validateServicosDetails(data.servicos_produtos, data.servicos_details || {});
+        if (errors.length > 0) {
+          throw new Error(errors[0].message);
+        }
+      }
+
       // Auto-infer lead_id from client if not provided
       let leadId = data.lead_id || null;
       
@@ -242,6 +251,14 @@ export function useUpdateProposal() {
 
   return useMutation({
     mutationFn: async ({ id, ...data }: UpdateProposalData) => {
+      // Guardrail: validate servicos details before update
+      if (data.proposal_type === 'servicos' && data.servicos_produtos?.length) {
+        const errors = validateServicosDetails(data.servicos_produtos, data.servicos_details || {});
+        if (errors.length > 0) {
+          throw new Error(errors[0].message);
+        }
+      }
+
       const { error } = await supabase
         .from('proposals')
         .update(data)
