@@ -85,19 +85,7 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
     }
   }, [updateAutoComissao]);
 
-  // Auto-calculate contrato fim when start + duration changes
-  useEffect(() => {
-    if (updateContratoInicio && updateDuracaoContrato) {
-      const start = new Date(updateContratoInicio);
-      const years = parseInt(updateDuracaoContrato) || 0;
-      if (years > 0) {
-        start.setFullYear(start.getFullYear() + years);
-        setUpdateContratoFim(start.toISOString().split('T')[0]);
-      }
-    }
-  }, [updateContratoInicio, updateDuracaoContrato]);
-
-  // Auto-calculate duracao when contrato_fim changes
+  // Auto-calculate duracao when dates change
   useEffect(() => {
     if (updateContratoInicio && updateContratoFim) {
       const start = new Date(updateContratoInicio);
@@ -105,9 +93,13 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
       const days = (end.getTime() - start.getTime()) / 86400000;
       if (days > 0) {
         setUpdateDuracaoContrato((days / 365).toFixed(3));
+      } else {
+        setUpdateDuracaoContrato('');
       }
+    } else {
+      setUpdateDuracaoContrato('');
     }
-  }, [updateContratoFim]);
+  }, [updateContratoInicio, updateContratoFim]);
 
   const resetForm = () => {
     setSelectedExistingCpe(null);
@@ -179,17 +171,8 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
           }
         }
       }
-      // Auto-recalculate contrato_fim when start + duration changes
-      if ((field === 'contrato_inicio' || field === 'duracao_contrato') && updated.contrato_inicio && updated.duracao_contrato) {
-        const start = new Date(updated.contrato_inicio);
-        const years = parseInt(updated.duracao_contrato) || 0;
-        if (years > 0) {
-          start.setFullYear(start.getFullYear() + years);
-          updated.contrato_fim = start.toISOString().split('T')[0];
-        }
-      }
-      // Auto-recalculate duracao_contrato when contrato_fim changes
-      if (field === 'contrato_fim' && updated.contrato_inicio && updated.contrato_fim) {
+      // Auto-recalculate duracao_contrato when dates change
+      if ((field === 'contrato_inicio' || field === 'contrato_fim') && updated.contrato_inicio && updated.contrato_fim) {
         const start = new Date(updated.contrato_inicio);
         const end = new Date(updated.contrato_fim);
         const days = (end.getTime() - start.getTime()) / 86400000;
@@ -310,64 +293,6 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs flex items-center gap-1">
-                    <Calculator className="h-3 w-3" />
-                    Duração (anos)
-                  </Label>
-                  <Input
-                    type="number"
-                    min="1"
-                    max="10"
-                    value={cpe.duracao_contrato}
-                    onChange={(e) => handleUpdateCpeField(cpe.id, 'duracao_contrato', e.target.value)}
-                    className="h-8 text-sm"
-                    placeholder="2"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">DBL (€/MWh)</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={cpe.dbl}
-                    onChange={(e) => handleUpdateCpeField(cpe.id, 'dbl', e.target.value)}
-                    className="h-8 text-sm"
-                    placeholder="5.50"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs flex items-center gap-1">
-                    <Calculator className="h-3 w-3" />
-                    Margem (€)
-                  </Label>
-                  <Input
-                    value={cpe.margem}
-                    className="h-8 text-sm bg-muted font-medium"
-                    disabled
-                    placeholder="Auto"
-                  />
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                <div className="space-y-1">
-                  <Label className="text-xs flex items-center gap-1">
-                    Comissão (€)
-                    {hasEnergyConfig && <Badge variant="outline" className="text-[9px] ml-1">Auto</Badge>}
-                  </Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={cpe.comissao}
-                    onChange={(e) => handleUpdateCpeField(cpe.id, 'comissao', e.target.value)}
-                    className={`h-8 text-sm ${hasEnergyConfig ? 'bg-muted' : ''}`}
-                    readOnly={hasEnergyConfig}
-                    placeholder="150"
-                  />
-                </div>
-                <div className="space-y-1">
                   <Label className="text-xs">Início Contrato</Label>
                   <Input
                     type="date"
@@ -383,6 +308,61 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
                     value={cpe.contrato_fim}
                     onChange={(e) => handleUpdateCpeField(cpe.id, 'contrato_fim', e.target.value)}
                     className="h-8 text-sm"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">DBL (€/MWh)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={cpe.dbl}
+                    onChange={(e) => handleUpdateCpeField(cpe.id, 'dbl', e.target.value)}
+                    className="h-8 text-sm"
+                    placeholder="5.50"
+                  />
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-xs flex items-center gap-1">
+                    <Calculator className="h-3 w-3" />
+                    Duração (anos)
+                  </Label>
+                  <Input
+                    value={cpe.duracao_contrato}
+                    className="h-8 text-sm bg-muted font-medium"
+                    disabled
+                    placeholder="Auto"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs flex items-center gap-1">
+                    <Calculator className="h-3 w-3" />
+                    Margem (€)
+                  </Label>
+                  <Input
+                    value={cpe.margem}
+                    className="h-8 text-sm bg-muted font-medium"
+                    disabled
+                    placeholder="Auto"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs flex items-center gap-1">
+                    Comissão (€)
+                    {hasEnergyConfig && <Badge variant="outline" className="text-[9px] ml-1">Auto</Badge>}
+                  </Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={cpe.comissao}
+                    onChange={(e) => handleUpdateCpeField(cpe.id, 'comissao', e.target.value)}
+                    className={`h-8 text-sm ${hasEnergyConfig ? 'bg-muted' : ''}`}
+                    readOnly={hasEnergyConfig}
+                    placeholder="150"
                   />
                 </div>
               </div>
@@ -501,21 +481,6 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs flex items-center gap-1">
-                      <Calculator className="h-3 w-3" />
-                      Duração (anos) <span className="text-destructive">*</span>
-                    </Label>
-                    <Input
-                      type="number"
-                      min="1"
-                      max="10"
-                      value={updateDuracaoContrato}
-                      onChange={(e) => setUpdateDuracaoContrato(e.target.value)}
-                      className="h-8"
-                      placeholder="2"
-                    />
-                  </div>
-                  <div className="space-y-1">
                     <Label className="text-xs">DBL (€/MWh) <span className="text-destructive">*</span></Label>
                     <Input
                       type="number"
@@ -525,6 +490,18 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
                       onChange={(e) => setUpdateDbl(e.target.value)}
                       className="h-8"
                       placeholder="5.50"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs flex items-center gap-1">
+                      <Calculator className="h-3 w-3" />
+                      Duração (anos)
+                    </Label>
+                    <Input
+                      value={updateDuracaoContrato}
+                      className="h-8 bg-muted font-medium"
+                      disabled
+                      placeholder="Auto"
                     />
                   </div>
                   <div className="space-y-1">
