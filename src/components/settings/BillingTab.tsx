@@ -38,6 +38,15 @@ export function BillingTab() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('billing') === 'success') {
+      // Fire Meta Pixel Purchase event
+      if (typeof window.fbq === 'function') {
+        window.fbq('track', 'Purchase', {
+          content_name: 'Senvia OS Subscription',
+          content_category: 'subscription',
+          currency: 'EUR',
+          value: 0,
+        });
+      }
       setTimeout(() => checkSubscription(), 2000);
       window.history.replaceState({}, '', window.location.pathname);
     }

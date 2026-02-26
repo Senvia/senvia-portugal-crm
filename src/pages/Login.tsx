@@ -275,6 +275,13 @@ export default function Login() {
 
       // Check if email confirmation is required (no session means confirmation needed)
       if (!authData.session) {
+        // Fire Meta Pixel Lead event
+        if (typeof window.fbq === 'function') {
+          window.fbq('track', 'Lead', {
+            content_name: 'Senvia OS Registration',
+            content_category: 'signup',
+          });
+        }
         toast({
           title: 'Confirme o seu email',
           description: 'Enviámos um email de confirmação. Confirme o seu email e depois faça login.',
@@ -303,6 +310,14 @@ export default function Login() {
           return;
         }
         throw orgError;
+      }
+
+      // Fire Meta Pixel Lead event
+      if (typeof window.fbq === 'function') {
+        window.fbq('track', 'Lead', {
+          content_name: 'Senvia OS Registration',
+          content_category: 'signup',
+        });
       }
 
       toast({
