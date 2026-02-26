@@ -95,6 +95,48 @@ function findEnergyBand(bands: EnergyMarginBand[], margem: number): EnergyMargin
   return sorted.find(b => margem >= b.marginMin) ?? null;
 }
 
+// --- Derivation helpers ---
+
+function getSourceValues(band: EnergyMarginBand, source: 'from_low' | 'from_mid' | 'from_high'): { ponderador: number; valor: number } {
+  switch (source) {
+    case 'from_low':  return { ponderador: band.ponderadorLow, valor: band.valorLow };
+    case 'from_high': return { ponderador: band.ponderadorHigh, valor: band.valorHigh };
+    default:          return { ponderador: band.ponderador, valor: band.valor };
+  }
+}
+
+function applyDerivation(baseValue: number, rule: TierDerivationRule): number {
+  switch (rule.operation) {
+    case 'multiply': return baseValue * (rule.value || 1);
+    case 'divide':   return rule.value ? baseValue / rule.value : baseValue;
+    case 'none':     return baseValue;
+    default:         return baseValue;
+  }
+}
+
+function getDerivedValues(
+  band: EnergyMarginBand,
+  tier: EnergyVolumeTier,
+  tierRules?: TierRules
+): { ponderador: number; valor: number } {
+  // Mid is always the reference — read directly
+  if (tier === 'mid') {
+    return { ponderador: band.ponderador, valor: band.valor };
+  }
+
+  const rules = tierRules ?? DEFAULT_TIER_RULES;
+  const rule = rules[tier];
+
+  // Get source column values
+  const source = getSourceValues(band, rule.source);
+
+  // Apply derivation operation
+  return {
+    ponderador: applyDerivation(source.ponderador, rule),
+    valor: applyDerivation(source.valor, rule),
+  };
+}
+
 export function calculateEnergyCommissionPure(
   margem: number,
   config: EnergyCommissionConfig,
@@ -105,21 +147,7 @@ export function calculateEnergyCommissionPure(
   const band = findEnergyBand(config.bands, margem);
   if (!band) return null;
   
-  let ponderador: number;
-  let valor: number;
-  switch (tier) {
-    case 'low':
-      ponderador = band.ponderadorLow;
-      valor = band.valorLow;
-      break;
-    case 'high':
-      ponderador = band.ponderadorHigh;
-      valor = band.valorHigh;
-      break;
-    default:
-      ponderador = band.ponderador;
-      valor = band.valor;
-  }
+  const { ponderador, valor } = getDerivedValues(band, tier, config.tierRules);
   
   return valor + (margem - band.marginMin) * (ponderador / 100);
 }
