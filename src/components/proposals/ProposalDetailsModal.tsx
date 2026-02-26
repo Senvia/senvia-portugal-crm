@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -24,6 +24,7 @@ import { useUpdateLeadStatus, useUpdateLead } from '@/hooks/useLeads';
 import { useFinalStages } from '@/hooks/usePipelineStages';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useAuth } from '@/contexts/AuthContext';
+import { useCommissionMatrix, getVolumeTier } from '@/hooks/useCommissionMatrix';
 import { 
   PROPOSAL_STATUS_LABELS, 
   PROPOSAL_STATUS_COLORS, 
@@ -69,7 +70,7 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
   const updateLead = useUpdateLead();
   const { finalPositiveStage, finalNegativeStage } = useFinalStages();
   const sendProposalEmail = useSendProposalEmail();
-  
+  const { calculateEnergyCommission, hasEnergyConfig } = useCommissionMatrix();
   // Obter logo e nome da organização
   const logoUrl = (orgData?.form_settings as any)?.logo_url || null;
   const orgName = orgData?.name || '';
@@ -81,7 +82,20 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
   const [showSaleModal, setShowSaleModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
 
-  // Verificar se existe venda concluída associada
+  // Recalculate energy CPE commissions using current tier rules
+  const recalculatedCpes = useMemo(() => {
+    if (!hasEnergyConfig || proposalCpes.length === 0) return proposalCpes;
+    return proposalCpes.map(cpe => {
+      if (!cpe.margem || !cpe.consumo_anual) return cpe;
+      const margem = Number(cpe.margem);
+      if (margem <= 0) return cpe;
+      const calc = calculateEnergyCommission(margem, getVolumeTier(Number(cpe.consumo_anual) || 0));
+      if (calc === null) return cpe;
+      return { ...cpe, comissao: calc };
+    });
+  }, [proposalCpes, hasEnergyConfig, calculateEnergyCommission]);
+
+
   const { data: completedSale } = useQuery({
     queryKey: ['proposal-completed-sale', proposal?.id],
     queryFn: async () => {
@@ -249,13 +263,13 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
           <div class="total-box">
             <div class="label">${orgData?.niche === 'telecom' ? 'Consumo Total MWh' : 'Valor Total'}</div>
             <div class="value">${orgData?.niche === 'telecom' 
-              ? `${(proposalCpes.reduce((sum, cpe) => sum + (Number(cpe.consumo_anual) || 0), 0) / 1000).toLocaleString('pt-PT', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} MWh`
+              ? `${(recalculatedCpes.reduce((sum, cpe) => sum + (Number(cpe.consumo_anual) || 0), 0) / 1000).toLocaleString('pt-PT', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} MWh`
               : formatCurrency(proposal.total_value)}</div>
-            ${orgData?.niche === 'telecom' && proposal.proposal_type === 'energia' && proposalCpes.length > 0 ? `
+            ${orgData?.niche === 'telecom' && proposal.proposal_type === 'energia' && recalculatedCpes.length > 0 ? `
               <div style="font-size: 12px; color: #666; margin-top: 6px;">
-                Margem Total: <strong>${formatCurrency(proposalCpes.reduce((sum, cpe) => sum + (Number(cpe.margem) || 0), 0))}</strong>
+                Margem Total: <strong>${formatCurrency(recalculatedCpes.reduce((sum, cpe) => sum + (Number(cpe.margem) || 0), 0))}</strong>
                 &nbsp;|&nbsp;
-                Comissão Total: <strong>${formatCurrency(proposalCpes.reduce((sum, cpe) => sum + (Number(cpe.comissao) || 0), 0))}</strong>
+                Comissão Total: <strong>${formatCurrency(recalculatedCpes.reduce((sum, cpe) => sum + (Number(cpe.comissao) || 0), 0))}</strong>
               </div>
             ` : ''}
             ${orgData?.niche === 'telecom' && proposal.proposal_type === 'servicos' ? `
@@ -267,10 +281,10 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
             ` : ''}
           </div>
 
-          ${orgData?.niche === 'telecom' && proposalCpes.length > 0 ? `
+          ${orgData?.niche === 'telecom' && recalculatedCpes.length > 0 ? `
             <div class="cpes">
               <h3>CPEs / Pontos de Consumo</h3>
-              ${proposalCpes.map(cpe => `
+              ${recalculatedCpes.map(cpe => `
                 <div class="cpe-card">
                   <div class="cpe-header">${cpe.equipment_type} ${cpe.serial_number ? `- ${cpe.serial_number}` : ''}</div>
                   <div class="cpe-grid">
@@ -468,7 +482,7 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
 
 
                   {/* CPEs - Telecom only */}
-                  {orgData?.niche === 'telecom' && proposalCpes.length > 0 && (
+                  {orgData?.niche === 'telecom' && recalculatedCpes.length > 0 && (
                     <Card>
                       <CardHeader className="pb-2 p-4">
                         <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
@@ -477,7 +491,7 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
                         </CardTitle>
                       </CardHeader>
                       <CardContent className="p-4 pt-0 space-y-3">
-                        {proposalCpes.map((cpe) => (
+                        {recalculatedCpes.map((cpe) => (
                           <div
                             key={cpe.id}
                             className="p-4 rounded-lg border bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800"
@@ -689,17 +703,17 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
                           <div className="space-y-2 text-sm">
                             <div className="flex justify-between">
                               <span className="text-muted-foreground">Consumo Total</span>
-                              <span className="font-medium">{(proposalCpes.reduce((sum, cpe) => sum + (Number(cpe.consumo_anual) || 0), 0) / 1000).toLocaleString('pt-PT', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} MWh</span>
+                              <span className="font-medium">{(recalculatedCpes.reduce((sum, cpe) => sum + (Number(cpe.consumo_anual) || 0), 0) / 1000).toLocaleString('pt-PT', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} MWh</span>
                             </div>
-                            {proposal.proposal_type === 'energia' && proposalCpes.length > 0 && (
+                            {proposal.proposal_type === 'energia' && recalculatedCpes.length > 0 && (
                               <>
                                 <div className="flex justify-between">
                                   <span className="text-muted-foreground">Margem Total</span>
-                                  <span className="font-medium text-green-600 dark:text-green-400">{formatCurrency(proposalCpes.reduce((sum, cpe) => sum + (Number(cpe.margem) || 0), 0))}</span>
+                                  <span className="font-medium text-green-600 dark:text-green-400">{formatCurrency(recalculatedCpes.reduce((sum, cpe) => sum + (Number(cpe.margem) || 0), 0))}</span>
                                 </div>
                                 <div className="flex justify-between">
                                   <span className="text-muted-foreground">Comissão Total</span>
-                                  <span className="font-medium">{formatCurrency(proposalCpes.reduce((sum, cpe) => sum + (Number(cpe.comissao) || 0), 0))}</span>
+                                  <span className="font-medium">{formatCurrency(recalculatedCpes.reduce((sum, cpe) => sum + (Number(cpe.comissao) || 0), 0))}</span>
                                 </div>
                               </>
                             )}

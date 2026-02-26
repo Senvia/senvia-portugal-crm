@@ -56,7 +56,7 @@ import { useProposalCpes, useUpdateProposalCpes } from "@/hooks/useProposalCpes"
 import type { CreateProposalCpeData } from "@/hooks/useProposalCpes";
 import { useCpes } from "@/hooks/useCpes";
 import { NEGOTIATION_TYPE_LABELS, NEGOTIATION_TYPES, MODELO_SERVICO_LABELS, SERVICOS_PRODUCTS, SERVICOS_PRODUCT_CONFIGS } from "@/types/proposals";
-import { useCommissionMatrix } from "@/hooks/useCommissionMatrix";
+import { useCommissionMatrix, getVolumeTier } from "@/hooks/useCommissionMatrix";
 import type { NegotiationType, ModeloServico } from "@/types/proposals";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CPE_STATUS_LABELS, CPE_STATUS_STYLES } from "@/types/cpes";
@@ -99,7 +99,7 @@ export function EditSaleModal({
   const { organization } = useAuth();
   const { isAdmin } = usePermissions();
   const isTelecom = organization?.niche === 'telecom';
-  const { calculateCommission, isAutoCalculated } = useCommissionMatrix();
+  const { calculateCommission, isAutoCalculated, calculateEnergyCommission, hasEnergyConfig } = useCommissionMatrix();
   const { data: orgData } = useOrganization();
   const salesSettings = (orgData?.sales_settings as { lock_delivered_sales?: boolean }) || {};
   const isDeliveredLocked = !!salesSettings.lock_delivered_sales && sale?.status === 'delivered' && !isAdmin;
@@ -170,30 +170,41 @@ export function EditSaleModal({
     }
   }, [open, sale]);
 
-  // Initialize editable CPEs from proposalCpes
+  // Initialize editable CPEs from proposalCpes with recalculated commissions
   useEffect(() => {
     if (open && proposalCpes.length > 0) {
-      setEditableCpes(proposalCpes.map(cpe => ({
-        proposal_id: cpe.proposal_id,
-        existing_cpe_id: cpe.existing_cpe_id,
-        equipment_type: cpe.equipment_type,
-        serial_number: cpe.serial_number,
-        comercializador: cpe.comercializador,
-        fidelizacao_start: cpe.fidelizacao_start,
-        fidelizacao_end: cpe.fidelizacao_end,
-        notes: cpe.notes,
-        consumo_anual: cpe.consumo_anual,
-        duracao_contrato: cpe.duracao_contrato,
-        dbl: cpe.dbl,
-        margem: cpe.margem,
-        comissao: cpe.comissao,
-        contrato_inicio: cpe.contrato_inicio,
-        contrato_fim: cpe.contrato_fim,
-      })));
+      setEditableCpes(proposalCpes.map(cpe => {
+        // Recalculate commission using current tier rules
+        let comissao = cpe.comissao;
+        if (hasEnergyConfig && cpe.margem && cpe.consumo_anual) {
+          const margem = Number(cpe.margem);
+          if (margem > 0) {
+            const calc = calculateEnergyCommission(margem, getVolumeTier(Number(cpe.consumo_anual) || 0));
+            if (calc !== null) comissao = calc;
+          }
+        }
+        return {
+          proposal_id: cpe.proposal_id,
+          existing_cpe_id: cpe.existing_cpe_id,
+          equipment_type: cpe.equipment_type,
+          serial_number: cpe.serial_number,
+          comercializador: cpe.comercializador,
+          fidelizacao_start: cpe.fidelizacao_start,
+          fidelizacao_end: cpe.fidelizacao_end,
+          notes: cpe.notes,
+          consumo_anual: cpe.consumo_anual,
+          duracao_contrato: cpe.duracao_contrato,
+          dbl: cpe.dbl,
+          margem: cpe.margem,
+          comissao,
+          contrato_inicio: cpe.contrato_inicio,
+          contrato_fim: cpe.contrato_fim,
+        };
+      }));
     } else if (open) {
       setEditableCpes([]);
     }
-  }, [open, proposalCpes]);
+  }, [open, proposalCpes, hasEnergyConfig, calculateEnergyCommission]);
 
   // Initialize items when existingItems load
   useEffect(() => {

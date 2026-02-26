@@ -16,7 +16,7 @@ import { useUpdateProposal, useProposalProducts, useUpdateProposalProducts } fro
 import { useClients } from '@/hooks/useClients';
 import { useActiveProducts } from '@/hooks/useProducts';
 import { useAuth } from '@/contexts/AuthContext';
-import { useCommissionMatrix } from '@/hooks/useCommissionMatrix';
+import { useCommissionMatrix, getVolumeTier } from '@/hooks/useCommissionMatrix';
 import { CreateClientModal } from '@/components/clients/CreateClientModal';
 import { ProposalCpeSelector, type ProposalCpeDraft } from './ProposalCpeSelector';
 import { useProposalCpes, useUpdateProposalCpes } from '@/hooks/useProposalCpes';
@@ -49,7 +49,7 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
   const { data: existingCpes = [] } = useProposalCpes(proposal.id);
   const { data: existingProducts = [] } = useProposalProducts(proposal.id);
   const { organization } = useAuth();
-  const { calculateCommission, isAutoCalculated } = useCommissionMatrix();
+  const { calculateCommission, isAutoCalculated, calculateEnergyCommission, hasEnergyConfig } = useCommissionMatrix();
   const updateProposal = useUpdateProposal();
   const updateProposalCpes = useUpdateProposalCpes();
   const updateProposalProducts = useUpdateProposalProducts();
@@ -132,29 +132,44 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
   useEffect(() => {
     if (open && existingCpes.length > 0) {
       setProposalCpes(
-        existingCpes.map(cpe => ({
-          id: cpe.id,
-          existing_cpe_id: cpe.existing_cpe_id,
-          equipment_type: cpe.equipment_type,
-          serial_number: cpe.serial_number || '',
-          comercializador: cpe.comercializador,
-          fidelizacao_start: cpe.fidelizacao_start || '',
-          fidelizacao_end: cpe.fidelizacao_end || '',
-          notes: cpe.notes || '',
-          isNew: !cpe.existing_cpe_id,
-          consumo_anual: cpe.consumo_anual?.toString() || '',
-          duracao_contrato: cpe.duracao_contrato?.toString() || '',
-          dbl: cpe.dbl?.toString() || '',
-          margem: cpe.margem?.toString() || '',
-          comissao: cpe.comissao?.toString() || '',
-          contrato_inicio: cpe.contrato_inicio || '',
-          contrato_fim: cpe.contrato_fim || '',
-        }))
+        existingCpes.map(cpe => {
+          const consumoAnual = cpe.consumo_anual?.toString() || '';
+          const margem = cpe.margem?.toString() || '';
+          
+          // Recalculate commission using current tier rules (runtime derivation)
+          let comissao = cpe.comissao?.toString() || '';
+          if (hasEnergyConfig && margem) {
+            const margemNum = parseFloat(margem);
+            if (margemNum > 0) {
+              const calc = calculateEnergyCommission(margemNum, getVolumeTier(parseFloat(consumoAnual) || 0));
+              if (calc !== null) comissao = calc.toFixed(2);
+            }
+          }
+          
+          return {
+            id: cpe.id,
+            existing_cpe_id: cpe.existing_cpe_id,
+            equipment_type: cpe.equipment_type,
+            serial_number: cpe.serial_number || '',
+            comercializador: cpe.comercializador,
+            fidelizacao_start: cpe.fidelizacao_start || '',
+            fidelizacao_end: cpe.fidelizacao_end || '',
+            notes: cpe.notes || '',
+            isNew: !cpe.existing_cpe_id,
+            consumo_anual: consumoAnual,
+            duracao_contrato: cpe.duracao_contrato?.toString() || '',
+            dbl: cpe.dbl?.toString() || '',
+            margem,
+            comissao,
+            contrato_inicio: cpe.contrato_inicio || '',
+            contrato_fim: cpe.contrato_fim || '',
+          };
+        })
       );
     } else if (open) {
       setProposalCpes([]);
     }
-  }, [open, existingCpes]);
+  }, [open, existingCpes, hasEnergyConfig, calculateEnergyCommission]);
 
   const getProductTotal = (product: typeof selectedProducts[0]) => {
     const subtotal = product.quantity * product.unit_price;
