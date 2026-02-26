@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useCpes } from '@/hooks/useCpes';
 import { ENERGY_COMERCIALIZADORES } from '@/types/cpes';
-import { useCommissionMatrix } from '@/hooks/useCommissionMatrix';
+import { useCommissionMatrix, getVolumeTier } from '@/hooks/useCommissionMatrix';
 
 export interface ProposalCpeDraft {
   id: string;
@@ -75,7 +75,7 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
     if (!hasEnergyConfig || !updateMargem) return null;
     const margem = parseFloat(updateMargem);
     if (margem <= 0) return null;
-    return calculateEnergyCommission(margem, 'mid');
+    return calculateEnergyCommission(margem, getVolumeTier(parseFloat(updateConsumoAnual) || 0));
   }, [updateMargem, hasEnergyConfig, calculateEnergyCommission]);
 
   // When auto-commission changes, update the field
@@ -174,7 +174,7 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
         if (hasEnergyConfig && updated.margem) {
           const margem = parseFloat(updated.margem);
           if (margem > 0) {
-            const com = calculateEnergyCommission(margem, 'mid');
+            const com = calculateEnergyCommission(margem, getVolumeTier(parseFloat(updated.consumo_anual) || 0));
             if (com !== null) updated.comissao = com.toFixed(2);
           }
         }
@@ -200,7 +200,7 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
           if (hasEnergyConfig && updated.margem) {
             const margem = parseFloat(updated.margem);
             if (margem > 0) {
-              const com = calculateEnergyCommission(margem, 'mid');
+              const com = calculateEnergyCommission(margem, getVolumeTier(parseFloat(updated.consumo_anual) || 0));
               if (com !== null) updated.comissao = com.toFixed(2);
             }
           }

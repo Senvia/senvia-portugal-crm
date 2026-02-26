@@ -79,6 +79,15 @@ function findTier(tiers: SolarTier[], kwp: number): SolarTier | null {
   return tiers.find(t => kwp >= t.kwpMin && kwp <= t.kwpMax) ?? null;
 }
 
+// --- Volume tier helper ---
+
+export function getVolumeTier(consumoAnualKwh: number): EnergyVolumeTier {
+  const mwh = consumoAnualKwh / 1000;
+  if (mwh <= 300) return 'low';
+  if (mwh <= 600) return 'mid';
+  return 'high';
+}
+
 // --- Energy commission calculation ---
 
 function findEnergyBand(bands: EnergyMarginBand[], margem: number): EnergyMarginBand | null {
