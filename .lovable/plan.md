@@ -1,40 +1,92 @@
 
-Objetivo: tornar realmente obrigatório preencher Valor e kWp para Carregadores e Condensadores (criar + editar + backend).
 
-1) Corrigir validação no Editar Proposta
-- Ficheiro: `src/components/proposals/EditProposalModal.tsx`
-- Adicionar estado `attempted` e regra `isServicosValid` (igual ao fluxo de criação).
-- Bloquear `handleSubmit` quando `proposalType === 'servicos'` e faltar `valor`/`kwp` (> 0) em Carregadores/Condensadores selecionados.
-- Mostrar erro inline “Obrigatório” nesses campos e adicionar `*` no label.
-- Desativar botão “Guardar Alterações” quando formulário inválido após tentativa de submit.
+## Plano: Sistema de Comissões EE & Gás
 
-2) Unificar regra para evitar divergência entre Criar e Editar
-- Criar util compartilhado (ex.: `src/lib/proposal-servicos-validation.ts`) com função de validação de serviços.
-- Aplicar essa função em:
-  - `src/components/proposals/CreateProposalModal.tsx`
-  - `src/components/proposals/EditProposalModal.tsx`
-- Regra explícita: se produto selecionado for `Carregadores` ou `Condensadores`, exigir `valor` e `kwp` numéricos e > 0.
+### Resumo do Entendimento
 
-3) Reforçar validação no backend (server-side)
-- Criar migration SQL com trigger `BEFORE INSERT OR UPDATE` em `public.proposals`.
-- Validar:
-  - `proposal_type = 'servicos'`
-  - se `servicos_produtos` contém `Carregadores` ou `Condensadores`, `servicos_details[produto].valor` e `servicos_details[produto].kwp` devem existir e ser > 0.
-- Em caso inválido, lançar erro claro (ex.: “Carregadores requer valor e kwp”).
+A tabela de comissões de Energia funciona assim:
+- **Bandas de Margem**: escalões progressivos baseados na Margem DBL Total do CPE (< 0€, > 0€, > 500€, > 1000€, > 2000€, > 5000€, > 10.000€, > 20.000€)
+- **3 Faixas de Volume** (MWh ativos no mês): 0–300, 301–600, 601+
+- **Referência** = coluna 301–600 (usada em Propostas e Vendas)
+- As outras faixas derivam: `0-300 = referência ÷ 1.33` e `601+ = referência × 1.5`
+- **Fórmula por CPE**: `Comissão = Valor + (Margem_Total − Limite_Banda) × Ponderador`
+- Quando a venda está ativa, a comissão é recalculada mensalmente com base no volume total de MWh ativos
 
-4) Guardrail no hook de escrita
-- Ficheiro: `src/hooks/useProposals.ts`
-- Antes de `.insert()` e `.update()`, aplicar a mesma validação compartilhada para falhar cedo com mensagem amigável.
-- Mantém UX consistente mesmo antes da resposta do backend.
+O cliente pode editar esta tabela na **Matriz de Comissões** (Settings), ao lado dos produtos de Serviços existentes.
 
-5) Validação final (QA)
-- Testar end-to-end no fluxo de criar e editar proposta:
-  - Carregadores sem valor/kwp → deve bloquear.
-  - Condensadores sem valor/kwp → deve bloquear.
-  - Com ambos preenchidos (>0) → deve guardar.
-  - Confirmar mobile e desktop no modal full-screen.
-  
-Detalhes técnicos
-- Problema identificado: hoje a criação tem validação parcial, mas a edição não bloqueia submissão; além disso, não há regra no backend para impedir payload inválido.
-- Evidência no dado atual: existe proposta com `servicos_produtos` contendo `Carregadores` sem detalhes correspondentes em `servicos_details`.
-- Resultado esperado após implementação: obrigatoriedade real em 3 camadas (UI criar/editar + backend), sem regressão no restante formulário de serviços.
+---
+
+### Alterações Técnicas
+
+#### 1. Novos tipos para EE & Gás
+**Ficheiro:** `src/hooks/useCommissionMatrix.ts`
+
+Adicionar:
+```typescript
+export interface EnergyMarginBand {
+  marginMin: number;      // Limite inferior da banda (0, 500, 1000...)
+  ponderador: number;     // % referência (ex: 4.00)
+  valor: number;          // € referência (ex: 40)
+}
+
+export interface EnergyCommissionConfig {
+  bands: EnergyMarginBand[];         // Tabela editável (coluna referência 301-600)
+  volumeMultipliers: {               // Derivação automática
+    low: number;   // divisor para 0-300 MWh (default: 1.33)
+    mid: number;   // referência 301-600 (sempre 1)
+    high: number;  // multiplicador 601+ (default: 1.5)
+  };
+}
+```
+
+Armazenado em `commission_matrix.ee_gas` na organização.
+
+#### 2. Função de cálculo de comissão Energia
+**Ficheiro:** `src/hooks/useCommissionMatrix.ts`
+
+Nova função `calculateEnergyCommission(margem, volumeTier)`:
+1. Encontra a banda onde `margem >= marginMin` (a mais alta aplicável)
+2. Obtém `ponderador` e `valor` da referência
+3. Aplica multiplicador de volume (÷1.33, ×1, ×1.5) ao ponderador e valor
+4. `Comissão = valorAjustado + (margem − marginMin) × (ponderadorAjustado / 100)`
+
+Para propostas/vendas: usa sempre `mid` (referência directa).
+
+#### 3. Editor visual na Matriz de Comissões
+**Ficheiro:** `src/components/settings/CommissionMatrixTab.tsx`
+
+- Novo card "EE & Gás" com ícone `Zap` no grid de produtos
+- Modal dedicado com tabela editável:
+  - Colunas: **Banda de Margem**, **Ponderador (%)**, **Valor (€)** — apenas a referência (301-600)
+  - Preview automático das 3 colunas derivadas (read-only)
+  - Campos editáveis para os multiplicadores de volume (default 1.33 / 1 / 1.5)
+  - Botões adicionar/remover bandas + importar Excel
+- Guardar em `commission_matrix.ee_gas`
+
+#### 4. Auto-cálculo na Proposta (por CPE)
+**Ficheiro:** `src/components/proposals/ProposalCpeSelector.tsx`
+
+- Quando a config EE & Gás existe na matriz, o campo **Comissão** do CPE passa a ser auto-calculado
+- Input: Margem (já calculada: `consumo × duração × DBL / 1000`)
+- Usa `calculateEnergyCommission(margem, 'mid')` para obter a comissão
+- Campo comissão fica `readOnly` com label "(Auto)" quando configurado
+- Soma total das comissões CPE = comissão da proposta
+
+#### 5. Recálculo evolutivo nas Vendas Ativas (futuro)
+- Quando vendas passam a estado ativo, o volume total de MWh dos CPEs ativos nesse mês determina a faixa
+- Este cálculo mensal pode ser feito via cron/edge function (fase 2)
+- Por agora: preparar a estrutura para suportar os 3 tiers de volume
+
+---
+
+### Ficheiros Afetados
+| Ficheiro | Ação |
+|---|---|
+| `src/hooks/useCommissionMatrix.ts` | Novos tipos + `calculateEnergyCommission()` |
+| `src/components/settings/CommissionMatrixTab.tsx` | Novo card + modal editor EE & Gás |
+| `src/components/proposals/ProposalCpeSelector.tsx` | Auto-cálculo comissão por CPE |
+| `src/components/proposals/CreateProposalModal.tsx` | Integrar auto-cálculo |
+| `src/components/proposals/EditProposalModal.tsx` | Integrar auto-cálculo |
+
+Nenhuma migration SQL necessária — os dados ficam no campo JSONB `commission_matrix` da tabela `organizations`.
+
