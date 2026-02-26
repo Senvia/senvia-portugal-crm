@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useCpes } from '@/hooks/useCpes';
 import { ENERGY_COMERCIALIZADORES } from '@/types/cpes';
-import { useCommissionMatrix, getVolumeTier } from '@/hooks/useCommissionMatrix';
+import { useCommissionMatrix, getVolumeTier, getTierRuleLabel } from '@/hooks/useCommissionMatrix';
 
 export interface ProposalCpeDraft {
   id: string;
@@ -49,7 +49,7 @@ function calculateMargem(consumo: string, duracao: string, dbl: string): string 
 
 export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCpeSelectorProps) {
   const { data: clientCpes = [] } = useCpes(clientId);
-  const { calculateEnergyCommission, hasEnergyConfig } = useCommissionMatrix();
+  const { calculateEnergyCommission, hasEnergyConfig, energyConfig } = useCommissionMatrix();
   
   const comercializadorOptions = ENERGY_COMERCIALIZADORES;
   
@@ -392,6 +392,11 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
                 <div className="mt-3 p-2 bg-amber-100 dark:bg-amber-900/30 rounded text-xs text-amber-800 dark:text-amber-200">
                   Margem calculada: <strong>{formatCurrency(cpe.margem)}</strong>
                   {cpe.comissao && ` | Comissão: ${formatCurrency(cpe.comissao)}`}
+                  {hasEnergyConfig && cpe.consumo_anual && (
+                    <span className="block mt-1 text-[10px] opacity-80">
+                      {getTierRuleLabel(getVolumeTier(parseFloat(cpe.consumo_anual) || 0), energyConfig)}
+                    </span>
+                  )}
                 </div>
               )}
             </div>
