@@ -793,19 +793,19 @@ function EnergyModal({
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead rowSpan={2} className="text-xs whitespace-nowrap align-bottom border-r">Banda de Margem</TableHead>
+                    <TableHead rowSpan={2} className="text-xs whitespace-nowrap align-bottom border-r">Banda de Margem (€)</TableHead>
                      <TableHead colSpan={2} className="text-xs text-center border-r">300 MWh</TableHead>
                      <TableHead colSpan={2} className="text-xs text-center border-r">301-600 MWh</TableHead>
                      <TableHead colSpan={2} className="text-xs text-center border-r">601+ MWh</TableHead>
                      <TableHead rowSpan={2} className="w-10 align-bottom" />
                    </TableRow>
                    <TableRow>
-                     <TableHead className="text-[10px] text-center">Pond.</TableHead>
-                     <TableHead className="text-[10px] text-center border-r">Valor</TableHead>
-                     <TableHead className="text-[10px] text-center">Pond.</TableHead>
-                     <TableHead className="text-[10px] text-center border-r">Valor</TableHead>
-                     <TableHead className="text-[10px] text-center">Pond.</TableHead>
-                     <TableHead className="text-[10px] text-center border-r">Valor</TableHead>
+                     <TableHead className="text-[10px] text-center">Pond. (%)</TableHead>
+                     <TableHead className="text-[10px] text-center border-r">Valor (€)</TableHead>
+                     <TableHead className="text-[10px] text-center">Pond. (%)</TableHead>
+                     <TableHead className="text-[10px] text-center border-r">Valor (€)</TableHead>
+                     <TableHead className="text-[10px] text-center">Pond. (%)</TableHead>
+                     <TableHead className="text-[10px] text-center border-r">Valor (€)</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
