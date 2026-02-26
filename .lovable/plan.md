@@ -1,35 +1,42 @@
 
 
-## Verificação: Cálculos de Comissão de Energia nas Propostas/CPEs
+## Problema: Regras de derivação não aplicadas no cálculo
 
-### Problema Encontrado
+### Situação Actual
+A função `calculateEnergyCommissionPure` lê **directamente** os valores armazenados nas bandas (`ponderadorLow`, `valorLow`, `ponderadorHigh`, `valorHigh`). As regras de derivação (`tierRules`) só são aplicadas no editor UI (CommissionMatrixTab) quando o utilizador edita um valor.
 
-O `ProposalCpeSelector` chama **sempre** `calculateEnergyCommission(margem, 'mid')` — hardcoded no tier `mid` (301-600 MWh). Isto significa que **independentemente do consumo anual do CPE**, a comissão é sempre calculada usando a coluna 301-600 MWh.
-
-Exemplo: Um CPE com consumo de 150 MWh (deveria usar coluna 0-300 MWh / tier `low`) está a ser calculado como se fosse 301-600 MWh.
+Isto significa que:
+- Se o utilizador importa dados via Excel só com a coluna de referência (mid), as colunas low/high ficam com **0**
+- Se o utilizador muda as regras de derivação depois de guardar, os valores antigos **não são recalculados**
+- O cálculo em runtime ignora completamente as `tierRules`
 
 ### Solução
+Aplicar as regras de derivação **em runtime** na função `calculateEnergyCommissionPure`, para que o cálculo seja sempre consistente com as regras configuradas.
+
+### Alteração
 
 **Ficheiro:** `src/hooks/useCommissionMatrix.ts`
-- Criar uma função utilitária `getVolumeTier(consumoAnualKwh: number): EnergyVolumeTier` que mapeia:
-  - 0–300.000 kWh (0–300 MWh) → `'low'`
-  - 300.001–600.000 kWh (301–600 MWh) → `'mid'`
-  - 600.001+ kWh (601+ MWh) → `'high'`
-- Exportar esta função do hook
 
-**Ficheiro:** `src/components/proposals/ProposalCpeSelector.tsx`
-- Importar `getVolumeTier` (ou equivalente do hook)
-- Em todas as 3 chamadas a `calculateEnergyCommission(margem, 'mid')`, substituir `'mid'` pelo tier correcto baseado no `consumo_anual` do CPE:
-  - Linha 78: `calculateEnergyCommission(margem, getVolumeTier(parseFloat(updateConsumoAnual)))`
-  - Linha 177: `calculateEnergyCommission(margem, getVolumeTier(parseFloat(updated.consumo_anual)))`
-  - Linha 203: `calculateEnergyCommission(margem, getVolumeTier(parseFloat(updated.consumo_anual)))`
+Na função `calculateEnergyCommissionPure`:
+1. Receber também as `tierRules` do config (já existe no `EnergyCommissionConfig`)
+2. Se o tier pedido **não** é a coluna de referência, aplicar a regra de derivação ao valor da coluna fonte:
+   - Identificar de qual coluna (low/mid/high) o tier actual deriva (`rule.source`)
+   - Ler os valores da coluna fonte na banda
+   - Aplicar a operação (`multiply`, `divide`, `none`) com o valor da regra
+3. Usar os valores derivados em runtime em vez dos valores armazenados
 
-### Nota sobre Unidades
-O `consumo_anual` no formulário está em **kWh** (ex: 15000), mas os tiers são em **MWh** (300 MWh = 300.000 kWh). A função de conversão precisa dividir por 1000 para converter kWh → MWh antes de comparar com os limiares.
+```text
+Fluxo actual:
+  tier=low → lê band.ponderadorLow, band.valorLow (pode ser 0 ou stale)
+
+Fluxo corrigido:
+  tier=low → rule.source=from_mid → lê band.ponderador, band.valor → aplica ÷1.33
+```
+
+Isto garante que mesmo que os valores armazenados estejam desactualizados, o cálculo reflecte sempre as regras de derivação actuais.
 
 ### Ficheiros afetados
 | Ficheiro | Ação |
 |---|---|
-| `src/hooks/useCommissionMatrix.ts` | Adicionar função `getVolumeTier()` |
-| `src/components/proposals/ProposalCpeSelector.tsx` | Usar tier dinâmico baseado no consumo anual |
+| `src/hooks/useCommissionMatrix.ts` | Aplicar tierRules no cálculo runtime de `calculateEnergyCommissionPure` |
 
