@@ -663,8 +663,8 @@ export function EditSaleModal({
                             <Input type="number" value={margem} onChange={e => setMargem(e.target.value)} className="h-9" step="0.01" />
                           </div>
                           <div className="space-y-1.5">
-                            <Label className="text-xs text-muted-foreground">Anos de Contrato</Label>
-                            <Input type="number" value={anosContrato} onChange={e => setAnosContrato(e.target.value)} className="h-9" step="1" min="0" />
+                            <Label className="text-xs text-muted-foreground">Anos de Contrato (auto)</Label>
+                            <Input type="number" value={anosContrato} className="h-9 bg-muted" step="1" min="0" disabled />
                           </div>
                           <div className="space-y-1.5">
                             <Label className="text-xs text-muted-foreground">DBL</Label>
@@ -775,8 +775,46 @@ export function EditSaleModal({
                                 <Input value={cpe.serial_number || ""} onChange={e => { const u = [...editableCpes]; u[idx] = { ...u[idx], serial_number: e.target.value }; setEditableCpes(u); }} className="h-8 text-sm font-mono" />
                               </div>
                               <div className="space-y-1">
+                                <Label className="text-xs text-muted-foreground">Início Contrato</Label>
+                                <Input type="date" value={cpe.contrato_inicio || ""} onChange={e => {
+                                  const u = [...editableCpes];
+                                  const inicio = e.target.value;
+                                  const fim = u[idx].contrato_fim;
+                                  let duracao = u[idx].duracao_contrato;
+                                  if (inicio && fim) {
+                                    const days = (new Date(fim).getTime() - new Date(inicio).getTime()) / 86400000;
+                                    duracao = days > 0 ? parseFloat((days / 365).toFixed(3)) : null;
+                                  }
+                                  u[idx] = { ...u[idx], contrato_inicio: inicio || null, duracao_contrato: duracao };
+                                  setEditableCpes(u);
+                                }} className="h-8 text-sm" />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs text-muted-foreground">Fim Contrato</Label>
+                                <Input type="date" value={cpe.contrato_fim || ""} onChange={e => {
+                                  const u = [...editableCpes];
+                                  const fim = e.target.value;
+                                  const inicio = u[idx].contrato_inicio;
+                                  let duracao = u[idx].duracao_contrato;
+                                  if (inicio && fim) {
+                                    const days = (new Date(fim).getTime() - new Date(inicio).getTime()) / 86400000;
+                                    duracao = days > 0 ? parseFloat((days / 365).toFixed(3)) : null;
+                                  }
+                                  u[idx] = { ...u[idx], contrato_fim: fim || null, duracao_contrato: duracao };
+                                  setEditableCpes(u);
+                                }} className="h-8 text-sm" />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs text-muted-foreground">Duração (anos)</Label>
+                                <Input type="number" value={cpe.duracao_contrato ?? ""} className="h-8 text-sm bg-muted" disabled />
+                              </div>
+                              <div className="space-y-1">
                                 <Label className="text-xs text-muted-foreground">Consumo (kWh)</Label>
                                 <Input type="number" value={cpe.consumo_anual ?? ""} onChange={e => { const u = [...editableCpes]; u[idx] = { ...u[idx], consumo_anual: e.target.value ? parseFloat(e.target.value) : null }; setEditableCpes(u); }} className="h-8 text-sm" step="0.01" />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs text-muted-foreground">DBL</Label>
+                                <Input type="number" value={cpe.dbl ?? ""} onChange={e => { const u = [...editableCpes]; u[idx] = { ...u[idx], dbl: e.target.value ? parseFloat(e.target.value) : null }; setEditableCpes(u); }} className="h-8 text-sm" step="0.01" />
                               </div>
                               <div className="space-y-1">
                                 <Label className="text-xs text-muted-foreground">Margem (€/MWh)</Label>
@@ -785,10 +823,6 @@ export function EditSaleModal({
                               <div className="space-y-1">
                                 <Label className="text-xs text-muted-foreground">Comissão (€)</Label>
                                 <Input type="number" value={cpe.comissao ?? ""} onChange={e => { const u = [...editableCpes]; u[idx] = { ...u[idx], comissao: e.target.value ? parseFloat(e.target.value) : null }; setEditableCpes(u); }} className="h-8 text-sm" step="0.01" />
-                              </div>
-                              <div className="space-y-1">
-                                <Label className="text-xs text-muted-foreground">DBL</Label>
-                                <Input type="number" value={cpe.dbl ?? ""} onChange={e => { const u = [...editableCpes]; u[idx] = { ...u[idx], dbl: e.target.value ? parseFloat(e.target.value) : null }; setEditableCpes(u); }} className="h-8 text-sm" step="0.01" />
                               </div>
                             </div>
                           </div>
