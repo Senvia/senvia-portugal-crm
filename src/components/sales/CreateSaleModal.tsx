@@ -57,7 +57,7 @@ import {
 } from "lucide-react";
 import type { Proposal, ServicosProductDetail } from "@/types/proposals";
 import { NEGOTIATION_TYPE_LABELS, SERVICOS_PRODUCTS, SERVICOS_PRODUCT_CONFIGS } from "@/types/proposals";
-import { useCommissionMatrix } from "@/hooks/useCommissionMatrix";
+import { useCommissionMatrix, getVolumeTier } from "@/hooks/useCommissionMatrix";
 import { 
   type ProposalType,
   type ModeloServico,
@@ -113,7 +113,7 @@ export function CreateSaleModal({
   const updateLeadStatus = useUpdateLeadStatus();
   const { organization } = useAuth();
   const isTelecom = organization?.niche === 'telecom';
-  const { calculateCommission, isAutoCalculated } = useCommissionMatrix();
+  const { calculateCommission, isAutoCalculated, calculateEnergyCommission, hasEnergyConfig } = useCommissionMatrix();
   
   // Fiscal info
   const ixActive = isInvoiceXpressActive(organization);
@@ -129,7 +129,20 @@ export function CreateSaleModal({
   const { data: proposalProducts } = useProposalProducts(effectiveProposalId);
   
   // Fetch proposal CPEs - usa prefill OU seleção manual, gated by open
-  const { data: proposalCpes = [] } = useProposalCpes(effectiveProposalId);
+  const { data: rawProposalCpes = [] } = useProposalCpes(effectiveProposalId);
+
+  // Recalculate energy CPE commissions using current tier rules
+  const proposalCpes = useMemo(() => {
+    if (!hasEnergyConfig || rawProposalCpes.length === 0) return rawProposalCpes;
+    return rawProposalCpes.map(cpe => {
+      if (!cpe.margem || !cpe.consumo_anual) return cpe;
+      const margem = Number(cpe.margem);
+      if (margem <= 0) return cpe;
+      const calc = calculateEnergyCommission(margem, getVolumeTier(Number(cpe.consumo_anual) || 0));
+      if (calc === null) return cpe;
+      return { ...cpe, comissao: calc };
+    });
+  }, [rawProposalCpes, hasEnergyConfig, calculateEnergyCommission]);
 
   // Form state
   const [clientId, setClientId] = useState<string>("");

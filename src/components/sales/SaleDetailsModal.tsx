@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { Progress } from "@/components/ui/progress";
 import { format } from "date-fns";
@@ -64,6 +64,7 @@ import { useSaleItems } from "@/hooks/useSaleItems";
 import { useProducts } from "@/hooks/useProducts";
 import { VatBadge, useVatCalculation, isInvoiceXpressActive as checkIxActive, getOrgTaxValue } from "./SaleFiscalInfo";
 import { useProposalCpes } from "@/hooks/useProposalCpes";
+import { useCommissionMatrix, getVolumeTier } from "@/hooks/useCommissionMatrix";
 import { useCpes } from "@/hooks/useCpes";
 import { formatCurrency } from "@/lib/format";
 import { CPE_STATUS_LABELS, CPE_STATUS_STYLES } from "@/types/cpes";
@@ -110,7 +111,21 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
 
   const { data: saleItems = [] } = useSaleItems(sale?.id);
   const { data: products } = useProducts();
-  const { data: proposalCpes = [] } = useProposalCpes(sale?.proposal_id ?? undefined);
+  const { data: rawProposalCpes = [] } = useProposalCpes(sale?.proposal_id ?? undefined);
+  const { calculateEnergyCommission, hasEnergyConfig } = useCommissionMatrix();
+
+  // Recalculate energy CPE commissions using current tier rules
+  const proposalCpes = useMemo(() => {
+    if (!hasEnergyConfig || rawProposalCpes.length === 0) return rawProposalCpes;
+    return rawProposalCpes.map(cpe => {
+      if (!cpe.margem || !cpe.consumo_anual) return cpe;
+      const margem = Number(cpe.margem);
+      if (margem <= 0) return cpe;
+      const calc = calculateEnergyCommission(margem, getVolumeTier(Number(cpe.consumo_anual) || 0));
+      if (calc === null) return cpe;
+      return { ...cpe, comissao: calc };
+    });
+  }, [rawProposalCpes, hasEnergyConfig, calculateEnergyCommission]);
   const clientId = sale?.client_id || sale?.client?.id || null;
   const { data: clientCpes = [] } = useCpes(clientId);
   const updateSale = useUpdateSale();
