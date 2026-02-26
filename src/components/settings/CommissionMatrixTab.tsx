@@ -12,8 +12,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { useOrganization, useUpdateOrganization } from '@/hooks/useOrganization';
 import { SERVICOS_PRODUCTS } from '@/types/proposals';
-import type { CommissionMatrix, CommissionRule, SolarTier, EnergyCommissionConfig, EnergyMarginBand } from '@/hooks/useCommissionMatrix';
-import { DEFAULT_ENERGY_CONFIG } from '@/hooks/useCommissionMatrix';
+import type { CommissionMatrix, CommissionRule, SolarTier, EnergyCommissionConfig, EnergyMarginBand, TierDerivationRule, TierRules } from '@/hooks/useCommissionMatrix';
+import { DEFAULT_ENERGY_CONFIG, DEFAULT_TIER_RULES } from '@/hooks/useCommissionMatrix';
 
 const METHOD_LABELS: Record<string, string> = {
   tiered_kwp: 'Escalões por kWp',
@@ -596,19 +596,53 @@ function EnergyModal({
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const bands = config.bands;
+  const tierRules: TierRules = config.tierRules ?? DEFAULT_TIER_RULES;
+
+  const updateTierRules = (newRules: TierRules) => {
+    onChange({ ...config, tierRules: newRules });
+  };
+
+  // Map tier key to the band fields it controls (ponderador + valor)
+  const TIER_POND_FIELD: Record<string, keyof EnergyMarginBand> = { low: 'ponderadorLow', mid: 'ponderador', high: 'ponderadorHigh' };
+  const TIER_VAL_FIELD: Record<string, keyof EnergyMarginBand> = { low: 'valorLow', mid: 'valor', high: 'valorHigh' };
+
+  const applyDerivation = (sourceVal: number, rule: TierDerivationRule): number => {
+    const result = rule.operation === 'divide' ? sourceVal / rule.value : sourceVal * rule.value;
+    return Math.round(result * 100) / 100;
+  };
 
   const updateBand = (idx: number, field: keyof EnergyMarginBand, value: number) => {
     const newBands = bands.map((b, i) => {
       if (i !== idx) return b;
       const updated = { ...b, [field]: value };
-      // Auto-derive low/high from reference when editing reference fields
-      if (field === 'ponderador') {
-        updated.ponderadorLow = Math.round((value / 1.33) * 100) / 100;
-        updated.ponderadorHigh = Math.round((value * 1.5) * 100) / 100;
-      } else if (field === 'valor') {
-        updated.valorLow = Math.round((value / 1.33) * 100) / 100;
-        updated.valorHigh = Math.round((value * 1.5) * 100) / 100;
+
+      // Determine which tier was edited
+      const editedTierKey =
+        (field === 'ponderadorLow' || field === 'valorLow') ? 'low' :
+        (field === 'ponderador' || field === 'valor') ? 'mid' :
+        (field === 'ponderadorHigh' || field === 'valorHigh') ? 'high' : null;
+
+      const isPonderador = ['ponderador', 'ponderadorLow', 'ponderadorHigh'].includes(field);
+      const isValorField = ['valor', 'valorLow', 'valorHigh'].includes(field);
+
+      if (editedTierKey) {
+        const sourceKey = `from_${editedTierKey}` as TierDerivationRule['source'];
+        // Recalculate all tiers that derive from this edited tier
+        (['low', 'mid', 'high'] as const).forEach((tk) => {
+          if (tk === editedTierKey) return;
+          const rule = tierRules[tk];
+          if (rule.source !== sourceKey) return;
+          if (isPonderador) {
+            const pondField = TIER_POND_FIELD[tk];
+            updated[pondField] = applyDerivation(value, rule);
+          }
+          if (isValorField) {
+            const valField = TIER_VAL_FIELD[tk];
+            updated[valField] = applyDerivation(value, rule);
+          }
+        });
       }
+
       return updated;
     });
     onChange({ ...config, bands: newBands });
@@ -684,6 +718,73 @@ function EnergyModal({
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-6">
+
+          {/* Tier derivation rules */}
+          <div className="space-y-3">
+            <div className="text-sm font-medium">Regras de Derivação por Volume</div>
+            <p className="text-xs text-muted-foreground">Defina como cada faixa de volume calcula os seus valores. Escolha "Manual" para editar directamente ou "Derivar de" para calcular automaticamente a partir de outra coluna.</p>
+            <div className="grid gap-3">
+              {([
+                { key: 'low' as const, label: '0-300 MWh' },
+                { key: 'mid' as const, label: '301-600 MWh' },
+                { key: 'high' as const, label: '601+ MWh' },
+              ]).map(({ key, label }) => {
+                const rule = tierRules[key];
+                const isManual = rule.source === 'manual';
+                return (
+                  <div key={key} className="flex flex-wrap items-center gap-2 rounded-md border p-3 bg-muted/30">
+                    <span className="text-xs font-medium w-24 shrink-0">{label}</span>
+                    <Select
+                      value={rule.source}
+                      onValueChange={(v) => {
+                        const newRule: TierDerivationRule = v === 'manual'
+                          ? { source: 'manual', operation: 'multiply', value: 1 }
+                          : { ...rule, source: v as TierDerivationRule['source'] };
+                        updateTierRules({ ...tierRules, [key]: newRule });
+                      }}
+                    >
+                      <SelectTrigger className="h-8 text-xs w-[140px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="manual">Manual</SelectItem>
+                        {key !== 'low' && <SelectItem value="from_low">Derivar de 0-300</SelectItem>}
+                        {key !== 'mid' && <SelectItem value="from_mid">Derivar de 301-600</SelectItem>}
+                        {key !== 'high' && <SelectItem value="from_high">Derivar de 601+</SelectItem>}
+                      </SelectContent>
+                    </Select>
+                    {!isManual && (
+                      <>
+                        <Select
+                          value={rule.operation}
+                          onValueChange={(v) => updateTierRules({ ...tierRules, [key]: { ...rule, operation: v as 'multiply' | 'divide' } })}
+                        >
+                          <SelectTrigger className="h-8 text-xs w-[70px]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="multiply">×</SelectItem>
+                            <SelectItem value="divide">÷</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min={0.01}
+                          className="h-8 text-xs w-20"
+                          value={rule.value}
+                          onChange={(e) => {
+                            const v = parseFloat(e.target.value);
+                            if (!isNaN(v) && v > 0) updateTierRules({ ...tierRules, [key]: { ...rule, value: v } });
+                          }}
+                        />
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
 
           {/* Bands table */}
           <div className="space-y-3">
