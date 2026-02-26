@@ -296,7 +296,7 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
               <Separator className="my-3" />
               
               {/* Energy data per CPE */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2 items-end">
                 <div className="space-y-1">
                   <Label className="text-xs">Consumo Anual (kWh)</Label>
                   <Input
