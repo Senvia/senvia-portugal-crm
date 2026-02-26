@@ -181,8 +181,8 @@ function ProductModal({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent variant="fullScreen" className="flex flex-col overflow-hidden">
-        <DialogHeader className="shrink-0 border-b pb-4 px-4 sm:px-6 pt-4">
+      <DialogContent variant="fullScreen" className="flex flex-col p-0 gap-0 overflow-hidden">
+        <DialogHeader className="shrink-0 border-b px-4 sm:px-6 py-4 pr-14">
           <div className="flex items-center gap-2">
             <Icon className="h-5 w-5 text-primary" />
             <DialogTitle className="text-base sm:text-lg">{product}</DialogTitle>
