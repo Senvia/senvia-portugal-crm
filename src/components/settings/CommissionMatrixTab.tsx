@@ -571,13 +571,14 @@ function TieredTableEditor({
 // ─── Energy (EE & Gás) Modal ───
 
 const DEFAULT_ENERGY_BANDS: EnergyMarginBand[] = [
-  { marginMin: 0, ponderador: 4.00, valor: 40 },
-  { marginMin: 500, ponderador: 3.50, valor: 60 },
-  { marginMin: 1000, ponderador: 3.00, valor: 77.50 },
-  { marginMin: 2000, ponderador: 2.50, valor: 107.50 },
-  { marginMin: 5000, ponderador: 2.00, valor: 182.50 },
-  { marginMin: 10000, ponderador: 1.50, valor: 282.50 },
-  { marginMin: 20000, ponderador: 1.00, valor: 432.50 },
+  { marginMin: -999999, ponderador: 0, valor: 0 },
+  { marginMin: 0, ponderador: 4.00, valor: 0 },
+  { marginMin: 500, ponderador: 4.00, valor: 20 },
+  { marginMin: 1000, ponderador: 4.00, valor: 40 },
+  { marginMin: 2000, ponderador: 3.76, valor: 80 },
+  { marginMin: 5000, ponderador: 1.52, valor: 193 },
+  { marginMin: 10000, ponderador: 1.28, valor: 269 },
+  { marginMin: 20000, ponderador: 0.80, valor: 397 },
 ];
 
 function EnergyModal({
@@ -619,13 +620,17 @@ function EnergyModal({
     onChange({ ...config, volumeMultipliers: { ...mult, [key]: value } });
   };
 
-  // Derive values for low/high tiers
   const deriveValue = (base: number, tier: 'low' | 'high') => {
     if (tier === 'low') return base / (mult.low || 1.33);
     return base * (mult.high || 1.5);
   };
 
   const formatNum = (n: number) => n.toFixed(2).replace('.', ',');
+
+  const formatBandLabel = (band: EnergyMarginBand) => {
+    if (band.marginMin < 0) return '< 0 €';
+    return `> ${band.marginMin.toLocaleString('pt-PT')} €`;
+  };
 
   const handleImportFile = useCallback((file: File) => {
     const reader = new FileReader();
@@ -703,14 +708,19 @@ function EnergyModal({
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="text-xs whitespace-nowrap">Margem Mín. (€)</TableHead>
-                    <TableHead className="text-xs whitespace-nowrap">Pond. Ref. (%)</TableHead>
-                    <TableHead className="text-xs whitespace-nowrap">Valor Ref. (€)</TableHead>
-                    <TableHead className="text-xs whitespace-nowrap text-muted-foreground">0-300 Pond.</TableHead>
-                    <TableHead className="text-xs whitespace-nowrap text-muted-foreground">0-300 Valor</TableHead>
-                    <TableHead className="text-xs whitespace-nowrap text-muted-foreground">601+ Pond.</TableHead>
-                    <TableHead className="text-xs whitespace-nowrap text-muted-foreground">601+ Valor</TableHead>
-                    <TableHead className="w-10" />
+                    <TableHead rowSpan={2} className="text-xs whitespace-nowrap align-bottom border-r">Banda de Margem</TableHead>
+                    <TableHead colSpan={2} className="text-xs text-center border-r text-muted-foreground">300 MWh</TableHead>
+                    <TableHead colSpan={2} className="text-xs text-center border-r font-semibold">301-600 MWh</TableHead>
+                    <TableHead colSpan={2} className="text-xs text-center border-r text-muted-foreground">601 MWh</TableHead>
+                    <TableHead rowSpan={2} className="w-10 align-bottom" />
+                  </TableRow>
+                  <TableRow>
+                    <TableHead className="text-[10px] text-center text-muted-foreground">Pond.</TableHead>
+                    <TableHead className="text-[10px] text-center text-muted-foreground border-r">Valor</TableHead>
+                    <TableHead className="text-[10px] text-center">Pond.</TableHead>
+                    <TableHead className="text-[10px] text-center border-r">Valor</TableHead>
+                    <TableHead className="text-[10px] text-center text-muted-foreground">Pond.</TableHead>
+                    <TableHead className="text-[10px] text-center text-muted-foreground border-r">Valor</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -723,19 +733,22 @@ function EnergyModal({
                   )}
                   {bands.map((band, idx) => (
                     <TableRow key={idx}>
-                      <TableCell className="p-1.5">
-                        <DecimalInput className="h-8 text-xs w-24" value={band.marginMin} onChange={(v) => updateBand(idx, 'marginMin', v)} />
+                      <TableCell className="p-1.5 text-xs font-medium whitespace-nowrap border-r">
+                        {formatBandLabel(band)}
                       </TableCell>
+                      {/* 300 MWh — read-only derived */}
+                      <TableCell className="p-1.5 text-xs text-muted-foreground text-center">{formatNum(deriveValue(band.ponderador, 'low'))}%</TableCell>
+                      <TableCell className="p-1.5 text-xs text-muted-foreground text-center border-r">{formatNum(deriveValue(band.valor, 'low'))}€</TableCell>
+                      {/* 301-600 MWh — editable reference */}
                       <TableCell className="p-1.5">
                         <DecimalInput className="h-8 text-xs w-20" value={band.ponderador} onChange={(v) => updateBand(idx, 'ponderador', v)} />
                       </TableCell>
-                      <TableCell className="p-1.5">
+                      <TableCell className="p-1.5 border-r">
                         <DecimalInput className="h-8 text-xs w-24" value={band.valor} onChange={(v) => updateBand(idx, 'valor', v)} />
                       </TableCell>
-                      <TableCell className="p-1.5 text-xs text-muted-foreground">{formatNum(deriveValue(band.ponderador, 'low'))}</TableCell>
-                      <TableCell className="p-1.5 text-xs text-muted-foreground">{formatNum(deriveValue(band.valor, 'low'))}</TableCell>
-                      <TableCell className="p-1.5 text-xs text-muted-foreground">{formatNum(deriveValue(band.ponderador, 'high'))}</TableCell>
-                      <TableCell className="p-1.5 text-xs text-muted-foreground">{formatNum(deriveValue(band.valor, 'high'))}</TableCell>
+                      {/* 601 MWh — read-only derived */}
+                      <TableCell className="p-1.5 text-xs text-muted-foreground text-center">{formatNum(deriveValue(band.ponderador, 'high'))}%</TableCell>
+                      <TableCell className="p-1.5 text-xs text-muted-foreground text-center border-r">{formatNum(deriveValue(band.valor, 'high'))}€</TableCell>
                       <TableCell className="p-1.5">
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeBand(idx)}>
                           <Trash2 className="h-3.5 w-3.5 text-destructive" />
