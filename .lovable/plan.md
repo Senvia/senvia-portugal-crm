@@ -1,29 +1,41 @@
 
 
-## Plano: Calcular duração do contrato automaticamente a partir das datas
+## Plano: Aplicar cálculo automático de duração nas Vendas (telecom energia)
 
-O código já tem lógica parcial para isto, mas o campo "Duração" ainda aparece como editável manualmente. A alteração torna as datas (início/fim) o input principal e a duração passa a ser auto-calculada e read-only.
+A mesma lógica das Propostas: o utilizador preenche **Início** e **Fim do Contrato**, e a **Duração** é calculada automaticamente (read-only). Afeta 3 ficheiros.
 
-### Ficheiro: `src/components/proposals/ProposalCpeSelector.tsx`
+---
 
-**1. CPEs já adicionados (grid de edição, linhas 299-387):**
-- Mover os campos "Início Contrato" e "Fim Contrato" para a mesma linha do Consumo/DBL (substituindo a posição da Duração)
-- Tornar o campo "Duração (anos)" read-only (`disabled`) com estilo `bg-muted`, auto-calculado a partir das datas
-- Layout: `Consumo | Início Contrato | Fim Contrato | DBL` na primeira linha, `Duração (auto) | Margem (auto) | Comissão` na segunda
+### 1. `src/components/sales/EditSaleModal.tsx` — CPEs editáveis
 
-**2. Formulário de adicionar CPE (linhas 467-516):**
-- Mover os campos de data para antes dos campos de energia (acima do Consumo/DBL)
-- Tornar `updateDuracaoContrato` read-only com estilo auto
-- Já existe o `useEffect` (linhas 100-110) que calcula a duração quando `contrato_fim` muda — mantê-lo
+**Secção CPEs (linhas 768-793):** Adicionar campos `contrato_inicio` e `contrato_fim` (inputs `type="date"`) ao grid de cada CPE. Adicionar campo `duracao_contrato` read-only (`disabled`, `bg-muted`) auto-calculado. Quando `contrato_inicio` ou `contrato_fim` muda, calcular `duracao_contrato` automaticamente:
+```
+days = (fim - inicio) / 86400000; duracao = (days / 365).toFixed(3)
+```
 
-**3. Lógica `handleUpdateCpeField` (linhas 166-211):**
-- Quando `contrato_inicio` ou `contrato_fim` muda, calcular `duracao_contrato` automaticamente (já existe nas linhas 192-207)
-- Remover a lógica que calcula `contrato_fim` a partir de `duracao_contrato` (linhas 183-190), pois agora a duração é derivada, não o contrário
-- Tornar o campo de duração read-only nos CPEs adicionados
+**Secção "Dados de Energia" (linhas 657-677):** Tornar o campo "Anos de Contrato" read-only (`disabled`, `bg-muted`), pois a duração agora vem dos CPEs ou é derivada das datas.
 
-**4. Formulário de adicionar CPE — `useEffect` (linhas 88-98):**
-- Remover o efeito que calcula `contrato_fim` a partir de `inicio + duração` (linhas 88-98), pois o fluxo agora é inverso
-- Manter o efeito que calcula `duração` a partir das datas (linhas 100-110)
+### 2. `src/components/sales/CreateSaleModal.tsx` — CPEs (read-only preview)
 
-Nenhuma alteração de base de dados necessária — `duracao_contrato` continua a ser guardado na tabela `proposal_cpes` como valor numérico.
+**Secção CPE/CUI (linhas 837-918):** Já mostra `contrato_inicio` e `contrato_fim` — sem alteração de lógica necessária, apenas garantir que `duracao_contrato` aparece como auto.
+
+**Secção "Dados de Energia" (linhas 750-835):** Os dados energia são read-only neste modal (vêm da proposta). Sem alteração necessária.
+
+### 3. `src/components/sales/SaleDetailsModal.tsx` — Visualização
+
+**Secção CPEs (linhas 410-460 aprox.):** Já mostra `contrato_inicio`, `contrato_fim` e `duracao_contrato`. Sem alteração necessária — apenas exibe dados.
+
+**Secção "Dados de Energia" (linhas 430-445):** Mostra `sale.anos_contrato`. Sem alteração — é read-only.
+
+---
+
+### Resumo de alterações concretas
+
+Apenas o **EditSaleModal.tsx** precisa de alterações:
+1. Adicionar inputs `contrato_inicio` e `contrato_fim` ao grid de cada CPE editável
+2. Adicionar campo `duracao_contrato` disabled/auto-calculado ao grid de cada CPE
+3. Calcular `duracao_contrato` quando datas mudam (handler inline no `onChange`)
+4. Tornar o campo "Anos de Contrato" na secção de dados de energia read-only com estilo `bg-muted`
+
+Nenhuma alteração de base de dados necessária.
 
