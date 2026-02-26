@@ -571,14 +571,14 @@ function TieredTableEditor({
 // ─── Energy (EE & Gás) Modal ───
 
 const DEFAULT_ENERGY_BANDS: EnergyMarginBand[] = [
-  { marginMin: -999999, ponderador: 0, valor: 0 },
-  { marginMin: 0, ponderador: 4.00, valor: 0 },
-  { marginMin: 500, ponderador: 4.00, valor: 20 },
-  { marginMin: 1000, ponderador: 4.00, valor: 40 },
-  { marginMin: 2000, ponderador: 3.76, valor: 80 },
-  { marginMin: 5000, ponderador: 1.52, valor: 193 },
-  { marginMin: 10000, ponderador: 1.28, valor: 269 },
-  { marginMin: 20000, ponderador: 0.80, valor: 397 },
+  { marginMin: -999999, ponderadorLow: 0, valorLow: 0, ponderador: 0, valor: 0, ponderadorHigh: 0, valorHigh: 0 },
+  { marginMin: 0, ponderadorLow: 3.01, valorLow: 0, ponderador: 4.00, valor: 0, ponderadorHigh: 6.00, valorHigh: 0 },
+  { marginMin: 500, ponderadorLow: 3.01, valorLow: 15.04, ponderador: 4.00, valor: 20, ponderadorHigh: 6.00, valorHigh: 30 },
+  { marginMin: 1000, ponderadorLow: 3.01, valorLow: 30.08, ponderador: 4.00, valor: 40, ponderadorHigh: 6.00, valorHigh: 60 },
+  { marginMin: 2000, ponderadorLow: 2.83, valorLow: 60.15, ponderador: 3.76, valor: 80, ponderadorHigh: 5.64, valorHigh: 120 },
+  { marginMin: 5000, ponderadorLow: 1.14, valorLow: 145.11, ponderador: 1.52, valor: 193, ponderadorHigh: 2.28, valorHigh: 289.50 },
+  { marginMin: 10000, ponderadorLow: 0.96, valorLow: 202.26, ponderador: 1.28, valor: 269, ponderadorHigh: 1.92, valorHigh: 403.50 },
+  { marginMin: 20000, ponderadorLow: 0.60, valorLow: 298.50, ponderador: 0.80, valor: 397, ponderadorHigh: 1.20, valorHigh: 595.50 },
 ];
 
 function EnergyModal({
@@ -596,7 +596,6 @@ function EnergyModal({
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const bands = config.bands;
-  const mult = config.volumeMultipliers;
 
   const updateBand = (idx: number, field: keyof EnergyMarginBand, value: number) => {
     const newBands = bands.map((b, i) => (i === idx ? { ...b, [field]: value } : b));
@@ -605,7 +604,7 @@ function EnergyModal({
 
   const addBand = () => {
     const lastMin = bands.length > 0 ? bands[bands.length - 1].marginMin : 0;
-    onChange({ ...config, bands: [...bands, { marginMin: lastMin + 1000, ponderador: 0, valor: 0 }] });
+    onChange({ ...config, bands: [...bands, { marginMin: lastMin + 1000, ponderadorLow: 0, valorLow: 0, ponderador: 0, valor: 0, ponderadorHigh: 0, valorHigh: 0 }] });
   };
 
   const removeBand = (idx: number) => {
@@ -616,21 +615,8 @@ function EnergyModal({
     onChange({ ...config, bands: DEFAULT_ENERGY_BANDS });
   };
 
-  const updateMultiplier = (key: 'low' | 'high', value: number) => {
-    onChange({ ...config, volumeMultipliers: { ...mult, [key]: value } });
-  };
-
-  const deriveValue = (base: number, tier: 'low' | 'high') => {
-    if (tier === 'low') return base / (mult.low || 1.33);
-    return base * (mult.high || 1.5);
-  };
-
   const formatNum = (n: number) => n.toFixed(2).replace('.', ',');
 
-  const formatBandLabel = (band: EnergyMarginBand) => {
-    if (band.marginMin < 0) return '< 0 €';
-    return `> ${band.marginMin.toLocaleString('pt-PT')} €`;
-  };
 
   const handleImportFile = useCallback((file: File) => {
     const reader = new FileReader();
@@ -654,8 +640,12 @@ function EnergyModal({
           const keys = Object.keys(row);
           return {
             marginMin: parseNum(row[keys[0]]),
-            ponderador: parseNum(row[keys[1]]),
-            valor: parseNum(row[keys[2]]),
+            ponderadorLow: parseNum(row[keys[1]]),
+            valorLow: parseNum(row[keys[2]]),
+            ponderador: parseNum(row[keys[3]]),
+            valor: parseNum(row[keys[4]]),
+            ponderadorHigh: parseNum(row[keys[5]]),
+            valorHigh: parseNum(row[keys[6]]),
           };
         });
 
@@ -677,29 +667,11 @@ function EnergyModal({
             <DialogTitle className="text-base sm:text-lg">EE & Gás — Comissões por Margem</DialogTitle>
           </div>
           <DialogDescription>
-            Configure as bandas de margem (referência 301-600 MWh). As outras faixas são derivadas automaticamente.
+            Configure as bandas de margem e comissões para cada faixa de volume.
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-6">
-          {/* Volume multipliers */}
-          <div className="space-y-3">
-            <div className="text-sm font-medium">Multiplicadores de Volume</div>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">0-300 MWh (÷)</Label>
-                <DecimalInput className="h-9" value={mult.low} onChange={(v) => updateMultiplier('low', v)} />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">301-600 MWh</Label>
-                <Input className="h-9" value="Referência (1)" disabled />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">601+ MWh (×)</Label>
-                <DecimalInput className="h-9" value={mult.high} onChange={(v) => updateMultiplier('high', v)} />
-              </div>
-            </div>
-          </div>
 
           {/* Bands table */}
           <div className="space-y-3">
@@ -709,18 +681,18 @@ function EnergyModal({
                 <TableHeader>
                   <TableRow>
                     <TableHead rowSpan={2} className="text-xs whitespace-nowrap align-bottom border-r">Banda de Margem</TableHead>
-                    <TableHead colSpan={2} className="text-xs text-center border-r text-muted-foreground">300 MWh</TableHead>
-                    <TableHead colSpan={2} className="text-xs text-center border-r font-semibold">301-600 MWh</TableHead>
-                    <TableHead colSpan={2} className="text-xs text-center border-r text-muted-foreground">601 MWh</TableHead>
-                    <TableHead rowSpan={2} className="w-10 align-bottom" />
-                  </TableRow>
-                  <TableRow>
-                    <TableHead className="text-[10px] text-center text-muted-foreground">Pond.</TableHead>
-                    <TableHead className="text-[10px] text-center text-muted-foreground border-r">Valor</TableHead>
-                    <TableHead className="text-[10px] text-center">Pond.</TableHead>
-                    <TableHead className="text-[10px] text-center border-r">Valor</TableHead>
-                    <TableHead className="text-[10px] text-center text-muted-foreground">Pond.</TableHead>
-                    <TableHead className="text-[10px] text-center text-muted-foreground border-r">Valor</TableHead>
+                     <TableHead colSpan={2} className="text-xs text-center border-r">300 MWh</TableHead>
+                     <TableHead colSpan={2} className="text-xs text-center border-r">301-600 MWh</TableHead>
+                     <TableHead colSpan={2} className="text-xs text-center border-r">601+ MWh</TableHead>
+                     <TableHead rowSpan={2} className="w-10 align-bottom" />
+                   </TableRow>
+                   <TableRow>
+                     <TableHead className="text-[10px] text-center">Pond.</TableHead>
+                     <TableHead className="text-[10px] text-center border-r">Valor</TableHead>
+                     <TableHead className="text-[10px] text-center">Pond.</TableHead>
+                     <TableHead className="text-[10px] text-center border-r">Valor</TableHead>
+                     <TableHead className="text-[10px] text-center">Pond.</TableHead>
+                     <TableHead className="text-[10px] text-center border-r">Valor</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -736,19 +708,27 @@ function EnergyModal({
                       <TableCell className="p-1.5 border-r">
                         <DecimalInput className="h-8 text-xs w-24" value={band.marginMin} onChange={(v) => updateBand(idx, 'marginMin', v)} />
                       </TableCell>
-                      {/* 300 MWh — read-only derived */}
-                      <TableCell className="p-1.5 text-xs text-muted-foreground text-center">{formatNum(deriveValue(band.ponderador, 'low'))}%</TableCell>
-                      <TableCell className="p-1.5 text-xs text-muted-foreground text-center border-r">{formatNum(deriveValue(band.valor, 'low'))}€</TableCell>
-                      {/* 301-600 MWh — editable reference */}
-                      <TableCell className="p-1.5">
-                        <DecimalInput className="h-8 text-xs w-20" value={band.ponderador} onChange={(v) => updateBand(idx, 'ponderador', v)} />
-                      </TableCell>
-                      <TableCell className="p-1.5 border-r">
-                        <DecimalInput className="h-8 text-xs w-24" value={band.valor} onChange={(v) => updateBand(idx, 'valor', v)} />
-                      </TableCell>
-                      {/* 601 MWh — read-only derived */}
-                      <TableCell className="p-1.5 text-xs text-muted-foreground text-center">{formatNum(deriveValue(band.ponderador, 'high'))}%</TableCell>
-                      <TableCell className="p-1.5 text-xs text-muted-foreground text-center border-r">{formatNum(deriveValue(band.valor, 'high'))}€</TableCell>
+                       {/* 300 MWh */}
+                       <TableCell className="p-1.5">
+                         <DecimalInput className="h-8 text-xs w-20" value={band.ponderadorLow} onChange={(v) => updateBand(idx, 'ponderadorLow', v)} />
+                       </TableCell>
+                       <TableCell className="p-1.5 border-r">
+                         <DecimalInput className="h-8 text-xs w-24" value={band.valorLow} onChange={(v) => updateBand(idx, 'valorLow', v)} />
+                       </TableCell>
+                       {/* 301-600 MWh */}
+                       <TableCell className="p-1.5">
+                         <DecimalInput className="h-8 text-xs w-20" value={band.ponderador} onChange={(v) => updateBand(idx, 'ponderador', v)} />
+                       </TableCell>
+                       <TableCell className="p-1.5 border-r">
+                         <DecimalInput className="h-8 text-xs w-24" value={band.valor} onChange={(v) => updateBand(idx, 'valor', v)} />
+                       </TableCell>
+                       {/* 601+ MWh */}
+                       <TableCell className="p-1.5">
+                         <DecimalInput className="h-8 text-xs w-20" value={band.ponderadorHigh} onChange={(v) => updateBand(idx, 'ponderadorHigh', v)} />
+                       </TableCell>
+                       <TableCell className="p-1.5 border-r">
+                         <DecimalInput className="h-8 text-xs w-24" value={band.valorHigh} onChange={(v) => updateBand(idx, 'valorHigh', v)} />
+                       </TableCell>
                       <TableCell className="p-1.5">
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeBand(idx)}>
                           <Trash2 className="h-3.5 w-3.5 text-destructive" />
@@ -791,7 +771,7 @@ function EnergyModal({
           {/* Formula preview */}
           <div className="flex items-start gap-2 rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
             <Info className="h-4 w-4 shrink-0 mt-0.5 text-primary" />
-            <span>Comissão = Valor (ajustado) + (Margem − Limite_Banda) × (Ponderador ajustado / 100). Para Propostas/Vendas usa-se sempre a referência (301-600).</span>
+            <span>Comissão = Valor + (Margem − Limite_Banda) × (Ponderador / 100). Cada faixa de volume (300, 301-600, 601+) usa os seus valores próprios.</span>
           </div>
         </div>
 
