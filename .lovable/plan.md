@@ -1,92 +1,43 @@
 
 
-## Plano: Sistema de Comissões EE & Gás
+## Plano: Reestruturar tabela EE & Gás conforme print
 
-### Resumo do Entendimento
+### Alterações
 
-A tabela de comissões de Energia funciona assim:
-- **Bandas de Margem**: escalões progressivos baseados na Margem DBL Total do CPE (< 0€, > 0€, > 500€, > 1000€, > 2000€, > 5000€, > 10.000€, > 20.000€)
-- **3 Faixas de Volume** (MWh ativos no mês): 0–300, 301–600, 601+
-- **Referência** = coluna 301–600 (usada em Propostas e Vendas)
-- As outras faixas derivam: `0-300 = referência ÷ 1.33` e `601+ = referência × 1.5`
-- **Fórmula por CPE**: `Comissão = Valor + (Margem_Total − Limite_Banda) × Ponderador`
-- Quando a venda está ativa, a comissão é recalculada mensalmente com base no volume total de MWh ativos
-
-O cliente pode editar esta tabela na **Matriz de Comissões** (Settings), ao lado dos produtos de Serviços existentes.
-
----
-
-### Alterações Técnicas
-
-#### 1. Novos tipos para EE & Gás
-**Ficheiro:** `src/hooks/useCommissionMatrix.ts`
-
-Adicionar:
-```typescript
-export interface EnergyMarginBand {
-  marginMin: number;      // Limite inferior da banda (0, 500, 1000...)
-  ponderador: number;     // % referência (ex: 4.00)
-  valor: number;          // € referência (ex: 40)
-}
-
-export interface EnergyCommissionConfig {
-  bands: EnergyMarginBand[];         // Tabela editável (coluna referência 301-600)
-  volumeMultipliers: {               // Derivação automática
-    low: number;   // divisor para 0-300 MWh (default: 1.33)
-    mid: number;   // referência 301-600 (sempre 1)
-    high: number;  // multiplicador 601+ (default: 1.5)
-  };
-}
-```
-
-Armazenado em `commission_matrix.ee_gas` na organização.
-
-#### 2. Função de cálculo de comissão Energia
-**Ficheiro:** `src/hooks/useCommissionMatrix.ts`
-
-Nova função `calculateEnergyCommission(margem, volumeTier)`:
-1. Encontra a banda onde `margem >= marginMin` (a mais alta aplicável)
-2. Obtém `ponderador` e `valor` da referência
-3. Aplica multiplicador de volume (÷1.33, ×1, ×1.5) ao ponderador e valor
-4. `Comissão = valorAjustado + (margem − marginMin) × (ponderadorAjustado / 100)`
-
-Para propostas/vendas: usa sempre `mid` (referência directa).
-
-#### 3. Editor visual na Matriz de Comissões
 **Ficheiro:** `src/components/settings/CommissionMatrixTab.tsx`
 
-- Novo card "EE & Gás" com ícone `Zap` no grid de produtos
-- Modal dedicado com tabela editável:
-  - Colunas: **Banda de Margem**, **Ponderador (%)**, **Valor (€)** — apenas a referência (301-600)
-  - Preview automático das 3 colunas derivadas (read-only)
-  - Campos editáveis para os multiplicadores de volume (default 1.33 / 1 / 1.5)
-  - Botões adicionar/remover bandas + importar Excel
-- Guardar em `commission_matrix.ee_gas`
+1. **Atualizar `DEFAULT_ENERGY_BANDS`** — incluir todas as 8 bandas com valores exatos do print:
+   - `< 0€`: ponderador 0%, valor 0€
+   - `> 0€`: ponderador 4%, valor 0€
+   - `> 500€`: ponderador 4%, valor 20€
+   - `> 1000€`: ponderador 4%, valor 40€
+   - `> 2000€`: ponderador 3.76%, valor 80€
+   - `> 5000€`: ponderador 1.52%, valor 193€
+   - `> 10.000€`: ponderador 1.28%, valor 269€
+   - `> 20.000€`: ponderador 0.80%, valor 397€
 
-#### 4. Auto-cálculo na Proposta (por CPE)
-**Ficheiro:** `src/components/proposals/ProposalCpeSelector.tsx`
+2. **Reestruturar layout da tabela** — passar de colunas flat para 3 grupos com headers agrupados:
 
-- Quando a config EE & Gás existe na matriz, o campo **Comissão** do CPE passa a ser auto-calculado
-- Input: Margem (já calculada: `consumo × duração × DBL / 1000`)
-- Usa `calculateEnergyCommission(margem, 'mid')` para obter a comissão
-- Campo comissão fica `readOnly` com label "(Auto)" quando configurado
-- Soma total das comissões CPE = comissão da proposta
+```text
+┌──────────────┬────────────────────┬────────────────────┬────────────────────┐
+│  Banda de    │     300 MWh        │   301-600 MWh      │     601 MWh        │
+│  Margem      ├──────────┬─────────┼──────────┬─────────┼──────────┬─────────┤
+│              │ Ponder.  │ Valor   │ Ponder.  │ Valor   │ Ponder.  │ Valor   │
+├──────────────┼──────────┼─────────┼──────────┼─────────┼──────────┼─────────┤
+│ < 0 €        │  0,00%   │   0€    │  0,00%   │   0€    │  0,00%   │   0€    │
+│ > 0 €        │  3,00%   │   0€    │  4,00%   │   0€    │  6,00%   │   0€    │
+│ ...          │  ...     │   ...   │  ...     │   ...   │  ...     │   ...   │
+└──────────────┴──────────┴─────────┴──────────┴─────────┴──────────┴─────────┘
+```
 
-#### 5. Recálculo evolutivo nas Vendas Ativas (futuro)
-- Quando vendas passam a estado ativo, o volume total de MWh dos CPEs ativos nesse mês determina a faixa
-- Este cálculo mensal pode ser feito via cron/edge function (fase 2)
-- Por agora: preparar a estrutura para suportar os 3 tiers de volume
+   - Coluna **Banda de Margem**: mostra `< 0 €` para marginMin negativo, `> X €` para os restantes (read-only display)
+   - Colunas **301-600 MWh**: editáveis (Ponderador + Valor) — são a referência
+   - Colunas **300 MWh** e **601 MWh**: read-only, derivadas automaticamente (÷1.33 e ×1.5)
+   - Coluna de ação (remover) no final
 
----
+3. **Header agrupado** — usar `colSpan={2}` para os títulos "300 MWh", "301-600 MWh", "601 MWh" numa row acima das sub-colunas "Ponderador" e "Valor"
 
-### Ficheiros Afetados
-| Ficheiro | Ação |
-|---|---|
-| `src/hooks/useCommissionMatrix.ts` | Novos tipos + `calculateEnergyCommission()` |
-| `src/components/settings/CommissionMatrixTab.tsx` | Novo card + modal editor EE & Gás |
-| `src/components/proposals/ProposalCpeSelector.tsx` | Auto-cálculo comissão por CPE |
-| `src/components/proposals/CreateProposalModal.tsx` | Integrar auto-cálculo |
-| `src/components/proposals/EditProposalModal.tsx` | Integrar auto-cálculo |
+4. **Formatação dos valores derivados** — mostrar com `%` e `€` para ficar consistente com o print
 
-Nenhuma migration SQL necessária — os dados ficam no campo JSONB `commission_matrix` da tabela `organizations`.
+Nenhum outro ficheiro afetado. A lógica de cálculo no hook permanece igual.
 
