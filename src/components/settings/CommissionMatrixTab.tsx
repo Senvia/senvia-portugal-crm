@@ -703,7 +703,7 @@ function EnergyModal({
 
           {/* Bands table */}
           <div className="space-y-3">
-            <div className="text-sm font-medium">Bandas de Margem (Referência 301-600 MWh)</div>
+            <div className="text-sm font-medium">Bandas de Margem</div>
             <div className="relative w-full overflow-x-auto rounded-md border">
               <Table>
                 <TableHeader>
@@ -733,8 +733,8 @@ function EnergyModal({
                   )}
                   {bands.map((band, idx) => (
                     <TableRow key={idx}>
-                      <TableCell className="p-1.5 text-xs font-medium whitespace-nowrap border-r">
-                        {formatBandLabel(band)}
+                      <TableCell className="p-1.5 border-r">
+                        <DecimalInput className="h-8 text-xs w-24" value={band.marginMin} onChange={(v) => updateBand(idx, 'marginMin', v)} />
                       </TableCell>
                       {/* 300 MWh — read-only derived */}
                       <TableCell className="p-1.5 text-xs text-muted-foreground text-center">{formatNum(deriveValue(band.ponderador, 'low'))}%</TableCell>
