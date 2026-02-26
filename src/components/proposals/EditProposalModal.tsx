@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { X, UserPlus, Zap, Wrench, Package, FileText, User, Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -129,6 +129,12 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
     }
   }, [open, proposal, isTelecom, existingProducts]);
 
+  // Stable ref to avoid useEffect re-triggering on every render
+  const calcRef = useRef(calculateEnergyCommission);
+  calcRef.current = calculateEnergyCommission;
+  const hasEnergyConfigRef = useRef(hasEnergyConfig);
+  hasEnergyConfigRef.current = hasEnergyConfig;
+
   useEffect(() => {
     if (open && existingCpes.length > 0) {
       setProposalCpes(
@@ -138,10 +144,10 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
           
           // Recalculate commission using current tier rules (runtime derivation)
           let comissao = cpe.comissao?.toString() || '';
-          if (hasEnergyConfig && margem) {
+          if (hasEnergyConfigRef.current && margem) {
             const margemNum = parseFloat(margem);
             if (margemNum > 0) {
-              const calc = calculateEnergyCommission(margemNum, getVolumeTier(parseFloat(consumoAnual) || 0));
+              const calc = calcRef.current(margemNum, getVolumeTier(parseFloat(consumoAnual) || 0));
               if (calc !== null) comissao = calc.toFixed(2);
             }
           }
@@ -169,7 +175,7 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
     } else if (open) {
       setProposalCpes([]);
     }
-  }, [open, existingCpes, hasEnergyConfig, calculateEnergyCommission]);
+  }, [open, existingCpes]);
 
   const getProductTotal = (product: typeof selectedProducts[0]) => {
     const subtotal = product.quantity * product.unit_price;
