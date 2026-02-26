@@ -1,91 +1,44 @@
 
 
-## Corrigir Pipeline Telecom: Exactamente 5 Estados
+## Corrigir Layout do Modal "Solar, Baterias..." na Matriz de Comissões
 
-### Situação Actual
+### Problema
 
-A organização Telecom ("Perfect2Gether") tem **7 etapas** na base de dados:
+O modal `ProductModal` no `CommissionMatrixTab.tsx` usa `variant="fullScreen"` mas falta-lhe o padrão `p-0 gap-0` que todos os outros modais fullScreen do projecto utilizam. Isto causa:
+- Padding inconsistente (o DialogContent default adiciona padding que conflita com o padding interno)
+- Aparência de "sem padding" porque os espaçamentos não estão correctos
 
-```text
-1. Lead (new)
-2. Contactado (contactado)
-3. Agendado (scheduled)
-4. Proposta (proposal)       ← REMOVER
-5. Instalação (installation) ← REMOVER
-6. Ativo (active)            ← REMOVER (is_final_positive)
-7. Perdido (perdido)         ← MANTER (is_final_negative)
+### Solução
+
+Alinhar o `ProductModal` com o padrão dos outros modais fullScreen do projecto (ex: `CreateSaleModal`, `LeadDetailsModal`, etc.): adicionar `p-0 gap-0` ao `DialogContent` e ajustar o padding interno das secções.
+
+### Alterações — `src/components/settings/CommissionMatrixTab.tsx`
+
+**Linha 184** — Adicionar `p-0 gap-0` ao `DialogContent`:
+```tsx
+// Antes
+<DialogContent variant="fullScreen" className="flex flex-col overflow-hidden">
+
+// Depois
+<DialogContent variant="fullScreen" className="flex flex-col p-0 gap-0 overflow-hidden">
 ```
 
-O utilizador quer **apenas 5**:
+**Linha 185** — Corrigir padding do `DialogHeader` para ser consistente com o padrão do projecto (px-6 no desktop, pr-14 para dar espaço ao botão fechar):
+```tsx
+// Antes
+<DialogHeader className="shrink-0 border-b pb-4 px-4 sm:px-6 pt-4">
 
-```text
-1. Lead
-2. Contactado
-3. Agendado
-4. Ganha (is_final_positive) ← renomear de "Ativo" para "Ganha", key "won"
-5. Perdido (is_final_negative)
+// Depois
+<DialogHeader className="shrink-0 border-b px-4 sm:px-6 py-4 pr-14">
 ```
 
-### Leads Afectados
+**Linha 193** — Manter o padding do corpo do scroll (já está correcto: `px-4 sm:px-6 py-4`).
 
-Existem **2 leads com status `active`** (Nuno Dias, totallink) que precisam ser migrados para o novo status `won` (Ganha). Nenhum lead tem status `proposal` ou `installation`.
-
----
-
-### Plano de Alterações
-
-#### 1. Base de Dados — Migração SQL
-
-- **Eliminar** as etapas `proposal`, `installation` e `active` da tabela `pipeline_stages` para a org Telecom
-- **Inserir** (ou actualizar) a etapa "Ganha" com key `won`, position 4, `is_final_positive = true`
-- **Actualizar** a position do "Perdido" para 5
-- **Migrar** os 2 leads com `status = 'active'` para `status = 'won'`
-
-Concretamente:
-```sql
--- 1. Migrar leads de 'active' para 'won'
-UPDATE leads SET status = 'won' WHERE organization_id = '<telecom_org_id>' AND status = 'active';
-
--- 2. Eliminar etapas removidas
-DELETE FROM pipeline_stages WHERE organization_id = '<telecom_org_id>' AND key IN ('proposal', 'installation', 'active');
-
--- 3. Inserir etapa "Ganha"
-INSERT INTO pipeline_stages (organization_id, key, name, color, position, is_final_positive, is_final_negative)
-VALUES ('<telecom_org_id>', 'won', 'Ganha', '#22C55E', 4, true, false);
-
--- 4. Actualizar position do Perdido
-UPDATE pipeline_stages SET position = 5 WHERE organization_id = '<telecom_org_id>' AND key = 'perdido';
-```
-
-#### 2. Template — `src/lib/pipeline-templates.ts`
-
-Actualizar o template `telecom` para reflectir exactamente os 5 estados, para que novas organizações Telecom sejam criadas com o pipeline correcto:
-
-```typescript
-// telecom stages
-stages: [
-  { name: 'Lead', key: 'new', color: '#3B82F6', position: 1, is_final_positive: false, is_final_negative: false },
-  { name: 'Contactado', key: 'contactado', color: '#A855F7', position: 2, is_final_positive: false, is_final_negative: false },
-  { name: 'Agendado', key: 'scheduled', color: '#F59E0B', position: 3, is_final_positive: false, is_final_negative: false },
-  { name: 'Ganha', key: 'won', color: '#22C55E', position: 4, is_final_positive: true, is_final_negative: false },
-  { name: 'Perdido', key: 'perdido', color: '#6B7280', position: 5, is_final_positive: false, is_final_negative: true },
-],
-```
-
-#### 3. Memory — Pipeline Telecom
-
-Actualizar a referência para "5 etapas: Lead, Contactado, Agendado, Ganha, Perdido" (em vez da descrição anterior).
-
----
+**Linha 216** — Footer já está correcto: `px-4 sm:px-6 py-3`.
 
 ### Ficheiros a alterar
 
 | Ficheiro | Acção |
 |---|---|
-| Base de dados (migração) | Eliminar 3 etapas, inserir "Ganha", migrar 2 leads |
-| `src/lib/pipeline-templates.ts` | Actualizar template telecom para 5 etapas |
-
-### Nota
-
-Como o sistema já usa flags dinâmicas (`is_final_positive`/`is_final_negative`) em vez de strings hardcoded, o Kanban, dashboard e conversão de leads vão funcionar automaticamente com o novo pipeline sem necessidade de alterar mais ficheiros.
+| `src/components/settings/CommissionMatrixTab.tsx` | Corrigir classes do `DialogContent` e `DialogHeader` |
 
