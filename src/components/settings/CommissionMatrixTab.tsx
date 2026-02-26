@@ -722,7 +722,7 @@ function EnergyModal({
           {/* Tier derivation rules */}
           <div className="space-y-3">
             <div className="text-sm font-medium">Regras de Derivação por Volume</div>
-            <p className="text-xs text-muted-foreground">Selecione a coluna de referência para cada faixa. Se escolher a própria coluna, os valores são editados directamente. Se escolher outra, serão calculados automaticamente.</p>
+            <p className="text-xs text-muted-foreground">Selecione a coluna de referência e, opcionalmente, uma operação (× ou ÷) com um valor para derivar automaticamente.</p>
             <div className="grid gap-3">
               {([
                 { key: 'low' as const, label: '0-300 MWh', selfSource: 'from_low' as const },
@@ -753,33 +753,29 @@ function EnergyModal({
                         <SelectItem value="from_high">601+ MWh</SelectItem>
                       </SelectContent>
                     </Select>
-                    {!isSelf && (
-                      <>
-                        <Select
-                          value={rule.operation}
-                          onValueChange={(v) => updateTierRules({ ...tierRules, [key]: { ...rule, operation: v as 'multiply' | 'divide' } })}
-                        >
-                          <SelectTrigger className="h-8 text-xs w-[70px]">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="multiply">×</SelectItem>
-                            <SelectItem value="divide">÷</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          min={0.01}
-                          className="h-8 text-xs w-20"
-                          value={rule.value}
-                          onChange={(e) => {
-                            const v = parseFloat(e.target.value);
-                            if (!isNaN(v) && v > 0) updateTierRules({ ...tierRules, [key]: { ...rule, value: v } });
-                          }}
-                        />
-                      </>
-                    )}
+                    <Select
+                      value={rule.operation}
+                      onValueChange={(v) => updateTierRules({ ...tierRules, [key]: { ...rule, operation: v as 'multiply' | 'divide' } })}
+                    >
+                      <SelectTrigger className="h-8 text-xs w-[70px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="multiply">×</SelectItem>
+                        <SelectItem value="divide">÷</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min={0.01}
+                      className="h-8 text-xs w-20"
+                      value={rule.value}
+                      onChange={(e) => {
+                        const v = parseFloat(e.target.value);
+                        if (!isNaN(v) && v > 0) updateTierRules({ ...tierRules, [key]: { ...rule, value: v } });
+                      }}
+                    />
                   </div>
                 );
               })}
