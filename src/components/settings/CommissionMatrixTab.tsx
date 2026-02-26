@@ -722,24 +722,25 @@ function EnergyModal({
           {/* Tier derivation rules */}
           <div className="space-y-3">
             <div className="text-sm font-medium">Regras de Derivação por Volume</div>
-            <p className="text-xs text-muted-foreground">Defina como cada faixa de volume calcula os seus valores. Escolha "Manual" para editar directamente ou "Derivar de" para calcular automaticamente a partir de outra coluna.</p>
+            <p className="text-xs text-muted-foreground">Selecione a coluna de referência para cada faixa. Se escolher a própria coluna, os valores são editados directamente. Se escolher outra, serão calculados automaticamente.</p>
             <div className="grid gap-3">
               {([
-                { key: 'low' as const, label: '0-300 MWh' },
-                { key: 'mid' as const, label: '301-600 MWh' },
-                { key: 'high' as const, label: '601+ MWh' },
-              ]).map(({ key, label }) => {
+                { key: 'low' as const, label: '0-300 MWh', selfSource: 'from_low' as const },
+                { key: 'mid' as const, label: '301-600 MWh', selfSource: 'from_mid' as const },
+                { key: 'high' as const, label: '601+ MWh', selfSource: 'from_high' as const },
+              ]).map(({ key, label, selfSource }) => {
                 const rule = tierRules[key];
-                const isManual = rule.source === 'manual';
+                const isSelf = rule.source === selfSource;
                 return (
                   <div key={key} className="flex flex-wrap items-center gap-2 rounded-md border p-3 bg-muted/30">
                     <span className="text-xs font-medium w-24 shrink-0">{label}</span>
                     <Select
                       value={rule.source}
                       onValueChange={(v) => {
-                        const newRule: TierDerivationRule = v === 'manual'
-                          ? { source: 'manual', operation: 'multiply', value: 1 }
-                          : { ...rule, source: v as TierDerivationRule['source'] };
+                        const newSource = v as TierDerivationRule['source'];
+                        const newRule: TierDerivationRule = newSource === selfSource
+                          ? { source: newSource, operation: 'multiply', value: 1 }
+                          : { ...rule, source: newSource };
                         updateTierRules({ ...tierRules, [key]: newRule });
                       }}
                     >
@@ -747,13 +748,12 @@ function EnergyModal({
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="manual">Manual</SelectItem>
-                        {key !== 'low' && <SelectItem value="from_low">Derivar de 0-300</SelectItem>}
-                        {key !== 'mid' && <SelectItem value="from_mid">Derivar de 301-600</SelectItem>}
-                        {key !== 'high' && <SelectItem value="from_high">Derivar de 601+</SelectItem>}
+                        <SelectItem value="from_low">0-300 MWh</SelectItem>
+                        <SelectItem value="from_mid">301-600 MWh</SelectItem>
+                        <SelectItem value="from_high">601+ MWh</SelectItem>
                       </SelectContent>
                     </Select>
-                    {!isManual && (
+                    {!isSelf && (
                       <>
                         <Select
                           value={rule.operation}

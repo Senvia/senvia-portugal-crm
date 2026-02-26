@@ -49,7 +49,7 @@ export interface EnergyMarginBand {
 export type EnergyVolumeTier = 'low' | 'mid' | 'high';
 
 export interface TierDerivationRule {
-  source: 'manual' | 'from_low' | 'from_mid' | 'from_high';
+  source: 'from_low' | 'from_mid' | 'from_high';
   operation: 'multiply' | 'divide';
   value: number;
 }
@@ -62,7 +62,7 @@ export interface TierRules {
 
 export const DEFAULT_TIER_RULES: TierRules = {
   low:  { source: 'from_mid', operation: 'divide',   value: 1.33 },
-  mid:  { source: 'manual',   operation: 'multiply', value: 1 },
+  mid:  { source: 'from_mid', operation: 'multiply', value: 1 },
   high: { source: 'from_mid', operation: 'multiply', value: 1.5 },
 };
 
