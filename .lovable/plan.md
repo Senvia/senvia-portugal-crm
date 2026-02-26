@@ -1,20 +1,24 @@
 
 
-## Plano: Mostrar operação e valor em todos os tiers
+## Plano: Tornar operação e valor opcionais
 
 ### Problema
-Quando um tier seleciona a própria coluna, os campos de operação (× / ÷) e valor ficam escondidos. O utilizador quer que seja **sempre possível** adicionar ou não uma operação e valor, independentemente da coluna selecionada.
+Actualmente a operação (× / ÷) e o valor são sempre obrigatórios. O utilizador quer poder **não ter** operação nenhuma — apenas a coluna de referência, sem transformação.
 
 ### Alteração
 
-**Ficheiro:** `src/components/settings/CommissionMatrixTab.tsx` (linhas 756-781)
+**Ficheiro:** `src/hooks/useCommissionMatrix.ts`
+- Adicionar `'none'` ao tipo `operation`: `'multiply' | 'divide' | 'none'`
+- Quando `operation === 'none'`, a derivação copia o valor directamente da coluna fonte sem cálculo
 
-- Remover a condição `{!isSelf && (...)}` — mostrar **sempre** os campos de operação e valor para todos os 3 tiers
-- Quando o tier seleciona a si próprio com operação `multiply` e valor `1`, o efeito é neutro (equivale a edição directa)
-- Actualizar o texto explicativo para reflectir que a operação é opcional
+**Ficheiro:** `src/components/settings/CommissionMatrixTab.tsx`
+- Adicionar opção "—" (nenhuma) ao Select de operação com value `none`
+- Quando `operation === 'none'`, esconder o Input do valor numérico (não faz sentido)
+- Ajustar `applyDerivation` para retornar o valor fonte directamente quando operation é `none`
 
 ### Ficheiros afetados
 | Ficheiro | Ação |
 |---|---|
-| `src/components/settings/CommissionMatrixTab.tsx` | Remover condição `isSelf`, mostrar sempre operação/valor |
+| `src/hooks/useCommissionMatrix.ts` | Adicionar `'none'` ao tipo operation |
+| `src/components/settings/CommissionMatrixTab.tsx` | Opção "—", esconder valor quando none, ajustar derivação |
 
