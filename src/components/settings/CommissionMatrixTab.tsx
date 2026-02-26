@@ -607,6 +607,7 @@ function EnergyModal({
   const TIER_VAL_FIELD: Record<string, keyof EnergyMarginBand> = { low: 'valorLow', mid: 'valor', high: 'valorHigh' };
 
   const applyDerivation = (sourceVal: number, rule: TierDerivationRule): number => {
+    if (rule.operation === 'none') return sourceVal;
     const result = rule.operation === 'divide' ? sourceVal / rule.value : sourceVal * rule.value;
     return Math.round(result * 100) / 100;
   };
@@ -755,27 +756,30 @@ function EnergyModal({
                     </Select>
                     <Select
                       value={rule.operation}
-                      onValueChange={(v) => updateTierRules({ ...tierRules, [key]: { ...rule, operation: v as 'multiply' | 'divide' } })}
+                      onValueChange={(v) => updateTierRules({ ...tierRules, [key]: { ...rule, operation: v as 'multiply' | 'divide' | 'none' } })}
                     >
                       <SelectTrigger className="h-8 text-xs w-[70px]">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="none">—</SelectItem>
                         <SelectItem value="multiply">×</SelectItem>
                         <SelectItem value="divide">÷</SelectItem>
                       </SelectContent>
                     </Select>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      min={0.01}
-                      className="h-8 text-xs w-20"
-                      value={rule.value}
-                      onChange={(e) => {
-                        const v = parseFloat(e.target.value);
-                        if (!isNaN(v) && v > 0) updateTierRules({ ...tierRules, [key]: { ...rule, value: v } });
-                      }}
-                    />
+                    {rule.operation !== 'none' && (
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min={0.01}
+                        className="h-8 text-xs w-20"
+                        value={rule.value}
+                        onChange={(e) => {
+                          const v = parseFloat(e.target.value);
+                          if (!isNaN(v) && v > 0) updateTierRules({ ...tierRules, [key]: { ...rule, value: v } });
+                        }}
+                      />
+                    )}
                   </div>
                 );
               })}
