@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, forwardRef } from 'react';
-import { Calculator, Info, Plus, Trash2, Sun, Battery, Gauge, Home, Save, FileSpreadsheet } from 'lucide-react';
+import { Calculator, Info, Plus, Trash2, Sun, Battery, Gauge, Home, Save, FileSpreadsheet, Zap } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/card';
@@ -12,7 +12,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { useOrganization, useUpdateOrganization } from '@/hooks/useOrganization';
 import { SERVICOS_PRODUCTS } from '@/types/proposals';
-import type { CommissionMatrix, CommissionRule, SolarTier } from '@/hooks/useCommissionMatrix';
+import type { CommissionMatrix, CommissionRule, SolarTier, EnergyCommissionConfig, EnergyMarginBand } from '@/hooks/useCommissionMatrix';
+import { DEFAULT_ENERGY_CONFIG } from '@/hooks/useCommissionMatrix';
 
 const METHOD_LABELS: Record<string, string> = {
   tiered_kwp: 'Escalões por kWp',
@@ -64,9 +65,11 @@ export function CommissionMatrixTab() {
   const updateOrg = useUpdateOrganization();
   const [localMatrix, setLocalMatrix] = useState<CommissionMatrix>({});
   const [openProduct, setOpenProduct] = useState<string | null>(null);
+  const [openEnergy, setOpenEnergy] = useState(false);
+  const [localEnergy, setLocalEnergy] = useState<EnergyCommissionConfig>(DEFAULT_ENERGY_CONFIG);
 
   useEffect(() => {
-    const saved = (org as any)?.commission_matrix as CommissionMatrix | null;
+    const saved = (org as any)?.commission_matrix as (CommissionMatrix & { ee_gas?: EnergyCommissionConfig }) | null;
     const initial: CommissionMatrix = {};
     SERVICOS_PRODUCTS.forEach((p) => {
       const existing = saved?.[p];
@@ -77,11 +80,19 @@ export function CommissionMatrixTab() {
       }
     });
     setLocalMatrix(initial);
+    setLocalEnergy(saved?.ee_gas ?? DEFAULT_ENERGY_CONFIG);
   }, [org]);
 
   const handleSave = (product: string) => {
     updateOrg.mutate({ commission_matrix: localMatrix as any }, {
       onSuccess: () => setOpenProduct(null),
+    });
+  };
+
+  const handleSaveEnergy = () => {
+    const fullMatrix = { ...localMatrix, ee_gas: localEnergy };
+    updateOrg.mutate({ commission_matrix: fullMatrix as any }, {
+      onSuccess: () => setOpenEnergy(false),
     });
   };
 
@@ -96,6 +107,23 @@ export function CommissionMatrixTab() {
       </p>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+        {/* EE & Gás card */}
+        <Card
+          className="cursor-pointer hover:border-primary/50 transition-colors border-amber-500/30"
+          onClick={() => setOpenEnergy(true)}
+        >
+          <CardContent className="p-4 flex flex-col items-center gap-2 text-center">
+            <Zap className="h-8 w-8 text-amber-500" />
+            <span className="text-sm font-medium leading-tight">EE & Gás</span>
+            <Badge variant="secondary" className="text-[10px]">
+              Bandas de Margem
+            </Badge>
+            <span className="text-[10px] text-muted-foreground">
+              {localEnergy.bands.length} banda(s)
+            </span>
+          </CardContent>
+        </Card>
+
         {SERVICOS_PRODUCTS.map((product) => {
           const rule = localMatrix[product] ?? { method: 'tiered_kwp' as const, tiers: [] };
           const Icon = getProductIcon(product);
@@ -137,6 +165,16 @@ export function CommissionMatrixTab() {
           onSave={() => handleSave(openProduct)}
           isSaving={updateOrg.isPending}
           onClose={() => setOpenProduct(null)}
+        />
+      )}
+
+      {openEnergy && (
+        <EnergyModal
+          config={localEnergy}
+          onChange={setLocalEnergy}
+          onSave={handleSaveEnergy}
+          isSaving={updateOrg.isPending}
+          onClose={() => setOpenEnergy(false)}
         />
       )}
     </div>
@@ -527,6 +565,232 @@ function TieredTableEditor({
         />
       </div>
     </div>
+  );
+}
+
+// ─── Energy (EE & Gás) Modal ───
+
+const DEFAULT_ENERGY_BANDS: EnergyMarginBand[] = [
+  { marginMin: 0, ponderador: 4.00, valor: 40 },
+  { marginMin: 500, ponderador: 3.50, valor: 60 },
+  { marginMin: 1000, ponderador: 3.00, valor: 77.50 },
+  { marginMin: 2000, ponderador: 2.50, valor: 107.50 },
+  { marginMin: 5000, ponderador: 2.00, valor: 182.50 },
+  { marginMin: 10000, ponderador: 1.50, valor: 282.50 },
+  { marginMin: 20000, ponderador: 1.00, valor: 432.50 },
+];
+
+function EnergyModal({
+  config,
+  onChange,
+  onSave,
+  isSaving,
+  onClose,
+}: {
+  config: EnergyCommissionConfig;
+  onChange: (c: EnergyCommissionConfig) => void;
+  onSave: () => void;
+  isSaving: boolean;
+  onClose: () => void;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const bands = config.bands;
+  const mult = config.volumeMultipliers;
+
+  const updateBand = (idx: number, field: keyof EnergyMarginBand, value: number) => {
+    const newBands = bands.map((b, i) => (i === idx ? { ...b, [field]: value } : b));
+    onChange({ ...config, bands: newBands });
+  };
+
+  const addBand = () => {
+    const lastMin = bands.length > 0 ? bands[bands.length - 1].marginMin : 0;
+    onChange({ ...config, bands: [...bands, { marginMin: lastMin + 1000, ponderador: 0, valor: 0 }] });
+  };
+
+  const removeBand = (idx: number) => {
+    onChange({ ...config, bands: bands.filter((_, i) => i !== idx) });
+  };
+
+  const loadDefaults = () => {
+    onChange({ ...config, bands: DEFAULT_ENERGY_BANDS });
+  };
+
+  const updateMultiplier = (key: 'low' | 'high', value: number) => {
+    onChange({ ...config, volumeMultipliers: { ...mult, [key]: value } });
+  };
+
+  // Derive values for low/high tiers
+  const deriveValue = (base: number, tier: 'low' | 'high') => {
+    if (tier === 'low') return base / (mult.low || 1.33);
+    return base * (mult.high || 1.5);
+  };
+
+  const formatNum = (n: number) => n.toFixed(2).replace('.', ',');
+
+  const handleImportFile = useCallback((file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer);
+        const wb = XLSX.read(data, { type: 'array' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const json = XLSX.utils.sheet_to_json<Record<string, any>>(ws, { defval: '' });
+        if (json.length === 0) { toast.error('Ficheiro vazio'); return; }
+
+        const parseNum = (val: any): number => {
+          if (typeof val === 'number') return val;
+          if (!val) return 0;
+          const s = String(val).replace(',', '.');
+          const n = parseFloat(s);
+          return isNaN(n) ? 0 : n;
+        };
+
+        const imported: EnergyMarginBand[] = json.map((row) => {
+          const keys = Object.keys(row);
+          return {
+            marginMin: parseNum(row[keys[0]]),
+            ponderador: parseNum(row[keys[1]]),
+            valor: parseNum(row[keys[2]]),
+          };
+        });
+
+        onChange({ ...config, bands: [...bands, ...imported] });
+        toast.success(`${imported.length} banda(s) importadas`);
+      } catch {
+        toast.error('Erro ao ler o ficheiro');
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }, [bands, config, onChange]);
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent variant="fullScreen" className="flex flex-col p-0 gap-0 overflow-hidden">
+        <DialogHeader className="shrink-0 border-b px-4 sm:px-6 py-4 pr-14">
+          <div className="flex items-center gap-2">
+            <Zap className="h-5 w-5 text-amber-500" />
+            <DialogTitle className="text-base sm:text-lg">EE & Gás — Comissões por Margem</DialogTitle>
+          </div>
+          <DialogDescription>
+            Configure as bandas de margem (referência 301-600 MWh). As outras faixas são derivadas automaticamente.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-6">
+          {/* Volume multipliers */}
+          <div className="space-y-3">
+            <div className="text-sm font-medium">Multiplicadores de Volume</div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">0-300 MWh (÷)</Label>
+                <DecimalInput className="h-9" value={mult.low} onChange={(v) => updateMultiplier('low', v)} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">301-600 MWh</Label>
+                <Input className="h-9" value="Referência (1)" disabled />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">601+ MWh (×)</Label>
+                <DecimalInput className="h-9" value={mult.high} onChange={(v) => updateMultiplier('high', v)} />
+              </div>
+            </div>
+          </div>
+
+          {/* Bands table */}
+          <div className="space-y-3">
+            <div className="text-sm font-medium">Bandas de Margem (Referência 301-600 MWh)</div>
+            <div className="relative w-full overflow-x-auto rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-xs whitespace-nowrap">Margem Mín. (€)</TableHead>
+                    <TableHead className="text-xs whitespace-nowrap">Pond. Ref. (%)</TableHead>
+                    <TableHead className="text-xs whitespace-nowrap">Valor Ref. (€)</TableHead>
+                    <TableHead className="text-xs whitespace-nowrap text-muted-foreground">0-300 Pond.</TableHead>
+                    <TableHead className="text-xs whitespace-nowrap text-muted-foreground">0-300 Valor</TableHead>
+                    <TableHead className="text-xs whitespace-nowrap text-muted-foreground">601+ Pond.</TableHead>
+                    <TableHead className="text-xs whitespace-nowrap text-muted-foreground">601+ Valor</TableHead>
+                    <TableHead className="w-10" />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {bands.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center text-sm text-muted-foreground py-6">
+                        Nenhuma banda configurada. Adicione uma linha, importe um ficheiro ou carregue valores padrão.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {bands.map((band, idx) => (
+                    <TableRow key={idx}>
+                      <TableCell className="p-1.5">
+                        <DecimalInput className="h-8 text-xs w-24" value={band.marginMin} onChange={(v) => updateBand(idx, 'marginMin', v)} />
+                      </TableCell>
+                      <TableCell className="p-1.5">
+                        <DecimalInput className="h-8 text-xs w-20" value={band.ponderador} onChange={(v) => updateBand(idx, 'ponderador', v)} />
+                      </TableCell>
+                      <TableCell className="p-1.5">
+                        <DecimalInput className="h-8 text-xs w-24" value={band.valor} onChange={(v) => updateBand(idx, 'valor', v)} />
+                      </TableCell>
+                      <TableCell className="p-1.5 text-xs text-muted-foreground">{formatNum(deriveValue(band.ponderador, 'low'))}</TableCell>
+                      <TableCell className="p-1.5 text-xs text-muted-foreground">{formatNum(deriveValue(band.valor, 'low'))}</TableCell>
+                      <TableCell className="p-1.5 text-xs text-muted-foreground">{formatNum(deriveValue(band.ponderador, 'high'))}</TableCell>
+                      <TableCell className="p-1.5 text-xs text-muted-foreground">{formatNum(deriveValue(band.valor, 'high'))}</TableCell>
+                      <TableCell className="p-1.5">
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeBand(idx)}>
+                          <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button type="button" variant="outline" size="sm" onClick={addBand} className="gap-1.5">
+                <Plus className="h-3.5 w-3.5" />
+                Adicionar Banda
+              </Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => fileRef.current?.click()} className="gap-1.5">
+                <FileSpreadsheet className="h-3.5 w-3.5" />
+                Importar
+              </Button>
+              {bands.length === 0 && (
+                <Button type="button" variant="outline" size="sm" onClick={loadDefaults} className="gap-1.5">
+                  Carregar Padrão
+                </Button>
+              )}
+              <input
+                ref={fileRef}
+                type="file"
+                className="hidden"
+                accept=".xlsx,.xls,.csv"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) handleImportFile(f);
+                  e.target.value = '';
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Formula preview */}
+          <div className="flex items-start gap-2 rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
+            <Info className="h-4 w-4 shrink-0 mt-0.5 text-primary" />
+            <span>Comissão = Valor (ajustado) + (Margem − Limite_Banda) × (Ponderador ajustado / 100). Para Propostas/Vendas usa-se sempre a referência (301-600).</span>
+          </div>
+        </div>
+
+        <div className="shrink-0 border-t px-4 sm:px-6 py-3 flex justify-end gap-2">
+          <Button variant="outline" onClick={onClose} disabled={isSaving}>Cancelar</Button>
+          <Button onClick={onSave} disabled={isSaving} className="gap-1.5">
+            <Save className="h-4 w-4" />
+            {isSaving ? 'A guardar...' : 'Guardar'}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

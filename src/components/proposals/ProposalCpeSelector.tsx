@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useCpes } from '@/hooks/useCpes';
 import { ENERGY_COMERCIALIZADORES } from '@/types/cpes';
+import { useCommissionMatrix } from '@/hooks/useCommissionMatrix';
 
 export interface ProposalCpeDraft {
   id: string;
@@ -48,6 +49,7 @@ function calculateMargem(consumo: string, duracao: string, dbl: string): string 
 
 export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCpeSelectorProps) {
   const { data: clientCpes = [] } = useCpes(clientId);
+  const { calculateEnergyCommission, hasEnergyConfig } = useCommissionMatrix();
   
   const comercializadorOptions = ENERGY_COMERCIALIZADORES;
   
@@ -67,6 +69,21 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
     calculateMargem(updateConsumoAnual, updateDuracaoContrato, updateDbl), 
     [updateConsumoAnual, updateDuracaoContrato, updateDbl]
   );
+
+  // Auto-calculate commission from energy config
+  const updateAutoComissao = useMemo(() => {
+    if (!hasEnergyConfig || !updateMargem) return null;
+    const margem = parseFloat(updateMargem);
+    if (margem <= 0) return null;
+    return calculateEnergyCommission(margem, 'mid');
+  }, [updateMargem, hasEnergyConfig, calculateEnergyCommission]);
+
+  // When auto-commission changes, update the field
+  useEffect(() => {
+    if (updateAutoComissao !== null) {
+      setUpdateComissao(updateAutoComissao.toFixed(2));
+    }
+  }, [updateAutoComissao]);
 
   // Auto-calculate contrato fim when start + duration changes
   useEffect(() => {
@@ -153,6 +170,14 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
       // Auto-recalculate margem when relevant fields change
       if (['consumo_anual', 'duracao_contrato', 'dbl'].includes(field)) {
         updated.margem = calculateMargem(updated.consumo_anual, updated.duracao_contrato, updated.dbl);
+        // Auto-calculate commission from energy config
+        if (hasEnergyConfig && updated.margem) {
+          const margem = parseFloat(updated.margem);
+          if (margem > 0) {
+            const com = calculateEnergyCommission(margem, 'mid');
+            if (com !== null) updated.comissao = com.toFixed(2);
+          }
+        }
       }
       // Auto-recalculate contrato_fim when start + duration changes
       if ((field === 'contrato_inicio' || field === 'duracao_contrato') && updated.contrato_inicio && updated.duracao_contrato) {
@@ -171,6 +196,14 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
         if (days > 0) {
           updated.duracao_contrato = (days / 365).toFixed(3);
           updated.margem = calculateMargem(updated.consumo_anual, updated.duracao_contrato, updated.dbl);
+          // Auto-calculate commission
+          if (hasEnergyConfig && updated.margem) {
+            const margem = parseFloat(updated.margem);
+            if (margem > 0) {
+              const com = calculateEnergyCommission(margem, 'mid');
+              if (com !== null) updated.comissao = com.toFixed(2);
+            }
+          }
         }
       }
       return updated;
@@ -319,14 +352,18 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
               
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <div className="space-y-1">
-                  <Label className="text-xs">Comissão (€)</Label>
+                  <Label className="text-xs flex items-center gap-1">
+                    Comissão (€)
+                    {hasEnergyConfig && <Badge variant="outline" className="text-[9px] ml-1">Auto</Badge>}
+                  </Label>
                   <Input
                     type="number"
                     step="0.01"
                     min="0"
                     value={cpe.comissao}
                     onChange={(e) => handleUpdateCpeField(cpe.id, 'comissao', e.target.value)}
-                    className="h-8 text-sm"
+                    className={`h-8 text-sm ${hasEnergyConfig ? 'bg-muted' : ''}`}
+                    readOnly={hasEnergyConfig}
                     placeholder="150"
                   />
                 </div>
@@ -505,14 +542,18 @@ export function ProposalCpeSelector({ clientId, cpes, onCpesChange }: ProposalCp
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="text-xs">Comissão (€) <span className="text-destructive">*</span></Label>
+                  <Label className="text-xs flex items-center gap-1">
+                    Comissão (€) <span className="text-destructive">*</span>
+                    {hasEnergyConfig && <Badge variant="outline" className="text-[9px] ml-1">Auto</Badge>}
+                  </Label>
                   <Input
                     type="number"
                     step="0.01"
                     min="0"
                     value={updateComissao}
                     onChange={(e) => setUpdateComissao(e.target.value)}
-                    className="h-8 w-full sm:w-1/3"
+                    className={`h-8 w-full sm:w-1/3 ${hasEnergyConfig ? 'bg-muted' : ''}`}
+                    readOnly={hasEnergyConfig}
                     placeholder="150"
                   />
                 </div>
