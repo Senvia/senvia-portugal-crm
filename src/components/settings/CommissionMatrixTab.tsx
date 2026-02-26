@@ -598,7 +598,19 @@ function EnergyModal({
   const bands = config.bands;
 
   const updateBand = (idx: number, field: keyof EnergyMarginBand, value: number) => {
-    const newBands = bands.map((b, i) => (i === idx ? { ...b, [field]: value } : b));
+    const newBands = bands.map((b, i) => {
+      if (i !== idx) return b;
+      const updated = { ...b, [field]: value };
+      // Auto-derive low/high from reference when editing reference fields
+      if (field === 'ponderador') {
+        updated.ponderadorLow = Math.round((value / 1.33) * 100) / 100;
+        updated.ponderadorHigh = Math.round((value * 1.5) * 100) / 100;
+      } else if (field === 'valor') {
+        updated.valorLow = Math.round((value / 1.33) * 100) / 100;
+        updated.valorHigh = Math.round((value * 1.5) * 100) / 100;
+      }
+      return updated;
+    });
     onChange({ ...config, bands: newBands });
   };
 
