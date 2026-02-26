@@ -50,7 +50,7 @@ export type EnergyVolumeTier = 'low' | 'mid' | 'high';
 
 export interface TierDerivationRule {
   source: 'from_low' | 'from_mid' | 'from_high';
-  operation: 'multiply' | 'divide';
+  operation: 'multiply' | 'divide' | 'none';
   value: number;
 }
 
