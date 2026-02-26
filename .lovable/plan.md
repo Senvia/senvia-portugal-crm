@@ -1,43 +1,51 @@
 
 
-## Plano: Reestruturar tabela EE & Gás conforme print
+## Plano: Tornar todas as colunas editáveis (300 MWh e 601 MWh)
+
+### Problema actual
+As colunas 300 MWh e 601 MWh são derivadas automaticamente (÷1.33 e ×1.5) e mostradas como read-only. O utilizador quer que todos os 6 valores (Ponderador + Valor × 3 faixas) sejam editáveis independentemente.
 
 ### Alterações
 
-**Ficheiro:** `src/components/settings/CommissionMatrixTab.tsx`
+#### 1. Alterar o tipo `EnergyMarginBand`
+**Ficheiro:** `src/hooks/useCommissionMatrix.ts`
 
-1. **Atualizar `DEFAULT_ENERGY_BANDS`** — incluir todas as 8 bandas com valores exatos do print:
-   - `< 0€`: ponderador 0%, valor 0€
-   - `> 0€`: ponderador 4%, valor 0€
-   - `> 500€`: ponderador 4%, valor 20€
-   - `> 1000€`: ponderador 4%, valor 40€
-   - `> 2000€`: ponderador 3.76%, valor 80€
-   - `> 5000€`: ponderador 1.52%, valor 193€
-   - `> 10.000€`: ponderador 1.28%, valor 269€
-   - `> 20.000€`: ponderador 0.80%, valor 397€
-
-2. **Reestruturar layout da tabela** — passar de colunas flat para 3 grupos com headers agrupados:
-
-```text
-┌──────────────┬────────────────────┬────────────────────┬────────────────────┐
-│  Banda de    │     300 MWh        │   301-600 MWh      │     601 MWh        │
-│  Margem      ├──────────┬─────────┼──────────┬─────────┼──────────┬─────────┤
-│              │ Ponder.  │ Valor   │ Ponder.  │ Valor   │ Ponder.  │ Valor   │
-├──────────────┼──────────┼─────────┼──────────┼─────────┼──────────┼─────────┤
-│ < 0 €        │  0,00%   │   0€    │  0,00%   │   0€    │  0,00%   │   0€    │
-│ > 0 €        │  3,00%   │   0€    │  4,00%   │   0€    │  6,00%   │   0€    │
-│ ...          │  ...     │   ...   │  ...     │   ...   │  ...     │   ...   │
-└──────────────┴──────────┴─────────┴──────────┴─────────┴──────────┴─────────┘
+Expandir de 2 campos (referência) para 6 campos independentes:
+```typescript
+export interface EnergyMarginBand {
+  marginMin: number;
+  ponderadorLow: number;   // 300 MWh
+  valorLow: number;
+  ponderador: number;      // 301-600 MWh (referência)
+  valor: number;
+  ponderadorHigh: number;  // 601 MWh
+  valorHigh: number;
+}
 ```
 
-   - Coluna **Banda de Margem**: mostra `< 0 €` para marginMin negativo, `> X €` para os restantes (read-only display)
-   - Colunas **301-600 MWh**: editáveis (Ponderador + Valor) — são a referência
-   - Colunas **300 MWh** e **601 MWh**: read-only, derivadas automaticamente (÷1.33 e ×1.5)
-   - Coluna de ação (remover) no final
+Atualizar `calculateEnergyCommissionPure` para aceitar o tier e usar o ponderador/valor correto conforme a faixa.
 
-3. **Header agrupado** — usar `colSpan={2}` para os títulos "300 MWh", "301-600 MWh", "601 MWh" numa row acima das sub-colunas "Ponderador" e "Valor"
+#### 2. Atualizar tabela no editor
+**Ficheiro:** `src/components/settings/CommissionMatrixTab.tsx`
 
-4. **Formatação dos valores derivados** — mostrar com `%` e `€` para ficar consistente com o print
+- Substituir as 4 células read-only (300 MWh e 601 MWh) por `DecimalInput` editáveis
+- Remover a função `deriveValue` e a secção "Multiplicadores de Volume" (já não são necessários)
+- Atualizar `DEFAULT_ENERGY_BANDS` para incluir os 6 valores por banda
+- Remover as classes `text-muted-foreground` das colunas laterais (já não são derivadas)
+- Atualizar a descrição do modal e a fórmula preview
+- Atualizar importação Excel para mapear 7 colunas (marginMin + 6 valores)
 
-Nenhum outro ficheiro afetado. A lógica de cálculo no hook permanece igual.
+#### 3. Atualizar defaults com todos os valores
+Usando a fórmula original para pré-calcular os defaults:
+- 300 MWh: `ponderador ÷ 1.33`, `valor ÷ 1.33`
+- 601 MWh: `ponderador × 1.5`, `valor × 1.5`
+
+#### 4. Remover `volumeMultipliers` do config
+Já não são necessários pois cada faixa tem valores independentes. Limpar referências no hook e no modal.
+
+### Ficheiros afetados
+| Ficheiro | Ação |
+|---|---|
+| `src/hooks/useCommissionMatrix.ts` | Expandir `EnergyMarginBand`, remover `volumeMultipliers`, atualizar cálculo |
+| `src/components/settings/CommissionMatrixTab.tsx` | Todos os inputs editáveis, remover derivação, atualizar defaults |
 
