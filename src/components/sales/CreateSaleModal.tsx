@@ -57,7 +57,7 @@ import {
 } from "lucide-react";
 import type { Proposal, ServicosProductDetail } from "@/types/proposals";
 import { NEGOTIATION_TYPE_LABELS, SERVICOS_PRODUCTS, SERVICOS_PRODUCT_CONFIGS } from "@/types/proposals";
-import { useCommissionMatrix, getVolumeTier } from "@/hooks/useCommissionMatrix";
+import { useCommissionMatrix, getVolumeTier, getTierRuleLabel } from "@/hooks/useCommissionMatrix";
 import { 
   type ProposalType,
   type ModeloServico,
@@ -113,7 +113,7 @@ export function CreateSaleModal({
   const updateLeadStatus = useUpdateLeadStatus();
   const { organization } = useAuth();
   const isTelecom = organization?.niche === 'telecom';
-  const { calculateCommission, isAutoCalculated, calculateEnergyCommission, hasEnergyConfig } = useCommissionMatrix();
+  const { calculateCommission, isAutoCalculated, calculateEnergyCommission, hasEnergyConfig, energyConfig } = useCommissionMatrix();
   
   // Fiscal info
   const ixActive = isInvoiceXpressActive(organization);
@@ -893,6 +893,11 @@ export function CreateSaleModal({
                               <div>
                                 <p className="text-xs text-muted-foreground">Comissão</p>
                                 <p className="text-sm font-medium text-green-500">{formatCurrency(cpe.comissao)}</p>
+                                {hasEnergyConfig && cpe.consumo_anual != null && (
+                                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                                    {getTierRuleLabel(getVolumeTier(Number(cpe.consumo_anual) || 0), energyConfig)}
+                                  </p>
+                                )}
                               </div>
                             )}
                           </div>

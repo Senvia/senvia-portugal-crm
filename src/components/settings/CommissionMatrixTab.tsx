@@ -84,7 +84,8 @@ export function CommissionMatrixTab() {
   }, [org]);
 
   const handleSave = (product: string) => {
-    updateOrg.mutate({ commission_matrix: localMatrix as any }, {
+    const fullMatrix = { ...localMatrix, ee_gas: localEnergy };
+    updateOrg.mutate({ commission_matrix: fullMatrix as any }, {
       onSuccess: () => setOpenProduct(null),
     });
   };

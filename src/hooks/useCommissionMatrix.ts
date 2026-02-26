@@ -152,13 +152,49 @@ export function calculateEnergyCommissionPure(
   return valor + (margem - band.marginMin) * (ponderador / 100);
 }
 
+// --- Normalizer: fill missing tierRules without overwriting existing ones ---
+
+function normalizeEnergyConfig(raw: EnergyCommissionConfig | null): EnergyCommissionConfig | null {
+  if (!raw) return null;
+  const tierRules: TierRules = {
+    low:  raw.tierRules?.low  ?? DEFAULT_TIER_RULES.low,
+    mid:  raw.tierRules?.mid  ?? DEFAULT_TIER_RULES.mid,
+    high: raw.tierRules?.high ?? DEFAULT_TIER_RULES.high,
+  };
+  return { ...raw, tierRules };
+}
+
+// --- Tier label helpers (for transparency) ---
+
+const TIER_LABELS: Record<EnergyVolumeTier, string> = {
+  low: 'Baixo (≤300 MWh)',
+  mid: 'Médio (301–600 MWh)',
+  high: 'Alto (+601 MWh)',
+};
+
+const OPERATION_LABELS: Record<string, string> = {
+  multiply: '×',
+  divide: '÷',
+  none: '=',
+};
+
+export function getTierRuleLabel(tier: EnergyVolumeTier, config: EnergyCommissionConfig | null): string {
+  if (!config?.tierRules) return TIER_LABELS[tier];
+  const rule = config.tierRules[tier];
+  if (!rule) return TIER_LABELS[tier];
+  const op = OPERATION_LABELS[rule.operation] || '?';
+  if (rule.operation === 'none') return `${TIER_LABELS[tier]} | Regra: ${rule.source} (direto)`;
+  return `${TIER_LABELS[tier]} | Regra: ${rule.source} ${op} ${rule.value}`;
+}
+
 // --- Main hook ---
 
 export function useCommissionMatrix() {
   const { data: org } = useOrganization();
 
   const matrix: CommissionMatrix | null = (org as any)?.commission_matrix ?? null;
-  const energyConfig: EnergyCommissionConfig | null = (org as any)?.commission_matrix?.ee_gas ?? null;
+  const rawEnergyConfig: EnergyCommissionConfig | null = (org as any)?.commission_matrix?.ee_gas ?? null;
+  const energyConfig = normalizeEnergyConfig(rawEnergyConfig);
 
   const calculateCommission = useCallback(
     (productName: string, detail: ServicosProductDetail, modeloServico?: ModeloServico): number | null => {
