@@ -148,11 +148,7 @@ export interface ServicosProductConfig {
 export const SERVICOS_PRODUCT_CONFIGS: ServicosProductConfig[] = [
   { name: 'Solar', fields: ['duracao', 'kwp', 'comissao'] },
   { name: 'Baterias', fields: ['kwp', 'comissao'] },
-  { 
-    name: 'Carregadores', 
-    fields: ['valor', 'kwp', 'comissao'],
-    kwpAuto: (d) => d.valor ? (d.valor * 0.67) / 1000 : null,
-  },
+  { name: 'Carregadores', fields: ['valor', 'kwp', 'comissao'] },
   { 
     name: 'Condensadores', 
     fields: ['duracao', 'valor', 'kwp', 'comissao'],
