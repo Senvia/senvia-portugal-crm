@@ -1,27 +1,24 @@
 
 
-## Remover fórmula automática de kWp dos Carregadores
+## Remover fórmula automática de kWp dos Condensadores
 
 ### Alteração
 
-**Ficheiro: `src/types/proposals.ts`** (linha ~148)
+**Ficheiro: `src/types/proposals.ts`**
 
-Remover a propriedade `kwpAuto` da config de "Carregadores", deixando o campo kWp manual:
+Remover a propriedade `kwpAuto` da config de "Condensadores", deixando o campo kWp manual:
 
 ```typescript
 // De:
 { 
-  name: 'Carregadores', 
-  fields: ['valor', 'kwp', 'comissao'],
+  name: 'Condensadores', 
+  fields: ['duracao', 'valor', 'kwp', 'comissao'],
   kwpAuto: (d) => d.valor ? (d.valor * 0.67) / 1000 : null,
 },
 
 // Para:
-{ 
-  name: 'Carregadores', 
-  fields: ['valor', 'kwp', 'comissao'],
-},
+{ name: 'Condensadores', fields: ['duracao', 'valor', 'kwp', 'comissao'] },
 ```
 
-Apenas esta linha é removida. O campo kWp continua visível mas passa a ser preenchido manualmente pelo utilizador.
+Mesma lógica aplicada anteriormente aos Carregadores. O campo kWp continua visível mas passa a ser preenchido manualmente.
 
