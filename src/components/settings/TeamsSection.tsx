@@ -158,11 +158,11 @@ export function TeamsSection() {
           <div className="space-y-2">
             <Label className="flex items-center gap-2">
               <UserPlus className="h-4 w-4" />
-              Membros ({selectedMemberIds.length})
+              Colaboradores ({selectedMemberIds.length})
             </Label>
             {availableMembers.length === 0 ? (
               <p className="text-sm text-muted-foreground py-2">
-                {!leaderId ? 'Selecione um líder primeiro.' : 'Todos os membros já estão atribuídos a outras equipas.'}
+                {!leaderId ? 'Selecione um líder primeiro.' : 'Todos os colaboradores já estão atribuídos a outras equipas.'}
               </p>
             ) : (
               <div className="space-y-2 max-h-48 overflow-y-auto">
@@ -224,7 +224,7 @@ export function TeamsSection() {
               Equipas
             </CardTitle>
             <CardDescription>
-              Crie equipas hierárquicas. O líder vê os dados dos membros da sua equipa.
+              Crie equipas hierárquicas. O líder vê os dados dos colaboradores da sua equipa.
             </CardDescription>
           </div>
           <Button onClick={handleOpenCreate} size="sm">
@@ -237,7 +237,7 @@ export function TeamsSection() {
             <div className="text-center py-8 text-muted-foreground">
               <Users className="h-10 w-10 mx-auto mb-2 opacity-50" />
               <p>Nenhuma equipa criada.</p>
-              <p className="text-sm">Crie equipas para que os líderes vejam os dados dos seus vendedores.</p>
+              <p className="text-sm">Crie equipas para que os líderes vejam os dados dos seus comerciais.</p>
             </div>
           ) : (
             <div className="space-y-3">

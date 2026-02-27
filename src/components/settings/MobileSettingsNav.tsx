@@ -34,7 +34,7 @@ interface SectionItem {
 const sections: SectionItem[] = [
   { id: "general", label: "Definições Gerais", icon: Building, description: "Organização, pipeline e formulários" },
   { id: "security", label: "Segurança", icon: Shield, description: "Password e autenticação" },
-  { id: "team", label: "Equipa e Acessos", icon: UsersRound, description: "Membros, perfis e equipas", requiresTeam: true },
+  { id: "team", label: "Equipa e Acessos", icon: UsersRound, description: "Colaboradores, perfis e equipas", requiresTeam: true },
   { id: "products", label: "Produtos", icon: Package, description: "Catálogo de produtos", requiresIntegrations: true },
   { id: "finance", label: "Financeiro", icon: Receipt, description: "Despesas e configuração fiscal", requiresIntegrations: true },
   { id: "notifications", label: "Notificações", icon: Bell, description: "Push e alertas automáticos" },

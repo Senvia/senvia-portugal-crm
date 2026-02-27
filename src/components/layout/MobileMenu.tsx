@@ -23,7 +23,7 @@ const getRoleLabel = (roles: AppRole[]): string => {
   if (roles.includes('super_admin')) return 'Super Admin';
   if (roles.includes('admin')) return 'Administrador';
   if (roles.includes('viewer')) return 'Visualizador';
-  return 'Membro';
+  return 'Colaborador';
 };
 
 interface MobileMenuProps {

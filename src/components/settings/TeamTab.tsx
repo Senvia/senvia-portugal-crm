@@ -25,7 +25,7 @@ import { getBaseUrl } from '@/lib/constants';
 const ROLE_LABELS: Record<string, string> = {
   admin: 'Administrador',
   viewer: 'Visualizador',
-  salesperson: 'Vendedor',
+  salesperson: 'Comercial',
   super_admin: 'Super Admin',
 };
 
@@ -274,7 +274,7 @@ export function TeamTab() {
                   <DialogHeader>
                     <DialogTitle>Adicionar Novo Acesso</DialogTitle>
                     <DialogDescription>
-                      Crie credenciais de acesso para um novo membro da equipa.
+                      Crie credenciais de acesso para um novo colaborador.
                     </DialogDescription>
                   </DialogHeader>
                   <div className="space-y-4 py-4">
@@ -351,7 +351,7 @@ export function TeamTab() {
                           <div className="flex items-start space-x-3 rounded-lg border p-3">
                             <RadioGroupItem value="salesperson" id="role-salesperson" className="mt-1" />
                             <div className="flex-1">
-                              <Label htmlFor="role-salesperson" className="font-medium cursor-pointer">Vendedor</Label>
+                              <Label htmlFor="role-salesperson" className="font-medium cursor-pointer">Comercial</Label>
                               <p className="text-sm text-muted-foreground">Vê apenas os leads atribuídos.</p>
                             </div>
                           </div>
@@ -576,7 +576,7 @@ export function TeamTab() {
                 {(!members || members.length === 0) && (
                   <TableRow>
                     <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
-                      Nenhum membro encontrado.
+                      Nenhum colaborador encontrado.
                     </TableCell>
                   </TableRow>
                 )}
@@ -693,7 +693,7 @@ export function TeamTab() {
                 <div className="flex items-start space-x-3 rounded-lg border p-3">
                   <RadioGroupItem value="salesperson" id="new-role-salesperson" className="mt-1" />
                   <div className="flex-1">
-                    <Label htmlFor="new-role-salesperson" className="font-medium cursor-pointer">Vendedor</Label>
+                    <Label htmlFor="new-role-salesperson" className="font-medium cursor-pointer">Comercial</Label>
                     <p className="text-sm text-muted-foreground">Vê leads atribuídos.</p>
                   </div>
                 </div>

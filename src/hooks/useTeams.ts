@@ -222,10 +222,10 @@ export function useSetTeamMembers() {
       queryClient.invalidateQueries({ queryKey: ['team-members-entries'] });
       queryClient.invalidateQueries({ queryKey: ['all-team-members-entries'] });
       queryClient.invalidateQueries({ queryKey: ['teams'] });
-      toast({ title: 'Membros atualizados' });
+      toast({ title: 'Colaboradores atualizados' });
     },
     onError: () => {
-      toast({ title: 'Erro', description: 'Não foi possível atualizar os membros.', variant: 'destructive' });
+      toast({ title: 'Erro', description: 'Não foi possível atualizar os colaboradores.', variant: 'destructive' });
     },
   });
 }

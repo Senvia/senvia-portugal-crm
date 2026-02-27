@@ -29,7 +29,7 @@ import { Shield, Plus, Pencil, Trash2, Loader2, Eye, LayoutDashboard, ArrowLeft 
 const BASE_ROLE_LABELS: Record<string, string> = {
   admin: 'Administrador',
   viewer: 'Visualizador',
-  salesperson: 'Vendedor',
+  salesperson: 'Comercial',
 };
 
 export function ProfilesTab() {
@@ -222,7 +222,7 @@ export function ProfilesTab() {
                     <SelectContent>
                       <SelectItem value="admin">Administrador</SelectItem>
                       <SelectItem value="viewer">Visualizador</SelectItem>
-                      <SelectItem value="salesperson">Vendedor</SelectItem>
+                      <SelectItem value="salesperson">Comercial</SelectItem>
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">Define as políticas de segurança base.</p>

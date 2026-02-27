@@ -458,7 +458,7 @@ export function CreateClientModal({ open, onOpenChange, onCreated, initialData }
                       </div>
 
                       <div className="space-y-2">
-                        <Label>Vendedor Responsável</Label>
+                        <Label>Comercial Responsável</Label>
                         <Select 
                           value={assignedTo || "none"} 
                           onValueChange={(v) => setAssignedTo(v === "none" ? "" : v)}

@@ -29,7 +29,7 @@ export const TEMPLATE_VARIABLES = [
   { key: '{{telefone}}', label: 'Telefone' },
   { key: '{{data}}', label: 'Data atual' },
   { key: '{{organizacao}}', label: 'Nome da organização' },
-  { key: '{{vendedor}}', label: 'Vendedor responsável (assigned_to)' },
+  { key: '{{vendedor}}', label: 'Comercial responsável (assigned_to)' },
 ] as const;
 
 // Campaign types

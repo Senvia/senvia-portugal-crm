@@ -120,7 +120,7 @@ export function AssignTeamMemberModal({
 
               {teamMembers.length === 0 && (
                 <p className="text-sm text-muted-foreground text-center py-4">
-                  Nenhum membro da equipa encontrado.
+                  Nenhum colaborador encontrado.
                 </p>
               )}
             </RadioGroup>

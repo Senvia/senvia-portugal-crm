@@ -445,10 +445,10 @@ export function ClientDetailsDrawer({
                     </CardContent>
                   </Card>
 
-                  {/* Vendedor Responsável */}
+                  {/* Comercial Responsável */}
                   <Card>
                     <CardHeader className="pb-3">
-                      <CardTitle className="text-base">Vendedor Responsável</CardTitle>
+                      <CardTitle className="text-base">Comercial Responsável</CardTitle>
                     </CardHeader>
                     <CardContent>
                       {getTeamMemberName(client.assigned_to) ? (
