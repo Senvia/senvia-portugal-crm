@@ -67,7 +67,7 @@ export function useLiveCommissions(selectedMonth: string) {
       // Get delivered sales filtered by activation_date
       const { data: sales, error: salesError } = await supabase
         .from('sales')
-        .select('id, lead_id, activation_date, status, proposal_id')
+        .select('id, lead_id, client_id, activation_date, status, proposal_id')
         .eq('organization_id', organizationId)
         .eq('status', 'delivered')
         .gte('activation_date', monthStart)
@@ -76,14 +76,16 @@ export function useLiveCommissions(selectedMonth: string) {
       if (salesError) throw salesError;
       if (!sales?.length) return { commercials: [], globalMwh: 0, globalTier: 'low', totalCommission: 0 };
 
-      // Get lead assigned_to
-      const leadIds = [...new Set(sales.map(s => s.lead_id).filter(Boolean))] as string[];
-      const { data: leads } = await supabase
-        .from('leads')
-        .select('id, assigned_to')
-        .in('id', leadIds);
+      // Get client assigned_to
+      const clientIds = [...new Set(sales.map(s => s.client_id).filter(Boolean))] as string[];
+      const { data: clients } = clientIds.length > 0
+        ? await supabase
+            .from('crm_clients')
+            .select('id, assigned_to')
+            .in('id', clientIds)
+        : { data: [] };
 
-      const leadMap = new Map((leads || []).map(l => [l.id, l.assigned_to]));
+      const clientMap = new Map((clients || []).map(c => [c.id, c.assigned_to]));
 
       // Get proposals with negotiation_type filter
       const proposalIds = [...new Set(sales.map(s => s.proposal_id).filter(Boolean))] as string[];
@@ -124,7 +126,7 @@ export function useLiveCommissions(selectedMonth: string) {
         if (!saleId) continue;
         const sale = sales.find(s => s.id === saleId);
         if (!sale) continue;
-        const assignedTo = (sale.lead_id ? leadMap.get(sale.lead_id) : null) || 'unassigned';
+        const assignedTo = (sale.client_id ? clientMap.get(sale.client_id) : null) || 'unassigned';
 
         if (!byCommercial.has(assignedTo)) {
           byCommercial.set(assignedTo, {
