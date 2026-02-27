@@ -11,7 +11,12 @@ import {
 } from '@/hooks/useCommissionMatrix';
 import { format, endOfMonth } from 'date-fns';
 
-const VALID_NEGOTIATION_TYPES = ['angariacao', 'angariacao_indexado'];
+const NEGOTIATION_TYPE_LABELS: Record<string, string> = {
+  angariacao: 'Angariação',
+  angariacao_indexado: 'Ang. Indexado',
+  renovacao: 'Renovação',
+  sem_volume: 'Sem Volume',
+};
 
 export interface CpeDetail {
   sale_id: string;
@@ -95,8 +100,7 @@ export function useLiveCommissions(selectedMonth: string) {
       const { data: proposals } = await supabase
         .from('proposals')
         .select('id, negotiation_type')
-        .in('id', proposalIds)
-        .in('negotiation_type', VALID_NEGOTIATION_TYPES);
+        .in('id', proposalIds);
 
       if (!proposals?.length) return { commercials: [], globalMwh: 0, globalTier: 'low', totalCommission: 0 };
 
