@@ -50,7 +50,7 @@ export function BulkActionsBar({
               className="flex-1 sm:flex-none"
             >
               <UserPlus className="h-4 w-4 mr-2" />
-              <span className="hidden sm:inline">Atribuir Colaborador</span>
+              <span className="hidden sm:inline">Atribuir Vendedor Responsável</span>
               <span className="sm:hidden">Atribuir</span>
             </Button>
             
