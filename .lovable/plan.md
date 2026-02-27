@@ -1,34 +1,21 @@
 
+Diagnóstico confirmado
+1. A venda 0012 está a ser carregada no módulo de comissões (request de vendas entregues de fevereiro retorna 0011 e 0012).
+2. A 0012 passa todos os filtros da lógica atual:
+   - `status = delivered`
+   - `activation_date` dentro do mês
+   - proposta com `negotiation_type = angariacao_indexado`
+   - existe `proposal_cpe` associado
+   - cliente com vendedor responsável (`crm_clients.assigned_to = Nuno`)
+3. O motivo da perceção de “não aparece” é visual: a tabela detalhada mostra **CPE/CUI**, não mostra **código da venda** (`0012`).
 
-## Diagnóstico
+Plano curto de implementação
+1. Em `useLiveCommissions.ts`, incluir `code` no select de `sales` e propagar `sale_code` para cada item de detalhe.
+2. Em `CommissionsTab.tsx`, adicionar coluna **Venda** no detalhe expandido (ex.: `0011`, `0012`).
+3. Manter coluna **CPE/CUI** e mostrar ambos para rastreabilidade (venda + CPE).
+4. Validar no mês de fevereiro: ao expandir Nuno, devem aparecer explicitamente as linhas com `0011` e `0012`.
 
-A lógica de comissões (`useLiveCommissions.ts`, linha 127) determina o comercial via:
-```
-sale → lead_id → leads.assigned_to
-```
-
-Mas o vendedor está no **cliente**, não no lead:
-```
-sale → client_id → crm_clients.assigned_to = Nuno Dias ✅
-```
-
-Dados confirmados: ambas as vendas (0011, 0012) têm `client_id` apontando para "Ricardo Cabral", cujo `assigned_to` é o Nuno Dias.
-
-## Plano
-
-### 1. Alterar lógica de comissões para usar `crm_clients.assigned_to`
-
-**Arquivo:** `src/hooks/useLiveCommissions.ts`
-
-- No select de `sales`, incluir `client_id` (já existe na tabela)
-- Substituir a query de `leads` por uma query de `crm_clients` usando os `client_id` das vendas
-- Criar `clientMap` em vez de `leadMap`
-- Linha 127: mudar de `sale.lead_id ? leadMap.get(sale.lead_id)` para `sale.client_id ? clientMap.get(sale.client_id)`
-- Fallback mantém-se como `'unassigned'`
-
-### Detalhes técnicos
-- Sem alterações de base de dados
-- Sem alterações de UI
-- Apenas 1 ficheiro alterado: `useLiveCommissions.ts`
-- As ~10 linhas que fazem fetch de leads e criam `leadMap` são substituídas por fetch de `crm_clients` e `clientMap`
-
+Detalhes técnicos
+- Arquivos: `src/hooks/useLiveCommissions.ts`, `src/components/finance/CommissionsTab.tsx`
+- Sem alterações de base de dados.
+- Sem alteração de regra de cálculo; apenas melhoria de identificação na UI.
