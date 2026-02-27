@@ -1,22 +1,34 @@
 
 
-## Diagnóstico confirmado com dados reais
+## Diagnóstico
 
-| Venda | activation_date | negotiation_type | Aparece? |
-|-------|----------------|------------------|----------|
-| 0011 | 2026-02-27 | angariacao | ✅ Deveria aparecer |
-| 0012 | **NULL** | angariacao_indexado | ❌ Excluída pelo filtro |
+A lógica de comissões (`useLiveCommissions.ts`, linha 127) determina o comercial via:
+```
+sale → lead_id → leads.assigned_to
+```
 
-### Problema da 0012
-Foi criada **antes** do deploy do campo "Data de Ativação" no modal de criação. Ficou com `activation_date = NULL`, logo é excluída pelo filtro `.gte('activation_date', monthStart)`.
+Mas o vendedor está no **cliente**, não no lead:
+```
+sale → client_id → crm_clients.assigned_to = Nuno Dias ✅
+```
 
-### Problema da 0011
-Se também não aparece na UI, pode ser cache do browser (refresh resolve) ou o mês selecionado no módulo de comissões não é Fevereiro 2026.
+Dados confirmados: ambas as vendas (0011, 0012) têm `client_id` apontando para "Ricardo Cabral", cujo `assigned_to` é o Nuno Dias.
 
-### Plano
+## Plano
 
-1. **Corrigir venda 0012 na base de dados** — atualizar `activation_date` para a data correta (ex: `2026-02-27`)
-2. **Verificar se a 0011 aparece** — pode ser apenas necessário um refresh da página
+### 1. Alterar lógica de comissões para usar `crm_clients.assigned_to`
 
-Apenas 1 query SQL de update, sem alterações de código.
+**Arquivo:** `src/hooks/useLiveCommissions.ts`
+
+- No select de `sales`, incluir `client_id` (já existe na tabela)
+- Substituir a query de `leads` por uma query de `crm_clients` usando os `client_id` das vendas
+- Criar `clientMap` em vez de `leadMap`
+- Linha 127: mudar de `sale.lead_id ? leadMap.get(sale.lead_id)` para `sale.client_id ? clientMap.get(sale.client_id)`
+- Fallback mantém-se como `'unassigned'`
+
+### Detalhes técnicos
+- Sem alterações de base de dados
+- Sem alterações de UI
+- Apenas 1 ficheiro alterado: `useLiveCommissions.ts`
+- As ~10 linhas que fazem fetch de leads e criam `leadMap` são substituídas por fetch de `crm_clients` e `clientMap`
 
