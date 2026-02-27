@@ -51,6 +51,7 @@ export function useLiveCommissions(selectedMonth: string) {
   const energyConfig: EnergyCommissionConfig | null = (org as any)?.commission_matrix?.ee_gas ?? null;
 
   const getMemberName = (userId: string) => {
+    if (userId === 'unassigned') return 'Sem Comercial';
     const m = members?.find((m: any) => m.user_id === userId);
     return m?.full_name || 'Desconhecido';
   };
@@ -122,8 +123,8 @@ export function useLiveCommissions(selectedMonth: string) {
         const saleId = proposalToSale.get(cpe.proposal_id);
         if (!saleId) continue;
         const sale = sales.find(s => s.id === saleId);
-        if (!sale || !sale.lead_id) continue;
-        const assignedTo = leadMap.get(sale.lead_id) || 'unassigned';
+        if (!sale) continue;
+        const assignedTo = (sale.lead_id ? leadMap.get(sale.lead_id) : null) || 'unassigned';
 
         if (!byCommercial.has(assignedTo)) {
           byCommercial.set(assignedTo, {
