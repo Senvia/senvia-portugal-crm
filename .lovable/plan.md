@@ -1,28 +1,28 @@
 
 
-## Plano: Remover conceito de "Mês Fechado" — Comissões sempre visíveis
+## Diagnóstico
 
-### Problema atual
-As comissões só aparecem depois de "Fechar Mês", que grava dados nas tabelas `commission_closings` / `commission_closing_items`. Antes disso, mostra ecrã vazio com cadeado.
+O módulo de comissões **já tem** o seletor de mês, o totalizador global e a lista de CPEs — a lógica está correta. O problema é que **os dados não aparecem** porque as vendas `delivered` deste mês têm `lead_id = NULL`.
 
-### Solução
-Calcular comissões **em tempo real** ao selecionar o mês, usando a mesma lógica que já existe no `CloseMonthModal.loadPreview()`.
+No código atual (`useLiveCommissions.ts`, linha 125):
+```typescript
+if (!sale || !sale.lead_id) continue; // ← salta TODOS os CPEs
+```
 
-### Ficheiros a alterar
+As 2 vendas de fevereiro 2026 (com `activation_date` 24 e 26 de fevereiro, `negotiation_type = angariacao`, CPEs com consumo 50.000 e 80.000 kWh) são ignoradas porque não têm lead associado.
 
-#### 1. `src/components/finance/CommissionsTab.tsx` — Reescrever
-- Remover dependência de `useCommissionClosings`, `CloseMonthModal`, botão "Fechar Mês", dialog de eliminar fechamento
-- Adicionar query direta (igual à lógica do `CloseMonthModal.loadPreview`):
-  - Vendas `delivered` filtradas por `activation_date` no mês
-  - Propostas com `negotiation_type` IN (`angariacao`, `angariacao_indexado`)
-  - CPEs dessas propostas → agrupar por comercial → calcular patamar e comissão
-- Mostrar sempre: totalizador global + tabela por comercial expandível com CPEs
-- Usar `useQuery` com chave `['commissions-live', orgId, selectedMonth]` para cache e loading state
+## Plano de correção
 
-#### 2. Ficheiros a eliminar (ou deixar sem uso)
-- `src/components/finance/CloseMonthModal.tsx` — remover import/uso
-- `src/hooks/useCommissionClosings.ts` — já não é necessário (as tabelas DB ficam, mas não são usadas)
+### Ficheiro: `src/hooks/useLiveCommissions.ts`
 
-### Resultado
-Ao selecionar qualquer mês, os dados aparecem imediatamente (calculados a partir das vendas). Sem botão "Fechar Mês", sem estado vazio.
+1. **Remover a obrigatoriedade de `lead_id`** — quando `lead_id` é null, agrupar o CPE como "Sem comercial atribuído" em vez de o ignorar
+2. **Suportar também `assigned_to` direto da venda** — algumas vendas podem não ter lead mas ter um `assigned_to` no próprio registo ou na proposta
+3. Alterar a query de sales para incluir também o campo `assigned_to` da própria venda (se existir) como fallback
+
+Concretamente:
+- Linha 69: adicionar `assigned_to` ao select das sales
+- Linha 125: remover `!sale.lead_id` — usar `sale.assigned_to || leadMap.get(sale.lead_id) || 'unassigned'` como chave de agrupamento
+- O nome "unassigned" mostra "Sem Comercial" na UI
+
+Apenas 1 ficheiro editado, ~5 linhas alteradas.
 
