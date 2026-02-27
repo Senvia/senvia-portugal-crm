@@ -1,22 +1,22 @@
 
 
-## Plano: Adicionar filtro de pesquisa por nome de comercial nas Comissões
+## Plano: Adicionar coluna "Serviços" no detalhe de comissões
 
-### Alteração
+Os serviços estão no campo `servicos_produtos` (string[]) da tabela `proposals`. Cada proposta pode ter múltiplos serviços.
 
-**`src/components/finance/CommissionsTab.tsx`**
-- Adicionar estado `searchTerm` para o input de pesquisa
-- Adicionar `<Input>` com ícone de pesquisa ao lado do Select de mês, numa row flex
-- Filtrar `commercials` por `item.name` com base no `searchTerm` (case-insensitive)
-- Usar os `filteredCommercials` na renderização em vez de `commercials`
+### Alterações
 
-### Layout
-```text
-[ Select Mês ▾ ] [ 🔍 Pesquisar comercial... ]
-```
+**1. `src/hooks/useLiveCommissions.ts`**
+- Adicionar `servicos_produtos` ao select da query de proposals (linha 109)
+- Criar um map `proposalServicosMap` para mapear proposal_id → servicos_produtos
+- Adicionar campo `servicos` ao interface `CpeDetail`
+- Passar os serviços para cada CPE detail
 
-Em mobile: ambos ficam full-width empilhados. Em desktop: lado a lado.
+**2. `src/components/finance/CommissionsTab.tsx`**
+- Adicionar `<TableHead>Serviços</TableHead>` no header do detalhe expandido
+- Renderizar os serviços como badges ou texto separado por vírgulas em cada linha de CPE
 
-### 1 ficheiro afetado
+### Ficheiros afetados
+- `src/hooks/useLiveCommissions.ts`
 - `src/components/finance/CommissionsTab.tsx`
 
