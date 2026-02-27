@@ -203,7 +203,7 @@ export function useCreateTeamMember() {
       });
 
       if (error) {
-        throw new Error(error.message || 'Erro ao criar membro');
+        throw new Error(error.message || 'Erro ao criar colaborador');
       }
 
       if (data?.error) {
@@ -216,7 +216,7 @@ export function useCreateTeamMember() {
       queryClient.invalidateQueries({ queryKey: ['team-members'] });
       toast({
         title: 'Acesso criado',
-        description: 'O novo membro foi adicionado com sucesso.',
+        description: 'O novo colaborador foi adicionado com sucesso.',
       });
     },
     onError: (error: Error) => {

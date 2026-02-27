@@ -339,7 +339,7 @@ export function useOrganizationProfiles() {
         .limit(1);
       
       if (members && members.length > 0) {
-        throw new Error('Este perfil está em uso por membros da equipa');
+        throw new Error('Este perfil está em uso por colaboradores da equipa');
       }
 
       const { error } = await supabase

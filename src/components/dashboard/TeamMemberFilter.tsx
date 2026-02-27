@@ -30,10 +30,10 @@ export function TeamMemberFilter({ className }: TeamMemberFilterProps) {
     >
       <SelectTrigger className={className || "w-[180px]"}>
         <Users className="h-4 w-4 mr-2 shrink-0" />
-        <SelectValue placeholder={isTeamLeader ? "Minha equipa" : "Todos os membros"} />
+        <SelectValue placeholder={isTeamLeader ? "Minha equipa" : "Todos os colaboradores"} />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value="all">{isTeamLeader ? "Minha equipa" : "Todos os membros"}</SelectItem>
+        <SelectItem value="all">{isTeamLeader ? "Minha equipa" : "Todos os colaboradores"}</SelectItem>
         {visibleMembers.map((m) => (
           <SelectItem key={m.id} value={m.user_id}>
             {m.full_name}

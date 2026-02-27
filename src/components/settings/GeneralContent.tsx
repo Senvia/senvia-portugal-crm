@@ -129,7 +129,7 @@ export const GeneralContent = ({
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Partilhe este código para convidar membros para a sua empresa.
+              Partilhe este código para convidar colaboradores para a sua empresa.
             </p>
           </div>
         </CardContent>

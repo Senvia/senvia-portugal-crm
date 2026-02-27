@@ -106,7 +106,7 @@ export const ROLE_LABELS: Record<AppRole, string> = {
   super_admin: 'Super Administrador',
   admin: 'Administrador',
   viewer: 'Visualizador',
-  salesperson: 'Vendedor',
+  salesperson: 'Comercial',
 };
 
 // PT-PT Plan Labels

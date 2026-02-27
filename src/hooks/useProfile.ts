@@ -88,7 +88,7 @@ export function useManageTeamMember() {
       });
 
       if (error) {
-        throw new Error(error.message || 'Erro ao gerir membro');
+        throw new Error(error.message || 'Erro ao gerir colaborador');
       }
 
       if (data?.error) {
@@ -145,9 +145,9 @@ export function useManageTeamMember() {
       queryClient.invalidateQueries({ queryKey: ['team-members', organization?.id] });
       
       const messages = {
-        change_password: { title: 'Password redefinida', description: 'A password do membro foi alterada com sucesso.' },
-        change_role: { title: 'Perfil alterado', description: 'O perfil do membro foi atualizado com sucesso.' },
-        toggle_status: { title: 'Estado alterado', description: 'O estado do membro foi atualizado com sucesso.' },
+        change_password: { title: 'Password redefinida', description: 'A password do colaborador foi alterada com sucesso.' },
+        change_role: { title: 'Perfil alterado', description: 'O perfil do colaborador foi atualizado com sucesso.' },
+        toggle_status: { title: 'Estado alterado', description: 'O estado do colaborador foi atualizado com sucesso.' },
       };
 
       const msg = messages[variables.action];
