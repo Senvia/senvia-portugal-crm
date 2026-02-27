@@ -20,12 +20,20 @@ import InternalRequests from "@/pages/finance/InternalRequests";
 import { BankAccountsTab } from "@/components/finance/BankAccountsTab";
 import { CommissionsTab } from "@/components/finance/CommissionsTab";
 import { useAuth } from "@/contexts/AuthContext";
+import { useEffect } from "react";
 
 export default function Finance() {
   const { organization } = useAuth();
   const isTelecom = organization?.niche === 'telecom';
+  const validTabs = isTelecom ? ['outros', 'comissoes'] : ['resumo', 'contas', 'faturas', 'outros'];
   const [dateRange, setDateRange] = usePersistedState<DateRange | undefined>('finance-daterange-v1', undefined);
   const [activeTab, setActiveTab] = usePersistedState('finance-tab-v1', isTelecom ? 'outros' : 'resumo');
+
+  useEffect(() => {
+    if (organization && !validTabs.includes(activeTab)) {
+      setActiveTab(validTabs[0]);
+    }
+  }, [organization?.niche]);
   const { stats, isLoading } = useFinanceStats({ dateRange });
   const navigate = useNavigate();
 
