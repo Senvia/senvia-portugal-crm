@@ -128,6 +128,7 @@ export function useCreateSale() {
       queryClient.invalidateQueries({ queryKey: ["sales"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
       queryClient.invalidateQueries({ queryKey: ["recurring-sales"] });
+      queryClient.invalidateQueries({ queryKey: ["commissions-live"] });
       toast.success("Venda criada com sucesso!");
     },
     onError: () => {
@@ -180,6 +181,7 @@ export function useCreateSaleFromProposal() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["sales"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["commissions-live"] });
       if (!(data as any).alreadyExists) {
         toast.success("Proposta aceite! Venda criada automaticamente.");
       }
@@ -205,6 +207,7 @@ export function useUpdateSaleStatus() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sales"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["commissions-live"] });
       toast.success("Estado atualizado!");
     },
     onError: () => {
@@ -266,6 +269,7 @@ export function useUpdateSale() {
       queryClient.invalidateQueries({ queryKey: ["sales"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
       queryClient.invalidateQueries({ queryKey: ["recurring-sales"] });
+      queryClient.invalidateQueries({ queryKey: ["commissions-live"] });
     },
     onError: () => {
       toast.error("Erro ao atualizar venda");
@@ -284,6 +288,7 @@ export function useDeleteSale() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sales"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["commissions-live"] });
       toast.success("Venda eliminada!");
     },
     onError: () => {
