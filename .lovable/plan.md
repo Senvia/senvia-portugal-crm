@@ -1,41 +1,77 @@
 
 
-## Plano: Aplicar cálculo automático de duração nas Vendas (telecom energia)
+## Plano: Módulo de Comissões Mensais (Financeiro)
 
-A mesma lógica das Propostas: o utilizador preenche **Início** e **Fim do Contrato**, e a **Duração** é calculada automaticamente (read-only). Afeta 3 ficheiros.
-
----
-
-### 1. `src/components/sales/EditSaleModal.tsx` — CPEs editáveis
-
-**Secção CPEs (linhas 768-793):** Adicionar campos `contrato_inicio` e `contrato_fim` (inputs `type="date"`) ao grid de cada CPE. Adicionar campo `duracao_contrato` read-only (`disabled`, `bg-muted`) auto-calculado. Quando `contrato_inicio` ou `contrato_fim` muda, calcular `duracao_contrato` automaticamente:
-```
-days = (fim - inicio) / 86400000; duracao = (days / 365).toFixed(3)
-```
-
-**Secção "Dados de Energia" (linhas 657-677):** Tornar o campo "Anos de Contrato" read-only (`disabled`, `bg-muted`), pois a duração agora vem dos CPEs ou é derivada das datas.
-
-### 2. `src/components/sales/CreateSaleModal.tsx` — CPEs (read-only preview)
-
-**Secção CPE/CUI (linhas 837-918):** Já mostra `contrato_inicio` e `contrato_fim` — sem alteração de lógica necessária, apenas garantir que `duracao_contrato` aparece como auto.
-
-**Secção "Dados de Energia" (linhas 750-835):** Os dados energia são read-only neste modal (vêm da proposta). Sem alteração necessária.
-
-### 3. `src/components/sales/SaleDetailsModal.tsx` — Visualização
-
-**Secção CPEs (linhas 410-460 aprox.):** Já mostra `contrato_inicio`, `contrato_fim` e `duracao_contrato`. Sem alteração necessária — apenas exibe dados.
-
-**Secção "Dados de Energia" (linhas 430-445):** Mostra `sale.anos_contrato`. Sem alteração — é read-only.
+Novo módulo dentro do Financeiro que permite ao admin "fechar" um mês, calculando as comissões reais de energia com base no volume agregado por comercial.
 
 ---
 
-### Resumo de alterações concretas
+### Lógica de negócio
 
-Apenas o **EditSaleModal.tsx** precisa de alterações:
-1. Adicionar inputs `contrato_inicio` e `contrato_fim` ao grid de cada CPE editável
-2. Adicionar campo `duracao_contrato` disabled/auto-calculado ao grid de cada CPE
-3. Calcular `duracao_contrato` quando datas mudam (handler inline no `onChange`)
-4. Tornar o campo "Anos de Contrato" na secção de dados de energia read-only com estilo `bg-muted`
+1. **Agrupar vendas com status `delivered` (Concluída)** por mês (usando `sale_date`) e por comercial (`leads.assigned_to` via `sales.lead_id`)
+2. **Somar `consumo_anual`** de todos os `proposal_cpes` dessas vendas → determina o patamar de volume (Low/Mid/High) por comercial
+3. **Recalcular comissão** de cada CPE usando esse patamar agregado (via `calculateEnergyCommissionPure`)
+4. **Preview** antes de confirmar → admin vê o resumo por comercial e os valores recalculados
+5. **Fechar mês** → grava os valores finais na nova tabela
 
-Nenhuma alteração de base de dados necessária.
+---
+
+### 1. Base de dados — 2 tabelas novas
+
+**`commission_closings`** — registo de cada fechamento mensal
+- `id`, `organization_id`, `month` (date, 1º dia do mês), `closed_by` (uuid), `closed_at` (timestamptz), `total_commission` (numeric), `notes` (text), `created_at`
+- Unique: `(organization_id, month)`
+
+**`commission_closing_items`** — detalhe por comercial
+- `id`, `closing_id` (FK), `organization_id`, `user_id` (comercial), `total_consumo_mwh` (numeric), `volume_tier` (text: low/mid/high), `total_commission` (numeric), `items_detail` (jsonb — array com cada CPE: sale_id, proposal_cpe_id, consumo_anual, margem, comissao_indicativa, comissao_final), `created_at`
+
+RLS: mesmas políticas da organização (org members view, admin manage).
+
+### 2. Permissões — adicionar subárea ao MODULE_SCHEMA
+
+**Ficheiro:** `src/hooks/useOrganizationProfiles.ts`
+
+Adicionar ao módulo `finance`:
+```
+commissions: { label: 'Comissões', actions: ['view', 'manage'] }
+```
+
+### 3. Frontend — nova aba "Comissões" no Financeiro
+
+**Ficheiro:** `src/pages/Finance.tsx`
+- Adicionar `<TabsTrigger value="comissoes">Comissões</TabsTrigger>` (visível apenas para nicho telecom)
+- Conteúdo: novo componente `CommissionsTab`
+
+**Novo ficheiro:** `src/components/finance/CommissionsTab.tsx`
+- Seletor de mês/ano
+- Botão "Fechar Mês" (se o mês ainda não foi fechado e user tem permissão `finance.commissions.manage`)
+- Se já fechado: tabela com resultados por comercial (nome, consumo total MWh, patamar, comissão total, expandir para ver CPEs)
+- Se não fechado: botão abre modal de preview
+
+**Novo ficheiro:** `src/components/finance/CloseMonthModal.tsx`
+- Busca vendas `delivered` do mês selecionado
+- Agrupa por comercial (assigned_to do lead)
+- Para cada comercial: soma consumo_anual → calcula patamar → recalcula comissão de cada CPE
+- Preview com tabela: Comercial | MWh Total | Patamar | Comissão Indicativa (soma original) | Comissão Final (recalculada)
+- Botão "Confirmar Fechamento" → insere `commission_closings` + `commission_closing_items`
+
+**Novo ficheiro:** `src/hooks/useCommissionClosings.ts`
+- Queries: listar fechamentos por organização, verificar se mês já está fechado
+- Mutation: criar fechamento (closing + items)
+
+### 4. Routing
+
+**Ficheiro:** `src/App.tsx`
+- Sem rota nova necessária — é uma tab dentro de `/financeiro`
+
+### Resumo de ficheiros
+
+| Ação | Ficheiro |
+|------|---------|
+| Migração DB | 2 tabelas + RLS |
+| Editar | `src/hooks/useOrganizationProfiles.ts` (adicionar subárea) |
+| Editar | `src/pages/Finance.tsx` (nova tab) |
+| Criar | `src/components/finance/CommissionsTab.tsx` |
+| Criar | `src/components/finance/CloseMonthModal.tsx` |
+| Criar | `src/hooks/useCommissionClosings.ts` |
 
