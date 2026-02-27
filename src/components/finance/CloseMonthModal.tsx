@@ -29,7 +29,12 @@ const TIER_LABELS: Record<string, string> = {
   high: 'Alto (+601 MWh)',
 };
 
-const VALID_NEGOTIATION_TYPES = ['angariacao', 'angariacao_indexado'];
+const NEGOTIATION_MULTIPLIER: Record<string, number> = {
+  angariacao: 1,
+  angariacao_indexado: 1,
+  sem_volume: 1,
+  renovacao: 0.25,
+};
 
 interface CommercialPreview {
   userId: string;
@@ -127,8 +132,7 @@ export function CloseMonthModal({ month, open, onOpenChange }: CloseMonthModalPr
       const { data: proposals } = await supabase
         .from('proposals')
         .select('id, negotiation_type')
-        .in('id', proposalIds)
-        .in('negotiation_type', VALID_NEGOTIATION_TYPES);
+        .in('id', proposalIds);
 
       if (!proposals?.length) {
         setPreview([]);
@@ -217,11 +221,12 @@ export function CloseMonthModal({ month, open, onOpenChange }: CloseMonthModalPr
 
         let totalFinal = 0;
         for (const cpe of entry.cpes) {
+          const multiplier = NEGOTIATION_MULTIPLIER[cpe.negotiation_type] ?? 1;
           if (energyConfig && energyConfig.bands.length > 0) {
             const final_ = calculateEnergyCommissionPure(cpe.margem, energyConfig, entry.tier);
-            cpe.comissao_final = final_ ?? cpe.comissao_indicativa;
+            cpe.comissao_final = (final_ ?? cpe.comissao_indicativa) * multiplier;
           } else {
-            cpe.comissao_final = cpe.comissao_indicativa;
+            cpe.comissao_final = cpe.comissao_indicativa * multiplier;
           }
           totalFinal += cpe.comissao_final;
         }
