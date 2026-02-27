@@ -1,21 +1,61 @@
 
-Diagnóstico confirmado
-1. A venda 0012 está a ser carregada no módulo de comissões (request de vendas entregues de fevereiro retorna 0011 e 0012).
-2. A 0012 passa todos os filtros da lógica atual:
-   - `status = delivered`
-   - `activation_date` dentro do mês
-   - proposta com `negotiation_type = angariacao_indexado`
-   - existe `proposal_cpe` associado
-   - cliente com vendedor responsável (`crm_clients.assigned_to = Nuno`)
-3. O motivo da perceção de “não aparece” é visual: a tabela detalhada mostra **CPE/CUI**, não mostra **código da venda** (`0012`).
 
-Plano curto de implementação
-1. Em `useLiveCommissions.ts`, incluir `code` no select de `sales` e propagar `sale_code` para cada item de detalhe.
-2. Em `CommissionsTab.tsx`, adicionar coluna **Venda** no detalhe expandido (ex.: `0011`, `0012`).
-3. Manter coluna **CPE/CUI** e mostrar ambos para rastreabilidade (venda + CPE).
-4. Validar no mês de fevereiro: ao expandir Nuno, devem aparecer explicitamente as linhas com `0011` e `0012`.
+## Plano: Renomear "Vendedor" → "Comercial" e "Membro" → "Colaborador"
 
-Detalhes técnicos
-- Arquivos: `src/hooks/useLiveCommissions.ts`, `src/components/finance/CommissionsTab.tsx`
-- Sem alterações de base de dados.
-- Sem alteração de regra de cálculo; apenas melhoria de identificação na UI.
+Alterações em **~15 ficheiros** — apenas labels/textos de UI, sem lógica.
+
+### Ficheiros e alterações
+
+**1. `src/types/index.ts`** — Role labels map
+- `salesperson: 'Vendedor'` → `salesperson: 'Comercial'`
+
+**2. `src/components/settings/TeamTab.tsx`** — Role labels + UI
+- Role map: `salesperson: 'Vendedor'` → `'Comercial'`
+- Radio labels: "Vendedor" → "Comercial"
+- Descrições: "membro" → "colaborador"
+- "Nenhum membro encontrado" → "Nenhum colaborador encontrado"
+- "novo membro da equipa" → "novo colaborador"
+
+**3. `src/components/settings/ProfilesTab.tsx`** — Role labels
+- `salesperson: 'Vendedor'` → `'Comercial'`
+- SelectItem "Vendedor" → "Comercial"
+
+**4. `src/components/settings/TeamsSection.tsx`**
+- "vendedores" → "comerciais"
+- "Membros" → "Colaboradores"
+- "membros" → "colaboradores" (todas as ocorrências)
+
+**5. `src/components/settings/MobileSettingsNav.tsx`**
+- "Membros, perfis e equipas" → "Colaboradores, perfis e equipas"
+
+**6. `src/components/dashboard/TeamMemberFilter.tsx`**
+- "Todos os membros" → "Todos os colaboradores"
+
+**7. `src/components/shared/BulkActionsBar.tsx`**
+- "Atribuir Vendedor Responsável" → "Atribuir Comercial Responsável"
+
+**8. `src/components/shared/AssignTeamMemberModal.tsx`**
+- "Atribuir Colaborador" (título) — já está correto
+- "Nenhum membro da equipa encontrado" → "Nenhum colaborador encontrado"
+
+**9. `src/components/clients/ClientDetailsDrawer.tsx`**
+- "Vendedor Responsável" → "Comercial Responsável"
+
+**10. `src/components/clients/CreateClientModal.tsx`**
+- "Vendedor Responsável" → "Comercial Responsável"
+
+**11. `src/components/clients/EditClientModal.tsx`**
+- "Vendedor Responsável" → "Comercial Responsável"
+
+**12. `src/types/marketing.ts`**
+- `'Vendedor responsável'` → `'Comercial responsável'`
+
+**13. `src/components/layout/MobileMenu.tsx`**
+- `return 'Membro'` → `return 'Colaborador'`
+
+**14. `src/components/settings/GeneralContent.tsx`**
+- "convidar membros" → "convidar colaboradores"
+
+**15. `src/hooks/useTeam.ts` / `useTeams.ts` / `useProfile.ts`** — Toast messages
+- "membro" → "colaborador" nas mensagens de sucesso/erro
+
