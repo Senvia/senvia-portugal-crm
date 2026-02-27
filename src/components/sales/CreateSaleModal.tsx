@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { toast } from "sonner";
 import {
   Dialog,
   DialogContent,
@@ -170,6 +171,7 @@ export function CreateSaleModal({
   // Sale status
   const [saleStatus, setSaleStatus] = useState<SaleStatus>("in_progress");
   const [edpProposalNumber, setEdpProposalNumber] = useState("");
+  const [activationDate, setActivationDate] = useState<Date | undefined>(undefined);
 
   // Draft payments state
   const [draftPayments, setDraftPayments] = useState<DraftPayment[]>([]);
@@ -273,6 +275,7 @@ export function CreateSaleModal({
       setSaleDate(new Date());
       setSaleStatus("in_progress");
       setEdpProposalNumber("");
+      setActivationDate(undefined);
       setItems([]);
       setDiscount("0");
       setDraftPayments([]);
@@ -525,6 +528,12 @@ export function CreateSaleModal({
     
     if (!isTelecom && total <= 0 && items.length === 0) return;
 
+    // Validar data de ativação quando estado é Concluída
+    if (saleStatus === 'delivered' && !activationDate) {
+      toast.error("A Data de Ativação é obrigatória para vendas com estado Concluída.");
+      return;
+    }
+
     try {
       const recurringItems = items.filter(item => {
         if (!item.product_id) return false;
@@ -562,6 +571,7 @@ export function CreateSaleModal({
           servicos_produtos: servicosProdutos.length > 0 ? servicosProdutos : undefined,
         } : {}),
         edp_proposal_number: edpProposalNumber.trim() || undefined,
+        activation_date: activationDate ? format(activationDate, 'yyyy-MM-dd') : undefined,
         has_recurring: hasRecurring,
         recurring_value: recurringValue,
         recurring_status: hasRecurring ? 'active' : undefined,
@@ -743,6 +753,35 @@ export function CreateSaleModal({
                           </SelectContent>
                         </Select>
                       </div>
+
+                      {/* Data de Ativação - quando estado é Concluída */}
+                      {saleStatus === 'delivered' && (
+                        <div className="col-span-1 sm:col-span-2 space-y-2">
+                          <Label>Data de Ativação <span className="text-destructive">*</span></Label>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                className={cn(
+                                  "w-full justify-start text-left font-normal",
+                                  !activationDate && "text-muted-foreground"
+                                )}
+                              >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {activationDate ? format(activationDate, "PPP", { locale: pt }) : "Selecionar data de ativação"}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                              <Calendar
+                                mode="single"
+                                selected={activationDate}
+                                onSelect={(date) => setActivationDate(date || undefined)}
+                                locale={pt}
+                              />
+                            </PopoverContent>
+                          </Popover>
+                        </div>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
