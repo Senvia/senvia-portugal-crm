@@ -385,6 +385,98 @@ export type Database = {
           },
         ]
       }
+      commission_closing_items: {
+        Row: {
+          closing_id: string
+          created_at: string
+          id: string
+          items_detail: Json
+          organization_id: string
+          total_commission: number
+          total_consumo_mwh: number
+          user_id: string
+          volume_tier: string
+        }
+        Insert: {
+          closing_id: string
+          created_at?: string
+          id?: string
+          items_detail?: Json
+          organization_id: string
+          total_commission?: number
+          total_consumo_mwh?: number
+          user_id: string
+          volume_tier: string
+        }
+        Update: {
+          closing_id?: string
+          created_at?: string
+          id?: string
+          items_detail?: Json
+          organization_id?: string
+          total_commission?: number
+          total_consumo_mwh?: number
+          user_id?: string
+          volume_tier?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "commission_closing_items_closing_id_fkey"
+            columns: ["closing_id"]
+            isOneToOne: false
+            referencedRelation: "commission_closings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commission_closing_items_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      commission_closings: {
+        Row: {
+          closed_at: string
+          closed_by: string
+          created_at: string
+          id: string
+          month: string
+          notes: string | null
+          organization_id: string
+          total_commission: number
+        }
+        Insert: {
+          closed_at?: string
+          closed_by: string
+          created_at?: string
+          id?: string
+          month: string
+          notes?: string | null
+          organization_id: string
+          total_commission?: number
+        }
+        Update: {
+          closed_at?: string
+          closed_by?: string
+          created_at?: string
+          id?: string
+          month?: string
+          notes?: string | null
+          organization_id?: string
+          total_commission?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "commission_closings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cpes: {
         Row: {
           alert_30d_sent: boolean | null

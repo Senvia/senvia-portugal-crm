@@ -69,6 +69,7 @@ export const MODULE_SCHEMA: Record<string, ModuleSchema> = {
       expenses: { label: 'Despesas', actions: ['view', 'add', 'edit', 'delete'] },
       payments: { label: 'Pagamentos', actions: ['view'] },
       requests: { label: 'Pedidos Internos', actions: ['view', 'submit', 'approve'] },
+      commissions: { label: 'Comissões', actions: ['view', 'manage'] },
     },
   },
   calendar: {
