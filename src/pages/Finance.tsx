@@ -18,6 +18,7 @@ import { DateRange } from "react-day-picker";
 import { InvoicesContent } from "@/components/finance/InvoicesContent";
 import InternalRequests from "@/pages/finance/InternalRequests";
 import { BankAccountsTab } from "@/components/finance/BankAccountsTab";
+import { CommissionsTab } from "@/components/finance/CommissionsTab";
 import { useAuth } from "@/contexts/AuthContext";
 
 export default function Finance() {
@@ -54,6 +55,7 @@ export default function Finance() {
             {!isTelecom && <TabsTrigger value="contas">Contas</TabsTrigger>}
             {!isTelecom && <TabsTrigger value="faturas">Faturas</TabsTrigger>}
             <TabsTrigger value="outros">Outros</TabsTrigger>
+            {isTelecom && <TabsTrigger value="comissoes">Comissões</TabsTrigger>}
           </TabsList>
 
           <TabsContent value="resumo" className="space-y-6 mt-0">
@@ -323,6 +325,12 @@ export default function Finance() {
           <TabsContent value="outros" className="mt-0">
             <InternalRequests />
           </TabsContent>
+
+          {isTelecom && (
+            <TabsContent value="comissoes" className="mt-0">
+              <CommissionsTab />
+            </TabsContent>
+          )}
         </Tabs>
     </div>
   );
