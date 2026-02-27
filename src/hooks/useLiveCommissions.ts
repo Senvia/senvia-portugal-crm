@@ -15,6 +15,7 @@ const VALID_NEGOTIATION_TYPES = ['angariacao', 'angariacao_indexado'];
 
 export interface CpeDetail {
   sale_id: string;
+  sale_code: string | null;
   proposal_cpe_id: string;
   serial_number: string | null;
   consumo_anual: number;
@@ -67,7 +68,7 @@ export function useLiveCommissions(selectedMonth: string) {
       // Get delivered sales filtered by activation_date
       const { data: sales, error: salesError } = await supabase
         .from('sales')
-        .select('id, lead_id, client_id, activation_date, status, proposal_id')
+        .select('id, code, lead_id, client_id, activation_date, status, proposal_id')
         .eq('organization_id', organizationId)
         .eq('status', 'delivered')
         .gte('activation_date', monthStart)
@@ -148,6 +149,7 @@ export function useLiveCommissions(selectedMonth: string) {
         entry.totalIndicativa += cpe.comissao || 0;
         entry.cpes.push({
           sale_id: saleId,
+          sale_code: sale.code || null,
           proposal_cpe_id: cpe.id,
           serial_number: cpe.serial_number,
           consumo_anual: consumo,
