@@ -79,6 +79,7 @@ export function useCreateSale() {
       recurring_value?: number;
       recurring_status?: 'active' | 'cancelled' | 'paused';
       next_renewal_date?: string;
+      activation_date?: string;
     }) => {
       if (!organization?.id) throw new Error("Sem organização");
 
@@ -117,11 +118,26 @@ export function useCreateSale() {
           recurring_value: data.recurring_value || 0,
           recurring_status: data.recurring_status || 'active',
           next_renewal_date: data.next_renewal_date || null,
+          activation_date: data.activation_date || null,
         })
         .select()
         .single();
 
       if (error) throw error;
+
+      // Se activation_date preenchida, criar registo no histórico
+      if (data.activation_date && sale?.id) {
+        await (supabase as any)
+          .from('sale_activation_history')
+          .insert({
+            sale_id: sale.id,
+            organization_id: organization.id,
+            activation_date: data.activation_date,
+            changed_by: user?.id || null,
+            notes: `Definida na criação da venda (estado: ${data.status || 'pending'})`,
+          });
+      }
+
       return sale;
     },
     onSuccess: () => {
