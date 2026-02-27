@@ -1,19 +1,14 @@
 import { useState } from 'react';
 import { format, subMonths, startOfMonth } from 'date-fns';
 import { pt } from 'date-fns/locale';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Lock, ChevronDown, ChevronRight, Trash2, Zap } from 'lucide-react';
-import { useCommissionClosings } from '@/hooks/useCommissionClosings';
-import { usePermissions } from '@/hooks/usePermissions';
-import { useTeamMembers } from '@/hooks/useTeam';
+import { ChevronDown, ChevronRight, Zap, FileX } from 'lucide-react';
 import { formatCurrency } from '@/lib/format';
 import { Skeleton } from '@/components/ui/skeleton';
-import { CloseMonthModal } from './CloseMonthModal';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { useLiveCommissions } from '@/hooks/useLiveCommissions';
 
 const TIER_LABELS: Record<string, string> = {
   low: 'Baixo (≤300 MWh)',
@@ -36,25 +31,10 @@ function generateMonthOptions() {
 
 export function CommissionsTab() {
   const monthOptions = generateMonthOptions();
-  const [selectedMonth, setSelectedMonth] = useState(monthOptions[1]?.value || monthOptions[0]?.value);
-  const [showCloseModal, setShowCloseModal] = useState(false);
+  const [selectedMonth, setSelectedMonth] = useState(monthOptions[0]?.value);
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
 
-  const { closings, isLoading, getClosingForMonth, getItemsForClosing, deleteClosing } = useCommissionClosings();
-  const { can } = usePermissions();
-  const { data: members } = useTeamMembers();
-
-  const canManage = can('finance', 'commissions', 'manage');
-  const closing = getClosingForMonth(selectedMonth);
-  const items = closing ? getItemsForClosing(closing.id) : [];
-
-  // Calculate global totals from all items
-  const globalMwh = items.reduce((sum, item) => sum + item.total_consumo_mwh, 0);
-
-  const getMemberName = (userId: string) => {
-    const m = members?.find((m: any) => m.user_id === userId);
-    return m?.full_name || 'Desconhecido';
-  };
+  const { data, isLoading } = useLiveCommissions(selectedMonth);
 
   const toggleExpand = (id: string) => {
     setExpandedItems(prev => {
@@ -74,31 +54,36 @@ export function CommissionsTab() {
     );
   }
 
+  const commercials = data?.commercials || [];
+  const globalMwh = data?.globalMwh || 0;
+  const globalTier = data?.globalTier || 'low';
+  const totalCommission = data?.totalCommission || 0;
+
   return (
     <div className="space-y-6">
-      {/* Month selector + actions */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-          <SelectTrigger className="w-full sm:w-[220px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {monthOptions.map(o => (
-              <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      {/* Month selector */}
+      <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+        <SelectTrigger className="w-full sm:w-[220px]">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {monthOptions.map(o => (
+            <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
 
-        {!closing && canManage && (
-          <Button onClick={() => setShowCloseModal(true)}>
-            <Lock className="mr-2 h-4 w-4" />
-            Fechar Mês
-          </Button>
-        )}
-      </div>
-
-      {/* Results */}
-      {closing ? (
+      {commercials.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+            <FileX className="h-12 w-12 text-muted-foreground/50 mb-4" />
+            <h3 className="text-lg font-medium mb-1">Sem dados de comissão</h3>
+            <p className="text-sm text-muted-foreground max-w-md">
+              Nenhuma venda concluída com data de ativação neste mês (Angariação / Angariação Indexado).
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
         <div className="space-y-4">
           {/* Global Totalizer */}
           <Card className="border-primary/30 bg-primary/5">
@@ -111,47 +96,19 @@ export function CommissionsTab() {
                 </div>
               </div>
               <div className="flex items-center gap-3">
+                <Badge variant="outline" className="text-sm font-semibold">
+                  {TIER_LABELS[globalTier] || globalTier}
+                </Badge>
                 <Badge variant="outline" className="text-base font-semibold">
-                  Total: {formatCurrency(closing.total_commission)}
+                  Total: {formatCurrency(totalCommission)}
                 </Badge>
               </div>
             </CardContent>
           </Card>
 
-          {/* Detail card */}
+          {/* Detail by commercial */}
           <Card>
-            <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <CardTitle className="text-base">Detalhe por Comercial</CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  Fechado em {format(new Date(closing.closed_at), 'dd/MM/yyyy HH:mm')} · Filtro: data de ativação
-                </p>
-              </div>
-              {canManage && (
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button variant="ghost" size="icon" className="text-destructive">
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Eliminar fechamento?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Esta ação irá eliminar o fechamento deste mês e todos os seus dados de comissão.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                      <AlertDialogAction onClick={() => deleteClosing.mutate(closing.id)}>
-                        Eliminar
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              )}
-            </CardHeader>
-            <CardContent>
+            <CardContent className="p-0">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -163,29 +120,29 @@ export function CommissionsTab() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {items.map(item => (
+                  {commercials.map(item => (
                     <>
                       <TableRow
-                        key={item.id}
+                        key={item.userId}
                         className="cursor-pointer"
-                        onClick={() => toggleExpand(item.id)}
+                        onClick={() => toggleExpand(item.userId)}
                       >
                         <TableCell>
-                          {expandedItems.has(item.id) ? (
+                          {expandedItems.has(item.userId) ? (
                             <ChevronDown className="h-4 w-4" />
                           ) : (
                             <ChevronRight className="h-4 w-4" />
                           )}
                         </TableCell>
-                        <TableCell className="font-medium">{getMemberName(item.user_id)}</TableCell>
-                        <TableCell className="text-right">{item.total_consumo_mwh.toFixed(1)}</TableCell>
+                        <TableCell className="font-medium">{item.name}</TableCell>
+                        <TableCell className="text-right">{item.totalConsumoMwh.toFixed(1)}</TableCell>
                         <TableCell>
-                          <Badge variant="secondary">{TIER_LABELS[item.volume_tier] || item.volume_tier}</Badge>
+                          <Badge variant="secondary">{TIER_LABELS[item.tier] || item.tier}</Badge>
                         </TableCell>
-                        <TableCell className="text-right font-semibold">{formatCurrency(item.total_commission)}</TableCell>
+                        <TableCell className="text-right font-semibold">{formatCurrency(item.totalFinal)}</TableCell>
                       </TableRow>
-                      {expandedItems.has(item.id) && (
-                        <TableRow key={`${item.id}-detail`}>
+                      {expandedItems.has(item.userId) && (
+                        <TableRow key={`${item.userId}-detail`}>
                           <TableCell colSpan={5} className="bg-muted/30 p-0">
                             <div className="p-4">
                               <Table>
@@ -199,7 +156,7 @@ export function CommissionsTab() {
                                   </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                  {(item.items_detail as any[]).map((d: any, idx: number) => (
+                                  {item.cpes.map((d, idx) => (
                                     <TableRow key={idx}>
                                       <TableCell className="text-xs">{d.serial_number || d.proposal_cpe_id?.slice(0, 8)}</TableCell>
                                       <TableCell className="text-right text-xs">{d.consumo_anual?.toLocaleString('pt-PT') || '—'}</TableCell>
@@ -216,36 +173,11 @@ export function CommissionsTab() {
                       )}
                     </>
                   ))}
-                  {items.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
-                        Sem dados de comissão para este mês
-                      </TableCell>
-                    </TableRow>
-                  )}
                 </TableBody>
               </Table>
             </CardContent>
           </Card>
         </div>
-      ) : (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-            <Lock className="h-12 w-12 text-muted-foreground/50 mb-4" />
-            <h3 className="text-lg font-medium mb-1">Mês não fechado</h3>
-            <p className="text-sm text-muted-foreground max-w-md">
-              As comissões deste mês ainda não foram calculadas. Clique em "Fechar Mês" para agregar o consumo (filtrado por data de ativação e tipo Angariação) e calcular as comissões finais por comercial.
-            </p>
-          </CardContent>
-        </Card>
-      )}
-
-      {showCloseModal && (
-        <CloseMonthModal
-          month={selectedMonth}
-          open={showCloseModal}
-          onOpenChange={setShowCloseModal}
-        />
       )}
     </div>
   );
