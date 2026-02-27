@@ -10,6 +10,13 @@ import { formatCurrency } from '@/lib/format';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLiveCommissions } from '@/hooks/useLiveCommissions';
 
+const NEGOTIATION_TYPE_LABELS: Record<string, string> = {
+  angariacao: 'Angariação',
+  angariacao_indexado: 'Ang. Indexado',
+  renovacao: 'Renovação',
+  sem_volume: 'Sem Volume',
+};
+
 const TIER_LABELS: Record<string, string> = {
   low: 'Baixo (≤300 MWh)',
   mid: 'Médio (301–600 MWh)',
@@ -149,7 +156,8 @@ export function CommissionsTab() {
                                 <TableHeader>
                                  <TableRow>
                                     <TableHead>Venda</TableHead>
-                                    <TableHead>CPE/CUI</TableHead>
+                                     <TableHead>Tipo</TableHead>
+                                     <TableHead>CPE/CUI</TableHead>
                                     <TableHead className="text-right">Consumo (kWh)</TableHead>
                                     <TableHead className="text-right">Margem (€)</TableHead>
                                     <TableHead className="text-right">Comissão Indicativa</TableHead>
@@ -160,6 +168,11 @@ export function CommissionsTab() {
                                   {item.cpes.map((d, idx) => (
                                     <TableRow key={idx}>
                                       <TableCell className="text-xs font-medium">{d.sale_code || '—'}</TableCell>
+                                      <TableCell>
+                                        <Badge variant="outline" className="text-[10px] whitespace-nowrap">
+                                          {NEGOTIATION_TYPE_LABELS[d.negotiation_type] || d.negotiation_type || '—'}
+                                        </Badge>
+                                      </TableCell>
                                       <TableCell className="text-xs">{d.serial_number || d.proposal_cpe_id?.slice(0, 8)}</TableCell>
                                       <TableCell className="text-right text-xs">{d.consumo_anual?.toLocaleString('pt-PT') || '—'}</TableCell>
                                       <TableCell className="text-right text-xs">{d.margem != null ? formatCurrency(d.margem) : '—'}</TableCell>
