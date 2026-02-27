@@ -35,6 +35,7 @@ export interface CpeDetail {
   comissao_indicativa: number;
   comissao_final: number;
   negotiation_type: string;
+  servicos: string[];
 }
 
 export interface CommercialEntry {
@@ -106,13 +107,14 @@ export function useLiveCommissions(selectedMonth: string) {
 
       const { data: proposals } = await supabase
         .from('proposals')
-        .select('id, negotiation_type')
+        .select('id, negotiation_type, servicos_produtos')
         .in('id', proposalIds);
 
       if (!proposals?.length) return { commercials: [], globalMwh: 0, globalTier: 'low', totalCommission: 0 };
 
       const validProposalIds = proposals.map(p => p.id);
       const proposalNegotiationMap = new Map(proposals.map(p => [p.id, p.negotiation_type]));
+      const proposalServicosMap = new Map(proposals.map(p => [p.id, (p.servicos_produtos as string[]) || []]));
 
       // Map proposal_id -> sale_id
       const proposalToSale = new Map<string, string>();
@@ -168,6 +170,7 @@ export function useLiveCommissions(selectedMonth: string) {
           comissao_indicativa: cpe.comissao || 0,
           comissao_final: 0,
           negotiation_type: proposalNegotiationMap.get(cpe.proposal_id) || '',
+          servicos: proposalServicosMap.get(cpe.proposal_id) || [],
         });
       }
 

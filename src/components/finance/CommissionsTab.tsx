@@ -178,8 +178,9 @@ export function CommissionsTab() {
                                      <TableHead>CPE/CUI</TableHead>
                                     <TableHead className="text-right">Consumo (kWh)</TableHead>
                                     <TableHead className="text-right">Margem (€)</TableHead>
-                                    <TableHead className="text-right">Comissão Indicativa</TableHead>
-                                    <TableHead className="text-right">Comissão Final</TableHead>
+                                     <TableHead className="text-right">Comissão Indicativa</TableHead>
+                                     <TableHead className="text-right">Comissão Final</TableHead>
+                                     <TableHead>Serviços</TableHead>
                                   </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -196,6 +197,15 @@ export function CommissionsTab() {
                                       <TableCell className="text-right text-xs">{d.margem != null ? formatCurrency(d.margem) : '—'}</TableCell>
                                       <TableCell className="text-right text-xs">{d.comissao_indicativa != null ? formatCurrency(d.comissao_indicativa) : '—'}</TableCell>
                                       <TableCell className="text-right text-xs font-medium">{d.comissao_final != null ? formatCurrency(d.comissao_final) : '—'}</TableCell>
+                                      <TableCell className="text-xs">
+                                        {d.servicos?.length > 0 ? (
+                                          <div className="flex flex-wrap gap-1">
+                                            {d.servicos.map((s, i) => (
+                                              <Badge key={i} variant="secondary" className="text-[10px]">{s}</Badge>
+                                            ))}
+                                          </div>
+                                        ) : '—'}
+                                      </TableCell>
                                     </TableRow>
                                   ))}
                                 </TableBody>
