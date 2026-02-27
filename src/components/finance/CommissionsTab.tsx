@@ -5,10 +5,12 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ChevronDown, ChevronRight, Zap, FileX } from 'lucide-react';
+import { ChevronDown, ChevronRight, Zap, FileX, Search } from 'lucide-react';
 import { formatCurrency } from '@/lib/format';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Input } from '@/components/ui/input';
 import { useLiveCommissions } from '@/hooks/useLiveCommissions';
+import { normalizeString } from '@/lib/utils';
 
 const NEGOTIATION_TYPE_LABELS: Record<string, string> = {
   angariacao: 'Angariação',
@@ -39,6 +41,7 @@ function generateMonthOptions() {
 export function CommissionsTab() {
   const monthOptions = generateMonthOptions();
   const [selectedMonth, setSelectedMonth] = useState(monthOptions[0]?.value);
+  const [searchTerm, setSearchTerm] = useState('');
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
 
   const { data, isLoading } = useLiveCommissions(selectedMonth);
@@ -66,21 +69,36 @@ export function CommissionsTab() {
   const globalTier = data?.globalTier || 'low';
   const totalCommission = data?.totalCommission || 0;
 
+  const normalizedSearch = normalizeString(searchTerm);
+  const filteredCommercials = commercials.filter(item =>
+    normalizeString(item.name).includes(normalizedSearch)
+  );
+
   return (
     <div className="space-y-6">
-      {/* Month selector */}
-      <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-        <SelectTrigger className="w-full sm:w-[220px]">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {monthOptions.map(o => (
-            <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <div className="flex flex-col sm:flex-row gap-3">
+        <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+          <SelectTrigger className="w-full sm:w-[220px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {monthOptions.map(o => (
+              <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <div className="relative flex-1 sm:max-w-[300px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Pesquisar comercial..."
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+      </div>
 
-      {commercials.length === 0 ? (
+      {filteredCommercials.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">
             <FileX className="h-12 w-12 text-muted-foreground/50 mb-4" />
@@ -127,7 +145,7 @@ export function CommissionsTab() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {commercials.map(item => (
+                  {filteredCommercials.map(item => (
                     <>
                       <TableRow
                         key={item.userId}
