@@ -5,7 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ChevronDown, ChevronRight, Zap, FileX, Search } from 'lucide-react';
+import { ChevronDown, ChevronRight, Zap, FileX, Search, Sun } from 'lucide-react';
 import { formatCurrency } from '@/lib/format';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
@@ -68,6 +68,7 @@ export function CommissionsTab() {
   const globalMwh = data?.globalMwh || 0;
   const globalTier = data?.globalTier || 'low';
   const totalCommission = data?.totalCommission || 0;
+  const globalServicosKwp = data?.globalServicosKwp || 0;
 
   const normalizedSearch = normalizeString(searchTerm);
   const filteredCommercials = commercials.filter(item =>
@@ -116,7 +117,7 @@ export function CommissionsTab() {
               <div className="flex items-center gap-3">
                 <Zap className="h-5 w-5 text-primary" />
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Totalizador Global (Angariação)</p>
+                  <p className="text-sm font-medium text-muted-foreground">Totalizador EE (Angariação)</p>
                   <p className="text-2xl font-bold">{globalMwh.toFixed(1)} MWh</p>
                 </div>
               </div>
@@ -127,6 +128,19 @@ export function CommissionsTab() {
                 <Badge variant="outline" className="text-base font-semibold">
                   Total: {formatCurrency(totalCommission)}
                 </Badge>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Services Totalizer */}
+          <Card className="border-amber-500/30 bg-amber-500/5">
+            <CardContent className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-3">
+                <Sun className="h-5 w-5 text-amber-500" />
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Totalizador Serviços</p>
+                  <p className="text-2xl font-bold">{globalServicosKwp.toFixed(1)} kWp</p>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -172,13 +186,12 @@ export function CommissionsTab() {
                             <div className="p-4">
                               <Table>
                                 <TableHeader>
-                                 <TableRow>
+                                <TableRow>
                                     <TableHead>Venda</TableHead>
                                      <TableHead>Tipo</TableHead>
                                      <TableHead>CPE/CUI</TableHead>
-                                    <TableHead className="text-right">Consumo (kWh)</TableHead>
-                                    <TableHead className="text-right">Margem (€)</TableHead>
-                                     <TableHead className="text-right">Comissão Indicativa</TableHead>
+                                    <TableHead className="text-right">EE (kWh)</TableHead>
+                                    <TableHead className="text-right">Serviços (kWp)</TableHead>
                                      <TableHead className="text-right">Comissão Final</TableHead>
                                      <TableHead>Serviços</TableHead>
                                   </TableRow>
@@ -193,9 +206,8 @@ export function CommissionsTab() {
                                         </Badge>
                                       </TableCell>
                                       <TableCell className="text-xs">{d.serial_number || d.proposal_cpe_id?.slice(0, 8)}</TableCell>
-                                      <TableCell className="text-right text-xs">{d.consumo_anual?.toLocaleString('pt-PT') || '—'}</TableCell>
-                                      <TableCell className="text-right text-xs">{d.margem != null ? formatCurrency(d.margem) : '—'}</TableCell>
-                                      <TableCell className="text-right text-xs">{d.comissao_indicativa != null ? formatCurrency(d.comissao_indicativa) : '—'}</TableCell>
+                                      <TableCell className="text-right text-xs">{d.consumo_anual ? d.consumo_anual.toLocaleString('pt-PT') : '—'}</TableCell>
+                                      <TableCell className="text-right text-xs">{d.servicos_kwp > 0 ? d.servicos_kwp.toFixed(1) : '—'}</TableCell>
                                       <TableCell className="text-right text-xs font-medium">{d.comissao_final != null ? formatCurrency(d.comissao_final) : '—'}</TableCell>
                                       <TableCell className="text-xs">
                                         {d.servicos?.length > 0 ? (

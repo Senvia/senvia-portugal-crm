@@ -36,6 +36,7 @@ export interface CpeDetail {
   comissao_final: number;
   negotiation_type: string;
   servicos: string[];
+  servicos_kwp: number;
 }
 
 export interface CommercialEntry {
@@ -46,6 +47,7 @@ export interface CommercialEntry {
   tier: EnergyVolumeTier;
   totalIndicativa: number;
   totalFinal: number;
+  totalServicosKwp: number;
   cpes: CpeDetail[];
 }
 
@@ -54,6 +56,7 @@ export interface LiveCommissionsData {
   globalMwh: number;
   globalTier: EnergyVolumeTier;
   totalCommission: number;
+  globalServicosKwp: number;
 }
 
 export function useLiveCommissions(selectedMonth: string) {
@@ -73,7 +76,8 @@ export function useLiveCommissions(selectedMonth: string) {
   return useQuery<LiveCommissionsData>({
     queryKey: ['commissions-live', organizationId, selectedMonth, members?.length, energyConfig?.bands?.length],
     queryFn: async (): Promise<LiveCommissionsData> => {
-      if (!organizationId) return { commercials: [], globalMwh: 0, globalTier: 'low', totalCommission: 0 };
+      const emptyResult: LiveCommissionsData = { commercials: [], globalMwh: 0, globalTier: 'low', totalCommission: 0, globalServicosKwp: 0 };
+      if (!organizationId) return emptyResult;
 
       const monthStart = selectedMonth;
       const monthEnd = format(endOfMonth(new Date(selectedMonth)), 'yyyy-MM-dd');
@@ -88,7 +92,7 @@ export function useLiveCommissions(selectedMonth: string) {
         .lte('activation_date', monthEnd);
 
       if (salesError) throw salesError;
-      if (!sales?.length) return { commercials: [], globalMwh: 0, globalTier: 'low', totalCommission: 0 };
+      if (!sales?.length) return emptyResult;
 
       // Get client assigned_to
       const clientIds = [...new Set(sales.map(s => s.client_id).filter(Boolean))] as string[];
@@ -103,18 +107,31 @@ export function useLiveCommissions(selectedMonth: string) {
 
       // Get proposals with negotiation_type filter
       const proposalIds = [...new Set(sales.map(s => s.proposal_id).filter(Boolean))] as string[];
-      if (!proposalIds.length) return { commercials: [], globalMwh: 0, globalTier: 'low', totalCommission: 0 };
+      if (!proposalIds.length) return emptyResult;
 
       const { data: proposals } = await supabase
         .from('proposals')
-        .select('id, negotiation_type, servicos_produtos')
+        .select('id, negotiation_type, servicos_produtos, servicos_details')
         .in('id', proposalIds);
 
-      if (!proposals?.length) return { commercials: [], globalMwh: 0, globalTier: 'low', totalCommission: 0 };
+      if (!proposals?.length) return emptyResult;
 
       const validProposalIds = proposals.map(p => p.id);
       const proposalNegotiationMap = new Map(proposals.map(p => [p.id, p.negotiation_type]));
       const proposalServicosMap = new Map(proposals.map(p => [p.id, (p.servicos_produtos as string[]) || []]));
+
+      // Extract kWp from servicos_details JSONB
+      const proposalKwpMap = new Map<string, number>();
+      for (const p of proposals) {
+        let totalKwp = 0;
+        const details = p.servicos_details as Record<string, { kwp?: number }> | null;
+        if (details && typeof details === 'object') {
+          for (const prod of Object.values(details)) {
+            totalKwp += (prod?.kwp || 0);
+          }
+        }
+        proposalKwpMap.set(p.id, totalKwp);
+      }
 
       // Map proposal_id -> sale_id
       const proposalToSale = new Map<string, string>();
@@ -129,7 +146,7 @@ export function useLiveCommissions(selectedMonth: string) {
         .select('id, proposal_id, consumo_anual, margem, comissao, serial_number')
         .in('proposal_id', validProposalIds);
 
-      if (!cpes?.length) return { commercials: [], globalMwh: 0, globalTier: 'low', totalCommission: 0 };
+      if (!cpes?.length) return emptyResult;
 
       // Group by commercial
       const byCommercial = new Map<string, CommercialEntry>();
@@ -151,14 +168,17 @@ export function useLiveCommissions(selectedMonth: string) {
             tier: 'low',
             totalIndicativa: 0,
             totalFinal: 0,
+            totalServicosKwp: 0,
             cpes: [],
           });
         }
 
         const entry = byCommercial.get(assignedTo)!;
         const consumo = cpe.consumo_anual || 0;
+        const cpeServicosKwp = proposalKwpMap.get(cpe.proposal_id) || 0;
         entry.totalConsumoKwh += consumo;
         totalGlobalKwh += consumo;
+        entry.totalServicosKwp += cpeServicosKwp;
         entry.totalIndicativa += cpe.comissao || 0;
         entry.cpes.push({
           sale_id: saleId,
@@ -171,6 +191,7 @@ export function useLiveCommissions(selectedMonth: string) {
           comissao_final: 0,
           negotiation_type: proposalNegotiationMap.get(cpe.proposal_id) || '',
           servicos: proposalServicosMap.get(cpe.proposal_id) || [],
+          servicos_kwp: cpeServicosKwp,
         });
       }
 
@@ -201,7 +222,9 @@ export function useLiveCommissions(selectedMonth: string) {
       const commercials = Array.from(byCommercial.values()).sort((a, b) => b.totalFinal - a.totalFinal);
       const totalCommission = commercials.reduce((sum, p) => sum + p.totalFinal, 0);
 
-      return { commercials, globalMwh, globalTier, totalCommission };
+      const globalServicosKwp = commercials.reduce((sum, p) => sum + p.totalServicosKwp, 0);
+
+      return { commercials, globalMwh, globalTier, totalCommission, globalServicosKwp };
     },
     enabled: !!organizationId && !!selectedMonth,
   });
