@@ -355,7 +355,7 @@ export default function Login() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <img src={senviaLogo} alt="SENVIA" className="h-12 w-48 object-contain mx-auto" />
+          <img src={senviaLogo} alt="SENVIA" className="h-12 w-48 object-contain mx-auto" width={192} height={48} fetchPriority="high" loading="eager" decoding="async" />
         </div>
 
         <Card className="border-slate-800 bg-slate-900/50 backdrop-blur">
