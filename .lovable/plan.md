@@ -1,25 +1,40 @@
 
 
-## Plano: Sincronização automática via cron job
+## Diagnóstico de Performance (Lighthouse Mobile: 59)
 
-O webhook da Brevo já existe mas não está a receber eventos. Em vez de depender do webhook (que requer configuração externa), vamos criar um **cron job** que chama a edge function `sync-email-statuses` automaticamente a cada 5 minutos.
+O problema principal: **todo o JavaScript da aplicação é carregado de uma vez** (zero code splitting). A página de Login carrega Dashboard, Calendar, Ecommerce, Marketing, Finance, Settings, etc. - tudo junto. Isto causa:
 
-### Alterações
+- **FCP 6.6s / LCP 8.6s** - JS bundle enorme bloqueia o render
+- **863 KiB de JS não utilizado** (Lighthouse confirma)
+- **Font blocking** - Google Fonts carregado via `@import` no CSS (render-blocking)
 
-**1. Cron job via `pg_cron` + `pg_net`**
-- Criar um SQL que agenda a chamada à `sync-email-statuses` a cada 5 minutos
-- A function já existe e funciona — só precisa de ser chamada automaticamente
-- Como a sync precisa de `organizationId`, vamos alterar a edge function para suportar um modo `sync_all` que percorre todas as organizações com `brevo_api_key` configurada
+## Plano: Otimização de performance
 
-**2. Atualizar `supabase/functions/sync-email-statuses/index.ts`**
-- Adicionar modo `sync_all`: se não receber `organizationId`, busca todas as orgs com `brevo_api_key` e sincroniza cada uma
-- O cron chama sem body, a function trata todas as orgs automaticamente
+### 1. Lazy loading de todas as páginas (`src/App.tsx`)
+Converter todos os imports de páginas para `React.lazy()` com `Suspense`. A página de Login carrega apenas ~20KB em vez de >1MB.
 
-**3. Remover botão "Sincronizar" de `src/pages/marketing/Reports.tsx`**
-- Remover o botão, o state `isSyncing`, a função `handleSync`, e os imports desnecessários (`CloudDownload`, `useAuth`)
+```tsx
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Leads = lazy(() => import('./pages/Leads'));
+// ... todas as 30+ páginas
+```
+
+### 2. Eliminar font blocking (`src/index.css`)
+Trocar `@import url(...)` por `<link rel="preload">` no `index.html` com `display=swap`.
+
+### 3. Preload da logo (`index.html`)
+Adicionar `<link rel="preload" as="image">` para a logo do Login (é o LCP element).
+
+### 4. Corrigir viewport para acessibilidade (`index.html`)
+Remover `user-scalable=no` e `maximum-scale=1.0` (flag do Lighthouse + melhora score).
 
 ### Ficheiros afetados
-- `supabase/functions/sync-email-statuses/index.ts` (modo sync_all)
-- `src/pages/marketing/Reports.tsx` (remover botão)
-- SQL insert para criar o cron job
+- `src/App.tsx` (lazy imports + Suspense)
+- `src/index.css` (remover @import de fonts)
+- `index.html` (preload font, preload logo, fix viewport)
+
+### Impacto esperado
+- FCP: 6.6s → ~2-3s (JS bundle da Login page reduzido em ~80%)
+- LCP: 8.6s → ~3-4s (logo preloaded + font não bloqueia render)
+- Score: 59 → 75-85+
 
