@@ -1,49 +1,33 @@
 
 
-## Diagnóstico detalhado
+## Ajustes ao Quadro de Comissões
 
-Com base no profiling e análise do código, o lazy loading já está implementado. Os problemas restantes são:
+### Resumo das alterações pedidas:
+1. **Novo totalizador global de Serviços (kWp)** — soma total de kWp de todos os serviços (Solar, Baterias, Carregadores, Condensadores)
+2. **Separar colunas EE e Serviços** na tabela de detalhe expandida
+3. **Na coluna "Consumo" para serviços, mostrar kWp** em vez de kWh
+4. **Remover colunas Margem e Comissão Indicativa** da tabela de detalhe
+5. **Na coluna Serviços, mostrar os nomes dos produtos** (Solar, Bateria, Carregadores, Condensadores)
 
-1. **Meta Pixel bloqueia o render** — script síncrono no `<head>` executa antes de qualquer conteúdo
-2. **Logo preload errado** — preloada `/senvia-logo-white.png` mas a Login page usa `@/assets/senvia-logo.png` (ficheiro diferente, bundled pelo Vite)
-3. **Font com 6 pesos desnecessários** — carrega 300-800 mas só precisa de 400, 500, 600, 700
-4. **HelmetProvider carrega react-helmet-async** no bundle inicial, mas o SEO já está hardcoded no `index.html`
-5. **PWAInstallButton carregado eager** no App.tsx — deveria ser lazy
+### Ficheiros a alterar
 
-## Plano de otimização
+#### 1. `src/hooks/useLiveCommissions.ts`
+- Buscar `servicos_details` e `servicos_produtos` das propostas (já busca `servicos_produtos`, falta `servicos_details`)
+- Adicionar ao `CpeDetail`: campo `servicos_kwp` (soma de kWp dos serviços da proposta)
+- Adicionar ao `CommercialEntry`: `totalServicosKwp`
+- Adicionar ao `LiveCommissionsData`: `globalServicosKwp` (totalizador global)
+- Calcular kWp total por proposta somando `servicos_details[produto].kwp` para cada produto
 
-### 1. Defer Meta Pixel (`index.html`)
-- Mover o script do Facebook Pixel para o final do `<body>`, depois do `<div id="root">`
-- Isto desbloqueia o parser e permite que o HTML renderize primeiro
+#### 2. `src/components/finance/CommissionsTab.tsx`
+- **Novo card totalizador** ao lado do existente: "Totalizador Serviços" com total kWp
+- **Tabela principal**: manter colunas Comercial, MWh Total, Patamar, Comissão (sem mudanças)
+- **Tabela de detalhe expandida**:
+  - Remover colunas "Margem (€)" e "Comissão Indicativa"
+  - Renomear "Consumo (kWh)" para "EE (kWh)" — mostrar consumo energia
+  - Adicionar coluna "Serviços (kWp)" — mostrar kWp total dos serviços
+  - Coluna "Serviços" mantém-se com badges dos produtos (Solar, Baterias, etc.)
+  - Colunas finais: Venda | Tipo | CPE/CUI | EE (kWh) | Serviços (kWp) | Comissão Final | Serviços
 
-### 2. Corrigir preload da logo (`index.html`)
-- Remover preload de `/senvia-logo-white.png` (não é usado na Login)
-- A logo real é bundled pelo Vite (`@/assets/senvia-logo.png`), não pode ser preloaded via HTML
-- Adicionar `fetchpriority="high"` à tag `<img>` no `Login.tsx` para priorizar o LCP element
-
-### 3. Reduzir font weights (`index.html`)
-- Mudar de `wght@300;400;500;600;700;800` para `wght@400;500;600;700`
-- Reduz o tamanho do download de fontes
-
-### 4. Lazy load HelmetProvider (`src/main.tsx`)
-- Remover `react-helmet-async` do bundle crítico
-- Lazy load o SEO component em vez de wrapping toda a app
-
-### 5. Lazy load PWAInstallButton (`src/App.tsx`)
-- Converter `PWAInstallButton` para `lazy()` — não é necessário no render inicial
-
-### 6. Login.tsx — otimizar LCP (`src/pages/Login.tsx`)
-- Adicionar `fetchpriority="high"` e `loading="eager"` na `<img>` do logo
-- Adicionar `width` e `height` para evitar layout shift (CLS)
-
-### Ficheiros afetados
-- `index.html` (defer pixel, fix preload, reduce fonts)
-- `src/main.tsx` (remover HelmetProvider wrapper)
-- `src/App.tsx` (lazy PWAInstallButton)
-- `src/pages/Login.tsx` (fetchpriority no logo)
-
-### Impacto esperado
-- FCP: redução de ~1-2s (desbloqueio do Meta Pixel + font otimizado)
-- LCP: redução de ~0.5-1s (fetchpriority no logo)
-- Best Practices: +5-10 pontos (defer third-party scripts)
+### Origem dos dados kWp
+O campo `proposals.servicos_details` é um JSONB com estrutura `{ "Solar": { kwp: 10, valor: 5000 }, "Baterias": { kwp: 5 } }`. Soma-se todos os `kwp` dos produtos para obter o total de serviços por CPE/venda.
 
