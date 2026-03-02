@@ -1,35 +1,17 @@
 
 
-## Correção das Regras de Comissão
+## Correção do scroll na lista de contactos (Email Marketing)
 
-### Regras corretas (confirmadas pelo utilizador)
+### Problema
+Na `CreateCampaignModal.tsx`, a lista de contactos (tab "Lista") usa um `ScrollArea` aninhado dentro de outro `ScrollArea` pai (o container do step 3). O Radix ScrollArea não lida bem com scroll aninhado — o scroll interno é "engolido" pelo pai.
 
-| Tipo | Comissão | Conta para Totalizador (Volume MWh)? |
-|------|----------|--------------------------------------|
-| Angariação | 100% | Sim |
-| Ang. Indexado | 100% | Sim |
-| **Sem Volume** | **100%** | **Não** |
-| **Renovação** | **25%** | **Não** |
+### Solução
+Substituir o `ScrollArea` interno (linha 522) por um `div` com `overflow-y-auto` e `max-h-[200px]`. Isto permite scroll nativo no browser que funciona correctamente mesmo dentro de outro ScrollArea.
 
-### O que está errado agora
-No `useLiveCommissions.ts`, linhas 179-180, **todos** os tipos de negociação somam `consumo_anual` ao totalizador de volume (`totalGlobalKwh` e `entry.totalConsumoKwh`). Precisamos excluir `sem_volume` e `renovacao`.
+Mesma correção para o ScrollArea da tab "individual" (linha 516) que pode ter o mesmo problema.
 
-O multiplicador de `sem_volume: 1` já está correto (100%). O de `renovacao: 0.25` também está correto (25%).
-
-### Alteração (1 ficheiro)
-
-**`src/hooks/useLiveCommissions.ts`** — linhas 177-180:
-- Só somar `consumo` ao `entry.totalConsumoKwh` e `totalGlobalKwh` quando `negotiation_type` **não** é `sem_volume` nem `renovacao`
-- Usar o `negotiation_type` da proposta (já disponível via `proposalNegotiationMap`) para decidir
-
-```typescript
-const negType = proposalNegotiationMap.get(cpe.proposal_id) || '';
-const countsForVolume = negType !== 'sem_volume' && negType !== 'renovacao';
-if (countsForVolume) {
-  entry.totalConsumoKwh += consumo;
-  totalGlobalKwh += consumo;
-}
-```
-
-Isto faz com que o Totalizador EE (MWh) e o patamar de volume só reflitam angariações e ang. indexado.
+### Ficheiro: `src/components/marketing/CreateCampaignModal.tsx`
+- Linha 522: trocar `<ScrollArea className="border rounded-md max-h-[200px]">` por `<div className="border rounded-md max-h-[200px] overflow-y-auto">`
+- Fechar com `</div>` em vez de `</ScrollArea>`
+- Aplicar o mesmo padrão à lista de clientes individuais se também usar ScrollArea aninhado
 
