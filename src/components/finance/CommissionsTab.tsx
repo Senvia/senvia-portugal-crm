@@ -16,7 +16,7 @@ const NEGOTIATION_TYPE_LABELS: Record<string, string> = {
   angariacao: 'Angariação',
   angariacao_indexado: 'Ang. Indexado',
   renovacao: 'Renovação',
-  sem_volume: 'Sem Volume',
+  sem_volume: 'Ang. sem Volume',
 };
 
 const TIER_LABELS: Record<string, string> = {
@@ -210,13 +210,17 @@ export function CommissionsTab() {
                                       <TableCell className="text-right text-xs">{d.servicos_kwp > 0 ? d.servicos_kwp.toFixed(1) : '—'}</TableCell>
                                       <TableCell className="text-right text-xs font-medium">{d.comissao_final != null ? formatCurrency(d.comissao_final) : '—'}</TableCell>
                                       <TableCell className="text-xs">
-                                        {d.servicos?.length > 0 ? (
-                                          <div className="flex flex-wrap gap-1">
-                                            {d.servicos.map((s, i) => (
-                                              <Badge key={i} variant="secondary" className="text-[10px]">{s}</Badge>
-                                            ))}
-                                          </div>
-                                        ) : '—'}
+                                        <div className="flex flex-wrap gap-1">
+                                          {d.proposal_type === 'energia' && (
+                                            <Badge variant="default" className="text-[10px]">
+                                              Energia{d.negotiation_type ? ` - ${NEGOTIATION_TYPE_LABELS[d.negotiation_type] || d.negotiation_type}` : ''}
+                                            </Badge>
+                                          )}
+                                          {d.servicos?.map((s, i) => (
+                                            <Badge key={i} variant="secondary" className="text-[10px]">{s}</Badge>
+                                          ))}
+                                          {!d.servicos?.length && d.proposal_type !== 'energia' && '—'}
+                                        </div>
                                       </TableCell>
                                     </TableRow>
                                   ))}
