@@ -1,40 +1,49 @@
 
 
-## Diagnóstico de Performance (Lighthouse Mobile: 59)
+## Diagnóstico detalhado
 
-O problema principal: **todo o JavaScript da aplicação é carregado de uma vez** (zero code splitting). A página de Login carrega Dashboard, Calendar, Ecommerce, Marketing, Finance, Settings, etc. - tudo junto. Isto causa:
+Com base no profiling e análise do código, o lazy loading já está implementado. Os problemas restantes são:
 
-- **FCP 6.6s / LCP 8.6s** - JS bundle enorme bloqueia o render
-- **863 KiB de JS não utilizado** (Lighthouse confirma)
-- **Font blocking** - Google Fonts carregado via `@import` no CSS (render-blocking)
+1. **Meta Pixel bloqueia o render** — script síncrono no `<head>` executa antes de qualquer conteúdo
+2. **Logo preload errado** — preloada `/senvia-logo-white.png` mas a Login page usa `@/assets/senvia-logo.png` (ficheiro diferente, bundled pelo Vite)
+3. **Font com 6 pesos desnecessários** — carrega 300-800 mas só precisa de 400, 500, 600, 700
+4. **HelmetProvider carrega react-helmet-async** no bundle inicial, mas o SEO já está hardcoded no `index.html`
+5. **PWAInstallButton carregado eager** no App.tsx — deveria ser lazy
 
-## Plano: Otimização de performance
+## Plano de otimização
 
-### 1. Lazy loading de todas as páginas (`src/App.tsx`)
-Converter todos os imports de páginas para `React.lazy()` com `Suspense`. A página de Login carrega apenas ~20KB em vez de >1MB.
+### 1. Defer Meta Pixel (`index.html`)
+- Mover o script do Facebook Pixel para o final do `<body>`, depois do `<div id="root">`
+- Isto desbloqueia o parser e permite que o HTML renderize primeiro
 
-```tsx
-const Dashboard = lazy(() => import('./pages/Dashboard'));
-const Leads = lazy(() => import('./pages/Leads'));
-// ... todas as 30+ páginas
-```
+### 2. Corrigir preload da logo (`index.html`)
+- Remover preload de `/senvia-logo-white.png` (não é usado na Login)
+- A logo real é bundled pelo Vite (`@/assets/senvia-logo.png`), não pode ser preloaded via HTML
+- Adicionar `fetchpriority="high"` à tag `<img>` no `Login.tsx` para priorizar o LCP element
 
-### 2. Eliminar font blocking (`src/index.css`)
-Trocar `@import url(...)` por `<link rel="preload">` no `index.html` com `display=swap`.
+### 3. Reduzir font weights (`index.html`)
+- Mudar de `wght@300;400;500;600;700;800` para `wght@400;500;600;700`
+- Reduz o tamanho do download de fontes
 
-### 3. Preload da logo (`index.html`)
-Adicionar `<link rel="preload" as="image">` para a logo do Login (é o LCP element).
+### 4. Lazy load HelmetProvider (`src/main.tsx`)
+- Remover `react-helmet-async` do bundle crítico
+- Lazy load o SEO component em vez de wrapping toda a app
 
-### 4. Corrigir viewport para acessibilidade (`index.html`)
-Remover `user-scalable=no` e `maximum-scale=1.0` (flag do Lighthouse + melhora score).
+### 5. Lazy load PWAInstallButton (`src/App.tsx`)
+- Converter `PWAInstallButton` para `lazy()` — não é necessário no render inicial
+
+### 6. Login.tsx — otimizar LCP (`src/pages/Login.tsx`)
+- Adicionar `fetchpriority="high"` e `loading="eager"` na `<img>` do logo
+- Adicionar `width` e `height` para evitar layout shift (CLS)
 
 ### Ficheiros afetados
-- `src/App.tsx` (lazy imports + Suspense)
-- `src/index.css` (remover @import de fonts)
-- `index.html` (preload font, preload logo, fix viewport)
+- `index.html` (defer pixel, fix preload, reduce fonts)
+- `src/main.tsx` (remover HelmetProvider wrapper)
+- `src/App.tsx` (lazy PWAInstallButton)
+- `src/pages/Login.tsx` (fetchpriority no logo)
 
 ### Impacto esperado
-- FCP: 6.6s → ~2-3s (JS bundle da Login page reduzido em ~80%)
-- LCP: 8.6s → ~3-4s (logo preloaded + font não bloqueia render)
-- Score: 59 → 75-85+
+- FCP: redução de ~1-2s (desbloqueio do Meta Pixel + font otimizado)
+- LCP: redução de ~0.5-1s (fetchpriority no logo)
+- Best Practices: +5-10 pontos (defer third-party scripts)
 
