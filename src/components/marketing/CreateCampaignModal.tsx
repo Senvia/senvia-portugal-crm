@@ -451,7 +451,7 @@ export function CreateCampaignModal({ open, onOpenChange, campaign }: CreateCamp
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                         <Input placeholder="Pesquisar..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-10" />
                       </div>
-                      <ScrollArea className="border rounded-md max-h-[300px]">
+                      <div className="border rounded-md max-h-[300px] overflow-y-auto">
                         <div className="p-2 space-y-1">
                           {loadingClients ? (
                             <div className="flex items-center justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
@@ -472,7 +472,7 @@ export function CreateCampaignModal({ open, onOpenChange, campaign }: CreateCamp
                             })
                           )}
                         </div>
-                      </ScrollArea>
+                      </div>
                     </TabsContent>
 
                     <TabsContent value="filter" className="space-y-4">
@@ -494,7 +494,7 @@ export function CreateCampaignModal({ open, onOpenChange, campaign }: CreateCamp
                           {selectedClients.length === filteredClients.length ? "Desmarcar" : "Selecionar"} todos
                         </Button>
                       </div>
-                      <ScrollArea className="border rounded-md max-h-[250px]">
+                      <div className="border rounded-md max-h-[250px] overflow-y-auto">
                         <div className="p-2 space-y-1">
                           {filteredClients.map((client) => {
                             const isSelected = selectedClients.some(c => c.id === client.id);
@@ -513,13 +513,13 @@ export function CreateCampaignModal({ open, onOpenChange, campaign }: CreateCamp
                             );
                           })}
                         </div>
-                      </ScrollArea>
+                      </div>
                     </TabsContent>
 
                     <TabsContent value="list" className="space-y-4">
                       <div className="space-y-2">
                         <Label>Selecionar listas</Label>
-                        <ScrollArea className="border rounded-md max-h-[200px]">
+                        <div className="border rounded-md max-h-[200px] overflow-y-auto">
                           <div className="p-2 space-y-1">
                             {contactLists.length === 0 ? (
                               <p className="text-sm text-muted-foreground text-center py-4">Nenhuma lista disponível</p>
@@ -546,7 +546,7 @@ export function CreateCampaignModal({ open, onOpenChange, campaign }: CreateCamp
                               })
                             )}
                           </div>
-                        </ScrollArea>
+                        </div>
                       </div>
 
                       {selectedListIds.length > 0 && (
