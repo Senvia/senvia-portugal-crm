@@ -1,30 +1,25 @@
 
 
-## Diagnóstico
+## Plano: Sincronização automática via cron job
 
-A base de dados confirma o problema: **33 emails ficaram com status "sent"** desde 13 de fevereiro, sem nunca atualizar para "delivered"/"opened". Isto acontece porque o webhook da Brevo não está a chegar ao sistema (sem logs recentes na edge function `brevo-webhook`).
+O webhook da Brevo já existe mas não está a receber eventos. Em vez de depender do webhook (que requer configuração externa), vamos criar um **cron job** que chama a edge function `sync-email-statuses` automaticamente a cada 5 minutos.
 
-Já tens o `sync-campaign-sends` que sincroniza campanhas, mas emails individuais/manuais não têm mecanismo de sync. O webhook é o único caminho e não está a funcionar.
+### Alterações
 
-## Plano: Criar botão "Sincronizar" + edge function de sync global
+**1. Cron job via `pg_cron` + `pg_net`**
+- Criar um SQL que agenda a chamada à `sync-email-statuses` a cada 5 minutos
+- A function já existe e funciona — só precisa de ser chamada automaticamente
+- Como a sync precisa de `organizationId`, vamos alterar a edge function para suportar um modo `sync_all` que percorre todas as organizações com `brevo_api_key` configurada
 
-### 1. Nova edge function `sync-email-statuses`
-- Recebe `organizationId`
-- Busca todos os `email_sends` com status "sent" dessa org
-- Para cada `brevo_message_id`, consulta a API Brevo (`GET /v3/smtp/statistics/events?messageId=...`) para obter o estado real
-- Atualiza status, `opened_at`, `clicked_at` na tabela `email_sends`
-- Retorna resumo (atualizados, erros)
+**2. Atualizar `supabase/functions/sync-email-statuses/index.ts`**
+- Adicionar modo `sync_all`: se não receber `organizationId`, busca todas as orgs com `brevo_api_key` e sincroniza cada uma
+- O cron chama sem body, a function trata todas as orgs automaticamente
 
-### 2. Atualizar `src/pages/marketing/Reports.tsx`
-- Adicionar botão "Sincronizar" ao lado do botão de refresh
-- Ao clicar, chama a edge function `sync-email-statuses`
-- Mostra toast com resultado e invalida a query
+**3. Remover botão "Sincronizar" de `src/pages/marketing/Reports.tsx`**
+- Remover o botão, o state `isSyncing`, a função `handleSync`, e os imports desnecessários (`CloudDownload`, `useAuth`)
 
-### 3. Config: `supabase/config.toml`
-- Adicionar `[functions.sync-email-statuses]` com `verify_jwt = false`
-
-### Ficheiros
-- `supabase/functions/sync-email-statuses/index.ts` (novo)
-- `src/pages/marketing/Reports.tsx` (botão sync)
-- `supabase/config.toml` (config)
+### Ficheiros afetados
+- `supabase/functions/sync-email-statuses/index.ts` (modo sync_all)
+- `src/pages/marketing/Reports.tsx` (remover botão)
+- SQL insert para criar o cron job
 
