@@ -1,4 +1,5 @@
 import { lazy, Suspense } from "react";
+import { HelmetProvider } from "react-helmet-async";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -7,7 +8,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedLayoutRoute } from "@/components/auth/ProtectedLayoutRoute";
 import { SuperAdminRoute } from "@/components/auth/SuperAdminRoute";
-import { PWAInstallButton } from "@/components/pwa/PWAInstallButton";
+const PWAInstallButton = lazy(() => import("@/components/pwa/PWAInstallButton").then(m => ({ default: m.PWAInstallButton })));
 
 // Eager: Login is the entry point
 import Login from "./pages/Login";
@@ -53,81 +54,88 @@ const FinanceInternalRequests = lazy(() => import("./pages/finance/InternalReque
 const queryClient = new QueryClient();
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <AuthProvider>
-          <PWAInstallButton />
-          <Suspense fallback={<div className="flex items-center justify-center h-screen bg-background"><div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" /></div>}>
-            <Routes>
-              {/* Public Routes */}
-              <Route path="/" element={<Login />} />
-              <Route path="/login" element={<Navigate to="/" replace />} />
-              <Route path="/reset-password" element={<ResetPassword />} />
-              <Route path="/f/:slug" element={<PublicLeadForm />} />
-              <Route path="/f/:slug/:formSlug" element={<PublicLeadForm />} />
-              <Route path="/c/:slug" element={<ConversationalLeadForm />} />
-              <Route path="/c/:slug/:formSlug" element={<ConversationalLeadForm />} />
-              <Route path="/invite/:token" element={<InviteRegister />} />
-              <Route path="/privacy" element={<Privacy />} />
-              <Route path="/terms" element={<Terms />} />
-              <Route path="/install" element={<Install />} />
+  <HelmetProvider>
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <AuthProvider>
+            <Suspense fallback={null}><PWAInstallButton /></Suspense>
+            <Suspense fallback={<div className="flex items-center justify-center h-screen bg-background"><div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" /></div>}>
+              <Routes>
+                {/* Public Routes */}
+                <Route path="/" element={<Login />} />
+                <Route path="/login" element={<Navigate to="/" replace />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
+                <Route path="/f/:slug" element={<PublicLeadForm />} />
+                <Route path="/f/:slug/:formSlug" element={<PublicLeadForm />} />
+                <Route path="/c/:slug" element={<ConversationalLeadForm />} />
+                <Route path="/c/:slug/:formSlug" element={<ConversationalLeadForm />} />
+                <Route path="/invite/:token" element={<InviteRegister />} />
+                <Route path="/privacy" element={<Privacy />} />
+                <Route path="/terms" element={<Terms />} />
+                <Route path="/install" element={<Install />} />
 
-              {/* Protected Routes (Persistent Layout) */}
-              <Route element={<ProtectedLayoutRoute />}>
-                <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/leads" element={<Leads />} />
-                <Route path="/clients" element={<Clients />} />
-                <Route path="/calendar" element={<Calendar />} />
-                <Route path="/proposals" element={<Proposals />} />
-                <Route path="/sales" element={<Sales />} />
-                <Route path="/financeiro" element={<Finance />} />
-                <Route path="/financeiro/pagamentos" element={<FinancePayments />} />
-                <Route path="/financeiro/faturas" element={<FinanceInvoices />} />
-                <Route path="/financeiro/despesas" element={<FinanceExpenses />} />
-                <Route path="/ecommerce" element={<Ecommerce />} />
-                <Route path="/ecommerce/products" element={<EcommerceProducts />} />
-                <Route path="/ecommerce/orders" element={<EcommerceOrders />} />
-                <Route path="/ecommerce/customers" element={<EcommerceCustomers />} />
-                <Route path="/ecommerce/inventory" element={<EcommerceInventory />} />
-                <Route path="/ecommerce/discounts" element={<EcommerceDiscounts />} />
-                <Route path="/ecommerce/reports" element={<EcommerceReports />} />
-                <Route path="/settings" element={<Settings />} />
-                <Route path="/marketing" element={<Marketing />} />
-                <Route path="/marketing/templates" element={<MarketingTemplates />} />
-                <Route path="/marketing/campaigns" element={<MarketingCampaigns />} />
-                <Route path="/marketing/reports" element={<MarketingReports />} />
-                <Route path="/marketing/lists" element={<MarketingLists />} />
-                <Route path="/marketing/automations" element={<MarketingAutomations />} />
-              </Route>
+                {/* Protected Routes (Persistent Layout) */}
+                <Route element={<ProtectedLayoutRoute />}>
+                  <Route path="/dashboard" element={<Dashboard />} />
+                  <Route path="/leads" element={<Leads />} />
+                  <Route path="/clients" element={<Clients />} />
+                  <Route path="/calendar" element={<Calendar />} />
+                  <Route path="/proposals" element={<Proposals />} />
+                  <Route path="/sales" element={<Sales />} />
+                  <Route path="/financeiro" element={<Finance />} />
+                  <Route path="/financeiro/pagamentos" element={<FinancePayments />} />
+                  <Route path="/financeiro/faturas" element={<FinanceInvoices />} />
+                  <Route path="/financeiro/despesas" element={<FinanceExpenses />} />
+                  <Route path="/ecommerce" element={<Ecommerce />} />
+                  <Route path="/ecommerce/products" element={<EcommerceProducts />} />
+                  <Route path="/ecommerce/orders" element={<EcommerceOrders />} />
+                  <Route path="/ecommerce/customers" element={<EcommerceCustomers />} />
+                  <Route path="/ecommerce/inventory" element={<EcommerceInventory />} />
+                  <Route path="/ecommerce/discounts" element={<EcommerceDiscounts />} />
+                  <Route path="/ecommerce/reports" element={<EcommerceReports />} />
+                  <Route path="/settings" element={<Settings />} />
+                  <Route path="/marketing" element={<Marketing />} />
+                  <Route path="/marketing/templates" element={<MarketingTemplates />} />
+                  <Route path="/marketing/campaigns" element={<MarketingCampaigns />} />
+                  <Route path="/marketing/reports" element={<MarketingReports />} />
+                  <Route path="/marketing/lists" element={<MarketingLists />} />
+                  <Route path="/marketing/automations" element={<MarketingAutomations />} />
+                </Route>
 
-              {/* Super Admin Routes */}
-              <Route path="/system-admin" element={
-                <SuperAdminRoute>
-                  <SystemAdminDashboard />
-                </SuperAdminRoute>
-              } />
-              <Route path="/system-admin/organizations" element={
-                <SuperAdminRoute>
-                  <SystemAdminOrganizations />
-                </SuperAdminRoute>
-              } />
-              <Route path="/system-admin/users" element={
-                <SuperAdminRoute>
-                  <SystemAdminUsers />
-                </SuperAdminRoute>
-              } />
+                {/* Super Admin Routes */}
+                <Route path="/system-admin" element={
+                  <SuperAdminRoute>
+                    <SystemAdminDashboard />
+                  </SuperAdminRoute>
+                } />
+                <Route path="/system-admin/organizations" element={
+                  <SuperAdminRoute>
+                    <SystemAdminOrganizations />
+                  </SuperAdminRoute>
+                } />
+                <Route path="/system-admin/users" element={
+                  <SuperAdminRoute>
+                    <SystemAdminUsers />
+                  </SuperAdminRoute>
+                } />
 
-              {/* Catch-all */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </Suspense>
-        </AuthProvider>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
+                {/* Finance sub-routes */}
+                <Route element={<ProtectedLayoutRoute />}>
+                  <Route path="/financeiro/pedidos" element={<FinanceInternalRequests />} />
+                </Route>
+
+                {/* Catch-all */}
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </Suspense>
+          </AuthProvider>
+        </BrowserRouter>
+      </TooltipProvider>
+    </QueryClientProvider>
+  </HelmetProvider>
 );
 
 export default App;
