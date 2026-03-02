@@ -1,17 +1,22 @@
 
 
-## Correção do scroll na lista de contactos (Email Marketing)
+## Correções na tabela de comissões
 
-### Problema
-Na `CreateCampaignModal.tsx`, a lista de contactos (tab "Lista") usa um `ScrollArea` aninhado dentro de outro `ScrollArea` pai (o container do step 3). O Radix ScrollArea não lida bem com scroll aninhado — o scroll interno é "engolido" pelo pai.
+### Bug 1 — Label errado para `sem_volume`
+Nos dois ficheiros (`CommissionsTab.tsx` linha 19 e `useLiveCommissions.ts` linha 17), o label está como `'Sem Volume'` mas deveria ser `'Ang. sem Volume'` para corresponder ao nome correto do tipo de negociação.
 
-### Solução
-Substituir o `ScrollArea` interno (linha 522) por um `div` com `overflow-y-auto` e `max-h-[200px]`. Isto permite scroll nativo no browser que funciona correctamente mesmo dentro de outro ScrollArea.
+### Bug 2 — Coluna "Serviços" não mostra "Energia"
+Na tabela expandida, a coluna "Serviços" só mostra os produtos de `servicos_produtos` (Solar, Baterias, etc.). Quando a proposta é do tipo `energia`, deveria também aparecer uma badge "Energia" com o tipo de negociação (ex: "Energia - Angariação").
 
-Mesma correção para o ScrollArea da tab "individual" (linha 516) que pode ter o mesmo problema.
+### Alterações
 
-### Ficheiro: `src/components/marketing/CreateCampaignModal.tsx`
-- Linha 522: trocar `<ScrollArea className="border rounded-md max-h-[200px]">` por `<div className="border rounded-md max-h-[200px] overflow-y-auto">`
-- Fechar com `</div>` em vez de `</ScrollArea>`
-- Aplicar o mesmo padrão à lista de clientes individuais se também usar ScrollArea aninhado
+**`src/components/finance/CommissionsTab.tsx`**:
+1. Linha 19: mudar `'Sem Volume'` → `'Ang. sem Volume'`
+2. Na coluna "Serviços" (linhas ~213-220): quando `proposal_type === 'energia'`, adicionar badge "Energia" antes dos serviços existentes
+
+**`src/hooks/useLiveCommissions.ts`**:
+1. Linha 17: mudar label `'Sem Volume'` → `'Ang. sem Volume'`
+2. Incluir `proposal_type` nos dados passados ao `CpeDetail` para que o componente saiba se é energia ou serviços
+
+**`CpeDetail` interface**: adicionar campo `proposal_type: string`
 
