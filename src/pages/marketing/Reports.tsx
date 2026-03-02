@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowLeft, Mail, Eye, MousePointer, AlertTriangle, Loader2, Send, CheckCircle, ShieldAlert, Ban, RefreshCw, Bot, Megaphone, CloudDownload } from "lucide-react";
+import { ArrowLeft, Mail, Eye, MousePointer, AlertTriangle, Loader2, Send, CheckCircle, ShieldAlert, Ban, RefreshCw, Bot, Megaphone } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
@@ -15,9 +15,6 @@ import { EMAIL_SEND_STATUS_LABELS, EMAIL_SEND_STATUS_STYLES, type EmailSendStatu
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
 import { format } from "date-fns";
 import { useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
-import { toast } from "@/hooks/use-toast";
 
 type Period = '7d' | '30d' | '90d';
 type SourceFilter = 'all' | 'campaign' | 'automation';
@@ -31,8 +28,6 @@ export default function Reports() {
   const { data: campaigns } = useCampaigns();
   const { automations } = useAutomations();
   const queryClient = useQueryClient();
-  const { organization } = useAuth();
-  const [isSyncing, setIsSyncing] = useState(false);
 
   const handleSourceChange = (v: SourceFilter) => {
     setSource(v);
@@ -41,30 +36,6 @@ export default function Reports() {
 
   const handleRefresh = () => {
     queryClient.invalidateQueries({ queryKey: ['email-stats'] });
-  };
-
-  const handleSync = async () => {
-    if (!organization?.id) return;
-    setIsSyncing(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('sync-email-statuses', {
-        body: { organizationId: organization.id },
-      });
-      if (error) throw error;
-      toast({
-        title: "Sincronização concluída",
-        description: `${data.updated} emails atualizados${data.errors > 0 ? `, ${data.errors} erros` : ''}`,
-      });
-      queryClient.invalidateQueries({ queryKey: ['email-stats'] });
-    } catch (err: any) {
-      toast({
-        title: "Erro na sincronização",
-        description: err.message || "Não foi possível sincronizar os estados dos emails",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSyncing(false);
-    }
   };
 
   const getOriginLabel = (event: any) => {
@@ -182,10 +153,6 @@ export default function Reports() {
           </Tabs>
           <Button variant="outline" size="icon" onClick={handleRefresh} className="h-9 w-9">
             <RefreshCw className="h-4 w-4" />
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleSync} disabled={isSyncing} className="gap-2">
-            {isSyncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CloudDownload className="h-4 w-4" />}
-            Sincronizar
           </Button>
         </div>
 
