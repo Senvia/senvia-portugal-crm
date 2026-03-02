@@ -176,8 +176,12 @@ export function useLiveCommissions(selectedMonth: string) {
         const entry = byCommercial.get(assignedTo)!;
         const consumo = cpe.consumo_anual || 0;
         const cpeServicosKwp = proposalKwpMap.get(cpe.proposal_id) || 0;
-        entry.totalConsumoKwh += consumo;
-        totalGlobalKwh += consumo;
+        const negType = proposalNegotiationMap.get(cpe.proposal_id) || '';
+        const countsForVolume = negType !== 'sem_volume' && negType !== 'renovacao';
+        if (countsForVolume) {
+          entry.totalConsumoKwh += consumo;
+          totalGlobalKwh += consumo;
+        }
         entry.totalServicosKwp += cpeServicosKwp;
         entry.totalIndicativa += cpe.comissao || 0;
         entry.cpes.push({
