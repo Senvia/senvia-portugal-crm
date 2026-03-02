@@ -15,7 +15,7 @@ const NEGOTIATION_TYPE_LABELS: Record<string, string> = {
   angariacao: 'Angariação',
   angariacao_indexado: 'Ang. Indexado',
   renovacao: 'Renovação',
-  sem_volume: 'Sem Volume',
+  sem_volume: 'Ang. sem Volume',
 };
 
 const NEGOTIATION_MULTIPLIER: Record<string, number> = {
@@ -37,6 +37,7 @@ export interface CpeDetail {
   negotiation_type: string;
   servicos: string[];
   servicos_kwp: number;
+  proposal_type: string;
 }
 
 export interface CommercialEntry {
@@ -111,7 +112,7 @@ export function useLiveCommissions(selectedMonth: string) {
 
       const { data: proposals } = await supabase
         .from('proposals')
-        .select('id, negotiation_type, servicos_produtos, servicos_details')
+        .select('id, negotiation_type, servicos_produtos, servicos_details, proposal_type')
         .in('id', proposalIds);
 
       if (!proposals?.length) return emptyResult;
@@ -119,6 +120,7 @@ export function useLiveCommissions(selectedMonth: string) {
       const validProposalIds = proposals.map(p => p.id);
       const proposalNegotiationMap = new Map(proposals.map(p => [p.id, p.negotiation_type]));
       const proposalServicosMap = new Map(proposals.map(p => [p.id, (p.servicos_produtos as string[]) || []]));
+      const proposalTypeMap = new Map(proposals.map(p => [p.id, (p as any).proposal_type || '']));
 
       // Extract kWp from servicos_details JSONB
       const proposalKwpMap = new Map<string, number>();
@@ -196,6 +198,7 @@ export function useLiveCommissions(selectedMonth: string) {
           negotiation_type: proposalNegotiationMap.get(cpe.proposal_id) || '',
           servicos: proposalServicosMap.get(cpe.proposal_id) || [],
           servicos_kwp: cpeServicosKwp,
+          proposal_type: proposalTypeMap.get(cpe.proposal_id) || '',
         });
       }
 
