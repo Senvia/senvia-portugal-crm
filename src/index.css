@@ -324,6 +324,7 @@
 @media print {
   /* ===== 1. Hide non-printable elements ===== */
   .no-print,
+  aside,
   [data-sidebar],
   nav,
   header,
