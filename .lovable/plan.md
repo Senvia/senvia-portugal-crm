@@ -1,24 +1,18 @@
 
 
-## Problema: Compromisso guardado mas não aparece
+## Filtrar Compromisso pelo filtro de colaborador
 
-### Causa Raiz
+O `CommitmentPanel` não lê o filtro global `useTeamFilter`. Quando o admin seleciona um colaborador no dropdown, o painel de compromisso continua a mostrar todos.
 
-Os dados **estão guardados** correctamente na base de dados (confirmado via network — `total_nifs: 2, total_energia_mwh: 3000`, etc.). O problema é na **renderização do painel**.
+### Alteração
 
-O `CommitmentPanel` faz:
-1. Busca a lista de membros da equipa via `useTeamMembers()` (edge function `get-team-members`)
-2. Para cada membro, procura o compromisso correspondente
-3. O teu utilizador (super_admin) **não está na tabela `organization_members`** da Perfect2Gether — apenas navega para lá via o switcher de organizações
-4. Como não aparece na lista de `members`, a sua linha **nunca é renderizada**, mesmo tendo dados guardados
+**`CommitmentPanel.tsx`** — importar `useTeamFilter` e filtrar as `rows` pelo `selectedMemberId`:
 
-### Correção
+1. Importar `useTeamFilter` do hook existente
+2. Obter `selectedMemberId` e `effectiveUserIds`
+3. Após construir as `rows`, aplicar filtro: se `selectedMemberId` estiver definido, mostrar apenas a linha desse colaborador
+4. Se `effectiveUserIds` (equipa do líder), filtrar por esse array
+5. Os totais no footer recalculam automaticamente com base nas rows filtradas
 
-**`CommitmentPanel.tsx`** — Garantir que o utilizador actual aparece sempre na tabela, mesmo que não esteja na lista de `organization_members`:
-
-1. Após construir `rows` a partir de `members`, verificar se o utilizador actual já está incluído
-2. Se não estiver (caso super_admin), adicionar uma linha com os dados do compromisso do próprio utilizador
-3. Para o nome, usar `profile?.full_name` do AuthContext como fallback
-
-Alteração isolada a **um único ficheiro** (`CommitmentPanel.tsx`), sem migrações SQL.
+Alteração isolada a **um único ficheiro**.
 
