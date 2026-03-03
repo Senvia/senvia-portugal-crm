@@ -26,6 +26,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { TemplateEditor } from "./TemplateEditor";
+import { TemplateAutomationSection } from "./TemplateAutomationSection";
 import { useCreateEmailTemplate } from "@/hooks/useEmailTemplates";
 import { TEMPLATE_CATEGORIES, type EmailTemplateCategory } from "@/types/marketing";
 
@@ -46,6 +47,13 @@ interface CreateTemplateModalProps {
 export function CreateTemplateModal({ open, onOpenChange }: CreateTemplateModalProps) {
   const createTemplate = useCreateEmailTemplate();
 
+  // Automation state
+  const [automationEnabled, setAutomationEnabled] = useState(false);
+  const [triggerType, setTriggerType] = useState('');
+  const [fromStatus, setFromStatus] = useState('');
+  const [toStatus, setToStatus] = useState('');
+  const [delayMinutes, setDelayMinutes] = useState(0);
+
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -57,13 +65,28 @@ export function CreateTemplateModal({ open, onOpenChange }: CreateTemplateModalP
   });
 
   const onSubmit = async (data: FormData) => {
+    const triggerConfig: Record<string, string> = {};
+    if (automationEnabled && triggerType) {
+      if (fromStatus && fromStatus !== 'any') triggerConfig.from_status = fromStatus;
+      if (toStatus) triggerConfig.to_status = toStatus;
+    }
+
     await createTemplate.mutateAsync({
       name: data.name,
       subject: data.subject,
       category: data.category as EmailTemplateCategory,
       html_content: data.html_content,
+      automation_enabled: automationEnabled,
+      automation_trigger_type: automationEnabled ? triggerType : null,
+      automation_trigger_config: triggerConfig,
+      automation_delay_minutes: delayMinutes,
     });
     form.reset();
+    setAutomationEnabled(false);
+    setTriggerType('');
+    setFromStatus('');
+    setToStatus('');
+    setDelayMinutes(0);
     onOpenChange(false);
   };
 
@@ -143,6 +166,20 @@ export function CreateTemplateModal({ open, onOpenChange }: CreateTemplateModalP
                   <FormMessage />
                 </FormItem>
               )}
+            />
+
+            {/* Automation Section */}
+            <TemplateAutomationSection
+              enabled={automationEnabled}
+              onEnabledChange={setAutomationEnabled}
+              triggerType={triggerType}
+              onTriggerTypeChange={setTriggerType}
+              fromStatus={fromStatus}
+              onFromStatusChange={setFromStatus}
+              toStatus={toStatus}
+              onToStatusChange={setToStatus}
+              delayMinutes={delayMinutes}
+              onDelayMinutesChange={setDelayMinutes}
             />
 
             <div className="flex justify-end gap-3">

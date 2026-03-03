@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -27,6 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { TemplateEditor } from "./TemplateEditor";
+import { TemplateAutomationSection } from "./TemplateAutomationSection";
 import { useUpdateEmailTemplate } from "@/hooks/useEmailTemplates";
 import { TEMPLATE_CATEGORIES, type EmailTemplate, type EmailTemplateCategory } from "@/types/marketing";
 
@@ -49,6 +50,13 @@ interface EditTemplateModalProps {
 export function EditTemplateModal({ template, open, onOpenChange }: EditTemplateModalProps) {
   const updateTemplate = useUpdateEmailTemplate();
 
+  // Automation state
+  const [automationEnabled, setAutomationEnabled] = useState(false);
+  const [triggerType, setTriggerType] = useState('');
+  const [fromStatus, setFromStatus] = useState('');
+  const [toStatus, setToStatus] = useState('');
+  const [delayMinutes, setDelayMinutes] = useState(0);
+
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -70,11 +78,23 @@ export function EditTemplateModal({ template, open, onOpenChange }: EditTemplate
         html_content: template.html_content,
         is_active: template.is_active,
       });
+      setAutomationEnabled(template.automation_enabled ?? false);
+      setTriggerType(template.automation_trigger_type ?? '');
+      const config = (template.automation_trigger_config as Record<string, string>) ?? {};
+      setFromStatus(config.from_status ?? '');
+      setToStatus(config.to_status ?? '');
+      setDelayMinutes(template.automation_delay_minutes ?? 0);
     }
   }, [template, form]);
 
   const onSubmit = async (data: FormData) => {
     if (!template) return;
+
+    const triggerConfig: Record<string, string> = {};
+    if (automationEnabled && triggerType) {
+      if (fromStatus && fromStatus !== 'any') triggerConfig.from_status = fromStatus;
+      if (toStatus) triggerConfig.to_status = toStatus;
+    }
 
     await updateTemplate.mutateAsync({
       id: template.id,
@@ -83,6 +103,10 @@ export function EditTemplateModal({ template, open, onOpenChange }: EditTemplate
       category: data.category as EmailTemplateCategory,
       html_content: data.html_content,
       is_active: data.is_active,
+      automation_enabled: automationEnabled,
+      automation_trigger_type: automationEnabled ? triggerType : null,
+      automation_trigger_config: triggerConfig,
+      automation_delay_minutes: delayMinutes,
     });
     onOpenChange(false);
   };
@@ -181,6 +205,20 @@ export function EditTemplateModal({ template, open, onOpenChange }: EditTemplate
                   </FormControl>
                 </FormItem>
               )}
+            />
+
+            {/* Automation Section */}
+            <TemplateAutomationSection
+              enabled={automationEnabled}
+              onEnabledChange={setAutomationEnabled}
+              triggerType={triggerType}
+              onTriggerTypeChange={setTriggerType}
+              fromStatus={fromStatus}
+              onFromStatusChange={setFromStatus}
+              toStatus={toStatus}
+              onToStatusChange={setToStatus}
+              delayMinutes={delayMinutes}
+              onDelayMinutesChange={setDelayMinutes}
             />
 
             <div className="flex justify-end gap-3">

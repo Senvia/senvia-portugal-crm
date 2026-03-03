@@ -10,6 +10,10 @@ export interface EmailTemplate {
   created_at: string;
   updated_at: string;
   created_by?: string;
+  automation_enabled?: boolean;
+  automation_trigger_type?: string | null;
+  automation_trigger_config?: Record<string, string> | null;
+  automation_delay_minutes?: number;
 }
 
 export type EmailTemplateCategory = 'general' | 'proposal' | 'welcome' | 'followup' | 'promotion';

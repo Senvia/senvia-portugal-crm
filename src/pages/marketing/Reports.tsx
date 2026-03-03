@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useEmailStats } from "@/hooks/useEmailStats";
 import { useCampaigns } from "@/hooks/useCampaigns";
-import { useAutomations } from "@/hooks/useAutomations";
+import { useEmailTemplates } from "@/hooks/useEmailTemplates";
 import { EMAIL_SEND_STATUS_LABELS, EMAIL_SEND_STATUS_STYLES, type EmailSendStatus } from "@/types/marketing";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
 import { format } from "date-fns";
@@ -26,7 +26,7 @@ export default function Reports() {
 
   const { data: stats, isLoading } = useEmailStats(period, source, sourceId);
   const { data: campaigns } = useCampaigns();
-  const { automations } = useAutomations();
+  const { data: templates } = useEmailTemplates();
   const queryClient = useQueryClient();
 
   const handleSourceChange = (v: SourceFilter) => {
@@ -49,11 +49,11 @@ export default function Reports() {
       );
     }
     if ((event as any).automation_id) {
-      const auto = automations?.find((a: any) => a.id === (event as any).automation_id);
+      const tpl = templates?.find((t: any) => t.id === (event as any).automation_id);
       return (
         <div className="flex items-center gap-1.5">
           <Bot className="h-3 w-3 text-purple-500" />
-          <span className="truncate max-w-[120px]">{auto?.name || 'Automação'}</span>
+          <span className="truncate max-w-[120px]">{tpl?.name || 'Automação'}</span>
         </div>
       );
     }
@@ -137,8 +137,8 @@ export default function Reports() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todas as automações</SelectItem>
-                {automations?.map((a: any) => (
-                  <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                {templates?.filter((t: any) => t.automation_enabled).map((t: any) => (
+                  <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
