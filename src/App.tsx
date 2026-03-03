@@ -30,7 +30,7 @@ const Marketing = lazy(() => import("./pages/Marketing"));
 const MarketingTemplates = lazy(() => import("./pages/marketing/Templates"));
 const MarketingCampaigns = lazy(() => import("./pages/marketing/Campaigns"));
 const MarketingReports = lazy(() => import("./pages/marketing/Reports"));
-const MarketingAutomations = lazy(() => import("./pages/marketing/Automations"));
+
 const MarketingLists = lazy(() => import("./pages/marketing/Lists"));
 const EcommerceProducts = lazy(() => import("./pages/ecommerce/Products"));
 const EcommerceOrders = lazy(() => import("./pages/ecommerce/Orders"));
@@ -102,7 +102,7 @@ const App = () => (
                   <Route path="/marketing/campaigns" element={<MarketingCampaigns />} />
                   <Route path="/marketing/reports" element={<MarketingReports />} />
                   <Route path="/marketing/lists" element={<MarketingLists />} />
-                  <Route path="/marketing/automations" element={<MarketingAutomations />} />
+                  
                 </Route>
 
                 {/* Super Admin Routes */}

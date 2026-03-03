@@ -34,104 +34,97 @@ serve(async (req: Request): Promise<Response> => {
 
     console.log(`Processing automation: ${trigger_type} for org ${organization_id}`);
 
-    // Find active automations for this trigger
-    const { data: automations, error: automError } = await supabase
-      .from("email_automations")
-      .select("*, email_templates(*)")
+    // Find templates with automation enabled for this trigger
+    const { data: templates, error: tplError } = await supabase
+      .from("email_templates")
+      .select("*")
       .eq("organization_id", organization_id)
-      .eq("trigger_type", trigger_type)
+      .eq("automation_enabled", true)
+      .eq("automation_trigger_type", trigger_type)
       .eq("is_active", true);
 
-    if (automError) {
-      console.error("Error fetching automations:", automError);
+    if (tplError) {
+      console.error("Error fetching templates:", tplError);
       return new Response(
-        JSON.stringify({ error: "Failed to fetch automations" }),
+        JSON.stringify({ error: "Failed to fetch templates" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    if (!automations || automations.length === 0) {
+    if (!templates || templates.length === 0) {
       return new Response(
-        JSON.stringify({ message: "No active automations for this trigger" }),
+        JSON.stringify({ message: "No active automation templates for this trigger" }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Resolve recipient from the trigger record
+    const recipientEmail = (record.email as string) || '';
+    const recipientName = (record.name as string) || '';
+
+    if (!recipientEmail) {
+      console.warn(`No email found in trigger record for ${trigger_type}`);
+      return new Response(
+        JSON.stringify({ message: "No recipient email in record" }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     let triggered = 0;
 
-    for (const automation of automations) {
+    for (const template of templates) {
       // Check trigger_config conditions
-      if (!matchesTriggerConfig(automation.trigger_config, record, old_record)) {
+      const config = (template.automation_trigger_config as Record<string, unknown>) || {};
+      if (!matchesTriggerConfig(config, record, old_record)) {
         continue;
       }
 
-      // Resolve recipients from list
-      const recipients = await resolveListRecipients(supabase, automation.list_id);
-      if (recipients.length === 0) {
-        console.warn(`No recipients found for automation ${automation.id} (list_id: ${automation.list_id})`);
-        continue;
-      }
-
-      // Build base variables from trigger record
-      const baseVariables: Record<string, string> = {
+      // Build variables from trigger record
+      const variables: Record<string, string> = {
+        nome: recipientName,
+        email: recipientEmail,
         data: new Date().toLocaleDateString('pt-PT', { day: '2-digit', month: 'long', year: 'numeric' }),
       };
       for (const [key, value] of Object.entries(record)) {
         if (typeof value === 'string' || typeof value === 'number') {
-          baseVariables[key] = String(value);
+          variables[key] = String(value);
         }
       }
 
-      for (const recipient of recipients) {
-        const variables: Record<string, string> = {
-          ...baseVariables,
-          nome: recipient.name || '',
-          email: recipient.email || '',
-        };
+      const delayMinutes = template.automation_delay_minutes || 0;
 
-        if (automation.delay_minutes > 0) {
-          const scheduledFor = new Date(Date.now() + automation.delay_minutes * 60 * 1000);
-          await supabase.from("automation_queue").insert({
-            automation_id: automation.id,
-            organization_id,
-            recipient_email: recipient.email,
-            recipient_name: recipient.name,
-            variables,
-            template_id: automation.template_id,
-            scheduled_for: scheduledFor.toISOString(),
-            status: "pending",
-          });
-          console.log(`Queued automation ${automation.id} for ${recipient.email} at ${scheduledFor.toISOString()}`);
+      if (delayMinutes > 0) {
+        const scheduledFor = new Date(Date.now() + delayMinutes * 60 * 1000);
+        await supabase.from("automation_queue").insert({
+          automation_id: template.id,
+          organization_id,
+          recipient_email: recipientEmail,
+          recipient_name: recipientName,
+          variables,
+          template_id: template.id,
+          scheduled_for: scheduledFor.toISOString(),
+          status: "pending",
+        });
+        console.log(`Queued template ${template.id} for ${recipientEmail} at ${scheduledFor.toISOString()}`);
+      } else {
+        const { error: sendError } = await supabase.functions.invoke("send-template-email", {
+          body: {
+            organizationId: organization_id,
+            templateId: template.id,
+            recipients: [{
+              email: recipientEmail,
+              name: recipientName,
+              variables,
+            }],
+          },
+        });
+
+        if (sendError) {
+          console.error(`Failed to send template ${template.id} to ${recipientEmail}:`, sendError);
         } else {
-          const { error: sendError } = await supabase.functions.invoke("send-template-email", {
-            body: {
-              organizationId: organization_id,
-              templateId: automation.template_id,
-              automationId: automation.id,
-              recipients: [{
-                email: recipient.email,
-                name: recipient.name || '',
-                variables,
-              }],
-            },
-          });
-
-          if (sendError) {
-            console.error(`Failed to send automation ${automation.id} to ${recipient.email}:`, sendError);
-          } else {
-            console.log(`Sent automation ${automation.id} to ${recipient.email}`);
-          }
+          console.log(`Sent template ${template.id} to ${recipientEmail}`);
         }
       }
-
-      // Update automation stats
-      await supabase
-        .from("email_automations")
-        .update({
-          last_triggered_at: new Date().toISOString(),
-          total_triggered: (automation.total_triggered || 0) + 1,
-        })
-        .eq("id", automation.id);
 
       triggered++;
     }
@@ -158,26 +151,4 @@ function matchesTriggerConfig(
   if (config.to_status && record.status !== config.to_status) return false;
   if (config.from_status && oldRecord && oldRecord.status !== config.from_status) return false;
   return true;
-}
-
-async function resolveListRecipients(
-  supabase: ReturnType<typeof createClient>,
-  listId: string | null
-): Promise<{ email: string; name: string | null }[]> {
-  if (!listId) return [];
-
-  const { data, error } = await supabase
-    .from("marketing_list_members")
-    .select("contact:marketing_contacts(email, name, subscribed)")
-    .eq("list_id", listId);
-
-  if (error) {
-    console.error("Error fetching list members:", error);
-    return [];
-  }
-
-  return (data || [])
-    .map((m: any) => m.contact)
-    .filter((c: any) => c && c.email && c.subscribed !== false)
-    .map((c: any) => ({ email: c.email, name: c.name }));
 }

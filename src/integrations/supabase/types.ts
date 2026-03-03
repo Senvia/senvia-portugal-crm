@@ -1269,6 +1269,10 @@ export type Database = {
       }
       email_templates: {
         Row: {
+          automation_delay_minutes: number
+          automation_enabled: boolean
+          automation_trigger_config: Json
+          automation_trigger_type: string | null
           category: string | null
           created_at: string | null
           created_by: string | null
@@ -1282,6 +1286,10 @@ export type Database = {
           variables: Json | null
         }
         Insert: {
+          automation_delay_minutes?: number
+          automation_enabled?: boolean
+          automation_trigger_config?: Json
+          automation_trigger_type?: string | null
           category?: string | null
           created_at?: string | null
           created_by?: string | null
@@ -1295,6 +1303,10 @@ export type Database = {
           variables?: Json | null
         }
         Update: {
+          automation_delay_minutes?: number
+          automation_enabled?: boolean
+          automation_trigger_config?: Json
+          automation_trigger_type?: string | null
           category?: string | null
           created_at?: string | null
           created_by?: string | null

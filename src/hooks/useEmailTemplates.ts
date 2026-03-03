@@ -11,6 +11,10 @@ interface CreateEmailTemplateData {
   category?: EmailTemplateCategory;
   variables?: string[];
   is_active?: boolean;
+  automation_enabled?: boolean;
+  automation_trigger_type?: string | null;
+  automation_trigger_config?: Record<string, string>;
+  automation_delay_minutes?: number;
 }
 
 interface UpdateEmailTemplateData extends Partial<CreateEmailTemplateData> {
@@ -18,7 +22,7 @@ interface UpdateEmailTemplateData extends Partial<CreateEmailTemplateData> {
 }
 
 export function useEmailTemplates() {
-  const { organization, user } = useAuth();
+  const { organization } = useAuth();
   const organizationId = organization?.id;
 
   return useQuery({
@@ -91,6 +95,10 @@ export function useCreateEmailTemplate() {
           variables: data.variables || [],
           is_active: data.is_active ?? true,
           created_by: user?.id,
+          automation_enabled: data.automation_enabled ?? false,
+          automation_trigger_type: data.automation_trigger_type ?? null,
+          automation_trigger_config: data.automation_trigger_config ?? {},
+          automation_delay_minutes: data.automation_delay_minutes ?? 0,
         })
         .select()
         .single();
@@ -117,16 +125,21 @@ export function useUpdateEmailTemplate() {
     mutationFn: async ({ id, ...data }: UpdateEmailTemplateData) => {
       if (!organization?.id) throw new Error('Sem organização');
 
+      const updateData: Record<string, unknown> = {};
+      if (data.name !== undefined) updateData.name = data.name;
+      if (data.subject !== undefined) updateData.subject = data.subject;
+      if (data.html_content !== undefined) updateData.html_content = data.html_content;
+      if (data.category !== undefined) updateData.category = data.category;
+      if (data.variables !== undefined) updateData.variables = data.variables;
+      if (data.is_active !== undefined) updateData.is_active = data.is_active;
+      if (data.automation_enabled !== undefined) updateData.automation_enabled = data.automation_enabled;
+      if (data.automation_trigger_type !== undefined) updateData.automation_trigger_type = data.automation_trigger_type;
+      if (data.automation_trigger_config !== undefined) updateData.automation_trigger_config = data.automation_trigger_config;
+      if (data.automation_delay_minutes !== undefined) updateData.automation_delay_minutes = data.automation_delay_minutes;
+
       const { data: template, error } = await supabase
         .from('email_templates')
-        .update({
-          name: data.name,
-          subject: data.subject,
-          html_content: data.html_content,
-          category: data.category,
-          variables: data.variables,
-          is_active: data.is_active,
-        })
+        .update(updateData)
         .eq('id', id)
         .eq('organization_id', organization.id)
         .select()
@@ -182,7 +195,6 @@ export function useDuplicateEmailTemplate() {
     mutationFn: async (templateId: string) => {
       if (!organization?.id) throw new Error('Sem organização');
 
-      // Fetch original template
       const { data: original, error: fetchError } = await supabase
         .from('email_templates')
         .select('*')
@@ -191,7 +203,6 @@ export function useDuplicateEmailTemplate() {
 
       if (fetchError) throw fetchError;
 
-      // Create duplicate
       const { data: duplicate, error: createError } = await supabase
         .from('email_templates')
         .insert({
@@ -203,6 +214,10 @@ export function useDuplicateEmailTemplate() {
           variables: original.variables,
           is_active: false,
           created_by: user?.id,
+          automation_enabled: false,
+          automation_trigger_type: null,
+          automation_trigger_config: {},
+          automation_delay_minutes: 0,
         })
         .select()
         .single();
