@@ -1,49 +1,61 @@
 
 
-## Correção: Otto Chat e Auditoria de Safe Areas no iPhone
+## Auditoria Completa: Safe Areas em Modais Fullscreen
 
-### Problema Principal
-O OttoChatWindow em mobile usa `fixed inset-0` (ecrã inteiro) e aplica `pt-safe` no header interno. Mas pela screenshot, o conteúdo do header (avatar + texto) está por trás da barra de estado/Dynamic Island do iPhone.
+### Componentes Afetados
 
-### Causa
-A classe `pt-safe` depende de `env(safe-area-inset-top)` que pode não ser aplicada corretamente quando o container pai não tem background que cubra a safe area. Além disso, o input na parte inferior pode ter o mesmo problema com a safe area bottom.
+**19 modais fullscreen** usam `variant="fullScreen"` no `DialogContent` — todos partilham o mesmo problema: em mobile (iPhone), o conteúdo do header fica por trás do notch/Dynamic Island e o footer pode ficar por trás do home indicator.
 
-### Correções
+Lista completa:
+- CreateSaleModal, EditSaleModal, SaleDetailsModal
+- LeadDetailsModal, AddLeadModal
+- ClientDetailsDrawer, EditClientModal, CreateClientModal
+- CreateProposalModal, EditProposalModal, ProposalDetailsModal
+- CampaignDetailsModal
+- CalendarAlertsWidget (modal interno)
+- CommissionMatrixTab (2 modais)
+- OnboardingWizard (não usa Dialog, mas `fixed inset-0`)
+- PaymentOverdueBlocker, TrialExpiredBlocker (centrados, menos críticos)
 
-**1. `src/components/otto/OttoChatWindow.tsx`** — Container mobile com safe area nativa:
-- Mudar o container mobile de `fixed inset-0` para incluir padding safe-area diretamente no container principal (não apenas no header)
-- Usar `pt-[env(safe-area-inset-top)]` no container ou manter o background a cobrir toda a área mas garantir que o header respeita o safe area
+### Causa Raiz
 
-```tsx
-// Container mobile: adicionar safe area ao próprio container
-isMobile
-  ? "fixed inset-0 z-[9999] bg-background flex flex-col"
-  // O header já tem pt-safe, mas vamos reforçar no container
+O variant `fullScreen` no `dialog.tsx` é `fixed inset-0` sem qualquer padding para safe areas. O botão X já usa `top-safe` (funciona), mas o conteúdo dos filhos (headers, footers) não tem safe area.
+
+### Solução Centralizada
+
+Em vez de corrigir 19+ ficheiros individualmente, a correção é feita **no próprio `dialog.tsx`**: adicionar `pt-safe` e `pb-safe` ao variant `fullScreen`, mas apenas em mobile (sem a media query `md:`).
+
+**Ficheiro: `src/components/ui/dialog.tsx`**
+
+Alterar o variant `fullScreen` para incluir safe area padding no container:
+
+```
+fullScreen: "pointer-events-auto fixed inset-0 z-50 w-full h-full max-w-none bg-background duration-200 ... md:left-64 md:w-[calc(100%-16rem)]"
 ```
 
-A abordagem correta: manter `inset-0` para o background cobrir tudo, mas garantir que o header usa padding suficiente. O problema real pode estar na classe `pt-safe` que usa `clamp(20px, ...)` — vamos simplificar para usar `env()` diretamente no header do Otto:
+Adicionar ao `DialogContent` quando `variant === "fullScreen"`: aplicar inline styles para `paddingTop` e `paddingBottom` usando `env(safe-area-inset-*)` apenas em mobile. Isto garante que:
+- O header de qualquer modal fullscreen fica abaixo do notch
+- O footer/botões ficam acima do home indicator
+- Em desktop (`md:`) não há efeito (sidebar já ocupa o espaço)
 
-```tsx
-// Header: usar env() diretamente em vez da classe pt-safe
-<div className={`flex items-center justify-between px-4 py-3 border-b border-border bg-muted/30`}
-     style={isMobile ? { paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.75rem)' } : undefined}>
-```
+Alternativa mais simples: adicionar as classes CSS `safe-top safe-bottom` directamente ao variant fullScreen. Como já existem na CSS (`padding-top: var(--safe-area-top)`) e são resetadas em print, é a abordagem mais limpa.
 
-E no input area inferior:
-```tsx
-// Input: usar env() diretamente para bottom safe area
-<div className={`p-3 border-t border-border bg-muted/20`}
-     style={isMobile ? { paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.75rem)' } : undefined}>
-```
+**Ficheiro: `src/components/onboarding/OnboardingWizard.tsx`**
 
-**2. Auditoria de outros componentes mobile** — Verificar e corrigir se necessário:
-- `MobileHeader.tsx` — usa `safe-top` ✅ (funciona porque é `padding-top`)
-- `MobileBottomNav.tsx` — usa `safe-bottom` ✅
-- `MobileMenu.tsx` — verificar se respeita safe areas
-- Modais fullscreen (`DialogContent variant="fullScreen"`) — verificar `pt-safe`
-- `sheet.tsx` — já usa `pt-safe` ✅
+Este componente não usa `Dialog` — usa `fixed inset-0` directamente. Necessita de safe area no header manualmente (inline style como no Otto).
 
-**3. Verificar `MobileMenu.tsx`** para garantir safe areas
+**Ficheiros: `PaymentOverdueBlocker.tsx`, `TrialExpiredBlocker.tsx`**
 
-São correções cirúrgicas — apenas no OttoChatWindow e em qualquer outro componente mobile fullscreen que não esteja a respeitar safe areas.
+Conteúdo centrado com `p-4` — menos crítico mas adicionar `safe-top safe-bottom` para consistência.
+
+### Resumo das Alterações
+
+| Ficheiro | Alteração |
+|---|---|
+| `dialog.tsx` | Adicionar safe area padding ao variant fullScreen (corrige 19 modais de uma vez) |
+| `OnboardingWizard.tsx` | Adicionar safe area ao header (inline style) |
+| `PaymentOverdueBlocker.tsx` | Adicionar classes safe-top/safe-bottom |
+| `TrialExpiredBlocker.tsx` | Adicionar classes safe-top/safe-bottom |
+
+Total: 4 ficheiros editados, 19+ modais corrigidos.
 
