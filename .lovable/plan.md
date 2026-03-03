@@ -1,71 +1,26 @@
 
 
-## Painel de Compromisso — Dashboard Telecom
+## Corrigir erro RLS no `monthly_commitments`
 
-### Conceito
+### Problema
 
-No início de cada mês, cada **Comercial** insere o seu compromisso de vendas: uma tabela com linhas onde indica **NIF**, **Energia (MWh)**, **Solar (kWp)** e **Comissão (€)** previstos. O admin/gestor vê o compromisso de todos os comerciais. O painel aparece **apenas no nicho telecom**, como uma secção dedicada acima dos widgets genéricos.
+O erro "new row violates row-level security policy" ocorre porque as políticas RLS do `monthly_commitments` usam `is_org_member()` que consulta a tabela `organization_members`. Se o utilizador não tiver registo nessa tabela (cenário comum com utilizadores legados), o acesso é negado.
 
-### Estrutura de dados
+A maioria das outras tabelas do sistema usa `get_user_org_id()` que tem fallbacks (JWT → `organization_members` → `profiles`), garantindo compatibilidade.
 
-Nova tabela `monthly_commitments`:
+### Correção
 
-| Coluna | Tipo | Descrição |
-|--------|------|-----------|
-| `id` | uuid PK | — |
-| `organization_id` | uuid FK | Isolamento tenant |
-| `user_id` | uuid FK profiles | Comercial que criou |
-| `month` | date | Primeiro dia do mês (ex: 2026-03-01) |
-| `created_at` | timestamptz | — |
-| `updated_at` | timestamptz | — |
+Migração SQL para recriar as 4 políticas RLS do `monthly_commitments` e as 4 do `commitment_lines`, trocando `is_org_member(auth.uid(), organization_id)` por `organization_id = get_user_org_id(auth.uid())` — o mesmo padrão usado em `expenses`, `leads`, `crm_clients`, etc.
 
-Nova tabela `commitment_lines`:
+Políticas novas para `monthly_commitments`:
+- **SELECT**: `organization_id = get_user_org_id(auth.uid())`
+- **INSERT**: `user_id = auth.uid() AND organization_id = get_user_org_id(auth.uid())`
+- **UPDATE**: mesma condição
+- **DELETE**: mesma condição
 
-| Coluna | Tipo | Descrição |
-|--------|------|-----------|
-| `id` | uuid PK | — |
-| `commitment_id` | uuid FK | Referência ao compromisso |
-| `nif` | text | NIF do cliente/prospect |
-| `energia_mwh` | numeric | Volume energia previsto |
-| `solar_kwp` | numeric | Capacidade solar prevista |
-| `comissao` | numeric | Comissão prevista |
-| `proposal_id` | uuid nullable | Proposta que suporta (opcional) |
-| `notes` | text nullable | Observações |
+Políticas novas para `commitment_lines` (via subquery ao `monthly_commitments`):
+- **SELECT**: commitment pertence à org do utilizador
+- **INSERT/UPDATE/DELETE**: commitment pertence à org E ao utilizador
 
-RLS: membros da org leem/escrevem nos seus compromissos; admins veem todos.
-
-### UI no Dashboard
-
-Para telecom, o Dashboard ganha uma secção **"Atividade Comercial"** com um card **"Compromisso"**:
-
-```text
-┌─────────────────────────────────────────────────┐
-│ 📋 Compromisso — Março 2026          [Editar]  │
-├─────────────────────────────────────────────────┤
-│  NIF      │ Energia │ Solar  │ Comissão        │
-│  5081234  │  3528   │  526   │  €3.939         │
-│  5089876  │  1200   │  0     │  €1.500         │
-├─────────────────────────────────────────────────┤
-│  TOTAL    │  4728   │  526   │  €5.439         │
-└─────────────────────────────────────────────────┘
-```
-
-- O Comercial vê **apenas o seu** compromisso com botão "Editar" para adicionar/remover linhas
-- O Admin vê um **select de Comercial** para navegar entre compromissos de todos
-- Se não existe compromisso para o mês, aparece CTA "Definir Compromisso"
-- Modal de edição: formulário com linhas dinâmicas (adicionar/remover) com campos NIF, Energia, Solar, Comissão e opcionalmente ligar a uma Proposta existente
-
-### Ficheiros a criar/alterar
-
-1. **Migração SQL** — Criar tabelas `monthly_commitments` e `commitment_lines` com RLS
-2. **`src/hooks/useCommitments.ts`** — Hook CRUD para compromissos (filtro por mês corrente, user_id)
-3. **`src/components/dashboard/CommitmentPanel.tsx`** — Card do compromisso com tabela e totais
-4. **`src/components/dashboard/EditCommitmentModal.tsx`** — Modal full-screen responsivo para editar linhas
-5. **`src/pages/Dashboard.tsx`** — Adicionar `CommitmentPanel` na secção telecom, dentro de um grupo "Atividade Comercial"
-
-### Faseamento
-
-Esta é a **Fase 1 — Compromisso**. Depois disto, avançamos para:
-- Mais painéis de "Atividade Comercial"
-- Painel "Ativações"
+Ficheiro alterado: **1 migração SQL** apenas. Nenhuma alteração de código necessária.
 
