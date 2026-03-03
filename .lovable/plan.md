@@ -1,31 +1,24 @@
 
 
-## Separar `{{data}}` e `{{data_ativacao}}` como variáveis independentes
+## Problema: Métricas de Email a Zero
 
-### Problema
-Atualmente `{{data}}` está a usar a data de ativação como fallback em vez da data atual. O correto é ter duas variáveis distintas:
-- `{{data}}` = data atual (quando o email é enviado)
-- `{{data_ativacao}}` = data de ativação da venda
+### Causa Raiz
+A tabela `email_sends` não tem uma política RLS para super admins. A tua conta é `super_admin` e está na org `06fe9e1d-...`, mas estás a visualizar a org `96a3950e-...` (Perfect2Gether). A tabela `email_templates` funciona porque tem uma policy "Super admin full access", mas `email_sends` não tem essa policy.
 
-### Alterações
+Existem 22 registos na base de dados para esta org (14 sent, 7 delivered, 1 failed) mas o RLS bloqueia o acesso.
 
-**1. `src/types/marketing.ts`** — Adicionar `{{data_ativacao}}` à lista de variáveis disponíveis no editor de templates:
-```typescript
-export const TEMPLATE_VARIABLES_ORG = [
-  // ... existentes ...
-  { key: '{{data}}', label: 'Data atual' },
-  { key: '{{data_ativacao}}', label: 'Data de ativação' },
-];
+### Correção
+
+Adicionar uma política RLS de super admin à tabela `email_sends`:
+
+```sql
+CREATE POLICY "Super admin full access email_sends"
+ON public.email_sends
+FOR ALL
+TO authenticated
+USING (has_role(auth.uid(), 'super_admin'::app_role))
+WITH CHECK (has_role(auth.uid(), 'super_admin'::app_role));
 ```
 
-**2. `supabase/functions/process-automation/index.ts`** — Corrigir `{{data}}` para ser sempre a data de hoje, e `{{data_ativacao}}` para usar `activation_date` do record:
-```typescript
-const variables = {
-  data: new Date().toLocaleDateString('pt-PT', { day: '2-digit', month: 'long', year: 'numeric' }),
-  data_ativacao: formatDatePT(record.activation_date),
-  data_venda: formatDatePT(record.sale_date),
-};
-```
-
-**3. `supabase/functions/send-template-email/index.ts`** — Garantir que `data_ativacao` é passada pelo recipient variables e não sobrescrita. A variável `data` já é definida como `formatDate()` (hoje) nesta função, que está correto.
+Isto é uma migração simples, sem alteração de código frontend.
 
