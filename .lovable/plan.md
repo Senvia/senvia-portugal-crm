@@ -1,22 +1,25 @@
 
 
-## Adicionar indicação de tipo (EE / Serviços) no dropdown de seleção de proposta
+## Corrigir scroll nos dropdowns SearchableCombobox
 
-### Alteração
+### Problema
+O `SearchableCombobox` usa um `Popover` (Radix) dentro de um `Dialog` (Radix). Quando o Dialog é modal, ele captura eventos de pointer/touch/wheel, impedindo o scroll na lista do dropdown. Este problema afeta **todos os modais** que usam `SearchableCombobox` (CreateSaleModal, EditSaleModal, CreateProposalModal, EditProposalModal, CreateEventModal, CreateAutomationModal).
 
-**`src/components/sales/CreateSaleModal.tsx`** — linha 702:
+### Solução
 
-No label do `SearchableCombobox` das propostas filtradas, adicionar um prefixo com o tipo da proposta:
+**`src/components/ui/searchable-combobox.tsx`** — 2 alterações:
 
-**De:**
+1. Adicionar `modal={true}` ao `Popover` para que ele crie o seu próprio layer modal, permitindo interação correta com scroll
+2. Adicionar handlers de eventos no `PopoverContent` para prevenir propagação de scroll/touch para o Dialog pai:
+
+```typescript
+<PopoverContent 
+  className="w-[--radix-popover-trigger-width] p-0" 
+  align="start"
+  onWheel={(e) => e.stopPropagation()}
+  onTouchMove={(e) => e.stopPropagation()}
+>
 ```
-`${proposal.client?.name || ...} - ${formatCurrency(proposal.total_value)} (${getProposalStatusLabel(proposal.status)})`
-```
 
-**Para:**
-```
-`[${proposal.proposal_type === 'servicos' ? 'Serviços' : 'EE'}] ${proposal.client?.name || ...} - ${formatCurrency(proposal.total_value)} (${getProposalStatusLabel(proposal.status)})`
-```
-
-Resultado: Cada proposta no dropdown aparece com `[EE]` ou `[Serviços]` antes do nome do cliente, facilitando a identificação imediata do tipo.
+Estas alterações corrigem o scroll em **todas as instâncias** do componente ao longo do projeto, sem necessidade de alterar cada modal individualmente.
 
