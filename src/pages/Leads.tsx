@@ -12,6 +12,7 @@ import { CreateProposalModal } from "@/components/proposals/CreateProposalModal"
 import { ProposalDetailsModal } from "@/components/proposals/ProposalDetailsModal";
 import { CreateClientModal } from "@/components/clients/CreateClientModal";
 import { LostLeadDialog } from "@/components/leads/LostLeadDialog";
+import { CreateSaleModal } from "@/components/sales/CreateSaleModal";
 import { TeamMemberFilter } from "@/components/dashboard/TeamMemberFilter";
 import { BulkActionsBar } from "@/components/shared/BulkActionsBar";
 import { AssignTeamMemberModal } from "@/components/shared/AssignTeamMemberModal";
@@ -77,6 +78,8 @@ export default function Leads() {
   const [isCreateClientModalOpen, setIsCreateClientModalOpen] = useState(false);
   const [newlyCreatedClientId, setNewlyCreatedClientId] = useState<string | null>(null);
   const [isChainedFlow, setIsChainedFlow] = useState(false);
+  const [isCreateSaleModalOpen, setIsCreateSaleModalOpen] = useState(false);
+  const [wonClientId, setWonClientId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = usePersistedState("leads-search-v1", "");
   const [statusFilter, setStatusFilter] = usePersistedState<string[]>("leads-status-v1", []);
   const [dateRange, setDateRange] = usePersistedState<{ from: Date | undefined; to: Date | undefined }>("leads-daterange-v1", { from: undefined, to: undefined });
@@ -269,10 +272,13 @@ export default function Leads() {
       return;
     }
 
-    // Intercept drops on won stages -> auto-create client
+    // Intercept drops on won stages -> auto-create client + open sale modal
     if (isWonStage(newStatus) && lead) {
       const existingClient = clients.find(c => c.lead_id === leadId || (lead.company_nif && c.company_nif === lead.company_nif));
-      if (!existingClient) {
+      if (existingClient) {
+        setWonClientId(existingClient.id);
+        setIsCreateSaleModalOpen(true);
+      } else {
         convertLeadToClient.mutate({
           lead_id: leadId,
           name: lead.company_name && lead.name === lead.company_name 
@@ -284,8 +290,12 @@ export default function Leads() {
           company_nif: lead.company_nif || undefined,
           notes: lead.notes || undefined,
         }, {
-          onSuccess: () => {
+          onSuccess: (newClient) => {
             toast.success('Lead ganha! Cliente criado automaticamente.');
+            if (newClient?.id) {
+              setWonClientId(newClient.id);
+              setIsCreateSaleModalOpen(true);
+            }
           },
         });
       }
@@ -765,6 +775,16 @@ export default function Leads() {
           }}
           leadName={pendingLead?.name || ""}
           onConfirm={handleLostConfirm}
+        />
+
+        {/* Create Sale Modal (after winning a lead) */}
+        <CreateSaleModal
+          open={isCreateSaleModalOpen}
+          onOpenChange={(open) => {
+            setIsCreateSaleModalOpen(open);
+            if (!open) setWonClientId(null);
+          }}
+          prefillClientId={wonClientId}
         />
     </div>
   );
