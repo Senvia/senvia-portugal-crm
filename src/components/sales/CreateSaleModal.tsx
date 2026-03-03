@@ -699,7 +699,7 @@ export function CreateSaleModal({
                         <SearchableCombobox
                           options={filteredProposals.map((proposal): ComboboxOption => ({
                             value: proposal.id,
-                            label: `${proposal.client?.name || proposal.lead?.name || "Proposta"} - ${formatCurrency(proposal.total_value)} (${getProposalStatusLabel(proposal.status)})`,
+                            label: `[${proposal.proposal_type === 'servicos' ? 'Serviços' : 'EE'}] ${proposal.client?.name || proposal.lead?.name || "Proposta"} - ${formatCurrency(proposal.total_value)} (${getProposalStatusLabel(proposal.status)})`,
                             sublabel: proposal.code || undefined,
                           }))}
                           value={proposalId || null}
