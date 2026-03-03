@@ -5,6 +5,7 @@ import { TeamMemberFilter } from "@/components/dashboard/TeamMemberFilter";
 import { FidelizationAlertsWidget } from "@/components/dashboard/FidelizationAlertsWidget";
 import { CalendarAlertsWidget } from "@/components/dashboard/CalendarAlertsWidget";
 import { CommitmentPanel } from "@/components/dashboard/CommitmentPanel";
+import { SalesPerformancePanel } from "@/components/dashboard/SalesPerformancePanel";
 import { Loader2 } from "lucide-react";
 import { NicheType } from "@/lib/dashboard-templates";
 import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription";
@@ -56,6 +57,7 @@ export default function Dashboard() {
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Atividade Comercial</h2>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <CommitmentPanel />
+                <SalesPerformancePanel />
               </div>
             </div>
           )}
