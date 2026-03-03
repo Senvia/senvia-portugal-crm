@@ -1,13 +1,25 @@
 
 
-## Remover campo "Margem" do resumo da Venda (Telecom)
+## Impedir reutilização de propostas em vendas
+
+### Problema
+Ao criar uma nova venda, propostas que já foram convertidas em venda continuam a aparecer na lista de seleção, permitindo criar vendas duplicadas com a mesma proposta.
 
 ### Alteração
 
-**`src/components/sales/SaleDetailsModal.tsx`**:
+**`src/components/sales/CreateSaleModal.tsx`** — no `filteredProposals` (linhas 357-375):
 
-1. **Remover o bloco "Margem"** (linhas 434-439) do card "Dados de Energia" — o campo que mostra `sale.margem` com label "Margem" e valor em €/MWh
-2. O "Valor Total" do resumo principal (linhas 252-256 e 676-680) mantém-se — esse mostra `sale.total_value` que é o valor da venda, não a margem per se
+Adicionar filtro para excluir propostas que já têm vendas associadas. O hook `useProposals` já faz fetch de `linked_sales:sales!sales_proposal_id_fkey(id)`, portanto basta verificar se `linked_sales` está vazio.
 
-Resultado: No card de energia da venda, deixa de aparecer "Margem: X.XX €/MWh". Os restantes campos (Consumo Anual, Contrato, DBL, Comissão) mantêm-se.
+Lógica:
+```typescript
+// Excluir propostas que já têm venda (exceto a do prefill)
+filtered = filtered.filter(p => 
+  p.id === prefillProposal?.id || 
+  !p.linked_sales || 
+  p.linked_sales.length === 0
+);
+```
+
+Resultado: Propostas já convertidas em venda deixam de aparecer no dropdown de seleção ao criar nova venda. Apenas propostas "aceites" e sem venda associada ficam disponíveis.
 
