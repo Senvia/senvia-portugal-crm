@@ -1,32 +1,55 @@
 
 
-## Adicionar gatilhos de mudança de status para Vendas e Propostas nas Automações
+## Mover Automação para dentro do Template (eliminar página de Automações)
 
-### Situação atual
-O sistema de automações já existe em `/marketing/automations` e suporta gatilhos como `lead_created`, `lead_status_changed`, `sale_created`, `proposal_created`. Porém **faltam dois gatilhos essenciais**:
-- `sale_status_changed` — quando uma venda muda de status (Ex: Em Progresso → Entregue)
-- `proposal_status_changed` — quando uma proposta muda de status (Ex: Enviada → Aceite)
+### Conceito
+Em vez de uma página separada de automações, a automação será uma secção dentro dos modais de **criar** e **editar template**. Um switch "Ativar Automação" revela os campos de gatilho e atraso. O email é enviado diretamente para o contacto que disparou o gatilho (lead, cliente, etc.) — sem necessidade de lista.
 
-### Plano
+### Alterações
 
-**1. `src/hooks/useAutomations.ts`** — Adicionar os novos trigger types:
-```typescript
-{ value: 'sale_status_changed', label: 'Venda Muda de Estado' },
-{ value: 'proposal_status_changed', label: 'Proposta Muda de Estado' },
+**1. Base de dados** — Adicionar colunas à tabela `email_templates`:
+- `automation_enabled` (boolean, default false)
+- `automation_trigger_type` (text, nullable)
+- `automation_trigger_config` (jsonb, default '{}')
+- `automation_delay_minutes` (integer, default 0)
+
+**2. Edge function `process-automation/index.ts`** — Alterar para buscar templates com `automation_enabled = true` em vez de buscar na tabela `email_automations`. O email é enviado diretamente para o contacto que disparou o gatilho (ex: o lead que mudou de status), usando `record.email` e `record.name`.
+
+**3. Trigger da base de dados `notify_automation_trigger()`** — Atualizar para chamar a nova lógica (buscar templates diretamente).
+
+**4. `CreateTemplateModal.tsx` e `EditTemplateModal.tsx`** — Adicionar secção de automação:
+- Switch "Ativar Automação"
+- Select de gatilho (reutilizar `TRIGGER_TYPES` do `useAutomations.ts`)
+- Selects condicionais de "De/Para estado" (quando aplicável)
+- Select de atraso
+
+**5. Remover ficheiros**:
+- `src/pages/marketing/Automations.tsx`
+- `src/components/marketing/AutomationsTable.tsx`
+- `src/components/marketing/CreateAutomationModal.tsx`
+
+**6. Limpar referências**:
+- `src/App.tsx` — Remover rota `/marketing/automations` e lazy import
+- `src/pages/Marketing.tsx` — Remover card "Automações" do hub
+- `src/hooks/useAutomations.ts` — Manter apenas os exports de `TRIGGER_TYPES`, `DELAY_OPTIONS`, etc. Remover CRUD de `email_automations`
+
+**7. `useEmailTemplates.ts`** — Atualizar `CreateEmailTemplateData` e `UpdateEmailTemplateData` para incluir os novos campos de automação.
+
+### Detalhes de implementação
+
+A secção de automação no modal ficará assim:
+```text
+┌─────────────────────────────────────┐
+│ ⚡ Automação                        │
+│ ┌─────────────────────────────────┐ │
+│ │ Ativar Automação         [  o ] │ │
+│ └─────────────────────────────────┘ │
+│ (visível quando ativo):             │
+│  Gatilho: [Lead Muda de Etapa  ▾]  │
+│  De: [Qualquer ▾]  Para: [Ganho ▾] │
+│  Atraso: [Imediato ▾]              │
+└─────────────────────────────────────┘
 ```
 
-**2. `src/components/marketing/CreateAutomationModal.tsx`** — Adaptar o UI de configuração de status:
-- Expandir `showStatusConfig` para incluir `sale_status_changed` e `proposal_status_changed`
-- Quando o gatilho for `sale_status_changed`, mostrar os estados de venda (Em Progresso, Entregue, Concluída, Cancelado) em vez dos pipeline stages
-- Quando for `proposal_status_changed`, mostrar os estados de proposta (Rascunho, Enviada, Em Negociação, Aceite, Recusada, Expirada)
-- Quando for `lead_status_changed` ou `client_status_changed`, manter o comportamento atual com pipeline stages
-
-**3. `supabase/functions/process-automation/index.ts`** — Já suporta `trigger_config.to_status` e `trigger_config.from_status`, portanto funciona automaticamente para os novos tipos sem alterações.
-
-**4. Disparo dos gatilhos** — Verificar onde as vendas e propostas mudam de status nos hooks (`useSales.ts`, `useProposals.ts`) e invocar a edge function `process-automation` após a mudança, tal como já é feito para leads.
-
-### Detalhes técnicos
-- Estados de Venda: `in_progress`, `fulfilled`, `delivered`, `cancelled`
-- Estados de Proposta: `draft`, `sent`, `negotiating`, `accepted`, `rejected`, `expired`
-- A edge function `process-automation` já implementa a lógica de `matchesTriggerConfig` que compara `from_status` / `to_status`, logo os novos gatilhos funcionam sem alteração no backend
+O email será enviado para o contacto que disparou o gatilho (`record.email`/`record.name`), não para uma lista separada.
 
