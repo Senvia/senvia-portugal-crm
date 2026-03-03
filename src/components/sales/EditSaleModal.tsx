@@ -759,7 +759,7 @@ export function EditSaleModal({
                           <div key={idx} className="p-3 rounded-lg border bg-muted/30 space-y-3">
                             <div className="flex items-center gap-2 flex-wrap">
                               <Badge variant="outline" className="text-xs">{cpe.equipment_type}</Badge>
-                              {cpe.existing_cpe_id ? (
+                              {negotiationType === 'renovacao' ? (
                                 <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-500 border-blue-500/30">Renovação</Badge>
                               ) : (
                                 <Badge variant="outline" className="text-xs bg-green-500/10 text-green-500 border-green-500/30">Novo</Badge>
