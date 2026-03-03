@@ -4,24 +4,20 @@ import { useAuth } from "@/contexts/AuthContext";
 import { startOfMonth, format } from "date-fns";
 import { toast } from "sonner";
 
-export interface CommitmentLine {
-  id?: string;
-  nif: string;
-  energia_mwh: number;
-  solar_kwp: number;
-  comissao: number;
-  proposal_id?: string | null;
-  notes?: string | null;
+export interface CommitmentTotals {
+  total_nifs: number;
+  total_energia_mwh: number;
+  total_solar_kwp: number;
+  total_comissao: number;
 }
 
-interface Commitment {
+export interface Commitment extends CommitmentTotals {
   id: string;
   organization_id: string;
   user_id: string;
   month: string;
   created_at: string;
   updated_at: string;
-  lines: CommitmentLine[];
 }
 
 export function useCommitments(targetUserId?: string | null) {
@@ -47,62 +43,53 @@ export function useCommitments(targetUserId?: string | null) {
         .maybeSingle();
 
       if (error) throw error;
-      if (!mc) return null;
-
-      const { data: lines, error: linesErr } = await supabase
-        .from("commitment_lines")
-        .select("*")
-        .eq("commitment_id", mc.id)
-        .order("created_at", { ascending: true });
-
-      if (linesErr) throw linesErr;
-
-      return { ...mc, lines: lines || [] } as Commitment;
+      return mc as Commitment | null;
     },
     enabled: !!orgId && !!effectiveUserId,
   });
 
+  // Fetch all commitments for the org (admin view)
+  const allCommitmentsQuery = useQuery({
+    queryKey: ["commitments-all", orgId, currentMonth],
+    queryFn: async () => {
+      if (!orgId) return [];
+
+      const { data, error } = await supabase
+        .from("monthly_commitments")
+        .select("*")
+        .eq("organization_id", orgId)
+        .eq("month", currentMonth);
+
+      if (error) throw error;
+      return (data || []) as Commitment[];
+    },
+    enabled: !!orgId,
+  });
+
   const saveCommitment = useMutation({
-    mutationFn: async (lines: CommitmentLine[]) => {
+    mutationFn: async (totals: CommitmentTotals) => {
       if (!orgId || !user?.id) throw new Error("Sem organização/utilizador");
 
-      // Upsert the commitment header
-      const { data: mc, error: mcErr } = await supabase
+      const { error } = await supabase
         .from("monthly_commitments")
         .upsert(
-          { organization_id: orgId, user_id: user.id, month: currentMonth },
+          {
+            organization_id: orgId,
+            user_id: user.id,
+            month: currentMonth,
+            total_nifs: totals.total_nifs,
+            total_energia_mwh: totals.total_energia_mwh,
+            total_solar_kwp: totals.total_solar_kwp,
+            total_comissao: totals.total_comissao,
+          },
           { onConflict: "organization_id,user_id,month" }
-        )
-        .select("id")
-        .single();
+        );
 
-      if (mcErr) throw mcErr;
-
-      // Delete existing lines and insert new ones
-      await supabase
-        .from("commitment_lines")
-        .delete()
-        .eq("commitment_id", mc.id);
-
-      if (lines.length > 0) {
-        const { error: insertErr } = await supabase
-          .from("commitment_lines")
-          .insert(
-            lines.map((l) => ({
-              commitment_id: mc.id,
-              nif: l.nif,
-              energia_mwh: l.energia_mwh,
-              solar_kwp: l.solar_kwp,
-              comissao: l.comissao,
-              proposal_id: l.proposal_id || null,
-              notes: l.notes || null,
-            }))
-          );
-        if (insertErr) throw insertErr;
-      }
+      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["commitments"] });
+      queryClient.invalidateQueries({ queryKey: ["commitments-all"] });
       toast.success("Compromisso guardado com sucesso");
     },
     onError: (err: any) => {
@@ -110,5 +97,11 @@ export function useCommitments(targetUserId?: string | null) {
     },
   });
 
-  return { commitment, isLoading, saveCommitment };
+  return {
+    commitment,
+    isLoading,
+    allCommitments: allCommitmentsQuery.data || [],
+    allLoading: allCommitmentsQuery.isLoading,
+    saveCommitment,
+  };
 }
