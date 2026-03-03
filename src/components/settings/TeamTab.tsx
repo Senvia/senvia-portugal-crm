@@ -53,7 +53,7 @@ export function TeamTab() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [role, setRole] = useState<'admin' | 'viewer' | 'salesperson'>('salesperson');
+  const [role, setRole] = useState('salesperson');
   const [showPassword, setShowPassword] = useState(false);
   
   // Success state
@@ -74,7 +74,7 @@ export function TeamTab() {
 
   // Change role modal state
   const [changeRoleOpen, setChangeRoleOpen] = useState(false);
-  const [newRole, setNewRole] = useState<'admin' | 'viewer' | 'salesperson'>('salesperson');
+  const [newRole, setNewRole] = useState('salesperson');
 
   // Edit profile modal state
   const [editProfileOpen, setEditProfileOpen] = useState(false);
@@ -98,8 +98,10 @@ export function TeamTab() {
       return;
     }
 
+    const selectedProfile = profiles.find(p => p.id === role);
+    const resolvedRole = selectedProfile?.base_role || role;
     createTeamMember.mutate(
-      { email, password, fullName, role },
+      { email, password, fullName, role: resolvedRole as 'admin' | 'viewer' | 'salesperson' },
       {
         onSuccess: () => {
           setCreatedMember({ email, password, fullName });
@@ -188,15 +190,12 @@ export function TeamTab() {
 
   const openChangeRoleModal = (member: TeamMember) => {
     setSelectedMember(member);
-    // Set to a different role than current
-    const currentRole = member.role;
-    if (currentRole === 'admin') {
-      setNewRole('salesperson');
-    } else if (currentRole === 'salesperson') {
-      setNewRole('viewer');
-    } else {
-      setNewRole('admin');
-    }
+    // Pre-select current profile by profile_id or fallback to role
+    const currentProfileId = (member as any).profile_id;
+    const matchedProfile = currentProfileId 
+      ? profiles.find(p => p.id === currentProfileId)
+      : profiles.find(p => p.base_role === member.role);
+    setNewRole(matchedProfile?.id || member.role);
     setChangeRoleOpen(true);
   };
 
@@ -234,8 +233,10 @@ export function TeamTab() {
   const handleChangeRole = () => {
     if (!selectedMember) return;
 
+    const selectedProfile = profiles.find(p => p.id === newRole);
+    const resolvedRole = selectedProfile?.base_role || newRole;
     manageTeamMember.mutate(
-      { action: 'change_role', user_id: selectedMember.user_id, new_role: newRole },
+      { action: 'change_role', user_id: selectedMember.user_id, new_role: resolvedRole as 'admin' | 'viewer' | 'salesperson' },
       {
         onSuccess: () => {
           setChangeRoleOpen(false);
@@ -362,13 +363,13 @@ export function TeamTab() {
                     <div className="space-y-3">
                       <Label>Perfil</Label>
                       {profiles.length > 0 ? (
-                        <Select value={role} onValueChange={(v) => setRole(v as any)}>
+                        <Select value={role} onValueChange={(v) => setRole(v)}>
                           <SelectTrigger>
                             <SelectValue placeholder="Selecionar perfil..." />
                           </SelectTrigger>
                           <SelectContent>
                             {profiles.map(p => (
-                              <SelectItem key={p.id} value={p.base_role}>
+                              <SelectItem key={p.id} value={p.id}>
                                 {p.name}
                                 <span className="text-muted-foreground text-xs ml-2">
                                   ({ROLE_LABELS[p.base_role] || p.base_role})
@@ -778,13 +779,13 @@ export function TeamTab() {
             {profiles.length > 0 ? (
               <div className="space-y-2">
                 <Label>Novo Perfil</Label>
-                <Select value={newRole} onValueChange={(v) => setNewRole(v as any)}>
+                <Select value={newRole} onValueChange={(v) => setNewRole(v)}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     {profiles.map(p => (
-                      <SelectItem key={p.id} value={p.base_role}>
+                      <SelectItem key={p.id} value={p.id}>
                         {p.name}
                       </SelectItem>
                     ))}
