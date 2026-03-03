@@ -1,0 +1,66 @@
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { startOfMonth, endOfMonth, format } from "date-fns";
+
+export interface UserSalesMetrics {
+  userId: string;
+  nifs: number;
+  energia: number; // MWh
+  solar: number;   // kWp
+  comissao: number;
+}
+
+export function useMonthSalesMetrics() {
+  const { organization } = useAuth();
+  const orgId = organization?.id;
+
+  const now = new Date();
+  const monthStart = format(startOfMonth(now), "yyyy-MM-dd");
+  const monthEnd = format(endOfMonth(now), "yyyy-MM-dd");
+
+  return useQuery({
+    queryKey: ["month-sales-metrics", orgId, monthStart],
+    queryFn: async (): Promise<UserSalesMetrics[]> => {
+      if (!orgId) return [];
+
+      const { data, error } = await supabase
+        .from("sales")
+        .select("created_by, consumo_anual, kwp, comissao, client_id, status")
+        .eq("organization_id", orgId)
+        .gte("sale_date", monthStart)
+        .lte("sale_date", monthEnd)
+        .neq("status", "cancelled");
+
+      if (error) throw error;
+      if (!data) return [];
+
+      // Group by created_by
+      const grouped = new Map<string, { clients: Set<string>; energia: number; solar: number; comissao: number }>();
+
+      for (const sale of data) {
+        const uid = sale.created_by;
+        if (!uid) continue;
+
+        if (!grouped.has(uid)) {
+          grouped.set(uid, { clients: new Set(), energia: 0, solar: 0, comissao: 0 });
+        }
+        const g = grouped.get(uid)!;
+
+        if (sale.client_id) g.clients.add(sale.client_id);
+        g.energia += Number(sale.consumo_anual || 0) / 1000; // kWh → MWh
+        g.solar += Number(sale.kwp || 0);
+        g.comissao += Number(sale.comissao || 0);
+      }
+
+      return Array.from(grouped.entries()).map(([userId, g]) => ({
+        userId,
+        nifs: g.clients.size,
+        energia: g.energia,
+        solar: g.solar,
+        comissao: g.comissao,
+      }));
+    },
+    enabled: !!orgId,
+  });
+}

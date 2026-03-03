@@ -4,14 +4,16 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { useTeamFilter } from "@/hooks/useTeamFilter";
 import { useCommitments } from "@/hooks/useCommitments";
 import { useTeamMembers } from "@/hooks/useTeam";
+import { useMonthSalesMetrics } from "@/hooks/useMonthSalesMetrics";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table";
-import { ClipboardList, Pencil, Plus } from "lucide-react";
+import { Target, Pencil, Plus } from "lucide-react";
 import { format, startOfMonth } from "date-fns";
 import { pt } from "date-fns/locale";
 import { EditCommitmentModal } from "./EditCommitmentModal";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Separator } from "@/components/ui/separator";
 
 function formatCurrency(val: number) {
   return new Intl.NumberFormat("pt-PT", { style: "currency", currency: "EUR" }).format(val);
@@ -21,18 +23,43 @@ function formatNumber(val: number) {
   return new Intl.NumberFormat("pt-PT", { maximumFractionDigits: 2 }).format(val);
 }
 
+function formatPercent(actual: number, target: number) {
+  if (target === 0) return "—";
+  const pct = (actual / target) * 100;
+  return `${Math.round(pct)}%`;
+}
+
+function percentColor(actual: number, target: number) {
+  if (target === 0) return "text-muted-foreground";
+  const pct = (actual / target) * 100;
+  if (pct >= 100) return "text-green-500";
+  if (pct >= 50) return "text-amber-500";
+  return "text-red-500";
+}
+
+interface RowData {
+  userId: string;
+  name: string;
+  nifs: number;
+  energia: number;
+  solar: number;
+  comissao: number;
+  hasCommitment: boolean;
+}
+
 export function CommitmentPanel() {
   const { user, profile } = useAuth();
   const { isAdmin } = usePermissions();
   const { data: members = [] } = useTeamMembers();
   const { selectedMemberId } = useTeamFilter();
   const { commitment, isLoading, allCommitments, allLoading } = useCommitments(user?.id);
+  const { data: salesMetrics = [], isLoading: salesLoading } = useMonthSalesMetrics();
   const [editOpen, setEditOpen] = useState(false);
 
   const currentMonthLabel = format(startOfMonth(new Date()), "MMMM yyyy", { locale: pt });
 
-  // Build rows: admin sees all members, user sees only self
-  const buildRows = () => {
+  // Build objective rows from commitments
+  const buildObjectiveRows = (): RowData[] => {
     if (isAdmin) {
       const memberRows = members.map((m) => {
         const mc = allCommitments.find((c) => c.user_id === m.user_id);
@@ -47,7 +74,6 @@ export function CommitmentPanel() {
         };
       });
 
-      // Ensure current user appears even if not in organization_members (e.g. super_admin)
       if (user?.id && !memberRows.some((r) => r.userId === user.id) && commitment) {
         memberRows.unshift({
           userId: user.id,
@@ -76,22 +102,95 @@ export function CommitmentPanel() {
     ];
   };
 
-  const allRows = buildRows();
-  const rows = selectedMemberId
-    ? allRows.filter((r) => r.userId === selectedMemberId)
-    : allRows;
+  // Build sales rows from real data
+  const buildSalesRows = (objectiveRows: RowData[]): RowData[] => {
+    return objectiveRows.map((obj) => {
+      const sm = salesMetrics.find((s) => s.userId === obj.userId);
+      return {
+        userId: obj.userId,
+        name: obj.name,
+        nifs: sm?.nifs || 0,
+        energia: sm?.energia || 0,
+        solar: sm?.solar || 0,
+        comissao: sm?.comissao || 0,
+        hasCommitment: true,
+      };
+    });
+  };
 
-  const totals = rows.reduce(
-    (acc, r) => ({
-      nifs: acc.nifs + r.nifs,
-      energia: acc.energia + r.energia,
-      solar: acc.solar + r.solar,
-      comissao: acc.comissao + r.comissao,
-    }),
-    { nifs: 0, energia: 0, solar: 0, comissao: 0 }
+  const allObjectiveRows = buildObjectiveRows();
+  const objectiveRows = selectedMemberId
+    ? allObjectiveRows.filter((r) => r.userId === selectedMemberId)
+    : allObjectiveRows;
+
+  const salesRows = buildSalesRows(objectiveRows);
+
+  const sumRows = (rows: RowData[]) =>
+    rows.reduce(
+      (acc, r) => ({
+        nifs: acc.nifs + r.nifs,
+        energia: acc.energia + r.energia,
+        solar: acc.solar + r.solar,
+        comissao: acc.comissao + r.comissao,
+      }),
+      { nifs: 0, energia: 0, solar: 0, comissao: 0 }
+    );
+
+  const objTotals = sumRows(objectiveRows);
+  const salesTotals = sumRows(salesRows);
+
+  const loading = isLoading || allLoading || salesLoading;
+
+  const SectionLabel = ({ label }: { label: string }) => (
+    <TableRow className="bg-muted/30 hover:bg-muted/30">
+      <TableCell colSpan={5} className="text-xs font-semibold uppercase tracking-wider py-1.5 text-muted-foreground">
+        {label}
+      </TableCell>
+    </TableRow>
   );
 
-  const loading = isLoading || allLoading;
+  const DataRows = ({ rows, isConcretizacao, objRows }: { rows: RowData[]; isConcretizacao?: boolean; objRows?: RowData[] }) => (
+    <>
+      {rows.map((row, i) => {
+        const obj = objRows?.[i];
+        return (
+          <TableRow key={row.userId}>
+            <TableCell className="text-xs py-1.5 font-medium">{row.name}</TableCell>
+            <TableCell className={`text-xs text-right py-1.5 ${isConcretizacao && obj ? percentColor(row.nifs, obj.nifs) : ""}`}>
+              {isConcretizacao && obj ? formatPercent(row.nifs, obj.nifs) : row.nifs}
+            </TableCell>
+            <TableCell className={`text-xs text-right py-1.5 ${isConcretizacao && obj ? percentColor(row.energia, obj.energia) : ""}`}>
+              {isConcretizacao && obj ? formatPercent(row.energia, obj.energia) : formatNumber(row.energia)}
+            </TableCell>
+            <TableCell className={`text-xs text-right py-1.5 hidden sm:table-cell ${isConcretizacao && obj ? percentColor(row.solar, obj.solar) : ""}`}>
+              {isConcretizacao && obj ? formatPercent(row.solar, obj.solar) : formatNumber(row.solar)}
+            </TableCell>
+            <TableCell className={`text-xs text-right py-1.5 font-medium ${isConcretizacao && obj ? percentColor(row.comissao, obj.comissao) : "text-green-500"}`}>
+              {isConcretizacao && obj ? formatPercent(row.comissao, obj.comissao) : formatCurrency(row.comissao)}
+            </TableCell>
+          </TableRow>
+        );
+      })}
+    </>
+  );
+
+  const TotalRow = ({ totals, isConcretizacao, objTotals: ot }: { totals: { nifs: number; energia: number; solar: number; comissao: number }; isConcretizacao?: boolean; objTotals?: typeof objTotals }) => (
+    <TableRow className="bg-muted/20 hover:bg-muted/20">
+      <TableCell className="text-xs font-semibold py-1.5">TOTAL</TableCell>
+      <TableCell className={`text-xs text-right font-semibold py-1.5 ${isConcretizacao && ot ? percentColor(totals.nifs, ot.nifs) : ""}`}>
+        {isConcretizacao && ot ? formatPercent(totals.nifs, ot.nifs) : totals.nifs}
+      </TableCell>
+      <TableCell className={`text-xs text-right font-semibold py-1.5 ${isConcretizacao && ot ? percentColor(totals.energia, ot.energia) : ""}`}>
+        {isConcretizacao && ot ? formatPercent(totals.energia, ot.energia) : formatNumber(totals.energia)}
+      </TableCell>
+      <TableCell className={`text-xs text-right font-semibold py-1.5 hidden sm:table-cell ${isConcretizacao && ot ? percentColor(totals.solar, ot.solar) : ""}`}>
+        {isConcretizacao && ot ? formatPercent(totals.solar, ot.solar) : formatNumber(totals.solar)}
+      </TableCell>
+      <TableCell className={`text-xs text-right font-semibold py-1.5 ${isConcretizacao && ot ? percentColor(totals.comissao, ot.comissao) : "text-green-500"}`}>
+        {isConcretizacao && ot ? formatPercent(totals.comissao, ot.comissao) : formatCurrency(totals.comissao)}
+      </TableCell>
+    </TableRow>
+  );
 
   return (
     <>
@@ -99,9 +198,9 @@ export function CommitmentPanel() {
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div className="flex items-center gap-2">
-              <ClipboardList className="h-5 w-5 text-primary" />
+              <Target className="h-5 w-5 text-primary" />
               <CardTitle className="text-base capitalize">
-                Compromisso — {currentMonthLabel}
+                Objetivo Mensal — {currentMonthLabel}
               </CardTitle>
             </div>
             <Button
@@ -118,15 +217,16 @@ export function CommitmentPanel() {
             <div className="space-y-2">
               <Skeleton className="h-8 w-full" />
               <Skeleton className="h-8 w-full" />
+              <Skeleton className="h-8 w-full" />
             </div>
-          ) : rows.every((r) => !r.hasCommitment) ? (
+          ) : objectiveRows.every((r) => !r.hasCommitment) ? (
             <div className="text-center py-6">
               <p className="text-sm text-muted-foreground mb-3">
-                Nenhum compromisso definido para este mês.
+                Nenhum objetivo definido para este mês.
               </p>
               <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
                 <Plus className="h-4 w-4 mr-1" />
-                Definir Compromisso
+                Definir Objetivo
               </Button>
             </div>
           ) : (
@@ -141,27 +241,27 @@ export function CommitmentPanel() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.map((row) => (
-                  <TableRow key={row.userId}>
-                    <TableCell className="text-xs py-2 font-medium">{row.name}</TableCell>
-                    <TableCell className="text-xs text-right py-2">{row.nifs}</TableCell>
-                    <TableCell className="text-xs text-right py-2">{formatNumber(row.energia)}</TableCell>
-                    <TableCell className="text-xs text-right py-2 hidden sm:table-cell">{formatNumber(row.solar)}</TableCell>
-                    <TableCell className="text-xs text-right py-2 font-medium text-green-500">{formatCurrency(row.comissao)}</TableCell>
-                  </TableRow>
-                ))}
+                {/* A) OBJETIVO */}
+                <SectionLabel label="A) Objetivo" />
+                <DataRows rows={objectiveRows} />
+                {isAdmin && objectiveRows.length > 1 && (
+                  <TotalRow totals={objTotals} />
+                )}
+
+                {/* B) VENDAS */}
+                <SectionLabel label="B) Vendas" />
+                <DataRows rows={salesRows} />
+                {isAdmin && salesRows.length > 1 && (
+                  <TotalRow totals={salesTotals} />
+                )}
+
+                {/* C) CONCRETIZAÇÃO */}
+                <SectionLabel label="C) Concretização" />
+                <DataRows rows={salesRows} isConcretizacao objRows={objectiveRows} />
+                {isAdmin && salesRows.length > 1 && (
+                  <TotalRow totals={salesTotals} isConcretizacao objTotals={objTotals} />
+                )}
               </TableBody>
-              {isAdmin && rows.length > 1 && (
-                <TableFooter>
-                  <TableRow>
-                    <TableCell className="text-xs font-semibold py-2">TOTAL</TableCell>
-                    <TableCell className="text-xs text-right font-semibold py-2">{totals.nifs}</TableCell>
-                    <TableCell className="text-xs text-right font-semibold py-2">{formatNumber(totals.energia)}</TableCell>
-                    <TableCell className="text-xs text-right font-semibold py-2 hidden sm:table-cell">{formatNumber(totals.solar)}</TableCell>
-                    <TableCell className="text-xs text-right font-semibold py-2 text-green-500">{formatCurrency(totals.comissao)}</TableCell>
-                  </TableRow>
-                </TableFooter>
-              )}
             </Table>
           )}
         </CardContent>
