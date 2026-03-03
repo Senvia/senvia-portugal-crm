@@ -56,6 +56,7 @@ export function MetricsPanel() {
   const { selectedMemberId } = useTeamFilter();
   const { metrics, isLoading: metricsLoading } = useMonthlyMetrics();
   const [editOpen, setEditOpen] = useState(false);
+  const [metricasOpen, setMetricasOpen] = useState(true);
   const [ritmoOpen, setRitmoOpen] = useState(true);
   const [concOpen, setConcOpen] = useState(true);
 
@@ -155,10 +156,52 @@ export function MetricsPanel() {
             </div>
           ) : (
             <>
-              {/* A) Ritmo */}
+              {/* A) Métricas (targets) */}
+              <Collapsible open={metricasOpen} onOpenChange={setMetricasOpen}>
+                <CollapsibleTrigger className="flex items-center gap-1 w-full text-left">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">A) Métricas</span>
+                  {metricasOpen ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>{headers}</TableHeader>
+                      <TableBody>
+                        {filteredMembers.map((m) => {
+                          const target = metrics.find((mt) => mt.user_id === m.user_id);
+                          return (
+                            <TableRow key={m.user_id}>
+                              <TableCell className="text-xs py-1.5 font-medium whitespace-nowrap">{m.full_name}{m.user_id === user?.id ? " (eu)" : ""}</TableCell>
+                              <TableCell className="text-xs text-right py-1.5">{target?.op_energia || 0}</TableCell>
+                              <TableCell className="text-xs text-right py-1.5">{formatNumber(target?.energia || 0)}</TableCell>
+                              <TableCell className="text-xs text-right py-1.5">{target?.op_solar || 0}</TableCell>
+                              <TableCell className="text-xs text-right py-1.5">{formatNumber(target?.solar || 0)}</TableCell>
+                              <TableCell className="text-xs text-right py-1.5">{target?.op_comissao || 0}</TableCell>
+                              <TableCell className="text-xs text-right py-1.5 font-medium text-primary">{formatCurrency(target?.comissao || 0)}</TableCell>
+                            </TableRow>
+                          );
+                        })}
+                        {showTotals && (
+                          <TableRow className="bg-muted/20 hover:bg-muted/20">
+                            <TableCell className="text-xs font-semibold py-1.5">TOTAL</TableCell>
+                            <TableCell className="text-xs text-right font-semibold py-1.5">{metrics.reduce((a, m) => a + m.op_energia, 0)}</TableCell>
+                            <TableCell className="text-xs text-right font-semibold py-1.5">{formatNumber(metrics.reduce((a, m) => a + m.energia, 0))}</TableCell>
+                            <TableCell className="text-xs text-right font-semibold py-1.5">{metrics.reduce((a, m) => a + m.op_solar, 0)}</TableCell>
+                            <TableCell className="text-xs text-right font-semibold py-1.5">{formatNumber(metrics.reduce((a, m) => a + m.solar, 0))}</TableCell>
+                            <TableCell className="text-xs text-right font-semibold py-1.5">{metrics.reduce((a, m) => a + m.op_comissao, 0)}</TableCell>
+                            <TableCell className="text-xs text-right font-semibold py-1.5 text-primary">{formatCurrency(metrics.reduce((a, m) => a + m.comissao, 0))}</TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+
+              {/* B) Ritmo */}
               <Collapsible open={ritmoOpen} onOpenChange={setRitmoOpen}>
                 <CollapsibleTrigger className="flex items-center gap-1 w-full text-left">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">A) Ritmo</span>
+                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">B) Ritmo</span>
                   {ritmoOpen ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
                 </CollapsibleTrigger>
                 <CollapsibleContent>
@@ -194,10 +237,10 @@ export function MetricsPanel() {
                 </CollapsibleContent>
               </Collapsible>
 
-              {/* B) Concretização das Métricas */}
+              {/* C) Concretização das Métricas */}
               <Collapsible open={concOpen} onOpenChange={setConcOpen}>
                 <CollapsibleTrigger className="flex items-center gap-1 w-full text-left">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">B) Concretização das Métricas</span>
+                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">C) Concretização das Métricas</span>
                   {concOpen ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
                 </CollapsibleTrigger>
                 <CollapsibleContent>
