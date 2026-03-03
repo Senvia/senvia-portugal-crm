@@ -1,86 +1,63 @@
 
 
-## Nova Secção "Ativações" no Dashboard
+## Filtro de Período + Impressão no Dashboard
 
-### Contexto
-As vendas têm `activation_date` e `proposal_type` (energia/servicos). Precisamos de uma nova tabela `activation_objectives` para guardar os targets definidos pelo admin, e um novo componente que mostre 4 pares (objetivo vs atingimento) com donut charts.
+### Problema
+Todos os hooks e painéis usam `new Date()` hardcoded — não há como ver dados de meses anteriores. Também falta funcionalidade de impressão.
 
-### 1. Nova tabela: `activation_objectives`
+### Solução
 
-```sql
-CREATE TABLE public.activation_objectives (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-  user_id uuid NOT NULL,
-  period_type text NOT NULL CHECK (period_type IN ('monthly','annual')),
-  proposal_type text NOT NULL CHECK (proposal_type IN ('energia','servicos')),
-  month date NOT NULL, -- 1º dia do mês (mensal) ou 1º dia do ano (anual)
-  target_quantity integer NOT NULL DEFAULT 0,
-  created_by uuid,
-  created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now(),
-  UNIQUE(organization_id, user_id, period_type, proposal_type, month)
-);
+#### 1. Estado global de período — `useDashboardPeriod.ts` (novo)
+Zustand store com:
+- `selectedMonth: Date` (default: mês atual)
+- `setSelectedMonth(date: Date)`
+- Presets: "Este mês", "Mês anterior", "Há 2 meses" + seletor de mês/ano livre
 
-ALTER TABLE public.activation_objectives ENABLE ROW LEVEL SECURITY;
+#### 2. Filtro de período no Dashboard header (novo componente `DashboardPeriodFilter.tsx`)
+- Select/Popover com presets de meses rápidos + calendário para escolher qualquer mês
+- Fica ao lado do `TeamMemberFilter` na barra de filtros
+- Botão de impressora global (🖨️) ao lado dos filtros → `window.print()` com CSS `@media print`
 
--- Admins manage
-CREATE POLICY "Admins manage activation_objectives" ON public.activation_objectives
-  FOR ALL TO authenticated
-  USING (organization_id = get_user_org_id(auth.uid()) AND has_role(auth.uid(), 'admin'::app_role))
-  WITH CHECK (organization_id = get_user_org_id(auth.uid()) AND has_role(auth.uid(), 'admin'::app_role));
+#### 3. Botão de impressora em cada Card
+- Adicionar um ícone `Printer` no header de cada painel (CommitmentPanel, SalesPerformancePanel, MetricsPanel, ActivationsPanel)
+- Ao clicar, isola esse card e chama `window.print()` (via classe CSS `print-target`)
 
--- Members view
-CREATE POLICY "Members view activation_objectives" ON public.activation_objectives
-  FOR SELECT TO authenticated
-  USING (organization_id = get_user_org_id(auth.uid()));
+#### 4. Adaptar hooks para receber `month` como parâmetro
+Todos estes hooks passam a aceitar um `Date` em vez de usar `new Date()`:
+- **`useCommitments`** — `currentMonth` parametrizado
+- **`useMonthlyObjectives`** — `currentMonth` parametrizado
+- **`useMonthlyMetrics`** — `currentMonth` parametrizado
+- **`useMonthSalesMetrics`** — `monthStart/monthEnd` parametrizado
+- **`useActivationObjectives`** — `currentMonthStart/currentYearStart` parametrizado
+- **`MetricsPanel`** — query interna de sales usa `monthStart` parametrizado
 
--- Super admin
-CREATE POLICY "Super admin full access activation_objectives" ON public.activation_objectives
-  FOR ALL TO authenticated
-  USING (has_role(auth.uid(), 'super_admin'::app_role));
+#### 5. Painéis lêem o período do store
+Cada painel importa `useDashboardPeriod()` para obter `selectedMonth` e passa-o ao hook respetivo. O label "março 2026" também reflete o mês selecionado.
+
+#### 6. CSS de impressão (`index.css`)
+```css
+@media print {
+  /* Esconde sidebar, header, filtros */
+  .sidebar, .mobile-header, .mobile-bottom-nav, .no-print { display: none !important; }
+  /* Quando imprimir card individual */
+  .print-single-active .print-target { display: block !important; }
+  .print-single-active *:not(.print-target):not(.print-target *) { display: none !important; }
+}
 ```
-
-### 2. Novo hook: `useActivationObjectives.ts`
-- Busca targets da tabela `activation_objectives` para o mês/ano atual
-- Mutation `upsert` para o admin definir targets
-- Busca vendas com `activation_date` preenchida agrupadas por `proposal_type` e `created_by` para calcular atingimento
-
-### 3. Novo componente: `ActivationsPanel.tsx`
-Layout com 4 blocos em grid 2x2 (mobile: 1 coluna):
-
-```text
-┌─────────────────────────┬─────────────────────────┐
-│  Energia Mensal         │  Serviços Mensal        │
-│  🎯 Obj: 10  ✅ Ativ: 4 │  🎯 Obj: 5  ✅ Ativ: 1  │
-│  [Donut 40%]            │  [Donut 20%]            │
-│  Por consultor (tabela) │  Por consultor (tabela) │
-├─────────────────────────┼─────────────────────────┤
-│  Energia Anual          │  Serviços Anual         │
-│  🎯 Obj: 120 ✅ Ativ: 48│  🎯 Obj: 60 ✅ Ativ: 12 │
-│  [Donut 40%]            │  [Donut 20%]            │
-│  Por consultor (tabela) │  Por consultor (tabela) │
-└─────────────────────────┴─────────────────────────┘
-```
-
-Cada bloco contém:
-- **Donut chart** (recharts `PieChart`) mostrando % atingimento com cor (verde ≥100%, amarelo ≥50%, vermelho <50%)
-- **Tabela** por consultor: Nome | Objetivo | Ativações | %
-- **Linha TOTAL** para admin
-- Botão editar (lápis) para admin definir objetivos por consultor
-
-### 4. Dashboard.tsx
-Adicionar `<ActivationsPanel />` logo abaixo de `<MetricsPanel />`, dentro da secção "Atividade Comercial".
-
-### Lógica de cálculo de ativações
-- **Mensal**: vendas com `activation_date` no mês atual, filtradas por `proposal_type`
-- **Anual**: vendas com `activation_date` no ano atual, filtradas por `proposal_type`
-- Agrupadas por `created_by` para mostrar por consultor
 
 ### Ficheiros a criar/editar
-- **Criar**: `src/hooks/useActivationObjectives.ts`
-- **Criar**: `src/components/dashboard/ActivationsPanel.tsx`
-- **Criar**: `src/components/dashboard/EditActivationObjectivesModal.tsx`
-- **Editar**: `src/pages/Dashboard.tsx` (adicionar import + componente)
-- **Migração**: 1 tabela nova com RLS
+- **Criar**: `src/stores/useDashboardPeriod.ts`
+- **Criar**: `src/components/dashboard/DashboardPeriodFilter.tsx`
+- **Criar**: `src/components/dashboard/PrintCardButton.tsx`
+- **Editar**: `src/pages/Dashboard.tsx` — adicionar filtros + botão print global
+- **Editar**: `src/hooks/useCommitments.ts` — aceitar `referenceDate`
+- **Editar**: `src/hooks/useMonthlyObjectives.ts` — aceitar `referenceDate`
+- **Editar**: `src/hooks/useMonthlyMetrics.ts` — aceitar `referenceDate`
+- **Editar**: `src/hooks/useMonthSalesMetrics.ts` — aceitar `referenceDate`
+- **Editar**: `src/hooks/useActivationObjectives.ts` — aceitar `referenceDate`
+- **Editar**: `src/components/dashboard/CommitmentPanel.tsx` — usar store + print
+- **Editar**: `src/components/dashboard/SalesPerformancePanel.tsx` — usar store + print
+- **Editar**: `src/components/dashboard/MetricsPanel.tsx` — usar store + print
+- **Editar**: `src/components/dashboard/ActivationsPanel.tsx` — usar store + print
+- **Editar**: `src/index.css` — regras `@media print`
 
