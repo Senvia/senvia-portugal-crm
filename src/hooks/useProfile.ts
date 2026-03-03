@@ -171,6 +171,7 @@ export function useManageTeamMember() {
         change_password: { title: 'Password redefinida', description: 'A password do colaborador foi alterada com sucesso.' },
         change_role: { title: 'Perfil alterado', description: 'O perfil do colaborador foi atualizado com sucesso.' },
         toggle_status: { title: 'Estado alterado', description: 'O estado do colaborador foi atualizado com sucesso.' },
+        update_profile: { title: 'Dados atualizados', description: 'Os dados do colaborador foram atualizados com sucesso.' },
       };
 
       const msg = messages[variables.action];
