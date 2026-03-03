@@ -79,6 +79,7 @@ interface ManageTeamMemberParams {
   new_password?: string;
   new_role?: 'admin' | 'viewer' | 'salesperson';
   profile_id?: string;
+  profile_name?: string;
   full_name?: string;
   email?: string;
   phone?: string;
@@ -129,7 +130,7 @@ export function useManageTeamMember() {
           if (!old) return old;
           return old.map(member => 
             member.user_id === variables.user_id 
-              ? { ...member, role: variables.new_role! }
+              ? { ...member, role: variables.new_role!, profile_id: variables.profile_id || null, profile_name: variables.profile_name || null }
               : member
           );
         });
