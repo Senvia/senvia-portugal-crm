@@ -10,6 +10,8 @@ import { useEmailTemplates } from '@/hooks/useEmailTemplates';
 import { usePipelineStages } from '@/hooks/usePipelineStages';
 import { useContactLists } from '@/hooks/useContactLists';
 import { useAuth } from '@/contexts/AuthContext';
+import { SALE_STATUS_LABELS, SALE_STATUSES } from '@/types/sales';
+import { PROPOSAL_STATUS_LABELS, type ProposalStatus } from '@/types/proposals';
 
 interface Props {
   open: boolean;
@@ -31,7 +33,9 @@ export function CreateAutomationModal({ open, onOpenChange }: Props) {
   const [fromStatus, setFromStatus] = useState('');
   const [toStatus, setToStatus] = useState('');
 
-  const showStatusConfig = triggerType === 'lead_status_changed' || triggerType === 'client_status_changed';
+  const showStatusConfig = ['lead_status_changed', 'client_status_changed', 'sale_status_changed', 'proposal_status_changed'].includes(triggerType);
+  const usesPipelineStages = triggerType === 'lead_status_changed' || triggerType === 'client_status_changed';
+  const PROPOSAL_STATUSES: ProposalStatus[] = ['draft', 'sent', 'negotiating', 'accepted', 'rejected', 'expired'];
   const isAgency = organization?.slug === 'senvia-agency';
 
   const triggerOptions: ComboboxOption[] = [
@@ -97,25 +101,31 @@ export function CreateAutomationModal({ open, onOpenChange }: Props) {
           {showStatusConfig && (
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>De qual etapa?</Label>
+                <Label>De qual estado?</Label>
                 <Select value={fromStatus} onValueChange={setFromStatus}>
                   <SelectTrigger><SelectValue placeholder="Qualquer" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="any">Qualquer</SelectItem>
-                    {stages?.map(s => (
-                      <SelectItem key={s.key} value={s.key}>{s.name}</SelectItem>
-                    ))}
+                    {usesPipelineStages
+                      ? stages?.map(s => <SelectItem key={s.key} value={s.key}>{s.name}</SelectItem>)
+                      : triggerType === 'sale_status_changed'
+                        ? SALE_STATUSES.map(s => <SelectItem key={s} value={s}>{SALE_STATUS_LABELS[s]}</SelectItem>)
+                        : PROPOSAL_STATUSES.map(s => <SelectItem key={s} value={s}>{PROPOSAL_STATUS_LABELS[s]}</SelectItem>)
+                    }
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <Label>Para qual etapa?</Label>
+                <Label>Para qual estado?</Label>
                 <Select value={toStatus} onValueChange={setToStatus}>
                   <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
                   <SelectContent>
-                    {stages?.map(s => (
-                      <SelectItem key={s.key} value={s.key}>{s.name}</SelectItem>
-                    ))}
+                    {usesPipelineStages
+                      ? stages?.map(s => <SelectItem key={s.key} value={s.key}>{s.name}</SelectItem>)
+                      : triggerType === 'sale_status_changed'
+                        ? SALE_STATUSES.map(s => <SelectItem key={s} value={s}>{SALE_STATUS_LABELS[s]}</SelectItem>)
+                        : PROPOSAL_STATUSES.map(s => <SelectItem key={s} value={s}>{PROPOSAL_STATUS_LABELS[s]}</SelectItem>)
+                    }
                   </SelectContent>
                 </Select>
               </div>
