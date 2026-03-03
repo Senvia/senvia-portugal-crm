@@ -431,12 +431,6 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                               <p className="text-sm font-medium">{sale.consumo_anual.toLocaleString('pt-PT')} kWh</p>
                             </div>
                           )}
-                          {sale.margem && (
-                            <div>
-                              <p className="text-xs text-muted-foreground">Margem</p>
-                              <p className="text-sm font-medium">{sale.margem.toLocaleString('pt-PT', { minimumFractionDigits: 2 })} €/MWh</p>
-                            </div>
-                          )}
                           {sale.anos_contrato && (
                             <div>
                               <p className="text-xs text-muted-foreground">Contrato</p>
