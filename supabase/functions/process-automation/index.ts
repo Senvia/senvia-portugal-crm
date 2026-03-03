@@ -61,19 +61,22 @@ serve(async (req: Request): Promise<Response> => {
     // Resolve recipient - direct fields or via client_id lookup
     let recipientEmail = (record.email as string) || '';
     let recipientName = (record.name as string) || '';
+    let recipientCompany = '';
+    const clientId = (record.client_id as string) || null;
 
-    if (!recipientEmail && record.client_id) {
-      console.log(`No direct email, looking up client_id: ${record.client_id}`);
+    if (!recipientEmail && clientId) {
+      console.log(`No direct email, looking up client_id: ${clientId}`);
       const { data: client } = await supabase
         .from('crm_clients')
-        .select('email, name')
-        .eq('id', record.client_id as string)
+        .select('email, name, company')
+        .eq('id', clientId)
         .single();
 
       if (client) {
         recipientEmail = client.email || '';
         recipientName = client.name || '';
-        console.log(`Resolved client: ${recipientName} <${recipientEmail}>`);
+        recipientCompany = client.company || '';
+        console.log(`Resolved client: ${recipientName} <${recipientEmail}> company=${recipientCompany}`);
       }
     }
 
@@ -95,10 +98,26 @@ serve(async (req: Request): Promise<Response> => {
       }
 
       // Build variables from trigger record
+      // Use activation_date/sale_date from record for {{data}} instead of today
+      const formatDatePT = (dateStr: string | unknown): string => {
+        if (!dateStr || typeof dateStr !== 'string') return '';
+        try {
+          return new Date(dateStr).toLocaleDateString('pt-PT', { day: '2-digit', month: 'long', year: 'numeric' });
+        } catch { return ''; }
+      };
+
+      const activationDate = formatDatePT(record.activation_date);
+      const saleDate = formatDatePT(record.sale_date);
+      // Use activation_date first, then sale_date, then today as fallback
+      const bestDate = activationDate || saleDate || new Date().toLocaleDateString('pt-PT', { day: '2-digit', month: 'long', year: 'numeric' });
+
       const variables: Record<string, string> = {
         nome: recipientName,
         email: recipientEmail,
-        data: new Date().toLocaleDateString('pt-PT', { day: '2-digit', month: 'long', year: 'numeric' }),
+        empresa: recipientCompany || (record.company as string) || '',
+        data: bestDate,
+        data_ativacao: activationDate,
+        data_venda: saleDate,
       };
       for (const [key, value] of Object.entries(record)) {
         if (typeof value === 'string' || typeof value === 'number') {
@@ -129,6 +148,7 @@ serve(async (req: Request): Promise<Response> => {
             recipients: [{
               email: recipientEmail,
               name: recipientName,
+              clientId: clientId,
               variables,
             }],
           },
