@@ -464,11 +464,22 @@
   /* ===== 10. Single-card print mode ===== */
   .print-single-active * {
     visibility: hidden !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    overflow: hidden !important;
   }
 
   .print-single-active .print-target,
   .print-single-active .print-target * {
     visibility: visible !important;
+    height: auto !important;
+    min-height: unset !important;
+    padding: revert !important;
+    margin: revert !important;
+    overflow: visible !important;
   }
 
   .print-single-active .print-target {
@@ -476,7 +487,7 @@
     left: 0;
     top: 0;
     width: 100%;
-    padding: 1rem;
+    padding: 1rem !important;
     background: white !important;
     color: black !important;
   }
