@@ -78,6 +78,7 @@ interface ManageTeamMemberParams {
   user_id: string;
   new_password?: string;
   new_role?: 'admin' | 'viewer' | 'salesperson';
+  profile_id?: string;
   full_name?: string;
   email?: string;
   phone?: string;

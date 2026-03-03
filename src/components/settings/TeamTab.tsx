@@ -236,7 +236,7 @@ export function TeamTab() {
     const selectedProfile = profiles.find(p => p.id === newRole);
     const resolvedRole = selectedProfile?.base_role || newRole;
     manageTeamMember.mutate(
-      { action: 'change_role', user_id: selectedMember.user_id, new_role: resolvedRole as 'admin' | 'viewer' | 'salesperson' },
+      { action: 'change_role', user_id: selectedMember.user_id, new_role: resolvedRole as 'admin' | 'viewer' | 'salesperson', profile_id: selectedProfile?.id },
       {
         onSuccess: () => {
           setChangeRoleOpen(false);
