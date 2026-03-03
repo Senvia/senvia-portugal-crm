@@ -58,9 +58,24 @@ serve(async (req: Request): Promise<Response> => {
       );
     }
 
-    // Resolve recipient from the trigger record
-    const recipientEmail = (record.email as string) || '';
-    const recipientName = (record.name as string) || '';
+    // Resolve recipient - direct fields or via client_id lookup
+    let recipientEmail = (record.email as string) || '';
+    let recipientName = (record.name as string) || '';
+
+    if (!recipientEmail && record.client_id) {
+      console.log(`No direct email, looking up client_id: ${record.client_id}`);
+      const { data: client } = await supabase
+        .from('crm_clients')
+        .select('email, name')
+        .eq('id', record.client_id as string)
+        .single();
+
+      if (client) {
+        recipientEmail = client.email || '';
+        recipientName = client.name || '';
+        console.log(`Resolved client: ${recipientName} <${recipientEmail}>`);
+      }
+    }
 
     if (!recipientEmail) {
       console.warn(`No email found in trigger record for ${trigger_type}`);
