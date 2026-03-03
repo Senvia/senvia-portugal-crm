@@ -131,7 +131,7 @@ export function FidelizationAlertsWidget() {
       </Card>
 
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-        <DialogContent variant="fullScreen" className="flex flex-col overflow-hidden">
+        <DialogContent variant="fullScreen" className="flex flex-col overflow-hidden p-0 gap-0">
           <DialogHeader className="shrink-0 px-4 pt-4 sm:px-6 sm:pt-6">
             <div className="flex items-center gap-3">
               <DialogTitle className="flex items-center gap-2">

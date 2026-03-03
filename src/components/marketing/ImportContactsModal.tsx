@@ -198,7 +198,7 @@ export function ImportContactsModal({ open, onOpenChange }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent variant="fullScreen" className="flex flex-col p-0">
+      <DialogContent variant="fullScreen" className="flex flex-col p-0 gap-0">
         <div className="p-6 pb-0 max-w-3xl mx-auto w-full">
           <DialogHeader>
             <DialogTitle className="text-lg">Importar contactos de um arquivo</DialogTitle>

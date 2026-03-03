@@ -296,7 +296,7 @@ export function CreateCampaignModal({ open, onOpenChange, campaign }: CreateCamp
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent variant="fullScreen" className="flex flex-col p-0">
+      <DialogContent variant="fullScreen" className="flex flex-col p-0 gap-0">
         {/* ====== Step 1: Campaign Type ====== */}
         {step === 1 && (
           <>
