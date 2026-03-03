@@ -1,22 +1,49 @@
 
 
-## Corrigir impressão completa do Dashboard
+## Corrigir impressão de card único gerar 5 páginas
 
 ### Problema
-Quando se clica no botão de imprimir o dashboard completo, o browser apenas imprime o que está visível no ecrã (viewport), cortando widgets e painéis que estão fora da área visível ou com overflow escondido.
+Quando imprimes apenas o painel de Compromissos (botão de impressora no card), saem 5 páginas — 4 em branco. Isto acontece porque as regras CSS de impressão que adicionámos forçam **todos** os containers a expandir (`overflow: visible`, `height: auto`, `max-height: none`), mesmo no modo single-card. O `body` e todos os containers pai ficam com altura enorme, gerando páginas vazias.
 
-### Causa
-O layout do dashboard usa `overflow: hidden/auto` em containers (sidebar, scroll areas) e os widgets têm alturas fixas com gráficos SVG que não se adaptam bem à impressão. O CSS de impressão actual não força a expansão de todo o conteúdo.
+### Causa raiz
+A regra global `* { overflow: visible !important; max-height: none !important; }` e `html, body { height: auto !important; }` expandem toda a página mesmo quando só queremos imprimir um card. O `.print-single-active` usa `visibility: hidden` para esconder tudo, mas os elementos escondidos continuam a ocupar espaço no layout.
 
 ### Solução
-Adicionar regras CSS de impressão robustas em `src/index.css` que:
+No modo `.print-single-active`, colapsar a altura de todos os elementos escondidos para que não ocupem espaço:
 
-1. **Forçam todo o conteúdo visível** — removem `overflow: hidden`, `max-height`, e `height` fixos em containers
-2. **Linearizam o layout** — transformam grids de 2-4 colunas numa coluna única para caber no papel A4
-3. **Evitam cortes** — usam `break-inside: avoid` nos cards/widgets para não partir um widget entre duas páginas
-4. **Expandem collapsibles** — forçam secções colapsáveis a ficarem abertas na impressão
-5. **Adaptam cores** — garantem contraste adequado (fundo branco, texto preto) e que gráficos SVG mantêm cores
+**`src/index.css`** — Atualizar a secção 10 (single-card print):
 
-### Ficheiro a editar
-- **`src/index.css`** — expandir o bloco `@media print` com regras para layout de impressão completo do dashboard
+```css
+.print-single-active * {
+  visibility: hidden !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: none !important;
+  overflow: hidden !important;
+}
+
+.print-single-active .print-target,
+.print-single-active .print-target * {
+  visibility: visible !important;
+  height: auto !important;
+  min-height: unset !important;
+  padding: revert !important;
+  margin: revert !important;
+  overflow: visible !important;
+}
+
+.print-single-active .print-target {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  padding: 1rem !important;
+  background: white !important;
+  color: black !important;
+}
+```
+
+Isto garante que no modo single-card, apenas o card alvo ocupa espaço — tudo o resto colapsa a zero, resultando numa única página de impressão.
 
