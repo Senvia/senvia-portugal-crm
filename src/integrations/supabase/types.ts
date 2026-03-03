@@ -14,6 +14,53 @@ export type Database = {
   }
   public: {
     Tables: {
+      activation_objectives: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          id: string
+          month: string
+          organization_id: string
+          period_type: string
+          proposal_type: string
+          target_quantity: number
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          month: string
+          organization_id: string
+          period_type: string
+          proposal_type: string
+          target_quantity?: number
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          month?: string
+          organization_id?: string
+          period_type?: string
+          proposal_type?: string
+          target_quantity?: number
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activation_objectives_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       automation_queue: {
         Row: {
           automation_id: string

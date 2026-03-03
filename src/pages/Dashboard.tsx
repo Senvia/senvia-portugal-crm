@@ -11,6 +11,7 @@ import { Loader2 } from "lucide-react";
 import { NicheType } from "@/lib/dashboard-templates";
 import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription";
 import { useModules } from "@/hooks/useModules";
+import { ActivationsPanel } from "@/components/dashboard/ActivationsPanel";
 export default function Dashboard() {
   useRealtimeSubscription([
     { table: 'leads', queryKeys: [['leads'], ['dashboard-stats']] },
@@ -60,6 +61,7 @@ export default function Dashboard() {
                 <CommitmentPanel />
                 <SalesPerformancePanel />
                 <MetricsPanel />
+                <ActivationsPanel />
               </div>
             </div>
           )}
