@@ -1,25 +1,22 @@
 
 
-## Impedir reutilização de propostas em vendas
-
-### Problema
-Ao criar uma nova venda, propostas que já foram convertidas em venda continuam a aparecer na lista de seleção, permitindo criar vendas duplicadas com a mesma proposta.
+## Adicionar indicação de tipo (EE / Serviços) no dropdown de seleção de proposta
 
 ### Alteração
 
-**`src/components/sales/CreateSaleModal.tsx`** — no `filteredProposals` (linhas 357-375):
+**`src/components/sales/CreateSaleModal.tsx`** — linha 702:
 
-Adicionar filtro para excluir propostas que já têm vendas associadas. O hook `useProposals` já faz fetch de `linked_sales:sales!sales_proposal_id_fkey(id)`, portanto basta verificar se `linked_sales` está vazio.
+No label do `SearchableCombobox` das propostas filtradas, adicionar um prefixo com o tipo da proposta:
 
-Lógica:
-```typescript
-// Excluir propostas que já têm venda (exceto a do prefill)
-filtered = filtered.filter(p => 
-  p.id === prefillProposal?.id || 
-  !p.linked_sales || 
-  p.linked_sales.length === 0
-);
+**De:**
+```
+`${proposal.client?.name || ...} - ${formatCurrency(proposal.total_value)} (${getProposalStatusLabel(proposal.status)})`
 ```
 
-Resultado: Propostas já convertidas em venda deixam de aparecer no dropdown de seleção ao criar nova venda. Apenas propostas "aceites" e sem venda associada ficam disponíveis.
+**Para:**
+```
+`[${proposal.proposal_type === 'servicos' ? 'Serviços' : 'EE'}] ${proposal.client?.name || ...} - ${formatCurrency(proposal.total_value)} (${getProposalStatusLabel(proposal.status)})`
+```
+
+Resultado: Cada proposta no dropdown aparece com `[EE]` ou `[Serviços]` antes do nome do cliente, facilitando a identificação imediata do tipo.
 
