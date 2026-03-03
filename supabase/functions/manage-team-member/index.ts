@@ -10,6 +10,7 @@ interface ManageMemberRequest {
   user_id: string;
   new_password?: string;
   new_role?: 'admin' | 'viewer' | 'salesperson';
+  profile_id?: string;
   full_name?: string;
   email?: string;
   phone?: string;
@@ -77,7 +78,7 @@ Deno.serve(async (req) => {
 
     // Parse request body
     const body: ManageMemberRequest = await req.json();
-    const { action, user_id, new_password, new_role, full_name, email, phone } = body;
+    const { action, user_id, new_password, new_role, profile_id, full_name, email, phone } = body;
 
     console.log(`Action: ${action}, Target user: ${user_id}`);
 
@@ -207,7 +208,21 @@ Deno.serve(async (req) => {
           );
         }
 
-        console.log(`Role changed to ${new_role} for user ${user_id}`);
+        // Update organization_members with profile_id and role
+        const { error: memberUpdateError } = await supabaseAdmin
+          .from('organization_members')
+          .update({ 
+            role: new_role,
+            profile_id: profile_id || null 
+          })
+          .eq('user_id', user_id)
+          .eq('organization_id', sharedOrgId);
+
+        if (memberUpdateError) {
+          console.error('Member profile update error:', memberUpdateError);
+        }
+
+        console.log(`Role changed to ${new_role} (profile_id: ${profile_id || 'none'}) for user ${user_id}`);
         break;
       }
 
