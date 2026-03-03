@@ -199,7 +199,7 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
     const lead = await createLead.mutateAsync({
       company_nif: data.company_nif || undefined,
       company_name: data.company_name || undefined,
-      name: isTelecom ? (data.company_name || data.name || '') : (data.name || data.company_name || ''),
+      name: data.name || data.company_name || '',
       email: data.email || '',
       phone: data.phone || '',
       source: data.source,
