@@ -1,39 +1,21 @@
 
 
-## Enviar Email de Reunião ao Agendar Lead
+## Corrigir "Total da Proposta" no Resumo — Mostrar Consumo Anual em vez de Margem
 
-### Situação atual
+### Problema
+No card de resumo (coluna direita), o destaque principal mostra "Valor Total" com `proposal.total_value` que no nicho telecom corresponde à Margem. Deveria mostrar o **Consumo Anual total** como valor principal.
 
-Atualmente, quando uma lead é movida para "Agendada" e o evento é criado no `CreateEventModal`, **não existe nenhum envio de email automático**. Também não existe um campo `meeting_link` na tabela `calendar_events` para guardar o link da reunião (O365/Teams/Zoom/etc).
+### Alteração
 
-O sistema já tem infraestrutura de envio de emails via Brevo (`send-template-email` edge function + `useSendTemplateEmail` hook), usada para propostas e campanhas.
+**`src/components/proposals/ProposalDetailsModal.tsx`** (linhas 691-699):
 
-### Plano
+No card "Valor Total" da coluna direita, quando `orgData?.niche === 'telecom'`:
+- Mudar o label de "Valor Total" para "Consumo Total"
+- Mostrar o consumo anual total dos CPEs (em MWh) como valor principal em destaque
+- Manter "Valor Total" original apenas para nichos não-telecom
 
-#### 1. Migração DB: Adicionar campo `meeting_link` à tabela `calendar_events`
-- `ALTER TABLE calendar_events ADD COLUMN meeting_link text;`
-
-#### 2. Atualizar tipo `CalendarEvent` em `src/types/calendar.ts`
-- Adicionar `meeting_link?: string | null`
-
-#### 3. Atualizar `CreateEventModal`
-- Adicionar campo "Link da Reunião" (input URL) — visível quando `event_type` é `meeting` ou `call`
-- Adicionar toggle/checkbox "Enviar email ao lead" (visível apenas quando há lead associado com email)
-- No `handleSubmit`: guardar `meeting_link` no evento e, se o toggle estiver ativo, chamar `send-template-email` com um email HTML inline contendo:
-  - Nome do lead
-  - Data/hora da reunião
-  - Link da reunião (botão clicável)
-  - Nome da organização
-
-#### 4. Atualizar `useCreateEvent` e `useUpdateEvent`
-- Passar `meeting_link` nos parâmetros de criação/edição
-
-### Dependências
-- A organização precisa ter Brevo configurado (`brevo_api_key` + `brevo_sender_email`) para o envio funcionar
-- O lead precisa ter email preenchido
+Também no bloco de impressão (linha 264), o `total-box` já usa Consumo Total MWh para telecom — está correto. A alteração é apenas no card do resumo interativo.
 
 ### Resultado
-Ao criar um evento "Reunião" com lead associado, o utilizador pode colar o link O365/Teams e enviar automaticamente um email profissional ao lead com todos os detalhes da reunião.
-
-Alteração em ~4 ficheiros + 1 migração DB.
+O card principal do resumo mostrará "Consumo Total: X.X MWh" para propostas telecom, e os sub-itens (Margem Total, Comissão Total) continuam abaixo como estão.
 
