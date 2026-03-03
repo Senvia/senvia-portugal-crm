@@ -108,14 +108,12 @@ serve(async (req: Request): Promise<Response> => {
 
       const activationDate = formatDatePT(record.activation_date);
       const saleDate = formatDatePT(record.sale_date);
-      // Use activation_date first, then sale_date, then today as fallback
-      const bestDate = activationDate || saleDate || new Date().toLocaleDateString('pt-PT', { day: '2-digit', month: 'long', year: 'numeric' });
 
       const variables: Record<string, string> = {
         nome: recipientName,
         email: recipientEmail,
         empresa: recipientCompany || (record.company as string) || '',
-        data: bestDate,
+        data: new Date().toLocaleDateString('pt-PT', { day: '2-digit', month: 'long', year: 'numeric' }),
         data_ativacao: activationDate,
         data_venda: saleDate,
       };
