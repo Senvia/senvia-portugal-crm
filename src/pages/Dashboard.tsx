@@ -2,6 +2,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useDashboardWidgets } from "@/hooks/useDashboardWidgets";
 import { DynamicWidget } from "@/components/dashboard/DynamicWidget";
 import { TeamMemberFilter } from "@/components/dashboard/TeamMemberFilter";
+import { DashboardPeriodFilter } from "@/components/dashboard/DashboardPeriodFilter";
 import { FidelizationAlertsWidget } from "@/components/dashboard/FidelizationAlertsWidget";
 import { CalendarAlertsWidget } from "@/components/dashboard/CalendarAlertsWidget";
 import { CommitmentPanel } from "@/components/dashboard/CommitmentPanel";
@@ -12,6 +13,7 @@ import { NicheType } from "@/lib/dashboard-templates";
 import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription";
 import { useModules } from "@/hooks/useModules";
 import { ActivationsPanel } from "@/components/dashboard/ActivationsPanel";
+
 export default function Dashboard() {
   useRealtimeSubscription([
     { table: 'leads', queryKeys: [['leads'], ['dashboard-stats']] },
@@ -43,7 +45,8 @@ export default function Dashboard() {
           </p>
         </div>
         
-        <div className="flex items-center gap-2 self-start sm:self-auto">
+        <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+          <DashboardPeriodFilter />
           <TeamMemberFilter className="w-[160px] sm:w-[180px]" />
         </div>
       </div>

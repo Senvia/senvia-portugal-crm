@@ -1,19 +1,20 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useTeamFilter } from "@/hooks/useTeamFilter";
 import { useTeamMembers } from "@/hooks/useTeam";
 import { useMonthlyMetrics } from "@/hooks/useMonthlyMetrics";
-import { useMonthSalesMetrics } from "@/hooks/useMonthSalesMetrics";
+import { useDashboardPeriod } from "@/stores/useDashboardPeriod";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { TrendingUp, Pencil, ChevronDown, ChevronUp } from "lucide-react";
-import { format, startOfMonth } from "date-fns";
+import { format, startOfMonth, endOfMonth } from "date-fns";
 import { pt } from "date-fns/locale";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EditMetricsModal } from "./EditMetricsModal";
+import { PrintCardButton } from "./PrintCardButton";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 
@@ -54,17 +55,19 @@ export function MetricsPanel() {
   const { isAdmin } = usePermissions();
   const { data: members = [] } = useTeamMembers();
   const { selectedMemberId } = useTeamFilter();
-  const { metrics, isLoading: metricsLoading } = useMonthlyMetrics();
+  const { selectedMonth } = useDashboardPeriod();
+  const { metrics, isLoading: metricsLoading } = useMonthlyMetrics(selectedMonth);
   const [editOpen, setEditOpen] = useState(false);
   const [metricasOpen, setMetricasOpen] = useState(true);
   const [ritmoOpen, setRitmoOpen] = useState(true);
   const [concOpen, setConcOpen] = useState(true);
+  const cardRef = useRef<HTMLDivElement>(null);
 
   const orgId = organization?.id;
-  const currentMonthLabel = format(startOfMonth(new Date()), "MMMM yyyy", { locale: pt });
+  const currentMonthLabel = format(startOfMonth(selectedMonth), "MMMM yyyy", { locale: pt });
 
-  // Fetch sales with operation type counts
-  const monthStart = format(startOfMonth(new Date()), "yyyy-MM-dd");
+  const monthStart = format(startOfMonth(selectedMonth), "yyyy-MM-dd");
+  const monthEndStr = format(endOfMonth(selectedMonth), "yyyy-MM-dd");
   const { data: salesRaw = [], isLoading: salesLoading } = useQuery({
     queryKey: ["metrics-sales-ops", orgId, monthStart],
     queryFn: async () => {
@@ -74,6 +77,7 @@ export function MetricsPanel() {
         .select("created_by, consumo_anual, kwp, comissao, status")
         .eq("organization_id", orgId)
         .gte("sale_date", monthStart)
+        .lte("sale_date", monthEndStr)
         .neq("status", "cancelled");
       if (error) throw error;
       return data || [];
@@ -86,7 +90,6 @@ export function MetricsPanel() {
   const memberList = members.length > 0 ? members : (user?.id ? [{ user_id: user.id, full_name: profile?.full_name || "Eu" }] : []);
   const filteredMembers = selectedMemberId ? memberList.filter((m) => m.user_id === selectedMemberId) : memberList;
 
-  // Build ritmo rows from sales
   const ritmoRows: RitmoRow[] = useMemo(() => {
     return filteredMembers.map((m) => {
       const userSales = salesRaw.filter((s: any) => s.created_by === m.user_id);
@@ -94,7 +97,7 @@ export function MetricsPanel() {
       for (const s of userSales) {
         const ca = Number(s.consumo_anual || 0);
         const kw = Number(s.kwp || 0);
-        if (ca > 0) { opEnergia++; energia += ca / 1000; } // kWh → MWh
+        if (ca > 0) { opEnergia++; energia += ca / 1000; }
         if (kw > 0) { opSolar++; solar += kw; }
         comissao += Number(s.comissao || 0);
       }
@@ -132,7 +135,7 @@ export function MetricsPanel() {
 
   return (
     <>
-      <Card>
+      <Card ref={cardRef}>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div className="flex items-center gap-2">
@@ -141,11 +144,14 @@ export function MetricsPanel() {
                 Métricas Mensais — {currentMonthLabel}
               </CardTitle>
             </div>
-            {isAdmin && (
-              <Button variant="ghost" size="icon-sm" onClick={() => setEditOpen(true)}>
-                <Pencil className="h-4 w-4" />
-              </Button>
-            )}
+            <div className="flex items-center gap-1">
+              <PrintCardButton targetRef={cardRef} />
+              {isAdmin && (
+                <Button variant="ghost" size="icon-sm" onClick={() => setEditOpen(true)}>
+                  <Pencil className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
           </div>
         </CardHeader>
         <CardContent className="pt-0 space-y-3">
@@ -156,7 +162,6 @@ export function MetricsPanel() {
             </div>
           ) : (
             <>
-              {/* A) Métricas (targets) */}
               <Collapsible open={metricasOpen} onOpenChange={setMetricasOpen}>
                 <CollapsibleTrigger className="flex items-center gap-1 w-full text-left">
                   <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">A) Métricas</span>
@@ -198,7 +203,6 @@ export function MetricsPanel() {
                 </CollapsibleContent>
               </Collapsible>
 
-              {/* B) Ritmo */}
               <Collapsible open={ritmoOpen} onOpenChange={setRitmoOpen}>
                 <CollapsibleTrigger className="flex items-center gap-1 w-full text-left">
                   <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">B) Ritmo</span>
@@ -237,7 +241,6 @@ export function MetricsPanel() {
                 </CollapsibleContent>
               </Collapsible>
 
-              {/* C) Concretização das Métricas */}
               <Collapsible open={concOpen} onOpenChange={setConcOpen}>
                 <CollapsibleTrigger className="flex items-center gap-1 w-full text-left">
                   <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">C) Concretização das Métricas</span>

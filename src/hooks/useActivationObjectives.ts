@@ -19,16 +19,16 @@ export interface ActivationCount {
   count: number;
 }
 
-export function useActivationObjectives() {
+export function useActivationObjectives(referenceDate?: Date) {
   const { organization } = useAuth();
   const queryClient = useQueryClient();
   const orgId = organization?.id;
 
-  const currentMonthStart = format(startOfMonth(new Date()), "yyyy-MM-dd");
-  const currentYearStart = format(startOfYear(new Date()), "yyyy-MM-dd");
-  const now = new Date();
-  const monthEnd = format(new Date(now.getFullYear(), now.getMonth() + 1, 0), "yyyy-MM-dd");
-  const yearEnd = format(new Date(now.getFullYear(), 11, 31), "yyyy-MM-dd");
+  const ref = referenceDate || new Date();
+  const currentMonthStart = format(startOfMonth(ref), "yyyy-MM-dd");
+  const currentYearStart = format(startOfYear(ref), "yyyy-MM-dd");
+  const monthEnd = format(new Date(ref.getFullYear(), ref.getMonth() + 1, 0), "yyyy-MM-dd");
+  const yearEnd = format(new Date(ref.getFullYear(), 11, 31), "yyyy-MM-dd");
 
   // Fetch all objectives for current month and year
   const { data: objectives = [], isLoading: objectivesLoading } = useQuery({

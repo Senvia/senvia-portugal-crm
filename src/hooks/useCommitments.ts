@@ -20,11 +20,11 @@ export interface Commitment extends CommitmentTotals {
   updated_at: string;
 }
 
-export function useCommitments(targetUserId?: string | null) {
+export function useCommitments(targetUserId?: string | null, referenceDate?: Date) {
   const { user, organization } = useAuth();
   const queryClient = useQueryClient();
   const orgId = organization?.id;
-  const currentMonth = format(startOfMonth(new Date()), "yyyy-MM-dd");
+  const currentMonth = format(startOfMonth(referenceDate || new Date()), "yyyy-MM-dd");
   const effectiveUserId = targetUserId || user?.id;
 
   const queryKey = ["commitments", orgId, currentMonth, effectiveUserId];
