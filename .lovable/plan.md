@@ -1,18 +1,16 @@
 
 
-## Corrigir URL no rodape de impressao
+## Porque aparece o URL no rodapé da impressão
 
-O browser usa `document.title` para o cabecalho/rodape das paginas impressas. Apenas o `PrintCardButton` altera o titulo para "Senvia OS" antes de imprimir. Os outros dois pontos que chamam `window.print()` nao fazem isso.
+O URL que aparece no rodapé (`https://lovable.dev/projects/...`) é colocado **pelo browser**, não pelo código do projeto. É um comportamento padrão — o browser imprime automaticamente o URL da página no rodapé e o título no cabeçalho.
 
-### Alteracoes
+**Isto NÃO pode ser removido via código (CSS ou JavaScript).** A propriedade `@page` do CSS não controla os headers/footers do browser.
 
-1. **`src/components/dashboard/DashboardPeriodFilter.tsx`** — No `handlePrintAll`, alterar `document.title` para "Senvia OS" antes de `window.print()` e restaurar depois.
+### Soluções
 
-2. **`src/components/finance/BankAccountStatementDrawer.tsx`** — Mesmo padrao no `onClick` do botao de impressao.
+1. **Solução imediata (manual):** Nas opções de impressão do browser, desmarcar **"Headers and footers"** (ou "Cabeçalhos e rodapés"). Isto remove tanto o URL como a data/título do cabeçalho.
 
-3. **`src/components/proposals/ProposalDetailsModal.tsx`** — Na funcao que abre `printWindow`, definir `printWindow.document.title = "Senvia OS"`.
+2. **Solução definitiva:** Configurar o domínio personalizado `app.senvia.pt` em **Settings → Domains**. Assim, mesmo que o browser imprima o URL, mostrará `https://app.senvia.pt/dashboard` em vez do URL técnico do projeto.
 
-Isto garante que em qualquer ponto de impressao do sistema, o browser mostra "Senvia OS" no cabecalho/rodape em vez do URL.
-
-> **Nota:** O rodape com o URL e um comportamento do browser que o utilizador pode desativar manualmente nas opcoes de impressao (desmarcar "Headers and footers"). A solucao definitiva e configurar o dominio personalizado em Settings → Domains.
+Não há alterações de código a fazer — isto é uma limitação do browser, não do projeto.
 
