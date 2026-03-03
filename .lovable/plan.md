@@ -1,44 +1,27 @@
 
 
-## Bug: "Nome da Empresa" da Lead vai para o campo "Nome" do Cliente
+## Abrir Modal de Venda ao Ganhar Lead
 
-### Causa raiz
+### Situação atual
 
-No ficheiro `src/pages/Leads.tsx` (linhas 276-283), quando uma lead é movida para a etapa "Ganha" e o cliente é criado automaticamente, o código passa:
+Quando uma lead é marcada como "Ganha", o sistema:
+1. Cria o cliente automaticamente (se não existe)
+2. Atualiza o status da lead
+3. Mostra um toast "Lead ganha! Cliente criado automaticamente."
 
-```typescript
-convertLeadToClient.mutate({
-  lead_id: leadId,
-  name: lead.name,        // ← só o nome do contacto
-  email: lead.email,
-  phone: lead.phone,
-  company_nif: lead.company_nif,
-  notes: lead.notes,
-  // ❌ Falta: company: lead.company_name
-});
-```
+**Mas não abre nenhum modal de venda.** O fluxo termina aí.
 
-O campo `company_name` da lead nunca é mapeado para o campo `company` do cliente. E no template Telecom, o `lead.name` pode conter o nome da empresa (porque `AddLeadModal` faz `name: data.company_name || data.name`), resultando no nome da empresa a aparecer no campo "Nome" do cliente em vez de no campo "Empresa".
+### Solução
 
-### Correção
+Alterar o fluxo em `src/pages/Leads.tsx` para que, após a lead ser ganha e o cliente criado/identificado, o `CreateSaleModal` seja aberto automaticamente com o `prefillClientId` pré-preenchido.
 
-**`src/pages/Leads.tsx`** (linha ~276-283):
-- Mapear `lead.company_name` → `company` no objeto passado ao `convertLeadToClient`
-- Para Telecom: se o `lead.name` é igual ao `company_name` (fallback do AddLeadModal), usar string vazia ou o nome real do contacto
+**`src/pages/Leads.tsx`**:
+- Importar `CreateSaleModal`
+- Adicionar estados: `isCreateSaleModalOpen` e `wonClientId`
+- No bloco `isWonStage` (linhas 272-296):
+  - Se já existe cliente: guardar o `clientId`, atualizar status, e abrir o modal de venda
+  - Se não existe: no `onSuccess` do `convertLeadToClient`, guardar o novo `clientId` e abrir o modal de venda
+- Renderizar `<CreateSaleModal open={isCreateSaleModalOpen} onOpenChange={setIsCreateSaleModalOpen} prefillClientId={wonClientId} />`
 
-```typescript
-convertLeadToClient.mutate({
-  lead_id: leadId,
-  name: lead.company_name && lead.name === lead.company_name 
-    ? (lead.company_name) // keep company_name as name only if no separate name exists
-    : lead.name,
-  email: lead.email,
-  phone: lead.phone,
-  company: lead.company_name || undefined, // ← NOVO
-  company_nif: lead.company_nif || undefined,
-  notes: lead.notes || undefined,
-});
-```
-
-Alteração em 1 ficheiro, ~3 linhas adicionadas/modificadas.
+O `CreateSaleModal` já suporta `prefillClientId`, portanto o utilizador verá o modal com o cliente pré-selecionado, pronto para registar a venda.
 
