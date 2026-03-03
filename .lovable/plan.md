@@ -1,49 +1,42 @@
 
 
-## Corrigir impressão de card único gerar 5 páginas
+## Corrigir impressão geral do Dashboard
 
 ### Problema
-Quando imprimes apenas o painel de Compromissos (botão de impressora no card), saem 5 páginas — 4 em branco. Isto acontece porque as regras CSS de impressão que adicionámos forçam **todos** os containers a expandir (`overflow: visible`, `height: auto`, `max-height: none`), mesmo no modo single-card. O `body` e todos os containers pai ficam com altura enorme, gerando páginas vazias.
-
-### Causa raiz
-A regra global `* { overflow: visible !important; max-height: none !important; }` e `html, body { height: auto !important; }` expandem toda a página mesmo quando só queremos imprimir um card. O `.print-single-active` usa `visibility: hidden` para esconder tudo, mas os elementos escondidos continuam a ocupar espaço no layout.
+Os seletores CSS de impressão não correspondem aos componentes reais:
+- `.mobile-bottom-nav` não existe — o `MobileBottomNav` é um `<nav>` com `fixed bottom-0`
+- `.otto-fab` não existe — o `OttoFAB` usa `[data-otto-fab]`
+- O `MobileHeader` (`<header>` fixo) não é escondido
+- O `TrialBanner` continua visível
+- A sidebar desktop (`AppSidebar`) pode não ter `[data-sidebar]`
 
 ### Solução
-No modo `.print-single-active`, colapsar a altura de todos os elementos escondidos para que não ocupem espaço:
-
-**`src/index.css`** — Atualizar a secção 10 (single-card print):
+Atualizar a secção 1 do `@media print` em `src/index.css` com seletores que realmente correspondem aos componentes do layout:
 
 ```css
-.print-single-active * {
-  visibility: hidden !important;
-  height: 0 !important;
-  min-height: 0 !important;
-  padding: 0 !important;
-  margin: 0 !important;
-  border: none !important;
-  overflow: hidden !important;
-}
-
-.print-single-active .print-target,
-.print-single-active .print-target * {
-  visibility: visible !important;
-  height: auto !important;
-  min-height: unset !important;
-  padding: revert !important;
-  margin: revert !important;
-  overflow: visible !important;
-}
-
-.print-single-active .print-target {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 100%;
-  padding: 1rem !important;
-  background: white !important;
-  color: black !important;
+/* ===== 1. Hide non-printable elements ===== */
+.no-print,
+[data-sidebar],
+nav,
+header,
+[data-otto-fab],
+.print\:hidden,
+[data-radix-popper-content-wrapper],
+[role="dialog"],
+.trial-banner {
+  display: none !important;
 }
 ```
 
-Isto garante que no modo single-card, apenas o card alvo ocupa espaço — tudo o resto colapsa a zero, resultando numa única página de impressão.
+Alterações:
+- **Adicionar `header`** — esconde o `MobileHeader` (que é um `<header>` fixo)
+- **Adicionar `[data-otto-fab]`** — esconde o botão flutuante Otto pelo atributo correto
+- **Remover `.mobile-bottom-nav`** e `.otto-fab` — não existem no código
+- **Remover `button`** — estava a esconder TODOS os botões o que pode afetar o conteúdo dos widgets
+- **O `nav`** já esconde o `MobileBottomNav` (é um `<nav>`)
+
+Também remover o `main { padding-left: 0 }` para o sidebar desktop e garantir que o `pl-64` da sidebar é anulado.
+
+### Ficheiro a editar
+- `src/index.css` — secção 1 do `@media print`
 
