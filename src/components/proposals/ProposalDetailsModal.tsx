@@ -692,10 +692,21 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
                     <Card>
                       <CardContent className="p-4 space-y-3">
                         <div className="p-4 rounded-lg bg-primary/10 border border-primary/20 text-center">
-                          <p className="text-sm text-muted-foreground mb-1">Valor Total</p>
-                          <p className="text-2xl font-bold text-primary">
-                            {formatCurrency(proposal.total_value)}
-                          </p>
+                          {orgData?.niche === 'telecom' ? (
+                            <>
+                              <p className="text-sm text-muted-foreground mb-1">Consumo Total</p>
+                              <p className="text-2xl font-bold text-primary">
+                                {(recalculatedCpes.reduce((sum, cpe) => sum + (Number(cpe.consumo_anual) || 0), 0) / 1000).toLocaleString('pt-PT', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} MWh
+                              </p>
+                            </>
+                          ) : (
+                            <>
+                              <p className="text-sm text-muted-foreground mb-1">Valor Total</p>
+                              <p className="text-2xl font-bold text-primary">
+                                {formatCurrency(proposal.total_value)}
+                              </p>
+                            </>
+                          )}
                         </div>
 
                         {/* Resumo Telecom */}
