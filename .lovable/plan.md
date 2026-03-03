@@ -1,26 +1,24 @@
 
 
-## Corrigir erro RLS no `monthly_commitments`
+## Corrigir RLS para super_admins no `monthly_commitments`
 
 ### Problema
 
-O erro "new row violates row-level security policy" ocorre porque as políticas RLS do `monthly_commitments` usam `is_org_member()` que consulta a tabela `organization_members`. Se o utilizador não tiver registo nessa tabela (cenário comum com utilizadores legados), o acesso é negado.
+O utilizador é **super_admin** e está a visualizar a organização **Perfect2Gether** (telecom). Ao guardar o compromisso, o código envia `organization_id = Perfect2Gether`, mas a política RLS usa `get_user_org_id(auth.uid())` que retorna **Senvia Agency** (a org onde o utilizador tem membership real). Como os IDs não coincidem, o INSERT é rejeitado.
 
-A maioria das outras tabelas do sistema usa `get_user_org_id()` que tem fallbacks (JWT → `organization_members` → `profiles`), garantindo compatibilidade.
+Este é o mesmo padrão usado noutras tabelas, mas aqui o super_admin precisa escrever dados para orgs que não são "suas".
 
 ### Correção
 
-Migração SQL para recriar as 4 políticas RLS do `monthly_commitments` e as 4 do `commitment_lines`, trocando `is_org_member(auth.uid(), organization_id)` por `organization_id = get_user_org_id(auth.uid())` — o mesmo padrão usado em `expenses`, `leads`, `crm_clients`, etc.
+Migração SQL para atualizar as 4 políticas de INSERT/UPDATE/DELETE do `monthly_commitments` e as 3 do `commitment_lines`, adicionando um bypass para super_admins via `has_role(auth.uid(), 'super_admin')`:
 
-Políticas novas para `monthly_commitments`:
-- **SELECT**: `organization_id = get_user_org_id(auth.uid())`
-- **INSERT**: `user_id = auth.uid() AND organization_id = get_user_org_id(auth.uid())`
-- **UPDATE**: mesma condição
-- **DELETE**: mesma condição
+**monthly_commitments:**
+- **INSERT**: `WITH CHECK (has_role(auth.uid(), 'super_admin') OR (user_id = auth.uid() AND organization_id = get_user_org_id(auth.uid())))`
+- **UPDATE/DELETE**: mesma lógica com `USING` e `WITH CHECK`
 
-Políticas novas para `commitment_lines` (via subquery ao `monthly_commitments`):
-- **SELECT**: commitment pertence à org do utilizador
-- **INSERT/UPDATE/DELETE**: commitment pertence à org E ao utilizador
+**commitment_lines** — mesma abordagem, adicionando `has_role` OR na subquery.
 
-Ficheiro alterado: **1 migração SQL** apenas. Nenhuma alteração de código necessária.
+Também dropar a policy antiga `"Members can view org commitments"` que ficou órfã.
+
+**1 migração SQL**, nenhuma alteração de código.
 
