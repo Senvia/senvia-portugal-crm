@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { Plus, FileText, ChevronRight } from 'lucide-react';
+import { Plus, FileText, ChevronRight, Zap, Wrench } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useLeadProposals } from '@/hooks/useProposals';
 import { CreateProposalModal } from './CreateProposalModal';
 import { ProposalDetailsModal } from './ProposalDetailsModal';
-import { PROPOSAL_STATUS_LABELS, PROPOSAL_STATUS_COLORS } from '@/types/proposals';
+import { PROPOSAL_STATUS_LABELS, PROPOSAL_STATUS_COLORS, PROPOSAL_TYPE_LABELS } from '@/types/proposals';
 import type { Proposal } from '@/types/proposals';
 import type { Lead } from '@/types';
 import { cn } from '@/lib/utils';
@@ -64,6 +64,12 @@ export function ProposalsList({ lead }: ProposalsListProps) {
                   <Badge className={cn('text-xs', PROPOSAL_STATUS_COLORS[proposal.status])}>
                     {PROPOSAL_STATUS_LABELS[proposal.status]}
                   </Badge>
+                  {proposal.proposal_type && (
+                    <Badge className={cn('text-xs', proposal.proposal_type === 'energia' ? 'bg-indigo-500/20 text-indigo-400' : 'bg-violet-500/20 text-violet-400')}>
+                      {proposal.proposal_type === 'energia' ? <Zap className="h-3 w-3 mr-1" /> : <Wrench className="h-3 w-3 mr-1" />}
+                      {PROPOSAL_TYPE_LABELS[proposal.proposal_type]}
+                    </Badge>
+                  )}
                   {proposal.code && (
                     <span className="text-xs font-mono text-primary font-medium">
                       {proposal.code}
