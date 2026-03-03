@@ -103,7 +103,7 @@ export function CampaignDetailsModal({ campaign, open, onOpenChange }: CampaignD
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent variant="fullScreen" className="flex flex-col p-0">
+      <DialogContent variant="fullScreen" className="flex flex-col p-0 gap-0">
         {/* Header */}
         <div className="border-b bg-card">
           <div className="max-w-3xl mx-auto w-full px-4 md:px-6 py-4 flex items-center gap-3">

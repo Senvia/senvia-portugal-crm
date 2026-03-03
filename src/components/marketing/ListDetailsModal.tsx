@@ -68,7 +68,7 @@ export function ListDetailsModal({ list, open, onOpenChange }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent variant="fullScreen" className="flex flex-col p-0">
+      <DialogContent variant="fullScreen" className="flex flex-col p-0 gap-0">
         <div className="p-6 pb-0 max-w-3xl mx-auto w-full">
           <DialogHeader>
             {editingList ? (
