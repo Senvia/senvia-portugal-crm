@@ -16,7 +16,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
-import { Users, UserPlus, Copy, X, Check, Clock, Loader2, RefreshCw, Eye, EyeOff, MoreHorizontal, Key, UserCog, Ban, CheckCircle, Mail } from 'lucide-react';
+import { Users, UserPlus, Copy, X, Check, Clock, Loader2, RefreshCw, Eye, EyeOff, MoreHorizontal, Key, UserCog, Ban, CheckCircle, Mail, Pencil, Phone } from 'lucide-react';
 
 import { formatDistanceToNow } from 'date-fns';
 import { pt } from 'date-fns/locale';
@@ -75,6 +75,12 @@ export function TeamTab() {
   // Change role modal state
   const [changeRoleOpen, setChangeRoleOpen] = useState(false);
   const [newRole, setNewRole] = useState<'admin' | 'viewer' | 'salesperson'>('salesperson');
+
+  // Edit profile modal state
+  const [editProfileOpen, setEditProfileOpen] = useState(false);
+  const [editFullName, setEditFullName] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editPhone, setEditPhone] = useState('');
 
   const handleCreateMember = async () => {
     if (!fullName.trim() || !email.trim() || !password || !confirmPassword) {
@@ -241,6 +247,31 @@ export function TeamTab() {
 
   const handleToggleStatus = (member: TeamMember) => {
     manageTeamMember.mutate({ action: 'toggle_status', user_id: member.user_id });
+  };
+
+  const openEditProfileModal = (member: TeamMember) => {
+    setSelectedMember(member);
+    setEditFullName(member.full_name || '');
+    setEditEmail(member.email || '');
+    setEditPhone(member.phone || '');
+    setEditProfileOpen(true);
+  };
+
+  const handleEditProfile = () => {
+    if (!selectedMember) return;
+    if (!editFullName.trim()) {
+      toast({ title: 'O nome é obrigatório', variant: 'destructive' });
+      return;
+    }
+    manageTeamMember.mutate(
+      { action: 'update_profile', user_id: selectedMember.user_id, full_name: editFullName.trim(), email: editEmail.trim(), phone: editPhone.trim() },
+      {
+        onSuccess: () => {
+          setEditProfileOpen(false);
+          setSelectedMember(null);
+        },
+      }
+    );
   };
 
   const loginUrl = `${getBaseUrl()}/`;
@@ -508,11 +539,28 @@ export function TeamTab() {
               <TableBody>
                 {members?.map((member) => (
                   <TableRow key={member.id} className={member.is_banned ? 'opacity-50' : ''}>
-                    <TableCell className="font-medium">
-                      {member.full_name}
-                      {isCurrentUser(member) && (
-                        <span className="ml-2 text-xs text-muted-foreground">(você)</span>
-                      )}
+                    <TableCell>
+                      <div>
+                        <span className="font-medium">
+                          {member.full_name}
+                          {isCurrentUser(member) && (
+                            <span className="ml-2 text-xs text-muted-foreground">(você)</span>
+                          )}
+                        </span>
+                        {(member.email || member.phone) && (
+                          <div className="flex flex-col gap-0.5 mt-0.5">
+                            {member.email && (
+                              <span className="text-xs text-muted-foreground">{member.email}</span>
+                            )}
+                            {member.phone && (
+                              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                <Phone className="h-3 w-3" />
+                                {member.phone}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>
                       <Badge variant={ROLE_VARIANTS[member.role] || 'secondary'}>
@@ -538,6 +586,10 @@ export function TeamTab() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => openEditProfileModal(member)}>
+                            <Pencil className="mr-2 h-4 w-4" />
+                            Editar Dados
+                          </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => openChangePasswordModal(member)}>
                             <Key className="mr-2 h-4 w-4" />
                             Redefinir Palavra-passe
@@ -638,6 +690,64 @@ export function TeamTab() {
             <Button
               onClick={handleChangePassword}
               disabled={!memberNewPassword || !memberConfirmPassword || manageTeamMember.isPending}
+            >
+              {manageTeamMember.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Guardar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Profile Modal */}
+      <Dialog open={editProfileOpen} onOpenChange={setEditProfileOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="h-5 w-5" />
+              Editar Dados
+            </DialogTitle>
+            <DialogDescription>
+              Edite os dados de contacto de {selectedMember?.full_name}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-full-name">Nome Completo</Label>
+              <Input
+                id="edit-full-name"
+                placeholder="Nome completo"
+                value={editFullName}
+                onChange={(e) => setEditFullName(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-email">Email de Contacto</Label>
+              <Input
+                id="edit-email"
+                type="email"
+                placeholder="email@exemplo.com"
+                value={editEmail}
+                onChange={(e) => setEditEmail(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-phone">Telefone</Label>
+              <Input
+                id="edit-phone"
+                type="tel"
+                placeholder="+351 912 345 678"
+                value={editPhone}
+                onChange={(e) => setEditPhone(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditProfileOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleEditProfile}
+              disabled={!editFullName.trim() || manageTeamMember.isPending}
             >
               {manageTeamMember.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Guardar

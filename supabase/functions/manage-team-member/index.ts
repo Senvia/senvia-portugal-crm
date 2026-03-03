@@ -6,10 +6,13 @@ const corsHeaders = {
 };
 
 interface ManageMemberRequest {
-  action: 'change_password' | 'change_role' | 'toggle_status';
+  action: 'change_password' | 'change_role' | 'toggle_status' | 'update_profile';
   user_id: string;
   new_password?: string;
   new_role?: 'admin' | 'viewer' | 'salesperson';
+  full_name?: string;
+  email?: string;
+  phone?: string;
 }
 
 Deno.serve(async (req) => {
@@ -89,7 +92,7 @@ Deno.serve(async (req) => {
 
     // Parse request body
     const body: ManageMemberRequest = await req.json();
-    const { action, user_id, new_password, new_role } = body;
+    const { action, user_id, new_password, new_role, full_name, email, phone } = body;
 
     console.log(`Action: ${action}, Target user: ${user_id}`);
 
@@ -234,6 +237,36 @@ Deno.serve(async (req) => {
 
           console.log(`User ${user_id} deactivated`);
         }
+        break;
+      }
+
+      case 'update_profile': {
+        const updateData: Record<string, string> = {};
+        if (full_name !== undefined) updateData.full_name = full_name.trim();
+        if (email !== undefined) updateData.email = email.trim();
+        if (phone !== undefined) updateData.phone = phone.trim();
+
+        if (Object.keys(updateData).length === 0) {
+          return new Response(
+            JSON.stringify({ error: 'Nenhum campo para atualizar' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const { error: profileUpdateError } = await supabaseAdmin
+          .from('profiles')
+          .update(updateData)
+          .eq('id', user_id);
+
+        if (profileUpdateError) {
+          console.error('Profile update error:', profileUpdateError);
+          return new Response(
+            JSON.stringify({ error: 'Erro ao atualizar dados' }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        console.log(`Profile updated for user ${user_id}:`, Object.keys(updateData));
         break;
       }
 

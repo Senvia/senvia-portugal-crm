@@ -74,10 +74,13 @@ export function useChangePassword() {
 }
 
 interface ManageTeamMemberParams {
-  action: 'change_password' | 'change_role' | 'toggle_status';
+  action: 'change_password' | 'change_role' | 'toggle_status' | 'update_profile';
   user_id: string;
   new_password?: string;
   new_role?: 'admin' | 'viewer' | 'salesperson';
+  full_name?: string;
+  email?: string;
+  phone?: string;
 }
 
 export function useManageTeamMember() {
@@ -126,6 +129,22 @@ export function useManageTeamMember() {
           return old.map(member => 
             member.user_id === variables.user_id 
               ? { ...member, role: variables.new_role! }
+              : member
+          );
+        });
+      }
+
+      if (variables.action === 'update_profile') {
+        queryClient.setQueryData<TeamMember[]>(['team-members', organization?.id], (old) => {
+          if (!old) return old;
+          return old.map(member => 
+            member.user_id === variables.user_id 
+              ? { 
+                  ...member, 
+                  full_name: variables.full_name ?? member.full_name,
+                  email: variables.email ?? member.email,
+                  phone: variables.phone ?? member.phone,
+                }
               : member
           );
         });

@@ -14,6 +14,8 @@ export interface TeamMember {
   id: string;
   full_name: string;
   avatar_url: string | null;
+  email: string | null;
+  phone: string | null;
   organization_id: string | null;
   role: 'admin' | 'viewer' | 'salesperson' | 'super_admin';
   user_id: string;

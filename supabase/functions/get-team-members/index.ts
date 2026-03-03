@@ -135,7 +135,7 @@ Deno.serve(async (req) => {
 
     const { data: profiles, error: profilesError } = await adminClient
       .from('profiles')
-      .select('id, full_name, avatar_url')
+      .select('id, full_name, avatar_url, email, phone')
       .in('id', userIds)
 
     if (profilesError) {
@@ -175,6 +175,8 @@ Deno.serve(async (req) => {
           id: member.user_id,
           full_name: profileItem?.full_name || 'Unknown',
           avatar_url: profileItem?.avatar_url,
+          email: profileItem?.email || null,
+          phone: profileItem?.phone || null,
           organization_id: organizationId,
           user_id: member.user_id,
           role: userRole?.role || member.role || 'viewer',
