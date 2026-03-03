@@ -275,9 +275,12 @@ export default function Leads() {
       if (!existingClient) {
         convertLeadToClient.mutate({
           lead_id: leadId,
-          name: lead.name,
+          name: lead.company_name && lead.name === lead.company_name 
+            ? lead.company_name 
+            : lead.name,
           email: lead.email,
           phone: lead.phone,
+          company: lead.company_name || undefined,
           company_nif: lead.company_nif || undefined,
           notes: lead.notes || undefined,
         }, {
