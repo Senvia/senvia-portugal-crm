@@ -56,7 +56,7 @@ export default function Dashboard() {
           {isTelecom && (
             <div className="space-y-4">
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Atividade Comercial</h2>
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <div className="space-y-4">
                 <CommitmentPanel />
                 <SalesPerformancePanel />
                 <MetricsPanel />
