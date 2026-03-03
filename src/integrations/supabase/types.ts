@@ -2062,6 +2062,56 @@ export type Database = {
           },
         ]
       }
+      monthly_objectives: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          month: string
+          organization_id: string
+          total_comissao: number
+          total_energia_mwh: number
+          total_nifs: number
+          total_solar_kwp: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          month: string
+          organization_id: string
+          total_comissao?: number
+          total_energia_mwh?: number
+          total_nifs?: number
+          total_solar_kwp?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          month?: string
+          organization_id?: string
+          total_comissao?: number
+          total_energia_mwh?: number
+          total_nifs?: number
+          total_solar_kwp?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "monthly_objectives_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       order_items: {
         Row: {
           created_at: string | null
