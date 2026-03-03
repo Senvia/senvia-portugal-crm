@@ -1,29 +1,86 @@
 
 
-## Redesenhar Layout — Atividade Comercial em Stack Vertical
+## Nova Secção "Ativações" no Dashboard
 
-### Problema
-Os 3 cards (Compromisso, Objetivo Mensal, Métricas Mensais) estão lado a lado em `grid-cols-3`, ficando apertados e pouco legíveis — especialmente o MetricsPanel com 7 colunas.
+### Contexto
+As vendas têm `activation_date` e `proposal_type` (energia/servicos). Precisamos de uma nova tabela `activation_objectives` para guardar os targets definidos pelo admin, e um novo componente que mostre 4 pares (objetivo vs atingimento) com donut charts.
 
-### Solução
-Empilhar verticalmente: cada card ocupa **1 linha inteira** (full-width). Ordem de cima para baixo:
+### 1. Nova tabela: `activation_objectives`
 
-```text
-┌─────────────────────────────────────────────────┐
-│ 🎯 Compromisso — março 2026                     │
-│ (tabela full-width com mais espaço)              │
-├─────────────────────────────────────────────────┤
-│ 📊 Objetivo Mensal — março 2026                  │
-│ (tabela full-width)                              │
-├─────────────────────────────────────────────────┤
-│ 📈 Métricas Mensais — março 2026                 │
-│ A) Métricas  |  B) Ritmo  |  C) Concretização   │
-└─────────────────────────────────────────────────┘
+```sql
+CREATE TABLE public.activation_objectives (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL,
+  period_type text NOT NULL CHECK (period_type IN ('monthly','annual')),
+  proposal_type text NOT NULL CHECK (proposal_type IN ('energia','servicos')),
+  month date NOT NULL, -- 1º dia do mês (mensal) ou 1º dia do ano (anual)
+  target_quantity integer NOT NULL DEFAULT 0,
+  created_by uuid,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now(),
+  UNIQUE(organization_id, user_id, period_type, proposal_type, month)
+);
+
+ALTER TABLE public.activation_objectives ENABLE ROW LEVEL SECURITY;
+
+-- Admins manage
+CREATE POLICY "Admins manage activation_objectives" ON public.activation_objectives
+  FOR ALL TO authenticated
+  USING (organization_id = get_user_org_id(auth.uid()) AND has_role(auth.uid(), 'admin'::app_role))
+  WITH CHECK (organization_id = get_user_org_id(auth.uid()) AND has_role(auth.uid(), 'admin'::app_role));
+
+-- Members view
+CREATE POLICY "Members view activation_objectives" ON public.activation_objectives
+  FOR SELECT TO authenticated
+  USING (organization_id = get_user_org_id(auth.uid()));
+
+-- Super admin
+CREATE POLICY "Super admin full access activation_objectives" ON public.activation_objectives
+  FOR ALL TO authenticated
+  USING (has_role(auth.uid(), 'super_admin'::app_role));
 ```
 
-### Alteração
+### 2. Novo hook: `useActivationObjectives.ts`
+- Busca targets da tabela `activation_objectives` para o mês/ano atual
+- Mutation `upsert` para o admin definir targets
+- Busca vendas com `activation_date` preenchida agrupadas por `proposal_type` e `created_by` para calcular atingimento
 
-**`src/pages/Dashboard.tsx`** — 1 ficheiro, 1 mudança:
-- Trocar `grid grid-cols-1 lg:grid-cols-3 gap-4` por `space-y-4` (stack vertical)
-- Cada card fica com largura total, muito mais legível nas tabelas
+### 3. Novo componente: `ActivationsPanel.tsx`
+Layout com 4 blocos em grid 2x2 (mobile: 1 coluna):
+
+```text
+┌─────────────────────────┬─────────────────────────┐
+│  Energia Mensal         │  Serviços Mensal        │
+│  🎯 Obj: 10  ✅ Ativ: 4 │  🎯 Obj: 5  ✅ Ativ: 1  │
+│  [Donut 40%]            │  [Donut 20%]            │
+│  Por consultor (tabela) │  Por consultor (tabela) │
+├─────────────────────────┼─────────────────────────┤
+│  Energia Anual          │  Serviços Anual         │
+│  🎯 Obj: 120 ✅ Ativ: 48│  🎯 Obj: 60 ✅ Ativ: 12 │
+│  [Donut 40%]            │  [Donut 20%]            │
+│  Por consultor (tabela) │  Por consultor (tabela) │
+└─────────────────────────┴─────────────────────────┘
+```
+
+Cada bloco contém:
+- **Donut chart** (recharts `PieChart`) mostrando % atingimento com cor (verde ≥100%, amarelo ≥50%, vermelho <50%)
+- **Tabela** por consultor: Nome | Objetivo | Ativações | %
+- **Linha TOTAL** para admin
+- Botão editar (lápis) para admin definir objetivos por consultor
+
+### 4. Dashboard.tsx
+Adicionar `<ActivationsPanel />` logo abaixo de `<MetricsPanel />`, dentro da secção "Atividade Comercial".
+
+### Lógica de cálculo de ativações
+- **Mensal**: vendas com `activation_date` no mês atual, filtradas por `proposal_type`
+- **Anual**: vendas com `activation_date` no ano atual, filtradas por `proposal_type`
+- Agrupadas por `created_by` para mostrar por consultor
+
+### Ficheiros a criar/editar
+- **Criar**: `src/hooks/useActivationObjectives.ts`
+- **Criar**: `src/components/dashboard/ActivationsPanel.tsx`
+- **Criar**: `src/components/dashboard/EditActivationObjectivesModal.tsx`
+- **Editar**: `src/pages/Dashboard.tsx` (adicionar import + componente)
+- **Migração**: 1 tabela nova com RLS
 
