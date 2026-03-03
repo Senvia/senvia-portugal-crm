@@ -10,10 +10,13 @@ import { Switch } from '@/components/ui/switch';
 import { useCreateEvent, useUpdateEvent } from '@/hooks/useCalendarEvents';
 import { useLeads } from '@/hooks/useLeads';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSendTemplateEmail } from '@/hooks/useSendTemplateEmail';
 import { supabase } from '@/integrations/supabase/client';
 import { EVENT_TYPE_LABELS, REMINDER_OPTIONS, type CalendarEvent, type EventType } from '@/types/calendar';
 import { format } from 'date-fns';
-import { Video, Phone, CheckSquare, RefreshCw, Loader2 } from 'lucide-react';
+import { pt } from 'date-fns/locale';
+import { Video, Phone, CheckSquare, RefreshCw, Loader2, Mail, Link as LinkIcon } from 'lucide-react';
+import { toast } from 'sonner';
 
 const EVENT_TYPE_ICONS: Record<EventType, React.ReactNode> = {
   meeting: <Video className="h-4 w-4" />,
@@ -36,6 +39,7 @@ export function CreateEventModal({ open, onOpenChange, selectedDate, event, pres
   const { organization } = useAuth();
   const createEvent = useCreateEvent();
   const updateEvent = useUpdateEvent();
+  const sendTemplateEmail = useSendTemplateEmail();
 
   // Calendar alert settings from organization
   const [calendarSettings, setCalendarSettings] = useState<{
@@ -56,7 +60,6 @@ export function CreateEventModal({ open, onOpenChange, selectedDate, event, pres
       if (data) {
         const raw = (data as any).calendar_alert_settings;
         if (raw && typeof raw === 'object' && Object.keys(raw).length > 0) {
-          // Migration: convert old auto_reminder_minutes to new fields
           let hours: number | null = raw.auto_reminder_hours ?? null;
           let days: number | null = raw.auto_reminder_days ?? null;
           if (hours === null && days === null && raw.auto_reminder_minutes != null) {
@@ -82,10 +85,20 @@ export function CreateEventModal({ open, onOpenChange, selectedDate, event, pres
   const [leadId, setLeadId] = useState<string>('');
   const [reminderMinutes, setReminderMinutes] = useState<string>('');
   const [endTimeManuallySet, setEndTimeManuallySet] = useState(false);
+  const [meetingLink, setMeetingLink] = useState('');
+  const [sendEmail, setSendEmail] = useState(false);
 
   const isEditing = !!event;
 
-  // Calculate end time +1 hour from start time
+  // Find selected lead to check if they have email
+  const selectedLead = useMemo(() => {
+    if (!leadId) return null;
+    return leads.find(l => l.id === leadId) || null;
+  }, [leadId, leads]);
+
+  const showMeetingLink = eventType === 'meeting' || eventType === 'call';
+  const canSendEmail = !!selectedLead?.email && showMeetingLink;
+
   const calculateAutoEndTime = (time: string): string => {
     const [hours, minutes] = time.split(':').map(Number);
     const endHour = (hours + 1) % 24;
@@ -94,7 +107,6 @@ export function CreateEventModal({ open, onOpenChange, selectedDate, event, pres
 
   const handleStartTimeChange = (newStartTime: string) => {
     setStartTime(newStartTime);
-    // Auto-calculate end time if not manually set
     if (!endTimeManuallySet) {
       setEndTime(calculateAutoEndTime(newStartTime));
     }
@@ -119,18 +131,21 @@ export function CreateEventModal({ open, onOpenChange, selectedDate, event, pres
       setAllDay(event.all_day);
       setLeadId(event.lead_id || '');
       setReminderMinutes(event.reminder_minutes?.toString() || '');
-      setEndTimeManuallySet(true); // Preserve existing end time when editing
+      setMeetingLink(event.meeting_link || '');
+      setEndTimeManuallySet(true);
+      setSendEmail(false);
     } else if (selectedDate) {
       setStartDate(format(selectedDate, 'yyyy-MM-dd'));
       setEndDate(format(selectedDate, 'yyyy-MM-dd'));
       setEndTimeManuallySet(false);
       setReminderMinutes('');
+      setMeetingLink('');
+      setSendEmail(false);
     }
     
-    // Pre-select lead if provided (from Kanban drop)
     if (preselectedLeadId && open && !event) {
       setLeadId(preselectedLeadId);
-      setEventType('meeting'); // Default to meeting for scheduled leads
+      setEventType('meeting');
     }
   }, [event, selectedDate, open, preselectedLeadId, calendarSettings]);
 
@@ -146,6 +161,43 @@ export function CreateEventModal({ open, onOpenChange, selectedDate, event, pres
     setLeadId('');
     setReminderMinutes('');
     setEndTimeManuallySet(false);
+    setMeetingLink('');
+    setSendEmail(false);
+  };
+
+  const buildMeetingEmailHtml = (leadName: string, dateStr: string, timeStr: string, link: string, orgName: string) => {
+    return `
+      <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e5e7eb;">
+        <div style="background: linear-gradient(135deg, #1e293b 0%, #334155 100%); padding: 32px 24px; text-align: center;">
+          <h1 style="color: #ffffff; margin: 0; font-size: 22px; font-weight: 600;">Reunião Agendada</h1>
+          <p style="color: #94a3b8; margin: 8px 0 0; font-size: 14px;">${orgName}</p>
+        </div>
+        <div style="padding: 32px 24px;">
+          <p style="color: #334155; font-size: 16px; margin: 0 0 24px;">Olá <strong>${leadName}</strong>,</p>
+          <p style="color: #475569; font-size: 15px; margin: 0 0 24px;">A sua reunião foi agendada com sucesso. Aqui estão os detalhes:</p>
+          <div style="background: #f8fafc; border-radius: 8px; padding: 20px; margin-bottom: 24px; border: 1px solid #e2e8f0;">
+            <table style="width: 100%; border-collapse: collapse;">
+              <tr>
+                <td style="padding: 8px 0; color: #64748b; font-size: 14px; width: 100px;">📅 Data:</td>
+                <td style="padding: 8px 0; color: #1e293b; font-size: 14px; font-weight: 600;">${dateStr}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; color: #64748b; font-size: 14px;">🕐 Hora:</td>
+                <td style="padding: 8px 0; color: #1e293b; font-size: 14px; font-weight: 600;">${timeStr}</td>
+              </tr>
+            </table>
+          </div>
+          ${link ? `
+          <div style="text-align: center; margin: 28px 0;">
+            <a href="${link}" target="_blank" style="display: inline-block; background: linear-gradient(135deg, #3b82f6, #2563eb); color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-size: 15px; font-weight: 600;">
+              🔗 Aceder à Reunião
+            </a>
+          </div>
+          ` : ''}
+          <p style="color: #94a3b8; font-size: 13px; margin: 24px 0 0; text-align: center;">Se tiver alguma questão, não hesite em contactar-nos.</p>
+        </div>
+      </div>
+    `;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -169,6 +221,7 @@ export function CreateEventModal({ open, onOpenChange, selectedDate, event, pres
       end_time: endDateTime,
       all_day: allDay,
       lead_id: leadId || undefined,
+      meeting_link: meetingLink || undefined,
       reminder_minutes: reminderMinutes
         ? parseInt(reminderMinutes)
         : (calendarSettings?.auto_reminder_meetings)
@@ -187,12 +240,33 @@ export function CreateEventModal({ open, onOpenChange, selectedDate, event, pres
       await createEvent.mutateAsync(params);
     }
 
+    // Send email after event creation/update
+    if (sendEmail && canSendEmail && selectedLead) {
+      try {
+        const eventDate = new Date(`${startDate}T${startTime}:00`);
+        const dateStr = format(eventDate, "d 'de' MMMM 'de' yyyy", { locale: pt });
+        const timeStr = allDay ? 'Dia inteiro' : startTime;
+        const orgName = organization?.name || 'A nossa equipa';
+
+        await sendTemplateEmail.mutateAsync({
+          recipients: [{
+            email: selectedLead.email,
+            name: selectedLead.name,
+          }],
+          subject: `Reunião Agendada — ${orgName}`,
+          htmlContent: buildMeetingEmailHtml(selectedLead.name, dateStr, timeStr, meetingLink, orgName),
+        });
+      } catch {
+        toast.error('Evento criado, mas falha ao enviar email.');
+      }
+    }
+
     resetForm();
     onSuccess?.();
     onOpenChange(false);
   };
 
-  const isPending = createEvent.isPending || updateEvent.isPending;
+  const isPending = createEvent.isPending || updateEvent.isPending || sendTemplateEmail.isPending;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -296,6 +370,38 @@ export function CreateEventModal({ open, onOpenChange, selectedDate, event, pres
               emptyText="Nenhum lead encontrado."
             />
           </div>
+
+          {/* Meeting Link - visible for meeting/call */}
+          {showMeetingLink && (
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <LinkIcon className="h-4 w-4" />
+                Link da Reunião
+              </Label>
+              <Input
+                type="url"
+                value={meetingLink}
+                onChange={(e) => setMeetingLink(e.target.value)}
+                placeholder="https://teams.microsoft.com/..."
+              />
+            </div>
+          )}
+
+          {/* Send Email Toggle - visible when lead has email */}
+          {canSendEmail && (
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border">
+              <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
+              <div className="flex-1 min-w-0">
+                <Label htmlFor="send-email" className="text-sm font-medium cursor-pointer">
+                  Enviar email ao lead
+                </Label>
+                <p className="text-xs text-muted-foreground truncate">
+                  {selectedLead?.email}
+                </p>
+              </div>
+              <Switch checked={sendEmail} onCheckedChange={setSendEmail} id="send-email" />
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label>Lembrete</Label>

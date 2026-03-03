@@ -195,6 +195,7 @@ export type Database = {
           event_type: string
           id: string
           lead_id: string | null
+          meeting_link: string | null
           organization_id: string
           reminder_minutes: number | null
           reminder_sent: boolean | null
@@ -213,6 +214,7 @@ export type Database = {
           event_type?: string
           id?: string
           lead_id?: string | null
+          meeting_link?: string | null
           organization_id: string
           reminder_minutes?: number | null
           reminder_sent?: boolean | null
@@ -231,6 +233,7 @@ export type Database = {
           event_type?: string
           id?: string
           lead_id?: string | null
+          meeting_link?: string | null
           organization_id?: string
           reminder_minutes?: number | null
           reminder_sent?: boolean | null

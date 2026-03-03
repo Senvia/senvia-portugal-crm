@@ -14,6 +14,7 @@ interface CreateEventParams {
   all_day?: boolean;
   lead_id?: string;
   reminder_minutes?: number | null;
+  meeting_link?: string;
 }
 
 interface UpdateEventParams {
@@ -27,6 +28,7 @@ interface UpdateEventParams {
   lead_id?: string | null;
   status?: EventStatus;
   reminder_minutes?: number | null;
+  meeting_link?: string | null;
 }
 
 export function useCalendarEvents(startDate?: Date, endDate?: Date) {

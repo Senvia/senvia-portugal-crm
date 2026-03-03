@@ -12,6 +12,7 @@ export interface CalendarEvent {
   start_time: string;
   end_time?: string | null;
   all_day: boolean;
+  meeting_link?: string | null;
   status: EventStatus;
   reminder_minutes?: number | null;
   reminder_sent: boolean;
