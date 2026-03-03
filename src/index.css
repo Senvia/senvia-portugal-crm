@@ -325,13 +325,12 @@
   /* ===== 1. Hide non-printable elements ===== */
   .no-print,
   [data-sidebar],
-  .mobile-bottom-nav,
   nav,
+  header,
+  [data-otto-fab],
   .print\:hidden,
-  button,
   [data-radix-popper-content-wrapper],
-  [role="dialog"],
-  .otto-fab {
+  [role="dialog"] {
     display: none !important;
   }
 
