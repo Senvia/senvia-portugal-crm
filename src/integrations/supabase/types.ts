@@ -2062,6 +2062,62 @@ export type Database = {
           },
         ]
       }
+      monthly_metrics: {
+        Row: {
+          comissao: number
+          created_at: string
+          created_by: string | null
+          energia: number
+          id: string
+          month: string
+          op_comissao: number
+          op_energia: number
+          op_solar: number
+          organization_id: string
+          solar: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          comissao?: number
+          created_at?: string
+          created_by?: string | null
+          energia?: number
+          id?: string
+          month: string
+          op_comissao?: number
+          op_energia?: number
+          op_solar?: number
+          organization_id: string
+          solar?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          comissao?: number
+          created_at?: string
+          created_by?: string | null
+          energia?: number
+          id?: string
+          month?: string
+          op_comissao?: number
+          op_energia?: number
+          op_solar?: number
+          organization_id?: string
+          solar?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "monthly_metrics_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       monthly_objectives: {
         Row: {
           created_at: string

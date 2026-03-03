@@ -1,0 +1,260 @@
+import { useState, useMemo } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { usePermissions } from "@/hooks/usePermissions";
+import { useTeamFilter } from "@/hooks/useTeamFilter";
+import { useTeamMembers } from "@/hooks/useTeam";
+import { useMonthlyMetrics } from "@/hooks/useMonthlyMetrics";
+import { useMonthSalesMetrics } from "@/hooks/useMonthSalesMetrics";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { TrendingUp, Pencil, ChevronDown, ChevronUp } from "lucide-react";
+import { format, startOfMonth } from "date-fns";
+import { pt } from "date-fns/locale";
+import { Skeleton } from "@/components/ui/skeleton";
+import { EditMetricsModal } from "./EditMetricsModal";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
+
+function formatNumber(val: number) {
+  return new Intl.NumberFormat("pt-PT", { maximumFractionDigits: 2 }).format(val);
+}
+
+function formatCurrency(val: number) {
+  return new Intl.NumberFormat("pt-PT", { style: "currency", currency: "EUR" }).format(val);
+}
+
+function formatPercent(actual: number, target: number) {
+  if (target === 0) return "—";
+  return `${Math.round((actual / target) * 100)}%`;
+}
+
+function percentColor(actual: number, target: number) {
+  if (target === 0) return "text-muted-foreground";
+  const pct = (actual / target) * 100;
+  if (pct >= 100) return "text-green-500";
+  if (pct >= 50) return "text-amber-500";
+  return "text-red-500";
+}
+
+interface RitmoRow {
+  userId: string;
+  name: string;
+  opEnergia: number;
+  energia: number;
+  opSolar: number;
+  solar: number;
+  opComissao: number;
+  comissao: number;
+}
+
+export function MetricsPanel() {
+  const { user, profile, organization } = useAuth();
+  const { isAdmin } = usePermissions();
+  const { data: members = [] } = useTeamMembers();
+  const { selectedMemberId } = useTeamFilter();
+  const { metrics, isLoading: metricsLoading } = useMonthlyMetrics();
+  const [editOpen, setEditOpen] = useState(false);
+  const [ritmoOpen, setRitmoOpen] = useState(true);
+  const [concOpen, setConcOpen] = useState(true);
+
+  const orgId = organization?.id;
+  const currentMonthLabel = format(startOfMonth(new Date()), "MMMM yyyy", { locale: pt });
+
+  // Fetch sales with operation type counts
+  const monthStart = format(startOfMonth(new Date()), "yyyy-MM-dd");
+  const { data: salesRaw = [], isLoading: salesLoading } = useQuery({
+    queryKey: ["metrics-sales-ops", orgId, monthStart],
+    queryFn: async () => {
+      if (!orgId) return [];
+      const { data, error } = await supabase
+        .from("sales")
+        .select("created_by, consumo_anual, kwp, comissao, status")
+        .eq("organization_id", orgId)
+        .gte("sale_date", monthStart)
+        .neq("status", "cancelled");
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!orgId,
+  });
+
+  const loading = metricsLoading || salesLoading;
+
+  const memberList = members.length > 0 ? members : (user?.id ? [{ user_id: user.id, full_name: profile?.full_name || "Eu" }] : []);
+  const filteredMembers = selectedMemberId ? memberList.filter((m) => m.user_id === selectedMemberId) : memberList;
+
+  // Build ritmo rows from sales
+  const ritmoRows: RitmoRow[] = useMemo(() => {
+    return filteredMembers.map((m) => {
+      const userSales = salesRaw.filter((s: any) => s.created_by === m.user_id);
+      let opEnergia = 0, energia = 0, opSolar = 0, solar = 0, comissao = 0;
+      for (const s of userSales) {
+        const ca = Number(s.consumo_anual || 0);
+        const kw = Number(s.kwp || 0);
+        if (ca > 0) { opEnergia++; energia += ca / 1000; } // kWh → MWh
+        if (kw > 0) { opSolar++; solar += kw; }
+        comissao += Number(s.comissao || 0);
+      }
+      return {
+        userId: m.user_id,
+        name: m.full_name + (m.user_id === user?.id ? " (eu)" : ""),
+        opEnergia, energia, opSolar, solar,
+        opComissao: opEnergia + opSolar,
+        comissao,
+      };
+    });
+  }, [filteredMembers, salesRaw, user?.id]);
+
+  const sumRitmo = (rows: RitmoRow[]) =>
+    rows.reduce((acc, r) => ({
+      opEnergia: acc.opEnergia + r.opEnergia, energia: acc.energia + r.energia,
+      opSolar: acc.opSolar + r.opSolar, solar: acc.solar + r.solar,
+      opComissao: acc.opComissao + r.opComissao, comissao: acc.comissao + r.comissao,
+    }), { opEnergia: 0, energia: 0, opSolar: 0, solar: 0, opComissao: 0, comissao: 0 });
+
+  const ritmoTotals = sumRitmo(ritmoRows);
+  const showTotals = isAdmin && ritmoRows.length > 1;
+
+  const headers = (
+    <TableRow>
+      <TableHead className="text-xs whitespace-nowrap">Consultor</TableHead>
+      <TableHead className="text-xs text-right whitespace-nowrap">OP</TableHead>
+      <TableHead className="text-xs text-right whitespace-nowrap">Energia</TableHead>
+      <TableHead className="text-xs text-right whitespace-nowrap">OP</TableHead>
+      <TableHead className="text-xs text-right whitespace-nowrap">Solar</TableHead>
+      <TableHead className="text-xs text-right whitespace-nowrap">OP</TableHead>
+      <TableHead className="text-xs text-right whitespace-nowrap">Comissão</TableHead>
+    </TableRow>
+  );
+
+  return (
+    <>
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-primary" />
+              <CardTitle className="text-base capitalize">
+                Métricas Mensais — {currentMonthLabel}
+              </CardTitle>
+            </div>
+            {isAdmin && (
+              <Button variant="ghost" size="icon-sm" onClick={() => setEditOpen(true)}>
+                <Pencil className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="pt-0 space-y-3">
+          {loading ? (
+            <div className="space-y-2">
+              <Skeleton className="h-8 w-full" />
+              <Skeleton className="h-8 w-full" />
+            </div>
+          ) : (
+            <>
+              {/* A) Ritmo */}
+              <Collapsible open={ritmoOpen} onOpenChange={setRitmoOpen}>
+                <CollapsibleTrigger className="flex items-center gap-1 w-full text-left">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">A) Ritmo</span>
+                  {ritmoOpen ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>{headers}</TableHeader>
+                      <TableBody>
+                        {ritmoRows.map((row) => (
+                          <TableRow key={row.userId}>
+                            <TableCell className="text-xs py-1.5 font-medium whitespace-nowrap">{row.name}</TableCell>
+                            <TableCell className="text-xs text-right py-1.5">{row.opEnergia}</TableCell>
+                            <TableCell className="text-xs text-right py-1.5">{formatNumber(row.energia)}</TableCell>
+                            <TableCell className="text-xs text-right py-1.5">{row.opSolar}</TableCell>
+                            <TableCell className="text-xs text-right py-1.5">{formatNumber(row.solar)}</TableCell>
+                            <TableCell className="text-xs text-right py-1.5">{row.opComissao}</TableCell>
+                            <TableCell className="text-xs text-right py-1.5 font-medium text-primary">{formatCurrency(row.comissao)}</TableCell>
+                          </TableRow>
+                        ))}
+                        {showTotals && (
+                          <TableRow className="bg-muted/20 hover:bg-muted/20">
+                            <TableCell className="text-xs font-semibold py-1.5">TOTAL</TableCell>
+                            <TableCell className="text-xs text-right font-semibold py-1.5">{ritmoTotals.opEnergia}</TableCell>
+                            <TableCell className="text-xs text-right font-semibold py-1.5">{formatNumber(ritmoTotals.energia)}</TableCell>
+                            <TableCell className="text-xs text-right font-semibold py-1.5">{ritmoTotals.opSolar}</TableCell>
+                            <TableCell className="text-xs text-right font-semibold py-1.5">{formatNumber(ritmoTotals.solar)}</TableCell>
+                            <TableCell className="text-xs text-right font-semibold py-1.5">{ritmoTotals.opComissao}</TableCell>
+                            <TableCell className="text-xs text-right font-semibold py-1.5 text-primary">{formatCurrency(ritmoTotals.comissao)}</TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+
+              {/* B) Concretização das Métricas */}
+              <Collapsible open={concOpen} onOpenChange={setConcOpen}>
+                <CollapsibleTrigger className="flex items-center gap-1 w-full text-left">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">B) Concretização das Métricas</span>
+                  {concOpen ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>{headers}</TableHeader>
+                      <TableBody>
+                        {ritmoRows.map((row) => {
+                          const target = metrics.find((m) => m.user_id === row.userId);
+                          const tOpE = target?.op_energia || 0;
+                          const tE = target?.energia || 0;
+                          const tOpS = target?.op_solar || 0;
+                          const tS = target?.solar || 0;
+                          const tOpC = target?.op_comissao || 0;
+                          const tC = target?.comissao || 0;
+                          return (
+                            <TableRow key={row.userId}>
+                              <TableCell className="text-xs py-1.5 font-medium whitespace-nowrap">{row.name}</TableCell>
+                              <TableCell className={`text-xs text-right py-1.5 ${percentColor(row.opEnergia, tOpE)}`}>{formatPercent(row.opEnergia, tOpE)}</TableCell>
+                              <TableCell className={`text-xs text-right py-1.5 ${percentColor(row.energia, tE)}`}>{formatPercent(row.energia, tE)}</TableCell>
+                              <TableCell className={`text-xs text-right py-1.5 ${percentColor(row.opSolar, tOpS)}`}>{formatPercent(row.opSolar, tOpS)}</TableCell>
+                              <TableCell className={`text-xs text-right py-1.5 ${percentColor(row.solar, tS)}`}>{formatPercent(row.solar, tS)}</TableCell>
+                              <TableCell className={`text-xs text-right py-1.5 ${percentColor(row.opComissao, tOpC)}`}>{formatPercent(row.opComissao, tOpC)}</TableCell>
+                              <TableCell className={`text-xs text-right py-1.5 font-medium ${percentColor(row.comissao, tC)}`}>{formatPercent(row.comissao, tC)}</TableCell>
+                            </TableRow>
+                          );
+                        })}
+                        {showTotals && (() => {
+                          const tOpE = metrics.reduce((a, m) => a + m.op_energia, 0);
+                          const tE = metrics.reduce((a, m) => a + m.energia, 0);
+                          const tOpS = metrics.reduce((a, m) => a + m.op_solar, 0);
+                          const tS = metrics.reduce((a, m) => a + m.solar, 0);
+                          const tOpC = metrics.reduce((a, m) => a + m.op_comissao, 0);
+                          const tC = metrics.reduce((a, m) => a + m.comissao, 0);
+                          return (
+                            <TableRow className="bg-muted/20 hover:bg-muted/20">
+                              <TableCell className="text-xs font-semibold py-1.5">TOTAL</TableCell>
+                              <TableCell className={`text-xs text-right font-semibold py-1.5 ${percentColor(ritmoTotals.opEnergia, tOpE)}`}>{formatPercent(ritmoTotals.opEnergia, tOpE)}</TableCell>
+                              <TableCell className={`text-xs text-right font-semibold py-1.5 ${percentColor(ritmoTotals.energia, tE)}`}>{formatPercent(ritmoTotals.energia, tE)}</TableCell>
+                              <TableCell className={`text-xs text-right font-semibold py-1.5 ${percentColor(ritmoTotals.opSolar, tOpS)}`}>{formatPercent(ritmoTotals.opSolar, tOpS)}</TableCell>
+                              <TableCell className={`text-xs text-right font-semibold py-1.5 ${percentColor(ritmoTotals.solar, tS)}`}>{formatPercent(ritmoTotals.solar, tS)}</TableCell>
+                              <TableCell className={`text-xs text-right font-semibold py-1.5 ${percentColor(ritmoTotals.opComissao, tOpC)}`}>{formatPercent(ritmoTotals.opComissao, tOpC)}</TableCell>
+                              <TableCell className={`text-xs text-right font-semibold py-1.5 ${percentColor(ritmoTotals.comissao, tC)}`}>{formatPercent(ritmoTotals.comissao, tC)}</TableCell>
+                            </TableRow>
+                          );
+                        })()}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      <EditMetricsModal open={editOpen} onOpenChange={setEditOpen} metrics={metrics} />
+    </>
+  );
+}
