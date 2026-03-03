@@ -48,6 +48,8 @@ export interface CommercialEntry {
   tier: EnergyVolumeTier;
   totalIndicativa: number;
   totalFinal: number;
+  totalEnergyCommission: number;
+  totalServicosCommission: number;
   totalServicosKwp: number;
   cpes: CpeDetail[];
 }
@@ -57,10 +59,12 @@ export interface LiveCommissionsData {
   globalMwh: number;
   globalTier: EnergyVolumeTier;
   totalCommission: number;
+  globalEnergyCommission: number;
+  globalServicosCommission: number;
   globalServicosKwp: number;
 }
 
-export function useLiveCommissions(selectedMonth: string) {
+export function useLiveCommissions(selectedMonth: string, effectiveUserIds?: string[] | null) {
   const { organization } = useAuth();
   const { data: org } = useOrganization();
   const { data: members } = useTeamMembers();
@@ -77,7 +81,7 @@ export function useLiveCommissions(selectedMonth: string) {
   return useQuery<LiveCommissionsData>({
     queryKey: ['commissions-live', organizationId, selectedMonth, members?.length, energyConfig?.bands?.length],
     queryFn: async (): Promise<LiveCommissionsData> => {
-      const emptyResult: LiveCommissionsData = { commercials: [], globalMwh: 0, globalTier: 'low', totalCommission: 0, globalServicosKwp: 0 };
+      const emptyResult: LiveCommissionsData = { commercials: [], globalMwh: 0, globalTier: 'low', totalCommission: 0, globalEnergyCommission: 0, globalServicosCommission: 0, globalServicosKwp: 0 };
       if (!organizationId) return emptyResult;
 
       const monthStart = selectedMonth;
@@ -170,6 +174,8 @@ export function useLiveCommissions(selectedMonth: string) {
             tier: 'low',
             totalIndicativa: 0,
             totalFinal: 0,
+            totalEnergyCommission: 0,
+            totalServicosCommission: 0,
             totalServicosKwp: 0,
             cpes: [],
           });
@@ -213,6 +219,8 @@ export function useLiveCommissions(selectedMonth: string) {
         entry.name = getMemberName(entry.userId);
 
         let totalFinal = 0;
+        let energyFinal = 0;
+        let servicosFinal = 0;
         for (const cpe of entry.cpes) {
           const multiplier = NEGOTIATION_MULTIPLIER[cpe.negotiation_type] ?? 1;
           if (energyConfig && energyConfig.bands.length > 0) {
@@ -222,16 +230,32 @@ export function useLiveCommissions(selectedMonth: string) {
             cpe.comissao_final = cpe.comissao_indicativa * multiplier;
           }
           totalFinal += cpe.comissao_final;
+          if (cpe.proposal_type === 'energia') energyFinal += cpe.comissao_final;
+          else servicosFinal += cpe.comissao_final;
         }
         entry.totalFinal = totalFinal;
+        entry.totalEnergyCommission = energyFinal;
+        entry.totalServicosCommission = servicosFinal;
       }
 
-      const commercials = Array.from(byCommercial.values()).sort((a, b) => b.totalFinal - a.totalFinal);
+      // Apply visibility filter
+      let commercials = Array.from(byCommercial.values());
+      if (effectiveUserIds && effectiveUserIds.length > 0) {
+        commercials = commercials.filter(c => effectiveUserIds.includes(c.userId));
+      }
+      commercials.sort((a, b) => b.totalFinal - a.totalFinal);
+
       const totalCommission = commercials.reduce((sum, p) => sum + p.totalFinal, 0);
-
       const globalServicosKwp = commercials.reduce((sum, p) => sum + p.totalServicosKwp, 0);
+      const globalEnergyCommission = commercials.reduce((sum, p) => sum + p.totalEnergyCommission, 0);
+      const globalServicosCommission = commercials.reduce((sum, p) => sum + p.totalServicosCommission, 0);
 
-      return { commercials, globalMwh, globalTier, totalCommission, globalServicosKwp };
+      // Recalculate globalMwh/globalTier from filtered data
+      const filteredTotalKwh = commercials.reduce((sum, p) => sum + p.totalConsumoKwh, 0);
+      const filteredGlobalMwh = filteredTotalKwh / 1000;
+      const filteredGlobalTier = getVolumeTier(filteredTotalKwh);
+
+      return { commercials, globalMwh: filteredGlobalMwh, globalTier: filteredGlobalTier, totalCommission, globalEnergyCommission, globalServicosCommission, globalServicosKwp };
     },
     enabled: !!organizationId && !!selectedMonth,
   });

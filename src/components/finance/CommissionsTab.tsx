@@ -11,6 +11,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { useLiveCommissions } from '@/hooks/useLiveCommissions';
 import { normalizeString } from '@/lib/utils';
+import { useTeamFilter } from '@/hooks/useTeamFilter';
+import { TeamMemberFilter } from '@/components/dashboard/TeamMemberFilter';
 
 const NEGOTIATION_TYPE_LABELS: Record<string, string> = {
   angariacao: 'Angariação',
@@ -39,12 +41,13 @@ function generateMonthOptions() {
 }
 
 export function CommissionsTab() {
+  const { effectiveUserIds, canFilterByTeam } = useTeamFilter();
   const monthOptions = generateMonthOptions();
   const [selectedMonth, setSelectedMonth] = useState(monthOptions[0]?.value);
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
 
-  const { data, isLoading } = useLiveCommissions(selectedMonth);
+  const { data, isLoading } = useLiveCommissions(selectedMonth, effectiveUserIds);
 
   const toggleExpand = (id: string) => {
     setExpandedItems(prev => {
@@ -69,6 +72,8 @@ export function CommissionsTab() {
   const globalTier = data?.globalTier || 'low';
   const totalCommission = data?.totalCommission || 0;
   const globalServicosKwp = data?.globalServicosKwp || 0;
+  const globalEnergyCommission = data?.globalEnergyCommission || 0;
+  const globalServicosCommission = data?.globalServicosCommission || 0;
 
   const normalizedSearch = normalizeString(searchTerm);
   const filteredCommercials = commercials.filter(item =>
@@ -88,15 +93,20 @@ export function CommissionsTab() {
             ))}
           </SelectContent>
         </Select>
-        <div className="relative flex-1 sm:max-w-[300px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Pesquisar comercial..."
-            value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
-            className="pl-9"
-          />
-        </div>
+        {canFilterByTeam && (
+          <>
+            <TeamMemberFilter />
+            <div className="relative flex-1 sm:max-w-[300px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Pesquisar comercial..."
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+          </>
+        )}
       </div>
 
       {filteredCommercials.length === 0 ? (
@@ -126,7 +136,7 @@ export function CommissionsTab() {
                   {TIER_LABELS[globalTier] || globalTier}
                 </Badge>
                 <Badge variant="outline" className="text-base font-semibold">
-                  Total: {formatCurrency(totalCommission)}
+                  {formatCurrency(globalEnergyCommission)}
                 </Badge>
               </div>
             </CardContent>
@@ -142,6 +152,17 @@ export function CommissionsTab() {
                   <p className="text-2xl font-bold">{globalServicosKwp.toFixed(1)} kWp</p>
                 </div>
               </div>
+              <Badge variant="outline" className="text-base font-semibold w-fit">
+                {formatCurrency(globalServicosCommission)}
+              </Badge>
+            </CardContent>
+          </Card>
+
+          {/* Total geral */}
+          <Card className="border-muted-foreground/20">
+            <CardContent className="flex items-center justify-between p-4">
+              <p className="text-sm font-medium text-muted-foreground">Total Comissões</p>
+              <p className="text-2xl font-bold">{formatCurrency(totalCommission)}</p>
             </CardContent>
           </Card>
 
