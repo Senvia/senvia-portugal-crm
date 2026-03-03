@@ -322,20 +322,52 @@
 }
 
 @media print {
-  /* Hide non-printable elements */
+  /* ===== 1. Hide non-printable elements ===== */
   .no-print,
   [data-sidebar],
   .mobile-bottom-nav,
-  nav {
+  nav,
+  .print\:hidden,
+  button,
+  [data-radix-popper-content-wrapper],
+  [role="dialog"],
+  .otto-fab {
     display: none !important;
   }
 
+  /* ===== 2. Reset body & global containers ===== */
   body {
     background: white !important;
     color: black !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
-  /* Print header with Senvia branding */
+  /* Force ALL containers to expand — no clipping */
+  *,
+  *::before,
+  *::after {
+    overflow: visible !important;
+    max-height: none !important;
+  }
+
+  html, body {
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  /* Remove fixed positioning & sidebar margin */
+  main {
+    padding-left: 0 !important;
+    margin-left: 0 !important;
+  }
+
+  main, main > div {
+    min-height: auto !important;
+    height: auto !important;
+  }
+
+  /* ===== 3. Print header with Senvia branding ===== */
   body::before {
     content: "Senvia OS";
     display: block;
@@ -348,7 +380,88 @@
     letter-spacing: 0.05em;
   }
 
-  /* When printing a single card */
+  /* ===== 4. Linearize grids for A4 paper ===== */
+  .grid {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 12px !important;
+  }
+
+  /* Single-column for lg grids on narrow paper */
+  .grid.grid-cols-3,
+  .grid.grid-cols-4,
+  .grid.lg\:grid-cols-3,
+  .grid.xl\:grid-cols-4,
+  .grid.lg\:grid-cols-4 {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  /* Full-width panels (commitments, sales performance, etc.) */
+  .grid.lg\:grid-cols-2 {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* ===== 5. Avoid page-break inside cards/widgets ===== */
+  .rounded-xl,
+  [class*="Card"],
+  [class*="card"],
+  .border {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* ===== 6. Expand collapsibles ===== */
+  [data-state="closed"] > [data-radix-collapsible-content],
+  [data-state="closed"][data-radix-collapsible-content] {
+    display: block !important;
+    height: auto !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
+
+  /* ===== 7. Charts — preserve colors via print-color-adjust ===== */
+  svg {
+    print-color-adjust: exact !important;
+    -webkit-print-color-adjust: exact !important;
+    max-width: 100% !important;
+    height: auto !important;
+  }
+
+  .recharts-wrapper,
+  .recharts-surface {
+    print-color-adjust: exact !important;
+    -webkit-print-color-adjust: exact !important;
+  }
+
+  /* ===== 8. Ensure text contrast ===== */
+  .text-muted-foreground {
+    color: #555 !important;
+  }
+
+  .text-foreground {
+    color: #111 !important;
+  }
+
+  .bg-card, .bg-background {
+    background: white !important;
+  }
+
+  .border {
+    border-color: #ddd !important;
+  }
+
+  /* ===== 9. Safe area resets (no notch on paper) ===== */
+  .pt-header-safe,
+  .pb-nav-safe,
+  .safe-top,
+  .safe-bottom,
+  .pt-safe,
+  .pb-safe {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+  }
+
+  /* ===== 10. Single-card print mode ===== */
   .print-single-active * {
     visibility: hidden !important;
   }
@@ -368,7 +481,7 @@
     color: black !important;
   }
 
-  /* Bank statement print */
+  /* ===== 11. Bank statement print ===== */
   #bank-statement-print,
   #bank-statement-print * {
     visibility: visible !important;
@@ -394,9 +507,5 @@
 
   #bank-statement-print .text-destructive {
     color: #dc2626 !important;
-  }
-
-  .print\:hidden {
-    display: none !important;
   }
 }
