@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useTeamFilter } from "@/hooks/useTeamFilter";
 import { useCommitments } from "@/hooks/useCommitments";
 import { useTeamMembers } from "@/hooks/useTeam";
+import { useDashboardPeriod } from "@/stores/useDashboardPeriod";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -12,6 +13,7 @@ import { format, startOfMonth } from "date-fns";
 import { pt } from "date-fns/locale";
 import { EditCommitmentModal } from "./EditCommitmentModal";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PrintCardButton } from "./PrintCardButton";
 
 function formatCurrency(val: number) {
   return new Intl.NumberFormat("pt-PT", { style: "currency", currency: "EUR" }).format(val);
@@ -36,10 +38,12 @@ export function CommitmentPanel() {
   const { isAdmin } = usePermissions();
   const { data: members = [] } = useTeamMembers();
   const { selectedMemberId } = useTeamFilter();
-  const { commitment, isLoading, allCommitments, allLoading } = useCommitments(user?.id);
+  const { selectedMonth } = useDashboardPeriod();
+  const { commitment, isLoading, allCommitments, allLoading } = useCommitments(user?.id, selectedMonth);
   const [editOpen, setEditOpen] = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
 
-  const currentMonthLabel = format(startOfMonth(new Date()), "MMMM yyyy", { locale: pt });
+  const currentMonthLabel = format(startOfMonth(selectedMonth), "MMMM yyyy", { locale: pt });
 
   const buildRows = (): RowData[] => {
     if (isAdmin) {
@@ -90,7 +94,7 @@ export function CommitmentPanel() {
 
   return (
     <>
-      <Card>
+      <Card ref={cardRef}>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div className="flex items-center gap-2">
@@ -99,9 +103,12 @@ export function CommitmentPanel() {
                 Compromisso — {currentMonthLabel}
               </CardTitle>
             </div>
-            <Button variant="ghost" size="icon-sm" onClick={() => setEditOpen(true)}>
-              {commitment ? <Pencil className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-            </Button>
+            <div className="flex items-center gap-1">
+              <PrintCardButton targetRef={cardRef} />
+              <Button variant="ghost" size="icon-sm" onClick={() => setEditOpen(true)}>
+                {commitment ? <Pencil className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="pt-0">

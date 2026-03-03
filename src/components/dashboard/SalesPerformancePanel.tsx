@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useTeamFilter } from "@/hooks/useTeamFilter";
 import { useTeamMembers } from "@/hooks/useTeam";
 import { useMonthlyObjectives } from "@/hooks/useMonthlyObjectives";
 import { useMonthSalesMetrics } from "@/hooks/useMonthSalesMetrics";
+import { useDashboardPeriod } from "@/stores/useDashboardPeriod";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -14,6 +15,7 @@ import { format, startOfMonth } from "date-fns";
 import { pt } from "date-fns/locale";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EditObjectiveModal } from "./EditObjectiveModal";
+import { PrintCardButton } from "./PrintCardButton";
 
 function formatCurrency(val: number) {
   return new Intl.NumberFormat("pt-PT", { style: "currency", currency: "EUR" }).format(val);
@@ -50,21 +52,21 @@ export function SalesPerformancePanel() {
   const { isAdmin } = usePermissions();
   const { data: members = [] } = useTeamMembers();
   const { selectedMemberId } = useTeamFilter();
-  const { objectives, isLoading: objLoading } = useMonthlyObjectives();
-  const { data: salesMetrics = [], isLoading: salesLoading } = useMonthSalesMetrics();
+  const { selectedMonth } = useDashboardPeriod();
+  const { objectives, isLoading: objLoading } = useMonthlyObjectives(selectedMonth);
+  const { data: salesMetrics = [], isLoading: salesLoading } = useMonthSalesMetrics(selectedMonth);
   const [editOpen, setEditOpen] = useState(false);
   const [objOpen, setObjOpen] = useState(true);
   const [salesOpen, setSalesOpen] = useState(true);
   const [concOpen, setConcOpen] = useState(true);
+  const cardRef = useRef<HTMLDivElement>(null);
 
-  const currentMonthLabel = format(startOfMonth(new Date()), "MMMM yyyy", { locale: pt });
+  const currentMonthLabel = format(startOfMonth(selectedMonth), "MMMM yyyy", { locale: pt });
   const loading = objLoading || salesLoading;
 
-  // Build member list
   const memberList = members.length > 0 ? members : (user?.id ? [{ user_id: user.id, full_name: profile?.full_name || "Eu" }] : []);
   const filteredMembers = selectedMemberId ? memberList.filter((m) => m.user_id === selectedMemberId) : memberList;
 
-  // Objective rows
   const objectiveRows: RowData[] = filteredMembers.map((m) => {
     const obj = objectives.find((o) => o.user_id === m.user_id);
     return {
@@ -77,7 +79,6 @@ export function SalesPerformancePanel() {
     };
   });
 
-  // Sales rows
   const salesRows: RowData[] = filteredMembers.map((m) => {
     const sm = salesMetrics.find((s) => s.userId === m.user_id);
     return {
@@ -204,7 +205,7 @@ export function SalesPerformancePanel() {
 
   return (
     <>
-      <Card>
+      <Card ref={cardRef}>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div className="flex items-center gap-2">
@@ -213,11 +214,14 @@ export function SalesPerformancePanel() {
                 Objetivo Mensal — {currentMonthLabel}
               </CardTitle>
             </div>
-            {isAdmin && (
-              <Button variant="ghost" size="icon-sm" onClick={() => setEditOpen(true)}>
-                <Pencil className="h-4 w-4" />
-              </Button>
-            )}
+            <div className="flex items-center gap-1">
+              <PrintCardButton targetRef={cardRef} />
+              {isAdmin && (
+                <Button variant="ghost" size="icon-sm" onClick={() => setEditOpen(true)}>
+                  <Pencil className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
           </div>
         </CardHeader>
         <CardContent className="pt-0 space-y-3">

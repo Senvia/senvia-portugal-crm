@@ -1,13 +1,15 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useTeamFilter } from "@/hooks/useTeamFilter";
 import { useTeamMembers } from "@/hooks/useTeam";
 import { useActivationObjectives } from "@/hooks/useActivationObjectives";
+import { useDashboardPeriod } from "@/stores/useDashboardPeriod";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Zap, Pencil } from "lucide-react";
+import { PrintCardButton } from "./PrintCardButton";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
 import { EditActivationObjectivesModal } from "./EditActivationObjectivesModal";
@@ -65,16 +67,21 @@ function ActivationBlock({
     { name: "remaining", value: Math.max(100 - totalPct, 0) },
   ];
 
+  const blockRef = useRef<HTMLDivElement>(null);
+
   return (
-    <Card>
+    <Card ref={blockRef}>
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between gap-2">
           <CardTitle className="text-sm font-semibold">{title}</CardTitle>
-          {isAdmin && (
-            <Button variant="ghost" size="icon-sm" onClick={onEdit}>
-              <Pencil className="h-3.5 w-3.5" />
-            </Button>
-          )}
+          <div className="flex items-center gap-1">
+            <PrintCardButton targetRef={blockRef} />
+            {isAdmin && (
+              <Button variant="ghost" size="icon-sm" onClick={onEdit}>
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
+            )}
+          </div>
         </div>
       </CardHeader>
       <CardContent className="pt-0 space-y-3">
@@ -153,7 +160,8 @@ export function ActivationsPanel() {
   const { isAdmin } = usePermissions();
   const { data: members = [] } = useTeamMembers();
   const { selectedMemberId } = useTeamFilter();
-  const { isLoading, getTarget, countActivations } = useActivationObjectives();
+  const { selectedMonth } = useDashboardPeriod();
+  const { isLoading, getTarget, countActivations } = useActivationObjectives(selectedMonth);
 
   const [editModal, setEditModal] = useState<{
     open: boolean;

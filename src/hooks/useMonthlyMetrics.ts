@@ -29,11 +29,11 @@ export interface MetricValues {
   comissao: number;
 }
 
-export function useMonthlyMetrics() {
+export function useMonthlyMetrics(referenceDate?: Date) {
   const { organization } = useAuth();
   const queryClient = useQueryClient();
   const orgId = organization?.id;
-  const currentMonth = format(startOfMonth(new Date()), "yyyy-MM-dd");
+  const currentMonth = format(startOfMonth(referenceDate || new Date()), "yyyy-MM-dd");
 
   const { data: metrics = [], isLoading } = useQuery({
     queryKey: ["monthly-metrics", orgId, currentMonth],

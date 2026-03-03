@@ -21,11 +21,11 @@ export interface MonthlyObjective extends ObjectiveTotals {
   updated_at: string;
 }
 
-export function useMonthlyObjectives() {
+export function useMonthlyObjectives(referenceDate?: Date) {
   const { organization } = useAuth();
   const queryClient = useQueryClient();
   const orgId = organization?.id;
-  const currentMonth = format(startOfMonth(new Date()), "yyyy-MM-dd");
+  const currentMonth = format(startOfMonth(referenceDate || new Date()), "yyyy-MM-dd");
 
   const { data: objectives = [], isLoading } = useQuery({
     queryKey: ["monthly-objectives", orgId, currentMonth],

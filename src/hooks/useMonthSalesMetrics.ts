@@ -11,13 +11,13 @@ export interface UserSalesMetrics {
   comissao: number;
 }
 
-export function useMonthSalesMetrics() {
+export function useMonthSalesMetrics(referenceDate?: Date) {
   const { organization } = useAuth();
   const orgId = organization?.id;
 
-  const now = new Date();
-  const monthStart = format(startOfMonth(now), "yyyy-MM-dd");
-  const monthEnd = format(endOfMonth(now), "yyyy-MM-dd");
+  const ref = referenceDate || new Date();
+  const monthStart = format(startOfMonth(ref), "yyyy-MM-dd");
+  const monthEnd = format(endOfMonth(ref), "yyyy-MM-dd");
 
   return useQuery({
     queryKey: ["month-sales-metrics", orgId, monthStart],

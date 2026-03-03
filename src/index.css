@@ -315,15 +315,45 @@
   }
 }
 
-/* Print styles for bank statement */
+/* Print styles */
 @media print {
-  body * {
-    visibility: hidden;
+  /* Hide non-printable elements */
+  .no-print,
+  [data-sidebar],
+  .mobile-bottom-nav,
+  nav {
+    display: none !important;
   }
 
+  body {
+    background: white !important;
+    color: black !important;
+  }
+
+  /* When printing a single card */
+  .print-single-active * {
+    visibility: hidden !important;
+  }
+
+  .print-single-active .print-target,
+  .print-single-active .print-target * {
+    visibility: visible !important;
+  }
+
+  .print-single-active .print-target {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    padding: 1rem;
+    background: white !important;
+    color: black !important;
+  }
+
+  /* Bank statement print */
   #bank-statement-print,
   #bank-statement-print * {
-    visibility: visible;
+    visibility: visible !important;
   }
 
   #bank-statement-print {
@@ -348,7 +378,7 @@
     color: #dc2626 !important;
   }
 
-  .print\\:hidden {
+  .print\:hidden {
     display: none !important;
   }
 }
