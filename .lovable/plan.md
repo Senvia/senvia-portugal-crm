@@ -1,66 +1,26 @@
 
 
-## Adicionar variáveis `{{vendedor_email}}` e `{{vendedor_telefone}}` aos templates
+## Adicionar edição de dados dos membros da equipa (Acessos)
 
-Para que os templates de email possam incluir o email e telefone do comercial responsável, é necessário:
+Atualmente, na tabela de Acessos, só é possível: redefinir password, alterar perfil e ativar/desativar. Faltam ações para editar o nome, email e telefone de cada membro.
 
-### 1. Adicionar colunas `email` e `phone` à tabela `profiles`
+### Alterações
 
-A tabela `profiles` só tem `full_name` e `avatar_url`. Migração SQL:
+**1. Edge Function `manage-team-member`** — Adicionar nova action `update_profile`:
+- Recebe `user_id`, `full_name`, `email`, `phone`
+- Usa `supabaseAdmin` para atualizar a tabela `profiles` do membro alvo (validando que pertence à mesma organização)
 
-```sql
-ALTER TABLE public.profiles 
-  ADD COLUMN email text,
-  ADD COLUMN phone text;
-```
+**2. `src/components/settings/TeamTab.tsx`** — Adicionar modal "Editar Dados":
+- Nova opção no DropdownMenu: "Editar Dados" com ícone de edição
+- Modal com campos: Nome Completo, Email de contacto, Telefone
+- Pré-preenche com os dados atuais do membro
+- Chama a edge function `manage-team-member` com `action: 'update_profile'`
 
-### 2. Preencher o email automaticamente a partir do `auth.users`
+**3. `src/hooks/useTeam.ts`** — Verificar que o `TeamMember` já inclui `email` e `phone` do profile (se não, adicionar ao SELECT da query)
 
-Criar um trigger que, ao criar o perfil, copie o email do `auth.users`. Para perfis existentes, fazer um UPDATE one-off via edge function ou SQL.
-
-### 3. Atualizar `src/types/marketing.ts`
-
-Adicionar as novas variáveis ao grupo "Organização / Comercial":
-
-```typescript
-export const TEMPLATE_VARIABLES_ORG = [
-  { key: '{{organizacao}}', label: 'Nome da organização' },
-  { key: '{{vendedor}}', label: 'Nome do comercial' },
-  { key: '{{vendedor_email}}', label: 'Email do comercial' },
-  { key: '{{vendedor_telefone}}', label: 'Telefone do comercial' },
-  { key: '{{data}}', label: 'Data atual' },
-] as const;
-```
-
-### 4. Atualizar edge function `send-template-email`
-
-Na secção onde resolve o `vendedorName` (linha ~200), também buscar `email` e `phone` do perfil:
-
-```typescript
-const { data: profileData } = await supabase
-  .from('profiles')
-  .select('full_name, email, phone')
-  .eq('id', clientData.assigned_to)
-  .single();
-
-vendedorName = profileData?.full_name || '';
-vendedorEmail = profileData?.email || '';
-vendedorPhone = profileData?.phone || '';
-```
-
-E adicionar às variáveis:
-
-```typescript
-vendedor_email: vendedorEmail,
-vendedor_telefone: vendedorPhone,
-```
-
-### 5. Adicionar campos no perfil do utilizador (Settings)
-
-No separador de perfil das Settings, adicionar inputs para o comercial editar o seu email de contacto e telefone. Estes dados ficam guardados na tabela `profiles`.
+**4. Tabela de membros** — Mostrar email e telefone como info secundária na coluna "Nome" (texto mais pequeno abaixo do nome)
 
 ### Resultado
-- Dois novos botões no editor: `{{vendedor_email}}` e `{{vendedor_telefone}}`
-- Ao enviar, o sistema busca o comercial `assigned_to` do cliente e preenche automaticamente
-- Cada comercial pode editar os seus dados no perfil
+- Admin pode editar nome, email e telefone de qualquer membro da equipa diretamente nos Acessos
+- Os dados editados ficam na tabela `profiles` e são usados nas variáveis de email `{{vendedor_email}}` e `{{vendedor_telefone}}`
 
