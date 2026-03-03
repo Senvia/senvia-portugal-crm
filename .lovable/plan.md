@@ -1,61 +1,51 @@
 
 
-## Auditoria Completa: Safe Areas em Modais Fullscreen
+## Auditoria de Bugs Identificados
 
-### Componentes Afetados
+### Bug 1: MobileHeader não tem botão de menu (hamburger)
+O `MobileHeader` recebe `onMenuToggle` como prop mas **não renderiza nenhum botão** para ativá-lo. O header mostra apenas o logo centrado. O `MobileMenu` nunca é acessível — o utilizador não consegue ver o seu perfil, trocar de organização, ou fazer logout em mobile (a menos que use o MobileBottomNav para ir a Definições).
 
-**19 modais fullscreen** usam `variant="fullScreen"` no `DialogContent` — todos partilham o mesmo problema: em mobile (iPhone), o conteúdo do header fica por trás do notch/Dynamic Island e o footer pode ficar por trás do home indicator.
+**Ficheiro:** `src/components/layout/MobileHeader.tsx`
+**Correção:** Adicionar um botão hamburger à esquerda que chama `onMenuToggle`.
 
-Lista completa:
-- CreateSaleModal, EditSaleModal, SaleDetailsModal
-- LeadDetailsModal, AddLeadModal
-- ClientDetailsDrawer, EditClientModal, CreateClientModal
-- CreateProposalModal, EditProposalModal, ProposalDetailsModal
-- CampaignDetailsModal
-- CalendarAlertsWidget (modal interno)
-- CommissionMatrixTab (2 modais)
-- OnboardingWizard (não usa Dialog, mas `fixed inset-0`)
-- PaymentOverdueBlocker, TrialExpiredBlocker (centrados, menos críticos)
+### Bug 2: Double safe-area padding no AddRevenueModal
+O `AddRevenueModal` usa `variant="fullScreen"` (que agora tem `safe-top`) E aplica `pt-safe` no `DialogHeader`. Isto resulta em **padding duplo** no topo em iPhone — o container já tem ~47px de safe-area E o header adiciona mais ~40px.
 
-### Causa Raiz
+**Ficheiro:** `src/components/finance/AddRevenueModal.tsx`
+**Correção:** Remover `pt-safe` do `DialogHeader` (já está coberto pelo variant).
 
-O variant `fullScreen` no `dialog.tsx` é `fixed inset-0` sem qualquer padding para safe areas. O botão X já usa `top-safe` (funciona), mas o conteúdo dos filhos (headers, footers) não tem safe area.
+### Bug 3: Fullscreen modals sem `p-0 gap-0` têm padding inconsistente
+Alguns modais fullscreen não usam `p-0 gap-0`, resultando em padding default do `DialogContent` (p-6 gap-4) MAIS o safe-area padding — criando espaçamento excessivo:
+- `CalendarAlertsWidget` — sem `p-0 gap-0`
+- `FidelizationAlertsWidget` — sem `p-0 gap-0`
 
-### Solução Centralizada
+**Correção:** Adicionar `p-0 gap-0` a estes modais para consistência com o padrão.
 
-Em vez de corrigir 19+ ficheiros individualmente, a correção é feita **no próprio `dialog.tsx`**: adicionar `pt-safe` e `pb-safe` ao variant `fullScreen`, mas apenas em mobile (sem a media query `md:`).
+### Bug 4: Modais Marketing sem `gap-0`
+- `CreateCampaignModal` — tem `p-0` mas falta `gap-0`
+- `CampaignDetailsModal` — tem `p-0` mas falta `gap-0`
+- `ListDetailsModal` — tem `p-0` mas falta `gap-0`
+- `ImportContactsModal` — tem `p-0` mas falta `gap-0`
 
-**Ficheiro: `src/components/ui/dialog.tsx`**
+**Correção:** Adicionar `gap-0` a todos.
 
-Alterar o variant `fullScreen` para incluir safe area padding no container:
+### Bug 5: MobileMenu não mostra todos os módulos
+O `MobileMenu` só mostra 3 itens fixos (Painel, Leads, Definições) enquanto o `MobileBottomNav` mostra todos os módulos. O menu deveria ser o lugar completo de navegação com acesso a perfil/logout — mas está incompleto.
 
-```
-fullScreen: "pointer-events-auto fixed inset-0 z-50 w-full h-full max-w-none bg-background duration-200 ... md:left-64 md:w-[calc(100%-16rem)]"
-```
+**Nota:** Isto é mais uma limitação de design do que bug — o BottomNav já cobre a navegação. Mas o menu deveria pelo menos mostrar funcionalidades que o BottomNav não tem (perfil, logout). Como já tem isso, o menu está funcional mas **não acessível** por causa do Bug 1.
 
-Adicionar ao `DialogContent` quando `variant === "fullScreen"`: aplicar inline styles para `paddingTop` e `paddingBottom` usando `env(safe-area-inset-*)` apenas em mobile. Isto garante que:
-- O header de qualquer modal fullscreen fica abaixo do notch
-- O footer/botões ficam acima do home indicator
-- Em desktop (`md:`) não há efeito (sidebar já ocupa o espaço)
+### Resumo de Correções
 
-Alternativa mais simples: adicionar as classes CSS `safe-top safe-bottom` directamente ao variant fullScreen. Como já existem na CSS (`padding-top: var(--safe-area-top)`) e são resetadas em print, é a abordagem mais limpa.
-
-**Ficheiro: `src/components/onboarding/OnboardingWizard.tsx`**
-
-Este componente não usa `Dialog` — usa `fixed inset-0` directamente. Necessita de safe area no header manualmente (inline style como no Otto).
-
-**Ficheiros: `PaymentOverdueBlocker.tsx`, `TrialExpiredBlocker.tsx`**
-
-Conteúdo centrado com `p-4` — menos crítico mas adicionar `safe-top safe-bottom` para consistência.
-
-### Resumo das Alterações
-
-| Ficheiro | Alteração |
+| Ficheiro | Correção |
 |---|---|
-| `dialog.tsx` | Adicionar safe area padding ao variant fullScreen (corrige 19 modais de uma vez) |
-| `OnboardingWizard.tsx` | Adicionar safe area ao header (inline style) |
-| `PaymentOverdueBlocker.tsx` | Adicionar classes safe-top/safe-bottom |
-| `TrialExpiredBlocker.tsx` | Adicionar classes safe-top/safe-bottom |
+| `MobileHeader.tsx` | Adicionar botão hamburger (Menu icon) que chama `onMenuToggle` |
+| `AddRevenueModal.tsx` | Remover `pt-safe` do DialogHeader (evitar padding duplo) |
+| `CalendarAlertsWidget.tsx` | Adicionar `p-0 gap-0` ao DialogContent fullScreen |
+| `FidelizationAlertsWidget.tsx` | Adicionar `p-0 gap-0` ao DialogContent fullScreen |
+| `CreateCampaignModal.tsx` | Adicionar `gap-0` ao DialogContent |
+| `CampaignDetailsModal.tsx` | Adicionar `gap-0` ao DialogContent |
+| `ListDetailsModal.tsx` | Adicionar `gap-0` ao DialogContent |
+| `ImportContactsModal.tsx` | Adicionar `gap-0` ao DialogContent |
 
-Total: 4 ficheiros editados, 19+ modais corrigidos.
+Total: 8 ficheiros, 8 correções cirúrgicas.
 
