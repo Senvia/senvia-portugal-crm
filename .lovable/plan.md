@@ -1,16 +1,22 @@
 
 
-## Porque aparece o URL no rodapé da impressão
+## Corrigir impressão completa do Dashboard
 
-O URL que aparece no rodapé (`https://lovable.dev/projects/...`) é colocado **pelo browser**, não pelo código do projeto. É um comportamento padrão — o browser imprime automaticamente o URL da página no rodapé e o título no cabeçalho.
+### Problema
+Quando se clica no botão de imprimir o dashboard completo, o browser apenas imprime o que está visível no ecrã (viewport), cortando widgets e painéis que estão fora da área visível ou com overflow escondido.
 
-**Isto NÃO pode ser removido via código (CSS ou JavaScript).** A propriedade `@page` do CSS não controla os headers/footers do browser.
+### Causa
+O layout do dashboard usa `overflow: hidden/auto` em containers (sidebar, scroll areas) e os widgets têm alturas fixas com gráficos SVG que não se adaptam bem à impressão. O CSS de impressão actual não força a expansão de todo o conteúdo.
 
-### Soluções
+### Solução
+Adicionar regras CSS de impressão robustas em `src/index.css` que:
 
-1. **Solução imediata (manual):** Nas opções de impressão do browser, desmarcar **"Headers and footers"** (ou "Cabeçalhos e rodapés"). Isto remove tanto o URL como a data/título do cabeçalho.
+1. **Forçam todo o conteúdo visível** — removem `overflow: hidden`, `max-height`, e `height` fixos em containers
+2. **Linearizam o layout** — transformam grids de 2-4 colunas numa coluna única para caber no papel A4
+3. **Evitam cortes** — usam `break-inside: avoid` nos cards/widgets para não partir um widget entre duas páginas
+4. **Expandem collapsibles** — forçam secções colapsáveis a ficarem abertas na impressão
+5. **Adaptam cores** — garantem contraste adequado (fundo branco, texto preto) e que gráficos SVG mantêm cores
 
-2. **Solução definitiva:** Configurar o domínio personalizado `app.senvia.pt` em **Settings → Domains**. Assim, mesmo que o browser imprima o URL, mostrará `https://app.senvia.pt/dashboard` em vez do URL técnico do projeto.
-
-Não há alterações de código a fazer — isto é uma limitação do browser, não do projeto.
+### Ficheiro a editar
+- **`src/index.css`** — expandir o bloco `@media print` com regras para layout de impressão completo do dashboard
 
