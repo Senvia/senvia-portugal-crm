@@ -19,7 +19,7 @@ export function TrialExpiredBlocker({ trialEndsAt }: TrialExpiredBlockerProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-[100] bg-background flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[100] bg-background flex items-center justify-center p-4 safe-top safe-bottom">
       <div className="max-w-md w-full text-center space-y-6">
         <div className="mx-auto w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center">
           <AlertTriangle className="h-8 w-8 text-destructive" />
