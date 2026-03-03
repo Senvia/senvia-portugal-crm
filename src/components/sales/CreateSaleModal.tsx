@@ -359,6 +359,12 @@ export function CreateSaleModal({
     
     let filtered = proposals.filter(p => p.status === 'accepted');
     
+    // Excluir propostas que já têm venda associada (exceto a do prefill)
+    filtered = filtered.filter(p => 
+      p.id === prefillProposal?.id || 
+      !p.has_sale
+    );
+    
     if (prefillProposal && !filtered.find(p => p.id === prefillProposal.id)) {
       filtered = [prefillProposal, ...filtered];
     }
