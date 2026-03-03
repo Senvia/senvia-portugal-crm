@@ -1,56 +1,29 @@
 
-## Bugs Encontrados e Correções
 
-### Bug 1: Atualização otimista não inclui `profile_name` e `profile_id` (CAUSA PRINCIPAL)
-**Ficheiro:** `src/hooks/useProfile.ts` (linhas 127-136)
+## Problema: Editor de Email HTML
 
-Quando o perfil é alterado com sucesso, a atualização otimista do cache só atualiza `role`, mas **não atualiza `profile_id` nem `profile_name`**. Resultado: a tabela mostra o role antigo até fazer refresh manual, porque o `invalidateQueries` só executa depois, e a UI já renderizou com os dados otimistas desatualizados.
+### Diagnóstico
 
-**Correção:** Atualizar o `onMutate` para incluir `profile_id` e resolver `profile_name` a partir dos perfis disponíveis:
-```tsx
-if (variables.action === 'change_role' && variables.new_role) {
-  queryClient.setQueryData<TeamMember[]>([...], (old) => {
-    return old.map(member => 
-      member.user_id === variables.user_id 
-        ? { ...member, role: variables.new_role!, profile_id: variables.profile_id || null, profile_name: ??? }
-        : member
-    );
-  });
-}
-```
-O problema é que o hook não tem acesso ao nome do perfil. A solução mais limpa é **passar o `profile_name` como campo opcional** nos params da mutação, preenchido pelo `TeamTab.tsx` no momento do `handleChangeRole`.
+O `TemplateEditor` usa **TipTap** (editor rich-text) que só suporta elementos básicos (p, h1, h2, bold, italic, links, listas). Quando colas HTML complexo (tabelas, divs, estilos inline, imagens), o TipTap **elimina tudo o que não reconhece**, destruindo o layout.
 
-### Bug 2: `create-team-member` não recebe `profile_id`
-**Ficheiro:** `supabase/functions/create-team-member/index.ts` + `src/components/settings/TeamTab.tsx`
+Além disso, ao alternar entre a tab "HTML" e "Editor Visual", o TipTap re-parseia o HTML e remove os elementos não suportados — perdendo o conteúdo colado.
 
-Quando se cria um novo membro com um perfil personalizado (ex: "CE"), o frontend resolve o `base_role` mas **nunca envia o `profile_id`** para a edge function. A edge function também não aceita nem grava `profile_id` no `organization_members`. Resultado: o novo membro fica sem perfil personalizado.
+### Correção
 
-**Correção (3 pontos):**
-1. `TeamTab.tsx` `handleCreateMember`: enviar `profile_id` junto com os dados
-2. `useTeam.ts` `CreateTeamMemberParams`: adicionar campo `profile_id?: string`
-3. `create-team-member/index.ts`: aceitar `profile_id` e incluir no upsert de `organization_members`
+**Ficheiro:** `src/components/marketing/TemplateEditor.tsx`
 
-### Bug 3: `useCreateTeamMember` hook não envia `profile_id`
-**Ficheiro:** `src/hooks/useTeam.ts`
+1. **Separar os modos**: O editor visual (TipTap) serve para emails simples. O modo HTML serve para HTML complexo. Quando o utilizador escreve/cola no modo HTML, o conteúdo **não deve passar pelo TipTap** — vai direto para o `onChange` e para o preview.
 
-O `CreateTeamMemberParams` não tem campo `profile_id`, e o `mutationFn` não o passa para a edge function.
+2. **Desativar sync destrutivo**: Remover o `useEffect` que faz `editor.commands.setContent(value)` sempre que o `value` muda (linha 207-211). Este efeito causa o TipTap a re-parsear e destruir HTML quando se alterna de tab.
 
----
+3. **Sync inteligente por tab**: Só sincronizar o TipTap quando o utilizador entra na tab "editor" e o conteúdo mudou, com aviso de que HTML complexo pode ser simplificado. Quando na tab "html", o textarea funciona sem interferência do TipTap.
 
-### Plano de Implementação
+4. **Melhorar a textarea HTML**: Aumentar a área, manter `font-mono`, e garantir que paste funciona sem limitações.
 
-**1. `src/hooks/useProfile.ts`**
-- Adicionar `profile_name?: string` ao `ManageTeamMemberParams`
-- No `onMutate` de `change_role`, atualizar também `profile_id` e `profile_name`
+### Mudanças concretas
 
-**2. `src/components/settings/TeamTab.tsx`**
-- No `handleChangeRole`: enviar `profile_name: selectedProfile?.name` na mutação
-- No `handleCreateMember`: enviar `profile_id: selectedProfile?.id` ao criar membro
+- Remover o `useEffect` de sync bidirecional (linhas 207-211)
+- Adicionar lógica no `onValueChange` das tabs: quando muda para "editor", fazer `setContent` com o HTML atual; quando muda para "html", atualizar o textarea com `editor.getHTML()`
+- Adicionar aviso visual na tab "Editor Visual" quando o conteúdo tem HTML que o TipTap não suporta (tabelas, divs, etc.)
+- Manter o preview iframe sempre atualizado independentemente do modo ativo
 
-**3. `src/hooks/useTeam.ts`**
-- Adicionar `profile_id?: string` ao `CreateTeamMemberParams`
-- Passar `profile_id` no body da chamada à edge function
-
-**4. `supabase/functions/create-team-member/index.ts`**
-- Aceitar `profile_id` no body
-- Incluir `profile_id` no upsert de `organization_members`
