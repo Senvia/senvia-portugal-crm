@@ -316,6 +316,11 @@
 }
 
 /* Print styles */
+@page {
+  margin: 1cm;
+  size: A4;
+}
+
 @media print {
   /* Hide non-printable elements */
   .no-print,
@@ -328,6 +333,19 @@
   body {
     background: white !important;
     color: black !important;
+  }
+
+  /* Print header with Senvia branding */
+  body::before {
+    content: "Senvia OS";
+    display: block;
+    font-size: 14px;
+    font-weight: 700;
+    color: #1a1a2e;
+    padding-bottom: 8px;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #3b82f6;
+    letter-spacing: 0.05em;
   }
 
   /* When printing a single card */
