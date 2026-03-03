@@ -25,8 +25,13 @@ interface SendTemplateRequest {
   htmlContent?: string;
 }
 
+// Sanitize: remove HTML tags that break {{ }} variable syntax (e.g. <strong>{{</strong>Email<strong>}}</strong>)
+function sanitizeVariableTags(html: string): string {
+  return html.replace(/\{\{[^}]*\}\}/g, (match) => match.replace(/<[^>]*>/g, ''));
+}
+
 function replaceVariables(content: string, variables: Record<string, string>): string {
-  let result = content;
+  let result = sanitizeVariableTags(content);
   for (const [key, value] of Object.entries(variables)) {
     const regex = new RegExp(`{{\\s*${key}\\s*}}`, 'gi');
     result = result.replace(regex, value || '');
