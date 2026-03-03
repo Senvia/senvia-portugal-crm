@@ -10,14 +10,18 @@ export function useUpdateProfile() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async ({ full_name }: { full_name: string }) => {
+    mutationFn: async ({ full_name, email, phone }: { full_name: string; email?: string; phone?: string }) => {
       if (!user?.id) {
         throw new Error('Utilizador não autenticado');
       }
 
+      const updateData: Record<string, string | null> = { full_name: full_name.trim() };
+      if (email !== undefined) updateData.email = email.trim() || null;
+      if (phone !== undefined) updateData.phone = phone.trim() || null;
+
       const { error } = await supabase
         .from('profiles')
-        .update({ full_name: full_name.trim() })
+        .update(updateData)
         .eq('id', user.id);
 
       if (error) throw error;

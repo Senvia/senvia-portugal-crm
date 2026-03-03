@@ -189,6 +189,8 @@ serve(async (req: Request): Promise<Response> => {
       try {
         // Resolve vendedor (assigned_to) from client record
         let vendedorName = '';
+        let vendedorEmail = '';
+        let vendedorPhone = '';
         if (recipient.clientId) {
           const { data: clientData } = await supabase
             .from('crm_clients')
@@ -199,10 +201,12 @@ serve(async (req: Request): Promise<Response> => {
           if (clientData?.assigned_to) {
             const { data: profileData } = await supabase
               .from('profiles')
-              .select('full_name')
+              .select('full_name, email, phone')
               .eq('id', clientData.assigned_to)
               .single();
             vendedorName = profileData?.full_name || '';
+            vendedorEmail = profileData?.email || '';
+            vendedorPhone = profileData?.phone || '';
           }
         }
 
@@ -212,6 +216,8 @@ serve(async (req: Request): Promise<Response> => {
           organizacao: org.name || '',
           data: formatDate(),
           vendedor: vendedorName,
+          vendedor_email: vendedorEmail,
+          vendedor_telefone: vendedorPhone,
           ...recipient.variables,
         };
 

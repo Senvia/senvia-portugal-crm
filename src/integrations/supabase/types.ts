@@ -3009,23 +3009,29 @@ export type Database = {
         Row: {
           avatar_url: string | null
           created_at: string | null
+          email: string | null
           full_name: string
           id: string
           organization_id: string | null
+          phone: string | null
         }
         Insert: {
           avatar_url?: string | null
           created_at?: string | null
+          email?: string | null
           full_name: string
           id: string
           organization_id?: string | null
+          phone?: string | null
         }
         Update: {
           avatar_url?: string | null
           created_at?: string | null
+          email?: string | null
           full_name?: string
           id?: string
           organization_id?: string | null
+          phone?: string | null
         }
         Relationships: [
           {

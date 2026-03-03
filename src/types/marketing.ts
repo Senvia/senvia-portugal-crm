@@ -35,7 +35,9 @@ export const TEMPLATE_VARIABLES_CLIENT = [
 
 export const TEMPLATE_VARIABLES_ORG = [
   { key: '{{organizacao}}', label: 'Nome da organização' },
-  { key: '{{vendedor}}', label: 'Comercial responsável' },
+  { key: '{{vendedor}}', label: 'Nome do comercial' },
+  { key: '{{vendedor_email}}', label: 'Email do comercial' },
+  { key: '{{vendedor_telefone}}', label: 'Telefone do comercial' },
   { key: '{{data}}', label: 'Data atual' },
 ] as const;
 

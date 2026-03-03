@@ -20,12 +20,18 @@ interface GeneralContentProps {
   } | null;
   profile: {
     full_name: string;
+    email?: string | null;
+    phone?: string | null;
   } | null;
   isAdmin: boolean;
   orgName: string;
   setOrgName: (value: string) => void;
   fullName: string;
   setFullName: (value: string) => void;
+  profileEmail: string;
+  setProfileEmail: (value: string) => void;
+  profilePhone: string;
+  setProfilePhone: (value: string) => void;
   handleSaveOrgName: () => void;
   handleSaveProfile: () => void;
   updateOrganizationIsPending: boolean;
@@ -40,6 +46,10 @@ export const GeneralContent = ({
   setOrgName,
   fullName,
   setFullName,
+  profileEmail,
+  setProfileEmail,
+  profilePhone,
+  setProfilePhone,
   handleSaveOrgName,
   handleSaveProfile,
   updateOrganizationIsPending,
@@ -143,23 +153,42 @@ export const GeneralContent = ({
         <CardContent className="space-y-6">
           <div className="space-y-2">
             <Label htmlFor="full-name">Nome Completo</Label>
-            <div className="flex gap-2">
+            <Input
+              id="full-name"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              placeholder="O seu nome"
+            />
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="profile-email">Email de contacto</Label>
               <Input
-                id="full-name"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                placeholder="O seu nome"
+                id="profile-email"
+                type="email"
+                value={profileEmail}
+                onChange={(e) => setProfileEmail(e.target.value)}
+                placeholder="email@exemplo.com"
               />
-              <Button
-                size="icon"
-                onClick={handleSaveProfile}
-                disabled={updateProfileIsPending || fullName === profile?.full_name}
-              >
-                {updateProfileIsPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              </Button>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="profile-phone">Telefone</Label>
+              <Input
+                id="profile-phone"
+                value={profilePhone}
+                onChange={(e) => setProfilePhone(e.target.value)}
+                placeholder="+351 900 000 000"
+              />
             </div>
           </div>
-
+          <Button
+            onClick={handleSaveProfile}
+            disabled={updateProfileIsPending || (fullName === profile?.full_name && profileEmail === (profile?.email || '') && profilePhone === (profile?.phone || ''))}
+            className="w-full sm:w-auto"
+          >
+            {updateProfileIsPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+            Guardar perfil
+          </Button>
         </CardContent>
       </Card>
 
