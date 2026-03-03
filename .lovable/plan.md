@@ -1,51 +1,44 @@
 
 
-## Melhorias na Página de Comissões
+## Bug: "Nome da Empresa" da Lead vai para o campo "Nome" do Cliente
 
-### 1. Adicionar soma de comissão nos totalizadores
+### Causa raiz
 
-Os cards "Totalizador EE" e "Totalizador Serviços" mostram apenas volume (MWh e kWp) mas não mostram quanto vale em comissão. Vamos adicionar o valor total de comissão em cada totalizador.
-
-Para isso, o hook precisa separar a comissão total em duas partes: comissão de energia e comissão de serviços. Atualmente tudo está num único `totalCommission`.
-
-**`src/hooks/useLiveCommissions.ts`**:
-- Adicionar `globalEnergyCommission` e `globalServicosCommission` ao `LiveCommissionsData`
-- No loop de cálculo, separar comissão por `proposal_type` (energia vs serviços)
-- Manter `totalCommission` como soma dos dois
-
-**`src/components/finance/CommissionsTab.tsx`**:
-- No card EE: mostrar `formatCurrency(globalEnergyCommission)` 
-- No card Serviços: mostrar `formatCurrency(globalServicosCommission)`
-- Manter o badge "Total" com a soma geral
-
-### 2. Filtrar comissões por utilizador (visibilidade)
-
-Comerciais com `data_scope: 'own'` devem ver apenas as suas próprias comissões. Admins vêem tudo.
-
-**`src/hooks/useLiveCommissions.ts`**:
-- Receber `effectiveUserIds` (do `useTeamFilter`) como parâmetro ou usar internamente
-- Após agrupar por comercial, filtrar os resultados: se `effectiveUserIds` não é `null`, manter apenas entradas cujo `userId` está na lista
-- Os totalizadores globais devem refletir apenas os dados visíveis (recalcular após filtro)
-
-**`src/components/finance/CommissionsTab.tsx`**:
-- Importar `useTeamFilter` e passar o contexto de visibilidade
-- Esconder o campo de pesquisa por comercial quando o utilizador só vê os seus dados (não faz sentido pesquisar)
-- Opcionalmente mostrar o `TeamMemberFilter` para admins filtrarem por comercial
-
-### Detalhe técnico
-
-No hook, a separação de comissões por tipo será feita no loop final (linhas 210-227) onde já temos acesso ao `proposal_type` de cada CPE:
+No ficheiro `src/pages/Leads.tsx` (linhas 276-283), quando uma lead é movida para a etapa "Ganha" e o cliente é criado automaticamente, o código passa:
 
 ```typescript
-// Por cada CommercialEntry
-let energyFinal = 0;
-let servicosFinal = 0;
-for (const cpe of entry.cpes) {
-  // ... cálculo existente ...
-  if (cpe.proposal_type === 'energia') energyFinal += cpe.comissao_final;
-  else servicosFinal += cpe.comissao_final;
-}
+convertLeadToClient.mutate({
+  lead_id: leadId,
+  name: lead.name,        // ← só o nome do contacto
+  email: lead.email,
+  phone: lead.phone,
+  company_nif: lead.company_nif,
+  notes: lead.notes,
+  // ❌ Falta: company: lead.company_name
+});
 ```
 
-Para a visibilidade, o filtro será aplicado no final do `queryFn` antes de retornar os dados, usando o `user.id` e `dataScope` do contexto de autenticação.
+O campo `company_name` da lead nunca é mapeado para o campo `company` do cliente. E no template Telecom, o `lead.name` pode conter o nome da empresa (porque `AddLeadModal` faz `name: data.company_name || data.name`), resultando no nome da empresa a aparecer no campo "Nome" do cliente em vez de no campo "Empresa".
+
+### Correção
+
+**`src/pages/Leads.tsx`** (linha ~276-283):
+- Mapear `lead.company_name` → `company` no objeto passado ao `convertLeadToClient`
+- Para Telecom: se o `lead.name` é igual ao `company_name` (fallback do AddLeadModal), usar string vazia ou o nome real do contacto
+
+```typescript
+convertLeadToClient.mutate({
+  lead_id: leadId,
+  name: lead.company_name && lead.name === lead.company_name 
+    ? (lead.company_name) // keep company_name as name only if no separate name exists
+    : lead.name,
+  email: lead.email,
+  phone: lead.phone,
+  company: lead.company_name || undefined, // ← NOVO
+  company_nif: lead.company_nif || undefined,
+  notes: lead.notes || undefined,
+});
+```
+
+Alteração em 1 ficheiro, ~3 linhas adicionadas/modificadas.
 
