@@ -1,45 +1,24 @@
 
 
-## Simplificar Compromisso — Resumo por Comercial
+## Problema: Compromisso guardado mas não aparece
 
-### Problema Atual
-O sistema pede ao comercial para introduzir linha a linha cada NIF com valores individuais de energia, solar e comissão. Na prática, o comercial só precisa definir **totais** para o mês: quantos NIFs vai fechar, e os totais de energia, solar e comissão.
+### Causa Raiz
 
-### Nova Abordagem
-Eliminar a tabela `commitment_lines` e guardar os totais diretamente na tabela `monthly_commitments`. O compromisso passa a ser **um único registo por utilizador/mês** com campos de resumo.
+Os dados **estão guardados** correctamente na base de dados (confirmado via network — `total_nifs: 2, total_energia_mwh: 3000`, etc.). O problema é na **renderização do painel**.
 
-### Alterações
+O `CommitmentPanel` faz:
+1. Busca a lista de membros da equipa via `useTeamMembers()` (edge function `get-team-members`)
+2. Para cada membro, procura o compromisso correspondente
+3. O teu utilizador (super_admin) **não está na tabela `organization_members`** da Perfect2Gether — apenas navega para lá via o switcher de organizações
+4. Como não aparece na lista de `members`, a sua linha **nunca é renderizada**, mesmo tendo dados guardados
 
-**1. Migração SQL**
-- Adicionar colunas à `monthly_commitments`: `total_nifs` (integer), `total_energia_mwh` (numeric), `total_solar_kwp` (numeric), `total_comissao` (numeric)
-- Migrar dados existentes das `commitment_lines` para os novos campos (SUM dos valores)
-- Manter `commitment_lines` mas deixar de a usar (pode ser removida depois)
+### Correção
 
-**2. Hook `useCommitments.ts`**
-- Simplificar: deixar de ler/escrever `commitment_lines`
-- O `saveCommitment` passa a fazer apenas upsert no `monthly_commitments` com os 4 campos de totais
-- Interface `Commitment` simplificada com `total_nifs`, `total_energia_mwh`, `total_solar_kwp`, `total_comissao`
+**`CommitmentPanel.tsx`** — Garantir que o utilizador actual aparece sempre na tabela, mesmo que não esteja na lista de `organization_members`:
 
-**3. `CommitmentPanel.tsx`**
-- Tabela mostra **uma linha por comercial** (admin vê todos os membros da org, comercial vê só o seu)
-- Colunas: **Colaborador** | Nº NIFs | Energia (MWh) | Solar (kWp) | Comissão
-- Admin vê lista completa com totais no footer; comercial vê apenas a sua linha
-- Botão de editar abre modal simplificado
+1. Após construir `rows` a partir de `members`, verificar se o utilizador actual já está incluído
+2. Se não estiver (caso super_admin), adicionar uma linha com os dados do compromisso do próprio utilizador
+3. Para o nome, usar `profile?.full_name` do AuthContext como fallback
 
-**4. `EditCommitmentModal.tsx`**
-- Simplificar para 4 campos apenas: Nº de NIFs, Total Energia, Total Solar, Total Comissão
-- Sem sistema de linhas/adicionar/remover
-
-### Resultado Visual (Admin)
-
-```text
-┌─────────────┬────────┬──────────┬───────────┬──────────┐
-│ Colaborador │ NIFs   │ Energia  │ Solar     │ Comissão │
-├─────────────┼────────┼──────────┼───────────┼──────────┤
-│ João Silva  │ 5      │ 12.5 MWh │ 8.0 kWp   │ 1.200 € │
-│ Ana Costa   │ 3      │ 8.0 MWh  │ 5.0 kWp   │ 800 €   │
-├─────────────┼────────┼──────────┼───────────┼──────────┤
-│ TOTAL       │ 8      │ 20.5 MWh │ 13.0 kWp  │ 2.000 € │
-└─────────────┴────────┴──────────┴───────────┴──────────┘
-```
+Alteração isolada a **um único ficheiro** (`CommitmentPanel.tsx`), sem migrações SQL.
 
