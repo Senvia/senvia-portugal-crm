@@ -1,27 +1,39 @@
 
 
-## Alterar gatilho "Nova Venda Criada" para "Venda Concluída"
+## Problema: Template HTML com variáveis Brevo malformadas
 
-Tens razão --- não faz sentido enviar um email automático quando a venda é criada (pode estar em progresso). O email deve ser enviado quando a venda muda para o estado "Concluída".
+O erro do Brevo está no template **"Inicio Contratual"**. O editor rich-text (TipTap) formatou a variável `{{Email}}` com bold parcial, quebrando a sintaxe que o Brevo espera:
 
-### Alterações
+```
+Actual:    <strong>{{</strong>Email<strong>}}</strong>
+Expected:  {{Email}}
+```
 
-**1. Remover o trigger `sale_created` e usar apenas `sale_status_changed`**
+O Brevo vê `{{` mas não encontra `}}` no mesmo nível de texto — as tags `<strong>` interrompem o parsing de variáveis.
 
-No ficheiro `src/hooks/useAutomations.ts`:
-- Remover a linha `{ value: 'sale_created', label: 'Nova Venda Criada' }`
-- Renomear `sale_status_changed` para `Venda Concluída` (o value interno mantém-se `sale_status_changed`)
+### Solução
 
-**2. Migrar o template "Inicio Contratual" existente na base de dados**
+**1. Corrigir o HTML do template na base de dados**
 
-Atualizar o template que está configurado com `automation_trigger_type = 'sale_created'` para usar `sale_status_changed` com `trigger_config = { "to_status": "completed" }`, para que dispare apenas quando a venda muda para "Concluída".
+Executar um UPDATE para limpar o HTML, garantindo que todas as variáveis `{{ }}` não estejam partidas por tags HTML:
 
-**3. Nenhuma alteração na edge function `process-automation`**
+- `<strong>{{</strong>Email<strong>}}</strong>` → `{{Email}}`
+- Verificar se `{{Fidelização}}` e outras variáveis estão intactas
 
-A lógica de `matchesTriggerConfig` já suporta verificar `to_status` e `from_status`. O trigger de base de dados `notify_automation_trigger` já dispara `sale_status_changed` quando `OLD.status IS DISTINCT FROM NEW.status`. Tudo já funciona --- só precisa do template mapeado correctamente.
+**2. Sanitizar variáveis antes de enviar ao Brevo (edge function)**
 
-### Resultado
-- O dropdown de gatilhos mostrará "Venda Concluída" em vez de "Nova Venda Criada"
-- Ao seleccionar este gatilho, aparece o selector de estados (de/para) onde se configura "Para: Concluída"
-- O template "Inicio Contratual" será re-mapeado automaticamente
+Na edge function `send-template-email`, adicionar uma sanitização do `html_content` antes de enviar — remover tags HTML de dentro de variáveis `{{ }}`:
+
+```js
+// Remove HTML tags inside {{ }} 
+html = html.replace(/\{\{[^}]*\}\}/g, (match) => {
+  return match.replace(/<[^>]*>/g, '');
+});
+```
+
+Isto previne o problema para templates futuros que o editor possa corromper.
+
+### Ficheiros a editar
+- **Database**: UPDATE no template `d7b41aeb...` para corrigir o HTML
+- **`supabase/functions/send-template-email/index.ts`**: Adicionar sanitização de variáveis no HTML antes do envio
 
