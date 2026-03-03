@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Toggle } from "@/components/ui/toggle";
 import { Separator } from "@/components/ui/separator";
-import { TEMPLATE_VARIABLES } from "@/types/marketing";
+import { TEMPLATE_VARIABLES_CLIENT, TEMPLATE_VARIABLES_ORG } from "@/types/marketing";
 import { cn } from "@/lib/utils";
 import {
   Bold,
@@ -269,24 +269,46 @@ export function TemplateEditor({ value, onChange, className }: TemplateEditorPro
   return (
     <div className={cn("space-y-4", className)}>
       {/* Variables */}
-      <div>
-        <Label className="text-xs text-muted-foreground mb-2 block">
-          Inserir variáveis
-        </Label>
-        <div className="flex flex-wrap gap-2">
-          {TEMPLATE_VARIABLES.map((v) => (
-            <Button
-              key={v.key}
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-7 text-xs"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => insertVariable(v.key)}
-            >
-              {v.key}
-            </Button>
-          ))}
+      <div className="space-y-3">
+        <div>
+          <Label className="text-xs text-muted-foreground mb-1.5 block">
+            Contacto / Cliente
+          </Label>
+          <div className="flex flex-wrap gap-2">
+            {TEMPLATE_VARIABLES_CLIENT.map((v) => (
+              <Button
+                key={v.key}
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => insertVariable(v.key)}
+              >
+                {v.key}
+              </Button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <Label className="text-xs text-muted-foreground mb-1.5 block">
+            Organização / Comercial
+          </Label>
+          <div className="flex flex-wrap gap-2">
+            {TEMPLATE_VARIABLES_ORG.map((v) => (
+              <Button
+                key={v.key}
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => insertVariable(v.key)}
+              >
+                {v.key}
+              </Button>
+            ))}
+          </div>
         </div>
       </div>
 

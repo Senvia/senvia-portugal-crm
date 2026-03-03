@@ -26,15 +26,20 @@ export const TEMPLATE_CATEGORIES: Record<EmailTemplateCategory, string> = {
   promotion: 'Promoção',
 };
 
-export const TEMPLATE_VARIABLES = [
+export const TEMPLATE_VARIABLES_CLIENT = [
   { key: '{{nome}}', label: 'Nome do contacto' },
   { key: '{{email}}', label: 'Email do contacto' },
-  { key: '{{empresa}}', label: 'Nome da empresa' },
   { key: '{{telefone}}', label: 'Telefone' },
-  { key: '{{data}}', label: 'Data atual' },
-  { key: '{{organizacao}}', label: 'Nome da organização' },
-  { key: '{{vendedor}}', label: 'Comercial responsável (assigned_to)' },
+  { key: '{{empresa}}', label: 'Nome da empresa' },
 ] as const;
+
+export const TEMPLATE_VARIABLES_ORG = [
+  { key: '{{organizacao}}', label: 'Nome da organização' },
+  { key: '{{vendedor}}', label: 'Comercial responsável' },
+  { key: '{{data}}', label: 'Data atual' },
+] as const;
+
+export const TEMPLATE_VARIABLES = [...TEMPLATE_VARIABLES_CLIENT, ...TEMPLATE_VARIABLES_ORG];
 
 // Campaign types
 export type CampaignStatus = 'draft' | 'sending' | 'sent' | 'failed' | 'scheduled';
