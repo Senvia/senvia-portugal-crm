@@ -26,7 +26,10 @@ export function DashboardPeriodFilter() {
   };
 
   const handlePrintAll = () => {
+    const originalTitle = document.title;
+    document.title = "Senvia OS";
     window.print();
+    document.title = originalTitle;
   };
 
   const currentLabel = format(startOfMonth(selectedMonth), "MMM yyyy", { locale: pt });
