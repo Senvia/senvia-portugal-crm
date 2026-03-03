@@ -53,6 +53,7 @@ export function SalesPerformancePanel() {
   const { objectives, isLoading: objLoading } = useMonthlyObjectives();
   const { data: salesMetrics = [], isLoading: salesLoading } = useMonthSalesMetrics();
   const [editOpen, setEditOpen] = useState(false);
+  const [objOpen, setObjOpen] = useState(true);
   const [salesOpen, setSalesOpen] = useState(true);
   const [concOpen, setConcOpen] = useState(true);
 
@@ -95,6 +96,40 @@ export function SalesPerformancePanel() {
   const salesTotals = sumRows(salesRows);
   const objTotals = sumRows(objectiveRows);
   const showTotals = isAdmin && salesRows.length > 1;
+
+  const ObjectiveTable = () => (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead className="text-xs">Colaborador</TableHead>
+          <TableHead className="text-xs text-right">NIFs</TableHead>
+          <TableHead className="text-xs text-right">Energia</TableHead>
+          <TableHead className="text-xs text-right hidden sm:table-cell">Solar</TableHead>
+          <TableHead className="text-xs text-right">Comissão</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {objectiveRows.map((row) => (
+          <TableRow key={row.userId}>
+            <TableCell className="text-xs py-1.5 font-medium">{row.name}</TableCell>
+            <TableCell className="text-xs text-right py-1.5">{row.nifs}</TableCell>
+            <TableCell className="text-xs text-right py-1.5">{formatNumber(row.energia)}</TableCell>
+            <TableCell className="text-xs text-right py-1.5 hidden sm:table-cell">{formatNumber(row.solar)}</TableCell>
+            <TableCell className="text-xs text-right py-1.5 font-medium text-primary">{formatCurrency(row.comissao)}</TableCell>
+          </TableRow>
+        ))}
+        {showTotals && (
+          <TableRow className="bg-muted/20 hover:bg-muted/20">
+            <TableCell className="text-xs font-semibold py-1.5">TOTAL</TableCell>
+            <TableCell className="text-xs text-right font-semibold py-1.5">{objTotals.nifs}</TableCell>
+            <TableCell className="text-xs text-right font-semibold py-1.5">{formatNumber(objTotals.energia)}</TableCell>
+            <TableCell className="text-xs text-right font-semibold py-1.5 hidden sm:table-cell">{formatNumber(objTotals.solar)}</TableCell>
+            <TableCell className="text-xs text-right font-semibold py-1.5 text-primary">{formatCurrency(objTotals.comissao)}</TableCell>
+          </TableRow>
+        )}
+      </TableBody>
+    </Table>
+  );
 
   const SalesTable = () => (
     <Table>
@@ -193,9 +228,19 @@ export function SalesPerformancePanel() {
             </div>
           ) : (
             <>
+              <Collapsible open={objOpen} onOpenChange={setObjOpen}>
+                <CollapsibleTrigger className="flex items-center gap-1 w-full text-left">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">A) Objetivo</span>
+                  {objOpen ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <ObjectiveTable />
+                </CollapsibleContent>
+              </Collapsible>
+
               <Collapsible open={salesOpen} onOpenChange={setSalesOpen}>
                 <CollapsibleTrigger className="flex items-center gap-1 w-full text-left">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">A) Vendas</span>
+                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">B) Vendas</span>
                   {salesOpen ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
                 </CollapsibleTrigger>
                 <CollapsibleContent>
@@ -205,7 +250,7 @@ export function SalesPerformancePanel() {
 
               <Collapsible open={concOpen} onOpenChange={setConcOpen}>
                 <CollapsibleTrigger className="flex items-center gap-1 w-full text-left">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">B) Concretização do Objetivo</span>
+                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">C) Concretização do Objetivo</span>
                   {concOpen ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
                 </CollapsibleTrigger>
                 <CollapsibleContent>
