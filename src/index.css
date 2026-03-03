@@ -471,13 +471,18 @@
     overflow: hidden !important;
   }
 
+  .print-single-active body::before {
+    display: none !important;
+  }
+
   .print-single-active .print-target,
   .print-single-active .print-target * {
     visibility: visible !important;
     height: auto !important;
     min-height: unset !important;
-    padding: revert !important;
-    margin: revert !important;
+    padding: unset !important;
+    margin: unset !important;
+    border: unset !important;
     overflow: visible !important;
   }
 
@@ -486,9 +491,20 @@
     left: 0;
     top: 0;
     width: 100%;
-    padding: 1rem !important;
+    max-width: 100%;
+    padding: 1.5rem !important;
     background: white !important;
     color: black !important;
+    border: 1px solid #ddd !important;
+    border-radius: 0.75rem !important;
+    box-shadow: none !important;
+  }
+
+  /* Ensure table cells have proper spacing */
+  .print-single-active .print-target th,
+  .print-single-active .print-target td {
+    padding: 0.375rem 0.5rem !important;
+    border-bottom: 1px solid #eee !important;
   }
 
   /* ===== 11. Bank statement print ===== */
