@@ -1,39 +1,26 @@
 
 
-## Corrigir alteração de perfil: `profile_id` não é atualizado
+## Corrigir exibição do perfil na tabela de equipa
 
-### Problema
-Quando se altera o perfil de um membro (ex: para "CE"), o sistema apenas atualiza a tabela `user_roles` com o `base_role` (ex: "salesperson"). Mas nunca atualiza o `profile_id` na tabela `organization_members`, que é o campo que realmente determina qual perfil personalizado o utilizador tem. Resultado: o perfil parece não mudar.
+### Diagnóstico
+A base de dados **está correta** — o Thiago já tem `profile_id` do "CE" atribuído. O problema é que o frontend nunca recebe essa informação:
+
+1. **Edge function `get-team-members`** — seleciona apenas `user_id, role, is_active` da tabela `organization_members`. Não inclui `profile_id`.
+2. **Resultado retornado** — não contém `profile_id` nem o nome do perfil personalizado.
+3. **Tabela no frontend** — mostra `ROLE_LABELS[member.role]` (ex: "Comercial"), nunca o nome do perfil real (ex: "CE").
 
 ### Correção (3 ficheiros)
 
-**1. Frontend — `src/components/settings/TeamTab.tsx`**
-- Na função `handleChangeRole`, enviar também o `profile_id` selecionado para o edge function:
-  ```tsx
-  manageTeamMember.mutate({
-    action: 'change_role',
-    user_id: selectedMember.user_id,
-    new_role: resolvedRole,
-    profile_id: selectedProfile?.id,  // novo campo
-  });
-  ```
+**1. Edge Function — `supabase/functions/get-team-members/index.ts`**
+- Linha 118: adicionar `profile_id` ao select: `'user_id, role, is_active, profile_id'`
+- Na construção do resultado (linha 174-184): incluir `profile_id` e fazer join com `organization_profiles` para obter o nome do perfil
+- Retornar `profile_id` e `profile_name` no objeto de cada membro
 
-**2. Hook — `src/hooks/useProfile.ts`**
-- Adicionar `profile_id?: string` ao interface `ManageTeamMemberParams`.
+**2. Interface — `src/hooks/useTeam.ts`**
+- Adicionar `profile_id?: string` e `profile_name?: string` ao `TeamMember` interface
 
-**3. Edge Function — `supabase/functions/manage-team-member/index.ts`**
-- Aceitar `profile_id` no body do request.
-- No case `change_role`, após atualizar `user_roles`, também atualizar `organization_members.profile_id` e `.role`:
-  ```typescript
-  await supabaseAdmin
-    .from('organization_members')
-    .update({ 
-      role: new_role,
-      profile_id: profile_id || null 
-    })
-    .eq('user_id', user_id)
-    .eq('organization_id', sharedOrgId);
-  ```
-
-Isto garante que o perfil personalizado (com permissões granulares) fica realmente associado ao membro.
+**3. Frontend — `src/components/settings/TeamTab.tsx`**
+- Na tabela (linha 567-569): mostrar `member.profile_name` quando existir, caso contrário fallback para `ROLE_LABELS[member.role]`
+- No "Perfil Atual" do modal (linha 775-777): mostrar o nome do perfil em vez do role genérico
+- No `openChangeRoleModal`: usar `member.profile_id` diretamente (sem cast para `any`)
 
