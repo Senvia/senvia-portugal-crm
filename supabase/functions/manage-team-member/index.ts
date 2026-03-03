@@ -75,48 +75,46 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Get current user's organization
-    const { data: currentProfile, error: profileError } = await supabaseAdmin
-      .from('profiles')
-      .select('organization_id')
-      .eq('id', currentUser.id)
-      .single();
-
-    if (profileError || !currentProfile?.organization_id) {
-      console.error('Profile error:', profileError);
-      return new Response(
-        JSON.stringify({ error: 'Organização não encontrada' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
     // Parse request body
     const body: ManageMemberRequest = await req.json();
     const { action, user_id, new_password, new_role, full_name, email, phone } = body;
 
     console.log(`Action: ${action}, Target user: ${user_id}`);
 
-    // Verify target user belongs to the same organization
-    const { data: targetProfile, error: targetError } = await supabaseAdmin
-      .from('profiles')
-      .select('organization_id, full_name')
-      .eq('id', user_id)
-      .single();
+    // Get current user's organizations via organization_members
+    const { data: currentMemberships, error: memberError } = await supabaseAdmin
+      .from('organization_members')
+      .select('organization_id')
+      .eq('user_id', currentUser.id)
+      .eq('is_active', true);
 
-    if (targetError || !targetProfile) {
-      console.error('Target profile error:', targetError);
+    if (memberError || !currentMemberships?.length) {
+      console.error('Membership error:', memberError);
       return new Response(
-        JSON.stringify({ error: 'Membro não encontrado' }),
+        JSON.stringify({ error: 'Organização não encontrada' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const currentOrgIds = currentMemberships.map(m => m.organization_id);
+
+    // Verify target user belongs to at least one of the same organizations
+    const { data: targetMemberships, error: targetError } = await supabaseAdmin
+      .from('organization_members')
+      .select('organization_id')
+      .eq('user_id', user_id)
+      .eq('is_active', true)
+      .in('organization_id', currentOrgIds);
+
+    if (targetError || !targetMemberships?.length) {
+      console.error('Target membership error:', targetError);
+      return new Response(
+        JSON.stringify({ error: 'Membro não encontrado nesta organização' }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    if (targetProfile.organization_id !== currentProfile.organization_id) {
-      return new Response(
-        JSON.stringify({ error: 'Não pode gerir membros de outra organização' }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    const sharedOrgId = targetMemberships[0].organization_id;
 
     // Prevent admin from modifying themselves for certain actions
     if (user_id === currentUser.id && (action === 'toggle_status' || action === 'change_role')) {
