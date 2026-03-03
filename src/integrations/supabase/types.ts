@@ -2014,6 +2014,10 @@ export type Database = {
           id: string
           month: string
           organization_id: string
+          total_comissao: number
+          total_energia_mwh: number
+          total_nifs: number
+          total_solar_kwp: number
           updated_at: string
           user_id: string
         }
@@ -2022,6 +2026,10 @@ export type Database = {
           id?: string
           month: string
           organization_id: string
+          total_comissao?: number
+          total_energia_mwh?: number
+          total_nifs?: number
+          total_solar_kwp?: number
           updated_at?: string
           user_id: string
         }
@@ -2030,6 +2038,10 @@ export type Database = {
           id?: string
           month?: string
           organization_id?: string
+          total_comissao?: number
+          total_energia_mwh?: number
+          total_nifs?: number
+          total_solar_kwp?: number
           updated_at?: string
           user_id?: string
         }
