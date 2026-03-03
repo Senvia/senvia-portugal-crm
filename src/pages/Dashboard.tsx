@@ -4,11 +4,11 @@ import { DynamicWidget } from "@/components/dashboard/DynamicWidget";
 import { TeamMemberFilter } from "@/components/dashboard/TeamMemberFilter";
 import { FidelizationAlertsWidget } from "@/components/dashboard/FidelizationAlertsWidget";
 import { CalendarAlertsWidget } from "@/components/dashboard/CalendarAlertsWidget";
+import { CommitmentPanel } from "@/components/dashboard/CommitmentPanel";
 import { Loader2 } from "lucide-react";
 import { NicheType } from "@/lib/dashboard-templates";
 import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription";
 import { useModules } from "@/hooks/useModules";
-
 export default function Dashboard() {
   useRealtimeSubscription([
     { table: 'leads', queryKeys: [['leads'], ['dashboard-stats']] },
@@ -17,6 +17,7 @@ export default function Dashboard() {
   ]);
   const { profile, organization } = useAuth();
   const { modules } = useModules();
+  const isTelecom = organization?.niche === 'telecom';
   const clientsModuleEnabled = modules.clients;
   const calendarModuleEnabled = modules.calendar !== false;
   const { 
@@ -50,9 +51,18 @@ export default function Dashboard() {
         </div>
       ) : (
         <div className="space-y-6">
-          {(organization?.niche === 'telecom' && clientsModuleEnabled || calendarModuleEnabled) && (
+          {isTelecom && (
+            <div className="space-y-4">
+              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Atividade Comercial</h2>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <CommitmentPanel />
+              </div>
+            </div>
+          )}
+
+          {(isTelecom && clientsModuleEnabled || calendarModuleEnabled) && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {organization?.niche === 'telecom' && clientsModuleEnabled && (
+              {isTelecom && clientsModuleEnabled && (
                 <FidelizationAlertsWidget />
               )}
               {calendarModuleEnabled && (

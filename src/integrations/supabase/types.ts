@@ -480,6 +480,57 @@ export type Database = {
           },
         ]
       }
+      commitment_lines: {
+        Row: {
+          comissao: number
+          commitment_id: string
+          created_at: string
+          energia_mwh: number
+          id: string
+          nif: string
+          notes: string | null
+          proposal_id: string | null
+          solar_kwp: number
+        }
+        Insert: {
+          comissao?: number
+          commitment_id: string
+          created_at?: string
+          energia_mwh?: number
+          id?: string
+          nif: string
+          notes?: string | null
+          proposal_id?: string | null
+          solar_kwp?: number
+        }
+        Update: {
+          comissao?: number
+          commitment_id?: string
+          created_at?: string
+          energia_mwh?: number
+          id?: string
+          nif?: string
+          notes?: string | null
+          proposal_id?: string | null
+          solar_kwp?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "commitment_lines_commitment_id_fkey"
+            columns: ["commitment_id"]
+            isOneToOne: false
+            referencedRelation: "monthly_commitments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commitment_lines_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cpes: {
         Row: {
           alert_30d_sent: boolean | null
@@ -1953,6 +2004,48 @@ export type Database = {
             columns: ["list_id"]
             isOneToOne: false
             referencedRelation: "client_lists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      monthly_commitments: {
+        Row: {
+          created_at: string
+          id: string
+          month: string
+          organization_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          month: string
+          organization_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          month?: string
+          organization_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "monthly_commitments_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "monthly_commitments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
