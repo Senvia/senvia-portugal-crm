@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useTeamFilter } from "@/hooks/useTeamFilter";
 import { useCommitments } from "@/hooks/useCommitments";
 import { useTeamMembers } from "@/hooks/useTeam";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,6 +25,7 @@ export function CommitmentPanel() {
   const { user, profile } = useAuth();
   const { isAdmin } = usePermissions();
   const { data: members = [] } = useTeamMembers();
+  const { selectedMemberId } = useTeamFilter();
   const { commitment, isLoading, allCommitments, allLoading } = useCommitments(user?.id);
   const [editOpen, setEditOpen] = useState(false);
 
@@ -74,7 +76,10 @@ export function CommitmentPanel() {
     ];
   };
 
-  const rows = buildRows();
+  const allRows = buildRows();
+  const rows = selectedMemberId
+    ? allRows.filter((r) => r.userId === selectedMemberId)
+    : allRows;
 
   const totals = rows.reduce(
     (acc, r) => ({
