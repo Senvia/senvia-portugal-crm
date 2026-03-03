@@ -1,14 +1,26 @@
 
 
-## Remover Referências ao Lovable
+## Remover "Lovable" das páginas de impressão
 
-O projeto tem algumas referências ao Lovable que precisam ser removidas:
+### O Problema
+Quando imprime o dashboard, o browser mostra o URL (`lovable.app`) no cabeçalho/rodapé da página impressa. Isto é um comportamento padrão do browser — ele imprime o URL da página.
 
-1. **Published URL** (`senvia-portugal-crm.lovable.app`) — Para isto, pode configurar um domínio personalizado em **Settings → Domains** (requer plano pago).
+### Solução
+Não é possível controlar os headers/footers do browser via CSS (são definidos pelo utilizador nas configurações de impressão). No entanto, podemos:
 
-2. **Badge "Edit in Lovable"** — Pode desativar em **Settings → Hide 'Lovable' Badge**.
+1. **Adicionar `@page` rules** no CSS para definir margens e tentar remover headers/footers do browser:
+```css
+@page {
+  margin: 1cm;
+  size: A4;
+}
+```
 
-3. **Código fonte** — Vou verificar se existe alguma referência textual ao "Lovable" em ficheiros do projeto (ex: comentários, alt texts, URLs hardcoded) e removê-las.
+2. **Adicionar um cabeçalho "Senvia OS"** visível apenas na impressão, para que a marca Senvia apareça no topo de cada página impressa, sobrepondo visualmente qualquer referência ao URL.
 
-Estas duas primeiras alterações são feitas nas definições do projeto, não no código. Quer que eu verifique o código para remover quaisquer menções textuais ao "Lovable"?
+3. **A solução definitiva** é configurar o domínio personalizado (`app.senvia.pt`) em **Settings → Domains**. Assim, mesmo o URL que o browser coloca no header/footer mostrará `app.senvia.pt` em vez de `lovable.app`.
+
+### Ficheiros a editar
+- **`src/index.css`** — adicionar `@page` rules e cabeçalho de impressão com marca Senvia
+- **`src/components/dashboard/PrintCardButton.tsx`** — injetar título "Senvia OS" no conteúdo impresso
 
