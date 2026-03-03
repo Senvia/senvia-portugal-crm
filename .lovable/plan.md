@@ -1,21 +1,13 @@
 
 
-## Corrigir "Total da Proposta" no Resumo — Mostrar Consumo Anual em vez de Margem
-
-### Problema
-No card de resumo (coluna direita), o destaque principal mostra "Valor Total" com `proposal.total_value` que no nicho telecom corresponde à Margem. Deveria mostrar o **Consumo Anual total** como valor principal.
+## Remover campo "Margem" do resumo da Venda (Telecom)
 
 ### Alteração
 
-**`src/components/proposals/ProposalDetailsModal.tsx`** (linhas 691-699):
+**`src/components/sales/SaleDetailsModal.tsx`**:
 
-No card "Valor Total" da coluna direita, quando `orgData?.niche === 'telecom'`:
-- Mudar o label de "Valor Total" para "Consumo Total"
-- Mostrar o consumo anual total dos CPEs (em MWh) como valor principal em destaque
-- Manter "Valor Total" original apenas para nichos não-telecom
+1. **Remover o bloco "Margem"** (linhas 434-439) do card "Dados de Energia" — o campo que mostra `sale.margem` com label "Margem" e valor em €/MWh
+2. O "Valor Total" do resumo principal (linhas 252-256 e 676-680) mantém-se — esse mostra `sale.total_value` que é o valor da venda, não a margem per se
 
-Também no bloco de impressão (linha 264), o `total-box` já usa Consumo Total MWh para telecom — está correto. A alteração é apenas no card do resumo interativo.
-
-### Resultado
-O card principal do resumo mostrará "Consumo Total: X.X MWh" para propostas telecom, e os sub-itens (Margem Total, Comissão Total) continuam abaixo como estão.
+Resultado: No card de energia da venda, deixa de aparecer "Margem: X.XX €/MWh". Os restantes campos (Consumo Anual, Contrato, DBL, Comissão) mantêm-se.
 
