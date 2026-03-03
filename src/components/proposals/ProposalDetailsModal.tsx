@@ -347,6 +347,7 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
     if (printWindow) {
       printWindow.document.write(printContent);
       printWindow.document.close();
+      printWindow.document.title = "Senvia OS";
       printWindow.print();
     }
   };
