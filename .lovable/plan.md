@@ -1,25 +1,22 @@
 
 
-## Corrigir scroll nos dropdowns SearchableCombobox
+## O prefixo [EE] / [Serviços] já está implementado — o problema é que não há propostas disponíveis
 
-### Problema
-O `SearchableCombobox` usa um `Popover` (Radix) dentro de um `Dialog` (Radix). Quando o Dialog é modal, ele captura eventos de pointer/touch/wheel, impedindo o scroll na lista do dropdown. Este problema afeta **todos os modais** que usam `SearchableCombobox` (CreateSaleModal, EditSaleModal, CreateProposalModal, EditProposalModal, CreateEventModal, CreateAutomationModal).
+### Diagnóstico
 
-### Solução
-
-**`src/components/ui/searchable-combobox.tsx`** — 2 alterações:
-
-1. Adicionar `modal={true}` ao `Popover` para que ele crie o seu próprio layer modal, permitindo interação correta com scroll
-2. Adicionar handlers de eventos no `PopoverContent` para prevenir propagação de scroll/touch para o Dialog pai:
+Verifiquei o código e a base de dados. A alteração na linha 702 do `CreateSaleModal.tsx` está correta:
 
 ```typescript
-<PopoverContent 
-  className="w-[--radix-popover-trigger-width] p-0" 
-  align="start"
-  onWheel={(e) => e.stopPropagation()}
-  onTouchMove={(e) => e.stopPropagation()}
->
+label: `[${proposal.proposal_type === 'servicos' ? 'Serviços' : 'EE'}] ${proposal.client?.name || ...}`
 ```
 
-Estas alterações corrigem o scroll em **todas as instâncias** do componente ao longo do projeto, sem necessidade de alterar cada modal individualmente.
+**Porém, todas as propostas aceites deste cliente (e de todos os outros) já têm vendas associadas.** O filtro `has_sale` exclui-as corretamente do dropdown, resultando em apenas "Venda direta" visível.
+
+Para ver o prefixo, é necessário ter uma proposta com status "accepted" que **não** tenha uma venda associada.
+
+### Opções
+
+1. **Testar com dados reais** — Aceitar uma nova proposta (que ainda não tenha venda) e abrir o modal "Nova Venda". O prefixo `[EE]` ou `[Serviços]` aparecerá no dropdown.
+
+2. **Nenhuma alteração de código é necessária** — A funcionalidade já está implementada e funcional. O dropdown simplesmente não tem propostas disponíveis para mostrar.
 
