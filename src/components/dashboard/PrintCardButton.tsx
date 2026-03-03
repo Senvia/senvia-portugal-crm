@@ -9,11 +9,15 @@ interface PrintCardButtonProps {
 export function PrintCardButton({ targetRef }: PrintCardButtonProps) {
   const handlePrint = useCallback(() => {
     if (!targetRef.current) return;
+    // Update document title so browser print header shows "Senvia OS" instead of URL
+    const originalTitle = document.title;
+    document.title = "Senvia OS";
     targetRef.current.classList.add("print-target");
     document.body.classList.add("print-single-active");
     window.print();
     document.body.classList.remove("print-single-active");
     targetRef.current.classList.remove("print-target");
+    document.title = originalTitle;
   }, [targetRef]);
 
   return (
