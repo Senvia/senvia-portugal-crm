@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { usePersistedState } from "@/hooks/usePersistedState";
 import { usePermissions } from "@/hooks/usePermissions";
 
@@ -12,7 +13,7 @@ import { CreateProposalModal } from "@/components/proposals/CreateProposalModal"
 import { ProposalDetailsModal } from "@/components/proposals/ProposalDetailsModal";
 import { CreateClientModal } from "@/components/clients/CreateClientModal";
 import { LostLeadDialog } from "@/components/leads/LostLeadDialog";
-import { CreateSaleModal } from "@/components/sales/CreateSaleModal";
+
 import { TeamMemberFilter } from "@/components/dashboard/TeamMemberFilter";
 import { BulkActionsBar } from "@/components/shared/BulkActionsBar";
 import { AssignTeamMemberModal } from "@/components/shared/AssignTeamMemberModal";
@@ -57,6 +58,7 @@ export default function Leads() {
   const deleteLead = useDeleteLead();
   const updateLead = useUpdateLead();
   const convertLeadToClient = useConvertLeadToClient();
+  const navigate = useNavigate();
   
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -78,8 +80,6 @@ export default function Leads() {
   const [isCreateClientModalOpen, setIsCreateClientModalOpen] = useState(false);
   const [newlyCreatedClientId, setNewlyCreatedClientId] = useState<string | null>(null);
   const [isChainedFlow, setIsChainedFlow] = useState(false);
-  const [isCreateSaleModalOpen, setIsCreateSaleModalOpen] = useState(false);
-  const [wonClientId, setWonClientId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = usePersistedState("leads-search-v1", "");
   const [statusFilter, setStatusFilter] = usePersistedState<string[]>("leads-status-v1", []);
   const [dateRange, setDateRange] = usePersistedState<{ from: Date | undefined; to: Date | undefined }>("leads-daterange-v1", { from: undefined, to: undefined });
@@ -276,8 +276,8 @@ export default function Leads() {
     if (isWonStage(newStatus) && lead) {
       const existingClient = clients.find(c => c.lead_id === leadId || (lead.company_nif && c.company_nif === lead.company_nif));
       if (existingClient) {
-        setWonClientId(existingClient.id);
-        setIsCreateSaleModalOpen(true);
+        toast.success('Lead ganha! Cliente já existente.');
+        navigate(`/clients?highlight=${existingClient.id}`);
       } else {
         convertLeadToClient.mutate({
           lead_id: leadId,
@@ -291,10 +291,9 @@ export default function Leads() {
           notes: lead.notes || undefined,
         }, {
           onSuccess: (newClient) => {
-            toast.success('Lead ganha! Cliente criado automaticamente.');
+            toast.success('Lead ganha! Novo cliente criado com sucesso.');
             if (newClient?.id) {
-              setWonClientId(newClient.id);
-              setIsCreateSaleModalOpen(true);
+              navigate(`/clients?highlight=${newClient.id}`);
             }
           },
         });
@@ -777,15 +776,6 @@ export default function Leads() {
           onConfirm={handleLostConfirm}
         />
 
-        {/* Create Sale Modal (after winning a lead) */}
-        <CreateSaleModal
-          open={isCreateSaleModalOpen}
-          onOpenChange={(open) => {
-            setIsCreateSaleModalOpen(open);
-            if (!open) setWonClientId(null);
-          }}
-          prefillClientId={wonClientId}
-        />
     </div>
   );
 }
