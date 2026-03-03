@@ -8,6 +8,7 @@ interface CreateTeamMemberParams {
   password: string;
   fullName: string;
   role: 'admin' | 'viewer' | 'salesperson';
+  profileId?: string;
 }
 
 export interface TeamMember {
@@ -196,13 +197,14 @@ export function useCreateTeamMember() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async ({ email, password, fullName, role }: CreateTeamMemberParams) => {
+    mutationFn: async ({ email, password, fullName, role, profileId }: CreateTeamMemberParams) => {
       const { data, error } = await supabase.functions.invoke('create-team-member', {
         body: { 
           email: email.toLowerCase().trim(), 
           password, 
           full_name: fullName.trim(), 
-          role 
+          role,
+          profile_id: profileId || null,
         }
       });
 

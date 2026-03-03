@@ -101,7 +101,7 @@ export function TeamTab() {
     const selectedProfile = profiles.find(p => p.id === role);
     const resolvedRole = selectedProfile?.base_role || role;
     createTeamMember.mutate(
-      { email, password, fullName, role: resolvedRole as 'admin' | 'viewer' | 'salesperson' },
+      { email, password, fullName, role: resolvedRole as 'admin' | 'viewer' | 'salesperson', profileId: selectedProfile?.id },
       {
         onSuccess: () => {
           setCreatedMember({ email, password, fullName });
@@ -236,7 +236,7 @@ export function TeamTab() {
     const selectedProfile = profiles.find(p => p.id === newRole);
     const resolvedRole = selectedProfile?.base_role || newRole;
     manageTeamMember.mutate(
-      { action: 'change_role', user_id: selectedMember.user_id, new_role: resolvedRole as 'admin' | 'viewer' | 'salesperson', profile_id: selectedProfile?.id },
+      { action: 'change_role', user_id: selectedMember.user_id, new_role: resolvedRole as 'admin' | 'viewer' | 'salesperson', profile_id: selectedProfile?.id, profile_name: selectedProfile?.name },
       {
         onSuccess: () => {
           setChangeRoleOpen(false);

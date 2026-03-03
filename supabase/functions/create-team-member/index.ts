@@ -120,7 +120,7 @@ serve(async (req) => {
     }
 
     // Parse request body
-    const { email, password, full_name, role }: CreateMemberRequest = await req.json();
+    const { email, password, full_name, role, profile_id }: CreateMemberRequest & { profile_id?: string } = await req.json();
 
     // Validate input
     if (!email || !password || !full_name || !role) {
@@ -255,15 +255,18 @@ serve(async (req) => {
     }
 
     // Add to organization_members table
+    const memberData: Record<string, unknown> = {
+      user_id: userId,
+      organization_id: organizationId,
+      role: role,
+      is_active: true,
+      joined_at: new Date().toISOString(),
+    };
+    if (profile_id) memberData.profile_id = profile_id;
+
     const { error: memberError } = await supabaseAdmin
       .from('organization_members')
-      .upsert({
-        user_id: userId,
-        organization_id: organizationId,
-        role: role,
-        is_active: true,
-        joined_at: new Date().toISOString()
-      }, { onConflict: 'user_id,organization_id' });
+      .upsert(memberData, { onConflict: 'user_id,organization_id' });
 
     if (memberError) {
       console.error('Error inserting organization member:', memberError);
