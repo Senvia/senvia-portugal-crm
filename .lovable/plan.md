@@ -1,22 +1,71 @@
 
 
-## Corrigir badge "Renovação" — mostrar apenas quando `negotiation_type === 'renovacao'`
+## Painel de Compromisso — Dashboard Telecom
 
-Atualmente o badge usa `existing_cpe_id` para decidir se mostra "Renovação" ou "Novo". O correto é usar o campo `negotiation_type` da venda/proposta.
+### Conceito
 
-### Alterações em 3 ficheiros:
+No início de cada mês, cada **Comercial** insere o seu compromisso de vendas: uma tabela com linhas onde indica **NIF**, **Energia (MWh)**, **Solar (kWp)** e **Comissão (€)** previstos. O admin/gestor vê o compromisso de todos os comerciais. O painel aparece **apenas no nicho telecom**, como uma secção dedicada acima dos widgets genéricos.
 
-**1. `src/components/sales/CreateSaleModal.tsx` (linhas 900-904)**
-- Trocar `cpe.existing_cpe_id` por `negotiationType === 'renovacao'`
-- A variável `negotiationType` já existe como state
+### Estrutura de dados
 
-**2. `src/components/sales/SaleDetailsModal.tsx` (linhas 530-534)**
-- Trocar `cpe.existing_cpe_id` por `sale.negotiation_type === 'renovacao'`
-- `sale` já tem `negotiation_type` disponível
+Nova tabela `monthly_commitments`:
 
-**3. `src/components/sales/EditSaleModal.tsx` (linhas 762-766)**
-- Trocar `cpe.existing_cpe_id` por `negotiationType === 'renovacao'`
-- A variável `negotiationType` já existe como state
+| Coluna | Tipo | Descrição |
+|--------|------|-----------|
+| `id` | uuid PK | — |
+| `organization_id` | uuid FK | Isolamento tenant |
+| `user_id` | uuid FK profiles | Comercial que criou |
+| `month` | date | Primeiro dia do mês (ex: 2026-03-01) |
+| `created_at` | timestamptz | — |
+| `updated_at` | timestamptz | — |
 
-Também remover o texto técnico da regra de comissão (`getTierRuleLabel`) que aparece por baixo da comissão no `CreateSaleModal.tsx`.
+Nova tabela `commitment_lines`:
+
+| Coluna | Tipo | Descrição |
+|--------|------|-----------|
+| `id` | uuid PK | — |
+| `commitment_id` | uuid FK | Referência ao compromisso |
+| `nif` | text | NIF do cliente/prospect |
+| `energia_mwh` | numeric | Volume energia previsto |
+| `solar_kwp` | numeric | Capacidade solar prevista |
+| `comissao` | numeric | Comissão prevista |
+| `proposal_id` | uuid nullable | Proposta que suporta (opcional) |
+| `notes` | text nullable | Observações |
+
+RLS: membros da org leem/escrevem nos seus compromissos; admins veem todos.
+
+### UI no Dashboard
+
+Para telecom, o Dashboard ganha uma secção **"Atividade Comercial"** com um card **"Compromisso"**:
+
+```text
+┌─────────────────────────────────────────────────┐
+│ 📋 Compromisso — Março 2026          [Editar]  │
+├─────────────────────────────────────────────────┤
+│  NIF      │ Energia │ Solar  │ Comissão        │
+│  5081234  │  3528   │  526   │  €3.939         │
+│  5089876  │  1200   │  0     │  €1.500         │
+├─────────────────────────────────────────────────┤
+│  TOTAL    │  4728   │  526   │  €5.439         │
+└─────────────────────────────────────────────────┘
+```
+
+- O Comercial vê **apenas o seu** compromisso com botão "Editar" para adicionar/remover linhas
+- O Admin vê um **select de Comercial** para navegar entre compromissos de todos
+- Se não existe compromisso para o mês, aparece CTA "Definir Compromisso"
+- Modal de edição: formulário com linhas dinâmicas (adicionar/remover) com campos NIF, Energia, Solar, Comissão e opcionalmente ligar a uma Proposta existente
+
+### Ficheiros a criar/alterar
+
+1. **Migração SQL** — Criar tabelas `monthly_commitments` e `commitment_lines` com RLS
+2. **`src/hooks/useCommitments.ts`** — Hook CRUD para compromissos (filtro por mês corrente, user_id)
+3. **`src/components/dashboard/CommitmentPanel.tsx`** — Card do compromisso com tabela e totais
+4. **`src/components/dashboard/EditCommitmentModal.tsx`** — Modal full-screen responsivo para editar linhas
+5. **`src/pages/Dashboard.tsx`** — Adicionar `CommitmentPanel` na secção telecom, dentro de um grupo "Atividade Comercial"
+
+### Faseamento
+
+Esta é a **Fase 1 — Compromisso**. Depois disto, avançamos para:
+- Mais painéis de "Atividade Comercial"
+- Painel "Ativações"
 
