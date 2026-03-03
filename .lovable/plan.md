@@ -1,34 +1,39 @@
 
 
-## Corrigir seleção múltipla no Select de perfis
+## Corrigir alteração de perfil: `profile_id` não é atualizado
 
 ### Problema
-Nos modais "Adicionar Acesso" e "Alterar Perfil", o `<SelectItem>` usa `p.base_role` como `value`. Se existirem 2+ perfis com o mesmo `base_role` (ex: dois perfis "Comercial"), o Select tem valores duplicados e comporta-se de forma errada — selecionar um seleciona todos.
+Quando se altera o perfil de um membro (ex: para "CE"), o sistema apenas atualiza a tabela `user_roles` com o `base_role` (ex: "salesperson"). Mas nunca atualiza o `profile_id` na tabela `organization_members`, que é o campo que realmente determina qual perfil personalizado o utilizador tem. Resultado: o perfil parece não mudar.
 
-### Correção
+### Correção (3 ficheiros)
 
-**Ficheiro: `src/components/settings/TeamTab.tsx`**
+**1. Frontend — `src/components/settings/TeamTab.tsx`**
+- Na função `handleChangeRole`, enviar também o `profile_id` selecionado para o edge function:
+  ```tsx
+  manageTeamMember.mutate({
+    action: 'change_role',
+    user_id: selectedMember.user_id,
+    new_role: resolvedRole,
+    profile_id: selectedProfile?.id,  // novo campo
+  });
+  ```
 
-1. **Estado** — Mudar `role` e `newRole` para guardarem o **profile ID** em vez do `base_role` (quando existem perfis personalizados).
+**2. Hook — `src/hooks/useProfile.ts`**
+- Adicionar `profile_id?: string` ao interface `ManageTeamMemberParams`.
 
-2. **SelectItem value** — Usar `p.id` como valor único em vez de `p.base_role`:
-   ```tsx
-   <SelectItem key={p.id} value={p.id}>
-     {p.name}
-   </SelectItem>
-   ```
+**3. Edge Function — `supabase/functions/manage-team-member/index.ts`**
+- Aceitar `profile_id` no body do request.
+- No case `change_role`, após atualizar `user_roles`, também atualizar `organization_members.profile_id` e `.role`:
+  ```typescript
+  await supabaseAdmin
+    .from('organization_members')
+    .update({ 
+      role: new_role,
+      profile_id: profile_id || null 
+    })
+    .eq('user_id', user_id)
+    .eq('organization_id', sharedOrgId);
+  ```
 
-3. **Ao submeter (criar membro / alterar perfil)** — Resolver o `base_role` a partir do profile ID selecionado:
-   ```tsx
-   const selectedProfile = profiles.find(p => p.id === role);
-   const resolvedRole = selectedProfile?.base_role || role;
-   ```
-
-4. **Ao abrir o modal de alterar perfil** — Pre-selecionar o profile ID atual do membro (via `member.profile_id`) em vez de adivinhar pelo role.
-
-Isto aplica-se a dois blocos:
-- Modal "Adicionar Acesso" (linhas ~364-379)
-- Modal "Alterar Perfil" (linhas ~778-792)
-
-Alteração circunscrita a um único ficheiro, sem impacto no backend.
+Isto garante que o perfil personalizado (com permissões granulares) fica realmente associado ao membro.
 
