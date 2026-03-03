@@ -1,24 +1,32 @@
 
 
-## Adicionar indicação de tipo (EE / Serviços) na lista de propostas do lead
+## Adicionar gatilhos de mudança de status para Vendas e Propostas nas Automações
 
-### Problema
-Na `ProposalsList` (que aparece dentro dos detalhes de um lead/cliente), cada proposta mostra apenas o status, código e valor — sem indicação se é **Energia** ou **Serviços**.
+### Situação atual
+O sistema de automações já existe em `/marketing/automations` e suporta gatilhos como `lead_created`, `lead_status_changed`, `sale_created`, `proposal_created`. Porém **faltam dois gatilhos essenciais**:
+- `sale_status_changed` — quando uma venda muda de status (Ex: Em Progresso → Entregue)
+- `proposal_status_changed` — quando uma proposta muda de status (Ex: Enviada → Aceite)
 
-### Solução
+### Plano
 
-**`src/components/proposals/ProposalsList.tsx`** — Adicionar o badge de tipo na lista de propostas, igual ao que já existe na página principal de Propostas:
-
-Dentro do bloco de badges de cada proposta (após o badge de status), adicionar:
-
-```tsx
-{proposal.proposal_type && (
-  <Badge className={cn('text-xs', proposal.proposal_type === 'energia' ? 'bg-indigo-500/20 text-indigo-400' : 'bg-violet-500/20 text-violet-400')}>
-    {proposal.proposal_type === 'energia' ? <Zap className="h-3 w-3 mr-1" /> : <Wrench className="h-3 w-3 mr-1" />}
-    {PROPOSAL_TYPE_LABELS[proposal.proposal_type]}
-  </Badge>
-)}
+**1. `src/hooks/useAutomations.ts`** — Adicionar os novos trigger types:
+```typescript
+{ value: 'sale_status_changed', label: 'Venda Muda de Estado' },
+{ value: 'proposal_status_changed', label: 'Proposta Muda de Estado' },
 ```
 
-Também será necessário importar `Zap`, `Wrench` do lucide-react e `PROPOSAL_TYPE_LABELS` dos tipos.
+**2. `src/components/marketing/CreateAutomationModal.tsx`** — Adaptar o UI de configuração de status:
+- Expandir `showStatusConfig` para incluir `sale_status_changed` e `proposal_status_changed`
+- Quando o gatilho for `sale_status_changed`, mostrar os estados de venda (Em Progresso, Entregue, Concluída, Cancelado) em vez dos pipeline stages
+- Quando for `proposal_status_changed`, mostrar os estados de proposta (Rascunho, Enviada, Em Negociação, Aceite, Recusada, Expirada)
+- Quando for `lead_status_changed` ou `client_status_changed`, manter o comportamento atual com pipeline stages
+
+**3. `supabase/functions/process-automation/index.ts`** — Já suporta `trigger_config.to_status` e `trigger_config.from_status`, portanto funciona automaticamente para os novos tipos sem alterações.
+
+**4. Disparo dos gatilhos** — Verificar onde as vendas e propostas mudam de status nos hooks (`useSales.ts`, `useProposals.ts`) e invocar a edge function `process-automation` após a mudança, tal como já é feito para leads.
+
+### Detalhes técnicos
+- Estados de Venda: `in_progress`, `fulfilled`, `delivered`, `cancelled`
+- Estados de Proposta: `draft`, `sent`, `negotiating`, `accepted`, `rejected`, `expired`
+- A edge function `process-automation` já implementa a lógica de `matchesTriggerConfig` que compara `from_status` / `to_status`, logo os novos gatilhos funcionam sem alteração no backend
 
