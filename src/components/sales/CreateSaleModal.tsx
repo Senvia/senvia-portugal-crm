@@ -897,7 +897,7 @@ export function CreateSaleModal({
                           <div className="flex items-center gap-2 flex-wrap">
                             <Badge variant="outline" className="text-xs">{cpe.equipment_type}</Badge>
                             <Badge variant="secondary" className="text-xs">{cpe.comercializador}</Badge>
-                            {cpe.existing_cpe_id ? (
+                            {negotiationType === 'renovacao' ? (
                               <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-500 border-blue-500/30">Renovação</Badge>
                             ) : (
                               <Badge variant="outline" className="text-xs bg-green-500/10 text-green-500 border-green-500/30">Novo</Badge>
@@ -938,11 +938,6 @@ export function CreateSaleModal({
                               <div>
                                 <p className="text-xs text-muted-foreground">Comissão</p>
                                 <p className="text-sm font-medium text-green-500">{formatCurrency(cpe.comissao)}</p>
-                                {hasEnergyConfig && cpe.consumo_anual != null && (
-                                  <p className="text-[10px] text-muted-foreground mt-0.5">
-                                    {getTierRuleLabel(getVolumeTier(Number(cpe.consumo_anual) || 0), energyConfig)}
-                                  </p>
-                                )}
                               </div>
                             )}
                           </div>
