@@ -6,8 +6,7 @@ export const TRIGGER_TYPES = [
   { value: 'lead_status_changed', label: 'Lead Muda de Etapa' },
   { value: 'client_created', label: 'Novo Cliente Criado' },
   { value: 'client_status_changed', label: 'Cliente Muda de Estado' },
-  { value: 'sale_created', label: 'Nova Venda Criada' },
-  { value: 'sale_status_changed', label: 'Venda Muda de Estado' },
+  { value: 'sale_status_changed', label: 'Venda Concluída' },
   { value: 'proposal_created', label: 'Nova Proposta Criada' },
   { value: 'proposal_status_changed', label: 'Proposta Muda de Estado' },
 ] as const;
