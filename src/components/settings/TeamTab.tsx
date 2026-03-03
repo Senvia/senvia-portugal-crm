@@ -191,7 +191,7 @@ export function TeamTab() {
   const openChangeRoleModal = (member: TeamMember) => {
     setSelectedMember(member);
     // Pre-select current profile by profile_id or fallback to role
-    const currentProfileId = (member as any).profile_id;
+    const currentProfileId = member.profile_id;
     const matchedProfile = currentProfileId 
       ? profiles.find(p => p.id === currentProfileId)
       : profiles.find(p => p.base_role === member.role);
@@ -565,7 +565,7 @@ export function TeamTab() {
                     </TableCell>
                     <TableCell>
                       <Badge variant={ROLE_VARIANTS[member.role] || 'secondary'}>
-                        {ROLE_LABELS[member.role] || member.role}
+                        {member.profile_name || ROLE_LABELS[member.role] || member.role}
                       </Badge>
                     </TableCell>
                     <TableCell>
@@ -773,7 +773,7 @@ export function TeamTab() {
             <div className="space-y-2 mb-4">
               <Label className="text-muted-foreground">Perfil Atual</Label>
               <Badge variant={selectedMember ? ROLE_VARIANTS[selectedMember.role] : 'secondary'}>
-                {selectedMember ? ROLE_LABELS[selectedMember.role] : ''}
+                {selectedMember?.profile_name || (selectedMember ? ROLE_LABELS[selectedMember.role] : '')}
               </Badge>
             </div>
             {profiles.length > 0 ? (

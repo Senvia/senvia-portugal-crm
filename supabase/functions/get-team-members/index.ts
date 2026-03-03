@@ -115,7 +115,7 @@ Deno.serve(async (req) => {
     // Get all organization members
     const { data: members, error: membersError } = await adminClient
       .from('organization_members')
-      .select('user_id, role, is_active')
+      .select('user_id, role, is_active, profile_id')
       .eq('organization_id', organizationId)
       .eq('is_active', true)
 
@@ -154,10 +154,22 @@ Deno.serve(async (req) => {
       throw rolesError
     }
 
+    // Fetch organization profiles to resolve profile names
+    const profileIds = members.map((m) => m.profile_id).filter(Boolean)
+    let orgProfiles: any[] = []
+    if (profileIds.length > 0) {
+      const { data: opData } = await adminClient
+        .from('organization_profiles')
+        .select('id, name')
+        .in('id', profileIds)
+      orgProfiles = opData || []
+    }
+
     const teamMembers = await Promise.all(
       members.map(async (member) => {
         const profileItem = profiles?.find((p) => p.id === member.user_id)
         const userRole = roles?.find((r) => r.user_id === member.user_id)
+        const orgProfile = orgProfiles.find((op) => op.id === member.profile_id)
 
         const { data: authUser, error: authError } = await adminClient.auth.admin.getUserById(
           member.user_id
@@ -181,6 +193,8 @@ Deno.serve(async (req) => {
           user_id: member.user_id,
           role: userRole?.role || member.role || 'viewer',
           is_banned: isBanned,
+          profile_id: member.profile_id || null,
+          profile_name: orgProfile?.name || null,
         }
       })
     )
