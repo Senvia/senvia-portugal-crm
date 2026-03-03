@@ -1,26 +1,18 @@
 
 
-## Remover "Lovable" das páginas de impressão
+## Corrigir URL no rodape de impressao
 
-### O Problema
-Quando imprime o dashboard, o browser mostra o URL (`lovable.app`) no cabeçalho/rodapé da página impressa. Isto é um comportamento padrão do browser — ele imprime o URL da página.
+O browser usa `document.title` para o cabecalho/rodape das paginas impressas. Apenas o `PrintCardButton` altera o titulo para "Senvia OS" antes de imprimir. Os outros dois pontos que chamam `window.print()` nao fazem isso.
 
-### Solução
-Não é possível controlar os headers/footers do browser via CSS (são definidos pelo utilizador nas configurações de impressão). No entanto, podemos:
+### Alteracoes
 
-1. **Adicionar `@page` rules** no CSS para definir margens e tentar remover headers/footers do browser:
-```css
-@page {
-  margin: 1cm;
-  size: A4;
-}
-```
+1. **`src/components/dashboard/DashboardPeriodFilter.tsx`** — No `handlePrintAll`, alterar `document.title` para "Senvia OS" antes de `window.print()` e restaurar depois.
 
-2. **Adicionar um cabeçalho "Senvia OS"** visível apenas na impressão, para que a marca Senvia apareça no topo de cada página impressa, sobrepondo visualmente qualquer referência ao URL.
+2. **`src/components/finance/BankAccountStatementDrawer.tsx`** — Mesmo padrao no `onClick` do botao de impressao.
 
-3. **A solução definitiva** é configurar o domínio personalizado (`app.senvia.pt`) em **Settings → Domains**. Assim, mesmo o URL que o browser coloca no header/footer mostrará `app.senvia.pt` em vez de `lovable.app`.
+3. **`src/components/proposals/ProposalDetailsModal.tsx`** — Na funcao que abre `printWindow`, definir `printWindow.document.title = "Senvia OS"`.
 
-### Ficheiros a editar
-- **`src/index.css`** — adicionar `@page` rules e cabeçalho de impressão com marca Senvia
-- **`src/components/dashboard/PrintCardButton.tsx`** — injetar título "Senvia OS" no conteúdo impresso
+Isto garante que em qualquer ponto de impressao do sistema, o browser mostra "Senvia OS" no cabecalho/rodape em vez do URL.
+
+> **Nota:** O rodape com o URL e um comportamento do browser que o utilizador pode desativar manualmente nas opcoes de impressao (desmarcar "Headers and footers"). A solucao definitiva e configurar o dominio personalizado em Settings → Domains.
 
