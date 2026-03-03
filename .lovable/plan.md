@@ -1,26 +1,21 @@
 
 
-## Adicionar edição de dados dos membros da equipa (Acessos)
+## Corrigir erro "Cannot read properties of undefined (reading 'title')"
 
-Atualmente, na tabela de Acessos, só é possível: redefinir password, alterar perfil e ativar/desativar. Faltam ações para editar o nome, email e telefone de cada membro.
+O problema é simples: no `onSuccess` do `useManageTeamMember` em `src/hooks/useProfile.ts`, o objeto `messages` não tem entrada para `update_profile`. Quando a action é `update_profile`, `msg` fica `undefined` e rebenta ao aceder `.title`.
 
-### Alterações
+### Correção
 
-**1. Edge Function `manage-team-member`** — Adicionar nova action `update_profile`:
-- Recebe `user_id`, `full_name`, `email`, `phone`
-- Usa `supabaseAdmin` para atualizar a tabela `profiles` do membro alvo (validando que pertence à mesma organização)
+Adicionar a entrada `update_profile` ao objeto `messages`:
 
-**2. `src/components/settings/TeamTab.tsx`** — Adicionar modal "Editar Dados":
-- Nova opção no DropdownMenu: "Editar Dados" com ícone de edição
-- Modal com campos: Nome Completo, Email de contacto, Telefone
-- Pré-preenche com os dados atuais do membro
-- Chama a edge function `manage-team-member` com `action: 'update_profile'`
+```typescript
+const messages = {
+  change_password: { title: 'Password redefinida', description: '...' },
+  change_role: { title: 'Perfil alterado', description: '...' },
+  toggle_status: { title: 'Estado alterado', description: '...' },
+  update_profile: { title: 'Dados atualizados', description: 'Os dados do colaborador foram atualizados com sucesso.' },
+};
+```
 
-**3. `src/hooks/useTeam.ts`** — Verificar que o `TeamMember` já inclui `email` e `phone` do profile (se não, adicionar ao SELECT da query)
-
-**4. Tabela de membros** — Mostrar email e telefone como info secundária na coluna "Nome" (texto mais pequeno abaixo do nome)
-
-### Resultado
-- Admin pode editar nome, email e telefone de qualquer membro da equipa diretamente nos Acessos
-- Os dados editados ficam na tabela `profiles` e são usados nas variáveis de email `{{vendedor_email}}` e `{{vendedor_telefone}}`
+Ficheiro: `src/hooks/useProfile.ts`, uma linha a adicionar.
 
