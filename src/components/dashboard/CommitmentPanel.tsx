@@ -21,7 +21,7 @@ function formatNumber(val: number) {
 }
 
 export function CommitmentPanel() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { isAdmin } = usePermissions();
   const { data: members = [] } = useTeamMembers();
   const { commitment, isLoading, allCommitments, allLoading } = useCommitments(user?.id);
@@ -30,8 +30,9 @@ export function CommitmentPanel() {
   const currentMonthLabel = format(startOfMonth(new Date()), "MMMM yyyy", { locale: pt });
 
   // Build rows: admin sees all members, user sees only self
-  const rows = isAdmin
-    ? members.map((m) => {
+  const buildRows = () => {
+    if (isAdmin) {
+      const memberRows = members.map((m) => {
         const mc = allCommitments.find((c) => c.user_id === m.user_id);
         return {
           userId: m.user_id,
@@ -42,18 +43,38 @@ export function CommitmentPanel() {
           comissao: Number(mc?.total_comissao || 0),
           hasCommitment: !!mc,
         };
-      })
-    : [
-        {
-          userId: user?.id || "",
-          name: members.find((m) => m.user_id === user?.id)?.full_name || "Eu",
-          nifs: Number(commitment?.total_nifs || 0),
-          energia: Number(commitment?.total_energia_mwh || 0),
-          solar: Number(commitment?.total_solar_kwp || 0),
-          comissao: Number(commitment?.total_comissao || 0),
-          hasCommitment: !!commitment,
-        },
-      ];
+      });
+
+      // Ensure current user appears even if not in organization_members (e.g. super_admin)
+      if (user?.id && !memberRows.some((r) => r.userId === user.id) && commitment) {
+        memberRows.unshift({
+          userId: user.id,
+          name: (profile?.full_name || "Eu") + " (eu)",
+          nifs: Number(commitment.total_nifs || 0),
+          energia: Number(commitment.total_energia_mwh || 0),
+          solar: Number(commitment.total_solar_kwp || 0),
+          comissao: Number(commitment.total_comissao || 0),
+          hasCommitment: true,
+        });
+      }
+
+      return memberRows;
+    }
+
+    return [
+      {
+        userId: user?.id || "",
+        name: members.find((m) => m.user_id === user?.id)?.full_name || profile?.full_name || "Eu",
+        nifs: Number(commitment?.total_nifs || 0),
+        energia: Number(commitment?.total_energia_mwh || 0),
+        solar: Number(commitment?.total_solar_kwp || 0),
+        comissao: Number(commitment?.total_comissao || 0),
+        hasCommitment: !!commitment,
+      },
+    ];
+  };
+
+  const rows = buildRows();
 
   const totals = rows.reduce(
     (acc, r) => ({
