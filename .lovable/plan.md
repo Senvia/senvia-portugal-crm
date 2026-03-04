@@ -1,51 +1,71 @@
 
 
-## Auditoria de Bugs Identificados
+## Diagnóstico
 
-### Bug 1: MobileHeader não tem botão de menu (hamburger)
-O `MobileHeader` recebe `onMenuToggle` como prop mas **não renderiza nenhum botão** para ativá-lo. O header mostra apenas o logo centrado. O `MobileMenu` nunca é acessível — o utilizador não consegue ver o seu perfil, trocar de organização, ou fazer logout em mobile (a menos que use o MobileBottomNav para ir a Definições).
+Atualmente, o evento **Lead** do Meta Pixel é disparado apenas no **browser** (client-side) via `fbq('track', 'Lead', ...)`. Se o utilizador tiver um ad blocker, modo privado, ou o script do Facebook não carregar, o evento perde-se. A **Conversions API (CAPI)** envia o evento diretamente do servidor para o Facebook, garantindo 100% de entrega.
 
-**Ficheiro:** `src/components/layout/MobileHeader.tsx`
-**Correção:** Adicionar um botão hamburger à esquerda que chama `onMenuToggle`.
+Existem **dois cenários** onde o Lead é disparado:
+1. **Formulários públicos** (`submit-lead` edge function) — leads de clientes
+2. **Registo no Senvia OS** (`Login.tsx`) — signups na plataforma (Pixel fixo `2027821837745963`)
 
-### Bug 2: Double safe-area padding no AddRevenueModal
-O `AddRevenueModal` usa `variant="fullScreen"` (que agora tem `safe-top`) E aplica `pt-safe` no `DialogHeader`. Isto resulta em **padding duplo** no topo em iPhone — o container já tem ~47px de safe-area E o header adiciona mais ~40px.
+## Plano: Implementar Meta Conversions API
 
-**Ficheiro:** `src/components/finance/AddRevenueModal.tsx`
-**Correção:** Remover `pt-safe` do `DialogHeader` (já está coberto pelo variant).
+### Requisitos
 
-### Bug 3: Fullscreen modals sem `p-0 gap-0` têm padding inconsistente
-Alguns modais fullscreen não usam `p-0 gap-0`, resultando em padding default do `DialogContent` (p-6 gap-4) MAIS o safe-area padding — criando espaçamento excessivo:
-- `CalendarAlertsWidget` — sem `p-0 gap-0`
-- `FidelizationAlertsWidget` — sem `p-0 gap-0`
+A CAPI precisa de:
+- **Pixel ID** — já existe (fixo `2027821837745963` para signups; dinâmico por organização nos formulários via `meta_pixels`)
+- **Access Token** — token de acesso da CAPI gerado no Meta Events Manager
 
-**Correção:** Adicionar `p-0 gap-0` a estes modais para consistência com o padrão.
+### 1. Guardar o Access Token como secret
 
-### Bug 4: Modais Marketing sem `gap-0`
-- `CreateCampaignModal` — tem `p-0` mas falta `gap-0`
-- `CampaignDetailsModal` — tem `p-0` mas falta `gap-0`
-- `ListDetailsModal` — tem `p-0` mas falta `gap-0`
-- `ImportContactsModal` — tem `p-0` mas falta `gap-0`
+Usar o tool `add_secret` para pedir o **META_CONVERSIONS_API_TOKEN** (token gerado em Meta Events Manager > Settings > Conversions API > Generate Access Token).
 
-**Correção:** Adicionar `gap-0` a todos.
+### 2. Adicionar envio CAPI no `submit-lead` edge function
 
-### Bug 5: MobileMenu não mostra todos os módulos
-O `MobileMenu` só mostra 3 itens fixos (Painel, Leads, Definições) enquanto o `MobileBottomNav` mostra todos os módulos. O menu deveria ser o lugar completo de navegação com acesso a perfil/logout — mas está incompleto.
+Após criar o lead com sucesso, enviar o evento server-side para cada pixel ativo do formulário:
 
-**Nota:** Isto é mais uma limitação de design do que bug — o BottomNav já cobre a navegação. Mas o menu deveria pelo menos mostrar funcionalidades que o BottomNav não tem (perfil, logout). Como já tem isso, o menu está funcional mas **não acessível** por causa do Bug 1.
+```
+POST https://graph.facebook.com/v21.0/{PIXEL_ID}/events
+```
 
-### Resumo de Correções
+Payload:
+- `event_name`: `Lead`
+- `event_time`: timestamp unix
+- `event_id`: `lead.id` (para deduplicação com o evento browser)
+- `action_source`: `website`
+- `user_data`: email (hashed SHA256), phone (hashed SHA256), client IP, user agent
+- `custom_data`: `content_name`, `content_category`
 
-| Ficheiro | Correção |
+O `event_id` já é enviado no browser (`eventID: leadId`), o que permite ao Facebook deduplicar automaticamente.
+
+### 3. Criar edge function `meta-capi-event` (reutilizável)
+
+Uma edge function dedicada que recebe:
+- `pixel_id`, `access_token` (ou usa o secret global), `event_name`, `event_id`, `user_data`, `custom_data`
+
+Isto permite reutilizar para signups e leads.
+
+### 4. Disparar CAPI no registo (Login.tsx)
+
+No `handleSignUp`, após criar o user, chamar a edge function `meta-capi-event` com o Pixel fixo e o email do utilizador.
+
+### 5. Suporte a Access Token por organização (opcional)
+
+Adicionar coluna `meta_capi_token` na tabela `organizations` para organizações que queiram usar o seu próprio token CAPI. Se não existir, usar o token global do Senvia.
+
+### Ficheiros a criar/alterar
+
+| Ficheiro | Ação |
 |---|---|
-| `MobileHeader.tsx` | Adicionar botão hamburger (Menu icon) que chama `onMenuToggle` |
-| `AddRevenueModal.tsx` | Remover `pt-safe` do DialogHeader (evitar padding duplo) |
-| `CalendarAlertsWidget.tsx` | Adicionar `p-0 gap-0` ao DialogContent fullScreen |
-| `FidelizationAlertsWidget.tsx` | Adicionar `p-0 gap-0` ao DialogContent fullScreen |
-| `CreateCampaignModal.tsx` | Adicionar `gap-0` ao DialogContent |
-| `CampaignDetailsModal.tsx` | Adicionar `gap-0` ao DialogContent |
-| `ListDetailsModal.tsx` | Adicionar `gap-0` ao DialogContent |
-| `ImportContactsModal.tsx` | Adicionar `gap-0` ao DialogContent |
+| `supabase/functions/meta-capi-event/index.ts` | **Criar** — edge function reutilizável para envio CAPI |
+| `supabase/functions/submit-lead/index.ts` | **Alterar** — chamar CAPI após criar lead |
+| `src/pages/Login.tsx` | **Alterar** — chamar CAPI edge function após signup |
+| `supabase/config.toml` | **Alterar** — registar nova function |
 
-Total: 8 ficheiros, 8 correções cirúrgicas.
+### Pré-requisito
+
+Antes de implementar, é necessário o **META_CONVERSIONS_API_TOKEN**. Este token é gerado no Meta Business Suite:
+1. Ir a **Events Manager** > selecionar o Pixel
+2. **Settings** > **Conversions API** > **Generate Access Token**
+3. Copiar o token gerado
 
