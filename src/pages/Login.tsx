@@ -275,13 +275,30 @@ export default function Login() {
 
       // Check if email confirmation is required (no session means confirmation needed)
       if (!authData.session) {
-        // Fire Meta Pixel Lead event
+        // Fire Meta Pixel Lead event (client-side)
         if (typeof window.fbq === 'function') {
           window.fbq('track', 'Lead', {
             content_name: 'Senvia OS Registration',
             content_category: 'signup',
           });
         }
+        // Fire Meta CAPI Lead event (server-side, non-blocking)
+        try {
+          const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+          fetch(`https://${projectId}.supabase.co/functions/v1/meta-capi-event`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              pixel_id: '2027821837745963',
+              event_name: 'Lead',
+              event_id: `signup-${authData.user.id}`,
+              event_source_url: window.location.href,
+              user_data: { em: signupEmail },
+              custom_data: { content_name: 'Senvia OS Registration', content_category: 'signup' },
+            }),
+          }).catch(() => {});
+        } catch {}
+
         toast({
           title: 'Confirme o seu email',
           description: 'Enviámos um email de confirmação. Confirme o seu email e depois faça login.',
@@ -312,13 +329,29 @@ export default function Login() {
         throw orgError;
       }
 
-      // Fire Meta Pixel Lead event
+      // Fire Meta Pixel Lead event (client-side)
       if (typeof window.fbq === 'function') {
         window.fbq('track', 'Lead', {
           content_name: 'Senvia OS Registration',
           content_category: 'signup',
         });
       }
+      // Fire Meta CAPI Lead event (server-side, non-blocking)
+      try {
+        const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+        fetch(`https://${projectId}.supabase.co/functions/v1/meta-capi-event`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            pixel_id: '2027821837745963',
+            event_name: 'Lead',
+            event_id: `signup-${authData.user!.id}`,
+            event_source_url: window.location.href,
+            user_data: { em: signupEmail },
+            custom_data: { content_name: 'Senvia OS Registration', content_category: 'signup' },
+          }),
+        }).catch(() => {});
+      } catch {}
 
       toast({
         title: 'Conta criada com sucesso!',
