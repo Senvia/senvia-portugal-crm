@@ -1,31 +1,37 @@
 
 
-## Plano: Mover lead para etapa "Agendado" ao agendar recontacto
+## Plano: Dois botões no diálogo — "Marcar como Perdido" apenas para nichos não-telecom
 
-### Problema
-Quando agendas um recontacto, o lead fica na etapa atual em vez de mover para a etapa "Agendado" da pipeline.
+### Contexto
+O utilizador quer que no nicho **telecom**, o diálogo de recontacto **nunca** permita marcar como perdido diretamente — apenas agendar recontacto. Nos outros nichos, o diálogo deve ter as duas opções.
 
-### Solução
-No `handleLostConfirm` (linha 344 de `Leads.tsx`), quando há `followUpDate`, encontrar dinamicamente a etapa "agendado/scheduled" da pipeline e mover o lead para lá.
-
-### Alteração
+### Alterações
 
 | Ficheiro | Ação |
 |---|---|
-| `src/pages/Leads.tsx` | Na condição `if (!data.followUpDate)` (linha 344), adicionar um `else` que encontra a etapa "scheduled" usando a função `isScheduledStage` já existente e faz `updateStatus.mutate` para essa etapa |
+| `src/components/leads/LostLeadDialog.tsx` | Adicionar prop `isTelecom`. Tornar `followUpDate` opcional na validação. No footer: mostrar botão "Marcar como Perdido" apenas se `!isTelecom`. Manter botão "Agendar Recontacto" sempre visível. |
+| `src/pages/Leads.tsx` | Passar `isTelecom` como prop ao `LostLeadDialog` |
 
-A lógica será:
-```typescript
-if (!data.followUpDate) {
-  updateStatus.mutate({ leadId, status: lostStatus });
-} else {
-  // Find the "scheduled" stage dynamically
-  const scheduledStage = stages.find(s => isScheduledStage(s.key));
-  if (scheduledStage) {
-    updateStatus.mutate({ leadId, status: scheduledStage.key });
-  }
-}
+### Detalhe do LostLeadDialog
+
+**Props**: Adicionar `isTelecom?: boolean`
+
+**Validação**:
+- "Marcar como Perdido": habilitado quando `lossReason` preenchido (envia `followUpDate: ""`)
+- "Agendar Recontacto": habilitado quando `lossReason` E `followUpDate` preenchidos
+
+**Footer (nichos genéricos)**:
+```
+[Cancelar]  [Marcar como Perdido]  [Agendar Recontacto]
 ```
 
-Isto usa a função `isScheduledStage` (linha 157) que já deteta etapas com keywords como "agendado", "scheduled", "reunião", garantindo compatibilidade com qualquer pipeline customizada.
+**Footer (telecom)**:
+```
+[Cancelar]  [Agendar Recontacto]
+```
+
+- No telecom, a data de recontacto continua obrigatória (com asterisco)
+- Nos outros nichos, a data perde o asterisco (é opcional — só necessária para agendar)
+
+A lógica no `Leads.tsx` (`handleLostConfirm`) já está preparada: sem `followUpDate` → marca perdido; com `followUpDate` → move para "Agendado".
 
