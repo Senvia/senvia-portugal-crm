@@ -91,10 +91,10 @@ Deno.serve(async (req) => {
     
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    // Validate public_key and get organization_id (including webhook_url and whatsapp config)
+    // Validate public_key and get organization_id (including webhook_url, whatsapp config, and meta_pixels)
     const { data: org, error: orgError } = await supabase
       .from('organizations')
-      .select('id, name, niche, webhook_url, whatsapp_instance, whatsapp_api_key, whatsapp_base_url')
+      .select('id, name, niche, webhook_url, whatsapp_instance, whatsapp_api_key, whatsapp_base_url, meta_pixels')
       .eq('public_key', body.public_key)
       .maybeSingle();
 
@@ -125,12 +125,13 @@ Deno.serve(async (req) => {
       form_settings: null as any,
       form_name: null as string | null,
       assigned_to: null as string | null,
+      meta_pixels: null as any[] | null,
     };
 
     if (body.form_id) {
       const { data: form, error: formError } = await supabase
         .from('forms')
-        .select('id, name, form_settings, ai_qualification_rules, msg_template_hot, msg_template_warm, msg_template_cold, assigned_to')
+        .select('id, name, form_settings, ai_qualification_rules, msg_template_hot, msg_template_warm, msg_template_cold, assigned_to, meta_pixels')
         .eq('id', body.form_id)
         .eq('organization_id', org.id)
         .maybeSingle();
@@ -144,6 +145,7 @@ Deno.serve(async (req) => {
           form_settings: form.form_settings,
           form_name: form.name,
           assigned_to: form.assigned_to,
+          meta_pixels: Array.isArray(form.meta_pixels) ? form.meta_pixels : null,
         };
         console.log('Form-specific settings loaded for:', form.name);
       }
@@ -352,6 +354,53 @@ Deno.serve(async (req) => {
         });
     } catch (pushError) {
       console.error('Error preparing push notification:', pushError);
+    }
+
+    // ===== META CONVERSIONS API (CAPI) =====
+    // Send server-side Lead event to Facebook for each active pixel
+    try {
+      // Get client IP and user agent from request headers
+      const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 
+                        req.headers.get('cf-connecting-ip') || '';
+      const clientUserAgent = req.headers.get('user-agent') || '';
+      
+      // Determine which pixels to fire — form-level overrides org-level
+      const pixelsToFire: Array<{ pixel_id: string; enabled: boolean }> = 
+        (formSettings.meta_pixels && formSettings.meta_pixels.length > 0)
+          ? formSettings.meta_pixels
+          : (Array.isArray(org.meta_pixels) ? org.meta_pixels : []);
+      
+      const activePixels = pixelsToFire.filter((p: any) => p.enabled && p.pixel_id);
+      
+      for (const pixel of activePixels) {
+        fetch(`${supabaseUrl}/functions/v1/meta-capi-event`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${serviceRoleKey}`,
+          },
+          body: JSON.stringify({
+            pixel_id: pixel.pixel_id,
+            event_name: 'Lead',
+            event_id: lead.id,
+            event_source_url: req.headers.get('referer') || undefined,
+            user_data: {
+              em: lead.email !== 'nao-fornecido@placeholder.local' ? lead.email : undefined,
+              ph: lead.phone !== '000000000' ? lead.phone : undefined,
+              client_ip_address: clientIp || undefined,
+              client_user_agent: clientUserAgent || undefined,
+            },
+            custom_data: {
+              content_name: formSettings.form_name || 'Formulário Público',
+              content_category: org.niche || 'lead',
+            },
+          }),
+        })
+          .then((res) => console.info(`CAPI Lead event sent to pixel ${pixel.pixel_id}, status: ${res.status}`))
+          .catch((err) => console.error(`CAPI dispatch failed for pixel ${pixel.pixel_id}:`, err.message));
+      }
+    } catch (capiError) {
+      console.error('Error dispatching CAPI events:', capiError);
     }
 
     return new Response(

@@ -104,3 +104,6 @@ verify_jwt = false
 
 [functions.check-trial-status]
 verify_jwt = false
+
+[functions.meta-capi-event]
+verify_jwt = false
