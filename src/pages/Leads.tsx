@@ -340,9 +340,14 @@ export default function Leads() {
     // Update lead notes always
     updateLead.mutate({ leadId: pendingLostStatus.leadId, updates: { notes: updatedNotes } });
 
-    // Only mark as lost if NO follow-up is scheduled
+    // Only mark as lost if NO follow-up is scheduled; otherwise move to "Agendado"
     if (!data.followUpDate) {
       updateStatus.mutate({ leadId: pendingLostStatus.leadId, status: pendingLostStatus.status });
+    } else {
+      const scheduledStage = stages?.find(s => isScheduledStage(s.key));
+      if (scheduledStage) {
+        updateStatus.mutate({ leadId: pendingLostStatus.leadId, status: scheduledStage.key });
+      }
     }
 
     // Create follow-up calendar event only if requested
