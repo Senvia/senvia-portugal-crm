@@ -2,70 +2,40 @@
 
 ## Diagnóstico
 
-Atualmente, o evento **Lead** do Meta Pixel é disparado apenas no **browser** (client-side) via `fbq('track', 'Lead', ...)`. Se o utilizador tiver um ad blocker, modo privado, ou o script do Facebook não carregar, o evento perde-se. A **Conversions API (CAPI)** envia o evento diretamente do servidor para o Facebook, garantindo 100% de entrega.
-
-Existem **dois cenários** onde o Lead é disparado:
-1. **Formulários públicos** (`submit-lead` edge function) — leads de clientes
-2. **Registo no Senvia OS** (`Login.tsx`) — signups na plataforma (Pixel fixo `2027821837745963`)
-
-## Plano: Implementar Meta Conversions API
-
-### Requisitos
-
-A CAPI precisa de:
-- **Pixel ID** — já existe (fixo `2027821837745963` para signups; dinâmico por organização nos formulários via `meta_pixels`)
-- **Access Token** — token de acesso da CAPI gerado no Meta Events Manager
-
-### 1. Guardar o Access Token como secret
-
-Usar o tool `add_secret` para pedir o **META_CONVERSIONS_API_TOKEN** (token gerado em Meta Events Manager > Settings > Conversions API > Generate Access Token).
-
-### 2. Adicionar envio CAPI no `submit-lead` edge function
-
-Após criar o lead com sucesso, enviar o evento server-side para cada pixel ativo do formulário:
+O erro nos logs da edge function `create-team-member` é claro:
 
 ```
-POST https://graph.facebook.com/v21.0/{PIXEL_ID}/events
+Error checking role: { code: "PGRST116", details: "The result contains 2 rows", message: "Cannot coerce the result to a single JSON object" }
 ```
 
-Payload:
-- `event_name`: `Lead`
-- `event_time`: timestamp unix
-- `event_id`: `lead.id` (para deduplicação com o evento browser)
-- `action_source`: `website`
-- `user_data`: email (hashed SHA256), phone (hashed SHA256), client IP, user agent
-- `custom_data`: `content_name`, `content_category`
+O utilizador atual (super_admin) tem **duas entradas** na tabela `user_roles` (ex: `admin` + `super_admin`). A query usa `.single()` com `.in('role', ['admin', 'super_admin'])`, que falha quando encontra mais de 1 resultado.
 
-O `event_id` já é enviado no browser (`eventID: leadId`), o que permite ao Facebook deduplicar automaticamente.
+## Correção
 
-### 3. Criar edge function `meta-capi-event` (reutilizável)
+No ficheiro `supabase/functions/create-team-member/index.ts`, substituir a query de verificação de role (linhas ~97-104):
 
-Uma edge function dedicada que recebe:
-- `pixel_id`, `access_token` (ou usa o secret global), `event_name`, `event_id`, `user_data`, `custom_data`
+**Antes:**
+```typescript
+const { data: roleData, error: roleError } = await supabaseAdmin
+  .from('user_roles')
+  .select('role')
+  .eq('user_id', currentUser.id)
+  .in('role', ['admin', 'super_admin'])
+  .single();
 
-Isto permite reutilizar para signups e leads.
+if (roleError || !roleData) {
+```
 
-### 4. Disparar CAPI no registo (Login.tsx)
+**Depois:**
+```typescript
+const { data: roleData, error: roleError } = await supabaseAdmin
+  .from('user_roles')
+  .select('role')
+  .eq('user_id', currentUser.id)
+  .in('role', ['admin', 'super_admin']);
 
-No `handleSignUp`, após criar o user, chamar a edge function `meta-capi-event` com o Pixel fixo e o email do utilizador.
+if (roleError || !roleData || roleData.length === 0) {
+```
 
-### 5. Suporte a Access Token por organização (opcional)
-
-Adicionar coluna `meta_capi_token` na tabela `organizations` para organizações que queiram usar o seu próprio token CAPI. Se não existir, usar o token global do Senvia.
-
-### Ficheiros a criar/alterar
-
-| Ficheiro | Ação |
-|---|---|
-| `supabase/functions/meta-capi-event/index.ts` | **Criar** — edge function reutilizável para envio CAPI |
-| `supabase/functions/submit-lead/index.ts` | **Alterar** — chamar CAPI após criar lead |
-| `src/pages/Login.tsx` | **Alterar** — chamar CAPI edge function após signup |
-| `supabase/config.toml` | **Alterar** — registar nova function |
-
-### Pré-requisito
-
-Antes de implementar, é necessário o **META_CONVERSIONS_API_TOKEN**. Este token é gerado no Meta Business Suite:
-1. Ir a **Events Manager** > selecionar o Pixel
-2. **Settings** > **Conversions API** > **Generate Access Token**
-3. Copiar o token gerado
+Remover `.single()` e verificar `roleData.length === 0` em vez de `!roleData`. Isto resolve o caso em que o utilizador tem ambos os roles `admin` e `super_admin`.
 
