@@ -782,6 +782,7 @@ export default function Leads() {
             }
           }}
           leadName={pendingLead?.name || ""}
+          isTelecom={isTelecom}
           onConfirm={handleLostConfirm}
         />
 

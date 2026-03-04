@@ -40,6 +40,7 @@ interface LostLeadDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   leadName: string;
+  isTelecom?: boolean;
   onConfirm: (data: {
     lossReason: string;
     notes: string;
@@ -55,6 +56,7 @@ export function LostLeadDialog({
   open,
   onOpenChange,
   leadName,
+  isTelecom = false,
   onConfirm,
 }: LostLeadDialogProps) {
   const [lossReason, setLossReason] = useState<string>("");
@@ -101,7 +103,8 @@ export function LostLeadDialog({
     onOpenChange(open);
   };
 
-  const isValid = lossReason && followUpDate;
+  const canMarkLost = !!lossReason;
+  const canSchedule = !!lossReason && !!followUpDate;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -148,7 +151,7 @@ export function LostLeadDialog({
 
           {/* Follow-up Date */}
               <div className="space-y-2">
-                <Label>Data de recontacto *</Label>
+                <Label>Data de recontacto {isTelecom ? '*' : ''}</Label>
                 <div className="flex gap-2 mb-2">
                   {[
                     { days: 30, label: "30 dias" },
@@ -169,7 +172,7 @@ export function LostLeadDialog({
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <Label className="text-xs text-muted-foreground mb-1">Data *</Label>
+                    <Label className="text-xs text-muted-foreground mb-1">Data {isTelecom ? '*' : ''}</Label>
                     <Input
                       type="date"
                       value={followUpDate}
@@ -235,8 +238,35 @@ export function LostLeadDialog({
           <Button variant="ghost" onClick={() => handleClose(false)} className="w-full sm:w-auto">
             Cancelar
           </Button>
-          <Button onClick={handleConfirm} disabled={!isValid} className="w-full sm:w-auto">
-            <CalendarClock className="h-4 w-4 mr-2" />Confirmar e Agendar
+          {!isTelecom && (
+            <Button
+              variant="destructive"
+              disabled={!canMarkLost}
+              className="w-full sm:w-auto"
+              onClick={() => {
+                if (!lossReason) return;
+                onConfirm({
+                  lossReason,
+                  notes,
+                  followUpDate: "",
+                  followUpTime: "",
+                  eventType,
+                  scheduleFollowUp: false,
+                  reminderMinutes: null,
+                });
+                setLossReason("");
+                setNotes("");
+                setFollowUpDate("");
+                setFollowUpTime("10:00");
+                setEventType("call");
+                setReminderMinutes("");
+              }}
+            >
+              Marcar como Perdido
+            </Button>
+          )}
+          <Button onClick={handleConfirm} disabled={!canSchedule} className="w-full sm:w-auto">
+            <CalendarClock className="h-4 w-4 mr-2" />Agendar Recontacto
           </Button>
         </DialogFooter>
       </DialogContent>
