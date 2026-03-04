@@ -1,39 +1,47 @@
 
 
-## Diagnóstico
+## Diagnóstico: Meta Pixel não dispara
 
-Na linha 341 do `Leads.tsx`, quando confirmas o diálogo de "Lead Perdido", o sistema faz duas coisas em paralelo:
-1. Muda o status do lead para **perdido** (`pendingLostStatus.status` = stage final negativa)
-2. Cria um **evento no calendário** com o recontacto
+O aviso "Pixel installed but hasn't fired recently" indica que o script do Meta Pixel carrega mas o pedido de rede para `facebook.com/tr` não é executado. Há dois problemas na implementação atual:
 
-O lead fica imediatamente como "perdido" no Kanban e o recontacto existe apenas como evento de calendário. O utilizador espera que o lead fique num estado intermédio (ex: "agendado") até à data do recontacto.
+### Problema 1: Posição do script no `index.html`
+
+O script do pixel está **depois** do `<script type="module" src="/src/main.tsx">`, que é um módulo async. Isto não é um problema grave, mas o Meta recomenda que o pixel esteja no `<head>` para garantir que dispara antes de qualquer interação do utilizador.
+
+### Problema 2: Content Security Policy / Preview domain
+
+No ambiente de preview do Lovable (`*.lovable.app`), o Facebook pode não processar o pixel corretamente porque o domínio não corresponde ao configurado no Meta Business. Isto é **esperado** no preview. O pixel deve funcionar no domínio de produção (`senvia.pt`).
+
+### Problema 3: Bloqueio por ad-blockers
+
+Se estás a usar um ad-blocker ou o Meta Pixel Helper num browser com proteção de tracking (ex: Brave, Firefox com ETP), o pedido será bloqueado.
 
 ## Solução
 
-Alterar o fluxo para que, quando o utilizador agenda um recontacto, o lead **não seja marcado como perdido imediatamente**. Em vez disso:
+Mover o script do Meta Pixel do final do `<body>` para dentro do `<head>`, que é a posição recomendada pela Meta. Isto garante que o `PageView` dispara o mais cedo possível.
 
-1. O lead mantém o status atual (ou move para um estado "recontacto" se existir na pipeline)
-2. As notas de perda são guardadas normalmente
-3. O evento de calendário é criado com a data do follow-up
-4. Apenas quando o utilizador decidir no futuro (via calendário ou manualmente) é que marca como perdido definitivamente
-
-### Alterações
+### Alteração
 
 | Ficheiro | Ação |
 |---|---|
-| `src/pages/Leads.tsx` | Alterar `handleLostConfirm` para NÃO mudar o status para perdido quando há follow-up agendado. Manter o status atual do lead |
-| `src/components/leads/LostLeadDialog.tsx` | Ajustar texto/UI para refletir que o lead ficará "em espera" com recontacto agendado, não como perdido |
+| `index.html` | Mover o bloco do Meta Pixel (script + noscript) do final do `<body>` para dentro do `<head>`, logo antes do `</head>` |
 
-### Lógica no `handleLostConfirm`
+O `<noscript>` fallback fica logo após `<body>` (já está correto).
 
+O script principal do pixel move para o `<head>`:
+
+```html
+<head>
+  ...existing meta tags...
+  
+  <!-- Meta Pixel Code -->
+  <script>
+  !function(f,b,e,v,n,t,s){...}
+  fbq('init', '2027821837745963');
+  fbq('track', 'PageView');
+  </script>
+</head>
 ```
-// Antes (linha 341):
-updateStatus.mutate({ leadId: pendingLostStatus.leadId, status: pendingLostStatus.status });
 
-// Depois:
-// Não muda o status - o lead fica no estado atual com recontacto agendado
-// As notas com o motivo de perda são guardadas na mesma
-```
-
-O lead permanecerá visível no Kanban na coluna atual, com as notas do motivo de perda e o evento de recontacto no calendário. O utilizador pode depois decidir movê-lo manualmente para perdido ou para outra etapa.
+**Nota importante**: Para validar que funciona, é necessário testar no domínio de produção (`senvia.pt`) ou no domínio publicado (`senvia-portugal-crm.lovable.app`), não no preview do Lovable.
 
