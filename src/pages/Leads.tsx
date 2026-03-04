@@ -337,9 +337,13 @@ export default function Leads() {
     const existingNotes = pendingLead.notes || "";
     const updatedNotes = existingNotes ? `${existingNotes}\n${lossNote}` : lossNote;
 
-    // Update lead status and notes
-    updateStatus.mutate({ leadId: pendingLostStatus.leadId, status: pendingLostStatus.status });
+    // Update lead notes always
     updateLead.mutate({ leadId: pendingLostStatus.leadId, updates: { notes: updatedNotes } });
+
+    // Only mark as lost if NO follow-up is scheduled
+    if (!data.followUpDate) {
+      updateStatus.mutate({ leadId: pendingLostStatus.leadId, status: pendingLostStatus.status });
+    }
 
     // Create follow-up calendar event only if requested
     if (data.followUpDate && user && organization) {

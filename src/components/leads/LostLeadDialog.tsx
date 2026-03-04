@@ -112,7 +112,7 @@ export function LostLeadDialog({
             Agendar Recontacto
           </DialogTitle>
           <DialogDescription>
-            Antes de marcar <strong>{leadName}</strong> como perdido, agende um follow-up futuro para tentar recuperar este lead.
+            Agende um recontacto para <strong>{leadName}</strong>. O lead permanecerá na etapa atual até decidires movê-lo.
           </DialogDescription>
         </DialogHeader>
 
