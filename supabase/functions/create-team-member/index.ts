@@ -108,10 +108,9 @@ serve(async (req) => {
       .from('user_roles')
       .select('role')
       .eq('user_id', currentUser.id)
-      .in('role', ['admin', 'super_admin'])
-      .single();
+      .in('role', ['admin', 'super_admin']);
 
-    if (roleError || !roleData) {
+    if (roleError || !roleData || roleData.length === 0) {
       console.error('Error checking role:', roleError);
       return new Response(
         JSON.stringify({ error: 'Apenas administradores podem adicionar membros' }),
