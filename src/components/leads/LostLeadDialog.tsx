@@ -108,133 +108,140 @@ export function LostLeadDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <CalendarClock className="h-5 w-5 text-warning" />
-            Agendar Recontacto
-          </DialogTitle>
-          <DialogDescription>
-            Agende um recontacto para <strong>{leadName}</strong>. O lead permanecerá na etapa atual até decidires movê-lo.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-4 py-2">
-          {/* Loss Reason */}
-          <div className="space-y-2">
-            <Label>Motivo da perda *</Label>
-            <Select value={lossReason} onValueChange={setLossReason}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecionar motivo" />
-              </SelectTrigger>
-              <SelectContent>
-                {LOSS_REASONS.map((reason) => (
-                  <SelectItem key={reason.value} value={reason.value}>
-                    {reason.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Notes */}
-          <div className="space-y-2">
-            <Label>Notas adicionais</Label>
-            <Textarea
-              placeholder="Detalhes sobre a perda..."
-              rows={2}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              className="resize-none"
-            />
-          </div>
-
-          {/* Follow-up Date */}
-              <div className="space-y-2">
-                <Label>Data de recontacto {isTelecom ? '*' : ''}</Label>
-                <div className="flex gap-2 mb-2">
-                  {[
-                    { days: 30, label: "30 dias" },
-                    { days: 60, label: "60 dias" },
-                    { days: 90, label: "90 dias" },
-                  ].map(({ days, label }) => (
-                    <Button
-                      key={days}
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="flex-1 text-xs"
-                      onClick={() => handleQuickDate(days)}
-                    >
-                      {label}
-                    </Button>
-                  ))}
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <Label className="text-xs text-muted-foreground mb-1">Data {isTelecom ? '*' : ''}</Label>
-                    <Input
-                      type="date"
-                      value={followUpDate}
-                      onChange={(e) => setFollowUpDate(e.target.value)}
-                      min={format(addDays(new Date(), 1), "yyyy-MM-dd")}
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground mb-1">Hora *</Label>
-                    <Input
-                      type="time"
-                      value={followUpTime}
-                      onChange={(e) => setFollowUpTime(e.target.value)}
-                    />
-                  </div>
-                </div>
-                {followUpDate && (
-                  <p className="text-xs text-muted-foreground">
-                    Recontacto a {format(new Date(followUpDate + "T12:00:00"), "d 'de' MMMM 'de' yyyy", { locale: pt })} às {followUpTime}
-                  </p>
-                )}
-              </div>
-
-              {/* Event Type */}
-              <div className="space-y-2">
-                <Label>Tipo de evento</Label>
-                <div className="flex gap-2">
-                  {EVENT_TYPES.map(({ value, label, icon: Icon }) => (
-                    <Button
-                      key={value}
-                      type="button"
-                      variant={eventType === value ? "default" : "outline"}
-                      size="sm"
-                      className="flex-1"
-                      onClick={() => setEventType(value as "call" | "meeting")}
-                    >
-                      <Icon className="h-4 w-4 mr-1.5" />
-                      {label}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Reminder */}
-              <div className="space-y-2">
-                <Label>Lembrete</Label>
-                <Select value={reminderMinutes || "none"} onValueChange={(v) => setReminderMinutes(v === "none" ? "" : v)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Sem lembrete" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {REMINDER_OPTIONS.map((option) => (
-                      <SelectItem key={option.value ?? 'none'} value={option.value?.toString() ?? 'none'}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+      <DialogContent variant="fullScreen" className="p-0 gap-0 flex flex-col">
+        {/* Header fixo */}
+        <div className="border-b p-4 md:p-6">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CalendarClock className="h-5 w-5 text-warning" />
+              Agendar Recontacto
+            </DialogTitle>
+            <DialogDescription>
+              Agende um recontacto para <strong>{leadName}</strong>. O lead permanecerá na etapa atual até decidires movê-lo.
+            </DialogDescription>
+          </DialogHeader>
         </div>
 
-        <DialogFooter className="flex-col gap-2 sm:flex-row">
+        {/* Corpo scrollável */}
+        <div className="flex-1 overflow-y-auto p-4 md:p-6">
+          <div className="space-y-4 max-w-lg">
+            {/* Loss Reason */}
+            <div className="space-y-2">
+              <Label>Motivo da perda *</Label>
+              <Select value={lossReason} onValueChange={setLossReason}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecionar motivo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {LOSS_REASONS.map((reason) => (
+                    <SelectItem key={reason.value} value={reason.value}>
+                      {reason.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Notes */}
+            <div className="space-y-2">
+              <Label>Notas adicionais</Label>
+              <Textarea
+                placeholder="Detalhes sobre a perda..."
+                rows={2}
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                className="resize-none"
+              />
+            </div>
+
+            {/* Follow-up Date */}
+            <div className="space-y-2">
+              <Label>Data de recontacto {isTelecom ? '*' : ''}</Label>
+              <div className="flex gap-2 mb-2">
+                {[
+                  { days: 30, label: "30 dias" },
+                  { days: 60, label: "60 dias" },
+                  { days: 90, label: "90 dias" },
+                ].map(({ days, label }) => (
+                  <Button
+                    key={days}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 text-xs"
+                    onClick={() => handleQuickDate(days)}
+                  >
+                    {label}
+                  </Button>
+                ))}
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label className="text-xs text-muted-foreground mb-1">Data {isTelecom ? '*' : ''}</Label>
+                  <Input
+                    type="date"
+                    value={followUpDate}
+                    onChange={(e) => setFollowUpDate(e.target.value)}
+                    min={format(addDays(new Date(), 1), "yyyy-MM-dd")}
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground mb-1">Hora *</Label>
+                  <Input
+                    type="time"
+                    value={followUpTime}
+                    onChange={(e) => setFollowUpTime(e.target.value)}
+                  />
+                </div>
+              </div>
+              {followUpDate && (
+                <p className="text-xs text-muted-foreground">
+                  Recontacto a {format(new Date(followUpDate + "T12:00:00"), "d 'de' MMMM 'de' yyyy", { locale: pt })} às {followUpTime}
+                </p>
+              )}
+            </div>
+
+            {/* Event Type */}
+            <div className="space-y-2">
+              <Label>Tipo de evento</Label>
+              <div className="flex gap-2">
+                {EVENT_TYPES.map(({ value, label, icon: Icon }) => (
+                  <Button
+                    key={value}
+                    type="button"
+                    variant={eventType === value ? "default" : "outline"}
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => setEventType(value as "call" | "meeting")}
+                  >
+                    <Icon className="h-4 w-4 mr-1.5" />
+                    {label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            {/* Reminder */}
+            <div className="space-y-2">
+              <Label>Lembrete</Label>
+              <Select value={reminderMinutes || "none"} onValueChange={(v) => setReminderMinutes(v === "none" ? "" : v)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Sem lembrete" />
+                </SelectTrigger>
+                <SelectContent>
+                  {REMINDER_OPTIONS.map((option) => (
+                    <SelectItem key={option.value ?? 'none'} value={option.value?.toString() ?? 'none'}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer fixo */}
+        <div className="border-t p-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
           <Button variant="ghost" onClick={() => handleClose(false)} className="w-full sm:w-auto">
             Cancelar
           </Button>
@@ -268,7 +275,7 @@ export function LostLeadDialog({
           <Button onClick={handleConfirm} disabled={!canSchedule} className="w-full sm:w-auto">
             <CalendarClock className="h-4 w-4 mr-2" />Agendar Recontacto
           </Button>
-        </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );
