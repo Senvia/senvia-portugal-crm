@@ -31,11 +31,11 @@ Deno.serve(async (req) => {
       auth: { persistSession: false },
     })
 
-    const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(token)
-    const userId = claimsData?.claims?.sub
+    const { data: { user: authUser2 }, error: authError } = await authClient.auth.getUser(token)
+    const userId = authUser2?.id
 
-    if (claimsError || !userId) {
-      console.error('auth.getClaims failed:', claimsError)
+    if (authError || !userId) {
+      console.error('auth.getUser failed:', authError)
       return new Response(
         JSON.stringify({ error: 'Unauthorized' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
