@@ -1,47 +1,31 @@
 
 
-## Diagnóstico: Meta Pixel não dispara
+## Plano: Mover lead para etapa "Agendado" ao agendar recontacto
 
-O aviso "Pixel installed but hasn't fired recently" indica que o script do Meta Pixel carrega mas o pedido de rede para `facebook.com/tr` não é executado. Há dois problemas na implementação atual:
+### Problema
+Quando agendas um recontacto, o lead fica na etapa atual em vez de mover para a etapa "Agendado" da pipeline.
 
-### Problema 1: Posição do script no `index.html`
-
-O script do pixel está **depois** do `<script type="module" src="/src/main.tsx">`, que é um módulo async. Isto não é um problema grave, mas o Meta recomenda que o pixel esteja no `<head>` para garantir que dispara antes de qualquer interação do utilizador.
-
-### Problema 2: Content Security Policy / Preview domain
-
-No ambiente de preview do Lovable (`*.lovable.app`), o Facebook pode não processar o pixel corretamente porque o domínio não corresponde ao configurado no Meta Business. Isto é **esperado** no preview. O pixel deve funcionar no domínio de produção (`senvia.pt`).
-
-### Problema 3: Bloqueio por ad-blockers
-
-Se estás a usar um ad-blocker ou o Meta Pixel Helper num browser com proteção de tracking (ex: Brave, Firefox com ETP), o pedido será bloqueado.
-
-## Solução
-
-Mover o script do Meta Pixel do final do `<body>` para dentro do `<head>`, que é a posição recomendada pela Meta. Isto garante que o `PageView` dispara o mais cedo possível.
+### Solução
+No `handleLostConfirm` (linha 344 de `Leads.tsx`), quando há `followUpDate`, encontrar dinamicamente a etapa "agendado/scheduled" da pipeline e mover o lead para lá.
 
 ### Alteração
 
 | Ficheiro | Ação |
 |---|---|
-| `index.html` | Mover o bloco do Meta Pixel (script + noscript) do final do `<body>` para dentro do `<head>`, logo antes do `</head>` |
+| `src/pages/Leads.tsx` | Na condição `if (!data.followUpDate)` (linha 344), adicionar um `else` que encontra a etapa "scheduled" usando a função `isScheduledStage` já existente e faz `updateStatus.mutate` para essa etapa |
 
-O `<noscript>` fallback fica logo após `<body>` (já está correto).
-
-O script principal do pixel move para o `<head>`:
-
-```html
-<head>
-  ...existing meta tags...
-  
-  <!-- Meta Pixel Code -->
-  <script>
-  !function(f,b,e,v,n,t,s){...}
-  fbq('init', '2027821837745963');
-  fbq('track', 'PageView');
-  </script>
-</head>
+A lógica será:
+```typescript
+if (!data.followUpDate) {
+  updateStatus.mutate({ leadId, status: lostStatus });
+} else {
+  // Find the "scheduled" stage dynamically
+  const scheduledStage = stages.find(s => isScheduledStage(s.key));
+  if (scheduledStage) {
+    updateStatus.mutate({ leadId, status: scheduledStage.key });
+  }
+}
 ```
 
-**Nota importante**: Para validar que funciona, é necessário testar no domínio de produção (`senvia.pt`) ou no domínio publicado (`senvia-portugal-crm.lovable.app`), não no preview do Lovable.
+Isto usa a função `isScheduledStage` (linha 157) que já deteta etapas com keywords como "agendado", "scheduled", "reunião", garantindo compatibilidade com qualquer pipeline customizada.
 
