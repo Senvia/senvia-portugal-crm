@@ -54,6 +54,11 @@ export default function Login() {
   // Tab state - default to signup if query param is set
   const defaultTab = searchParams.get('tab') === 'signup' ? 'signup' : 'login';
   const [activeTab, setActiveTab] = useState(defaultTab);
+
+  // Capture Meta tracking params from URL (fbclid → fbc for CAPI attribution)
+  const fbclid = searchParams.get('fbclid');
+  const fbc = fbclid ? `fb.1.${Date.now()}.${fbclid}` : (searchParams.get('fbc') || null);
+  const fbp = searchParams.get('fbp') || null;
   
   // Login form state
   const [loginCompanyCode, setLoginCompanyCode] = useState('');
@@ -275,12 +280,13 @@ export default function Login() {
 
       // Check if email confirmation is required (no session means confirmation needed)
       if (!authData.session) {
-        // Fire Meta Pixel Lead event (client-side)
+        // Fire Meta Pixel Lead event (client-side) with eventID for deduplication
+        const capiEventId = `signup-${authData.user.id}`;
         if (typeof window.fbq === 'function') {
           window.fbq('track', 'Lead', {
             content_name: 'Senvia OS Registration',
             content_category: 'signup',
-          });
+          }, { eventID: capiEventId });
         }
         // Fire Meta CAPI Lead event (server-side, non-blocking)
         try {
@@ -293,7 +299,7 @@ export default function Login() {
               event_name: 'Lead',
               event_id: `signup-${authData.user.id}`,
               event_source_url: window.location.href,
-              user_data: { em: signupEmail },
+              user_data: { em: signupEmail, fbc: fbc || undefined, fbp: fbp || undefined, client_user_agent: navigator.userAgent },
               custom_data: { content_name: 'Senvia OS Registration', content_category: 'signup' },
             }),
           }).catch(() => {});
@@ -329,12 +335,13 @@ export default function Login() {
         throw orgError;
       }
 
-      // Fire Meta Pixel Lead event (client-side)
+      // Fire Meta Pixel Lead event (client-side) with eventID for deduplication
+      const capiEventId2 = `signup-${authData.user!.id}`;
       if (typeof window.fbq === 'function') {
         window.fbq('track', 'Lead', {
           content_name: 'Senvia OS Registration',
           content_category: 'signup',
-        });
+        }, { eventID: capiEventId2 });
       }
       // Fire Meta CAPI Lead event (server-side, non-blocking)
       try {
@@ -343,12 +350,12 @@ export default function Login() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            pixel_id: '2027821837745963',
-            event_name: 'Lead',
-            event_id: `signup-${authData.user!.id}`,
-            event_source_url: window.location.href,
-            user_data: { em: signupEmail },
-            custom_data: { content_name: 'Senvia OS Registration', content_category: 'signup' },
+              pixel_id: '2027821837745963',
+              event_name: 'Lead',
+              event_id: `signup-${authData.user!.id}`,
+              event_source_url: window.location.href,
+              user_data: { em: signupEmail, fbc: fbc || undefined, fbp: fbp || undefined, client_user_agent: navigator.userAgent },
+              custom_data: { content_name: 'Senvia OS Registration', content_category: 'signup' },
           }),
         }).catch(() => {});
       } catch {}
