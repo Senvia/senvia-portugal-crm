@@ -161,6 +161,18 @@ export default function PublicLeadForm() {
     fetchForm();
   }, [slug, formSlug]);
 
+  // Notify parent iframe of height changes for auto-resize
+  useEffect(() => {
+    if (typeof window === 'undefined' || window.parent === window) return;
+    const sendHeight = () => {
+      window.parent.postMessage({ type: 'senvia-resize', height: document.body.scrollHeight }, '*');
+    };
+    sendHeight();
+    const observer = new ResizeObserver(sendHeight);
+    observer.observe(document.body);
+    return () => observer.disconnect();
+  }, [isSuccess, isValidating]);
+
   // Inject Meta Pixels - using sessionStorage to persist across React remounts
   useEffect(() => {
     if (!formData?.meta_pixels || !formData?.form_id) return;
