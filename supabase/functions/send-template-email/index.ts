@@ -177,10 +177,21 @@ serve(async (req: Request): Promise<Response> => {
     // Get user ID from auth header
     const authHeader = req.headers.get("authorization");
     let userId: string | null = null;
+    let senderSignature: string | null = null;
     if (authHeader) {
       const token = authHeader.replace("Bearer ", "");
       const { data: { user } } = await supabase.auth.getUser(token);
       userId = user?.id || null;
+
+      // Fetch sender's email signature
+      if (userId) {
+        const { data: senderProfile } = await supabase
+          .from("profiles")
+          .select("email_signature")
+          .eq("id", userId)
+          .single();
+        senderSignature = (senderProfile as any)?.email_signature || null;
+      }
     }
 
     const results: { email: string; status: string; error?: string }[] = [];
@@ -223,6 +234,11 @@ serve(async (req: Request): Promise<Response> => {
 
         const subject = replaceVariables(templateSubject, variables);
         let htmlContent = replaceVariables(templateHtmlContent, variables);
+
+        // Append sender's email signature if available
+        if (senderSignature) {
+          htmlContent = htmlContent + '<br><br>---<br>' + senderSignature;
+        }
 
         // Apply campaign settings to HTML
         htmlContent = applyHtmlSettings(htmlContent, settings, settingsData);

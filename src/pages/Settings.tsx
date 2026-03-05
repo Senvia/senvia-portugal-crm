@@ -95,6 +95,7 @@ export default function Settings() {
   const [fullName, setFullName] = useState('');
   const [profileEmail, setProfileEmail] = useState('');
   const [profilePhone, setProfilePhone] = useState('');
+  const [emailSignature, setEmailSignature] = useState('');
 
   // Password change state
   const [newPassword, setNewPassword] = useState('');
@@ -111,7 +112,8 @@ export default function Settings() {
     if (profile?.full_name) setFullName(profile.full_name);
     setProfileEmail((profile as any)?.email || '');
     setProfilePhone((profile as any)?.phone || '');
-  }, [profile?.full_name, (profile as any)?.email, (profile as any)?.phone]);
+    setEmailSignature((profile as any)?.email_signature || '');
+  }, [profile?.full_name, (profile as any)?.email, (profile as any)?.phone, (profile as any)?.email_signature]);
 
   // Fetch current integrations data
   useEffect(() => {
@@ -226,7 +228,7 @@ export default function Settings() {
       toast({ title: 'Nome inválido', description: 'O nome não pode estar vazio.', variant: 'destructive' });
       return;
     }
-    updateProfile.mutate({ full_name: fullName.trim(), email: profileEmail, phone: profilePhone });
+    updateProfile.mutate({ full_name: fullName.trim(), email: profileEmail, phone: profilePhone, email_signature: emailSignature });
   };
 
   const handleChangePassword = () => {
@@ -251,6 +253,7 @@ export default function Settings() {
   const generalContentProps = {
     organization, profile, isAdmin, orgName, setOrgName, fullName, setFullName,
     profileEmail, setProfileEmail, profilePhone, setProfilePhone,
+    emailSignature, setEmailSignature,
     handleSaveOrgName, handleSaveProfile,
     updateOrganizationIsPending: updateOrganization.isPending,
     updateProfileIsPending: updateProfile.isPending,

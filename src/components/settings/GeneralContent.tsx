@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Label } from "@/components/ui/label";
-import { User, Building, Loader2, Save, Copy, Check } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { User, Building, Loader2, Save, Copy, Check, Mail, Eye, EyeOff } from "lucide-react";
 import { PLAN_LABELS, OrganizationPlan } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
@@ -32,6 +33,8 @@ interface GeneralContentProps {
   setProfileEmail: (value: string) => void;
   profilePhone: string;
   setProfilePhone: (value: string) => void;
+  emailSignature: string;
+  setEmailSignature: (value: string) => void;
   handleSaveOrgName: () => void;
   handleSaveProfile: () => void;
   updateOrganizationIsPending: boolean;
@@ -50,6 +53,8 @@ export const GeneralContent = ({
   setProfileEmail,
   profilePhone,
   setProfilePhone,
+  emailSignature,
+  setEmailSignature,
   handleSaveOrgName,
   handleSaveProfile,
   updateOrganizationIsPending,
@@ -57,6 +62,7 @@ export const GeneralContent = ({
 }: GeneralContentProps) => {
   const { toast } = useToast();
   const [copiedSlug, setCopiedSlug] = useState(false);
+  const [showSignaturePreview, setShowSignaturePreview] = useState(false);
 
   const isOnTrial = (() => {
     if (!organization) return false;
@@ -181,9 +187,48 @@ export const GeneralContent = ({
               />
             </div>
           </div>
+          <Separator />
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="email-signature" className="flex items-center gap-2">
+                <Mail className="h-4 w-4" />
+                Assinatura de Email
+              </Label>
+              {emailSignature && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowSignaturePreview(!showSignaturePreview)}
+                >
+                  {showSignaturePreview ? <EyeOff className="h-4 w-4 mr-1" /> : <Eye className="h-4 w-4 mr-1" />}
+                  {showSignaturePreview ? 'Editar' : 'Preview'}
+                </Button>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Esta assinatura será automaticamente anexada a todos os emails que enviar (templates, marketing, leads).
+            </p>
+            {showSignaturePreview ? (
+              <div
+                className="border rounded-md p-4 bg-background min-h-[80px]"
+                dangerouslySetInnerHTML={{ __html: emailSignature }}
+              />
+            ) : (
+              <Textarea
+                id="email-signature"
+                value={emailSignature}
+                onChange={(e) => setEmailSignature(e.target.value)}
+                placeholder="Cole aqui a sua assinatura HTML (ex: nome, cargo, telefone, logo...)"
+                rows={6}
+                className="font-mono text-xs"
+              />
+            )}
+          </div>
+
           <Button
             onClick={handleSaveProfile}
-            disabled={updateProfileIsPending || (fullName === profile?.full_name && profileEmail === (profile?.email || '') && profilePhone === (profile?.phone || ''))}
+            disabled={updateProfileIsPending || (fullName === profile?.full_name && profileEmail === (profile?.email || '') && profilePhone === (profile?.phone || '') && emailSignature === ((profile as any)?.email_signature || ''))}
             className="w-full sm:w-auto"
           >
             {updateProfileIsPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
