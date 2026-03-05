@@ -12,7 +12,7 @@ const DialogOverlay = React.forwardRef<React.ElementRef<typeof DialogPrimitive.O
 }, ref) => <DialogPrimitive.Overlay ref={ref} className={cn("fixed inset-0 z-50 bg-black/80 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0", className)} {...props} />);
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 const dialogContentVariants = {
-  default: "pointer-events-auto fixed inset-0 z-50 grid w-full max-w-lg max-w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem-var(--safe-area-top)-var(--safe-area-bottom))] overflow-y-auto m-auto gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 sm:rounded-lg safe-top safe-bottom",
+  default: "pointer-events-auto fixed left-1/2 -translate-x-1/2 z-50 grid w-full max-w-lg max-w-[calc(100vw-2rem)] overflow-y-auto gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 sm:rounded-lg",
   fullScreen: "pointer-events-auto fixed inset-0 z-50 w-full h-full max-w-none bg-background duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 safe-top safe-bottom md:left-64 md:w-[calc(100%-16rem)]",
 };
 
@@ -40,7 +40,11 @@ const DialogContent = React.forwardRef<React.ElementRef<typeof DialogPrimitive.C
           e.preventDefault();
         }
       }}
-      className={cn(dialogContentVariants[variant], className)} 
+      className={cn(dialogContentVariants[variant], className)}
+      style={variant === "default" ? {
+        top: "calc(var(--safe-area-top) + 1rem)",
+        bottom: "calc(var(--safe-area-bottom) + 1rem)",
+      } : undefined}
       {...props}>
       {children}
       <DialogPrimitive.Close className="absolute right-4 top-safe rounded-sm opacity-70 ring-offset-background transition-opacity data-[state=open]:bg-accent data-[state=open]:text-muted-foreground hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none">
