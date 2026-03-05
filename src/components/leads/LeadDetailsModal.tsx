@@ -67,6 +67,7 @@ import {
 } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { cn } from "@/lib/utils";
+import { SendLeadEmailModal } from "./SendLeadEmailModal";
 
 interface LeadDetailsModalProps {
   lead: Lead | null;
@@ -95,6 +96,7 @@ export function LeadDetailsModal({
   onUpdate
 }: LeadDetailsModalProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showEmailModal, setShowEmailModal] = useState(false);
   const { canDeleteLeads, canManageTeam, isAdmin } = usePermissions();
   const { organization } = useAuth();
   const { data: teamMembers } = useTeamMembers();
@@ -621,6 +623,15 @@ export function LeadDetailsModal({
                       <Button
                         variant="outline"
                         className="w-full"
+                        disabled={!lead.email}
+                        onClick={() => setShowEmailModal(true)}
+                      >
+                        <Mail className="h-4 w-4" />
+                        Enviar Email
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="w-full"
                         onClick={() => window.location.href = `tel:${lead.phone}`}
                       >
                         <Phone className="h-4 w-4" />
@@ -628,6 +639,14 @@ export function LeadDetailsModal({
                       </Button>
                     </CardContent>
                   </Card>
+
+                  {lead && (
+                    <SendLeadEmailModal
+                      lead={lead}
+                      open={showEmailModal}
+                      onOpenChange={setShowEmailModal}
+                    />
+                  )}
 
                   {/* Back Button */}
                   <Button variant="outline" className="w-full" onClick={() => onOpenChange(false)}>
