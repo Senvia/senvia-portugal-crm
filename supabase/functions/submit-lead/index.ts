@@ -252,6 +252,12 @@ Deno.serve(async (req) => {
       return result;
     };
 
+    // Transform custom_data IDs to human-readable labels
+    const transformedCustomData = mapCustomDataToLabels(
+      body.custom_data || null,
+      formSettings.form_settings as any
+    );
+
     // Fetch active webhooks from organization_webhooks table
     const { data: activeWebhooks } = await supabase
       .from('organization_webhooks')
