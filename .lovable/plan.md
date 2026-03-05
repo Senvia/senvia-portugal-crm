@@ -1,28 +1,22 @@
 
 
-## Bug: Validação de NIF a detetar duplicados de outra organização
+## Assinatura como Variável de Template `{{assinatura}}`
 
-### Análise
+### Resumo
 
-O `useNifValidation` consulta `crm_clients` com `.eq('organization_id', organization.id)` — o que deveria isolar por organização. No entanto, a política RLS da tabela `crm_clients` usa `get_user_org_id(auth.uid())`, que depende do JWT `active_organization_id`. Se o JWT não estiver sincronizado com a organização ativa na UI (ex: após trocar de organização sem refresh do token), o RLS pode devolver dados da organização errada.
+Substituir a concatenação automática da assinatura no final do email por uma variável `{{assinatura}}` que o utilizador posiciona livremente no template HTML. A assinatura é resolvida dinamicamente com base no utilizador que envia o email.
 
-**Causa provável**: Ao trocar de organização na UI, o `active_organization_id` no JWT não é atualizado (está guardado apenas em `localStorage`), e o fallback do `get_user_org_id` retorna a primeira organização por `joined_at` — que pode ser Perfect2Gether em vez de SENVIA.
+### Alterações
 
-### Solução
-
-| Ficheiro | Alteração |
+| Componente | O quê |
 |---|---|
-| `src/hooks/useNifValidation.ts` | Nenhuma mudança necessária — a query já filtra por `organization_id` |
-| `src/contexts/AuthContext.tsx` | Ao fazer `switchOrganization`, garantir que o `app_metadata.active_organization_id` é atualizado no JWT via `supabase.auth.updateUser()`, não apenas em `localStorage`. Isso sincroniza o RLS com a UI. |
+| **`src/types/marketing.ts`** | Adicionar `{ key: '{{assinatura}}', label: 'Assinatura do comercial' }` ao array `TEMPLATE_VARIABLES_ORG` |
+| **`supabase/functions/send-template-email/index.ts`** | Remover a concatenação no final (`htmlContent + '<br><br>---<br>' + senderSignature`). Em vez disso, incluir `assinatura: senderSignature || ''` no objeto de variáveis passado ao `replaceVariables()`, para que `{{assinatura}}` seja substituído inline |
 
-### Alteração concreta
+### Resultado
 
-Na função `switchOrganization` do `AuthContext`, após guardar em localStorage, chamar:
-```typescript
-await supabase.auth.updateUser({
-  data: { active_organization_id: orgId }
-});
-```
-
-Isto garante que o JWT passa o `active_organization_id` correto para o `get_user_org_id`, alinhando o RLS com a organização selecionada na UI.
+- No editor de templates, aparece o botão `{{assinatura}}` junto das outras variáveis da organização
+- O utilizador coloca `{{assinatura}}` onde quiser no HTML do template
+- Ao enviar, o sistema substitui `{{assinatura}}` pelo `email_signature` do perfil do utilizador autenticado
+- Se o utilizador não tiver assinatura configurada, a variável é substituída por string vazia (sem vestígios)
 
