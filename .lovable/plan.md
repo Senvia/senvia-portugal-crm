@@ -1,48 +1,45 @@
 
 
-## Corrigir modais responsivos em mobile
+## Diagnostico: Leads nao chegam ao Facebook
 
-### Problema identificado
+### Problemas encontrados
 
-O componente base `DialogContent` (variante `default`) em `src/components/ui/dialog.tsx` não tem restrições de largura/altura para mobile:
+**Bug 1 (CRITICO) — `submit-lead` crasha antes de enviar CAPI**
 
-```
-// Variante default atual — sem limites mobile
-"... w-full max-w-lg ... gap-4 border bg-background p-6 ..."
-```
+No ficheiro `supabase/functions/submit-lead/index.ts`, linha 310, o webhook payload referencia `transformedCustomData` — uma variavel que **nunca e definida**. A funcao `mapCustomDataToLabels` existe (linhas 230-253) mas nunca e chamada. Isto causa um `ReferenceError` que crasha a funcao DEPOIS de inserir o lead na DB mas ANTES de:
+- Enviar webhooks ao n8n
+- Enviar push notifications
+- Enviar eventos CAPI ao Facebook
 
-Isto causa:
-- Modais com `max-w-3xl`, `max-w-2xl`, `max-w-[700px]` ultrapassam a largura do ecrã → scroll lateral
-- Modais com `max-h-[90vh]` + `p-6` não respeitam safe areas do iPhone
-- Sem `overflow-y-auto` base, conteúdo longo sai do viewport
+Resultado: leads sao guardados na base de dados, mas o Facebook nunca recebe o evento.
 
-### Solução
+**Bug 2 — Login.tsx CAPI call sem autorizacao adequada**
 
-**1 ficheiro principal**: `src/components/ui/dialog.tsx`
+A chamada CAPI no signup (linha 294) nao inclui header `Authorization`. Embora `verify_jwt = false`, a ausencia de qualquer header pode causar problemas dependendo do proxy. Alem disso, qualquer erro e silenciado por `.catch(() => {})`.
 
-Alterar a variante `default` para incluir:
-- `max-w-[calc(100vw-2rem)]` — garante que nenhum modal excede a largura do ecrã menos margens
-- `max-h-[calc(100dvh-2rem)]` — limita altura ao viewport dinâmico (dvh respeita barra de endereço mobile)
-- `overflow-y-auto` — scroll interno quando conteúdo excede
-- `safe-top safe-bottom` — respeitar notch/Dynamic Island em iOS
+### Solucao
 
-Resultado: qualquer modal que use a variante default (com qualquer `max-w-*` via className) ficará automaticamente limitado ao ecrã, sem necessidade de alterar cada modal individualmente.
+**Ficheiro 1: `supabase/functions/submit-lead/index.ts`**
+- Adicionar a chamada a `mapCustomDataToLabels` antes de construir o payload:
+  ```typescript
+  const transformedCustomData = mapCustomDataToLabels(
+    body.custom_data || null,
+    formSettings.form_settings as any
+  );
+  ```
+- Inserir esta linha imediatamente antes da construcao do `webhookPayload` (antes da linha 276).
 
-**Ficheiros secundários** (2 modais que usam `max-w-3xl` sem ser fullScreen — os mais problemáticos):
-- `src/components/marketing/CreateTemplateModal.tsx` — já tem `max-h-[90vh] overflow-y-auto`, a correção no base resolve
-- `src/components/marketing/EditTemplateModal.tsx` — idem
+**Ficheiro 2: `src/pages/Login.tsx`**
+- Adicionar header `Authorization` com a anon key nas chamadas CAPI para garantir que passam pelo proxy correctamente:
+  ```typescript
+  headers: { 
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+  },
+  ```
+- Aplicar nos dois blocos de CAPI call (linhas ~294 e ~349).
 
-A correção no componente base resolve ~56 modais de uma vez.
+### Impacto
 
-### Detalhe técnico
-
-```css
-/* Variante default corrigida */
-"pointer-events-auto fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg 
- max-w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)] overflow-y-auto
- translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 
- shadow-lg duration-200 sm:rounded-lg safe-top safe-bottom ..."
-```
-
-O `max-w-[calc(100vw-2rem)]` funciona como tecto — se um modal define `max-w-3xl` via className, o CSS aplica o menor dos dois valores, impedindo overflow.
+A correcao do Bug 1 resolve o problema principal — todos os leads de formularios publicos voltarao a disparar eventos CAPI para o Facebook. A correcao do Bug 2 garante que os eventos de signup tambem chegam.
 
