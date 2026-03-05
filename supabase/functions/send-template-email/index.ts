@@ -229,16 +229,12 @@ serve(async (req: Request): Promise<Response> => {
           vendedor: vendedorName,
           vendedor_email: vendedorEmail,
           vendedor_telefone: vendedorPhone,
+          assinatura: senderSignature || '',
           ...recipient.variables,
         };
 
         const subject = replaceVariables(templateSubject, variables);
         let htmlContent = replaceVariables(templateHtmlContent, variables);
-
-        // Append sender's email signature if available
-        if (senderSignature) {
-          htmlContent = htmlContent + '<br><br>---<br>' + senderSignature;
-        }
 
         // Apply campaign settings to HTML
         htmlContent = applyHtmlSettings(htmlContent, settings, settingsData);
