@@ -1,69 +1,48 @@
 
 
-## Diagnóstico: Evento Lead não atribuído ao anúncio
+## Corrigir modais responsivos em mobile
 
-### O que acontece hoje
+### Problema identificado
 
-```text
-senvia.pt/senvia-os (Pixel ativo)
-   ↓ clique "Teste Grátis"
-senvia-portugal-crm.lovable.app/?tab=signup (domínio diferente)
-   ↓ registo
-Login.tsx dispara fbq('track', 'Lead') 
-   → Pixel sem cookie fbc/fbp → Meta não consegue atribuir ao anúncio
+O componente base `DialogContent` (variante `default`) em `src/components/ui/dialog.tsx` não tem restrições de largura/altura para mobile:
+
+```
+// Variante default atual — sem limites mobile
+"... w-full max-w-lg ... gap-4 border bg-background p-6 ..."
 ```
 
-- **Cookies `_fbc` e `_fbp`** ficam em `senvia.pt` e não são partilhados com `lovable.app`
-- O CAPI server-side só é chamado no `submit-lead` (formulários públicos), **não no registo de conta**
-- Resultado: o Meta recebe o evento Lead mas sem dados de atribuição ao clique do anúncio
+Isto causa:
+- Modais com `max-w-3xl`, `max-w-2xl`, `max-w-[700px]` ultrapassam a largura do ecrã → scroll lateral
+- Modais com `max-h-[90vh]` + `p-6` não respeitam safe areas do iPhone
+- Sem `overflow-y-auto` base, conteúdo longo sai do viewport
 
-### Solução proposta
+### Solução
 
-Passar os parâmetros de rastreio (`fbclid`, `fbc`, `fbp`) via URL do link do anúncio → capturá-los no registo → enviá-los ao CAPI server-side.
+**1 ficheiro principal**: `src/components/ui/dialog.tsx`
 
-| Passo | Ficheiro | Ação |
-|---|---|---|
-| 1 | `src/pages/Login.tsx` | Capturar `fbclid`, `fbc`, `fbp` dos query params da URL ao carregar a página. Guardar em state. |
-| 2 | `src/pages/Login.tsx` | Após registo bem-sucedido, além do `fbq('track', 'Lead')` client-side, chamar a edge function `meta-capi-event` com os dados do utilizador + `fbc`/`fbp` do URL |
-| 3 | Link do anúncio | Garantir que o link no anúncio passa os params: `https://senvia-portugal-crm.lovable.app/?tab=signup&fbclid={fbclid}` (o Meta faz isso automaticamente) |
+Alterar a variante `default` para incluir:
+- `max-w-[calc(100vw-2rem)]` — garante que nenhum modal excede a largura do ecrã menos margens
+- `max-h-[calc(100dvh-2rem)]` — limita altura ao viewport dinâmico (dvh respeita barra de endereço mobile)
+- `overflow-y-auto` — scroll interno quando conteúdo excede
+- `safe-top safe-bottom` — respeitar notch/Dynamic Island em iOS
 
-### Detalhe técnico - Login.tsx
+Resultado: qualquer modal que use a variante default (com qualquer `max-w-*` via className) ficará automaticamente limitado ao ecrã, sem necessidade de alterar cada modal individualmente.
 
-Após registo:
-```typescript
-// Extrair fbclid/fbc/fbp dos URL params
-const urlParams = new URLSearchParams(window.location.search);
-const fbclid = urlParams.get('fbclid');
-const fbc = fbclid ? `fb.1.${Date.now()}.${fbclid}` : null;
+**Ficheiros secundários** (2 modais que usam `max-w-3xl` sem ser fullScreen — os mais problemáticos):
+- `src/components/marketing/CreateTemplateModal.tsx` — já tem `max-h-[90vh] overflow-y-auto`, a correção no base resolve
+- `src/components/marketing/EditTemplateModal.tsx` — idem
 
-// Chamar CAPI server-side com dados de atribuição
-await supabase.functions.invoke('meta-capi-event', {
-  body: {
-    pixel_id: '2027821837745963',
-    event_name: 'Lead',
-    event_id: eventId, // mesmo ID usado no fbq client-side para deduplicação
-    user_data: {
-      em: email,
-      fbc: fbc,
-      client_ip_address: '',
-      client_user_agent: navigator.userAgent,
-    },
-    custom_data: {
-      content_name: 'Senvia OS Registration',
-      content_category: 'signup',
-    },
-  },
-});
+A correção no componente base resolve ~56 modais de uma vez.
+
+### Detalhe técnico
+
+```css
+/* Variante default corrigida */
+"pointer-events-auto fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg 
+ max-w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)] overflow-y-auto
+ translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 
+ shadow-lg duration-200 sm:rounded-lg safe-top safe-bottom ..."
 ```
 
-### Nota sobre o link do anúncio
-
-O Meta Ads adiciona automaticamente o `?fbclid=xxx` ao URL de destino. Se o link de destino for `senvia.pt/senvia-os`, o `fbclid` fica nesse domínio. Para resolver:
-
-**Opção A**: O botão CTA em `senvia.pt/senvia-os` deve passar o `fbclid` para o URL de registo:
-```
-https://senvia-portugal-crm.lovable.app/?tab=signup&fbclid={valor_do_fbclid}
-```
-
-**Opção B** (mais simples): Mudar o URL de destino do anúncio diretamente para `https://senvia-portugal-crm.lovable.app/?tab=signup` — assim o `fbclid` já fica no domínio correto.
+O `max-w-[calc(100vw-2rem)]` funciona como tecto — se um modal define `max-w-3xl` via className, o CSS aplica o menor dos dois valores, impedindo overflow.
 
