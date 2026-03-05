@@ -1,22 +1,31 @@
 
 
-## Assinatura como Variável de Template `{{assinatura}}`
+## Emails enviados pelo domínio de cada colaborador
 
-### Resumo
+### Contexto atual
+Hoje, todos os emails são enviados com `sender: { name: org.name, email: org.brevo_sender_email }` — ou seja, sempre o remetente da organização. Queremos que cada colaborador possa ter o seu próprio email de remetente verificado na Brevo.
 
-Substituir a concatenação automática da assinatura no final do email por uma variável `{{assinatura}}` que o utilizador posiciona livremente no template HTML. A assinatura é resolvida dinamicamente com base no utilizador que envia o email.
+### Solução
 
-### Alterações
-
-| Componente | O quê |
+| Componente | Alteração |
 |---|---|
-| **`src/types/marketing.ts`** | Adicionar `{ key: '{{assinatura}}', label: 'Assinatura do comercial' }` ao array `TEMPLATE_VARIABLES_ORG` |
-| **`supabase/functions/send-template-email/index.ts`** | Remover a concatenação no final (`htmlContent + '<br><br>---<br>' + senderSignature`). Em vez disso, incluir `assinatura: senderSignature || ''` no objeto de variáveis passado ao `replaceVariables()`, para que `{{assinatura}}` seja substituído inline |
+| **Database** | Adicionar coluna `brevo_sender_email` à tabela `profiles` (text, nullable) |
+| **UI — Definições → A Minha Conta** | Novo campo "Email de envio (Brevo)" abaixo do email de contacto, onde o colaborador insere o seu email verificado na Brevo |
+| **`useProfile.ts`** | Incluir `brevo_sender_email` no `mutationFn` |
+| **Edge function `send-template-email`** | Na query do perfil do sender, buscar também `brevo_sender_email`. Se existir, usar como `sender.email` em vez de `org.brevo_sender_email`. O `sender.name` passa a ser o `full_name` do colaborador (fallback: org.name) |
 
-### Resultado
+### Lógica de prioridade no envio
 
-- No editor de templates, aparece o botão `{{assinatura}}` junto das outras variáveis da organização
-- O utilizador coloca `{{assinatura}}` onde quiser no HTML do template
-- Ao enviar, o sistema substitui `{{assinatura}}` pelo `email_signature` do perfil do utilizador autenticado
-- Se o utilizador não tiver assinatura configurada, a variável é substituída por string vazia (sem vestígios)
+```text
+sender.email = profile.brevo_sender_email ?? org.brevo_sender_email
+sender.name  = profile.full_name ?? org.name
+```
+
+Se o colaborador não configurou o seu email Brevo, o sistema continua a usar o da organização como fallback.
+
+### Ficheiros afetados
+1. **Migração SQL** — `ALTER TABLE profiles ADD COLUMN brevo_sender_email text;`
+2. **`src/components/settings/GeneralContent.tsx`** — Novo campo de input
+3. **`src/hooks/useProfile.ts`** — Adicionar campo ao update
+4. **`supabase/functions/send-template-email/index.ts`** — Usar sender do perfil com fallback para org
 
