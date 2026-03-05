@@ -132,7 +132,14 @@ export function LeadDetailsModal({
     if (!lead?.custom_data || typeof lead.custom_data !== 'object') return [];
     
     const entries: { label: string; value: string; isUtm: boolean }[] = [];
-    const utmKeys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'];
+    const utmKeys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'fbclid', 'gclid', 'fbc', 'fbp', 'ref'];
+    const campaignLabels: Record<string, string> = {
+      fbclid: 'Facebook Click ID',
+      gclid: 'Google Click ID',
+      fbc: 'Facebook Cookie',
+      fbp: 'Facebook Browser ID',
+      ref: 'Referência',
+    };
     
     Object.entries(lead.custom_data).forEach(([key, value]) => {
       if (value === null || value === undefined || value === '') return;
@@ -153,7 +160,7 @@ export function LeadDetailsModal({
           }
         }
       } else {
-        label = key.replace('utm_', 'UTM ').replace(/^(.)/, (m) => m.toUpperCase());
+        label = campaignLabels[key] || key.replace('utm_', 'UTM ').replace(/^(.)/, (m) => m.toUpperCase());
       }
       
       let displayValue = String(value);
