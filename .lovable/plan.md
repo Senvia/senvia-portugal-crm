@@ -1,45 +1,70 @@
 
 
-## Diagnostico: Leads nao chegam ao Facebook
+## Formulario embebido directamente no site do cliente (iframe embed)
 
-### Problemas encontrados
+### Funciona? Sim — com o embed script a fazer a ponte
 
-**Bug 1 (CRITICO) — `submit-lead` crasha antes de enviar CAPI**
+O formulario pode aparecer directamente no site do cliente via `<iframe>`. O problema e que o iframe corre no dominio `app.senvia.pt` e nao tem acesso a URL do site pai (`consultoriogomes.pt?fbclid=abc123`) por restricoes de seguranca do browser (cross-origin).
 
-No ficheiro `supabase/functions/submit-lead/index.ts`, linha 310, o webhook payload referencia `transformedCustomData` — uma variavel que **nunca e definida**. A funcao `mapCustomDataToLabels` existe (linhas 230-253) mas nunca e chamada. Isto causa um `ReferenceError` que crasha a funcao DEPOIS de inserir o lead na DB mas ANTES de:
-- Enviar webhooks ao n8n
-- Enviar push notifications
-- Enviar eventos CAPI ao Facebook
+A solucao: o **embed script** (que corre no dominio do cliente) le os parametros da URL do cliente e injeta-os no `src` do iframe automaticamente.
 
-Resultado: leads sao guardados na base de dados, mas o Facebook nunca recebe o evento.
+### Fluxo
 
-**Bug 2 — Login.tsx CAPI call sem autorizacao adequada**
+```text
+1. consultoriogomes.pt?fbclid=abc123  (utilizador chega do anuncio)
+2. embed.js le fbclid da URL do pai
+3. Cria iframe: src="app.senvia.pt/c/consultoriogomes?fbclid=abc123"
+4. Formulario dentro do iframe captura fbclid via source-detection.ts
+5. submit-lead envia CAPI com fbc → Facebook atribui o lead ao anuncio
+```
 
-A chamada CAPI no signup (linha 294) nao inclui header `Authorization`. Embora `verify_jwt = false`, a ausencia de qualquer header pode causar problemas dependendo do proxy. Alem disso, qualquer erro e silenciado por `.catch(() => {})`.
+### Implementacao (3 ficheiros)
 
-### Solucao
+**1. `public/embed.js`** — Script embed (~3KB)
 
-**Ficheiro 1: `supabase/functions/submit-lead/index.ts`**
-- Adicionar a chamada a `mapCustomDataToLabels` antes de construir o payload:
-  ```typescript
-  const transformedCustomData = mapCustomDataToLabels(
-    body.custom_data || null,
-    formSettings.form_settings as any
-  );
-  ```
-- Inserir esta linha imediatamente antes da construcao do `webhookPayload` (antes da linha 276).
+Suporta dois modos via `data-mode`:
+- `data-mode="iframe"` — Renderiza o formulario inline dentro de um `<div>` no site do cliente (o que queres agora)
+- `data-mode="redirect"` — Botao flutuante que redireciona (o cenario anterior)
 
-**Ficheiro 2: `src/pages/Login.tsx`**
-- Adicionar header `Authorization` com a anon key nas chamadas CAPI para garantir que passam pelo proxy correctamente:
-  ```typescript
-  headers: { 
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-  },
-  ```
-- Aplicar nos dois blocos de CAPI call (linhas ~294 e ~349).
+O script:
+- Captura `fbclid`, `gclid`, `ttclid`, UTMs da URL actual do site do cliente
+- No modo iframe: cria um `<iframe>` com esses params no src, com altura auto-ajustavel
+- No modo redirect: cria botao que redireciona com params
 
-### Impacto
+Codigo do cliente (1 linha):
+```html
+<div id="senvia-form"></div>
+<script src="https://app.senvia.pt/embed.js" data-form="consultoriogomes" data-mode="iframe"></script>
+```
 
-A correcao do Bug 1 resolve o problema principal — todos os leads de formularios publicos voltarao a disparar eventos CAPI para o Facebook. A correcao do Bug 2 garante que os eventos de signup tambem chegam.
+**2. `supabase/functions/submit-lead/index.ts`** — Fix CAPI (prioritario)
+
+Extrair `fbclid` do `custom_data` e construir `fbc` para o Meta atribuir:
+
+```typescript
+const fbclid = (body.custom_data as Record<string, unknown>)?.fbclid as string | undefined;
+const fbc = fbclid ? `fb.1.${Date.now()}.${fbclid}` : undefined;
+
+// user_data no CAPI:
+fbc: fbc,
+```
+
+**3. `src/components/settings/FormsManager.tsx`** — Opcao "Copiar Codigo Embed"
+
+No dropdown de cada formulario, adicionar duas novas opcoes:
+- **"Copiar Embed (Formulario)"** — copia o `<script>` com `data-mode="iframe"`
+- **"Copiar Embed (Botao)"** — copia o `<script>` com `data-mode="redirect"`
+
+Com toast de confirmacao "Codigo copiado!"
+
+### Detalhe do iframe
+
+O `embed.js` no modo iframe:
+- Cria iframe com `border:none`, `width:100%`, altura inicial 600px
+- Escuta `postMessage` do formulario Senvia para auto-ajustar altura (evitar scrollbar duplo)
+- No formulario (`ConversationalLeadForm.tsx` / `PublicLeadForm.tsx`), adicionar `window.parent.postMessage({ type: 'senvia-resize', height: document.body.scrollHeight }, '*')` apos render
+
+### Resultado
+
+O cliente cola 2 linhas de HTML no site dele. O formulario aparece directamente na pagina. O tracking funciona automaticamente — sem o cliente precisar de saber o que e fbclid ou CAPI.
 
