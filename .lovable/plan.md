@@ -1,35 +1,34 @@
 
 
-## Fix: fbclid deve aparecer em "Dados de Campanha"
+## Enviar Email a Leads com Templates de Boas-vindas
 
-### Problema
+### Resumo
 
-No `LeadDetailsModal.tsx`, a lista `utmKeys` (linha 135) só inclui `utm_source`, `utm_medium`, `utm_campaign`, `utm_term`, `utm_content`. O `fbclid` e outros parâmetros de tracking (como `gclid`, `fbc`, `fbp`) não estão incluídos, por isso aparecem como dados de formulário em vez de "Dados de Campanha".
+Adicionar um botao "Enviar Email" nos leads (tanto no LeadDetailsModal como no LeadCard) que abre um modal para selecionar um template de email (filtrado por categoria `welcome`) e enviar ao lead.
 
-### Solução
+### Componente Novo
 
-Alterar a linha 135 de `LeadDetailsModal.tsx` para incluir `fbclid`, `gclid`, `fbc`, `fbp`, e `ref` na lista de chaves de campanha:
+**`src/components/leads/SendLeadEmailModal.tsx`** — Modal dedicado para envio de email a um lead:
+- Recebe o `lead` como prop (nome, email)
+- Carrega templates via `useEmailTemplates()`, filtra por categoria `welcome` (boas-vindas) mas permite ver todos
+- Lista os templates disponiveis com nome e assunto
+- Ao selecionar um template, mostra preview do assunto e botao "Enviar"
+- Usa `useSendTemplateEmail()` para enviar, passando o lead como unico destinatario com variaveis pre-preenchidas (`nome`, `email`, `telefone`, `empresa`)
+- Feedback de sucesso/erro via toast
 
-```typescript
-const utmKeys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'fbclid', 'gclid', 'fbc', 'fbp', 'ref'];
-```
+### Alteracoes
 
-E adicionar labels legíveis para estes (linha 156):
-
-```typescript
-const campaignLabels: Record<string, string> = {
-  fbclid: 'Facebook Click ID',
-  gclid: 'Google Click ID',
-  fbc: 'Facebook Cookie',
-  fbp: 'Facebook Browser ID',
-  ref: 'Referência',
-};
-label = campaignLabels[key] || key.replace('utm_', 'UTM ').replace(/^(.)/, (m) => m.toUpperCase());
-```
-
-### Ficheiro
-
-| Ficheiro | Alteração |
+| Ficheiro | Alteracao |
 |---|---|
-| `src/components/leads/LeadDetailsModal.tsx` | Expandir `utmKeys` + adicionar labels para tracking params |
+| `src/components/leads/SendLeadEmailModal.tsx` | **Novo** — Modal de selecao de template e envio |
+| `src/components/leads/LeadDetailsModal.tsx` | Adicionar botao "Enviar Email" na secao "Acoes Rapidas" (linhas 607-630), entre WhatsApp e Ligar. Abre o `SendLeadEmailModal`. Desabilitado se lead nao tem email |
+| `src/components/leads/LeadCard.tsx` | Adicionar icone de email no grupo de botoes de acao (linhas 260-280), abre o mesmo modal |
+
+### Fluxo
+
+1. Utilizador clica "Enviar Email" no lead
+2. Modal abre com lista de templates (boas-vindas em destaque, outros disponiveis)
+3. Seleciona template → ve preview do assunto
+4. Clica "Enviar" → edge function `send-template-email` processa o envio via Brevo
+5. Toast de confirmacao
 
