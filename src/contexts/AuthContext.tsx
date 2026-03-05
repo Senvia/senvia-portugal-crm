@@ -314,6 +314,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    // Sync active_organization_id in JWT so RLS uses the correct org
+    await supabase.auth.updateUser({
+      data: { active_organization_id: orgId }
+    });
+
     await loadOrganization(orgId);
     
     // Reload the page to ensure all data is fresh for the new organization
@@ -321,6 +326,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const selectOrganization = async (orgId: string) => {
+    // Sync active_organization_id in JWT so RLS uses the correct org
+    await supabase.auth.updateUser({
+      data: { active_organization_id: orgId }
+    });
     await loadOrganization(orgId);
   };
 
