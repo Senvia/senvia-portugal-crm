@@ -1,34 +1,29 @@
 
 
-## Enviar Email a Leads com Templates de Boas-vindas
+## Assinatura de Email por Membro da Equipa
 
 ### Resumo
 
-Adicionar um botao "Enviar Email" nos leads (tanto no LeadDetailsModal como no LeadCard) que abre um modal para selecionar um template de email (filtrado por categoria `welcome`) e enviar ao lead.
-
-### Componente Novo
-
-**`src/components/leads/SendLeadEmailModal.tsx`** — Modal dedicado para envio de email a um lead:
-- Recebe o `lead` como prop (nome, email)
-- Carrega templates via `useEmailTemplates()`, filtra por categoria `welcome` (boas-vindas) mas permite ver todos
-- Lista os templates disponiveis com nome e assunto
-- Ao selecionar um template, mostra preview do assunto e botao "Enviar"
-- Usa `useSendTemplateEmail()` para enviar, passando o lead como unico destinatario com variaveis pre-preenchidas (`nome`, `email`, `telefone`, `empresa`)
-- Feedback de sucesso/erro via toast
+Adicionar um campo `email_signature` (HTML) na tabela `profiles` para que cada membro configure a sua assinatura. A assinatura e editada em Definicoes > Geral > "A Minha Conta". Ao enviar emails (edge function `send-template-email`), a assinatura do utilizador que envia e automaticamente anexada ao final do HTML do template.
 
 ### Alteracoes
 
-| Ficheiro | Alteracao |
+| Componente | Alteracao |
 |---|---|
-| `src/components/leads/SendLeadEmailModal.tsx` | **Novo** — Modal de selecao de template e envio |
-| `src/components/leads/LeadDetailsModal.tsx` | Adicionar botao "Enviar Email" na secao "Acoes Rapidas" (linhas 607-630), entre WhatsApp e Ligar. Abre o `SendLeadEmailModal`. Desabilitado se lead nao tem email |
-| `src/components/leads/LeadCard.tsx` | Adicionar icone de email no grupo de botoes de acao (linhas 260-280), abre o mesmo modal |
+| **Migracao SQL** | `ALTER TABLE profiles ADD COLUMN email_signature text;` |
+| **`src/components/settings/GeneralContent.tsx`** | Adicionar secao "Assinatura de Email" no card "A Minha Conta" com um `<Textarea>` (ou editor simples) para o utilizador escrever/colar a sua assinatura HTML. Botao de guardar junto com os outros dados do perfil. Adicionar preview da assinatura renderizada. |
+| **`src/hooks/useProfile.ts`** | Incluir `email_signature` no `mutationFn` do `useUpdateProfile` para persistir o campo. |
+| **`src/pages/Settings.tsx`** | Passar `emailSignature` / `setEmailSignature` como props ao `GeneralContent`. Inicializar estado a partir de `profile.email_signature`. |
+| **`supabase/functions/send-template-email/index.ts`** | Apos resolver o `userId`, buscar `email_signature` da tabela `profiles`. Se existir, anexar ao final do `htmlContent` antes de enviar via Brevo (com separador `<br><br>---<br>`). |
 
 ### Fluxo
 
-1. Utilizador clica "Enviar Email" no lead
-2. Modal abre com lista de templates (boas-vindas em destaque, outros disponiveis)
-3. Seleciona template → ve preview do assunto
-4. Clica "Enviar" → edge function `send-template-email` processa o envio via Brevo
-5. Toast de confirmacao
+1. Utilizador vai a Definicoes > Geral > "A Minha Conta"
+2. Preenche o campo "Assinatura de Email" (texto/HTML)
+3. Guarda o perfil
+4. Quando envia qualquer email (template, marketing, lead), a edge function busca a assinatura do remetente e anexa-a ao corpo do email automaticamente
+
+### Detalhe Tecnico
+
+A assinatura e armazenada como `text` (contem HTML) no perfil. Na edge function, e inserida apos o conteudo do template e antes de qualquer footer customizado, garantindo que cada comercial tem a sua identidade nos emails enviados.
 
