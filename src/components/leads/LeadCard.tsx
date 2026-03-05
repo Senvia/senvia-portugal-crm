@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Lead, LeadTemperature, LeadTipologia, TEMPERATURE_LABELS, TEMPERATURE_STYLES, TIPOLOGIA_LABELS, TIPOLOGIA_STYLES } from "@/types";
 import { formatRelativeTime, getWhatsAppUrl, formatCurrency } from "@/lib/format";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -15,6 +16,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { PipelineStage } from "@/hooks/usePipelineStages";
+import { SendLeadEmailModal } from "./SendLeadEmailModal";
 
 interface UpcomingEvent {
   id: string;
@@ -50,6 +52,7 @@ export function LeadCard({
 }: LeadCardProps) {
   const { canDeleteLeads } = usePermissions();
   const { organization } = useAuth();
+  const [showEmailModal, setShowEmailModal] = useState(false);
   const isTelecom = organization?.niche === 'telecom';
   
   const temperature = lead.temperature || 'cold';
@@ -283,14 +286,23 @@ export function LeadCard({
         <Button
           variant="outline"
           size="icon-sm"
+          disabled={!lead.email}
           onClick={(e) => {
             e.stopPropagation();
-            window.location.href = `mailto:${lead.email}`;
+            setShowEmailModal(true);
           }}
         >
           <Mail className="h-4 w-4" />
         </Button>
       </div>
+
+      {showEmailModal && (
+        <SendLeadEmailModal
+          lead={lead}
+          open={showEmailModal}
+          onOpenChange={setShowEmailModal}
+        />
+      )}
     </div>
   );
 }
