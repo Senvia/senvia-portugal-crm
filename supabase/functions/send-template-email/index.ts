@@ -187,10 +187,17 @@ serve(async (req: Request): Promise<Response> => {
       if (userId) {
         const { data: senderProfile } = await supabase
           .from("profiles")
-          .select("email_signature")
+          .select("email_signature, brevo_sender_email, full_name")
           .eq("id", userId)
           .single();
         senderSignature = (senderProfile as any)?.email_signature || null;
+        // Use sender's own Brevo email if configured
+        const senderBrevoEmail = (senderProfile as any)?.brevo_sender_email;
+        const senderFullName = (senderProfile as any)?.full_name;
+        if (senderBrevoEmail) {
+          (org as any)._sender_email_override = senderBrevoEmail;
+          (org as any)._sender_name_override = senderFullName || org.name;
+        }
       }
     }
 
@@ -245,7 +252,7 @@ serve(async (req: Request): Promise<Response> => {
           : (recipient.name || recipient.email);
 
         const brevoPayload: Record<string, unknown> = {
-          sender: { name: org.name, email: org.brevo_sender_email },
+          sender: { name: (org as any)._sender_name_override || org.name, email: (org as any)._sender_email_override || org.brevo_sender_email },
           to: [{ email: recipient.email, name: toName }],
           subject,
           htmlContent,
