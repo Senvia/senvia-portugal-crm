@@ -369,6 +369,13 @@ Deno.serve(async (req) => {
       const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 
                         req.headers.get('cf-connecting-ip') || '';
       const clientUserAgent = req.headers.get('user-agent') || '';
+
+      // Extract fbclid/fbp from custom_data for Meta attribution
+      const fbclid = (body.custom_data as Record<string, unknown>)?.fbclid as string | undefined;
+      const fbc = fbclid ? `fb.1.${Date.now()}.${fbclid}` : undefined;
+      const fbp = (body.custom_data as Record<string, unknown>)?.fbp as string | undefined;
+      
+      if (fbc) console.log('CAPI: fbc constructed from fbclid:', fbc);
       
       // Determine which pixels to fire — form-level overrides org-level
       const pixelsToFire: Array<{ pixel_id: string; enabled: boolean }> = 
@@ -395,6 +402,8 @@ Deno.serve(async (req) => {
               ph: lead.phone !== '000000000' ? lead.phone : undefined,
               client_ip_address: clientIp || undefined,
               client_user_agent: clientUserAgent || undefined,
+              fbc: fbc || undefined,
+              fbp: fbp || undefined,
             },
             custom_data: {
               content_name: formSettings.form_name || 'Formulário Público',

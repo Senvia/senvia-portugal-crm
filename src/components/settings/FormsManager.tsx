@@ -14,7 +14,8 @@ import {
   Edit,
   Loader2,
   Power,
-  PowerOff
+  PowerOff,
+  Code
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -73,6 +74,24 @@ export function FormsManager() {
 
   const handleCopyUrl = async (form: Form) => {
     await navigator.clipboard.writeText(getFormUrl(form));
+    toast.success('URL copiado!');
+  };
+
+  const handleCopyEmbed = async (form: Form, embedMode: 'iframe' | 'redirect') => {
+    const formPath = form.form_settings.mode === 'conversational' ? 'c' : 'f';
+    const slug = form.is_default 
+      ? organization?.slug 
+      : `${organization?.slug}/${form.slug}`;
+    
+    let code: string;
+    if (embedMode === 'iframe') {
+      code = `<div id="senvia-form"></div>\n<script src="${PRODUCTION_URL}/embed.js" data-form="${slug}" data-path="${formPath}" data-mode="iframe"></script>`;
+    } else {
+      code = `<script src="${PRODUCTION_URL}/embed.js" data-form="${slug}" data-path="${formPath}" data-mode="redirect"></script>`;
+    }
+    
+    await navigator.clipboard.writeText(code);
+    toast.success('Código embed copiado!');
   };
 
   const handleSetDefault = (form: Form) => {
@@ -184,6 +203,14 @@ export function FormsManager() {
                     <DropdownMenuItem onClick={() => handleCopyUrl(form)}>
                       <Copy className="h-4 w-4 mr-2" />
                       Copiar URL
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleCopyEmbed(form, 'iframe')}>
+                      <Code className="h-4 w-4 mr-2" />
+                      Copiar Embed (Formulário)
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleCopyEmbed(form, 'redirect')}>
+                      <Code className="h-4 w-4 mr-2" />
+                      Copiar Embed (Botão)
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => duplicateForm.mutate(form.id)}>
                       <Copy className="h-4 w-4 mr-2" />
