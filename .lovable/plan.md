@@ -1,32 +1,35 @@
 
 
-## Fix: Modal a sobrepor safe area do iPhone
+## Fix: fbclid deve aparecer em "Dados de Campanha"
 
 ### Problema
 
-O modal `default` (centrado) usa `max-h-[calc(100dvh-2rem)]` — em iPhones com notch/Dynamic Island, os `2rem` nao sao suficientes para evitar sobreposicao com a barra de status (bateria, hora, rede).
+No `LeadDetailsModal.tsx`, a lista `utmKeys` (linha 135) só inclui `utm_source`, `utm_medium`, `utm_campaign`, `utm_term`, `utm_content`. O `fbclid` e outros parâmetros de tracking (como `gclid`, `fbc`, `fbp`) não estão incluídos, por isso aparecem como dados de formulário em vez de "Dados de Campanha".
 
-A classe `safe-top` adiciona `padding-top` ao conteudo interno do modal, mas o **container** do modal continua a poder estender-se ate ao topo do ecra.
+### Solução
 
-### Solucao
+Alterar a linha 135 de `LeadDetailsModal.tsx` para incluir `fbclid`, `gclid`, `fbc`, `fbp`, e `ref` na lista de chaves de campanha:
 
-Alterar a variante `default` do `DialogContent` em `src/components/ui/dialog.tsx` (linha 15) para usar safe area no calculo da altura maxima:
-
-**De:**
-```
-max-h-[calc(100dvh-2rem)]
+```typescript
+const utmKeys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'fbclid', 'gclid', 'fbc', 'fbp', 'ref'];
 ```
 
-**Para:**
-```
-max-h-[calc(100dvh-2rem-var(--safe-area-top)-var(--safe-area-bottom))]
-```
+E adicionar labels legíveis para estes (linha 156):
 
-Isto garante que o modal centrado nunca ultrapassa a safe area, independentemente do dispositivo. O `safe-top`/`safe-bottom` no padding interno continua a funcionar para o conteudo.
+```typescript
+const campaignLabels: Record<string, string> = {
+  fbclid: 'Facebook Click ID',
+  gclid: 'Google Click ID',
+  fbc: 'Facebook Cookie',
+  fbp: 'Facebook Browser ID',
+  ref: 'Referência',
+};
+label = campaignLabels[key] || key.replace('utm_', 'UTM ').replace(/^(.)/, (m) => m.toUpperCase());
+```
 
 ### Ficheiro
 
-| Ficheiro | Alteracao |
+| Ficheiro | Alteração |
 |---|---|
-| `src/components/ui/dialog.tsx` | Linha 15: actualizar `max-h` da variante `default` para incluir `--safe-area-top` e `--safe-area-bottom` |
+| `src/components/leads/LeadDetailsModal.tsx` | Expandir `utmKeys` + adicionar labels para tracking params |
 
