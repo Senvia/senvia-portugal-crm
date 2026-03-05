@@ -96,6 +96,7 @@ export default function Settings() {
   const [profileEmail, setProfileEmail] = useState('');
   const [profilePhone, setProfilePhone] = useState('');
   const [emailSignature, setEmailSignature] = useState('');
+  const [profileBrevoSenderEmail, setProfileBrevoSenderEmail] = useState('');
 
   // Password change state
   const [newPassword, setNewPassword] = useState('');
@@ -113,7 +114,8 @@ export default function Settings() {
     setProfileEmail((profile as any)?.email || '');
     setProfilePhone((profile as any)?.phone || '');
     setEmailSignature((profile as any)?.email_signature || '');
-  }, [profile?.full_name, (profile as any)?.email, (profile as any)?.phone, (profile as any)?.email_signature]);
+    setProfileBrevoSenderEmail((profile as any)?.brevo_sender_email || '');
+  }, [profile?.full_name, (profile as any)?.email, (profile as any)?.phone, (profile as any)?.email_signature, (profile as any)?.brevo_sender_email]);
 
   // Fetch current integrations data
   useEffect(() => {
@@ -228,7 +230,7 @@ export default function Settings() {
       toast({ title: 'Nome inválido', description: 'O nome não pode estar vazio.', variant: 'destructive' });
       return;
     }
-    updateProfile.mutate({ full_name: fullName.trim(), email: profileEmail, phone: profilePhone, email_signature: emailSignature });
+    updateProfile.mutate({ full_name: fullName.trim(), email: profileEmail, phone: profilePhone, email_signature: emailSignature, brevo_sender_email: profileBrevoSenderEmail });
   };
 
   const handleChangePassword = () => {
@@ -254,6 +256,7 @@ export default function Settings() {
     organization, profile, isAdmin, orgName, setOrgName, fullName, setFullName,
     profileEmail, setProfileEmail, profilePhone, setProfilePhone,
     emailSignature, setEmailSignature,
+    brevoSenderEmail: profileBrevoSenderEmail, setBrevoSenderEmail: setProfileBrevoSenderEmail,
     handleSaveOrgName, handleSaveProfile,
     updateOrganizationIsPending: updateOrganization.isPending,
     updateProfileIsPending: updateProfile.isPending,

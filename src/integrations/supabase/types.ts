@@ -3008,6 +3008,7 @@ export type Database = {
       profiles: {
         Row: {
           avatar_url: string | null
+          brevo_sender_email: string | null
           created_at: string | null
           email: string | null
           email_signature: string | null
@@ -3018,6 +3019,7 @@ export type Database = {
         }
         Insert: {
           avatar_url?: string | null
+          brevo_sender_email?: string | null
           created_at?: string | null
           email?: string | null
           email_signature?: string | null
@@ -3028,6 +3030,7 @@ export type Database = {
         }
         Update: {
           avatar_url?: string | null
+          brevo_sender_email?: string | null
           created_at?: string | null
           email?: string | null
           email_signature?: string | null

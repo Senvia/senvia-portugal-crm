@@ -23,6 +23,7 @@ interface GeneralContentProps {
     full_name: string;
     email?: string | null;
     phone?: string | null;
+    brevo_sender_email?: string | null;
   } | null;
   isAdmin: boolean;
   orgName: string;
@@ -35,6 +36,8 @@ interface GeneralContentProps {
   setProfilePhone: (value: string) => void;
   emailSignature: string;
   setEmailSignature: (value: string) => void;
+  brevoSenderEmail: string;
+  setBrevoSenderEmail: (value: string) => void;
   handleSaveOrgName: () => void;
   handleSaveProfile: () => void;
   updateOrganizationIsPending: boolean;
@@ -55,6 +58,8 @@ export const GeneralContent = ({
   setProfilePhone,
   emailSignature,
   setEmailSignature,
+  brevoSenderEmail,
+  setBrevoSenderEmail,
   handleSaveOrgName,
   handleSaveProfile,
   updateOrganizationIsPending,
@@ -185,8 +190,23 @@ export const GeneralContent = ({
                 onChange={(e) => setProfilePhone(e.target.value)}
                 placeholder="+351 900 000 000"
               />
-            </div>
+           </div>
           </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="brevo-sender-email">Email de envio (Brevo)</Label>
+            <Input
+              id="brevo-sender-email"
+              type="email"
+              value={brevoSenderEmail}
+              onChange={(e) => setBrevoSenderEmail(e.target.value)}
+              placeholder="o-seu-email@dominio.com"
+            />
+            <p className="text-xs text-muted-foreground">
+              Se configurado, os emails que enviar serão remetidos a partir deste endereço (deve estar verificado na Brevo). Caso contrário, será usado o email da organização.
+            </p>
+          </div>
+
           <Separator />
 
           <div className="space-y-3">
@@ -228,7 +248,7 @@ export const GeneralContent = ({
 
           <Button
             onClick={handleSaveProfile}
-            disabled={updateProfileIsPending || (fullName === profile?.full_name && profileEmail === (profile?.email || '') && profilePhone === (profile?.phone || '') && emailSignature === ((profile as any)?.email_signature || ''))}
+            disabled={updateProfileIsPending || (fullName === profile?.full_name && profileEmail === (profile?.email || '') && profilePhone === (profile?.phone || '') && emailSignature === ((profile as any)?.email_signature || '') && brevoSenderEmail === (profile?.brevo_sender_email || ''))}
             className="w-full sm:w-auto"
           >
             {updateProfileIsPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
