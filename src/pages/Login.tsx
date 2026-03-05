@@ -293,7 +293,7 @@ export default function Login() {
           const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
           fetch(`https://${projectId}.supabase.co/functions/v1/meta-capi-event`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` },
             body: JSON.stringify({
               pixel_id: '2027821837745963',
               event_name: 'Lead',
@@ -348,7 +348,7 @@ export default function Login() {
         const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
         fetch(`https://${projectId}.supabase.co/functions/v1/meta-capi-event`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` },
           body: JSON.stringify({
               pixel_id: '2027821837745963',
               event_name: 'Lead',
