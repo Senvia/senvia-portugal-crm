@@ -1,27 +1,28 @@
 
 
-## Corrigir modais na safe area do iPhone
+## Corrigir modais na safe area do iPhone (PWA)
 
 ### Problema
-O modal `default` usa `top: 50%; transform: translateY(-50%)` para centrar verticalmente. Quando o conteúdo do modal é alto, ele ultrapassa a safe area do iPhone (notch/status bar) porque o `top: 50%` é relativo ao viewport completo, não ao viewport seguro.
 
-A propriedade `max-h` com `var(--safe-area-top/bottom)` limita a altura, mas o **posicionamento** continua a usar o viewport completo como referência.
+O modal usa `inset-0 m-auto` que divide o espaço restante **igualmente** entre top e bottom. Além disso, as classes `safe-top safe-bottom` adicionam **padding interno** ao modal scrollável — quando o utilizador faz scroll, esse padding acompanha o conteúdo e o conteúdo vai parar atrás do notch.
+
+No PWA standalone do iPhone, `m-auto` não garante que o top margin seja suficiente para cobrir a safe area assimétrica.
 
 ### Solução
 
-Alterar a estratégia de posicionamento do modal `default` para garantir que ele nunca invada a safe area:
+Substituir `inset-0 m-auto` + `safe-top safe-bottom` por posicionamento explícito via inline `style`:
 
-**`src/components/ui/dialog.tsx`** — variante `default`:
-- Trocar de `top-[50%] translate-y-[-50%]` para um layout que respeite as safe areas
-- Usar `top: var(--safe-area-top)` + `bottom: var(--safe-area-bottom)` com `margin: auto` para centrar dentro da zona segura, ou
-- Usar `inset-0` com `m-auto` + `max-h` com safe areas para centrar o modal dentro da área segura do viewport
-- Manter `max-w-[calc(100vw-2rem)]` e `max-h-[calc(100dvh-2rem-var(--safe-area-top)-var(--safe-area-bottom))]`
+**`src/components/ui/dialog.tsx`** (variante `default`):
+- Remover `inset-0`, `m-auto`, `max-h-[...]`, `safe-top`, `safe-bottom` das classes
+- Usar classes `fixed left-1/2 -translate-x-1/2` para centrar horizontalmente
+- Adicionar `style` inline no componente: `top: calc(var(--safe-area-top) + 1rem)`, `bottom: calc(var(--safe-area-bottom) + 1rem)`, `maxHeight: none`
+- Manter `overflow-y-auto` para scroll interno
+- O modal fica **contido** entre as safe areas sem depender de `m-auto`
 
-A abordagem `fixed inset-0 m-auto` com `max-w` e `max-h` definidos centra o modal automaticamente na área disponível sem usar `translate`, garantindo que o `max-h` com safe areas funcione corretamente.
-
-**Também verificar `src/components/ui/alert-dialog.tsx`** — aplicar a mesma correção ao `AlertDialogContent` que usa o mesmo padrão de posicionamento.
+**`src/components/ui/alert-dialog.tsx`**:
+- Mesma correção: remover `inset-0 m-auto max-h-[...]` e usar posicionamento explícito via `style`
 
 ### Ficheiros
-1. `src/components/ui/dialog.tsx` — corrigir posicionamento da variante `default`
-2. `src/components/ui/alert-dialog.tsx` — corrigir posicionamento do `AlertDialogContent`
+1. `src/components/ui/dialog.tsx`
+2. `src/components/ui/alert-dialog.tsx`
 
