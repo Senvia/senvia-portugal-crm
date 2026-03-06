@@ -34,7 +34,7 @@ import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Users, Loader2, CalendarIcon, X, Plus, LayoutGrid, List, Zap } from "lucide-react";
+import { Search, Users, Loader2, CalendarIcon, X, Plus, LayoutGrid, List, Zap, BarChart3 } from "lucide-react";
 import { format, endOfDay } from "date-fns";
 import { pt } from "date-fns/locale";
 import { normalizeString, cn } from "@/lib/utils";
