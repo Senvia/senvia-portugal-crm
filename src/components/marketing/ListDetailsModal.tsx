@@ -190,6 +190,15 @@ export function ListDetailsModal({ list, open, onOpenChange }: Props) {
           </div>
         </ScrollArea>
       </DialogContent>
+
+      <ConvertToLeadModal
+        open={showConvertModal}
+        onOpenChange={setShowConvertModal}
+        contacts={members
+          .filter(m => selectedForConvert.includes(m.contact_id) && m.contact)
+          .map(m => m.contact as MarketingContact)}
+        onSuccess={() => setSelectedForConvert([])}
+      />
     </Dialog>
   );
 }
