@@ -474,6 +474,7 @@ export default function Leads() {
 
   return (
     <div className="p-4 lg:p-8">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'pipeline' | 'report')} className="space-y-4">
         <div className="mb-4 lg:mb-6 space-y-3 lg:space-y-4">
           {/* Linha 1: Título + Pesquisa */}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
