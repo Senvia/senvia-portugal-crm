@@ -156,17 +156,32 @@ export function ListDetailsModal({ list, open, onOpenChange }: Props) {
               <div className="space-y-1">
                 {filteredMembers.map(m => (
                   <div key={m.id} className="border rounded-lg p-3 hover:bg-muted/50">
-                    <div className="flex items-center justify-between">
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium truncate">{m.contact?.name}</p>
-                        <div className="flex flex-wrap gap-x-3 gap-y-0.5">
-                          <p className="text-xs text-muted-foreground truncate">{m.contact?.email}</p>
-                          {m.contact?.phone && <p className="text-xs text-muted-foreground truncate">{m.contact.phone}</p>}
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        checked={selectedForConvert.includes(m.contact_id)}
+                        onCheckedChange={(checked) => {
+                          setSelectedForConvert(prev =>
+                            checked ? [...prev, m.contact_id] : prev.filter(id => id !== m.contact_id)
+                          );
+                        }}
+                      />
+                      <div className="flex items-center justify-between flex-1 min-w-0">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-medium truncate">{m.contact?.name}</p>
+                            {(m.contact as any)?.converted_to_lead && (
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0">Convertido</Badge>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+                            <p className="text-xs text-muted-foreground truncate">{m.contact?.email}</p>
+                            {m.contact?.phone && <p className="text-xs text-muted-foreground truncate">{m.contact.phone}</p>}
+                          </div>
                         </div>
+                        <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive shrink-0" onClick={() => removeMember.mutate({ listId: list.id, contactId: m.contact_id })}>
+                          <UserMinus className="h-4 w-4" />
+                        </Button>
                       </div>
-                      <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive shrink-0" onClick={() => removeMember.mutate({ listId: list.id, contactId: m.contact_id })}>
-                        <UserMinus className="h-4 w-4" />
-                      </Button>
                     </div>
                   </div>
                 ))}
