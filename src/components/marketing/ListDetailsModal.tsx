@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Search, UserMinus, UserPlus, Loader2, Users, Pencil, Check, X } from "lucide-react";
+import { Search, UserMinus, UserPlus, Loader2, Users, Pencil, Check, X, ArrowRightCircle } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +8,9 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useContactListMembers, useRemoveListMember, useAddListMembers, useUpdateContactList, useMarketingContacts, type ContactList } from "@/hooks/useContactLists";
+import { ConvertToLeadModal } from "@/components/marketing/ConvertToLeadModal";
 import { normalizeString } from "@/lib/utils";
+import type { MarketingContact } from "@/types/marketing";
 
 interface Props {
   list: ContactList | null;
