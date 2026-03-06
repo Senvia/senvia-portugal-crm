@@ -1,20 +1,26 @@
 
 
-## Alterar Ativações para contar apenas Vendas Concluídas
+## Fix: Modal de Objetivos Anuais "bugado"
 
-### Contexto
+### Problema
 
-Atualmente, o painel de Ativações (`useActivationObjectives.ts`) conta vendas que tenham `activation_date` preenchida e status diferente de `cancelled` (`.neq("status", "cancelled")`). O utilizador quer que conte apenas vendas com status **"completed"** (Concluídas).
+O `useEffect` no `EditActivationObjectivesModal` tem `getTarget` como dependência. Como `getTarget` é uma função normal (closure) criada a cada render no hook `useActivationObjectives`, ganha uma nova referência em cada render. Isto causa:
+- O `useEffect` dispara repetidamente, resetando os valores que o utilizador acabou de digitar
+- Os inputs ficam "presos" ou voltam a 0
 
-### Alteração
+### Solução
+
+1. **`src/hooks/useActivationObjectives.ts`**: Envolver `getTarget` em `useCallback` para estabilizar a referência.
+
+2. **`src/components/dashboard/EditActivationObjectivesModal.tsx`**: Remover `getTarget` das dependências do `useEffect`, usando apenas `open`, `members`, `periodType`, `proposalType` como triggers. Usar uma ref ou chamar `getTarget` apenas quando o modal abre (não a cada re-render).
+
+### Alterações
 
 **`src/hooks/useActivationObjectives.ts`**:
+- Importar `useCallback` do React
+- Envolver `getTarget` e `countActivations` em `useCallback` com as dependências correctas (`objectives`, `currentMonthStart`, `currentYearStart` para `getTarget`; `monthlyActivations`, `annualActivations` para `countActivations`)
 
-1. Na query `activations-monthly` (linha 61): substituir `.neq("status", "cancelled")` por `.eq("status", "completed")`
-2. Na query `activations-annual` (mesma lógica): substituir `.neq("status", "cancelled")` por `.eq("status", "completed")`
-
-Isto garante que apenas vendas com status "completed" (Concluídas) são contabilizadas como ativações.
-
-### Ficheiro
-- `src/hooks/useActivationObjectives.ts`
+**`src/components/dashboard/EditActivationObjectivesModal.tsx`**:
+- Remover `getTarget` da lista de dependências do `useEffect` (deixar apenas `open, members, periodType, proposalType`)
+- Isto evita que os valores sejam resetados enquanto o utilizador está a digitar
 
