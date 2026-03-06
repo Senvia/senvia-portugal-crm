@@ -660,8 +660,10 @@ export default function Leads() {
               </Button>
             )}
           </div>
+          )}
         </div>
 
+        <TabsContent value="pipeline" className="mt-0">
         {/* Bulk Actions Bar */}
         {viewMode === 'table' && (
           <BulkActionsBar
