@@ -102,11 +102,18 @@ export function ListDetailsModal({ list, open, onOpenChange }: Props) {
             )}
           </DialogHeader>
 
-          <div className="flex items-center justify-between mt-4">
+          <div className="flex items-center justify-between mt-4 flex-wrap gap-2">
             <Badge variant="secondary">{members.length} contacto(s)</Badge>
-            <Button size="sm" variant="outline" onClick={() => setShowAdd(!showAdd)}>
-              <UserPlus className="h-4 w-4 mr-1" /> Adicionar
-            </Button>
+            <div className="flex gap-2">
+              {selectedForConvert.length > 0 && (
+                <Button size="sm" onClick={() => setShowConvertModal(true)}>
+                  <ArrowRightCircle className="h-4 w-4 mr-1" /> Converter {selectedForConvert.length} em Leads
+                </Button>
+              )}
+              <Button size="sm" variant="outline" onClick={() => setShowAdd(!showAdd)}>
+                <UserPlus className="h-4 w-4 mr-1" /> Adicionar
+              </Button>
+            </div>
           </div>
 
           {showAdd && (
