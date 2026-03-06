@@ -1,26 +1,34 @@
 
 
-## Fix: Modal de Objetivos Anuais "bugado"
+## Atualização em cascata ao atribuir colaborador a clientes
 
-### Problema
+### Contexto
 
-O `useEffect` no `EditActivationObjectivesModal` tem `getTarget` como dependência. Como `getTarget` é uma função normal (closure) criada a cada render no hook `useActivationObjectives`, ganha uma nova referência em cada render. Isto causa:
-- O `useEffect` dispara repetidamente, resetando os valores que o utilizador acabou de digitar
-- Os inputs ficam "presos" ou voltam a 0
+Quando se atribui um colaborador a clientes (bulk ou individual), apenas a tabela `crm_clients` é atualizada. As propostas, leads e eventos de calendário associados mantêm o colaborador anterior, causando inconsistência.
 
-### Solução
+### Alteração
 
-1. **`src/hooks/useActivationObjectives.ts`**: Envolver `getTarget` em `useCallback` para estabilizar a referência.
+**`src/hooks/useBulkAssign.ts`** — na função `useBulkAssignClients`:
 
-2. **`src/components/dashboard/EditActivationObjectivesModal.tsx`**: Remover `getTarget` das dependências do `useEffect`, usando apenas `open`, `members`, `periodType`, `proposalType` como triggers. Usar uma ref ou chamar `getTarget` apenas quando o modal abre (não a cada re-render).
+Após atualizar `crm_clients.assigned_to`, executar 3 operações adicionais em cascata:
 
-### Alterações
+1. **Leads associados**: Buscar os `lead_id` dos clientes selecionados e atualizar `leads.assigned_to` para o novo colaborador
+2. **Propostas associadas**: Atualizar `proposals.created_by` onde `client_id` está nos clientes selecionados
+3. **Eventos de calendário**: Atualizar `calendar_events.user_id` onde `client_id` está nos clientes selecionados
 
-**`src/hooks/useActivationObjectives.ts`**:
-- Importar `useCallback` do React
-- Envolver `getTarget` e `countActivations` em `useCallback` com as dependências correctas (`objectives`, `currentMonthStart`, `currentYearStart` para `getTarget`; `monthlyActivations`, `annualActivations` para `countActivations`)
+Invalidar as queries `["leads"]`, `["proposals"]`, `["calendar-events"]` além de `["clients"]` no `onSuccess`.
 
-**`src/components/dashboard/EditActivationObjectivesModal.tsx`**:
-- Remover `getTarget` da lista de dependências do `useEffect` (deixar apenas `open, members, periodType, proposalType`)
-- Isto evita que os valores sejam resetados enquanto o utilizador está a digitar
+### Lógica detalhada
+
+```text
+mutationFn:
+  1. UPDATE crm_clients SET assigned_to = X WHERE id IN (...)
+  2. SELECT lead_id FROM crm_clients WHERE id IN (...) AND lead_id IS NOT NULL
+  3. UPDATE leads SET assigned_to = X WHERE id IN (lead_ids)
+  4. UPDATE proposals SET created_by = X WHERE client_id IN (client_ids)
+  5. UPDATE calendar_events SET user_id = X WHERE client_id IN (client_ids)
+```
+
+### Ficheiro
+- `src/hooks/useBulkAssign.ts`
 
