@@ -488,35 +488,48 @@ export default function Leads() {
               <p className="text-sm text-muted-foreground hidden sm:block">Gerencie os contactos da sua organização.</p>
             </div>
             <div className="flex items-center gap-2 w-full sm:w-auto">
-              <div className="relative flex-1 sm:w-64">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input placeholder="Pesquisar..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9 h-9 lg:h-10" />
-              </div>
-              
-              {/* View Mode Toggle */}
-              <div className="hidden sm:flex items-center border border-border rounded-lg p-1 bg-background">
-                <Button 
-                  variant={viewMode === 'kanban' ? 'secondary' : 'ghost'} 
-                  size="icon"
-                  className="h-7 w-7"
-                  onClick={() => setViewMode('kanban')}
-                >
-                  <LayoutGrid className="h-4 w-4" />
-                </Button>
-                <Button 
-                  variant={viewMode === 'table' ? 'secondary' : 'ghost'} 
-                  size="icon"
-                  className="h-7 w-7"
-                  onClick={() => setViewMode('table')}
-                >
-                  <List className="h-4 w-4" />
-                </Button>
-              </div>
-              
-              <Button onClick={() => setIsAddModalOpen(true)} className="shrink-0 h-9 lg:h-10">
-                <Plus className="h-4 w-4 sm:mr-2" />
-                <span className="hidden sm:inline">Adicionar</span>
-              </Button>
+              <TabsList className="h-9">
+                <TabsTrigger value="pipeline" className="text-xs gap-1">
+                  <LayoutGrid className="h-3.5 w-3.5" /> Pipeline
+                </TabsTrigger>
+                <TabsTrigger value="report" className="text-xs gap-1">
+                  <BarChart3 className="h-3.5 w-3.5" /> Relatório
+                </TabsTrigger>
+              </TabsList>
+
+              {activeTab === 'pipeline' && (
+                <>
+                  <div className="relative flex-1 sm:w-64">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input placeholder="Pesquisar..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9 h-9 lg:h-10" />
+                  </div>
+                  
+                  {/* View Mode Toggle */}
+                  <div className="hidden sm:flex items-center border border-border rounded-lg p-1 bg-background">
+                    <Button 
+                      variant={viewMode === 'kanban' ? 'secondary' : 'ghost'} 
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => setViewMode('kanban')}
+                    >
+                      <LayoutGrid className="h-4 w-4" />
+                    </Button>
+                    <Button 
+                      variant={viewMode === 'table' ? 'secondary' : 'ghost'} 
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => setViewMode('table')}
+                    >
+                      <List className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  
+                  <Button onClick={() => setIsAddModalOpen(true)} className="shrink-0 h-9 lg:h-10">
+                    <Plus className="h-4 w-4 sm:mr-2" />
+                    <span className="hidden sm:inline">Adicionar</span>
+                  </Button>
+                </>
+              )}
             </div>
           </div>
 
