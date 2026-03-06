@@ -69,14 +69,14 @@ export function MetricsPanel() {
   const monthStart = format(startOfMonth(selectedMonth), "yyyy-MM-dd");
   const monthEndStr = format(endOfMonth(selectedMonth), "yyyy-MM-dd");
 
-  // Query proposals for OP counts (not concluded)
+  // Query proposals for OP counts (not concluded) - include client_id for NIF lookup
   const { data: proposalsRaw = [], isLoading: proposalsLoading } = useQuery({
     queryKey: ["metrics-proposals-ops", orgId, monthStart],
     queryFn: async () => {
       if (!orgId) return [];
       const { data, error } = await supabase
         .from("proposals")
-        .select("created_by, proposal_type, kwp")
+        .select("created_by, proposal_type, kwp, client_id")
         .eq("organization_id", orgId)
         .gte("proposal_date", monthStart)
         .lte("proposal_date", monthEndStr)
@@ -85,6 +85,33 @@ export function MetricsPanel() {
       return data || [];
     },
     enabled: !!orgId,
+  });
+
+  // Query client NIFs for distinct NIF counting
+  const proposalClientIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const p of proposalsRaw) {
+      if (p.client_id) ids.add(p.client_id);
+    }
+    return Array.from(ids);
+  }, [proposalsRaw]);
+
+  const { data: clientNifMap = new Map<string, string | null>(), isLoading: nifsLoading } = useQuery({
+    queryKey: ["metrics-client-nifs", proposalClientIds],
+    queryFn: async () => {
+      if (proposalClientIds.length === 0) return new Map<string, string | null>();
+      const { data, error } = await supabase
+        .from("crm_clients")
+        .select("id, nif")
+        .in("id", proposalClientIds);
+      if (error) throw error;
+      const map = new Map<string, string | null>();
+      for (const c of data || []) {
+        map.set(c.id, c.nif);
+      }
+      return map;
+    },
+    enabled: proposalClientIds.length > 0,
   });
 
   // Query sales for values (only fulfilled)
@@ -105,17 +132,26 @@ export function MetricsPanel() {
     enabled: !!orgId,
   });
 
-  const loading = metricsLoading || proposalsLoading || salesLoading;
+  const loading = metricsLoading || proposalsLoading || salesLoading || nifsLoading;
 
   const memberList = members.length > 0 ? members : (user?.id ? [{ user_id: user.id, full_name: profile?.full_name || "Eu" }] : []);
   const filteredMembers = selectedMemberId ? memberList.filter((m) => m.user_id === selectedMemberId) : memberList;
 
   const ritmoRows: RitmoRow[] = useMemo(() => {
     return filteredMembers.map((m) => {
-      // OP counts from proposals
+      // OP counts from proposals - count distinct NIFs
       const userProposals = proposalsRaw.filter((p: any) => p.created_by === m.user_id);
-      const opEnergia = userProposals.filter((p: any) => p.proposal_type === "energia").length;
-      const opSolar = userProposals.filter((p: any) => p.proposal_type === "servicos" && Number(p.kwp || 0) > 0).length;
+      
+      const energiaNifs = new Set<string>();
+      const solarNifs = new Set<string>();
+      for (const p of userProposals) {
+        const nif = p.client_id ? clientNifMap.get(p.client_id) : null;
+        if (!nif) continue;
+        if (p.proposal_type === "energia") energiaNifs.add(nif);
+        if (p.proposal_type === "servicos" && Number(p.kwp || 0) > 0) solarNifs.add(nif);
+      }
+      const opEnergia = energiaNifs.size;
+      const opSolar = solarNifs.size;
 
       // Values from fulfilled sales
       const userSales = salesRaw.filter((s: any) => s.created_by === m.user_id);
@@ -133,7 +169,7 @@ export function MetricsPanel() {
         comissao,
       };
     });
-  }, [filteredMembers, proposalsRaw, salesRaw, user?.id]);
+  }, [filteredMembers, proposalsRaw, salesRaw, clientNifMap, user?.id]);
 
   const sumRitmo = (rows: RitmoRow[]) =>
     rows.reduce((acc, r) => ({
