@@ -33,6 +33,8 @@ export function ListDetailsModal({ list, open, onOpenChange }: Props) {
   const [editingList, setEditingList] = useState(false);
   const [listName, setListName] = useState("");
   const [listDesc, setListDesc] = useState("");
+  const [selectedForConvert, setSelectedForConvert] = useState<string[]>([]);
+  const [showConvertModal, setShowConvertModal] = useState(false);
 
   if (!list) return null;
 
