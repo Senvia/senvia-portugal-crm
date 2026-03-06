@@ -58,7 +58,7 @@ export function useActivationObjectives(referenceDate?: Date) {
         .not("activation_date", "is", null)
         .gte("activation_date", currentMonthStart)
         .lte("activation_date", monthEnd)
-        .neq("status", "cancelled");
+        .eq("status", "delivered");
       if (error) throw error;
       return data || [];
     },
@@ -77,7 +77,7 @@ export function useActivationObjectives(referenceDate?: Date) {
         .not("activation_date", "is", null)
         .gte("activation_date", currentYearStart)
         .lte("activation_date", yearEnd)
-        .neq("status", "cancelled");
+        .eq("status", "delivered");
       if (error) throw error;
       return data || [];
     },
