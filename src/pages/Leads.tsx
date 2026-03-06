@@ -703,11 +703,15 @@ export default function Leads() {
             />
           )}
         </div>
+        </TabsContent>
+
+        <TabsContent value="report" className="mt-0">
+          <LeadsReportPanel />
+        </TabsContent>
 
         <LeadDetailsModal lead={selectedLead} open={isModalOpen} onOpenChange={setIsModalOpen} onStatusChange={handleStatusChange} onDelete={handleDelete} onUpdate={handleUpdate} />
         <AddLeadModal open={isAddModalOpen} onOpenChange={setIsAddModalOpen} />
         
-        {/* Modal for viewing/editing existing event */}
         <EventDetailsModal
           open={isEventDetailsModalOpen}
           onOpenChange={(open) => {
@@ -718,7 +722,6 @@ export default function Leads() {
           onEdit={handleEditEvent}
         />
         
-        {/* Modal for creating event when dropping on 'scheduled' */}
         <CreateEventModal
           open={isCreateEventModalOpen}
           onOpenChange={(open) => {
@@ -734,12 +737,10 @@ export default function Leads() {
           onSuccess={handleEventCreated}
         />
         
-        {/* Modal for creating client when dropping on 'proposal' (first step) */}
         <CreateClientModal
           open={isCreateClientModalOpen}
           onOpenChange={(open) => {
             setIsCreateClientModalOpen(open);
-            // Only clear pendingLead if NOT in chained flow
             if (!open && !isChainedFlow) {
               setPendingLead(null);
             }
@@ -755,7 +756,6 @@ export default function Leads() {
           } : undefined}
         />
         
-        {/* Modal for creating proposal when dropping on 'proposal' (second step) */}
         <CreateProposalModal
           open={isCreateProposalModalOpen}
           onOpenChange={(open) => {
@@ -771,7 +771,6 @@ export default function Leads() {
           leadId={pendingLead?.id}
         />
         
-        {/* Modal for editing existing proposal */}
         <ProposalDetailsModal
           proposal={selectedProposal}
           open={isProposalDetailsModalOpen && !!selectedProposal}
@@ -781,7 +780,6 @@ export default function Leads() {
           }}
         />
 
-        {/* Assign Team Member Modal */}
         <AssignTeamMemberModal
           open={showAssignModal}
           onOpenChange={setShowAssignModal}
@@ -790,7 +788,6 @@ export default function Leads() {
           onSuccess={handleAssignSuccess}
         />
 
-        {/* Lost Lead Dialog */}
         <LostLeadDialog
           open={isLostDialogOpen}
           onOpenChange={(open) => {
@@ -804,7 +801,7 @@ export default function Leads() {
           isTelecom={isTelecom}
           onConfirm={handleLostConfirm}
         />
-
+      </Tabs>
     </div>
   );
 }
