@@ -30,7 +30,7 @@ export function useMonthSalesMetrics(referenceDate?: Date) {
         .eq("organization_id", orgId)
         .gte("sale_date", monthStart)
         .lte("sale_date", monthEnd)
-        .neq("status", "cancelled");
+        .eq("status", "fulfilled");
 
       if (error) throw error;
       if (!data) return [];
