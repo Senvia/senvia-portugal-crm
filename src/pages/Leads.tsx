@@ -42,6 +42,8 @@ import { mapLeadsForExport, exportToCsv, exportToExcel } from "@/lib/export";
 import { toast } from "sonner";
 import type { Lead, LeadTemperature, LeadTipologia } from "@/types";
 import { TIPOLOGIA_LABELS } from "@/types";
+import { LeadsReportPanel } from "@/components/leads/LeadsReportPanel";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function Leads() {
   // Subscribe to realtime updates
