@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Search, UserMinus, UserPlus, Loader2, Users, Pencil, Check, X } from "lucide-react";
+import { Search, UserMinus, UserPlus, Loader2, Users, Pencil, Check, X, ArrowRightCircle } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +8,9 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useContactListMembers, useRemoveListMember, useAddListMembers, useUpdateContactList, useMarketingContacts, type ContactList } from "@/hooks/useContactLists";
+import { ConvertToLeadModal } from "@/components/marketing/ConvertToLeadModal";
 import { normalizeString } from "@/lib/utils";
+import type { MarketingContact } from "@/types/marketing";
 
 interface Props {
   list: ContactList | null;
@@ -31,6 +33,8 @@ export function ListDetailsModal({ list, open, onOpenChange }: Props) {
   const [editingList, setEditingList] = useState(false);
   const [listName, setListName] = useState("");
   const [listDesc, setListDesc] = useState("");
+  const [selectedForConvert, setSelectedForConvert] = useState<string[]>([]);
+  const [showConvertModal, setShowConvertModal] = useState(false);
 
   if (!list) return null;
 
@@ -98,11 +102,18 @@ export function ListDetailsModal({ list, open, onOpenChange }: Props) {
             )}
           </DialogHeader>
 
-          <div className="flex items-center justify-between mt-4">
+          <div className="flex items-center justify-between mt-4 flex-wrap gap-2">
             <Badge variant="secondary">{members.length} contacto(s)</Badge>
-            <Button size="sm" variant="outline" onClick={() => setShowAdd(!showAdd)}>
-              <UserPlus className="h-4 w-4 mr-1" /> Adicionar
-            </Button>
+            <div className="flex gap-2">
+              {selectedForConvert.length > 0 && (
+                <Button size="sm" onClick={() => setShowConvertModal(true)}>
+                  <ArrowRightCircle className="h-4 w-4 mr-1" /> Converter {selectedForConvert.length} em Leads
+                </Button>
+              )}
+              <Button size="sm" variant="outline" onClick={() => setShowAdd(!showAdd)}>
+                <UserPlus className="h-4 w-4 mr-1" /> Adicionar
+              </Button>
+            </div>
           </div>
 
           {showAdd && (
@@ -145,17 +156,32 @@ export function ListDetailsModal({ list, open, onOpenChange }: Props) {
               <div className="space-y-1">
                 {filteredMembers.map(m => (
                   <div key={m.id} className="border rounded-lg p-3 hover:bg-muted/50">
-                    <div className="flex items-center justify-between">
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium truncate">{m.contact?.name}</p>
-                        <div className="flex flex-wrap gap-x-3 gap-y-0.5">
-                          <p className="text-xs text-muted-foreground truncate">{m.contact?.email}</p>
-                          {m.contact?.phone && <p className="text-xs text-muted-foreground truncate">{m.contact.phone}</p>}
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        checked={selectedForConvert.includes(m.contact_id)}
+                        onCheckedChange={(checked) => {
+                          setSelectedForConvert(prev =>
+                            checked ? [...prev, m.contact_id] : prev.filter(id => id !== m.contact_id)
+                          );
+                        }}
+                      />
+                      <div className="flex items-center justify-between flex-1 min-w-0">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-medium truncate">{m.contact?.name}</p>
+                            {(m.contact as any)?.converted_to_lead && (
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0">Convertido</Badge>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+                            <p className="text-xs text-muted-foreground truncate">{m.contact?.email}</p>
+                            {m.contact?.phone && <p className="text-xs text-muted-foreground truncate">{m.contact.phone}</p>}
+                          </div>
                         </div>
+                        <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive shrink-0" onClick={() => removeMember.mutate({ listId: list.id, contactId: m.contact_id })}>
+                          <UserMinus className="h-4 w-4" />
+                        </Button>
                       </div>
-                      <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive shrink-0" onClick={() => removeMember.mutate({ listId: list.id, contactId: m.contact_id })}>
-                        <UserMinus className="h-4 w-4" />
-                      </Button>
                     </div>
                   </div>
                 ))}
@@ -164,6 +190,15 @@ export function ListDetailsModal({ list, open, onOpenChange }: Props) {
           </div>
         </ScrollArea>
       </DialogContent>
+
+      <ConvertToLeadModal
+        open={showConvertModal}
+        onOpenChange={setShowConvertModal}
+        contacts={members
+          .filter(m => selectedForConvert.includes(m.contact_id) && m.contact)
+          .map(m => m.contact as MarketingContact)}
+        onSuccess={() => setSelectedForConvert([])}
+      />
     </Dialog>
   );
 }

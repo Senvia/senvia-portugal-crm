@@ -70,7 +70,7 @@ export function useContactListMembers(listId: string | null) {
 
       const { data, error } = await supabase
         .from('marketing_list_members' as any)
-        .select('*, contact:marketing_contacts(id, name, email, phone, company, source, subscribed)')
+        .select('*, contact:marketing_contacts(id, name, email, phone, company, source, subscribed, converted_to_lead)')
         .eq('list_id', listId)
         .order('added_at', { ascending: false });
 

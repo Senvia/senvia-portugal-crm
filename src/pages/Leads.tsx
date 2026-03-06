@@ -34,7 +34,7 @@ import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Users, Loader2, CalendarIcon, X, Plus, LayoutGrid, List, Zap } from "lucide-react";
+import { Search, Users, Loader2, CalendarIcon, X, Plus, LayoutGrid, List, Zap, BarChart3 } from "lucide-react";
 import { format, endOfDay } from "date-fns";
 import { pt } from "date-fns/locale";
 import { normalizeString, cn } from "@/lib/utils";
@@ -42,6 +42,8 @@ import { mapLeadsForExport, exportToCsv, exportToExcel } from "@/lib/export";
 import { toast } from "sonner";
 import type { Lead, LeadTemperature, LeadTipologia } from "@/types";
 import { TIPOLOGIA_LABELS } from "@/types";
+import { LeadsReportPanel } from "@/components/leads/LeadsReportPanel";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function Leads() {
   // Subscribe to realtime updates
@@ -89,6 +91,7 @@ export default function Leads() {
     const saved = localStorage.getItem('leads-view-mode');
     return (saved === 'table' || saved === 'kanban') ? saved : 'kanban';
   });
+  const [activeTab, setActiveTab] = useState<'pipeline' | 'report'>('pipeline');
 
   // Bulk selection state
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -471,6 +474,7 @@ export default function Leads() {
 
   return (
     <div className="p-4 lg:p-8">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'pipeline' | 'report')} className="space-y-4">
         <div className="mb-4 lg:mb-6 space-y-3 lg:space-y-4">
           {/* Linha 1: Título + Pesquisa */}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -484,39 +488,52 @@ export default function Leads() {
               <p className="text-sm text-muted-foreground hidden sm:block">Gerencie os contactos da sua organização.</p>
             </div>
             <div className="flex items-center gap-2 w-full sm:w-auto">
-              <div className="relative flex-1 sm:w-64">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input placeholder="Pesquisar..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9 h-9 lg:h-10" />
-              </div>
-              
-              {/* View Mode Toggle */}
-              <div className="hidden sm:flex items-center border border-border rounded-lg p-1 bg-background">
-                <Button 
-                  variant={viewMode === 'kanban' ? 'secondary' : 'ghost'} 
-                  size="icon"
-                  className="h-7 w-7"
-                  onClick={() => setViewMode('kanban')}
-                >
-                  <LayoutGrid className="h-4 w-4" />
-                </Button>
-                <Button 
-                  variant={viewMode === 'table' ? 'secondary' : 'ghost'} 
-                  size="icon"
-                  className="h-7 w-7"
-                  onClick={() => setViewMode('table')}
-                >
-                  <List className="h-4 w-4" />
-                </Button>
-              </div>
-              
-              <Button onClick={() => setIsAddModalOpen(true)} className="shrink-0 h-9 lg:h-10">
-                <Plus className="h-4 w-4 sm:mr-2" />
-                <span className="hidden sm:inline">Adicionar</span>
-              </Button>
+              <TabsList className="h-9">
+                <TabsTrigger value="pipeline" className="text-xs gap-1">
+                  <LayoutGrid className="h-3.5 w-3.5" /> Pipeline
+                </TabsTrigger>
+                <TabsTrigger value="report" className="text-xs gap-1">
+                  <BarChart3 className="h-3.5 w-3.5" /> Relatório
+                </TabsTrigger>
+              </TabsList>
+
+              {activeTab === 'pipeline' && (
+                <>
+                  <div className="relative flex-1 sm:w-64">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input placeholder="Pesquisar..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9 h-9 lg:h-10" />
+                  </div>
+                  
+                  {/* View Mode Toggle */}
+                  <div className="hidden sm:flex items-center border border-border rounded-lg p-1 bg-background">
+                    <Button 
+                      variant={viewMode === 'kanban' ? 'secondary' : 'ghost'} 
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => setViewMode('kanban')}
+                    >
+                      <LayoutGrid className="h-4 w-4" />
+                    </Button>
+                    <Button 
+                      variant={viewMode === 'table' ? 'secondary' : 'ghost'} 
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => setViewMode('table')}
+                    >
+                      <List className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  
+                  <Button onClick={() => setIsAddModalOpen(true)} className="shrink-0 h-9 lg:h-10">
+                    <Plus className="h-4 w-4 sm:mr-2" />
+                    <span className="hidden sm:inline">Adicionar</span>
+                  </Button>
+                </>
+              )}
             </div>
           </div>
 
-          {/* Linha 2: Filtros de Data + Status + Filtro de Equipa + Limpar - scrollable on mobile */}
+          {activeTab === 'pipeline' && (
           <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
             {/* Team Member Filter (Admin Only) */}
             <TeamMemberFilter className="w-[160px] shrink-0" />
@@ -643,8 +660,10 @@ export default function Leads() {
               </Button>
             )}
           </div>
+          )}
         </div>
 
+        <TabsContent value="pipeline" className="mt-0">
         {/* Bulk Actions Bar */}
         {viewMode === 'table' && (
           <BulkActionsBar
@@ -684,11 +703,15 @@ export default function Leads() {
             />
           )}
         </div>
+        </TabsContent>
+
+        <TabsContent value="report" className="mt-0">
+          <LeadsReportPanel />
+        </TabsContent>
 
         <LeadDetailsModal lead={selectedLead} open={isModalOpen} onOpenChange={setIsModalOpen} onStatusChange={handleStatusChange} onDelete={handleDelete} onUpdate={handleUpdate} />
         <AddLeadModal open={isAddModalOpen} onOpenChange={setIsAddModalOpen} />
         
-        {/* Modal for viewing/editing existing event */}
         <EventDetailsModal
           open={isEventDetailsModalOpen}
           onOpenChange={(open) => {
@@ -699,7 +722,6 @@ export default function Leads() {
           onEdit={handleEditEvent}
         />
         
-        {/* Modal for creating event when dropping on 'scheduled' */}
         <CreateEventModal
           open={isCreateEventModalOpen}
           onOpenChange={(open) => {
@@ -715,12 +737,10 @@ export default function Leads() {
           onSuccess={handleEventCreated}
         />
         
-        {/* Modal for creating client when dropping on 'proposal' (first step) */}
         <CreateClientModal
           open={isCreateClientModalOpen}
           onOpenChange={(open) => {
             setIsCreateClientModalOpen(open);
-            // Only clear pendingLead if NOT in chained flow
             if (!open && !isChainedFlow) {
               setPendingLead(null);
             }
@@ -736,7 +756,6 @@ export default function Leads() {
           } : undefined}
         />
         
-        {/* Modal for creating proposal when dropping on 'proposal' (second step) */}
         <CreateProposalModal
           open={isCreateProposalModalOpen}
           onOpenChange={(open) => {
@@ -752,7 +771,6 @@ export default function Leads() {
           leadId={pendingLead?.id}
         />
         
-        {/* Modal for editing existing proposal */}
         <ProposalDetailsModal
           proposal={selectedProposal}
           open={isProposalDetailsModalOpen && !!selectedProposal}
@@ -762,7 +780,6 @@ export default function Leads() {
           }}
         />
 
-        {/* Assign Team Member Modal */}
         <AssignTeamMemberModal
           open={showAssignModal}
           onOpenChange={setShowAssignModal}
@@ -771,7 +788,6 @@ export default function Leads() {
           onSuccess={handleAssignSuccess}
         />
 
-        {/* Lost Lead Dialog */}
         <LostLeadDialog
           open={isLostDialogOpen}
           onOpenChange={(open) => {
@@ -785,7 +801,7 @@ export default function Leads() {
           isTelecom={isTelecom}
           onConfirm={handleLostConfirm}
         />
-
+      </Tabs>
     </div>
   );
 }
