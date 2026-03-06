@@ -533,7 +533,7 @@ export default function Leads() {
             </div>
           </div>
 
-          {/* Linha 2: Filtros de Data + Status + Filtro de Equipa + Limpar - scrollable on mobile */}
+          {activeTab === 'pipeline' && (
           <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
             {/* Team Member Filter (Admin Only) */}
             <TeamMemberFilter className="w-[160px] shrink-0" />
