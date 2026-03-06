@@ -31,7 +31,8 @@ export function EditActivationObjectivesModal({ open, onOpenChange, periodType, 
       });
       setValues(initial);
     }
-  }, [open, members, periodType, proposalType, getTarget]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, members, periodType, proposalType]);
 
   const handleSave = async () => {
     setSaving(true);

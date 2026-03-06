@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -85,16 +86,16 @@ export function useActivationObjectives(referenceDate?: Date) {
   });
 
   // Helper to get objective target
-  const getTarget = (userId: string, periodType: "monthly" | "annual", proposalType: "energia" | "servicos"): number => {
+  const getTarget = useCallback((userId: string, periodType: "monthly" | "annual", proposalType: "energia" | "servicos"): number => {
     const month = periodType === "monthly" ? currentMonthStart : currentYearStart;
     const obj = objectives.find(
       (o) => o.user_id === userId && o.period_type === periodType && o.proposal_type === proposalType && o.month === month
     );
     return obj?.target_quantity || 0;
-  };
+  }, [objectives, currentMonthStart, currentYearStart]);
 
   // Helper to count activations
-  const countActivations = (
+  const countActivations = useCallback((
     userId: string | null,
     periodType: "monthly" | "annual",
     proposalType: "energia" | "servicos"
@@ -102,12 +103,12 @@ export function useActivationObjectives(referenceDate?: Date) {
     const source = periodType === "monthly" ? monthlyActivations : annualActivations;
     return source.filter((s: any) => {
       const matchType = proposalType === "energia"
-        ? s.proposal_type === "energia" || (!s.proposal_type && true) // default to energia if null
+        ? s.proposal_type === "energia" || (!s.proposal_type && true)
         : s.proposal_type === "servicos";
       const matchUser = userId ? s.created_by === userId : true;
       return matchType && matchUser;
     }).length;
-  };
+  }, [monthlyActivations, annualActivations]);
 
   // Upsert objective
   const saveObjective = useMutation({
