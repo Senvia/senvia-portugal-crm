@@ -91,6 +91,7 @@ export default function Leads() {
     const saved = localStorage.getItem('leads-view-mode');
     return (saved === 'table' || saved === 'kanban') ? saved : 'kanban';
   });
+  const [activeTab, setActiveTab] = useState<'pipeline' | 'report'>('pipeline');
 
   // Bulk selection state
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
