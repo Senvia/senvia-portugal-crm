@@ -1972,6 +1972,7 @@ export type Database = {
       marketing_contacts: {
         Row: {
           company: string | null
+          converted_to_lead: boolean
           created_at: string
           email: string | null
           id: string
@@ -1985,6 +1986,7 @@ export type Database = {
         }
         Insert: {
           company?: string | null
+          converted_to_lead?: boolean
           created_at?: string
           email?: string | null
           id?: string
@@ -1998,6 +2000,7 @@ export type Database = {
         }
         Update: {
           company?: string | null
+          converted_to_lead?: boolean
           created_at?: string
           email?: string | null
           id?: string
