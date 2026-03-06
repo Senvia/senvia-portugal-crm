@@ -68,37 +68,61 @@ export function MetricsPanel() {
 
   const monthStart = format(startOfMonth(selectedMonth), "yyyy-MM-dd");
   const monthEndStr = format(endOfMonth(selectedMonth), "yyyy-MM-dd");
-  const { data: salesRaw = [], isLoading: salesLoading } = useQuery({
-    queryKey: ["metrics-sales-ops", orgId, monthStart],
+
+  // Query proposals for OP counts (not concluded)
+  const { data: proposalsRaw = [], isLoading: proposalsLoading } = useQuery({
+    queryKey: ["metrics-proposals-ops", orgId, monthStart],
     queryFn: async () => {
       if (!orgId) return [];
       const { data, error } = await supabase
-        .from("sales")
-        .select("created_by, consumo_anual, kwp, comissao, status")
+        .from("proposals")
+        .select("created_by, proposal_type, kwp")
         .eq("organization_id", orgId)
-        .gte("sale_date", monthStart)
-        .lte("sale_date", monthEndStr)
-        .neq("status", "cancelled");
+        .gte("proposal_date", monthStart)
+        .lte("proposal_date", monthEndStr)
+        .in("status", ["draft", "sent", "negotiating"]);
       if (error) throw error;
       return data || [];
     },
     enabled: !!orgId,
   });
 
-  const loading = metricsLoading || salesLoading;
+  // Query sales for values (only fulfilled)
+  const { data: salesRaw = [], isLoading: salesLoading } = useQuery({
+    queryKey: ["metrics-sales-ops", orgId, monthStart],
+    queryFn: async () => {
+      if (!orgId) return [];
+      const { data, error } = await supabase
+        .from("sales")
+        .select("created_by, consumo_anual, kwp, comissao")
+        .eq("organization_id", orgId)
+        .gte("sale_date", monthStart)
+        .lte("sale_date", monthEndStr)
+        .eq("status", "fulfilled");
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!orgId,
+  });
+
+  const loading = metricsLoading || proposalsLoading || salesLoading;
 
   const memberList = members.length > 0 ? members : (user?.id ? [{ user_id: user.id, full_name: profile?.full_name || "Eu" }] : []);
   const filteredMembers = selectedMemberId ? memberList.filter((m) => m.user_id === selectedMemberId) : memberList;
 
   const ritmoRows: RitmoRow[] = useMemo(() => {
     return filteredMembers.map((m) => {
+      // OP counts from proposals
+      const userProposals = proposalsRaw.filter((p: any) => p.created_by === m.user_id);
+      const opEnergia = userProposals.filter((p: any) => p.proposal_type === "energia").length;
+      const opSolar = userProposals.filter((p: any) => p.proposal_type === "servicos" && Number(p.kwp || 0) > 0).length;
+
+      // Values from fulfilled sales
       const userSales = salesRaw.filter((s: any) => s.created_by === m.user_id);
-      let opEnergia = 0, energia = 0, opSolar = 0, solar = 0, comissao = 0;
+      let energia = 0, solar = 0, comissao = 0;
       for (const s of userSales) {
-        const ca = Number(s.consumo_anual || 0);
-        const kw = Number(s.kwp || 0);
-        if (ca > 0) { opEnergia++; energia += ca / 1000; }
-        if (kw > 0) { opSolar++; solar += kw; }
+        energia += Number(s.consumo_anual || 0) / 1000;
+        solar += Number(s.kwp || 0);
         comissao += Number(s.comissao || 0);
       }
       return {
@@ -109,7 +133,7 @@ export function MetricsPanel() {
         comissao,
       };
     });
-  }, [filteredMembers, salesRaw, user?.id]);
+  }, [filteredMembers, proposalsRaw, salesRaw, user?.id]);
 
   const sumRitmo = (rows: RitmoRow[]) =>
     rows.reduce((acc, r) => ({
