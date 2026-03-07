@@ -20,14 +20,21 @@ import InternalRequests from "@/pages/finance/InternalRequests";
 import { BankAccountsTab } from "@/components/finance/BankAccountsTab";
 import { CommissionsTab } from "@/components/finance/CommissionsTab";
 import { useAuth } from "@/contexts/AuthContext";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { Percent } from "lucide-react";
+import { useSalesCommissions } from "@/hooks/useSalesCommissions";
+import { CommissionsPayableModal } from "@/components/finance/CommissionsPayableModal";
 
 export default function Finance() {
   const { organization } = useAuth();
   const isTelecom = organization?.niche === 'telecom';
+  const salesSettings = (organization?.sales_settings as { commissions_enabled?: boolean }) || {};
+  const commissionsEnabled = !!salesSettings.commissions_enabled;
   const validTabs = isTelecom ? ['outros', 'comissoes'] : ['resumo', 'contas', 'faturas', 'outros'];
   const [dateRange, setDateRange] = usePersistedState<DateRange | undefined>('finance-daterange-v1', undefined);
   const [activeTab, setActiveTab] = usePersistedState('finance-tab-v1', isTelecom ? 'outros' : 'resumo');
+  const [commissionsModalOpen, setCommissionsModalOpen] = useState(false);
+  const { data: commissionsData } = useSalesCommissions();
 
   useEffect(() => {
     if (organization && !validTabs.includes(activeTab)) {
@@ -225,9 +232,29 @@ export default function Finance() {
                   <p className="text-xs text-muted-foreground">{stats.dueSoonCount} pagamento(s)</p>
                 </CardContent>
               </Card>
+              {commissionsEnabled && (
+                <Card 
+                  className="cursor-pointer hover:bg-muted/50 transition-colors group"
+                  onClick={() => setCommissionsModalOpen(true)}
+                >
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Comissões a Pagar</CardTitle>
+                    <div className="flex items-center gap-1">
+                      <Percent className="h-4 w-4 text-primary" />
+                      <ExternalLink className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-xl md:text-2xl font-bold text-primary">
+                      {formatCurrency(commissionsData?.reduce((sum, c) => sum + c.totalCommission, 0) || 0)}
+                    </div>
+                    <p className="text-xs text-muted-foreground">Total do período</p>
+                  </CardContent>
+                </Card>
+              )}
             </div>
 
-            {/* Chart */}
+            <CommissionsPayableModal open={commissionsModalOpen} onOpenChange={setCommissionsModalOpen} />
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">
