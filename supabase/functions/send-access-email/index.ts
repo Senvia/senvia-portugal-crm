@@ -12,7 +12,7 @@ interface SendAccessEmailRequest {
   recipientName: string;
   loginUrl: string;
   companyCode: string;
-  password: string;
+  password?: string;
 }
 
 serve(async (req) => {
