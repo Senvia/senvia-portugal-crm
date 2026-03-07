@@ -28,9 +28,13 @@ import { CommissionsPayableModal } from "@/components/finance/CommissionsPayable
 export default function Finance() {
   const { organization } = useAuth();
   const isTelecom = organization?.niche === 'telecom';
+  const salesSettings = (organization?.sales_settings as { commissions_enabled?: boolean }) || {};
+  const commissionsEnabled = !!salesSettings.commissions_enabled;
   const validTabs = isTelecom ? ['outros', 'comissoes'] : ['resumo', 'contas', 'faturas', 'outros'];
   const [dateRange, setDateRange] = usePersistedState<DateRange | undefined>('finance-daterange-v1', undefined);
   const [activeTab, setActiveTab] = usePersistedState('finance-tab-v1', isTelecom ? 'outros' : 'resumo');
+  const [commissionsModalOpen, setCommissionsModalOpen] = useState(false);
+  const { data: commissionsData } = useSalesCommissions();
 
   useEffect(() => {
     if (organization && !validTabs.includes(activeTab)) {
