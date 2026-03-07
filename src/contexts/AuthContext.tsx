@@ -31,6 +31,7 @@ interface Organization {
   invoicexpress_api_key?: string | null;
   integrations_enabled?: any;
   tax_config?: any;
+  sales_settings?: any;
 }
 
 interface UserOrganizationMembership {

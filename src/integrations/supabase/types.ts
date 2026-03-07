@@ -2425,6 +2425,7 @@ export type Database = {
       }
       organization_members: {
         Row: {
+          commission_rate: number | null
           id: string
           is_active: boolean
           joined_at: string | null
@@ -2434,6 +2435,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          commission_rate?: number | null
           id?: string
           is_active?: boolean
           joined_at?: string | null
@@ -2443,6 +2445,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          commission_rate?: number | null
           id?: string
           is_active?: boolean
           joined_at?: string | null

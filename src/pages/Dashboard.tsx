@@ -8,6 +8,7 @@ import { CalendarAlertsWidget } from "@/components/dashboard/CalendarAlertsWidge
 import { CommitmentPanel } from "@/components/dashboard/CommitmentPanel";
 import { SalesPerformancePanel } from "@/components/dashboard/SalesPerformancePanel";
 import { MetricsPanel } from "@/components/dashboard/MetricsPanel";
+import { CommissionsWidget } from "@/components/dashboard/CommissionsWidget";
 import { Loader2 } from "lucide-react";
 import { NicheType } from "@/lib/dashboard-templates";
 import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription";
@@ -25,6 +26,8 @@ export default function Dashboard() {
   const isTelecom = organization?.niche === 'telecom';
   const clientsModuleEnabled = modules.clients;
   const calendarModuleEnabled = modules.calendar !== false;
+  const salesSettings = (organization?.sales_settings as any) || {};
+  const commissionsEnabled = !!salesSettings.commissions_enabled;
   const { 
     visibleWidgets, 
     isLoading, 
@@ -78,6 +81,10 @@ export default function Dashboard() {
                 <CalendarAlertsWidget />
               )}
             </div>
+          )}
+
+          {commissionsEnabled && (
+            <CommissionsWidget />
           )}
           
           <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">

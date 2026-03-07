@@ -4,6 +4,8 @@ import { useTeamMembers, usePendingInvites, useCancelInvite, useResendInvite, us
 import { useManageTeamMember } from '@/hooks/useProfile';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOrganizationProfiles } from '@/hooks/useOrganizationProfiles';
+import { useOrganization } from '@/hooks/useOrganization';
+import { useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -38,6 +40,8 @@ const ROLE_VARIANTS: Record<string, 'default' | 'secondary' | 'outline'> = {
 
 export function TeamTab() {
   const { user, organization } = useAuth();
+  const { data: orgData } = useOrganization();
+  const queryClient = useQueryClient();
   const { data: members, isLoading: loadingMembers } = useTeamMembers();
   const { data: invites, isLoading: loadingInvites } = usePendingInvites();
   const { profiles } = useOrganizationProfiles();
@@ -46,6 +50,11 @@ export function TeamTab() {
   const createTeamMember = useCreateTeamMember();
   const manageTeamMember = useManageTeamMember();
   const { toast } = useToast();
+
+  const salesSettings = (orgData?.sales_settings as any) || {};
+  const commissionsEnabled = !!salesSettings.commissions_enabled;
+  const globalRate = salesSettings.commission_percentage;
+  const showIndividualCommission = commissionsEnabled && (!globalRate || globalRate <= 0);
 
   // Modal state - Add member
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -81,6 +90,7 @@ export function TeamTab() {
   const [editFullName, setEditFullName] = useState('');
   const [editEmail, setEditEmail] = useState('');
   const [editPhone, setEditPhone] = useState('');
+  const [editCommissionRate, setEditCommissionRate] = useState('');
 
   const handleCreateMember = async () => {
     if (!fullName.trim() || !email.trim() || !password || !confirmPassword) {
@@ -250,19 +260,41 @@ export function TeamTab() {
     manageTeamMember.mutate({ action: 'toggle_status', user_id: member.user_id });
   };
 
-  const openEditProfileModal = (member: TeamMember) => {
+  const openEditProfileModal = async (member: TeamMember) => {
     setSelectedMember(member);
     setEditFullName(member.full_name || '');
     setEditEmail(member.email || '');
     setEditPhone(member.phone || '');
+    // Load commission rate from organization_members
+    if (showIndividualCommission && organization?.id) {
+      const { data } = await supabase
+        .from('organization_members')
+        .select('commission_rate')
+        .eq('user_id', member.user_id)
+        .eq('organization_id', organization.id)
+        .single();
+      setEditCommissionRate(data?.commission_rate ? String(data.commission_rate) : '');
+    } else {
+      setEditCommissionRate('');
+    }
     setEditProfileOpen(true);
   };
 
-  const handleEditProfile = () => {
+  const handleEditProfile = async () => {
     if (!selectedMember) return;
     if (!editFullName.trim()) {
       toast({ title: 'O nome é obrigatório', variant: 'destructive' });
       return;
+    }
+    // Save commission rate if individual mode
+    if (showIndividualCommission && organization?.id) {
+      const rate = editCommissionRate ? parseFloat(editCommissionRate) : null;
+      await supabase
+        .from('organization_members')
+        .update({ commission_rate: rate } as any)
+        .eq('user_id', selectedMember.user_id)
+        .eq('organization_id', organization.id);
+      queryClient.invalidateQueries({ queryKey: ['sales-commissions'] });
     }
     manageTeamMember.mutate(
       { action: 'update_profile', user_id: selectedMember.user_id, full_name: editFullName.trim(), email: editEmail.trim(), phone: editPhone.trim() },
@@ -741,6 +773,25 @@ export function TeamTab() {
                 onChange={(e) => setEditPhone(e.target.value)}
               />
             </div>
+            {showIndividualCommission && (
+              <div className="space-y-2">
+                <Label htmlFor="edit-commission-rate">Comissão (%)</Label>
+                <Input
+                  id="edit-commission-rate"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.5"
+                  placeholder="Ex: 10"
+                  value={editCommissionRate}
+                  onChange={(e) => setEditCommissionRate(e.target.value)}
+                  className="w-32"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Percentagem de comissão individual sobre o valor total das vendas.
+                </p>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditProfileOpen(false)}>
