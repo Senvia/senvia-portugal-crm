@@ -535,6 +535,7 @@ Deno.serve(async (req) => {
       console.error('Error sending new-lead email:', emailError);
     }
 
+    return new Response(
       JSON.stringify({ 
         success: true, 
         message: 'Contacto registado com sucesso',
