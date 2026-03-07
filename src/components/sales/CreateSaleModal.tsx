@@ -398,6 +398,39 @@ export function CreateSaleModal({
     return PROPOSAL_STATUS_LABELS[status as ProposalStatus] || status;
   };
 
+  // Org search for plan sales
+  useEffect(() => {
+    if (!isPlanSale || orgSearchTerm.length < 2) {
+      setOrgSearchResults([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      const { data } = await (await import("@/integrations/supabase/client")).supabase
+        .from("organizations")
+        .select("id, name, slug")
+        .neq("id", organization?.id || "")
+        .ilike("name", `%${orgSearchTerm}%`)
+        .limit(10);
+      setOrgSearchResults(data || []);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [orgSearchTerm, isPlanSale, organization?.id]);
+
+  // Handle plan selection
+  const handlePlanSelect = (planId: string) => {
+    setSelectedPlanId(planId);
+    const plan = STRIPE_PLANS.find(p => p.id === planId);
+    if (plan) {
+      setItems([{
+        id: crypto.randomUUID(),
+        product_id: null,
+        name: `Plano ${plan.name} (mensal)`,
+        quantity: 1,
+        unit_price: plan.priceMonthly,
+      }]);
+    }
+  };
+
   // Calculate totals
   const subtotal = useMemo(() => {
     return items.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
