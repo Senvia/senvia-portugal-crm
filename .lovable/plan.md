@@ -1,25 +1,26 @@
 
 
-## Hospedar Imagem no Supabase Storage
+## Fix: Modal de Objetivos Anuais "bugado"
 
-### Cores identificadas na imagem
+### Problema
 
-| Elemento | Cor HEX |
-|---|---|
-| Fundo (azul escuro) | `#0B2545` |
-| Texto / Contorno (creme) | `#E8D5B7` |
-| Lâmpada (amarelo) | `#F5C542` |
-| Cérebro (laranja) | `#E8943A` |
-| Base da lâmpada (cinza) | `#6B7C8A` |
+O `useEffect` no `EditActivationObjectivesModal` tem `getTarget` como dependência. Como `getTarget` é uma função normal (closure) criada a cada render no hook `useActivationObjectives`, ganha uma nova referência em cada render. Isto causa:
+- O `useEffect` dispara repetidamente, resetando os valores que o utilizador acabou de digitar
+- Os inputs ficam "presos" ou voltam a 0
 
-### Plano
+### Solução
 
-1. Copiar a imagem para `public/` do projeto
-2. Fazer upload para o bucket `organization-logos` (público) via migração SQL ou diretamente no código
-3. A URL pública será: `https://zppcobirzgpfcrnxznwe.supabase.co/storage/v1/object/public/organization-logos/escolha-inteligente-logo.png`
+1. **`src/hooks/useActivationObjectives.ts`**: Envolver `getTarget` em `useCallback` para estabilizar a referência.
 
-Alternativa mais simples: copiar para `public/org-logos/escolha-inteligente-logo.png` — ficaria acessível via URL do projeto: `https://senvia-portugal-crm.lovable.app/org-logos/escolha-inteligente-logo.png`
+2. **`src/components/dashboard/EditActivationObjectivesModal.tsx`**: Remover `getTarget` das dependências do `useEffect`, usando apenas `open`, `members`, `periodType`, `proposalType` como triggers. Usar uma ref ou chamar `getTarget` apenas quando o modal abre (não a cada re-render).
 
 ### Alterações
-- Copiar `user-uploads://image-133.png` para `public/org-logos/escolha-inteligente-logo.png`
+
+**`src/hooks/useActivationObjectives.ts`**:
+- Importar `useCallback` do React
+- Envolver `getTarget` e `countActivations` em `useCallback` com as dependências correctas (`objectives`, `currentMonthStart`, `currentYearStart` para `getTarget`; `monthlyActivations`, `annualActivations` para `countActivations`)
+
+**`src/components/dashboard/EditActivationObjectivesModal.tsx`**:
+- Remover `getTarget` da lista de dependências do `useEffect` (deixar apenas `open, members, periodType, proposalType`)
+- Isto evita que os valores sejam resetados enquanto o utilizador está a digitar
 
