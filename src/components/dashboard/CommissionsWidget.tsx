@@ -13,7 +13,7 @@ export function CommissionsWidget() {
   const { user, roles } = useAuth();
   const isAdmin = roles.includes("admin") || roles.includes("super_admin");
 
-  if (isLoading && stripeLoading) {
+  if (isLoading || stripeLoading) {
     return (
       <Card>
         <CardHeader className="pb-3">
@@ -70,7 +70,7 @@ export function CommissionsWidget() {
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Summary cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className={`grid grid-cols-2 gap-3 ${hasRecurringData ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
           <div className="rounded-lg border bg-muted/30 p-3 text-center">
             <p className="text-xs text-muted-foreground">Vendas</p>
             <p className="text-lg font-bold text-foreground">{formatCurrency(totalSales)}</p>

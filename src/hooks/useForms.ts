@@ -306,6 +306,13 @@ export function useDuplicateForm() {
           form_settings: original.form_settings,
           is_default: false,
           is_active: true,
+          target_stage: original.target_stage || null,
+          assigned_to: original.assigned_to || null,
+          meta_pixels: original.meta_pixels || [],
+          msg_template_hot: original.msg_template_hot || null,
+          msg_template_warm: original.msg_template_warm || null,
+          msg_template_cold: original.msg_template_cold || null,
+          ai_qualification_rules: original.ai_qualification_rules || null,
         })
         .select()
         .single();
