@@ -48,7 +48,7 @@ serve(async (req) => {
 
     const { organizationId, recipientEmail, recipientName, loginUrl, companyCode, password }: SendAccessEmailRequest = await req.json();
 
-    if (!organizationId || !recipientEmail || !recipientName || !loginUrl || !companyCode || !password) {
+    if (!organizationId || !recipientEmail || !recipientName || !loginUrl || !companyCode) {
       return new Response(
         JSON.stringify({ error: 'Campos obrigatórios em falta' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
