@@ -406,12 +406,12 @@ export function CreateSaleModal({
     }
     const timer = setTimeout(async () => {
       const { data } = await (await import("@/integrations/supabase/client")).supabase
-        .from("organizations")
-        .select("id, name, slug")
-        .neq("id", organization?.id || "")
-        .ilike("name", `%${orgSearchTerm}%`)
-        .limit(10);
-      setOrgSearchResults(data || []);
+        .rpc("search_organizations_by_name", {
+          _caller_org_id: organization?.id || "",
+          _search: orgSearchTerm,
+          _limit: 10,
+        });
+      setOrgSearchResults((data as { id: string; name: string; slug: string }[]) || []);
     }, 300);
     return () => clearTimeout(timer);
   }, [orgSearchTerm, isPlanSale, organization?.id]);
