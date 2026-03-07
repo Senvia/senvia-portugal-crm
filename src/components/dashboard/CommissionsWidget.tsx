@@ -13,7 +13,7 @@ export function CommissionsWidget() {
   const { user, roles } = useAuth();
   const isAdmin = roles.includes("admin") || roles.includes("super_admin");
 
-  if (isLoading && stripeLoading) {
+  if (isLoading || stripeLoading) {
     return (
       <Card>
         <CardHeader className="pb-3">
