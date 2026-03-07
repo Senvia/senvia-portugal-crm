@@ -291,6 +291,11 @@ export function CreateSaleModal({
       setShowDraftPaymentModal(false);
       setShowPaymentTypeSelector(false);
       setShowDraftScheduleModal(false);
+      setIsPlanSale(false);
+      setSelectedPlanId("");
+      setClientOrgId("");
+      setOrgSearchTerm("");
+      setOrgSearchResults([]);
       if (!prefillProposal?.notes) {
         setNotes("");
       }
