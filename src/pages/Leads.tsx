@@ -806,6 +806,15 @@ export default function Leads() {
           isTelecom={isTelecom}
           onConfirm={handleLostConfirm}
         />
+
+        <CreateSaleModal
+          open={isCreateSaleModalOpen}
+          onOpenChange={(open) => {
+            setIsCreateSaleModalOpen(open);
+            if (!open) setPrefillSaleClientId(null);
+          }}
+          prefillClientId={prefillSaleClientId}
+        />
       </Tabs>
     </div>
   );
