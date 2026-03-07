@@ -94,7 +94,7 @@ Deno.serve(async (req) => {
     // Validate public_key and get organization_id (including webhook_url, whatsapp config, and meta_pixels)
     const { data: org, error: orgError } = await supabase
       .from('organizations')
-      .select('id, name, niche, webhook_url, whatsapp_instance, whatsapp_api_key, whatsapp_base_url, meta_pixels, sales_settings')
+      .select('id, name, niche, webhook_url, whatsapp_instance, whatsapp_api_key, whatsapp_base_url, meta_pixels, sales_settings, brevo_api_key, brevo_sender_email, slug')
       .eq('public_key', body.public_key)
       .maybeSingle();
 
@@ -457,6 +457,82 @@ Deno.serve(async (req) => {
       }
     } catch (capiError) {
       console.error('Error dispatching CAPI events:', capiError);
+    }
+
+    // ===== EMAIL NOTIFICATION (Brevo) =====
+    // Notify admins + assigned salesperson about the new lead
+    try {
+      const brevoKey = (org as any).brevo_api_key;
+      const brevoSender = (org as any).brevo_sender_email;
+
+      if (brevoKey && brevoSender) {
+        // Fetch admin emails
+        const { data: adminMembers } = await supabase
+          .from('organization_members')
+          .select('user_id')
+          .eq('organization_id', org.id)
+          .eq('role', 'admin')
+          .eq('is_active', true);
+
+        const adminIds = (adminMembers || []).map((m: any) => m.user_id);
+
+        // Add assigned salesperson if exists and not already in admin list
+        if (autoAssignedTo && !adminIds.includes(autoAssignedTo)) {
+          adminIds.push(autoAssignedTo);
+        }
+
+        if (adminIds.length > 0) {
+          const { data: profiles } = await supabase
+            .from('profiles')
+            .select('id, email, full_name')
+            .in('id', adminIds);
+
+          const recipients = (profiles || [])
+            .filter((p: any) => p.email)
+            .map((p: any) => ({ email: p.email, name: p.full_name || p.email }));
+
+          if (recipients.length > 0) {
+            const orgSlug = (org as any).slug || '';
+            const leadsUrl = `https://senvia-portugal-crm.lovable.app/leads`;
+
+            const htmlContent = `
+              <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px">
+                <h2 style="color:#10b981">🚀 Novo Lead Recebido</h2>
+                <table style="width:100%;border-collapse:collapse;margin:16px 0">
+                  <tr><td style="padding:8px;font-weight:bold;color:#6b7280">Nome</td><td style="padding:8px">${lead.name}</td></tr>
+                  ${lead.phone && lead.phone !== '000000000' ? `<tr><td style="padding:8px;font-weight:bold;color:#6b7280">Telefone</td><td style="padding:8px">${lead.phone}</td></tr>` : ''}
+                  ${lead.email && lead.email !== 'nao-fornecido@placeholder.local' ? `<tr><td style="padding:8px;font-weight:bold;color:#6b7280">Email</td><td style="padding:8px">${lead.email}</td></tr>` : ''}
+                  <tr><td style="padding:8px;font-weight:bold;color:#6b7280">Fonte</td><td style="padding:8px">${lead.source || 'Formulário Público'}</td></tr>
+                  ${formSettings.form_name ? `<tr><td style="padding:8px;font-weight:bold;color:#6b7280">Formulário</td><td style="padding:8px">${formSettings.form_name}</td></tr>` : ''}
+                  ${lead.company_name ? `<tr><td style="padding:8px;font-weight:bold;color:#6b7280">Empresa</td><td style="padding:8px">${lead.company_name}</td></tr>` : ''}
+                </table>
+                <a href="${leadsUrl}" style="display:inline-block;background:#10b981;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;margin-top:8px">Ver Lead no Senvia</a>
+                <p style="color:#9ca3af;font-size:12px;margin-top:24px">Organização: ${org.name}</p>
+              </div>
+            `;
+
+            fetch('https://api.brevo.com/v3/smtp/email', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'api-key': brevoKey,
+              },
+              body: JSON.stringify({
+                sender: { email: brevoSender, name: org.name },
+                to: recipients,
+                subject: `🚀 Novo Lead: ${lead.name} - ${lead.source || 'Formulário'}`,
+                htmlContent,
+              }),
+            })
+              .then((res) => console.info(`Brevo new-lead email sent, status: ${res.status}`))
+              .catch((err) => console.error('Brevo new-lead email failed:', err.message));
+          }
+        }
+      } else {
+        console.log('Brevo not configured for org, skipping email notification');
+      }
+    } catch (emailError) {
+      console.error('Error sending new-lead email:', emailError);
     }
 
     return new Response(

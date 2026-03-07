@@ -1,45 +1,26 @@
 
 
-## Notificacao por Email: Novo Lead Criado
+## Fix: Modal de Objetivos Anuais "bugado"
 
-### Objetivo
-Quando um novo lead e criado (via formulario publico), enviar email automatico via Brevo para:
-1. **Admins** da organizacao (todos os membros com role `admin`)
-2. **Comercial atribuido** (se o lead foi auto-assigned via round-robin ou form config)
+### Problema
 
-### Arquitetura
+O `useEffect` no `EditActivationObjectivesModal` tem `getTarget` como dependência. Como `getTarget` é uma função normal (closure) criada a cada render no hook `useActivationObjectives`, ganha uma nova referência em cada render. Isto causa:
+- O `useEffect` dispara repetidamente, resetando os valores que o utilizador acabou de digitar
+- Os inputs ficam "presos" ou voltam a 0
 
-A logica sera adicionada diretamente na edge function `submit-lead/index.ts`, no mesmo bloco onde ja dispara push notifications e webhooks. Reutiliza o padrao existente de Brevo (igual a `notify-finance-request`).
+### Solução
 
-### Alteracoes
+1. **`src/hooks/useActivationObjectives.ts`**: Envolver `getTarget` em `useCallback` para estabilizar a referência.
 
-**1. `supabase/functions/submit-lead/index.ts`**
+2. **`src/components/dashboard/EditActivationObjectivesModal.tsx`**: Remover `getTarget` das dependências do `useEffect`, usando apenas `open`, `members`, `periodType`, `proposalType` como triggers. Usar uma ref ou chamar `getTarget` apenas quando o modal abre (não a cada re-render).
 
-Apos a secao de push notifications (~linha 404), adicionar um novo bloco non-blocking:
+### Alterações
 
-- Buscar `brevo_api_key` e `brevo_sender_email` da organizacao (ja disponivel no objeto `org` — basta adicionar estes campos ao `.select()` inicial na linha ~109)
-- Se Brevo estiver configurado:
-  - Buscar todos os `organization_members` com `role = 'admin'` e `is_active = true`, join com `profiles` para obter o email
-  - Se `autoAssignedTo` existe, buscar o email do comercial atribuido via `profiles`
-  - Construir lista unica de destinatarios (sem duplicados)
-  - Enviar email via Brevo API (`api.brevo.com/v3/smtp/email`) com:
-    - **Assunto**: `🚀 Novo Lead: {nome} - {source}`
-    - **Corpo HTML**: Info basica do lead (nome, telefone, email, fonte, formulario) + link direto para `/leads`
-  - Fire-and-forget (non-blocking, como os webhooks)
+**`src/hooks/useActivationObjectives.ts`**:
+- Importar `useCallback` do React
+- Envolver `getTarget` e `countActivations` em `useCallback` com as dependências correctas (`objectives`, `currentMonthStart`, `currentYearStart` para `getTarget`; `monthlyActivations`, `annualActivations` para `countActivations`)
 
-### Detalhes tecnicos
-
-- O `.select()` na linha ~109 ja busca dados da org — adicionar `brevo_api_key, brevo_sender_email` ao select
-- Emails dos admins: query `organization_members` WHERE `role = 'admin'` JOIN `profiles` ON `user_id = id`
-- Email do comercial: query `profiles` WHERE `id = autoAssignedTo`
-- Deduplicar: se o comercial tambem e admin, enviar apenas 1 email
-- Fallback: se Brevo nao configurado, skip silenciosamente (log warning)
-
-### Sem alteracoes no frontend
-Nao e necessaria nenhuma configuracao adicional — basta a organizacao ter Brevo configurado (campo `brevo_api_key` e `brevo_sender_email`). O comportamento e automatico.
-
-### Resumo
-1 ficheiro alterado: `supabase/functions/submit-lead/index.ts`
-- Adicionar `brevo_api_key, brevo_sender_email` ao select da org
-- Novo bloco apos push notifications para enviar email via Brevo aos admins + comercial atribuido
+**`src/components/dashboard/EditActivationObjectivesModal.tsx`**:
+- Remover `getTarget` da lista de dependências do `useEffect` (deixar apenas `open, members, periodType, proposalType`)
+- Isto evita que os valores sejam resetados enquanto o utilizador está a digitar
 
