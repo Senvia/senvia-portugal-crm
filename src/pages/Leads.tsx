@@ -281,7 +281,8 @@ export default function Leads() {
       const existingClient = clients.find(c => c.lead_id === leadId || (lead.company_nif && c.company_nif === lead.company_nif));
       if (existingClient) {
         toast.success('Lead ganha! Cliente já existente.');
-        navigate(`/clients?highlight=${existingClient.id}`);
+        setPrefillSaleClientId(existingClient.id);
+        setIsCreateSaleModalOpen(true);
       } else {
         convertLeadToClient.mutate({
           lead_id: leadId,
@@ -295,9 +296,10 @@ export default function Leads() {
           notes: lead.notes || undefined,
         }, {
           onSuccess: (newClient) => {
-            toast.success('Lead ganha! Novo cliente criado com sucesso.');
+            toast.success('Lead ganha! Novo cliente criado.');
             if (newClient?.id) {
-              navigate(`/clients?highlight=${newClient.id}`);
+              setPrefillSaleClientId(newClient.id);
+              setIsCreateSaleModalOpen(true);
             }
           },
         });
