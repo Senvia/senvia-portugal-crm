@@ -40,7 +40,8 @@ export default function Finance() {
     if (organization && !validTabs.includes(activeTab)) {
       setActiveTab(validTabs[0]);
     }
-  }, [organization?.niche]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [organization?.niche, activeTab]);
   const { stats, isLoading } = useFinanceStats({ dateRange });
   const navigate = useNavigate();
 
