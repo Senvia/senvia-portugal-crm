@@ -459,13 +459,12 @@ Deno.serve(async (req) => {
       console.error('Error dispatching CAPI events:', capiError);
     }
 
-    // ===== EMAIL NOTIFICATION (Brevo) =====
-    // Notify admins + assigned salesperson about the new lead
+    // ===== EMAIL NOTIFICATION (Brevo SENVIA global) =====
+    // Always send via Senvia's own Brevo account, regardless of client config
     try {
-      const brevoKey = (org as any).brevo_api_key;
-      const brevoSender = (org as any).brevo_sender_email;
+      const brevoKey = Deno.env.get('BREVO_API_KEY');
 
-      if (brevoKey && brevoSender) {
+      if (brevoKey) {
         // Fetch admin emails
         const { data: adminMembers } = await supabase
           .from('organization_members')
@@ -476,7 +475,7 @@ Deno.serve(async (req) => {
 
         const adminIds = (adminMembers || []).map((m: any) => m.user_id);
 
-        // Add assigned salesperson if exists and not already in admin list
+        // Add assigned salesperson if not already admin
         if (autoAssignedTo && !adminIds.includes(autoAssignedTo)) {
           adminIds.push(autoAssignedTo);
         }
@@ -492,24 +491,43 @@ Deno.serve(async (req) => {
             .map((p: any) => ({ email: p.email, name: p.full_name || p.email }));
 
           if (recipients.length > 0) {
-            const orgSlug = (org as any).slug || '';
-            const leadsUrl = `https://senvia-portugal-crm.lovable.app/leads`;
+            const leadsUrl = 'https://senvia-portugal-crm.lovable.app/leads';
+            const logoUrl = 'https://senvia-portugal-crm.lovable.app/senvia-logo-white.png';
 
             const htmlContent = `
-              <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px">
-                <h2 style="color:#10b981">🚀 Novo Lead Recebido</h2>
-                <table style="width:100%;border-collapse:collapse;margin:16px 0">
-                  <tr><td style="padding:8px;font-weight:bold;color:#6b7280">Nome</td><td style="padding:8px">${lead.name}</td></tr>
-                  ${lead.phone && lead.phone !== '000000000' ? `<tr><td style="padding:8px;font-weight:bold;color:#6b7280">Telefone</td><td style="padding:8px">${lead.phone}</td></tr>` : ''}
-                  ${lead.email && lead.email !== 'nao-fornecido@placeholder.local' ? `<tr><td style="padding:8px;font-weight:bold;color:#6b7280">Email</td><td style="padding:8px">${lead.email}</td></tr>` : ''}
-                  <tr><td style="padding:8px;font-weight:bold;color:#6b7280">Fonte</td><td style="padding:8px">${lead.source || 'Formulário Público'}</td></tr>
-                  ${formSettings.form_name ? `<tr><td style="padding:8px;font-weight:bold;color:#6b7280">Formulário</td><td style="padding:8px">${formSettings.form_name}</td></tr>` : ''}
-                  ${lead.company_name ? `<tr><td style="padding:8px;font-weight:bold;color:#6b7280">Empresa</td><td style="padding:8px">${lead.company_name}</td></tr>` : ''}
-                </table>
-                <a href="${leadsUrl}" style="display:inline-block;background:#10b981;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;margin-top:8px">Ver Lead no Senvia</a>
-                <p style="color:#9ca3af;font-size:12px;margin-top:24px">Organização: ${org.name}</p>
-              </div>
-            `;
+<!DOCTYPE html>
+<html lang="pt">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background-color:#0f172a;font-family:'Segoe UI',Roboto,Arial,sans-serif">
+<table width="100%" cellpadding="0" cellspacing="0" style="background-color:#0f172a;padding:40px 16px">
+<tr><td align="center">
+<table width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background-color:#1e293b;border-radius:16px;overflow:hidden">
+  <tr><td style="padding:32px 32px 24px;text-align:center">
+    <img src="${logoUrl}" alt="Senvia OS" width="140" style="display:inline-block;margin-bottom:24px" />
+    <h1 style="color:#ffffff;font-size:22px;margin:0 0 4px">🚀 Novo Lead Recebido</h1>
+    <p style="color:#94a3b8;font-size:14px;margin:0">Organização: <strong style="color:#cbd5e1">${org.name}</strong></p>
+  </td></tr>
+  <tr><td style="padding:0 32px 24px">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#0f172a;border-radius:12px;border:1px solid #334155">
+      ${lead.name && lead.name !== 'Anónimo' ? `<tr><td style="padding:12px 16px 0;color:#94a3b8;font-size:13px;font-weight:600">Nome</td><td style="padding:12px 16px 0;color:#f1f5f9;font-size:14px;text-align:right">${lead.name}</td></tr>` : ''}
+      ${lead.phone && lead.phone !== '000000000' ? `<tr><td style="padding:12px 16px 0;color:#94a3b8;font-size:13px;font-weight:600">Telefone</td><td style="padding:12px 16px 0;color:#f1f5f9;font-size:14px;text-align:right">${lead.phone}</td></tr>` : ''}
+      ${lead.email && lead.email !== 'nao-fornecido@placeholder.local' ? `<tr><td style="padding:12px 16px 0;color:#94a3b8;font-size:13px;font-weight:600">Email</td><td style="padding:12px 16px 0;color:#f1f5f9;font-size:14px;text-align:right">${lead.email}</td></tr>` : ''}
+      <tr><td style="padding:12px 16px 0;color:#94a3b8;font-size:13px;font-weight:600">Fonte</td><td style="padding:12px 16px 0;color:#f1f5f9;font-size:14px;text-align:right">${lead.source || 'Formulário Público'}</td></tr>
+      ${formSettings.form_name ? `<tr><td style="padding:12px 16px 0;color:#94a3b8;font-size:13px;font-weight:600">Formulário</td><td style="padding:12px 16px 0;color:#f1f5f9;font-size:14px;text-align:right">${formSettings.form_name}</td></tr>` : ''}
+      ${lead.company_name ? `<tr><td style="padding:12px 16px;color:#94a3b8;font-size:13px;font-weight:600">Empresa</td><td style="padding:12px 16px;color:#f1f5f9;font-size:14px;text-align:right">${lead.company_name}</td></tr>` : '<tr><td style="padding:0 0 12px" colspan="2"></td></tr>'}
+    </table>
+  </td></tr>
+  <tr><td style="padding:0 32px 32px;text-align:center">
+    <a href="${leadsUrl}" style="display:inline-block;background:#10b981;color:#ffffff;padding:14px 32px;border-radius:10px;text-decoration:none;font-weight:700;font-size:15px">Ver Lead no Senvia</a>
+  </td></tr>
+  <tr><td style="padding:16px 32px;border-top:1px solid #334155;text-align:center">
+    <p style="color:#64748b;font-size:12px;margin:0">Senvia OS · <a href="https://senvia.pt" style="color:#64748b;text-decoration:underline">senvia.pt</a></p>
+  </td></tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>`;
 
             fetch('https://api.brevo.com/v3/smtp/email', {
               method: 'POST',
@@ -518,7 +536,7 @@ Deno.serve(async (req) => {
                 'api-key': brevoKey,
               },
               body: JSON.stringify({
-                sender: { email: brevoSender, name: org.name },
+                sender: { email: 'notificacoes@senvia.pt', name: 'Senvia OS' },
                 to: recipients,
                 subject: `🚀 Novo Lead: ${lead.name} - ${lead.source || 'Formulário'}`,
                 htmlContent,
@@ -529,7 +547,7 @@ Deno.serve(async (req) => {
           }
         }
       } else {
-        console.log('Brevo not configured for org, skipping email notification');
+        console.warn('BREVO_API_KEY secret not set, skipping new-lead email notification');
       }
     } catch (emailError) {
       console.error('Error sending new-lead email:', emailError);
