@@ -3489,6 +3489,7 @@ export type Database = {
           activation_date: string | null
           anos_contrato: number | null
           client_id: string | null
+          client_org_id: string | null
           code: string | null
           comissao: number | null
           consumo_anual: number | null
@@ -3534,6 +3535,7 @@ export type Database = {
           activation_date?: string | null
           anos_contrato?: number | null
           client_id?: string | null
+          client_org_id?: string | null
           code?: string | null
           comissao?: number | null
           consumo_anual?: number | null
@@ -3579,6 +3581,7 @@ export type Database = {
           activation_date?: string | null
           anos_contrato?: number | null
           client_id?: string | null
+          client_org_id?: string | null
           code?: string | null
           comissao?: number | null
           consumo_anual?: number | null
@@ -3626,6 +3629,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "crm_clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_client_org_id_fkey"
+            columns: ["client_org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
           {
@@ -3707,6 +3717,79 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      stripe_commission_records: {
+        Row: {
+          amount: number
+          client_org_id: string
+          commission_amount: number
+          commission_rate: number
+          created_at: string
+          id: string
+          organization_id: string
+          period_end: string | null
+          period_start: string | null
+          plan: string | null
+          sale_id: string
+          status: string
+          stripe_invoice_id: string | null
+          user_id: string
+        }
+        Insert: {
+          amount?: number
+          client_org_id: string
+          commission_amount?: number
+          commission_rate?: number
+          created_at?: string
+          id?: string
+          organization_id: string
+          period_end?: string | null
+          period_start?: string | null
+          plan?: string | null
+          sale_id: string
+          status?: string
+          stripe_invoice_id?: string | null
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          client_org_id?: string
+          commission_amount?: number
+          commission_rate?: number
+          created_at?: string
+          id?: string
+          organization_id?: string
+          period_end?: string | null
+          period_start?: string | null
+          plan?: string | null
+          sale_id?: string
+          status?: string
+          stripe_invoice_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stripe_commission_records_client_org_id_fkey"
+            columns: ["client_org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stripe_commission_records_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stripe_commission_records_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "sales"
             referencedColumns: ["id"]
           },
         ]
@@ -4164,6 +4247,7 @@ export type Database = {
           activation_date: string | null
           anos_contrato: number | null
           client_id: string | null
+          client_org_id: string | null
           code: string | null
           comissao: number | null
           consumo_anual: number | null

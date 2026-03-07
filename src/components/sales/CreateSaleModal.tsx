@@ -38,6 +38,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useFinalStages } from "@/hooks/usePipelineStages";
 import { useUpdateLeadStatus } from "@/hooks/useLeads";
 import { formatCurrency } from "@/lib/format";
+import { STRIPE_PLANS } from "@/lib/stripe-plans";
 import { cn } from "@/lib/utils";
 import { format, addMonths } from "date-fns";
 import { ClientFiscalCard, VatBadge, useVatCalculation, isInvoiceXpressActive, getOrgTaxValue } from "./SaleFiscalInfo";
@@ -114,6 +115,7 @@ export function CreateSaleModal({
   const updateLeadStatus = useUpdateLeadStatus();
   const { organization } = useAuth();
   const isTelecom = organization?.niche === 'telecom';
+  const isSenviaOrg = organization?.id === '06fe9e1d-9670-45b0-8717-c5a6e90be380';
   const { calculateCommission, isAutoCalculated, calculateEnergyCommission, hasEnergyConfig, energyConfig } = useCommissionMatrix();
   
   // Fiscal info
@@ -178,6 +180,13 @@ export function CreateSaleModal({
   const [showDraftPaymentModal, setShowDraftPaymentModal] = useState(false);
   const [showPaymentTypeSelector, setShowPaymentTypeSelector] = useState(false);
   const [showDraftScheduleModal, setShowDraftScheduleModal] = useState(false);
+
+  // Plan sale mode (Senvia only)
+  const [isPlanSale, setIsPlanSale] = useState(false);
+  const [selectedPlanId, setSelectedPlanId] = useState<string>("");
+  const [clientOrgId, setClientOrgId] = useState<string>("");
+  const [orgSearchResults, setOrgSearchResults] = useState<{ id: string; name: string; slug: string }[]>([]);
+  const [orgSearchTerm, setOrgSearchTerm] = useState("");
   
 
   // Helper to recalculate commission from proposal data using matrix
@@ -282,6 +291,11 @@ export function CreateSaleModal({
       setShowDraftPaymentModal(false);
       setShowPaymentTypeSelector(false);
       setShowDraftScheduleModal(false);
+      setIsPlanSale(false);
+      setSelectedPlanId("");
+      setClientOrgId("");
+      setOrgSearchTerm("");
+      setOrgSearchResults([]);
       if (!prefillProposal?.notes) {
         setNotes("");
       }
@@ -382,6 +396,39 @@ export function CreateSaleModal({
 
   const getProposalStatusLabel = (status: string) => {
     return PROPOSAL_STATUS_LABELS[status as ProposalStatus] || status;
+  };
+
+  // Org search for plan sales
+  useEffect(() => {
+    if (!isPlanSale || orgSearchTerm.length < 2) {
+      setOrgSearchResults([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      const { data } = await (await import("@/integrations/supabase/client")).supabase
+        .from("organizations")
+        .select("id, name, slug")
+        .neq("id", organization?.id || "")
+        .ilike("name", `%${orgSearchTerm}%`)
+        .limit(10);
+      setOrgSearchResults(data || []);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [orgSearchTerm, isPlanSale, organization?.id]);
+
+  // Handle plan selection
+  const handlePlanSelect = (planId: string) => {
+    setSelectedPlanId(planId);
+    const plan = STRIPE_PLANS.find(p => p.id === planId);
+    if (plan) {
+      setItems([{
+        id: crypto.randomUUID(),
+        product_id: null,
+        name: `Plano ${plan.name} (mensal)`,
+        quantity: 1,
+        unit_price: plan.priceMonthly,
+      }]);
+    }
   };
 
   // Calculate totals
@@ -534,6 +581,12 @@ export function CreateSaleModal({
     
     if (!isTelecom && total <= 0 && items.length === 0) return;
 
+    // Validate plan sale
+    if (isPlanSale && !clientOrgId) {
+      toast.error("Selecione a organização cliente para a venda de plano.");
+      return;
+    }
+
     // Validar data de ativação quando estado é Concluída
     if (saleStatus === 'delivered' && !activationDate) {
       toast.error("A Data de Ativação é obrigatória para vendas com estado Concluída.");
@@ -541,16 +594,18 @@ export function CreateSaleModal({
     }
 
     try {
+      // For plan sales, force recurring
+      const isPlanRecurring = isPlanSale && !!selectedPlanId;
       const recurringItems = items.filter(item => {
         if (!item.product_id) return false;
         const product = products?.find(p => p.id === item.product_id);
         return product?.is_recurring;
       });
       
-      const recurringValue = recurringItems.reduce(
-        (sum, item) => sum + (item.quantity * item.unit_price), 0
-      );
-      const hasRecurring = recurringValue > 0;
+      const recurringValue = isPlanRecurring 
+        ? total 
+        : recurringItems.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
+      const hasRecurring = isPlanRecurring || recurringValue > 0;
       const nextRenewalDate = hasRecurring 
         ? addMonths(saleDate, 1).toISOString().split('T')[0] 
         : undefined;
@@ -578,10 +633,11 @@ export function CreateSaleModal({
         } : {}),
         edp_proposal_number: edpProposalNumber.trim() || undefined,
         activation_date: activationDate ? format(activationDate, 'yyyy-MM-dd') : undefined,
-        has_recurring: hasRecurring,
+        has_recurring: hasRecurring || false,
         recurring_value: recurringValue,
         recurring_status: hasRecurring ? 'active' : undefined,
         next_renewal_date: nextRenewalDate,
+        ...(isPlanSale && clientOrgId ? { client_org_id: clientOrgId } : {}),
       });
 
       if (!isTelecom && items.length > 0 && sale?.id) {
@@ -676,6 +732,90 @@ export function CreateSaleModal({
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="p-4 pt-0 space-y-4">
+                    {/* Plan Sale Toggle (Senvia only) */}
+                    {isSenviaOrg && !prefillProposal && (
+                      <div className="flex items-center gap-3 p-3 rounded-lg border border-border/50 bg-muted/20">
+                        <label className="flex items-center gap-2 cursor-pointer text-sm font-medium">
+                          <input
+                            type="checkbox"
+                            checked={isPlanSale}
+                            onChange={(e) => {
+                              setIsPlanSale(e.target.checked);
+                              if (!e.target.checked) {
+                                setSelectedPlanId("");
+                                setClientOrgId("");
+                                setOrgSearchTerm("");
+                                setOrgSearchResults([]);
+                                setItems([]);
+                              }
+                            }}
+                            className="rounded border-border"
+                          />
+                          <CreditCard className="h-4 w-4 text-primary" />
+                          Venda de Plano Senvia
+                        </label>
+                      </div>
+                    )}
+
+                    {/* Plan Sale Fields */}
+                    {isPlanSale && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>Plano</Label>
+                          <Select value={selectedPlanId} onValueChange={handlePlanSelect}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Selecionar plano..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {STRIPE_PLANS.map(plan => (
+                                <SelectItem key={plan.id} value={plan.id}>
+                                  {plan.name} — {formatCurrency(plan.priceMonthly)}/mês
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Organização Cliente</Label>
+                          <div className="relative">
+                            <Input
+                              placeholder="Pesquisar organização..."
+                              value={orgSearchTerm}
+                              onChange={(e) => setOrgSearchTerm(e.target.value)}
+                            />
+                            {orgSearchResults.length > 0 && !clientOrgId && (
+                              <div className="absolute z-50 w-full mt-1 border border-border rounded-lg bg-popover shadow-lg max-h-48 overflow-y-auto">
+                                {orgSearchResults.map(org => (
+                                  <button
+                                    key={org.id}
+                                    type="button"
+                                    className="w-full text-left px-3 py-2 text-sm hover:bg-accent transition-colors"
+                                    onClick={() => {
+                                      setClientOrgId(org.id);
+                                      setOrgSearchTerm(org.name);
+                                      setOrgSearchResults([]);
+                                    }}
+                                  >
+                                    <span className="font-medium">{org.name}</span>
+                                    <span className="text-muted-foreground ml-2 text-xs">({org.slug})</span>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                            {clientOrgId && (
+                              <button
+                                type="button"
+                                className="absolute right-2 top-1/2 -translate-y-1/2"
+                                onClick={() => { setClientOrgId(""); setOrgSearchTerm(""); }}
+                              >
+                                <X className="h-4 w-4 text-muted-foreground" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label>Cliente</Label>

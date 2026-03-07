@@ -69,7 +69,6 @@ serve(async (req) => {
         const productId = sub.items.data[0].price.product as string;
         const plan = PRODUCT_TO_PLAN[productId];
 
-        // Check if reactivation before updating plan
         const orgId = await findOrgByEmail(supabase, email);
         let isReactivation = false;
         if (orgId) {
@@ -93,7 +92,6 @@ serve(async (req) => {
           await dispatchAutomation(supabase, `stripe_welcome_${plan}`, { email, plan, nome: orgName });
         }
 
-        // Sync auto-lists: add to plan list, remove from overdue & canceled
         await syncStripeAutoLists(supabase, email, orgName, "checkout_completed", plan || null, isReactivation);
         break;
       }
@@ -151,6 +149,10 @@ serve(async (req) => {
         }
         break;
       }
+      case "invoice.paid": {
+        await handleInvoicePaid(supabase, stripe, event.data.object as Stripe.Invoice);
+        break;
+      }
       default:
         logStep("Unhandled event type", { type: event.type });
     }
@@ -164,6 +166,117 @@ serve(async (req) => {
     status: 200,
   });
 });
+
+// --- Invoice Paid → Recurring Commission ---
+
+async function handleInvoicePaid(supabase: any, stripe: Stripe, invoice: Stripe.Invoice) {
+  try {
+    const email = invoice.customer_email;
+    if (!email) { logStep("invoice.paid: no email"); return; }
+
+    const amount = (invoice.amount_paid || 0) / 100; // cents to euros
+    if (amount <= 0) { logStep("invoice.paid: zero amount"); return; }
+
+    // Determine plan from subscription
+    let plan: string | null = null;
+    const subId = invoice.subscription as string | null;
+    if (subId) {
+      const sub = await stripe.subscriptions.retrieve(subId);
+      const productId = sub.items.data[0]?.price?.product as string;
+      plan = PRODUCT_TO_PLAN[productId] || null;
+    }
+
+    // Find the client organization by email
+    const clientOrgId = await findOrgByEmail(supabase, email);
+    if (!clientOrgId) { logStep("invoice.paid: no org found for email", { email }); return; }
+
+    // Check for duplicate (same stripe invoice ID)
+    const stripeInvoiceId = invoice.id;
+    const { data: existing } = await supabase
+      .from("stripe_commission_records")
+      .select("id")
+      .eq("stripe_invoice_id", stripeInvoiceId)
+      .limit(1);
+    
+    if (existing && existing.length > 0) {
+      logStep("invoice.paid: commission already recorded", { stripeInvoiceId });
+      return;
+    }
+
+    // Find sale in Senvia org linked to this client org
+    const { data: sales, error: salesErr } = await supabase
+      .from("sales")
+      .select("id, created_by, total_value, has_recurring")
+      .eq("organization_id", SENVIA_AGENCY_ORG_ID)
+      .eq("client_org_id", clientOrgId)
+      .in("status", ["in_progress", "fulfilled", "delivered"])
+      .limit(1);
+
+    if (salesErr) { logStep("invoice.paid: sales query error", { error: salesErr.message }); return; }
+    if (!sales || sales.length === 0) { logStep("invoice.paid: no linked sale found", { clientOrgId }); return; }
+
+    const sale = sales[0];
+    if (!sale.created_by) { logStep("invoice.paid: sale has no created_by"); return; }
+
+    // Get commission rate for the salesperson
+    const salesSettings = await getOrgSalesSettings(supabase);
+    const globalRate = salesSettings?.commission_percentage || 0;
+
+    const { data: member } = await supabase
+      .from("organization_members")
+      .select("commission_rate")
+      .eq("organization_id", SENVIA_AGENCY_ORG_ID)
+      .eq("user_id", sale.created_by)
+      .eq("is_active", true)
+      .maybeSingle();
+
+    const rate = globalRate > 0 ? globalRate : Number(member?.commission_rate || 0);
+    if (rate <= 0) { logStep("invoice.paid: no commission rate", { userId: sale.created_by }); return; }
+
+    const commissionAmount = amount * (rate / 100);
+
+    // Extract period
+    const periodStart = invoice.period_start ? new Date(invoice.period_start * 1000).toISOString().split("T")[0] : null;
+    const periodEnd = invoice.period_end ? new Date(invoice.period_end * 1000).toISOString().split("T")[0] : null;
+
+    // Insert commission record
+    const { error: insertErr } = await supabase
+      .from("stripe_commission_records")
+      .insert({
+        organization_id: SENVIA_AGENCY_ORG_ID,
+        sale_id: sale.id,
+        user_id: sale.created_by,
+        client_org_id: clientOrgId,
+        amount,
+        commission_rate: rate,
+        commission_amount: commissionAmount,
+        stripe_invoice_id: stripeInvoiceId,
+        period_start: periodStart,
+        period_end: periodEnd,
+        plan,
+        status: "pending",
+      });
+
+    if (insertErr) {
+      logStep("invoice.paid: insert error", { error: insertErr.message });
+    } else {
+      logStep("invoice.paid: commission recorded", { 
+        userId: sale.created_by, amount, rate, commissionAmount, plan 
+      });
+    }
+  } catch (err) {
+    logStep("invoice.paid: error", { error: (err as Error).message });
+  }
+}
+
+async function getOrgSalesSettings(supabase: any) {
+  const { data } = await supabase
+    .from("organizations")
+    .select("sales_settings")
+    .eq("id", SENVIA_AGENCY_ORG_ID)
+    .maybeSingle();
+  return data?.sales_settings || {};
+}
 
 // --- Stripe Auto-Lists Sync ---
 
@@ -180,10 +293,8 @@ async function syncStripeAutoLists(
   try {
     logStep("Syncing Stripe auto-lists", { email, eventType, plan });
 
-    // 1. Ensure lists exist
     await supabase.rpc("ensure_stripe_auto_lists", { p_org_id: SENVIA_AGENCY_ORG_ID });
 
-    // 2. Upsert marketing contact
     const { data: contact, error: contactErr } = await supabase
       .from("marketing_contacts")
       .upsert(
@@ -199,7 +310,6 @@ async function syncStripeAutoLists(
     }
     const contactId = contact.id;
 
-    // 3. Get all Stripe system list IDs
     const { data: lists } = await supabase
       .from("client_lists")
       .select("id, name")
@@ -223,7 +333,6 @@ async function syncStripeAutoLists(
     const reactivatedListId = listMap["Subscrição Reativada"];
     const currentPlanListId = plan ? listMap[PLAN_LIST_NAMES[plan]] : null;
 
-    // Helper: add to list
     const addToList = async (listId: string) => {
       if (!listId) return;
       await supabase.from("marketing_list_members").upsert(
@@ -232,7 +341,6 @@ async function syncStripeAutoLists(
       );
     };
 
-    // Helper: remove from list
     const removeFromList = async (listId: string) => {
       if (!listId) return;
       await supabase.from("marketing_list_members")
@@ -241,7 +349,6 @@ async function syncStripeAutoLists(
         .eq("contact_id", contactId);
     };
 
-    // Helper: remove from multiple lists
     const removeFromLists = async (listIds: string[]) => {
       for (const id of listIds) await removeFromList(id);
     };
@@ -249,35 +356,26 @@ async function syncStripeAutoLists(
     switch (eventType) {
       case "checkout_completed":
       case "renewed":
-        // Add to current plan list
         if (currentPlanListId) await addToList(currentPlanListId);
-        // Remove from other plan lists (upgrade/downgrade)
         for (const id of planListIds) {
           if (id !== currentPlanListId) await removeFromList(id);
         }
-        // Remove from overdue, canceled & trial lists
         if (overdueListId) await removeFromList(overdueListId);
         if (canceledListId) await removeFromList(canceledListId);
         if (trialListId) await removeFromList(trialListId);
         if (trialExpiredListId) await removeFromList(trialExpiredListId);
-        // Add to reactivated list if applicable
         if (isReactivation && reactivatedListId) await addToList(reactivatedListId);
         break;
 
       case "past_due":
       case "payment_failed":
-        // Add to overdue
         if (overdueListId) await addToList(overdueListId);
         break;
 
       case "canceled":
-        // Remove from all plan lists
         await removeFromLists(planListIds);
-        // Remove from overdue
         if (overdueListId) await removeFromList(overdueListId);
-        // Remove from reactivated
         if (reactivatedListId) await removeFromList(reactivatedListId);
-        // Add to canceled
         if (canceledListId) await addToList(canceledListId);
         break;
     }
