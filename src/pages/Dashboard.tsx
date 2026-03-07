@@ -26,6 +26,8 @@ export default function Dashboard() {
   const isTelecom = organization?.niche === 'telecom';
   const clientsModuleEnabled = modules.clients;
   const calendarModuleEnabled = modules.calendar !== false;
+  const salesSettings = (organization?.sales_settings as any) || {};
+  const commissionsEnabled = !!salesSettings.commissions_enabled;
   const { 
     visibleWidgets, 
     isLoading, 
