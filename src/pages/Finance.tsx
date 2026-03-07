@@ -232,9 +232,29 @@ export default function Finance() {
                   <p className="text-xs text-muted-foreground">{stats.dueSoonCount} pagamento(s)</p>
                 </CardContent>
               </Card>
+              {commissionsEnabled && (
+                <Card 
+                  className="cursor-pointer hover:bg-muted/50 transition-colors group"
+                  onClick={() => setCommissionsModalOpen(true)}
+                >
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Comissões a Pagar</CardTitle>
+                    <div className="flex items-center gap-1">
+                      <Percent className="h-4 w-4 text-primary" />
+                      <ExternalLink className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-xl md:text-2xl font-bold text-primary">
+                      {formatCurrency(commissionsData?.reduce((sum, c) => sum + c.totalCommission, 0) || 0)}
+                    </div>
+                    <p className="text-xs text-muted-foreground">Total do período</p>
+                  </CardContent>
+                </Card>
+              )}
             </div>
 
-            {/* Chart */}
+            <CommissionsPayableModal open={commissionsModalOpen} onOpenChange={setCommissionsModalOpen} />
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">
