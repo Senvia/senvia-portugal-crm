@@ -1,26 +1,35 @@
 
 
-## Fix: Modal de Objetivos Anuais "bugado"
+## Revisao: Substituir `safe-top`/`safe-bottom` por `pt-safe`/`pb-safe`
 
-### Problema
+### Analise
 
-O `useEffect` no `EditActivationObjectivesModal` tem `getTarget` como dependência. Como `getTarget` é uma função normal (closure) criada a cada render no hook `useActivationObjectives`, ganha uma nova referência em cada render. Isto causa:
-- O `useEffect` dispara repetidamente, resetando os valores que o utilizador acabou de digitar
-- Os inputs ficam "presos" ou voltam a 0
+Existem **4 componentes** que usam `safe-top`/`safe-bottom` (sem minimo garantido):
 
-### Solução
+| Componente | Classe atual | Acao |
+|---|---|---|
+| `TrialExpiredBlocker.tsx` | `safe-top safe-bottom` | Substituir por `pt-safe pb-safe` |
+| `PaymentOverdueBlocker.tsx` | `safe-top safe-bottom` | Substituir por `pt-safe pb-safe` |
+| `MobileHeader.tsx` | `safe-top` | **Manter** — e um header de layout, precisa apenas do safe area exato |
+| `MobileBottomNav.tsx` | `safe-bottom` | **Manter** — nav de layout, padding extra ficaria visualmente incorreto |
 
-1. **`src/hooks/useActivationObjectives.ts`**: Envolver `getTarget` em `useCallback` para estabilizar a referência.
+Os **blockers** sao overlays fullscreen que funcionam como modais — devem usar `pt-safe`/`pb-safe` (com clamp e minimo 20px) para consistencia com os Dialog/AlertDialog corrigidos.
 
-2. **`src/components/dashboard/EditActivationObjectivesModal.tsx`**: Remover `getTarget` das dependências do `useEffect`, usando apenas `open`, `members`, `periodType`, `proposalType` como triggers. Usar uma ref ou chamar `getTarget` apenas quando o modal abre (não a cada re-render).
+Os componentes de **layout** (header/nav) precisam do safe area exato sem padding extra, pois ja tem alturas proprias definidas.
 
-### Alterações
+### Alteracoes (2 ficheiros)
 
-**`src/hooks/useActivationObjectives.ts`**:
-- Importar `useCallback` do React
-- Envolver `getTarget` e `countActivations` em `useCallback` com as dependências correctas (`objectives`, `currentMonthStart`, `currentYearStart` para `getTarget`; `monthlyActivations`, `annualActivations` para `countActivations`)
+**1. `src/components/auth/TrialExpiredBlocker.tsx` (linha 22)**
+- `safe-top safe-bottom` → `pt-safe pb-safe`
 
-**`src/components/dashboard/EditActivationObjectivesModal.tsx`**:
-- Remover `getTarget` da lista de dependências do `useEffect` (deixar apenas `open, members, periodType, proposalType`)
-- Isto evita que os valores sejam resetados enquanto o utilizador está a digitar
+**2. `src/components/auth/PaymentOverdueBlocker.tsx` (linha 20)**
+- `safe-top safe-bottom` → `pt-safe pb-safe`
+
+### Opcao adicional: Atualizar `.safe-top` no CSS
+
+Opcionalmente, podemos tambem atualizar a propria classe `.safe-top` no `index.css` para incluir um `clamp()` minimo, tornando-a segura por defeito:
+```css
+.safe-top { padding-top: clamp(0px, var(--safe-area-top), 50px); }
+```
+Isto nao resolve o caso de 0px mas limita o maximo. A abordagem mais segura e simplesmente usar `pt-safe` onde necessario.
 
