@@ -4200,6 +4200,14 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      search_organizations_by_name: {
+        Args: { _caller_org_id: string; _limit?: number; _search: string }
+        Returns: {
+          id: string
+          name: string
+          slug: string
+        }[]
+      }
       search_proposals_unaccent: {
         Args: {
           max_results?: number
