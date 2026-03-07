@@ -8,6 +8,7 @@ import { CalendarAlertsWidget } from "@/components/dashboard/CalendarAlertsWidge
 import { CommitmentPanel } from "@/components/dashboard/CommitmentPanel";
 import { SalesPerformancePanel } from "@/components/dashboard/SalesPerformancePanel";
 import { MetricsPanel } from "@/components/dashboard/MetricsPanel";
+import { CommissionsWidget } from "@/components/dashboard/CommissionsWidget";
 import { Loader2 } from "lucide-react";
 import { NicheType } from "@/lib/dashboard-templates";
 import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription";

@@ -773,6 +773,25 @@ export function TeamTab() {
                 onChange={(e) => setEditPhone(e.target.value)}
               />
             </div>
+            {showIndividualCommission && (
+              <div className="space-y-2">
+                <Label htmlFor="edit-commission-rate">Comissão (%)</Label>
+                <Input
+                  id="edit-commission-rate"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.5"
+                  placeholder="Ex: 10"
+                  value={editCommissionRate}
+                  onChange={(e) => setEditCommissionRate(e.target.value)}
+                  className="w-32"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Percentagem de comissão individual sobre o valor total das vendas.
+                </p>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditProfileOpen(false)}>
