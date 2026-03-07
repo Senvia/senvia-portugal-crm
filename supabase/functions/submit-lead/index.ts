@@ -126,6 +126,7 @@ Deno.serve(async (req) => {
       form_name: null as string | null,
       assigned_to: null as string | null,
       meta_pixels: null as any[] | null,
+      target_stage: null as string | null,
     };
 
     if (body.form_id) {
