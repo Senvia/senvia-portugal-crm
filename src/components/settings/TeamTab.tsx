@@ -40,6 +40,8 @@ const ROLE_VARIANTS: Record<string, 'default' | 'secondary' | 'outline'> = {
 
 export function TeamTab() {
   const { user, organization } = useAuth();
+  const { data: orgData } = useOrganization();
+  const queryClient = useQueryClient();
   const { data: members, isLoading: loadingMembers } = useTeamMembers();
   const { data: invites, isLoading: loadingInvites } = usePendingInvites();
   const { profiles } = useOrganizationProfiles();
@@ -48,6 +50,11 @@ export function TeamTab() {
   const createTeamMember = useCreateTeamMember();
   const manageTeamMember = useManageTeamMember();
   const { toast } = useToast();
+
+  const salesSettings = (orgData?.sales_settings as any) || {};
+  const commissionsEnabled = !!salesSettings.commissions_enabled;
+  const globalRate = salesSettings.commission_percentage;
+  const showIndividualCommission = commissionsEnabled && (!globalRate || globalRate <= 0);
 
   // Modal state - Add member
   const [isAddOpen, setIsAddOpen] = useState(false);
