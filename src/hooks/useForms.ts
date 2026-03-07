@@ -76,6 +76,7 @@ interface CreateFormData {
   slug: string;
   form_settings?: FormSettings;
   is_default?: boolean;
+  target_stage?: string | null;
 }
 
 export function useCreateForm() {
