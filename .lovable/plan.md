@@ -1,41 +1,26 @@
 
 
-## Auditoria: Safe area em todos os componentes fullscreen do PWA
-
-### Resultado da analise
-
-Todos os componentes `fixed inset-0` (fullscreen) foram verificados. O estado atual:
-
-| Componente | Safe area | Estado |
-|---|---|---|
-| Dialog (default) | `clamp(20px, ...)` inline style | OK |
-| Dialog (fullScreen) | `pt-safe pb-safe` | OK |
-| AlertDialog | `clamp(20px, ...)` inline style | OK |
-| Sheet | `pt-safe` | OK |
-| Drawer | `pb-safe` (bottom-only) | OK |
-| TrialExpiredBlocker | `pt-safe pb-safe` | OK |
-| PaymentOverdueBlocker | `pt-safe pb-safe` | OK |
-| MobileHeader | `safe-top` | OK (layout — exato) |
-| MobileBottomNav | `safe-bottom` | OK (layout — exato) |
-| **OttoChatWindow** | `env(safe-area-inset-top, 0px)` inline | **PROBLEMA** — sem minimo, pode ser 0px |
-| **OnboardingWizard** | `env(safe-area-inset-top, 0px)` inline | **PROBLEMA** — sem minimo, pode ser 0px |
-| **MobileMenu** | `env(safe-area-inset-top, 0px)` inline | **PROBLEMA** — sem minimo, pode ser 0px |
+## Fix: Modal de Objetivos Anuais "bugado"
 
 ### Problema
 
-3 componentes usam `env(safe-area-inset-top, 0px)` diretamente em inline styles, sem o `clamp()` de minimo 20px. No iPhone PWA, isto pode resultar em conteudo a ficar por tras da barra de estado.
+O `useEffect` no `EditActivationObjectivesModal` tem `getTarget` como dependência. Como `getTarget` é uma função normal (closure) criada a cada render no hook `useActivationObjectives`, ganha uma nova referência em cada render. Isto causa:
+- O `useEffect` dispara repetidamente, resetando os valores que o utilizador acabou de digitar
+- Os inputs ficam "presos" ou voltam a 0
 
-### Correcoes (3 ficheiros)
+### Solução
 
-**1. `src/components/otto/OttoChatWindow.tsx` (linha 110)**
-- Substituir `calc(env(safe-area-inset-top, 0px) + 0.75rem)` por `calc(clamp(20px, env(safe-area-inset-top, 0px), 50px) + 0.75rem)`
+1. **`src/hooks/useActivationObjectives.ts`**: Envolver `getTarget` em `useCallback` para estabilizar a referência.
 
-**2. `src/components/onboarding/OnboardingWizard.tsx` (linha 82)**
-- Substituir `calc(env(safe-area-inset-top, 0px) + 1rem)` por `calc(clamp(20px, env(safe-area-inset-top, 0px), 50px) + 1rem)`
+2. **`src/components/dashboard/EditActivationObjectivesModal.tsx`**: Remover `getTarget` das dependências do `useEffect`, usando apenas `open`, `members`, `periodType`, `proposalType` como triggers. Usar uma ref ou chamar `getTarget` apenas quando o modal abre (não a cada re-render).
 
-**3. `src/components/layout/MobileMenu.tsx` (linha 55)**
-- Substituir `calc(env(safe-area-inset-top, 0px) + 0.5rem)` por `calc(clamp(20px, env(safe-area-inset-top, 0px), 50px) + 0.5rem)`
+### Alterações
 
-### Resumo
-3 ficheiros com alteracao minima (inline style update). Todos os restantes componentes ja estao corretos.
+**`src/hooks/useActivationObjectives.ts`**:
+- Importar `useCallback` do React
+- Envolver `getTarget` e `countActivations` em `useCallback` com as dependências correctas (`objectives`, `currentMonthStart`, `currentYearStart` para `getTarget`; `monthlyActivations`, `annualActivations` para `countActivations`)
+
+**`src/components/dashboard/EditActivationObjectivesModal.tsx`**:
+- Remover `getTarget` da lista de dependências do `useEffect` (deixar apenas `open, members, periodType, proposalType`)
+- Isto evita que os valores sejam resetados enquanto o utilizador está a digitar
 
