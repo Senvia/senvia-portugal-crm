@@ -1,26 +1,51 @@
 
 
-## Fix: Modal de Objetivos Anuais "bugado"
+## Atualizar Conhecimento do Otto
 
 ### Problema
+O system prompt do Otto nao tem informacao sobre onde ficam os formularios no sistema. Ele esta a dizer ao utilizador para ir a Marketing, quando na verdade os formularios sao geridos em **Definicoes > Definicoes Gerais > Formularios**.
 
-O `useEffect` no `EditActivationObjectivesModal` tem `getTarget` como dependência. Como `getTarget` é uma função normal (closure) criada a cada render no hook `useActivationObjectives`, ganha uma nova referência em cada render. Isto causa:
-- O `useEffect` dispara repetidamente, resetando os valores que o utilizador acabou de digitar
-- Os inputs ficam "presos" ou voltam a 0
+### Solucao
+Atualizar o `SYSTEM_PROMPT` no ficheiro `supabase/functions/otto-chat/index.ts`:
 
-### Solução
+**1. Adicionar rota no MAPA DE ROTAS** (apos linha 87):
+```
+- /settings (secção Formulários) → Definições > Definições Gerais > Formulários
+```
 
-1. **`src/hooks/useActivationObjectives.ts`**: Envolver `getTarget` em `useCallback` para estabilizar a referência.
+**2. Adicionar secao de CONHECIMENTO DO SISTEMA** apos o mapa de rotas, com informacao precisa sobre onde encontrar cada funcionalidade:
 
-2. **`src/components/dashboard/EditActivationObjectivesModal.tsx`**: Remover `getTarget` das dependências do `useEffect`, usando apenas `open`, `members`, `periodType`, `proposalType` como triggers. Usar uma ref ou chamar `getTarget` apenas quando o modal abre (não a cada re-render).
+```
+CONHECIMENTO DO SISTEMA (onde fica cada funcionalidade):
 
-### Alterações
+FORMULÁRIOS DE CAPTURA DE LEADS:
+- Os formulários públicos para captura de leads são geridos em: Definições > Definições Gerais > Formulários
+- NÃO estão em Marketing. Marketing é para campanhas de email e templates.
+- Cada formulário tem um link público (slug) que pode ser usado em landing pages e anúncios.
+- Tipos: Formulário clássico ou Formulário conversacional (com IA).
+- Configurações: campos personalizados, etapa do pipeline, atribuição automática, Meta Pixel, mensagem de sucesso.
 
-**`src/hooks/useActivationObjectives.ts`**:
-- Importar `useCallback` do React
-- Envolver `getTarget` e `countActivations` em `useCallback` com as dependências correctas (`objectives`, `currentMonthStart`, `currentYearStart` para `getTarget`; `monthlyActivations`, `annualActivations` para `countActivations`)
+PIPELINE DE LEADS:
+- Configurar etapas do pipeline: Definições > Definições Gerais > Pipeline
+- Gerir leads no Kanban: Leads (menu lateral)
 
-**`src/components/dashboard/EditActivationObjectivesModal.tsx`**:
-- Remover `getTarget` da lista de dependências do `useEffect` (deixar apenas `open, members, periodType, proposalType`)
-- Isto evita que os valores sejam resetados enquanto o utilizador está a digitar
+EQUIPA E ACESSOS:
+- Adicionar membros: Definições > Equipa e Acessos
+- Perfis de permissão: Definições > Equipa e Acessos > Perfis
+
+INTEGRAÇÕES:
+- WhatsApp, Brevo (email), InvoiceXpress/KeyInvoice (faturação): Definições > Integrações
+
+PRODUTOS:
+- Catálogo de produtos/serviços: Definições > Produtos
+
+NOTIFICAÇÕES:
+- Push notifications, alertas de fidelização, alertas de agenda: Definições > Notificações
+
+PLANO E FATURAÇÃO:
+- Subscrição, upgrade, faturas: Definições > Plano e Faturação
+```
+
+### Resumo
+1 ficheiro editado: `supabase/functions/otto-chat/index.ts` — adicionar mapa de funcionalidades ao system prompt para o Otto dar instrucoes corretas sobre formularios e outras areas do sistema. Requer redeploy da edge function.
 
