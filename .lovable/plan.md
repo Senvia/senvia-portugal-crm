@@ -1,27 +1,26 @@
 
 
-## Botao "Enviar Email de Acesso" para membros existentes
+## Fix: Modal de Objetivos Anuais "bugado"
 
 ### Problema
-O botao de enviar email so aparece no momento da criacao do membro. Depois de fechar o modal, nao ha forma de reenviar credenciais.
 
-### Solucao
-Adicionar uma opcao "Enviar Email de Acesso" no dropdown de acoes de cada membro da equipa. O fluxo sera:
+O `useEffect` no `EditActivationObjectivesModal` tem `getTarget` como dependência. Como `getTarget` é uma função normal (closure) criada a cada render no hook `useActivationObjectives`, ganha uma nova referência em cada render. Isto causa:
+- O `useEffect` dispara repetidamente, resetando os valores que o utilizador acabou de digitar
+- Os inputs ficam "presos" ou voltam a 0
 
-1. Admin clica em "Enviar Email de Acesso" no dropdown do membro
-2. Abre um modal pedindo uma **nova password temporaria** (obrigatorio, pois nao temos a password original guardada)
-3. O sistema:
-   - Redefine a password do utilizador via edge function `manage-team-member` (action: `change_password`)
-   - Envia o email via edge function `send-access-email` com as novas credenciais
-4. Toast de sucesso
+### Solução
 
-### Alteracoes
+1. **`src/hooks/useActivationObjectives.ts`**: Envolver `getTarget` em `useCallback` para estabilizar a referência.
 
-**Ficheiro: `src/components/settings/TeamTab.tsx`**
-- Adicionar estado para o modal "Enviar Email de Acesso" (`sendAccessOpen`, `accessPassword`, etc.)
-- Adicionar `DropdownMenuItem` com icone `Mail` e texto "Enviar Email de Acesso" no menu de cada membro
-- Criar modal com campo de password temporaria + botao enviar
-- Handler que: (1) redefine password, (2) invoca `send-access-email` com os dados do membro + slug da org
+2. **`src/components/dashboard/EditActivationObjectivesModal.tsx`**: Remover `getTarget` das dependências do `useEffect`, usando apenas `open`, `members`, `periodType`, `proposalType` como triggers. Usar uma ref ou chamar `getTarget` apenas quando o modal abre (não a cada re-render).
 
-Nenhuma alteracao de backend necessaria — ambas as edge functions (`manage-team-member` e `send-access-email`) ja existem.
+### Alterações
+
+**`src/hooks/useActivationObjectives.ts`**:
+- Importar `useCallback` do React
+- Envolver `getTarget` e `countActivations` em `useCallback` com as dependências correctas (`objectives`, `currentMonthStart`, `currentYearStart` para `getTarget`; `monthlyActivations`, `annualActivations` para `countActivations`)
+
+**`src/components/dashboard/EditActivationObjectivesModal.tsx`**:
+- Remover `getTarget` da lista de dependências do `useEffect` (deixar apenas `open, members, periodType, proposalType`)
+- Isto evita que os valores sejam resetados enquanto o utilizador está a digitar
 

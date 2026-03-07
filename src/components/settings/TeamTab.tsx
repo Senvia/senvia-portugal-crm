@@ -92,6 +92,13 @@ export function TeamTab() {
   const [editPhone, setEditPhone] = useState('');
   const [editCommissionRate, setEditCommissionRate] = useState('');
 
+  // Send access email modal state
+  const [sendAccessOpen, setSendAccessOpen] = useState(false);
+  const [accessPassword, setAccessPassword] = useState('');
+  const [accessConfirmPassword, setAccessConfirmPassword] = useState('');
+  const [showAccessPassword, setShowAccessPassword] = useState(false);
+  const [sendingAccessEmail, setSendingAccessEmail] = useState(false);
+
   const handleCreateMember = async () => {
     if (!fullName.trim() || !email.trim() || !password || !confirmPassword) {
       toast({ title: 'Preencha todos os campos', variant: 'destructive' });
@@ -305,6 +312,67 @@ export function TeamTab() {
         },
       }
     );
+  };
+
+  const openSendAccessModal = (member: TeamMember) => {
+    setSelectedMember(member);
+    setAccessPassword('');
+    setAccessConfirmPassword('');
+    setShowAccessPassword(false);
+    setSendAccessOpen(true);
+  };
+
+  const handleSendAccessEmailToMember = async () => {
+    if (!selectedMember || !organization) return;
+
+    if (!accessPassword || !accessConfirmPassword) {
+      toast({ title: 'Preencha todos os campos', variant: 'destructive' });
+      return;
+    }
+    if (accessPassword.length < 6) {
+      toast({ title: 'A palavra-passe deve ter pelo menos 6 caracteres', variant: 'destructive' });
+      return;
+    }
+    if (accessPassword !== accessConfirmPassword) {
+      toast({ title: 'As palavras-passe não coincidem', variant: 'destructive' });
+      return;
+    }
+
+    setSendingAccessEmail(true);
+    try {
+      // 1. Reset password
+      const { data: pwData, error: pwError } = await supabase.functions.invoke('manage-team-member', {
+        body: { action: 'change_password', user_id: selectedMember.user_id, new_password: accessPassword },
+      });
+      if (pwError) throw pwError;
+      if (pwData?.error) throw new Error(pwData.error);
+
+      // 2. Send access email
+      const { data, error } = await supabase.functions.invoke('send-access-email', {
+        body: {
+          organizationId: organization.id,
+          recipientEmail: selectedMember.email,
+          recipientName: selectedMember.full_name,
+          loginUrl,
+          companyCode: organization.slug,
+          password: accessPassword,
+        },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      toast({ title: 'Email enviado!', description: `Credenciais enviadas para ${selectedMember.email}.` });
+      setSendAccessOpen(false);
+      setSelectedMember(null);
+    } catch (err: any) {
+      toast({
+        title: 'Erro ao enviar email',
+        description: err.message || 'Verifique se a integração Brevo está configurada.',
+        variant: 'destructive',
+      });
+    } finally {
+      setSendingAccessEmail(false);
+    }
   };
 
   const loginUrl = `${getBaseUrl()}/`;
@@ -627,6 +695,10 @@ export function TeamTab() {
                             <Key className="mr-2 h-4 w-4" />
                             Redefinir Palavra-passe
                           </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openSendAccessModal(member)}>
+                            <Mail className="mr-2 h-4 w-4" />
+                            Enviar Email de Acesso
+                          </DropdownMenuItem>
                           {!isCurrentUser(member) && member.role !== 'super_admin' && (
                             <>
                               <DropdownMenuItem onClick={() => openChangeRoleModal(member)}>
@@ -731,7 +803,66 @@ export function TeamTab() {
         </DialogContent>
       </Dialog>
 
-      {/* Edit Profile Modal */}
+      {/* Send Access Email Modal */}
+      <Dialog open={sendAccessOpen} onOpenChange={setSendAccessOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Mail className="h-5 w-5" />
+              Enviar Email de Acesso
+            </DialogTitle>
+            <DialogDescription>
+              Defina uma nova palavra-passe temporária para {selectedMember?.full_name}. A password será redefinida e as credenciais enviadas por email.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="access-password">Nova Palavra-passe</Label>
+              <div className="relative">
+                <Input
+                  id="access-password"
+                  type={showAccessPassword ? 'text' : 'password'}
+                  placeholder="Mínimo 6 caracteres"
+                  value={accessPassword}
+                  onChange={(e) => setAccessPassword(e.target.value)}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-0 top-0 h-full px-3"
+                  onClick={() => setShowAccessPassword(!showAccessPassword)}
+                >
+                  {showAccessPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="access-confirm-password">Confirmar Palavra-passe</Label>
+              <Input
+                id="access-confirm-password"
+                type={showAccessPassword ? 'text' : 'password'}
+                placeholder="Repetir palavra-passe"
+                value={accessConfirmPassword}
+                onChange={(e) => setAccessConfirmPassword(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSendAccessOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleSendAccessEmailToMember}
+              disabled={!accessPassword || !accessConfirmPassword || sendingAccessEmail}
+            >
+              {sendingAccessEmail && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Enviar Email
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={editProfileOpen} onOpenChange={setEditProfileOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
