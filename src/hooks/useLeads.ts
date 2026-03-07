@@ -147,18 +147,53 @@ export function useCreateLead() {
       gdpr_consent: boolean;
       automation_enabled?: boolean;
       assigned_to?: string;
-      // Telecom template fields
       tipologia?: LeadTipologia;
       consumo_anual?: number;
       company_nif?: string;
       company_name?: string;
     }) => {
       if (!organization?.id) throw new Error('Sem organização');
+
+      let assignedTo = leadData.assigned_to || null;
+
+      // Round-robin auto-assign if no assigned_to provided
+      if (!assignedTo) {
+        const { data: org } = await supabase
+          .from('organizations')
+          .select('sales_settings')
+          .eq('id', organization.id)
+          .single();
+
+        const salesSettings = (org?.sales_settings as any) || {};
+        if (salesSettings.auto_assign_leads) {
+          const { data: members } = await supabase
+            .from('organization_members')
+            .select('user_id')
+            .eq('organization_id', organization.id)
+            .eq('is_active', true)
+            .order('joined_at', { ascending: true });
+
+          if (members && members.length > 0) {
+            const currentIndex = salesSettings.round_robin_index || 0;
+            const safeIndex = currentIndex % members.length;
+            assignedTo = members[safeIndex].user_id;
+            const nextIndex = (safeIndex + 1) % members.length;
+
+            await supabase
+              .from('organizations')
+              .update({
+                sales_settings: { ...salesSettings, round_robin_index: nextIndex },
+              })
+              .eq('id', organization.id);
+          }
+        }
+      }
       
       const { data, error } = await supabase
         .from('leads')
         .insert({
           ...leadData,
+          assigned_to: assignedTo,
           organization_id: organization.id,
           status: 'new',
         })
