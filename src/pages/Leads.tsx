@@ -12,6 +12,7 @@ import { EventDetailsModal } from "@/components/calendar/EventDetailsModal";
 import { CreateProposalModal } from "@/components/proposals/CreateProposalModal";
 import { ProposalDetailsModal } from "@/components/proposals/ProposalDetailsModal";
 import { CreateClientModal } from "@/components/clients/CreateClientModal";
+import { CreateSaleModal } from "@/components/sales/CreateSaleModal";
 import { LostLeadDialog } from "@/components/leads/LostLeadDialog";
 
 import { TeamMemberFilter } from "@/components/dashboard/TeamMemberFilter";
