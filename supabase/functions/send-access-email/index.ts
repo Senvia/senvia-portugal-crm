@@ -71,12 +71,12 @@ serve(async (req) => {
       );
     }
 
-    const brevoApiKey = org.brevo_api_key;
-    const senderEmail = org.brevo_sender_email;
+    const brevoApiKey = org.brevo_api_key || Deno.env.get('BREVO_API_KEY');
+    const senderEmail = org.brevo_sender_email || 'noreply@senvia.pt';
 
-    if (!brevoApiKey || !senderEmail) {
+    if (!brevoApiKey) {
       return new Response(
-        JSON.stringify({ error: 'Integração Brevo não configurada. Configure a API Key e o email remetente nas Definições > Integrações.' }),
+        JSON.stringify({ error: 'API Key do Brevo não configurada. Configure em Definições → Integrações → Email (Brevo)' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
