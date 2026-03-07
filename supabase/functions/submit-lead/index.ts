@@ -94,7 +94,7 @@ Deno.serve(async (req) => {
     // Validate public_key and get organization_id (including webhook_url, whatsapp config, and meta_pixels)
     const { data: org, error: orgError } = await supabase
       .from('organizations')
-      .select('id, name, niche, webhook_url, whatsapp_instance, whatsapp_api_key, whatsapp_base_url, meta_pixels')
+      .select('id, name, niche, webhook_url, whatsapp_instance, whatsapp_api_key, whatsapp_base_url, meta_pixels, sales_settings')
       .eq('public_key', body.public_key)
       .maybeSingle();
 
