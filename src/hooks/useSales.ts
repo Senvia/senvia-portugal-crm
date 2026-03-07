@@ -74,6 +74,7 @@ export function useCreateSale() {
       negotiation_type?: NegotiationType;
       servicos_produtos?: string[];
       edp_proposal_number?: string;
+      client_org_id?: string;
       // Campos de recorrência
       has_recurring?: boolean;
       recurring_value?: number;
