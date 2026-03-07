@@ -595,7 +595,7 @@ export function CreateSaleModal({
 
     try {
       // For plan sales, force recurring
-      const isPlanRecurring = isPlanSale && selectedPlanId;
+      const isPlanRecurring = isPlanSale && !!selectedPlanId;
       const recurringItems = items.filter(item => {
         if (!item.product_id) return false;
         const product = products?.find(p => p.id === item.product_id);
