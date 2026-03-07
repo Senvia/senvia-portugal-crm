@@ -280,11 +280,21 @@ export function TeamTab() {
     setEditProfileOpen(true);
   };
 
-  const handleEditProfile = () => {
+  const handleEditProfile = async () => {
     if (!selectedMember) return;
     if (!editFullName.trim()) {
       toast({ title: 'O nome é obrigatório', variant: 'destructive' });
       return;
+    }
+    // Save commission rate if individual mode
+    if (showIndividualCommission && organization?.id) {
+      const rate = editCommissionRate ? parseFloat(editCommissionRate) : null;
+      await supabase
+        .from('organization_members')
+        .update({ commission_rate: rate } as any)
+        .eq('user_id', selectedMember.user_id)
+        .eq('organization_id', organization.id);
+      queryClient.invalidateQueries({ queryKey: ['sales-commissions'] });
     }
     manageTeamMember.mutate(
       { action: 'update_profile', user_id: selectedMember.user_id, full_name: editFullName.trim(), email: editEmail.trim(), phone: editPhone.trim() },
