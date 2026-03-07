@@ -147,6 +147,7 @@ Deno.serve(async (req) => {
           form_name: form.name,
           assigned_to: form.assigned_to,
           meta_pixels: Array.isArray(form.meta_pixels) ? form.meta_pixels : null,
+          target_stage: form.target_stage || null,
         };
         console.log('Form-specific settings loaded for:', form.name);
       }
