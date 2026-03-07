@@ -1,34 +1,26 @@
 
 
-## Abrir Modal de Venda ao mover Lead para "Ganho"
+## Fix: Modal de Objetivos Anuais "bugado"
 
 ### Problema
-Quando um lead e movido para a etapa final positiva (Ganho), o sistema converte automaticamente em cliente e redireciona para `/clients`. Nao abre o modal de criacao de venda como esperado.
 
-### Solucao
-Alterar o fluxo "won" no `src/pages/Leads.tsx` para:
-1. Converter lead em cliente (manter logica atual)
-2. Em vez de redirecionar para `/clients`, **abrir o `CreateSaleModal`** com o `prefillClientId` do cliente criado/existente
+O `useEffect` no `EditActivationObjectivesModal` tem `getTarget` como dependência. Como `getTarget` é uma função normal (closure) criada a cada render no hook `useActivationObjectives`, ganha uma nova referência em cada render. Isto causa:
+- O `useEffect` dispara repetidamente, resetando os valores que o utilizador acabou de digitar
+- Os inputs ficam "presos" ou voltam a 0
 
-### Alteracoes — 1 ficheiro
+### Solução
 
-**`src/pages/Leads.tsx`**
+1. **`src/hooks/useActivationObjectives.ts`**: Envolver `getTarget` em `useCallback` para estabilizar a referência.
 
-1. **Importar** `CreateSaleModal` de `@/components/sales/CreateSaleModal`
-2. **Adicionar estados**:
-   - `isCreateSaleModalOpen` (boolean)
-   - `prefillSaleClientId` (string | null)
-3. **Modificar o bloco `isWonStage`** (linhas 279-304):
-   - Cliente existente: em vez de `navigate(...)`, setar `prefillSaleClientId = existingClient.id` e abrir o modal de venda
-   - Cliente novo (onSuccess do convertLeadToClient): setar `prefillSaleClientId = newClient.id` e abrir o modal de venda
-   - Remover os `navigate(...)` e os `toast.success` (o modal de venda ja dara feedback)
-4. **Renderizar** `<CreateSaleModal>` no JSX com `prefillClientId={prefillSaleClientId}`
+2. **`src/components/dashboard/EditActivationObjectivesModal.tsx`**: Remover `getTarget` das dependências do `useEffect`, usando apenas `open`, `members`, `periodType`, `proposalType` como triggers. Usar uma ref ou chamar `getTarget` apenas quando o modal abre (não a cada re-render).
 
-### Fluxo resultante
-```text
-Lead arrastado para "Ganho"
-  → Cliente ja existe? Usa existente : Cria novo
-  → Atualiza status do lead para "ganho"
-  → Abre CreateSaleModal pre-preenchido com o cliente
-```
+### Alterações
+
+**`src/hooks/useActivationObjectives.ts`**:
+- Importar `useCallback` do React
+- Envolver `getTarget` e `countActivations` em `useCallback` com as dependências correctas (`objectives`, `currentMonthStart`, `currentYearStart` para `getTarget`; `monthlyActivations`, `annualActivations` para `countActivations`)
+
+**`src/components/dashboard/EditActivationObjectivesModal.tsx`**:
+- Remover `getTarget` da lista de dependências do `useEffect` (deixar apenas `open, members, periodType, proposalType`)
+- Isto evita que os valores sejam resetados enquanto o utilizador está a digitar
 

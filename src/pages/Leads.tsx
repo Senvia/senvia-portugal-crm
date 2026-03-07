@@ -12,6 +12,7 @@ import { EventDetailsModal } from "@/components/calendar/EventDetailsModal";
 import { CreateProposalModal } from "@/components/proposals/CreateProposalModal";
 import { ProposalDetailsModal } from "@/components/proposals/ProposalDetailsModal";
 import { CreateClientModal } from "@/components/clients/CreateClientModal";
+import { CreateSaleModal } from "@/components/sales/CreateSaleModal";
 import { LostLeadDialog } from "@/components/leads/LostLeadDialog";
 
 import { TeamMemberFilter } from "@/components/dashboard/TeamMemberFilter";
@@ -82,6 +83,8 @@ export default function Leads() {
   const [isCreateClientModalOpen, setIsCreateClientModalOpen] = useState(false);
   const [newlyCreatedClientId, setNewlyCreatedClientId] = useState<string | null>(null);
   const [isChainedFlow, setIsChainedFlow] = useState(false);
+  const [isCreateSaleModalOpen, setIsCreateSaleModalOpen] = useState(false);
+  const [prefillSaleClientId, setPrefillSaleClientId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = usePersistedState("leads-search-v1", "");
   const [statusFilter, setStatusFilter] = usePersistedState<string[]>("leads-status-v1", []);
   const [dateRange, setDateRange] = usePersistedState<{ from: Date | undefined; to: Date | undefined }>("leads-daterange-v1", { from: undefined, to: undefined });
@@ -280,7 +283,8 @@ export default function Leads() {
       const existingClient = clients.find(c => c.lead_id === leadId || (lead.company_nif && c.company_nif === lead.company_nif));
       if (existingClient) {
         toast.success('Lead ganha! Cliente já existente.');
-        navigate(`/clients?highlight=${existingClient.id}`);
+        setPrefillSaleClientId(existingClient.id);
+        setIsCreateSaleModalOpen(true);
       } else {
         convertLeadToClient.mutate({
           lead_id: leadId,
@@ -294,9 +298,10 @@ export default function Leads() {
           notes: lead.notes || undefined,
         }, {
           onSuccess: (newClient) => {
-            toast.success('Lead ganha! Novo cliente criado com sucesso.');
+            toast.success('Lead ganha! Novo cliente criado.');
             if (newClient?.id) {
-              navigate(`/clients?highlight=${newClient.id}`);
+              setPrefillSaleClientId(newClient.id);
+              setIsCreateSaleModalOpen(true);
             }
           },
         });
@@ -800,6 +805,15 @@ export default function Leads() {
           leadName={pendingLead?.name || ""}
           isTelecom={isTelecom}
           onConfirm={handleLostConfirm}
+        />
+
+        <CreateSaleModal
+          open={isCreateSaleModalOpen}
+          onOpenChange={(open) => {
+            setIsCreateSaleModalOpen(open);
+            if (!open) setPrefillSaleClientId(null);
+          }}
+          prefillClientId={prefillSaleClientId}
         />
       </Tabs>
     </div>
