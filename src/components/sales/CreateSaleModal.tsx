@@ -633,10 +633,11 @@ export function CreateSaleModal({
         } : {}),
         edp_proposal_number: edpProposalNumber.trim() || undefined,
         activation_date: activationDate ? format(activationDate, 'yyyy-MM-dd') : undefined,
-        has_recurring: hasRecurring,
+        has_recurring: hasRecurring || false,
         recurring_value: recurringValue,
         recurring_status: hasRecurring ? 'active' : undefined,
         next_renewal_date: nextRenewalDate,
+        ...(isPlanSale && clientOrgId ? { client_org_id: clientOrgId } : {}),
       });
 
       if (!isTelecom && items.length > 0 && sale?.id) {
