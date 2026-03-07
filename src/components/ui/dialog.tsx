@@ -42,8 +42,8 @@ const DialogContent = React.forwardRef<React.ElementRef<typeof DialogPrimitive.C
       }}
       className={cn(dialogContentVariants[variant], className)}
       style={variant === "default" ? {
-        top: "calc(var(--safe-area-top) + 1rem)",
-        bottom: "calc(var(--safe-area-bottom) + 1rem)",
+        top: "calc(clamp(20px, var(--safe-area-top), 50px) + 1rem)",
+        bottom: "calc(clamp(0px, var(--safe-area-bottom), 50px) + 1rem)",
       } : undefined}
       {...props}>
       {children}
