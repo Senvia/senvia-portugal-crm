@@ -1,26 +1,23 @@
 
 
-## Fix: Modal de Objetivos Anuais "bugado"
+## Correcao: Enviar Email de Acesso sem alterar password
 
 ### Problema
+O botao atual pede uma nova password, redefine-a e envia. O correto e enviar apenas os dados de acesso ja existentes (link, codigo da empresa, email) sem tocar na password.
 
-O `useEffect` no `EditActivationObjectivesModal` tem `getTarget` como dependência. Como `getTarget` é uma função normal (closure) criada a cada render no hook `useActivationObjectives`, ganha uma nova referência em cada render. Isto causa:
-- O `useEffect` dispara repetidamente, resetando os valores que o utilizador acabou de digitar
-- Os inputs ficam "presos" ou voltam a 0
+### Alteracoes
 
-### Solução
+**1. `src/components/settings/TeamTab.tsx`**
+- Remover estados de password (`accessPassword`, `accessConfirmPassword`, `showAccessPassword`)
+- Substituir o modal complexo por um dialog de confirmacao simples: "Enviar email de acesso para {nome}?"
+- O handler chama apenas `send-access-email` sem chamar `manage-team-member` (sem reset de password)
+- Enviar `password: null` para a edge function
 
-1. **`src/hooks/useActivationObjectives.ts`**: Envolver `getTarget` em `useCallback` para estabilizar a referência.
+**2. `supabase/functions/send-access-email/index.ts`**
+- Tornar `password` opcional no request
+- No template HTML: se password estiver presente, mostrar. Se nao, mostrar "Utilize a sua palavra-passe atual" em vez do campo de password
+- Remover `password` da validacao obrigatoria
 
-2. **`src/components/dashboard/EditActivationObjectivesModal.tsx`**: Remover `getTarget` das dependências do `useEffect`, usando apenas `open`, `members`, `periodType`, `proposalType` como triggers. Usar uma ref ou chamar `getTarget` apenas quando o modal abre (não a cada re-render).
-
-### Alterações
-
-**`src/hooks/useActivationObjectives.ts`**:
-- Importar `useCallback` do React
-- Envolver `getTarget` e `countActivations` em `useCallback` com as dependências correctas (`objectives`, `currentMonthStart`, `currentYearStart` para `getTarget`; `monthlyActivations`, `annualActivations` para `countActivations`)
-
-**`src/components/dashboard/EditActivationObjectivesModal.tsx`**:
-- Remover `getTarget` da lista de dependências do `useEffect` (deixar apenas `open, members, periodType, proposalType`)
-- Isto evita que os valores sejam resetados enquanto o utilizador está a digitar
+### Resultado
+Admin clica "Enviar Email de Acesso" → confirma → email enviado com link, codigo da empresa e email do utilizador. Sem alterar nada na conta.
 
