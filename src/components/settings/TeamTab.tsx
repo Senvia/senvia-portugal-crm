@@ -92,6 +92,13 @@ export function TeamTab() {
   const [editPhone, setEditPhone] = useState('');
   const [editCommissionRate, setEditCommissionRate] = useState('');
 
+  // Send access email modal state
+  const [sendAccessOpen, setSendAccessOpen] = useState(false);
+  const [accessPassword, setAccessPassword] = useState('');
+  const [accessConfirmPassword, setAccessConfirmPassword] = useState('');
+  const [showAccessPassword, setShowAccessPassword] = useState(false);
+  const [sendingAccessEmail, setSendingAccessEmail] = useState(false);
+
   const handleCreateMember = async () => {
     if (!fullName.trim() || !email.trim() || !password || !confirmPassword) {
       toast({ title: 'Preencha todos os campos', variant: 'destructive' });
