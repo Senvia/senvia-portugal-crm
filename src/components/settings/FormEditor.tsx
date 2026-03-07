@@ -301,6 +301,47 @@ export function FormEditor({ form, onBack }: FormEditorProps) {
           </AccordionContent>
         </AccordionItem>
 
+        {/* Target Stage Section */}
+        <AccordionItem value="target-stage" className="border rounded-xl px-4">
+          <AccordionTrigger className="hover:no-underline py-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/10">
+                <Target className="h-5 w-5 text-emerald-600" />
+              </div>
+              <div className="text-left">
+                <span className="font-medium">Etapa Inicial do Lead</span>
+                <p className="text-xs text-muted-foreground font-normal">
+                  Em qual etapa do pipeline o lead entra automaticamente
+                </p>
+              </div>
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="pb-4 pt-2 space-y-4">
+            <div className="space-y-2">
+              <Label>Etapa do Pipeline</Label>
+              <Select
+                value={targetStage || 'default'}
+                onValueChange={(v) => setTargetStage(v === 'default' ? null : v)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Primeira etapa (padrão)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="default">Primeira etapa (padrão)</SelectItem>
+                  {stages.map((stage) => (
+                    <SelectItem key={stage.id} value={stage.key}>
+                      {stage.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Os leads deste formulário entrarão diretamente nesta etapa do pipeline. O nome do formulário será adicionado nas notas do lead.
+              </p>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+
         {/* Form Mode Section */}
         <AccordionItem value="mode" className="border rounded-xl px-4">
           <AccordionTrigger className="hover:no-underline py-4">

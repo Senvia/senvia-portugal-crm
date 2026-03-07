@@ -250,8 +250,8 @@ Deno.serve(async (req) => {
         phone: cleanPhone || '000000000',
         gdpr_consent: true,
         source: body.source || formSettings.form_name || 'Formulário Público',
-        status: 'new',
-        notes: body.notes || null,
+        status: formSettings.target_stage || 'new',
+        notes: formSettings.form_name ? `Formulário: ${formSettings.form_name}` : (body.notes || null),
         custom_data: body.custom_data || {},
       })
       .select()
