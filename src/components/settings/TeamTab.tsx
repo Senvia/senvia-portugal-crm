@@ -314,6 +314,67 @@ export function TeamTab() {
     );
   };
 
+  const openSendAccessModal = (member: TeamMember) => {
+    setSelectedMember(member);
+    setAccessPassword('');
+    setAccessConfirmPassword('');
+    setShowAccessPassword(false);
+    setSendAccessOpen(true);
+  };
+
+  const handleSendAccessEmailToMember = async () => {
+    if (!selectedMember || !organization) return;
+
+    if (!accessPassword || !accessConfirmPassword) {
+      toast({ title: 'Preencha todos os campos', variant: 'destructive' });
+      return;
+    }
+    if (accessPassword.length < 6) {
+      toast({ title: 'A palavra-passe deve ter pelo menos 6 caracteres', variant: 'destructive' });
+      return;
+    }
+    if (accessPassword !== accessConfirmPassword) {
+      toast({ title: 'As palavras-passe não coincidem', variant: 'destructive' });
+      return;
+    }
+
+    setSendingAccessEmail(true);
+    try {
+      // 1. Reset password
+      const { data: pwData, error: pwError } = await supabase.functions.invoke('manage-team-member', {
+        body: { action: 'change_password', user_id: selectedMember.user_id, new_password: accessPassword },
+      });
+      if (pwError) throw pwError;
+      if (pwData?.error) throw new Error(pwData.error);
+
+      // 2. Send access email
+      const { data, error } = await supabase.functions.invoke('send-access-email', {
+        body: {
+          organizationId: organization.id,
+          recipientEmail: selectedMember.email,
+          recipientName: selectedMember.full_name,
+          loginUrl,
+          companyCode: organization.slug,
+          password: accessPassword,
+        },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      toast({ title: 'Email enviado!', description: `Credenciais enviadas para ${selectedMember.email}.` });
+      setSendAccessOpen(false);
+      setSelectedMember(null);
+    } catch (err: any) {
+      toast({
+        title: 'Erro ao enviar email',
+        description: err.message || 'Verifique se a integração Brevo está configurada.',
+        variant: 'destructive',
+      });
+    } finally {
+      setSendingAccessEmail(false);
+    }
+  };
+
   const loginUrl = `${getBaseUrl()}/`;
 
   // Check if member is current user
