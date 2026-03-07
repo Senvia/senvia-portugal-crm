@@ -3,15 +3,17 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useSalesCommissions } from "@/hooks/useSalesCommissions";
+import { useStripeCommissions } from "@/hooks/useStripeCommissions";
 import { useAuth } from "@/contexts/AuthContext";
-import { Percent, TrendingUp, Receipt } from "lucide-react";
+import { Percent, TrendingUp, Receipt, RefreshCw } from "lucide-react";
 
 export function CommissionsWidget() {
   const { data: entries, isLoading } = useSalesCommissions();
+  const { data: stripeData, isLoading: stripeLoading } = useStripeCommissions();
   const { user, roles } = useAuth();
   const isAdmin = roles.includes("admin") || roles.includes("super_admin");
 
-  if (isLoading) {
+  if (isLoading && stripeLoading) {
     return (
       <Card>
         <CardHeader className="pb-3">
@@ -24,7 +26,22 @@ export function CommissionsWidget() {
     );
   }
 
-  if (!entries || entries.length === 0) {
+  const myEntries = isAdmin ? (entries || []) : (entries || []).filter(e => e.userId === user?.id);
+  const totalCommissions = myEntries.reduce((sum, e) => sum + e.totalCommission, 0);
+  const totalSales = myEntries.reduce((sum, e) => sum + e.totalSales, 0);
+  const totalCount = myEntries.reduce((sum, e) => sum + e.salesCount, 0);
+
+  // Stripe recurring commissions
+  const stripeTotal = stripeData?.grandTotal || 0;
+  const stripeByUser = isAdmin 
+    ? (stripeData?.byUser || []) 
+    : (stripeData?.byUser || []).filter(u => u.userId === user?.id);
+  const myStripeTotal = stripeByUser.reduce((s, u) => s + u.totalCommission, 0);
+
+  const hasDirectData = myEntries.length > 0;
+  const hasRecurringData = stripeByUser.length > 0;
+
+  if (!hasDirectData && !hasRecurringData) {
     return (
       <Card>
         <CardHeader className="pb-3">
@@ -40,11 +57,6 @@ export function CommissionsWidget() {
     );
   }
 
-  const myEntries = isAdmin ? entries : entries.filter(e => e.userId === user?.id);
-  const totalCommissions = myEntries.reduce((sum, e) => sum + e.totalCommission, 0);
-  const totalSales = myEntries.reduce((sum, e) => sum + e.totalSales, 0);
-  const totalCount = myEntries.reduce((sum, e) => sum + e.salesCount, 0);
-
   const formatCurrency = (v: number) =>
     new Intl.NumberFormat("pt-PT", { style: "currency", currency: "EUR" }).format(v);
 
@@ -58,7 +70,7 @@ export function CommissionsWidget() {
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Summary cards */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="rounded-lg border bg-muted/30 p-3 text-center">
             <p className="text-xs text-muted-foreground">Vendas</p>
             <p className="text-lg font-bold text-foreground">{formatCurrency(totalSales)}</p>
@@ -66,14 +78,21 @@ export function CommissionsWidget() {
           </div>
           <div className="rounded-lg border bg-muted/30 p-3 text-center">
             <TrendingUp className="h-4 w-4 mx-auto mb-1 text-primary" />
-            <p className="text-xs text-muted-foreground">Comissões</p>
+            <p className="text-xs text-muted-foreground">Comissões Diretas</p>
             <p className="text-lg font-bold text-primary">{formatCurrency(totalCommissions)}</p>
           </div>
+          {hasRecurringData && (
+            <div className="rounded-lg border bg-muted/30 p-3 text-center">
+              <RefreshCw className="h-4 w-4 mx-auto mb-1 text-primary" />
+              <p className="text-xs text-muted-foreground">Recorrentes</p>
+              <p className="text-lg font-bold text-primary">{formatCurrency(myStripeTotal)}</p>
+            </div>
+          )}
           <div className="rounded-lg border bg-muted/30 p-3 text-center">
             <Receipt className="h-4 w-4 mx-auto mb-1 text-muted-foreground" />
-            <p className="text-xs text-muted-foreground">Média/Venda</p>
+            <p className="text-xs text-muted-foreground">Total</p>
             <p className="text-lg font-bold text-foreground">
-              {totalCount > 0 ? formatCurrency(totalCommissions / totalCount) : "—"}
+              {formatCurrency(totalCommissions + myStripeTotal)}
             </p>
           </div>
         </div>
