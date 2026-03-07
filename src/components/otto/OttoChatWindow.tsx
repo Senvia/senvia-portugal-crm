@@ -107,7 +107,7 @@ export function OttoChatWindow({ onClose }: OttoChatWindowProps) {
       }
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/30" style={isMobile ? { paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.75rem)' } : undefined}>
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/30" style={isMobile ? { paddingTop: 'calc(clamp(20px, env(safe-area-inset-top, 0px), 50px) + 0.75rem)' } : undefined}>
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-full overflow-hidden">
             <img src={ottoMascot} alt="Otto" className="w-full h-full object-cover" />
