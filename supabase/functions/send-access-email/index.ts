@@ -12,7 +12,7 @@ interface SendAccessEmailRequest {
   recipientName: string;
   loginUrl: string;
   companyCode: string;
-  password: string;
+  password?: string;
 }
 
 serve(async (req) => {
@@ -48,7 +48,7 @@ serve(async (req) => {
 
     const { organizationId, recipientEmail, recipientName, loginUrl, companyCode, password }: SendAccessEmailRequest = await req.json();
 
-    if (!organizationId || !recipientEmail || !recipientName || !loginUrl || !companyCode || !password) {
+    if (!organizationId || !recipientEmail || !recipientName || !loginUrl || !companyCode) {
       return new Response(
         JSON.stringify({ error: 'Campos obrigatórios em falta' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -137,6 +137,7 @@ serve(async (req) => {
                           <span style="color:#18181b;font-size:14px;font-family:monospace;">${recipientEmail}</span>
                         </td>
                       </tr>
+                      ${password ? `
                       <tr><td style="padding:8px 0;border-bottom:1px solid #e4e4e7;"></td></tr>
                       <tr>
                         <td style="padding:10px 0 6px;">
@@ -144,6 +145,15 @@ serve(async (req) => {
                           <span style="color:#18181b;font-size:14px;font-weight:600;font-family:monospace;">${password}</span>
                         </td>
                       </tr>
+                      ` : `
+                      <tr><td style="padding:8px 0;border-bottom:1px solid #e4e4e7;"></td></tr>
+                      <tr>
+                        <td style="padding:10px 0 6px;">
+                          <span style="color:#71717a;font-size:12px;text-transform:uppercase;letter-spacing:0.5px;">Password</span><br>
+                          <span style="color:#52525b;font-size:14px;font-style:italic;">Utilize a sua palavra-passe atual</span>
+                        </td>
+                      </tr>
+                      `}
                     </table>
                   </td>
                 </tr>
