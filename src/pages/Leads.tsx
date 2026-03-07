@@ -83,6 +83,8 @@ export default function Leads() {
   const [isCreateClientModalOpen, setIsCreateClientModalOpen] = useState(false);
   const [newlyCreatedClientId, setNewlyCreatedClientId] = useState<string | null>(null);
   const [isChainedFlow, setIsChainedFlow] = useState(false);
+  const [isCreateSaleModalOpen, setIsCreateSaleModalOpen] = useState(false);
+  const [prefillSaleClientId, setPrefillSaleClientId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = usePersistedState("leads-search-v1", "");
   const [statusFilter, setStatusFilter] = usePersistedState<string[]>("leads-status-v1", []);
   const [dateRange, setDateRange] = usePersistedState<{ from: Date | undefined; to: Date | undefined }>("leads-daterange-v1", { from: undefined, to: undefined });
