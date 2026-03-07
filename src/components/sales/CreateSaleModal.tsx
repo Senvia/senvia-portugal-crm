@@ -581,6 +581,12 @@ export function CreateSaleModal({
     
     if (!isTelecom && total <= 0 && items.length === 0) return;
 
+    // Validate plan sale
+    if (isPlanSale && !clientOrgId) {
+      toast.error("Selecione a organização cliente para a venda de plano.");
+      return;
+    }
+
     // Validar data de ativação quando estado é Concluída
     if (saleStatus === 'delivered' && !activationDate) {
       toast.error("A Data de Ativação é obrigatória para vendas com estado Concluída.");
@@ -588,16 +594,18 @@ export function CreateSaleModal({
     }
 
     try {
+      // For plan sales, force recurring
+      const isPlanRecurring = isPlanSale && selectedPlanId;
       const recurringItems = items.filter(item => {
         if (!item.product_id) return false;
         const product = products?.find(p => p.id === item.product_id);
         return product?.is_recurring;
       });
       
-      const recurringValue = recurringItems.reduce(
-        (sum, item) => sum + (item.quantity * item.unit_price), 0
-      );
-      const hasRecurring = recurringValue > 0;
+      const recurringValue = isPlanRecurring 
+        ? total 
+        : recurringItems.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
+      const hasRecurring = isPlanRecurring || recurringValue > 0;
       const nextRenewalDate = hasRecurring 
         ? addMonths(saleDate, 1).toISOString().split('T')[0] 
         : undefined;
