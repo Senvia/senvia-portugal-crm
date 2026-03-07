@@ -122,6 +122,7 @@ export function FormEditor({ form, onBack }: FormEditorProps) {
         ai_qualification_rules: aiQualificationRules || null,
         meta_pixels: metaPixels,
         assigned_to: assignedTo,
+        target_stage: targetStage,
       },
       {
         onSuccess: () => {
