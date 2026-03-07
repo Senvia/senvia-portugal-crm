@@ -1,36 +1,26 @@
 
 
-## Fix: Modais a sobrepor safe area do iPhone (PWA)
+## Fix: Modal de Objetivos Anuais "bugado"
 
-### Causa raiz
-O problema esta nas classes CSS usadas nos modais:
-- `safe-top` = `padding-top: var(--safe-area-top)` → pode ser **0px** em certos contextos PWA
-- `pt-safe` = `padding-top: calc(clamp(20px, var(--safe-area-top), 50px) + 0.75rem)` → garante **minimo 20px**
+### Problema
 
-A variante `fullScreen` do Dialog usa `safe-top` e `safe-bottom` (sem minimo), resultando em 0px de padding no iPhone.
+O `useEffect` no `EditActivationObjectivesModal` tem `getTarget` como dependência. Como `getTarget` é uma função normal (closure) criada a cada render no hook `useActivationObjectives`, ganha uma nova referência em cada render. Isto causa:
+- O `useEffect` dispara repetidamente, resetando os valores que o utilizador acabou de digitar
+- Os inputs ficam "presos" ou voltam a 0
 
-### Alteracoes
+### Solução
 
-**1. `src/components/ui/dialog.tsx`**
-- **fullScreen variant**: Substituir `safe-top safe-bottom` por `pt-safe pb-safe` para garantir padding minimo
-- **default variant**: Atualizar o inline style `top` para usar `clamp()` com minimo de 20px, igual ao padrao `pt-safe`
+1. **`src/hooks/useActivationObjectives.ts`**: Envolver `getTarget` em `useCallback` para estabilizar a referência.
 
-**2. `src/components/ui/sheet.tsx`**
-- Verificar e garantir que `pt-safe` (com clamp) esta a ser usado em vez de `safe-top`
-- O Sheet ja usa `pt-safe` — OK, sem alteracao necessaria
+2. **`src/components/dashboard/EditActivationObjectivesModal.tsx`**: Remover `getTarget` das dependências do `useEffect`, usando apenas `open`, `members`, `periodType`, `proposalType` como triggers. Usar uma ref ou chamar `getTarget` apenas quando o modal abre (não a cada re-render).
 
-**3. `src/components/ui/alert-dialog.tsx`**
-- Atualizar o inline style `top` para usar `clamp()` com minimo, igual ao Dialog default
+### Alterações
 
-**4. `src/components/ui/drawer.tsx`**
-- Drawer e bottom-only com `pb-safe` — OK, sem alteracao
+**`src/hooks/useActivationObjectives.ts`**:
+- Importar `useCallback` do React
+- Envolver `getTarget` e `countActivations` em `useCallback` com as dependências correctas (`objectives`, `currentMonthStart`, `currentYearStart` para `getTarget`; `monthlyActivations`, `annualActivations` para `countActivations`)
 
-### Resumo das mudancas
-| Componente | Antes | Depois |
-|---|---|---|
-| Dialog fullScreen | `safe-top safe-bottom` | `pt-safe pb-safe` |
-| Dialog default (top) | `var(--safe-area-top) + 1rem` | `clamp(20px, var(--safe-area-top), 50px) + 1rem` |
-| AlertDialog (top) | `var(--safe-area-top) + 1rem` | `clamp(20px, var(--safe-area-top), 50px) + 1rem` |
-
-3 ficheiros alterados, correcao puramente CSS/classes.
+**`src/components/dashboard/EditActivationObjectivesModal.tsx`**:
+- Remover `getTarget` da lista de dependências do `useEffect` (deixar apenas `open, members, periodType, proposalType`)
+- Isto evita que os valores sejam resetados enquanto o utilizador está a digitar
 
