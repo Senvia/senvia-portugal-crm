@@ -695,6 +695,10 @@ export function TeamTab() {
                             <Key className="mr-2 h-4 w-4" />
                             Redefinir Palavra-passe
                           </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openSendAccessModal(member)}>
+                            <Mail className="mr-2 h-4 w-4" />
+                            Enviar Email de Acesso
+                          </DropdownMenuItem>
                           {!isCurrentUser(member) && member.role !== 'super_admin' && (
                             <>
                               <DropdownMenuItem onClick={() => openChangeRoleModal(member)}>
