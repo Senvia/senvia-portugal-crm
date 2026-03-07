@@ -1,23 +1,26 @@
 
 
-## Fix: send-access-email Brevo fallback
+## Fix: Modal de Objetivos Anuais "bugado"
 
-### Problem
-The edge function `send-access-email` returns 400 when the organization doesn't have `brevo_api_key` or `brevo_sender_email` configured. Unlike other email functions (e.g. `send-proposal-email`), it has no fallback to the global `BREVO_API_KEY` secret.
+### Problema
 
-### Solution
-Update `supabase/functions/send-access-email/index.ts` to mirror the pattern used in `send-proposal-email`:
+O `useEffect` no `EditActivationObjectivesModal` tem `getTarget` como dependência. Como `getTarget` é uma função normal (closure) criada a cada render no hook `useActivationObjectives`, ganha uma nova referência em cada render. Isto causa:
+- O `useEffect` dispara repetidamente, resetando os valores que o utilizador acabou de digitar
+- Os inputs ficam "presos" ou voltam a 0
 
-1. If `org.brevo_api_key` is empty, fall back to `Deno.env.get("BREVO_API_KEY")`
-2. If `org.brevo_sender_email` is empty, fall back to `"noreply@senvia.pt"`
-3. Only throw error if neither org-level nor global key exists
+### Solução
 
-### Changes
+1. **`src/hooks/useActivationObjectives.ts`**: Envolver `getTarget` em `useCallback` para estabilizar a referência.
 
-**File: `supabase/functions/send-access-email/index.ts`**
-- Replace the hard block (`if (!brevoApiKey || !senderEmail)`) with fallback logic:
-  - `const brevoApiKey = org.brevo_api_key || Deno.env.get("BREVO_API_KEY")`
-  - `const senderEmail = org.brevo_sender_email || "noreply@senvia.pt"`
-  - Only error if `brevoApiKey` is still null after fallback
-- Also update CORS headers to include the full set of required Supabase client headers
+2. **`src/components/dashboard/EditActivationObjectivesModal.tsx`**: Remover `getTarget` das dependências do `useEffect`, usando apenas `open`, `members`, `periodType`, `proposalType` como triggers. Usar uma ref ou chamar `getTarget` apenas quando o modal abre (não a cada re-render).
+
+### Alterações
+
+**`src/hooks/useActivationObjectives.ts`**:
+- Importar `useCallback` do React
+- Envolver `getTarget` e `countActivations` em `useCallback` com as dependências correctas (`objectives`, `currentMonthStart`, `currentYearStart` para `getTarget`; `monthlyActivations`, `annualActivations` para `countActivations`)
+
+**`src/components/dashboard/EditActivationObjectivesModal.tsx`**:
+- Remover `getTarget` da lista de dependências do `useEffect` (deixar apenas `open, members, periodType, proposalType`)
+- Isto evita que os valores sejam resetados enquanto o utilizador está a digitar
 

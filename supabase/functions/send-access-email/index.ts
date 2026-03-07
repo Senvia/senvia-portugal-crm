@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
 interface SendAccessEmailRequest {
@@ -71,12 +71,12 @@ serve(async (req) => {
       );
     }
 
-    const brevoApiKey = org.brevo_api_key;
-    const senderEmail = org.brevo_sender_email;
+    const brevoApiKey = org.brevo_api_key || Deno.env.get('BREVO_API_KEY');
+    const senderEmail = org.brevo_sender_email || 'noreply@senvia.pt';
 
-    if (!brevoApiKey || !senderEmail) {
+    if (!brevoApiKey) {
       return new Response(
-        JSON.stringify({ error: 'Integração Brevo não configurada. Configure a API Key e o email remetente nas Definições > Integrações.' }),
+        JSON.stringify({ error: 'API Key do Brevo não configurada. Configure em Definições → Integrações → Email (Brevo)' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
