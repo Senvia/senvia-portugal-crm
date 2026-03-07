@@ -21,6 +21,7 @@ function transformForm(row: any): Form {
     ai_qualification_rules: row.ai_qualification_rules,
     meta_pixels: Array.isArray(row.meta_pixels) ? row.meta_pixels : [],
     assigned_to: row.assigned_to,
+    target_stage: row.target_stage || null,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
