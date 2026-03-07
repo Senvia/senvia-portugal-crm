@@ -147,6 +147,7 @@ interface UpdateFormData {
   ai_qualification_rules?: string | null;
   meta_pixels?: any[];
   assigned_to?: string | null;
+  target_stage?: string | null;
 }
 
 export function useUpdateForm() {
