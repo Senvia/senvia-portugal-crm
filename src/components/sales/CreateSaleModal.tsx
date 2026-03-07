@@ -732,6 +732,90 @@ export function CreateSaleModal({
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="p-4 pt-0 space-y-4">
+                    {/* Plan Sale Toggle (Senvia only) */}
+                    {isSenviaOrg && !prefillProposal && (
+                      <div className="flex items-center gap-3 p-3 rounded-lg border border-border/50 bg-muted/20">
+                        <label className="flex items-center gap-2 cursor-pointer text-sm font-medium">
+                          <input
+                            type="checkbox"
+                            checked={isPlanSale}
+                            onChange={(e) => {
+                              setIsPlanSale(e.target.checked);
+                              if (!e.target.checked) {
+                                setSelectedPlanId("");
+                                setClientOrgId("");
+                                setOrgSearchTerm("");
+                                setOrgSearchResults([]);
+                                setItems([]);
+                              }
+                            }}
+                            className="rounded border-border"
+                          />
+                          <CreditCard className="h-4 w-4 text-primary" />
+                          Venda de Plano Senvia
+                        </label>
+                      </div>
+                    )}
+
+                    {/* Plan Sale Fields */}
+                    {isPlanSale && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>Plano</Label>
+                          <Select value={selectedPlanId} onValueChange={handlePlanSelect}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Selecionar plano..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {STRIPE_PLANS.map(plan => (
+                                <SelectItem key={plan.id} value={plan.id}>
+                                  {plan.name} — {formatCurrency(plan.priceMonthly)}/mês
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Organização Cliente</Label>
+                          <div className="relative">
+                            <Input
+                              placeholder="Pesquisar organização..."
+                              value={orgSearchTerm}
+                              onChange={(e) => setOrgSearchTerm(e.target.value)}
+                            />
+                            {orgSearchResults.length > 0 && !clientOrgId && (
+                              <div className="absolute z-50 w-full mt-1 border border-border rounded-lg bg-popover shadow-lg max-h-48 overflow-y-auto">
+                                {orgSearchResults.map(org => (
+                                  <button
+                                    key={org.id}
+                                    type="button"
+                                    className="w-full text-left px-3 py-2 text-sm hover:bg-accent transition-colors"
+                                    onClick={() => {
+                                      setClientOrgId(org.id);
+                                      setOrgSearchTerm(org.name);
+                                      setOrgSearchResults([]);
+                                    }}
+                                  >
+                                    <span className="font-medium">{org.name}</span>
+                                    <span className="text-muted-foreground ml-2 text-xs">({org.slug})</span>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                            {clientOrgId && (
+                              <button
+                                type="button"
+                                className="absolute right-2 top-1/2 -translate-y-1/2"
+                                onClick={() => { setClientOrgId(""); setOrgSearchTerm(""); }}
+                              >
+                                <X className="h-4 w-4 text-muted-foreground" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label>Cliente</Label>
