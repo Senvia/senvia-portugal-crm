@@ -77,6 +77,7 @@ export function FormEditor({ form, onBack }: FormEditorProps) {
   const isMobile = useIsMobile();
 
   const { data: teamMembers } = useTeamMembers();
+  const { data: stages = [] } = usePipelineStages();
   
   const [name, setName] = useState(form.name);
   const [slug, setSlug] = useState(form.slug);
