@@ -87,6 +87,8 @@ export interface Form {
   meta_pixels?: MetaPixel[];
   // Auto-assignment (per-form)
   assigned_to?: string | null;
+  // Target pipeline stage (per-form)
+  target_stage?: string | null;
   created_at: string;
   updated_at: string;
 }

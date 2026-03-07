@@ -180,6 +180,7 @@ export function useUpdateForm() {
       if (data.ai_qualification_rules !== undefined) updateData.ai_qualification_rules = data.ai_qualification_rules;
       if (data.meta_pixels !== undefined) updateData.meta_pixels = data.meta_pixels;
       if (data.assigned_to !== undefined) updateData.assigned_to = data.assigned_to;
+      if (data.target_stage !== undefined) updateData.target_stage = data.target_stage;
 
       const { data: updatedForm, error } = await supabase
         .from('forms')

@@ -1561,6 +1561,7 @@ export type Database = {
           name: string
           organization_id: string
           slug: string
+          target_stage: string | null
           updated_at: string | null
         }
         Insert: {
@@ -1578,6 +1579,7 @@ export type Database = {
           name: string
           organization_id: string
           slug: string
+          target_stage?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -1595,6 +1597,7 @@ export type Database = {
           name?: string
           organization_id?: string
           slug?: string
+          target_stage?: string | null
           updated_at?: string | null
         }
         Relationships: [
