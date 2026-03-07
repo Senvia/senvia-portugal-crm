@@ -4,6 +4,8 @@ import { useTeamMembers, usePendingInvites, useCancelInvite, useResendInvite, us
 import { useManageTeamMember } from '@/hooks/useProfile';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOrganizationProfiles } from '@/hooks/useOrganizationProfiles';
+import { useOrganization } from '@/hooks/useOrganization';
+import { useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
