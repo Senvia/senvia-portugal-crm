@@ -85,6 +85,36 @@ MAPA DE ROTAS:
 - /ecommerce/reports → Relatórios E-commerce
 - /settings → Definições
 - /settings (secção Suporte) → Definições > Suporte (tickets de suporte)
+- /settings (secção Formulários) → Definições > Definições Gerais > Formulários
+
+CONHECIMENTO DO SISTEMA (onde fica cada funcionalidade):
+
+FORMULÁRIOS DE CAPTURA DE LEADS:
+- Os formulários públicos para captura de leads são geridos em: Definições > Definições Gerais > Formulários
+- NÃO estão em Marketing. Marketing é para campanhas de email e templates.
+- Cada formulário tem um link público (slug) que pode ser usado em landing pages e anúncios.
+- Tipos: Formulário clássico ou Formulário conversacional (com IA).
+- Configurações: campos personalizados, etapa do pipeline, atribuição automática, Meta Pixel, mensagem de sucesso.
+
+PIPELINE DE LEADS:
+- Configurar etapas do pipeline: Definições > Definições Gerais > Pipeline
+- Gerir leads no Kanban: Leads (menu lateral)
+
+EQUIPA E ACESSOS:
+- Adicionar membros: Definições > Equipa e Acessos
+- Perfis de permissão: Definições > Equipa e Acessos > Perfis
+
+INTEGRAÇÕES:
+- WhatsApp, Brevo (email), InvoiceXpress/KeyInvoice (faturação): Definições > Integrações
+
+PRODUTOS:
+- Catálogo de produtos/serviços: Definições > Produtos
+
+NOTIFICAÇÕES:
+- Push notifications, alertas de fidelização, alertas de agenda: Definições > Notificações
+
+PLANO E FATURAÇÃO:
+- Subscrição, upgrade, faturas: Definições > Plano e Faturação
 
 LIMITAÇÕES (O QUE NÃO PODES FAZER):
 - NÃO podes enviar emails, faturas ou documentos.
