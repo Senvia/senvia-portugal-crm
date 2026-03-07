@@ -47,6 +47,7 @@ import {
   UserPlus
 } from "lucide-react";
 import { useUpdateForm } from '@/hooks/useForms';
+import { usePipelineStages } from '@/hooks/usePipelineStages';
 import { useTeamMembers } from '@/hooks/useTeam';
 import { useAuth } from '@/contexts/AuthContext';
 import { Form, FormSettings, FormMode, MetaPixel, migrateFormSettings } from '@/types';
