@@ -13,7 +13,7 @@ const DialogOverlay = React.forwardRef<React.ElementRef<typeof DialogPrimitive.O
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 const dialogContentVariants = {
   default: "pointer-events-auto fixed left-1/2 -translate-x-1/2 z-50 grid w-full max-w-lg max-w-[calc(100vw-2rem)] overflow-y-auto gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 sm:rounded-lg",
-  fullScreen: "pointer-events-auto fixed inset-0 z-50 w-full h-full max-w-none bg-background duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 safe-top safe-bottom md:left-64 md:w-[calc(100%-16rem)]",
+  fullScreen: "pointer-events-auto fixed inset-0 z-50 w-full h-full max-w-none bg-background duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 pt-safe pb-safe md:left-64 md:w-[calc(100%-16rem)]",
 };
 
 interface DialogContentProps extends React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> {
