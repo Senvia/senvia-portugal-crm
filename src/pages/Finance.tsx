@@ -20,7 +20,10 @@ import InternalRequests from "@/pages/finance/InternalRequests";
 import { BankAccountsTab } from "@/components/finance/BankAccountsTab";
 import { CommissionsTab } from "@/components/finance/CommissionsTab";
 import { useAuth } from "@/contexts/AuthContext";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { Percent } from "lucide-react";
+import { useSalesCommissions } from "@/hooks/useSalesCommissions";
+import { CommissionsPayableModal } from "@/components/finance/CommissionsPayableModal";
 
 export default function Finance() {
   const { organization } = useAuth();
