@@ -53,8 +53,8 @@ export function useStripeCommissions() {
       if (!records || records.length === 0) return { byUser: [], grandTotal: 0 };
 
       // Get unique user IDs and client org IDs
-      const userIds = [...new Set(records.map((r: any) => r.user_id))];
-      const clientOrgIds = [...new Set(records.map((r: any) => r.client_org_id))];
+      const userIds = [...new Set(records.map((r: any) => r.user_id))] as string[];
+      const clientOrgIds = [...new Set(records.map((r: any) => r.client_org_id))] as string[];
 
       const [profilesRes, orgsRes] = await Promise.all([
         supabase.from("profiles").select("id, full_name").in("id", userIds),
