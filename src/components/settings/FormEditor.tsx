@@ -96,6 +96,9 @@ export function FormEditor({ form, onBack }: FormEditorProps) {
   
   // Auto-assignment
   const [assignedTo, setAssignedTo] = useState<string | null>(form.assigned_to || null);
+  
+  // Target stage
+  const [targetStage, setTargetStage] = useState<string | null>(form.target_stage || null);
 
   const getFormUrl = () => {
     if (!organization?.slug) return '';
