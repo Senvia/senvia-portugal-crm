@@ -21,6 +21,7 @@ function transformForm(row: any): Form {
     ai_qualification_rules: row.ai_qualification_rules,
     meta_pixels: Array.isArray(row.meta_pixels) ? row.meta_pixels : [],
     assigned_to: row.assigned_to,
+    target_stage: row.target_stage || null,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -75,6 +76,7 @@ interface CreateFormData {
   slug: string;
   form_settings?: FormSettings;
   is_default?: boolean;
+  target_stage?: string | null;
 }
 
 export function useCreateForm() {
@@ -103,6 +105,7 @@ export function useCreateForm() {
           form_settings: (data.form_settings || DEFAULT_FORM_SETTINGS) as unknown as Json,
           is_default: data.is_default || false,
           is_active: true,
+          target_stage: data.target_stage || null,
         })
         .select()
         .single();
@@ -144,6 +147,7 @@ interface UpdateFormData {
   ai_qualification_rules?: string | null;
   meta_pixels?: any[];
   assigned_to?: string | null;
+  target_stage?: string | null;
 }
 
 export function useUpdateForm() {
@@ -176,6 +180,7 @@ export function useUpdateForm() {
       if (data.ai_qualification_rules !== undefined) updateData.ai_qualification_rules = data.ai_qualification_rules;
       if (data.meta_pixels !== undefined) updateData.meta_pixels = data.meta_pixels;
       if (data.assigned_to !== undefined) updateData.assigned_to = data.assigned_to;
+      if (data.target_stage !== undefined) updateData.target_stage = data.target_stage;
 
       const { data: updatedForm, error } = await supabase
         .from('forms')

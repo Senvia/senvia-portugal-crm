@@ -1,43 +1,26 @@
 
 
-## Etapa Inicial do Lead na Criação do Formulário
+## Fix: Modal de Objetivos Anuais "bugado"
 
-### O que será feito
+### Problema
 
-Adicionar na **criação e edição** do formulário um campo para selecionar a etapa da pipeline onde o lead vai cair automaticamente. O nome do formulário é adicionado às notas do lead.
+O `useEffect` no `EditActivationObjectivesModal` tem `getTarget` como dependência. Como `getTarget` é uma função normal (closure) criada a cada render no hook `useActivationObjectives`, ganha uma nova referência em cada render. Isto causa:
+- O `useEffect` dispara repetidamente, resetando os valores que o utilizador acabou de digitar
+- Os inputs ficam "presos" ou voltam a 0
+
+### Solução
+
+1. **`src/hooks/useActivationObjectives.ts`**: Envolver `getTarget` em `useCallback` para estabilizar a referência.
+
+2. **`src/components/dashboard/EditActivationObjectivesModal.tsx`**: Remover `getTarget` das dependências do `useEffect`, usando apenas `open`, `members`, `periodType`, `proposalType` como triggers. Usar uma ref ou chamar `getTarget` apenas quando o modal abre (não a cada re-render).
 
 ### Alterações
 
-**1. Migration: nova coluna `target_stage` na tabela `forms`**
-```sql
-ALTER TABLE public.forms ADD COLUMN target_stage text DEFAULT NULL;
-```
+**`src/hooks/useActivationObjectives.ts`**:
+- Importar `useCallback` do React
+- Envolver `getTarget` e `countActivations` em `useCallback` com as dependências correctas (`objectives`, `currentMonthStart`, `currentYearStart` para `getTarget`; `monthlyActivations`, `annualActivations` para `countActivations`)
 
-**2. `src/types/index.ts`** — adicionar `target_stage?: string | null` ao interface `Form`
-
-**3. `src/hooks/useForms.ts`** — incluir `target_stage` no `transformForm`, `CreateFormData` e `UpdateFormData`
-
-**4. `src/components/settings/CreateFormModal.tsx`**
-- Importar `usePipelineStages` e `Select`
-- Adicionar campo "Etapa Inicial do Lead" com as etapas da pipeline como opções
-- Opção default "Primeira etapa (padrão)" = null
-- Passar `target_stage` no `createForm.mutate()`
-
-**5. `src/components/settings/FormEditor.tsx`**
-- Adicionar o mesmo Select na secção de configuração do formulário (Accordion)
-- Guardar `target_stage` no `handleSave`
-
-**6. `supabase/functions/submit-lead/index.ts`**
-- No select do form (linha 134), adicionar `target_stage` aos campos
-- Guardar em `formSettings.target_stage`
-- Na inserção do lead (linha 251): `status: formSettings.target_stage || 'new'`
-- Nas notes: adicionar `Formulário: ${formSettings.form_name}` quando existe form_name
-
-### Ficheiros
-- Migration: coluna `target_stage` em `forms`
-- `src/types/index.ts`
-- `src/hooks/useForms.ts`
-- `src/components/settings/CreateFormModal.tsx`
-- `src/components/settings/FormEditor.tsx`
-- `supabase/functions/submit-lead/index.ts`
+**`src/components/dashboard/EditActivationObjectivesModal.tsx`**:
+- Remover `getTarget` da lista de dependências do `useEffect` (deixar apenas `open, members, periodType, proposalType`)
+- Isto evita que os valores sejam resetados enquanto o utilizador está a digitar
 

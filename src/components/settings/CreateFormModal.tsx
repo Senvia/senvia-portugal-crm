@@ -10,8 +10,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { FileText, MessagesSquare, Loader2, Check } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { FileText, MessagesSquare, Loader2, Check, Target } from "lucide-react";
 import { useCreateForm } from '@/hooks/useForms';
+import { usePipelineStages } from '@/hooks/usePipelineStages';
 import { useAuth } from '@/contexts/AuthContext';
 import { FormMode, DEFAULT_FORM_SETTINGS } from '@/types';
 import { PRODUCTION_URL } from '@/lib/constants';
@@ -25,10 +33,12 @@ interface CreateFormModalProps {
 export function CreateFormModal({ open, onOpenChange }: CreateFormModalProps) {
   const { organization } = useAuth();
   const createForm = useCreateForm();
+  const { data: stages = [] } = usePipelineStages();
 
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
   const [mode, setMode] = useState<FormMode>('traditional');
+  const [targetStage, setTargetStage] = useState<string | null>(null);
 
   const generateSlug = (text: string) => {
     return text
@@ -42,7 +52,6 @@ export function CreateFormModal({ open, onOpenChange }: CreateFormModalProps) {
 
   const handleNameChange = (value: string) => {
     setName(value);
-    // Auto-generate slug from name if slug is empty or was auto-generated
     if (!slug || slug === generateSlug(name)) {
       setSlug(generateSlug(value));
     }
@@ -63,13 +72,19 @@ export function CreateFormModal({ open, onOpenChange }: CreateFormModalProps) {
     };
 
     createForm.mutate(
-      { name: name.trim(), slug: slug.trim(), form_settings: formSettings },
+      { 
+        name: name.trim(), 
+        slug: slug.trim(), 
+        form_settings: formSettings,
+        target_stage: targetStage,
+      },
       {
         onSuccess: () => {
           onOpenChange(false);
           setName('');
           setSlug('');
           setMode('traditional');
+          setTargetStage(null);
         },
       }
     );
@@ -123,7 +138,6 @@ export function CreateFormModal({ open, onOpenChange }: CreateFormModalProps) {
           <div className="space-y-2">
             <Label>Tipo de Formulário</Label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {/* Traditional Mode */}
               <button
                 type="button"
                 onClick={() => setMode('traditional')}
@@ -154,7 +168,6 @@ export function CreateFormModal({ open, onOpenChange }: CreateFormModalProps) {
                 )}
               </button>
 
-              {/* Conversational Mode */}
               <button
                 type="button"
                 onClick={() => setMode('conversational')}
@@ -185,6 +198,33 @@ export function CreateFormModal({ open, onOpenChange }: CreateFormModalProps) {
                 )}
               </button>
             </div>
+          </div>
+
+          {/* Target Stage */}
+          <div className="space-y-2">
+            <Label className="flex items-center gap-2">
+              <Target className="h-3.5 w-3.5 text-muted-foreground" />
+              Etapa Inicial do Lead
+            </Label>
+            <Select
+              value={targetStage || 'default'}
+              onValueChange={(v) => setTargetStage(v === 'default' ? null : v)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Primeira etapa (padrão)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="default">Primeira etapa (padrão)</SelectItem>
+                {stages.map((stage) => (
+                  <SelectItem key={stage.id} value={stage.key}>
+                    {stage.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Os leads deste formulário entrarão diretamente nesta etapa do pipeline.
+            </p>
           </div>
         </div>
 

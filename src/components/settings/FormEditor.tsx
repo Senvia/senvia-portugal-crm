@@ -47,6 +47,7 @@ import {
   UserPlus
 } from "lucide-react";
 import { useUpdateForm } from '@/hooks/useForms';
+import { usePipelineStages } from '@/hooks/usePipelineStages';
 import { useTeamMembers } from '@/hooks/useTeam';
 import { useAuth } from '@/contexts/AuthContext';
 import { Form, FormSettings, FormMode, MetaPixel, migrateFormSettings } from '@/types';
@@ -76,6 +77,7 @@ export function FormEditor({ form, onBack }: FormEditorProps) {
   const isMobile = useIsMobile();
 
   const { data: teamMembers } = useTeamMembers();
+  const { data: stages = [] } = usePipelineStages();
   
   const [name, setName] = useState(form.name);
   const [slug, setSlug] = useState(form.slug);
@@ -94,6 +96,9 @@ export function FormEditor({ form, onBack }: FormEditorProps) {
   
   // Auto-assignment
   const [assignedTo, setAssignedTo] = useState<string | null>(form.assigned_to || null);
+  
+  // Target stage
+  const [targetStage, setTargetStage] = useState<string | null>(form.target_stage || null);
 
   const getFormUrl = () => {
     if (!organization?.slug) return '';
@@ -117,6 +122,7 @@ export function FormEditor({ form, onBack }: FormEditorProps) {
         ai_qualification_rules: aiQualificationRules || null,
         meta_pixels: metaPixels,
         assigned_to: assignedTo,
+        target_stage: targetStage,
       },
       {
         onSuccess: () => {
@@ -290,6 +296,47 @@ export function FormEditor({ form, onBack }: FormEditorProps) {
               </Select>
               <p className="text-xs text-muted-foreground">
                 Todos os leads que chegarem por este formulário serão automaticamente atribuídos a este colaborador.
+              </p>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+
+        {/* Target Stage Section */}
+        <AccordionItem value="target-stage" className="border rounded-xl px-4">
+          <AccordionTrigger className="hover:no-underline py-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/10">
+                <Target className="h-5 w-5 text-emerald-600" />
+              </div>
+              <div className="text-left">
+                <span className="font-medium">Etapa Inicial do Lead</span>
+                <p className="text-xs text-muted-foreground font-normal">
+                  Em qual etapa do pipeline o lead entra automaticamente
+                </p>
+              </div>
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="pb-4 pt-2 space-y-4">
+            <div className="space-y-2">
+              <Label>Etapa do Pipeline</Label>
+              <Select
+                value={targetStage || 'default'}
+                onValueChange={(v) => setTargetStage(v === 'default' ? null : v)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Primeira etapa (padrão)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="default">Primeira etapa (padrão)</SelectItem>
+                  {stages.map((stage) => (
+                    <SelectItem key={stage.id} value={stage.key}>
+                      {stage.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Os leads deste formulário entrarão diretamente nesta etapa do pipeline. O nome do formulário será adicionado nas notas do lead.
               </p>
             </div>
           </AccordionContent>

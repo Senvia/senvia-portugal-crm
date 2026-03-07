@@ -126,12 +126,13 @@ Deno.serve(async (req) => {
       form_name: null as string | null,
       assigned_to: null as string | null,
       meta_pixels: null as any[] | null,
+      target_stage: null as string | null,
     };
 
     if (body.form_id) {
       const { data: form, error: formError } = await supabase
         .from('forms')
-        .select('id, name, form_settings, ai_qualification_rules, msg_template_hot, msg_template_warm, msg_template_cold, assigned_to, meta_pixels')
+        .select('id, name, form_settings, ai_qualification_rules, msg_template_hot, msg_template_warm, msg_template_cold, assigned_to, meta_pixels, target_stage')
         .eq('id', body.form_id)
         .eq('organization_id', org.id)
         .maybeSingle();
@@ -146,6 +147,7 @@ Deno.serve(async (req) => {
           form_name: form.name,
           assigned_to: form.assigned_to,
           meta_pixels: Array.isArray(form.meta_pixels) ? form.meta_pixels : null,
+          target_stage: form.target_stage || null,
         };
         console.log('Form-specific settings loaded for:', form.name);
       }
@@ -248,8 +250,8 @@ Deno.serve(async (req) => {
         phone: cleanPhone || '000000000',
         gdpr_consent: true,
         source: body.source || formSettings.form_name || 'Formulário Público',
-        status: 'new',
-        notes: body.notes || null,
+        status: formSettings.target_stage || 'new',
+        notes: formSettings.form_name ? `Formulário: ${formSettings.form_name}` : (body.notes || null),
         custom_data: body.custom_data || {},
       })
       .select()
