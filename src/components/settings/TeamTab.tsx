@@ -260,11 +260,23 @@ export function TeamTab() {
     manageTeamMember.mutate({ action: 'toggle_status', user_id: member.user_id });
   };
 
-  const openEditProfileModal = (member: TeamMember) => {
+  const openEditProfileModal = async (member: TeamMember) => {
     setSelectedMember(member);
     setEditFullName(member.full_name || '');
     setEditEmail(member.email || '');
     setEditPhone(member.phone || '');
+    // Load commission rate from organization_members
+    if (showIndividualCommission && organization?.id) {
+      const { data } = await supabase
+        .from('organization_members')
+        .select('commission_rate')
+        .eq('user_id', member.user_id)
+        .eq('organization_id', organization.id)
+        .single();
+      setEditCommissionRate(data?.commission_rate ? String(data.commission_rate) : '');
+    } else {
+      setEditCommissionRate('');
+    }
     setEditProfileOpen(true);
   };
 
