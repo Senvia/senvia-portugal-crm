@@ -17,14 +17,45 @@ export function useConvertProspectToLead() {
     mutationFn: async ({ contacts, assignedTo }: ConvertOptions) => {
       if (!organization?.id) throw new Error('Sem organização');
 
+      // Resolve round-robin if no assignedTo
+      let resolvedAssignedTo = assignedTo || null;
+      let salesSettings: any = {};
+      let members: { user_id: string }[] = [];
+
+      if (!resolvedAssignedTo) {
+        const { data: org } = await supabase
+          .from('organizations')
+          .select('sales_settings')
+          .eq('id', organization.id)
+          .single();
+
+        salesSettings = (org?.sales_settings as any) || {};
+        if (salesSettings.auto_assign_leads) {
+          const { data: m } = await supabase
+            .from('organization_members')
+            .select('user_id')
+            .eq('organization_id', organization.id)
+            .eq('is_active', true)
+            .order('joined_at', { ascending: true });
+          members = m || [];
+        }
+      }
+
       let converted = 0;
       let skipped = 0;
+      let rrIndex = salesSettings.round_robin_index || 0;
 
       for (const contact of contacts) {
-        // Check if already converted
         if ((contact as any).converted_to_lead) {
           skipped++;
           continue;
+        }
+
+        let finalAssignedTo = resolvedAssignedTo;
+        if (!finalAssignedTo && salesSettings.auto_assign_leads && members.length > 0) {
+          const safeIndex = rrIndex % members.length;
+          finalAssignedTo = members[safeIndex].user_id;
+          rrIndex = (safeIndex + 1) % members.length;
         }
 
         const { error: leadError } = await supabase
@@ -36,7 +67,7 @@ export function useConvertProspectToLead() {
             company_name: contact.company || undefined,
             source: 'prospect',
             organization_id: organization.id,
-            assigned_to: assignedTo || undefined,
+            assigned_to: finalAssignedTo || undefined,
             gdpr_consent: true,
             status: 'new',
           });
@@ -46,13 +77,20 @@ export function useConvertProspectToLead() {
           continue;
         }
 
-        // Mark as converted
         await supabase
           .from('marketing_contacts' as any)
           .update({ converted_to_lead: true })
           .eq('id', contact.id);
 
         converted++;
+      }
+
+      // Persist final round-robin index
+      if (!resolvedAssignedTo && salesSettings.auto_assign_leads && members.length > 0) {
+        await supabase
+          .from('organizations')
+          .update({ sales_settings: { ...salesSettings, round_robin_index: rrIndex } })
+          .eq('id', organization.id);
       }
 
       return { converted, skipped };
