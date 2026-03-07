@@ -803,7 +803,66 @@ export function TeamTab() {
         </DialogContent>
       </Dialog>
 
-      {/* Edit Profile Modal */}
+      {/* Send Access Email Modal */}
+      <Dialog open={sendAccessOpen} onOpenChange={setSendAccessOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Mail className="h-5 w-5" />
+              Enviar Email de Acesso
+            </DialogTitle>
+            <DialogDescription>
+              Defina uma nova palavra-passe temporária para {selectedMember?.full_name}. A password será redefinida e as credenciais enviadas por email.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="access-password">Nova Palavra-passe</Label>
+              <div className="relative">
+                <Input
+                  id="access-password"
+                  type={showAccessPassword ? 'text' : 'password'}
+                  placeholder="Mínimo 6 caracteres"
+                  value={accessPassword}
+                  onChange={(e) => setAccessPassword(e.target.value)}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-0 top-0 h-full px-3"
+                  onClick={() => setShowAccessPassword(!showAccessPassword)}
+                >
+                  {showAccessPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="access-confirm-password">Confirmar Palavra-passe</Label>
+              <Input
+                id="access-confirm-password"
+                type={showAccessPassword ? 'text' : 'password'}
+                placeholder="Repetir palavra-passe"
+                value={accessConfirmPassword}
+                onChange={(e) => setAccessConfirmPassword(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSendAccessOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleSendAccessEmailToMember}
+              disabled={!accessPassword || !accessConfirmPassword || sendingAccessEmail}
+            >
+              {sendingAccessEmail && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Enviar Email
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={editProfileOpen} onOpenChange={setEditProfileOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
