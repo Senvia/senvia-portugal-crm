@@ -105,6 +105,7 @@ export function useCreateForm() {
           form_settings: (data.form_settings || DEFAULT_FORM_SETTINGS) as unknown as Json,
           is_default: data.is_default || false,
           is_active: true,
+          target_stage: data.target_stage || null,
         })
         .select()
         .single();
