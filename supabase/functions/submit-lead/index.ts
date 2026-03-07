@@ -132,7 +132,7 @@ Deno.serve(async (req) => {
     if (body.form_id) {
       const { data: form, error: formError } = await supabase
         .from('forms')
-        .select('id, name, form_settings, ai_qualification_rules, msg_template_hot, msg_template_warm, msg_template_cold, assigned_to, meta_pixels')
+        .select('id, name, form_settings, ai_qualification_rules, msg_template_hot, msg_template_warm, msg_template_cold, assigned_to, meta_pixels, target_stage')
         .eq('id', body.form_id)
         .eq('organization_id', org.id)
         .maybeSingle();
