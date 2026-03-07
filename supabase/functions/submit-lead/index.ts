@@ -193,13 +193,52 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ===== ROUND-ROBIN AUTO-ASSIGN =====
+    let autoAssignedTo: string | null = formSettings.assigned_to || null;
+    
+    if (!autoAssignedTo) {
+      const salesSettings = (org.sales_settings as any) || {};
+      if (salesSettings.auto_assign_leads) {
+        try {
+          const { data: members } = await supabase
+            .from('organization_members')
+            .select('user_id')
+            .eq('organization_id', org.id)
+            .eq('is_active', true)
+            .order('joined_at', { ascending: true });
+
+          if (members && members.length > 0) {
+            const currentIndex = salesSettings.round_robin_index || 0;
+            const safeIndex = currentIndex % members.length;
+            autoAssignedTo = members[safeIndex].user_id;
+            const nextIndex = (safeIndex + 1) % members.length;
+
+            // Update round_robin_index
+            await supabase
+              .from('organizations')
+              .update({
+                sales_settings: {
+                  ...salesSettings,
+                  round_robin_index: nextIndex,
+                },
+              })
+              .eq('id', org.id);
+
+            console.log(`Round-robin assigned lead to member index ${safeIndex}, next: ${nextIndex}`);
+          }
+        } catch (rrErr) {
+          console.error('Round-robin assignment failed:', rrErr);
+        }
+      }
+    }
+
     // Insert lead with custom data - use defaults for required DB fields
     const { data: lead, error: leadError } = await supabase
       .from('leads')
       .insert({
         organization_id: org.id,
         form_id: body.form_id || null,
-        assigned_to: formSettings.assigned_to || null,
+        assigned_to: autoAssignedTo,
         company_nif: body.company_nif?.trim() || null,
         company_name: body.company_name?.trim() || null,
         name: org.niche === 'telecom'
