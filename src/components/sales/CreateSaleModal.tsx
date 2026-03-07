@@ -180,6 +180,13 @@ export function CreateSaleModal({
   const [showDraftPaymentModal, setShowDraftPaymentModal] = useState(false);
   const [showPaymentTypeSelector, setShowPaymentTypeSelector] = useState(false);
   const [showDraftScheduleModal, setShowDraftScheduleModal] = useState(false);
+
+  // Plan sale mode (Senvia only)
+  const [isPlanSale, setIsPlanSale] = useState(false);
+  const [selectedPlanId, setSelectedPlanId] = useState<string>("");
+  const [clientOrgId, setClientOrgId] = useState<string>("");
+  const [orgSearchResults, setOrgSearchResults] = useState<{ id: string; name: string; slug: string }[]>([]);
+  const [orgSearchTerm, setOrgSearchTerm] = useState("");
   
 
   // Helper to recalculate commission from proposal data using matrix
