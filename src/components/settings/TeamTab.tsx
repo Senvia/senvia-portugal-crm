@@ -94,9 +94,6 @@ export function TeamTab() {
 
   // Send access email modal state
   const [sendAccessOpen, setSendAccessOpen] = useState(false);
-  const [accessPassword, setAccessPassword] = useState('');
-  const [accessConfirmPassword, setAccessConfirmPassword] = useState('');
-  const [showAccessPassword, setShowAccessPassword] = useState(false);
   const [sendingAccessEmail, setSendingAccessEmail] = useState(false);
 
   const handleCreateMember = async () => {
