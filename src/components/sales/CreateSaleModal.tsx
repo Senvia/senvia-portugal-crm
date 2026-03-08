@@ -783,7 +783,6 @@ export function CreateSaleModal({
                               </button>
                             )}
                           </div>
-                        </div>
                       </div>
                     )}
 
