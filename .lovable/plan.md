@@ -1,35 +1,26 @@
 
 
-## Modais abaixo do header no mobile (PWA)
+## Fix: Modal de Objetivos Anuais "bugado"
 
 ### Problema
-No mobile, os modais (tanto `default` como `fullScreen`) ocupam toda a viewport, cobrindo o header com o logo e o menu. O utilizador perde a referência visual da app.
 
-### Solução — `src/components/ui/dialog.tsx`
+O `useEffect` no `EditActivationObjectivesModal` tem `getTarget` como dependência. Como `getTarget` é uma função normal (closure) criada a cada render no hook `useActivationObjectives`, ganha uma nova referência em cada render. Isto causa:
+- O `useEffect` dispara repetidamente, resetando os valores que o utilizador acabou de digitar
+- Os inputs ficam "presos" ou voltam a 0
 
-Ajustar ambas as variantes para que, no mobile (`< md`), o modal comece abaixo do header. O header mobile tem `h-14` (3.5rem) + safe-area-inset-top.
+### Solução
 
-**1. Variante `fullScreen`:**
-- Trocar `inset-0` por `inset-x-0 bottom-0` + `top-[calc(3.5rem+env(safe-area-inset-top,0px))]` no mobile
-- No desktop (`md:`), manter o comportamento atual com `md:inset-0`
-- Remover `pt-safe` no mobile (já não precisa, o header cobre a safe area)
+1. **`src/hooks/useActivationObjectives.ts`**: Envolver `getTarget` em `useCallback` para estabilizar a referência.
 
-**2. Variante `default`:**
-- No mobile, posicionar com `top-[calc(3.5rem+env(safe-area-inset-top,0px)+1rem)]` em vez de `top-[50%] -translate-y-[50%]`
-- Manter centragem vertical no desktop via `sm:top-[50%] sm:-translate-y-[50%]`
+2. **`src/components/dashboard/EditActivationObjectivesModal.tsx`**: Remover `getTarget` das dependências do `useEffect`, usando apenas `open`, `members`, `periodType`, `proposalType` como triggers. Usar uma ref ou chamar `getTarget` apenas quando o modal abre (não a cada re-render).
 
-**3. Overlay:**
-- O overlay mantém `inset-0` (escurece tudo incluindo o header), mas o z-index do header (`z-50`) já o mantém por cima se necessário
-- Alternativa: subir o header para `z-[60]` para ficar sempre visível por cima do overlay
+### Alterações
 
-**4. Header z-index:**
-- Alterar o `MobileHeader` de `z-50` para `z-[60]` para garantir que fica acima do overlay dos modais (`z-50`)
+**`src/hooks/useActivationObjectives.ts`**:
+- Importar `useCallback` do React
+- Envolver `getTarget` e `countActivations` em `useCallback` com as dependências correctas (`objectives`, `currentMonthStart`, `currentYearStart` para `getTarget`; `monthlyActivations`, `annualActivations` para `countActivations`)
 
-### Ficheiros alterados
-1. `src/components/ui/dialog.tsx` — variantes responsive
-2. `src/components/layout/MobileHeader.tsx` — z-index para `z-[60]`
-
-### Resultado
-- No mobile: header sempre visível, modais aparecem abaixo do logo/menu
-- No desktop: comportamento inalterado (sidebar + modal fullscreen ou centrado)
+**`src/components/dashboard/EditActivationObjectivesModal.tsx`**:
+- Remover `getTarget` da lista de dependências do `useEffect` (deixar apenas `open, members, periodType, proposalType`)
+- Isto evita que os valores sejam resetados enquanto o utilizador está a digitar
 
