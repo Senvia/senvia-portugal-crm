@@ -281,6 +281,7 @@ export default function Leads() {
 
     // Intercept drops on won stages -> auto-create client + open sale modal
     if (isWonStage(newStatus) && lead) {
+      setPendingWonData({ leadId, status: newStatus });
       const existingClient = clients.find(c => c.lead_id === leadId || (lead.company_nif && c.company_nif === lead.company_nif));
       if (existingClient) {
         toast.success('Lead ganha! Cliente já existente.');
@@ -307,9 +308,10 @@ export default function Leads() {
           },
         });
       }
+      return;
     }
     
-    // For other statuses (including won), update normally
+    // For other statuses, update normally
     updateStatus.mutate({ leadId, status: newStatus });
   };
 
