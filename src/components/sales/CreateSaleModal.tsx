@@ -581,8 +581,8 @@ export function CreateSaleModal({
     }
 
     try {
-      // For plan sales, force recurring
-      const isPlanRecurring = isPlanSale && !!selectedPlanId;
+      // For plan sales, force recurring (no plan selection needed, value comes from Stripe)
+      const isPlanRecurring = isPlanSale;
       const recurringItems = items.filter(item => {
         if (!item.product_id) return false;
         const product = products?.find(p => p.id === item.product_id);
