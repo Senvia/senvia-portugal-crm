@@ -729,7 +729,6 @@ export function CreateSaleModal({
                             onChange={(e) => {
                               setIsPlanSale(e.target.checked);
                               if (!e.target.checked) {
-                                setSelectedPlanId("");
                                 setClientOrgId("");
                                 setOrgSearchTerm("");
                                 setOrgSearchResults([]);
