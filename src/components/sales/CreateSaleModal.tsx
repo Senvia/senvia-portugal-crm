@@ -566,7 +566,7 @@ export function CreateSaleModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!isTelecom && total <= 0 && items.length === 0) return;
+    if (!isTelecom && !isPlanSale && total <= 0 && items.length === 0) return;
 
     // Validate plan sale
     if (isPlanSale && !clientOrgId) {
