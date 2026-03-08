@@ -41,10 +41,6 @@ const DialogContent = React.forwardRef<React.ElementRef<typeof DialogPrimitive.C
         }
       }}
       className={cn(dialogContentVariants[variant], className)}
-      style={variant === "default" ? {
-        top: "calc(clamp(20px, var(--safe-area-top), 50px) + 1rem)",
-        bottom: "calc(clamp(0px, var(--safe-area-bottom), 50px) + 1rem)",
-      } : undefined}
       {...props}>
       {children}
       <DialogPrimitive.Close className="absolute right-4 top-safe rounded-sm opacity-70 ring-offset-background transition-opacity data-[state=open]:bg-accent data-[state=open]:text-muted-foreground hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none">
