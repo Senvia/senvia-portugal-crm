@@ -1,26 +1,19 @@
+## Simplificar Venda de Plano Senvia — Valor automático via Stripe
 
+### Estado: ✅ Implementado
 
-## Fix: Modal de Objetivos Anuais "bugado"
+### Alterações Realizadas
 
-### Problema
+**1. `src/components/sales/CreateSaleModal.tsx`**
+- Removido dropdown de seleção de plano (`selectedPlanId`, `handlePlanSelect`, `STRIPE_PLANS` import)
+- Mantido checkbox "Venda de Plano Senvia" + pesquisa de organização cliente
+- Adicionada mensagem informativa: "O valor será atualizado automaticamente quando o cliente subscrever"
+- Permitido valor 0€ para vendas de plano (validação ajustada)
+- Forçado `has_recurring: true` sempre que `isPlanSale` (sem depender de plano selecionado)
 
-O `useEffect` no `EditActivationObjectivesModal` tem `getTarget` como dependência. Como `getTarget` é uma função normal (closure) criada a cada render no hook `useActivationObjectives`, ganha uma nova referência em cada render. Isto causa:
-- O `useEffect` dispara repetidamente, resetando os valores que o utilizador acabou de digitar
-- Os inputs ficam "presos" ou voltam a 0
-
-### Solução
-
-1. **`src/hooks/useActivationObjectives.ts`**: Envolver `getTarget` em `useCallback` para estabilizar a referência.
-
-2. **`src/components/dashboard/EditActivationObjectivesModal.tsx`**: Remover `getTarget` das dependências do `useEffect`, usando apenas `open`, `members`, `periodType`, `proposalType` como triggers. Usar uma ref ou chamar `getTarget` apenas quando o modal abre (não a cada re-render).
-
-### Alterações
-
-**`src/hooks/useActivationObjectives.ts`**:
-- Importar `useCallback` do React
-- Envolver `getTarget` e `countActivations` em `useCallback` com as dependências correctas (`objectives`, `currentMonthStart`, `currentYearStart` para `getTarget`; `monthlyActivations`, `annualActivations` para `countActivations`)
-
-**`src/components/dashboard/EditActivationObjectivesModal.tsx`**:
-- Remover `getTarget` da lista de dependências do `useEffect` (deixar apenas `open, members, periodType, proposalType`)
-- Isto evita que os valores sejam resetados enquanto o utilizador está a digitar
-
+**2. `supabase/functions/stripe-webhook/index.ts` — `handleInvoicePaid`**
+- Após registar comissão, atualiza a venda vinculada com:
+  - `total_value` = valor pago no Stripe
+  - `recurring_value` = valor pago
+  - `status` = move para `in_progress` se estava `pending`
+- Cada pagamento Stripe atualiza automaticamente o valor da venda (reflete upgrades/downgrades)
