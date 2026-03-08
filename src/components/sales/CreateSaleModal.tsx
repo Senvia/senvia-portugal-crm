@@ -292,7 +292,7 @@ export function CreateSaleModal({
       setShowPaymentTypeSelector(false);
       setShowDraftScheduleModal(false);
       setIsPlanSale(false);
-      setSelectedPlanId("");
+      // selectedPlanId removed
       setClientOrgId("");
       setOrgSearchTerm("");
       setOrgSearchResults([]);
