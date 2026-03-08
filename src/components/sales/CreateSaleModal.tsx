@@ -183,7 +183,7 @@ export function CreateSaleModal({
 
   // Plan sale mode (Senvia only)
   const [isPlanSale, setIsPlanSale] = useState(false);
-  const [selectedPlanId, setSelectedPlanId] = useState<string>("");
+  // selectedPlanId removed — plan value comes from Stripe automatically
   const [clientOrgId, setClientOrgId] = useState<string>("");
   const [orgSearchResults, setOrgSearchResults] = useState<{ id: string; name: string; slug: string }[]>([]);
   const [orgSearchTerm, setOrgSearchTerm] = useState("");
