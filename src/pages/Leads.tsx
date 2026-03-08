@@ -814,9 +814,18 @@ export default function Leads() {
           open={isCreateSaleModalOpen}
           onOpenChange={(open) => {
             setIsCreateSaleModalOpen(open);
-            if (!open) setPrefillSaleClientId(null);
+            if (!open) {
+              setPrefillSaleClientId(null);
+              setPendingWonData(null);
+            }
           }}
           prefillClientId={prefillSaleClientId}
+          onSaleCreated={() => {
+            if (pendingWonData) {
+              updateStatus.mutate({ leadId: pendingWonData.leadId, status: pendingWonData.status });
+              setPendingWonData(null);
+            }
+          }}
         />
       </Tabs>
     </div>
