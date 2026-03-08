@@ -85,6 +85,7 @@ export default function Leads() {
   const [isChainedFlow, setIsChainedFlow] = useState(false);
   const [isCreateSaleModalOpen, setIsCreateSaleModalOpen] = useState(false);
   const [prefillSaleClientId, setPrefillSaleClientId] = useState<string | null>(null);
+  const [pendingWonData, setPendingWonData] = useState<{ leadId: string; status: string } | null>(null);
   const [searchQuery, setSearchQuery] = usePersistedState("leads-search-v1", "");
   const [statusFilter, setStatusFilter] = usePersistedState<string[]>("leads-status-v1", []);
   const [dateRange, setDateRange] = usePersistedState<{ from: Date | undefined; to: Date | undefined }>("leads-daterange-v1", { from: undefined, to: undefined });
@@ -280,6 +281,7 @@ export default function Leads() {
 
     // Intercept drops on won stages -> auto-create client + open sale modal
     if (isWonStage(newStatus) && lead) {
+      setPendingWonData({ leadId, status: newStatus });
       const existingClient = clients.find(c => c.lead_id === leadId || (lead.company_nif && c.company_nif === lead.company_nif));
       if (existingClient) {
         toast.success('Lead ganha! Cliente já existente.');
@@ -306,9 +308,10 @@ export default function Leads() {
           },
         });
       }
+      return;
     }
     
-    // For other statuses (including won), update normally
+    // For other statuses, update normally
     updateStatus.mutate({ leadId, status: newStatus });
   };
 
@@ -811,9 +814,18 @@ export default function Leads() {
           open={isCreateSaleModalOpen}
           onOpenChange={(open) => {
             setIsCreateSaleModalOpen(open);
-            if (!open) setPrefillSaleClientId(null);
+            if (!open) {
+              setPrefillSaleClientId(null);
+              setPendingWonData(null);
+            }
           }}
           prefillClientId={prefillSaleClientId}
+          onSaleCreated={() => {
+            if (pendingWonData) {
+              updateStatus.mutate({ leadId: pendingWonData.leadId, status: pendingWonData.status });
+              setPendingWonData(null);
+            }
+          }}
         />
       </Tabs>
     </div>

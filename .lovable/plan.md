@@ -1,68 +1,26 @@
 
 
-## Fix: Estado "Ganho" só aplica se a venda for gravada
+## Fix: Modal de Objetivos Anuais "bugado"
 
 ### Problema
-Quando um lead é arrastado para a etapa "Ganho", o `updateStatus.mutate()` é chamado imediatamente (linha 312), antes de o utilizador gravar a venda. Se fechar o modal sem gravar, o lead fica em "Ganho" sem venda associada.
 
-### Solução — `src/pages/Leads.tsx`
+O `useEffect` no `EditActivationObjectivesModal` tem `getTarget` como dependência. Como `getTarget` é uma função normal (closure) criada a cada render no hook `useActivationObjectives`, ganha uma nova referência em cada render. Isto causa:
+- O `useEffect` dispara repetidamente, resetando os valores que o utilizador acabou de digitar
+- Os inputs ficam "presos" ou voltam a 0
 
-1. **Adicionar estado para guardar o lead/status pendente do won:**
-   - `pendingWonData: { leadId: string; status: string } | null`
+### Solução
 
-2. **No `handleStatusChange`, bloquear o `updateStatus.mutate` quando é won stage:**
-   - Guardar o `leadId` e `newStatus` em `pendingWonData`
-   - Abrir o modal de venda normalmente
-   - **NÃO** chamar `updateStatus.mutate` para won (remover da linha 312 para won)
+1. **`src/hooks/useActivationObjectives.ts`**: Envolver `getTarget` em `useCallback` para estabilizar a referência.
 
-3. **Usar o callback `onSaleCreated` no `CreateSaleModal`:**
-   - Quando a venda é gravada com sucesso → chamar `updateStatus.mutate` com o `pendingWonData`
-   - Limpar o estado pendente
+2. **`src/components/dashboard/EditActivationObjectivesModal.tsx`**: Remover `getTarget` das dependências do `useEffect`, usando apenas `open`, `members`, `periodType`, `proposalType` como triggers. Usar uma ref ou chamar `getTarget` apenas quando o modal abre (não a cada re-render).
 
-4. **No `onOpenChange` do `CreateSaleModal`:**
-   - Se o modal fechar sem venda gravada (pendingWonData ainda existe) → não alterar o status (lead mantém estado anterior)
-   - Limpar `pendingWonData`
+### Alterações
 
-### Alterações concretas
+**`src/hooks/useActivationObjectives.ts`**:
+- Importar `useCallback` do React
+- Envolver `getTarget` e `countActivations` em `useCallback` com as dependências correctas (`objectives`, `currentMonthStart`, `currentYearStart` para `getTarget`; `monthlyActivations`, `annualActivations` para `countActivations`)
 
-**Linha ~86** — Adicionar estado:
-```typescript
-const [pendingWonData, setPendingWonData] = useState<{ leadId: string; status: string } | null>(null);
-```
-
-**Linhas 282-312** — No bloco `isWonStage`, guardar pendingWonData em vez de mutar status:
-```typescript
-if (isWonStage(newStatus) && lead) {
-  setPendingWonData({ leadId, status: newStatus });
-  // ... resto da lógica de criar cliente + abrir modal mantém-se
-  // REMOVER: updateStatus.mutate({ leadId, status: newStatus }) para este caso
-  return; // Não cair no mutate genérico da linha 312
-}
-```
-
-**Linhas 810-817** — Adicionar `onSaleCreated` e atualizar `onOpenChange`:
-```typescript
-<CreateSaleModal
-  open={isCreateSaleModalOpen}
-  onOpenChange={(open) => {
-    setIsCreateSaleModalOpen(open);
-    if (!open) {
-      setPrefillSaleClientId(null);
-      setPendingWonData(null); // Limpa sem alterar status
-    }
-  }}
-  prefillClientId={prefillSaleClientId}
-  onSaleCreated={() => {
-    if (pendingWonData) {
-      updateStatus.mutate({ leadId: pendingWonData.leadId, status: pendingWonData.status });
-      setPendingWonData(null);
-    }
-  }}
-/>
-```
-
-### Resultado
-- Lead só passa para "Ganho" quando a venda é efetivamente gravada
-- Se fechar o modal sem gravar, o lead mantém o estado anterior
-- 1 ficheiro editado: `src/pages/Leads.tsx`
+**`src/components/dashboard/EditActivationObjectivesModal.tsx`**:
+- Remover `getTarget` da lista de dependências do `useEffect` (deixar apenas `open, members, periodType, proposalType`)
+- Isto evita que os valores sejam resetados enquanto o utilizador está a digitar
 
