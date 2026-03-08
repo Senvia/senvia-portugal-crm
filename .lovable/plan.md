@@ -1,25 +1,26 @@
 
 
-## Fix: Modais com tamanho excessivo
+## Fix: Modal de Objetivos Anuais "bugado"
 
 ### Problema
-No `dialog.tsx`, a variante `default` aplica `top` e `bottom` via inline style, o que estica o modal verticalmente para ocupar toda a viewport. Resultado: modais pequenos (ex: criar lista, criar conta) ficam enormes com espaço vazio.
 
-### Solução — `src/components/ui/dialog.tsx`
+O `useEffect` no `EditActivationObjectivesModal` tem `getTarget` como dependência. Como `getTarget` é uma função normal (closure) criada a cada render no hook `useActivationObjectives`, ganha uma nova referência em cada render. Isto causa:
+- O `useEffect` dispara repetidamente, resetando os valores que o utilizador acabou de digitar
+- Os inputs ficam "presos" ou voltam a 0
 
-Alterar o posicionamento da variante `default`:
-- Remover o inline `style` que define `top` e `bottom` simultaneamente
-- Usar `top-[50%] -translate-y-[50%]` para centrar verticalmente
-- Adicionar `max-h-[calc(100vh-2rem)]` para limitar altura e permitir scroll
-- Manter `h-auto` para que o modal se ajuste ao conteúdo
+### Solução
 
-**Classe default atualizada:**
-```
-fixed left-1/2 top-[50%] -translate-x-1/2 -translate-y-[50%] z-50 grid w-full max-w-lg max-w-[calc(100vw-2rem)] max-h-[calc(100vh-2rem)] overflow-y-auto gap-4 border bg-background p-6 shadow-lg ...
-```
+1. **`src/hooks/useActivationObjectives.ts`**: Envolver `getTarget` em `useCallback` para estabilizar a referência.
 
-Remove-se o bloco `style={variant === "default" ? { top: ..., bottom: ... } : undefined}`.
+2. **`src/components/dashboard/EditActivationObjectivesModal.tsx`**: Remover `getTarget` das dependências do `useEffect`, usando apenas `open`, `members`, `periodType`, `proposalType` como triggers. Usar uma ref ou chamar `getTarget` apenas quando o modal abre (não a cada re-render).
 
-### Resultado
-Modais centrados vertical e horizontalmente, com tamanho ajustado ao conteúdo, e scroll automático se o conteúdo exceder a viewport.
+### Alterações
+
+**`src/hooks/useActivationObjectives.ts`**:
+- Importar `useCallback` do React
+- Envolver `getTarget` e `countActivations` em `useCallback` com as dependências correctas (`objectives`, `currentMonthStart`, `currentYearStart` para `getTarget`; `monthlyActivations`, `annualActivations` para `countActivations`)
+
+**`src/components/dashboard/EditActivationObjectivesModal.tsx`**:
+- Remover `getTarget` da lista de dependências do `useEffect` (deixar apenas `open, members, periodType, proposalType`)
+- Isto evita que os valores sejam resetados enquanto o utilizador está a digitar
 

@@ -12,7 +12,7 @@ const DialogOverlay = React.forwardRef<React.ElementRef<typeof DialogPrimitive.O
 }, ref) => <DialogPrimitive.Overlay ref={ref} className={cn("fixed inset-0 z-50 bg-black/80 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0", className)} {...props} />);
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 const dialogContentVariants = {
-  default: "pointer-events-auto fixed left-1/2 -translate-x-1/2 z-50 grid w-full max-w-lg max-w-[calc(100vw-2rem)] overflow-y-auto gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 sm:rounded-lg",
+  default: "pointer-events-auto fixed left-1/2 top-[50%] -translate-x-1/2 -translate-y-[50%] z-50 grid w-full max-w-lg max-w-[calc(100vw-2rem)] max-h-[calc(100vh-2rem)] h-auto overflow-y-auto gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 sm:rounded-lg",
   fullScreen: "pointer-events-auto fixed inset-0 z-50 w-full h-full max-w-none bg-background duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 pt-safe pb-safe md:left-64 md:w-[calc(100%-16rem)]",
 };
 
@@ -41,10 +41,6 @@ const DialogContent = React.forwardRef<React.ElementRef<typeof DialogPrimitive.C
         }
       }}
       className={cn(dialogContentVariants[variant], className)}
-      style={variant === "default" ? {
-        top: "calc(clamp(20px, var(--safe-area-top), 50px) + 1rem)",
-        bottom: "calc(clamp(0px, var(--safe-area-bottom), 50px) + 1rem)",
-      } : undefined}
       {...props}>
       {children}
       <DialogPrimitive.Close className="absolute right-4 top-safe rounded-sm opacity-70 ring-offset-background transition-opacity data-[state=open]:bg-accent data-[state=open]:text-muted-foreground hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none">
