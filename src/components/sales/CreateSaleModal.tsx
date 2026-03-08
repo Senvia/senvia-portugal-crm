@@ -38,7 +38,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useFinalStages } from "@/hooks/usePipelineStages";
 import { useUpdateLeadStatus } from "@/hooks/useLeads";
 import { formatCurrency } from "@/lib/format";
-import { STRIPE_PLANS } from "@/lib/stripe-plans";
+// STRIPE_PLANS import removed — plan selection no longer needed
 import { cn } from "@/lib/utils";
 import { format, addMonths } from "date-fns";
 import { ClientFiscalCard, VatBadge, useVatCalculation, isInvoiceXpressActive, getOrgTaxValue } from "./SaleFiscalInfo";
@@ -183,7 +183,7 @@ export function CreateSaleModal({
 
   // Plan sale mode (Senvia only)
   const [isPlanSale, setIsPlanSale] = useState(false);
-  const [selectedPlanId, setSelectedPlanId] = useState<string>("");
+  // selectedPlanId removed — plan value comes from Stripe automatically
   const [clientOrgId, setClientOrgId] = useState<string>("");
   const [orgSearchResults, setOrgSearchResults] = useState<{ id: string; name: string; slug: string }[]>([]);
   const [orgSearchTerm, setOrgSearchTerm] = useState("");
@@ -292,7 +292,7 @@ export function CreateSaleModal({
       setShowPaymentTypeSelector(false);
       setShowDraftScheduleModal(false);
       setIsPlanSale(false);
-      setSelectedPlanId("");
+      // selectedPlanId removed
       setClientOrgId("");
       setOrgSearchTerm("");
       setOrgSearchResults([]);
@@ -416,20 +416,7 @@ export function CreateSaleModal({
     return () => clearTimeout(timer);
   }, [orgSearchTerm, isPlanSale, organization?.id]);
 
-  // Handle plan selection
-  const handlePlanSelect = (planId: string) => {
-    setSelectedPlanId(planId);
-    const plan = STRIPE_PLANS.find(p => p.id === planId);
-    if (plan) {
-      setItems([{
-        id: crypto.randomUUID(),
-        product_id: null,
-        name: `Plano ${plan.name} (mensal)`,
-        quantity: 1,
-        unit_price: plan.priceMonthly,
-      }]);
-    }
-  };
+  // Plan sale no longer needs plan selection - value comes from Stripe automatically
 
   // Calculate totals
   const subtotal = useMemo(() => {
@@ -579,7 +566,7 @@ export function CreateSaleModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!isTelecom && total <= 0 && items.length === 0) return;
+    if (!isTelecom && !isPlanSale && total <= 0 && items.length === 0) return;
 
     // Validate plan sale
     if (isPlanSale && !clientOrgId) {
@@ -594,8 +581,8 @@ export function CreateSaleModal({
     }
 
     try {
-      // For plan sales, force recurring
-      const isPlanRecurring = isPlanSale && !!selectedPlanId;
+      // For plan sales, force recurring (no plan selection needed, value comes from Stripe)
+      const isPlanRecurring = isPlanSale;
       const recurringItems = items.filter(item => {
         if (!item.product_id) return false;
         const product = products?.find(p => p.id === item.product_id);
@@ -742,7 +729,6 @@ export function CreateSaleModal({
                             onChange={(e) => {
                               setIsPlanSale(e.target.checked);
                               if (!e.target.checked) {
-                                setSelectedPlanId("");
                                 setClientOrgId("");
                                 setOrgSearchTerm("");
                                 setOrgSearchResults([]);
@@ -757,26 +743,11 @@ export function CreateSaleModal({
                       </div>
                     )}
 
-                    {/* Plan Sale Fields */}
+                    {/* Plan Sale Fields — only org search, value comes from Stripe */}
                     {isPlanSale && (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label>Plano</Label>
-                          <Select value={selectedPlanId} onValueChange={handlePlanSelect}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Selecionar plano..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {STRIPE_PLANS.map(plan => (
-                                <SelectItem key={plan.id} value={plan.id}>
-                                  {plan.name} — {formatCurrency(plan.priceMonthly)}/mês
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Organização Cliente</Label>
+                      <div className="space-y-2">
+                        <Label>Organização Cliente</Label>
+                        <p className="text-xs text-muted-foreground">O valor da venda será atualizado automaticamente quando o cliente subscrever um plano.</p>
                           <div className="relative">
                             <Input
                               placeholder="Pesquisar organização..."
@@ -812,7 +783,6 @@ export function CreateSaleModal({
                               </button>
                             )}
                           </div>
-                        </div>
                       </div>
                     )}
 

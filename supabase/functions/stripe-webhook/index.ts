@@ -264,6 +264,22 @@ async function handleInvoicePaid(supabase: any, stripe: Stripe, invoice: Stripe.
         userId: sale.created_by, amount, rate, commissionAmount, plan 
       });
     }
+
+    // Update linked sale value to reflect actual Stripe payment
+    const { error: saleUpdateErr } = await supabase
+      .from("sales")
+      .update({
+        total_value: amount,
+        recurring_value: amount,
+        ...(sale.status === "pending" ? { status: "in_progress" } : {}),
+      })
+      .eq("id", sale.id);
+
+    if (saleUpdateErr) {
+      logStep("invoice.paid: sale update error", { error: saleUpdateErr.message });
+    } else {
+      logStep("invoice.paid: sale value updated", { saleId: sale.id, amount, plan });
+    }
   } catch (err) {
     logStep("invoice.paid: error", { error: (err as Error).message });
   }
