@@ -743,26 +743,11 @@ export function CreateSaleModal({
                       </div>
                     )}
 
-                    {/* Plan Sale Fields */}
+                    {/* Plan Sale Fields — only org search, value comes from Stripe */}
                     {isPlanSale && (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label>Plano</Label>
-                          <Select value={selectedPlanId} onValueChange={handlePlanSelect}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Selecionar plano..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {STRIPE_PLANS.map(plan => (
-                                <SelectItem key={plan.id} value={plan.id}>
-                                  {plan.name} — {formatCurrency(plan.priceMonthly)}/mês
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Organização Cliente</Label>
+                      <div className="space-y-2">
+                        <Label>Organização Cliente</Label>
+                        <p className="text-xs text-muted-foreground">O valor da venda será atualizado automaticamente quando o cliente subscrever um plano.</p>
                           <div className="relative">
                             <Input
                               placeholder="Pesquisar organização..."
