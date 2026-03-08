@@ -416,20 +416,7 @@ export function CreateSaleModal({
     return () => clearTimeout(timer);
   }, [orgSearchTerm, isPlanSale, organization?.id]);
 
-  // Handle plan selection
-  const handlePlanSelect = (planId: string) => {
-    setSelectedPlanId(planId);
-    const plan = STRIPE_PLANS.find(p => p.id === planId);
-    if (plan) {
-      setItems([{
-        id: crypto.randomUUID(),
-        product_id: null,
-        name: `Plano ${plan.name} (mensal)`,
-        quantity: 1,
-        unit_price: plan.priceMonthly,
-      }]);
-    }
-  };
+  // Plan sale no longer needs plan selection - value comes from Stripe automatically
 
   // Calculate totals
   const subtotal = useMemo(() => {
