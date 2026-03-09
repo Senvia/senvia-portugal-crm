@@ -450,7 +450,7 @@ export function LeadDetailsModal({
                       onFocus={() => setIsEditingNotes(true)}
                       onBlur={() => {
                         handleNotesBlur();
-                        setIsEditingNotes(false);
+                        setTimeout(() => setIsEditingNotes(false), 600);
                       }}
                       className="resize-none"
                     />
