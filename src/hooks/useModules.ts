@@ -12,6 +12,7 @@ export interface EnabledModules {
   clients: boolean;
   marketing: boolean;
   finance: boolean;
+  energy: boolean;
 }
 
 export const DEFAULT_MODULES: EnabledModules = {
