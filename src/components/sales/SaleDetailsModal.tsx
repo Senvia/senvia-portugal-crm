@@ -168,23 +168,25 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
   if (!sale) return null;
 
   const handleStatusChange = (newStatus: SaleStatus) => {
-    if (newStatus === 'delivered') {
-      setPendingStatus('delivered');
-      setPendingActivationDate(sale.activation_date || new Date().toISOString().split('T')[0]);
-      setShowDeliveredConfirm(true);
-      return;
-    }
-    if (newStatus === 'fulfilled') {
-      setPendingStatus('fulfilled');
-      setPendingActivationDate(sale.activation_date || new Date().toISOString().split('T')[0]);
-      setShowFulfilledConfirm(true);
-      return;
-    }
-    if (newStatus === 'in_progress') {
-      setPendingStatus('in_progress');
-      setPendingActivationDate(sale.activation_date || new Date().toISOString().split('T')[0]);
-      setShowFulfilledConfirm(true);
-      return;
+    if (isTelecom) {
+      if (newStatus === 'delivered') {
+        setPendingStatus('delivered');
+        setPendingActivationDate(sale.activation_date || new Date().toISOString().split('T')[0]);
+        setShowDeliveredConfirm(true);
+        return;
+      }
+      if (newStatus === 'fulfilled') {
+        setPendingStatus('fulfilled');
+        setPendingActivationDate(sale.activation_date || new Date().toISOString().split('T')[0]);
+        setShowFulfilledConfirm(true);
+        return;
+      }
+      if (newStatus === 'in_progress') {
+        setPendingStatus('in_progress');
+        setPendingActivationDate(sale.activation_date || new Date().toISOString().split('T')[0]);
+        setShowFulfilledConfirm(true);
+        return;
+      }
     }
     setStatus(newStatus);
     updateSale.mutate({ saleId: sale.id, updates: { status: newStatus } });
