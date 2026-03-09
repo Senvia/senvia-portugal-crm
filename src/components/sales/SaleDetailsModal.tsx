@@ -152,6 +152,7 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
 
   // Conditional labels based on organization niche
   const isTelecom = organization?.niche === 'telecom';
+  const { data: saleFields } = useSaleFieldsSettings();
   const cpeLabel = isTelecom ? 'CPE/CUI (Pontos de Consumo)' : 'CPEs (Equipamentos)';
   const serialLabel = isTelecom ? 'Local de Consumo' : 'Nº Série';
 
