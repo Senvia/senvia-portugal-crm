@@ -269,7 +269,7 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
             <div class="value">${showEnergy 
               ? `${(recalculatedCpes.reduce((sum, cpe) => sum + (Number(cpe.consumo_anual) || 0), 0) / 1000).toLocaleString('pt-PT', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} MWh`
               : formatCurrency(proposal.total_value)}</div>
-            ${orgData?.niche === 'telecom' && proposal.proposal_type === 'energia' && recalculatedCpes.length > 0 ? `
+            ${showEnergy && proposal.proposal_type === 'energia' && recalculatedCpes.length > 0 ? `
               <div style="font-size: 12px; color: #666; margin-top: 6px;">
                 Margem Total: <strong>${formatCurrency(recalculatedCpes.reduce((sum, cpe) => sum + (Number(cpe.margem) || 0), 0))}</strong>
                 &nbsp;|&nbsp;
