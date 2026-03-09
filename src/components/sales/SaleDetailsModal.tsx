@@ -79,6 +79,7 @@ import { InvoiceDetailsModal } from "./InvoiceDetailsModal";
 import { CreateCreditNoteModal } from "./CreateCreditNoteModal";
 import { openPdfInNewTab } from "@/lib/download";
 import { useSaleActivationHistory } from "@/hooks/useSaleActivationHistory";
+import { useSaleFieldsSettings } from "@/hooks/useSaleFieldsSettings";
 
 interface SaleDetailsModalProps {
   sale: SaleWithDetails | null;
