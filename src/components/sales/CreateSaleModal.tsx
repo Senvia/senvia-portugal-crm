@@ -623,7 +623,7 @@ export function CreateSaleModal({
         activation_date: activationDate ? format(activationDate, 'yyyy-MM-dd') : undefined,
         has_recurring: hasRecurring || false,
         recurring_value: recurringValue,
-        recurring_status: hasRecurring ? 'active' : undefined,
+        recurring_status: isPlanSale ? 'pending' : (hasRecurring ? 'active' : undefined),
         next_renewal_date: nextRenewalDate,
         ...(isPlanSale && clientOrgId ? { client_org_id: clientOrgId } : {}),
       });

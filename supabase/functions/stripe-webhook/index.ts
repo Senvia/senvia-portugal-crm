@@ -271,6 +271,8 @@ async function handleInvoicePaid(supabase: any, stripe: Stripe, invoice: Stripe.
       .update({
         total_value: amount,
         recurring_value: amount,
+        recurring_status: "active",
+        next_renewal_date: periodEnd,
         ...(sale.status === "pending" ? { status: "in_progress" } : {}),
       })
       .eq("id", sale.id);
