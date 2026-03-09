@@ -159,9 +159,9 @@ export function LostLeadDialog({
               <Label>Data de recontacto {isTelecom ? '*' : ''}</Label>
               <div className="flex gap-2 mb-2">
                 {[
+                  { days: 15, label: "15 dias" },
                   { days: 30, label: "30 dias" },
-                  { days: 60, label: "60 dias" },
-                  { days: 90, label: "90 dias" },
+                  { days: 45, label: "45 dias" },
                 ].map(({ days, label }) => (
                   <Button
                     key={days}
