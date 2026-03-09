@@ -57,6 +57,8 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
   const createProposalCpesBatch = useCreateProposalCpesBatch();
   
   const isTelecom = organization?.niche === 'telecom';
+  const { modules } = useModules();
+  const showEnergy = isTelecom && modules.energy;
   
   const [selectedClientId, setSelectedClientId] = useState<string | null>(client?.id || null);
   const [notes, setNotes] = useState('');
