@@ -1,4 +1,5 @@
 import { useState, useRef, useMemo } from "react";
+import { toast } from "@/hooks/use-toast";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -687,15 +688,17 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
                           control={form.control}
                           name="gdpr_consent"
                           render={({ field }) => (
-                            <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                              <FormControl>
-                                <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-                              </FormControl>
-                              <div className="space-y-1 leading-none">
-                                <FormLabel>Consentimento RGPD obtido *</FormLabel>
-                                <p className="text-xs text-muted-foreground">
-                                  Confirmo que obtive consentimento para guardar estes dados.
-                                </p>
+                             <FormItem>
+                              <div className="flex flex-row items-start space-x-3 space-y-0">
+                                <FormControl>
+                                  <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                                </FormControl>
+                                <div className="space-y-1 leading-none">
+                                  <FormLabel>Consentimento RGPD obtido *</FormLabel>
+                                  <p className="text-xs text-muted-foreground">
+                                    Confirmo que obtive consentimento para guardar estes dados.
+                                  </p>
+                                </div>
                               </div>
                               <FormMessage />
                             </FormItem>
@@ -743,9 +746,19 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
                           form.handleSubmit(onSubmit, (errors) => {
                             const firstErrorKey = Object.keys(errors)[0];
                             if (firstErrorKey) {
-                              const el = document.querySelector(`[name="${firstErrorKey}"]`);
-                              el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                              const el = document.querySelector(`[name="${firstErrorKey}"]`)
+                                || document.querySelector(`[data-field="${firstErrorKey}"]`)
+                                || document.querySelector('.text-destructive');
+                              if (el) {
+                                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                              }
                             }
+                            const firstError = Object.values(errors)[0];
+                            toast({
+                              title: 'Campos obrigatórios',
+                              description: (firstError?.message as string) || 'Preencha todos os campos obrigatórios.',
+                              variant: 'destructive',
+                            });
                           })();
                         }}
                       >
