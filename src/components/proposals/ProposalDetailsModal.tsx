@@ -575,7 +575,7 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
                   )}
 
                   {/* Serviços telecom */}
-                  {orgData?.niche === 'telecom' && proposal.proposal_type === 'servicos' && (
+                  {isTelecom && proposal.proposal_type === 'servicos' && (
                     <Card>
                       <CardContent className="p-4">
                         <div className="space-y-3 p-4 rounded-lg border bg-secondary/30 border-border">
