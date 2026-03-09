@@ -65,6 +65,9 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
   const { data: proposalProducts = [] } = useProposalProducts(proposal?.id);
   const { data: proposalCpes = [] } = useProposalCpes(proposal?.id);
   const { data: orgData } = useOrganization();
+  const { modules } = useModules();
+  const isTelecom = orgData?.niche === 'telecom';
+  const showEnergy = isTelecom && modules.energy;
   const updateProposal = useUpdateProposal();
   const deleteProposal = useDeleteProposal();
   const updateLeadStatus = useUpdateLeadStatus();
