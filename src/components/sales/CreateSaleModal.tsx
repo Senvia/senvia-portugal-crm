@@ -596,8 +596,8 @@ export function CreateSaleModal({
       return;
     }
 
-    // Validar data de ativação quando estado é Concluída
-    if (saleStatus === 'delivered' && !activationDate) {
+    // Validar data de ativação quando estado é Concluída (apenas telecom)
+    if (isTelecom && saleStatus === 'delivered' && !activationDate) {
       toast.error("A Data de Ativação é obrigatória para vendas com estado Concluída.");
       return;
     }
