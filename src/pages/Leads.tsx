@@ -45,6 +45,7 @@ import type { Lead, LeadTemperature, LeadTipologia } from "@/types";
 import { TIPOLOGIA_LABELS } from "@/types";
 import { LeadsReportPanel } from "@/components/leads/LeadsReportPanel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useModules } from "@/hooks/useModules";
 
 export default function Leads() {
   // Subscribe to realtime updates

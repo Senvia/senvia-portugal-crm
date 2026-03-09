@@ -40,6 +40,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useUploadLeadAttachment } from "@/hooks/useLeadAttachments";
 import { useLeadFieldsSettings } from "@/hooks/useLeadFieldsSettings";
 import { LeadFieldsSettings, DEFAULT_LEAD_FIELDS_SETTINGS } from "@/types/field-settings";
+import { useModules } from "@/hooks/useModules";
 import type { LeadTemperature, LeadTipologia } from "@/types";
 import { ROLE_LABELS as RoleLabels, TIPOLOGIA_LABELS, TIPOLOGIA_STYLES } from "@/types";
 
