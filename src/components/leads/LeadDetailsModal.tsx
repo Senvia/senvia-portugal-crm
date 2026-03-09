@@ -223,7 +223,7 @@ export function LeadDetailsModal({
     if (numValue !== currentValue) {
       handleFieldSave("value", numValue);
     }
-    setIsEditingValue(false);
+    setTimeout(() => setIsEditingValue(false), 600);
   };
 
   const handleConsumoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -237,7 +237,7 @@ export function LeadDetailsModal({
     if (numValue !== currentConsumo) {
       handleFieldSave("consumo_anual" as keyof Lead, numValue);
     }
-    setIsEditingConsumo(false);
+    setTimeout(() => setIsEditingConsumo(false), 600);
   };
 
   const handleNotesBlur = () => {
@@ -450,7 +450,7 @@ export function LeadDetailsModal({
                       onFocus={() => setIsEditingNotes(true)}
                       onBlur={() => {
                         handleNotesBlur();
-                        setIsEditingNotes(false);
+                        setTimeout(() => setIsEditingNotes(false), 600);
                       }}
                       className="resize-none"
                     />
@@ -532,7 +532,7 @@ export function LeadDetailsModal({
                             } else if (!editName.trim()) {
                               setEditName(lead.name);
                             }
-                            setIsEditingName(false);
+                            setTimeout(() => setIsEditingName(false), 600);
                           }}
                           className="h-8 text-sm font-semibold border-transparent bg-transparent px-2 focus-visible:ring-1 focus-visible:ring-primary hover:border-muted-foreground/30 transition-colors"
                           placeholder="Nome do lead"
@@ -561,7 +561,7 @@ export function LeadDetailsModal({
                             if (editPhone !== lead.phone) {
                               handleFieldSave("phone", editPhone);
                             }
-                            setIsEditingPhone(false);
+                            setTimeout(() => setIsEditingPhone(false), 600);
                           }}
                           className="h-8 text-sm border-transparent bg-transparent px-2 focus-visible:ring-1 focus-visible:ring-primary hover:border-muted-foreground/30 transition-colors"
                           placeholder="Telefone"
@@ -579,7 +579,7 @@ export function LeadDetailsModal({
                             if (editEmail !== lead.email) {
                               handleFieldSave("email", editEmail);
                             }
-                            setIsEditingEmail(false);
+                            setTimeout(() => setIsEditingEmail(false), 600);
                           }}
                           className="h-8 text-sm border-transparent bg-transparent px-2 focus-visible:ring-1 focus-visible:ring-primary hover:border-muted-foreground/30 transition-colors"
                           placeholder="Email"
