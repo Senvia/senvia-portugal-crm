@@ -1,21 +1,28 @@
-## Recorrência de Vendas de Plano — Ativar apenas após pagamento Stripe
 
-### Estado: ✅ Implementado
 
-### Alterações Realizadas
+## Restringir Data de Ativação ao nicho Telecom
 
-**1. `src/types/sales.ts`**
-- Adicionado `'pending'` ao tipo `RecurringStatus`
-- Adicionado label "Pendente" e cor azul para o novo estado
+### Problema
+A "Data de Ativação" e os diálogos de confirmação com data de ativação aparecem para **todas** as organizações, mas deviam ser exclusivos do nicho **telecom**.
 
-**2. `src/hooks/useSales.ts`**
-- Atualizado tipos de `recurring_status` para incluir `'pending'`
+### Alterações
 
-**3. `src/components/sales/CreateSaleModal.tsx`**
-- Vendas de plano (`isPlanSale`) agora criadas com `recurring_status: 'pending'` em vez de `'active'`
-- `next_renewal_date` fica `undefined` para vendas de plano (sem data até pagamento real)
+#### 1. `src/components/sales/CreateSaleModal.tsx`
+- **Linha 600**: Adicionar `isTelecom &&` à validação obrigatória da data de ativação
+- **Linha 897**: Adicionar `isTelecom &&` à condição de renderização do campo
 
-**4. `supabase/functions/stripe-webhook/index.ts` — `handleInvoicePaid`**
-- Ao atualizar a venda vinculada, também define:
-  - `recurring_status: 'active'`
-  - `next_renewal_date: periodEnd` (data real do Stripe)
+#### 2. `src/components/sales/SaleDetailsModal.tsx`
+- **Linhas 170-188** (`handleStatusChange`): Para nichos não-telecom, mudar estado diretamente sem pedir data de ativação (sem abrir diálogos de confirmação)
+- **Linhas 194-211** (`confirmDelivered`/`confirmFulfilled`): Só enviar `activation_date` se `isTelecom`
+- **Linha 312**: Mostrar "Data de Ativação" só se `isTelecom`
+- **Linha 762**: Mostrar "Histórico de Ativação" só se `isTelecom`
+- **Diálogos de confirmação (linhas 940, 967)**: Só mostrar o campo de data nos diálogos se `isTelecom`; para outros nichos, a mudança de estado é direta
+
+#### 3. `src/components/sales/EditSaleModal.tsx`
+- Campos de `activationDate` e `edpProposalNumber` já estão no submit geral — envolver com `isTelecom` para não enviar dados desnecessários
+- O campo de UI da data de ativação na edição (se existir) deve ser condicionado a `isTelecom`
+
+### Resultado
+- Organizações não-telecom: mudança de estado direta, sem campo de data de ativação
+- Organizações telecom: comportamento atual mantido (data obrigatória ao concluir)
+
