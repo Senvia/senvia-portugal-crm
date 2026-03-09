@@ -697,7 +697,7 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
                     <Card>
                       <CardContent className="p-4 space-y-3">
                         <div className="p-4 rounded-lg bg-primary/10 border border-primary/20 text-center">
-                          {orgData?.niche === 'telecom' ? (
+                          {showEnergy ? (
                             <>
                               <p className="text-sm text-muted-foreground mb-1">Consumo Total</p>
                               <p className="text-2xl font-bold text-primary">
