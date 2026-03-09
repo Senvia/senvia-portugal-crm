@@ -26,6 +26,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { useOrganization } from "@/hooks/useOrganization";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { useModules } from "@/hooks/useModules";
 import { format, parseISO } from "date-fns";
 import { ClientFiscalCard, VatBadge, useVatCalculation, isInvoiceXpressActive, getOrgTaxValue } from "./SaleFiscalInfo";
 import { supabase } from "@/integrations/supabase/client";

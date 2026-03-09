@@ -41,6 +41,7 @@ import { formatCurrency } from "@/lib/format";
 import { getPlanById } from "@/lib/stripe-plans";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { useModules } from "@/hooks/useModules";
 import { format, addMonths } from "date-fns";
 import { ClientFiscalCard, VatBadge, useVatCalculation, isInvoiceXpressActive, getOrgTaxValue } from "./SaleFiscalInfo";
 import { pt } from "date-fns/locale";

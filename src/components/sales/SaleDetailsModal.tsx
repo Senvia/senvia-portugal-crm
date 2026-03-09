@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { cn } from "@/lib/utils";
+import { useModules } from "@/hooks/useModules";
 import { Progress } from "@/components/ui/progress";
 import { format } from "date-fns";
 import { pt } from "date-fns/locale";
