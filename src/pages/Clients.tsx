@@ -276,7 +276,7 @@ export default function Clients() {
             filters={filters}
             onFiltersChange={setFilters}
             onClearFilters={handleClearFilters}
-            isTelecom={isTelecom}
+            isTelecom={showEnergy}
           />
         </div>
 
