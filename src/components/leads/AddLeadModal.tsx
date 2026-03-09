@@ -133,7 +133,7 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
       temperature: "cold",
       value: "",
       notes: "",
-      gdpr_consent: undefined,
+      gdpr_consent: false as unknown as true as unknown as true,
       automation_enabled: true,
       assigned_to: "",
       tipologia: undefined,
@@ -736,10 +736,18 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
                         Cancelar
                       </Button>
                       <Button
-                        type="submit"
+                        type="button"
                         className="flex-1"
                         disabled={createLead.isPending || nifValidation.isDuplicate}
-                        onClick={form.handleSubmit(onSubmit)}
+                        onClick={() => {
+                          form.handleSubmit(onSubmit, (errors) => {
+                            const firstErrorKey = Object.keys(errors)[0];
+                            if (firstErrorKey) {
+                              const el = document.querySelector(`[name="${firstErrorKey}"]`);
+                              el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            }
+                          })();
+                        }}
                       >
                         {createLead.isPending ? (
                           <>
