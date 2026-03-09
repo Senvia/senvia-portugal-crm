@@ -1357,16 +1357,18 @@ export function CreateSaleModal({
                   </Card>
 
                   {/* EDP Proposal Number */}
-                  {isTelecom && (<Card>
+                  {saleFields?.edp_proposal_number?.visible && (<Card>
                     <CardHeader className="pb-2 p-4">
-                      <CardTitle className="text-sm font-medium text-muted-foreground">Numero Proposta EDP *</CardTitle>
+                      <CardTitle className="text-sm font-medium text-muted-foreground">
+                        {saleFields.edp_proposal_number.label}{saleFields.edp_proposal_number.required ? ' *' : ''}
+                      </CardTitle>
                     </CardHeader>
                     <CardContent className="p-4 pt-0">
                       <Input
                         placeholder="Ex: EDP-2024-001234"
                         value={edpProposalNumber}
                         onChange={(e) => setEdpProposalNumber(e.target.value)}
-                        required
+                        required={saleFields.edp_proposal_number.required}
                       />
                     </CardContent>
                   </Card>)}
