@@ -254,7 +254,7 @@ export function LeadsTableView({
           <TableBody>
             {sortedLeads.length === 0 ? (
             <TableRow>
-                <TableCell colSpan={isTelecom ? 11 : 10} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={showEnergy ? 11 : 10} className="h-24 text-center text-muted-foreground">
                   Nenhum lead encontrado.
                 </TableCell>
               </TableRow>
