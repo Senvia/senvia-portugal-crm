@@ -715,7 +715,7 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
                         </div>
 
                         {/* Resumo Telecom */}
-                        {orgData?.niche === 'telecom' && (
+                        {showEnergy && (
                           <div className="space-y-2 text-sm">
                             <div className="flex justify-between">
                               <span className="text-muted-foreground">Consumo Total</span>
