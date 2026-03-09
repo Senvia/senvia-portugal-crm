@@ -413,7 +413,7 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                   )}
 
                   {/* Telecom: Energy Data */}
-                  {isTelecom && hasEnergyData && (
+                  {showEnergy && hasEnergyData && (
                     <Card>
                       <CardHeader className="pb-2 p-4">
                         <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
