@@ -56,6 +56,8 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
   const updateProposalProducts = useUpdateProposalProducts();
   
   const isTelecom = organization?.niche === 'telecom';
+  const { modules } = useModules();
+  const showEnergy = isTelecom && modules.energy;
   
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [notes, setNotes] = useState('');
