@@ -388,7 +388,7 @@ export function LeadsTableView({
                     )}
                     {/* Conditional: Consumo for Telecom, Value for others */}
                     <TableCell className="hidden lg:table-cell">
-                      {isTelecom ? (
+                      {showEnergy ? (
                         lead.consumo_anual ? (
                           <span className="font-medium text-primary">
                             {new Intl.NumberFormat('pt-PT').format(lead.consumo_anual)} kWh

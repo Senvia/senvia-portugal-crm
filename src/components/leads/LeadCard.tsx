@@ -233,7 +233,7 @@ export function LeadCard({
         )}
         
         {/* Conditional: Show consumo_anual for Telecom, value for others */}
-        {isTelecom ? (
+        {showEnergy ? (
           lead.consumo_anual ? (
             <p className="mt-1 text-lg font-bold text-primary">
               {new Intl.NumberFormat('pt-PT').format(lead.consumo_anual)} kWh
