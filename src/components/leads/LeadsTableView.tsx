@@ -371,7 +371,7 @@ export function LeadsTableView({
                       </Select>
                     </TableCell>
                     {/* Tipologia column - Only for Telecom */}
-                    {isTelecom && (
+                    {showEnergy && (
                       <TableCell className="hidden sm:table-cell">
                         {lead.tipologia ? (
                           <Badge 
