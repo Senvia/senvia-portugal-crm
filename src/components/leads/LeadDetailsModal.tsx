@@ -335,7 +335,7 @@ export function LeadDetailsModal({
                     </div>
 
                     {/* Tipologia - Only for Telecom */}
-                    {isTelecom && (
+                    {showEnergy && (
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-muted-foreground">Tipologia</span>
                         <Select
