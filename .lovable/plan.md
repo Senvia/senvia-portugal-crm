@@ -1,27 +1,21 @@
+## Recorrência de Vendas de Plano — Ativar apenas após pagamento Stripe
 
+### Estado: ✅ Implementado
 
-## Bug: "Nome da Empresa" obrigatório mesmo quando desactivado nas definições
+### Alterações Realizadas
 
-### Causa
+**1. `src/types/sales.ts`**
+- Adicionado `'pending'` ao tipo `RecurringStatus`
+- Adicionado label "Pendente" e cor azul para o novo estado
 
-Em `src/components/leads/AddLeadModal.tsx`, linha 69-70, existe uma regra hardcoded que força `company_name` como obrigatório quando o nicho da organização é `telecom` — ignorando completamente as definições de campos configuradas pelo administrador.
+**2. `src/hooks/useSales.ts`**
+- Atualizado tipos de `recurring_status` para incluir `'pending'`
 
-```typescript
-// Linha 69-70 — o problema
-if (key === 'company_name' && isTelecom) {
-  return z.string().min(minLen, ...); // SEMPRE obrigatório, ignora settings
-}
-```
+**3. `src/components/sales/CreateSaleModal.tsx`**
+- Vendas de plano (`isPlanSale`) agora criadas com `recurring_status: 'pending'` em vez de `'active'`
+- `next_renewal_date` fica `undefined` para vendas de plano (sem data até pagamento real)
 
-### Correção
-
-Remover este override hardcoded. A função `strField` já respeita as definições de campos na linha 72 — basta deixar essa lógica funcionar normalmente para todos os nichos, incluindo telecom.
-
-**Ficheiro:** `src/components/leads/AddLeadModal.tsx`
-- Remover as linhas 69-71 (o bloco `if (key === 'company_name' && isTelecom)`)
-- A validação passará a seguir exclusivamente o que está configurado nas definições de campos
-
-### Impacto
-- Zero risco — apenas remove uma excepção hardcoded, permitindo que as definições do administrador sejam respeitadas
-- Se o admin quiser `company_name` obrigatório, basta activá-lo nas definições
-
+**4. `supabase/functions/stripe-webhook/index.ts` — `handleInvoicePaid`**
+- Ao atualizar a venda vinculada, também define:
+  - `recurring_status: 'active'`
+  - `next_renewal_date: periodEnd` (data real do Stripe)
