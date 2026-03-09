@@ -168,23 +168,25 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
   if (!sale) return null;
 
   const handleStatusChange = (newStatus: SaleStatus) => {
-    if (newStatus === 'delivered') {
-      setPendingStatus('delivered');
-      setPendingActivationDate(sale.activation_date || new Date().toISOString().split('T')[0]);
-      setShowDeliveredConfirm(true);
-      return;
-    }
-    if (newStatus === 'fulfilled') {
-      setPendingStatus('fulfilled');
-      setPendingActivationDate(sale.activation_date || new Date().toISOString().split('T')[0]);
-      setShowFulfilledConfirm(true);
-      return;
-    }
-    if (newStatus === 'in_progress') {
-      setPendingStatus('in_progress');
-      setPendingActivationDate(sale.activation_date || new Date().toISOString().split('T')[0]);
-      setShowFulfilledConfirm(true);
-      return;
+    if (isTelecom) {
+      if (newStatus === 'delivered') {
+        setPendingStatus('delivered');
+        setPendingActivationDate(sale.activation_date || new Date().toISOString().split('T')[0]);
+        setShowDeliveredConfirm(true);
+        return;
+      }
+      if (newStatus === 'fulfilled') {
+        setPendingStatus('fulfilled');
+        setPendingActivationDate(sale.activation_date || new Date().toISOString().split('T')[0]);
+        setShowFulfilledConfirm(true);
+        return;
+      }
+      if (newStatus === 'in_progress') {
+        setPendingStatus('in_progress');
+        setPendingActivationDate(sale.activation_date || new Date().toISOString().split('T')[0]);
+        setShowFulfilledConfirm(true);
+        return;
+      }
     }
     setStatus(newStatus);
     updateSale.mutate({ saleId: sale.id, updates: { status: newStatus } });
@@ -309,7 +311,7 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                             <p className="text-sm font-medium font-mono">{(sale as any).edp_proposal_number}</p>
                           </div>
                         )}
-                        {sale.activation_date && (
+                        {isTelecom && sale.activation_date && (
                           <div>
                             <p className="text-xs text-muted-foreground">Data de Ativação</p>
                             <p className="text-sm font-medium">
@@ -758,8 +760,8 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                       </Card>
                     )}
 
-                    {/* Activation History */}
-                    {activationHistory.length > 0 && (
+                    {/* Activation History (telecom only) */}
+                    {isTelecom && activationHistory.length > 0 && (
                       <Card>
                         <CardHeader className="pb-2 p-4">
                           <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">

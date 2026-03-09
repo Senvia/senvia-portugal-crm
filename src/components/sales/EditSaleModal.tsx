@@ -398,8 +398,10 @@ export function EditSaleModal({
           modelo_servico: (modeloServico as ModeloServico) || null,
           kwp: parseFloat(kwp) || null,
           servicos_produtos: servicosProdutos.length > 0 ? servicosProdutos : null,
-          activation_date: activationDate || null,
-          edp_proposal_number: edpProposalNumber.trim() || null,
+          ...(isTelecom ? {
+            activation_date: activationDate || null,
+            edp_proposal_number: edpProposalNumber.trim() || null,
+          } : {}),
         },
       });
 
@@ -572,7 +574,7 @@ export function EditSaleModal({
                             </Badge>
                           </div>
                         </div>
-                        {(sale.status === 'fulfilled' || sale.status === 'delivered' || sale.status === 'in_progress') && (
+                        {isTelecom && (sale.status === 'fulfilled' || sale.status === 'delivered' || sale.status === 'in_progress') && (
                           <div className="space-y-1.5">
                             <Label className="text-xs text-muted-foreground">Data de Ativação</Label>
                             <Input
