@@ -467,7 +467,7 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
                         )}
                       </div>
 
-                      {isVisible('tipologia') && isTelecom && (
+                      {isVisible('tipologia') && showEnergy && (
                         <FormField
                           control={form.control}
                           name="tipologia"
