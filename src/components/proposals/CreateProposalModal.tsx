@@ -13,6 +13,7 @@ import { Separator } from '@/components/ui/separator';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2 } from 'lucide-react';
 import { useCreateProposal } from '@/hooks/useProposals';
+import { useModules } from '@/hooks/useModules';
 import { useClients } from '@/hooks/useClients';
 import { useCreateProposalCpesBatch } from '@/hooks/useProposalCpes';
 import { useActiveProducts } from '@/hooks/useProducts';
