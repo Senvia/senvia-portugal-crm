@@ -1,21 +1,20 @@
-## Recorrência de Vendas de Plano — Ativar apenas após pagamento Stripe
 
-### Estado: ✅ Implementado
 
-### Alterações Realizadas
+## Corrigir AlertDialog demasiado grande
 
-**1. `src/types/sales.ts`**
-- Adicionado `'pending'` ao tipo `RecurringStatus`
-- Adicionado label "Pendente" e cor azul para o novo estado
+### Problema
+O `AlertDialogContent` usa `top` + `bottom` via inline styles, o que faz o modal esticar de cima a baixo da viewport. AlertDialogs são tipicamente pequenos (confirmações) e devem adaptar-se ao conteúdo, não ocupar toda a altura.
 
-**2. `src/hooks/useSales.ts`**
-- Atualizado tipos de `recurring_status` para incluir `'pending'`
+### Solução — `src/components/ui/alert-dialog.tsx`
 
-**3. `src/components/sales/CreateSaleModal.tsx`**
-- Vendas de plano (`isPlanSale`) agora criadas com `recurring_status: 'pending'` em vez de `'active'`
-- `next_renewal_date` fica `undefined` para vendas de plano (sem data até pagamento real)
+Alterar o posicionamento do `AlertDialogContent` para usar `h-auto` com centragem vertical, igual ao padrão do Dialog `default`:
 
-**4. `supabase/functions/stripe-webhook/index.ts` — `handleInvoicePaid`**
-- Ao atualizar a venda vinculada, também define:
-  - `recurring_status: 'active'`
-  - `next_renewal_date: periodEnd` (data real do Stripe)
+- **Mobile**: posicionar abaixo do header com `top-[calc(3.5rem+env(safe-area-inset-top,0px)+1rem)]`, `bottom: auto`, `max-height` limitado
+- **Desktop (sm+)**: centrar verticalmente com `top: 50%` + `transform: translateY(-50%)`
+- Remover o `bottom` fixo do inline style — o modal deve ter `h-auto` e crescer com o conteúdo
+
+Resultado: AlertDialogs compactos que se ajustam ao conteúdo, sem espaço vazio.
+
+### Ficheiro
+`src/components/ui/alert-dialog.tsx` — substituir o inline style por classes responsive consistentes com o Dialog default.
+
