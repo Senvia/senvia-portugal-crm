@@ -34,6 +34,21 @@ serve(async (req: Request): Promise<Response> => {
 
     console.log(`Processing automation: ${trigger_type} for org ${organization_id}`);
 
+    // Check if organization has Brevo configured - automations only work with Brevo
+    const { data: orgData, error: orgError } = await supabase
+      .from("organizations")
+      .select("brevo_api_key")
+      .eq("id", organization_id)
+      .single();
+
+    if (orgError || !orgData?.brevo_api_key) {
+      console.log(`Organization ${organization_id} has no Brevo API key configured, skipping automations`);
+      return new Response(
+        JSON.stringify({ message: "Organization has no Brevo configured, skipping automations" }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Find templates with automation enabled for this trigger
     const { data: templates, error: tplError } = await supabase
       .from("email_templates")

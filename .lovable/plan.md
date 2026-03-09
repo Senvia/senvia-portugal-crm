@@ -1,52 +1,21 @@
+## Recorrência de Vendas de Plano — Ativar apenas após pagamento Stripe
 
+### Estado: ✅ Implementado
 
-## Diagnóstico
+### Alterações Realizadas
 
-O problema está claro no `submit-lead/index.ts` (linhas 462-554):
+**1. `src/types/sales.ts`**
+- Adicionado `'pending'` ao tipo `RecurringStatus`
+- Adicionado label "Pendente" e cor azul para o novo estado
 
-- **Hardcoded**: Usa sempre `BREVO_API_KEY` (secret global da Senvia) e `notificacoes@senvia.pt` como remetente
-- **Ignora completamente** o `brevo_api_key` e `brevo_sender_email` da organização, que já são fetched na query (linha 97) mas nunca usados para email
+**2. `src/hooks/useSales.ts`**
+- Atualizado tipos de `recurring_status` para incluir `'pending'`
 
-O `process-automation/index.ts` já delega corretamente ao `send-template-email`, que usa as credenciais da org. Mas o email de notificação hardcoded no `submit-lead` bypassa tudo isso.
+**3. `src/components/sales/CreateSaleModal.tsx`**
+- Vendas de plano (`isPlanSale`) agora criadas com `recurring_status: 'pending'` em vez de `'active'`
+- `next_renewal_date` fica `undefined` para vendas de plano (sem data até pagamento real)
 
----
-
-## Plano de Correção
-
-### 1. Corrigir `supabase/functions/submit-lead/index.ts` (linhas 462-554)
-
-Substituir toda a secção de email notification com esta lógica:
-
-```
-SE org.brevo_api_key E org.brevo_sender_email existem:
-  → Usar org.brevo_api_key como api-key
-  → Usar org.brevo_sender_email como sender email
-  → Usar org.name como sender name
-SENÃO:
-  → Usar BREVO_API_KEY (secret global)
-  → Usar "geral@senvia.pt" como sender email  
-  → Usar "Senvia" como sender name
-```
-
-O HTML template e lógica de fetch admins/assigned mantêm-se iguais, só muda a chave API e o remetente.
-
-### 2. Corrigir `supabase/functions/process-automation/index.ts`
-
-Adicionar verificação: **só executar automações se a organização tiver `brevo_api_key` configurada**. Se não tiver, skip silenciosamente com log.
-
-Isto significa adicionar um fetch à tabela `organizations` para verificar `brevo_api_key` antes de processar os templates.
-
-### Ficheiros a editar
-
-| Ficheiro | Alteração |
-|---|---|
-| `supabase/functions/submit-lead/index.ts` | Linhas 462-554: usar credenciais Brevo da org, fallback para `geral@senvia.pt` |
-| `supabase/functions/process-automation/index.ts` | Adicionar check de `brevo_api_key` da org antes de executar automações |
-
-### Resultado esperado
-
-- Lead entra → email de notificação sai do email verificado Brevo do cliente (ex: `contacto@escolhainteligente.pt`)
-- Se cliente não tem Brevo → email sai de `geral@senvia.pt` via chave Senvia
-- Automações de templates → só disparam se org tem Brevo ativo
-- `notificacoes@senvia.pt` eliminado completamente do código
-
+**4. `supabase/functions/stripe-webhook/index.ts` — `handleInvoicePaid`**
+- Ao atualizar a venda vinculada, também define:
+  - `recurring_status: 'active'`
+  - `next_renewal_date: periodEnd` (data real do Stripe)
