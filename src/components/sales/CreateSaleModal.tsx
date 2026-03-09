@@ -1017,7 +1017,7 @@ export function CreateSaleModal({
                 )}
 
                 {/* Telecom CPE/CUI Details */}
-                {isTelecom && proposalCpes.length > 0 && (
+                {showEnergy && proposalCpes.length > 0 && (
                   <Card>
                     <CardHeader className="pb-2 p-4">
                       <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">

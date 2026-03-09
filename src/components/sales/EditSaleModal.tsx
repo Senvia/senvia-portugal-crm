@@ -639,7 +639,7 @@ export function EditSaleModal({
                   )}
 
                   {/* Energy Data (editable) */}
-                  {isTelecom && sale?.proposal_type === 'energia' && (
+                  {showEnergy && sale?.proposal_type === 'energia' && (
                     <Card>
                       <CardHeader className="pb-2 p-4">
                         <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">

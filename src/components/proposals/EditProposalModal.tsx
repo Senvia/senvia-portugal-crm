@@ -538,7 +538,7 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
                   )}
 
                   {/* CPE Selector para propostas de Energia - Apenas Telecom */}
-                  {isTelecom && proposalType === 'energia' && (
+                  {showEnergy && proposalType === 'energia' && (
                     <Card>
                       <CardContent className="p-4">
                         <ProposalCpeSelector

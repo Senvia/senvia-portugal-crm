@@ -160,7 +160,7 @@ export function ClientDetailsModal({ client, open, onOpenChange, onEdit }: Clien
                 <p className="text-xs text-muted-foreground">Vendas</p>
               </div>
               
-              {isTelecom ? (
+              {showEnergy ? (
                 <>
                   <div className="rounded-lg bg-muted/50 p-3 text-center">
                     <div className="flex items-center justify-center gap-1 text-muted-foreground mb-1">

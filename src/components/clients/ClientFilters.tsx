@@ -107,7 +107,7 @@ export function ClientFilters({ filters, onFiltersChange, onClearFilters, isTele
       </Select>
 
       {/* Proposal Type Filter (Telecom only) */}
-      {isTelecom && (
+      {isTelecom && filters.proposalType !== undefined && (
         <Select
           value={filters.proposalType}
           onValueChange={(value) => onFiltersChange({ ...filters, proposalType: value as 'all' | 'energia' | 'servicos' })}

@@ -515,7 +515,7 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                   )}
 
                   {/* Telecom: CPEs (proposal CPEs first, fallback to client CPEs) */}
-                  {isTelecom && (proposalCpes.length > 0 || clientCpes.length > 0) && (
+                  {showEnergy && (proposalCpes.length > 0 || clientCpes.length > 0) && (
                     <Card>
                       <CardHeader className="pb-2 p-4">
                         <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">

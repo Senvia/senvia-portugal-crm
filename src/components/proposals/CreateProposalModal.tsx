@@ -443,7 +443,7 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
                   )}
 
                   {/* Tipo de Proposta (apenas telecom) */}
-                  {isTelecom && (
+                  {showEnergy && (
                     <Card>
                       <CardHeader className="pb-2 p-4">
                         <CardTitle className="text-sm font-medium text-muted-foreground">Tipo de Proposta</CardTitle>
