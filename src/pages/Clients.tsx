@@ -42,6 +42,8 @@ export default function Clients() {
   const deleteClient = useDeleteClient();
   const labels = useClientLabels();
   const { clientTypesMap, isTelecom } = useClientProposalTypes();
+  const { modules } = useModules();
+  const showEnergy = isTelecom && modules.energy;
 
   const filteredClients = useMemo(() => {
     if (!clients) return [];
