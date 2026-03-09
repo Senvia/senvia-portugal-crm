@@ -632,7 +632,7 @@ export default function Leads() {
             </Select>
 
             {/* Tipologia Filter (Telecom only) */}
-            {isTelecom && (
+            {showEnergy && (
               <Select value={tipologiaFilter} onValueChange={(v) => setTipologiaFilter(v as 'all' | LeadTipologia)}>
                 <SelectTrigger className="w-[140px] h-8 shrink-0">
                   <Zap className="h-3.5 w-3.5 mr-1" />

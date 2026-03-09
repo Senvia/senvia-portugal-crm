@@ -662,16 +662,16 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
                               value={`${TEMPERATURE_LABELS[watchedValues.temperature]?.emoji} ${TEMPERATURE_LABELS[watchedValues.temperature]?.label}`}
                             />
                           )}
-                          {isVisible('value') && !isTelecom && watchedValues.value && (
+                          {isVisible('value') && !showEnergy && watchedValues.value && (
                             <SummaryRow label={getLabel('value', 'Valor')} value={`€${watchedValues.value}`} />
                           )}
-                          {isVisible('tipologia') && isTelecom && watchedValues.tipologia && (
+                          {isVisible('tipologia') && showEnergy && watchedValues.tipologia && (
                             <SummaryRow
                               label={getLabel('tipologia', 'Tipologia')}
                               value={`${TIPOLOGIA_STYLES[watchedValues.tipologia as LeadTipologia]?.emoji} ${TIPOLOGIA_LABELS[watchedValues.tipologia as LeadTipologia]}`}
                             />
                           )}
-                          {isVisible('consumo_anual') && isTelecom && watchedValues.consumo_anual && (
+                          {isVisible('consumo_anual') && showEnergy && watchedValues.consumo_anual && (
                             <SummaryRow label={getLabel('consumo_anual', 'Consumo')} value={`${watchedValues.consumo_anual} kWh`} />
                           )}
                         </div>

@@ -399,12 +399,12 @@ export function LeadDetailsModal({
                 <Card>
                   <CardHeader className="pb-3">
                     <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                      {isTelecom ? <Zap className="h-4 w-4" /> : <Euro className="h-4 w-4" />}
-                      {isTelecom ? 'Consumo Anual/kWp (kWh)' : 'Valor do Negócio'}
+                      {showEnergy ? <Zap className="h-4 w-4" /> : <Euro className="h-4 w-4" />}
+                      {showEnergy ? 'Consumo Anual/kWp (kWh)' : 'Valor do Negócio'}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    {isTelecom ? (
+                    {showEnergy ? (
                       <div className="relative">
                         <Input
                           type="text"
