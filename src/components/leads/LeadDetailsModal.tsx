@@ -578,7 +578,8 @@ export function LeadDetailsModal({
                           onBlur={() => {
                             if (editEmail !== lead.email) {
                               handleFieldSave("email", editEmail);
-               Timeout(() => setIsEditingEmail(false), 600                       setIsEditingEmail(false);
+                            }
+                            setTimeout(() => setIsEditingEmail(false), 600);
                           }}
                           className="h-8 text-sm border-transparent bg-transparent px-2 focus-visible:ring-1 focus-visible:ring-primary hover:border-muted-foreground/30 transition-colors"
                           placeholder="Email"
