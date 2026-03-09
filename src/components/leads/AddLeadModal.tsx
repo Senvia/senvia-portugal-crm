@@ -736,7 +736,7 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
                         Cancelar
                       </Button>
                       <Button
-           button       type="submit"
+                        type="button"
                         className="flex-1"
                         disabled={createLead.isPending || nifValidation.isDuplicate}
                         onClick={() => {
