@@ -113,18 +113,6 @@ export function useCreateEvent() {
 
       if (eventError) throw eventError;
 
-      // 2. Se evento tem lead associado, atualizar status para "scheduled"
-      if (params.lead_id) {
-        const { error: leadError } = await supabase
-          .from('leads')
-          .update({ status: 'scheduled' })
-          .eq('id', params.lead_id);
-
-        if (leadError) {
-          console.error('Error updating lead status:', leadError);
-        }
-      }
-
       return eventData;
     },
     onSuccess: () => {
