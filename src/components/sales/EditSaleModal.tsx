@@ -572,7 +572,7 @@ export function EditSaleModal({
                             </Badge>
                           </div>
                         </div>
-                        {(sale.status === 'fulfilled' || sale.status === 'delivered' || sale.status === 'in_progress') && (
+                        {isTelecom && (sale.status === 'fulfilled' || sale.status === 'delivered' || sale.status === 'in_progress') && (
                           <div className="space-y-1.5">
                             <Label className="text-xs text-muted-foreground">Data de Ativação</Label>
                             <Input
