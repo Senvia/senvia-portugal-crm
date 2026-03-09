@@ -532,7 +532,7 @@ export function LeadDetailsModal({
                             } else if (!editName.trim()) {
                               setEditName(lead.name);
                             }
-                            setIsEditingName(false);
+                            setTimeout(() => setIsEditingName(false), 600);
                           }}
                           className="h-8 text-sm font-semibold border-transparent bg-transparent px-2 focus-visible:ring-1 focus-visible:ring-primary hover:border-muted-foreground/30 transition-colors"
                           placeholder="Nome do lead"
