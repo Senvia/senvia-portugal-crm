@@ -22,6 +22,7 @@ import { formatCurrency } from "@/lib/format";
 import { mapClientsForExport, exportToCsv, exportToExcel } from "@/lib/export";
 import { useClientProposalTypes } from "@/hooks/useClientProposalTypes";
 import { toast } from "sonner";
+import { useModules } from "@/hooks/useModules";
 import { format, isWithinInterval, startOfDay, endOfDay, parseISO } from "date-fns";
 
 export default function Clients() {
