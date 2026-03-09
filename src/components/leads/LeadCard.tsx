@@ -3,6 +3,7 @@ import { Lead, LeadTemperature, LeadTipologia, TEMPERATURE_LABELS, TEMPERATURE_S
 import { formatRelativeTime, getWhatsAppUrl, formatCurrency } from "@/lib/format";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useAuth } from "@/contexts/AuthContext";
+import { useModules } from "@/hooks/useModules";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { MessageCircle, Phone, Mail, MoreVertical, GripVertical, Thermometer, CalendarClock, Zap } from "lucide-react";
