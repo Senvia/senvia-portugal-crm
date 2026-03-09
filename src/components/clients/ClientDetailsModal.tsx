@@ -1,4 +1,5 @@
 import { useAuth } from "@/contexts/AuthContext";
+import { useModules } from "@/hooks/useModules";
 import {
   Dialog,
   DialogContent,
