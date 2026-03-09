@@ -23,6 +23,7 @@ export const DEFAULT_MODULES: EnabledModules = {
   clients: true,
   marketing: false,
   finance: true,
+  energy: true,
 };
 
 export function useModules() {
