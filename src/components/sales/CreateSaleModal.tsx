@@ -38,7 +38,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useFinalStages } from "@/hooks/usePipelineStages";
 import { useUpdateLeadStatus } from "@/hooks/useLeads";
 import { formatCurrency } from "@/lib/format";
-// STRIPE_PLANS import removed — plan selection no longer needed
+import { getPlanById } from "@/lib/stripe-plans";
+import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { format, addMonths } from "date-fns";
 import { ClientFiscalCard, VatBadge, useVatCalculation, isInvoiceXpressActive, getOrgTaxValue } from "./SaleFiscalInfo";
@@ -367,7 +368,28 @@ export function CreateSaleModal({
     }
   }, [open, proposalProducts, prefillProposal, selectedProposalId, initializedProposalId, proposals]);
 
-  // Filter proposals based on selected client
+  // Auto-fill plan price when selecting client org for plan sale
+  useEffect(() => {
+    if (!isPlanSale || !clientOrgId) return;
+    supabase
+      .from("organizations")
+      .select("plan")
+      .eq("id", clientOrgId)
+      .single()
+      .then(({ data }) => {
+        const plan = data?.plan ? getPlanById(data.plan) : null;
+        if (plan) {
+          setItems([{
+            id: crypto.randomUUID(),
+            product_id: null,
+            name: `Plano ${plan.name}`,
+            quantity: 1,
+            unit_price: plan.priceMonthly,
+          }]);
+        }
+      });
+  }, [clientOrgId, isPlanSale]);
+
   const filteredProposals = useMemo(() => {
     if (!proposals) return [];
     
