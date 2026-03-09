@@ -170,16 +170,18 @@ export function OttoChatWindow({ onClose }: OttoChatWindowProps) {
 
       {/* Input */}
       <div className="p-3 border-t border-border bg-muted/20" style={isMobile ? { paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.75rem)' } : undefined}>
-        <Button
-          variant="outline"
-          size="sm"
-          className="w-full rounded-full gap-2 text-xs mb-2"
-          onClick={() => handleQuickAction("Preciso de abrir um ticket de suporte")}
-          disabled={isLoading}
-        >
-          <LifeBuoy className="w-3.5 h-3.5" />
-          Abrir Ticket de Suporte
-        </Button>
+        {!messages.some(m => m.role === "assistant" && /ticket|assunto|suporte/i.test(m.content)) && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full rounded-full gap-2 text-xs mb-2"
+            onClick={() => handleQuickAction("Preciso de abrir um ticket de suporte")}
+            disabled={isLoading}
+          >
+            <LifeBuoy className="w-3.5 h-3.5" />
+            Abrir Ticket de Suporte
+          </Button>
+        )}
 
         {/* Attachment previews */}
         {pendingAttachments.length > 0 && (
