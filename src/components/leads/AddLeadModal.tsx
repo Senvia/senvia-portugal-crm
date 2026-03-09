@@ -511,7 +511,7 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
                             </FormItem>
                           )}
                         />
-                      ) : isVisible('value') && !isTelecom ? (
+                      ) : isVisible('value') && !showEnergy ? (
                         <FormField
                           control={form.control}
                           name="value"
