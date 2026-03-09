@@ -593,9 +593,10 @@ export function CreateSaleModal({
         ? total 
         : recurringItems.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
       const hasRecurring = isPlanRecurring || recurringValue > 0;
-      const nextRenewalDate = hasRecurring 
-        ? addMonths(saleDate, 1).toISOString().split('T')[0] 
-        : undefined;
+      // For plan sales, don't set renewal date — it will be set by Stripe webhook on first payment
+      const nextRenewalDate = isPlanSale 
+        ? undefined 
+        : (hasRecurring ? addMonths(saleDate, 1).toISOString().split('T')[0] : undefined);
 
       const sale = await createSale.mutateAsync({
         client_id: clientId || undefined,
