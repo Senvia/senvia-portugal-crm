@@ -687,15 +687,17 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
                           control={form.control}
                           name="gdpr_consent"
                           render={({ field }) => (
-                            <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                              <FormControl>
-                                <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-                              </FormControl>
-                              <div className="space-y-1 leading-none">
-                                <FormLabel>Consentimento RGPD obtido *</FormLabel>
-                                <p className="text-xs text-muted-foreground">
-                                  Confirmo que obtive consentimento para guardar estes dados.
-                                </p>
+                             <FormItem>
+                              <div className="flex flex-row items-start space-x-3 space-y-0">
+                                <FormControl>
+                                  <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                                </FormControl>
+                                <div className="space-y-1 leading-none">
+                                  <FormLabel>Consentimento RGPD obtido *</FormLabel>
+                                  <p className="text-xs text-muted-foreground">
+                                    Confirmo que obtive consentimento para guardar estes dados.
+                                  </p>
+                                </div>
                               </div>
                               <FormMessage />
                             </FormItem>
