@@ -306,7 +306,7 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
             </div>
           ` : ''}
 
-          ${orgData?.niche !== 'telecom' && proposalProducts.length > 0 ? `
+          ${!showEnergy && proposalProducts.length > 0 ? `
             <div class="cpes">
               <h3>Produtos / Serviços</h3>
               <table style="width:100%; border-collapse:collapse;">
