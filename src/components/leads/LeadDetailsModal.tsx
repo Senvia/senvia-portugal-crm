@@ -560,7 +560,8 @@ export function LeadDetailsModal({
                           onBlur={() => {
                             if (editPhone !== lead.phone) {
                               handleFieldSave("phone", editPhone);
-               Timeout(() => setIsEditingPhone(false), 600   Timeout(() => setIsEditingPhone(false), 600setIsEditingPhone(false);
+                            }
+                            setTimeout(() => setIsEditingPhone(false), 600);
                           }}
                           className="h-8 text-sm border-transparent bg-transparent px-2 focus-visible:ring-1 focus-visible:ring-primary hover:border-muted-foreground/30 transition-colors"
                           placeholder="Telefone"
