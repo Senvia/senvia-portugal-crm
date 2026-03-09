@@ -230,7 +230,7 @@ export function LeadsTableView({
               <TableHead className="hidden sm:table-cell">
                 <SortableHeader field="temperature">Temp.</SortableHeader>
               </TableHead>
-              {isTelecom && (
+              {showEnergy && (
                 <TableHead className="hidden sm:table-cell">
                   <SortableHeader field="tipologia">Tipologia</SortableHeader>
                 </TableHead>
