@@ -100,6 +100,7 @@ export function EditSaleModal({
   const { organization } = useAuth();
   const { isAdmin } = usePermissions();
   const isTelecom = organization?.niche === 'telecom';
+  const { data: saleFields } = useSaleFieldsSettings();
   const { calculateCommission, isAutoCalculated, calculateEnergyCommission, hasEnergyConfig } = useCommissionMatrix();
   const { data: orgData } = useOrganization();
   const salesSettings = (orgData?.sales_settings as { lock_delivered_sales?: boolean }) || {};
