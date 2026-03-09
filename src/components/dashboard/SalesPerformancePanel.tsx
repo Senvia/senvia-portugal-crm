@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useMemo } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useTeamFilter } from "@/hooks/useTeamFilter";
@@ -51,7 +51,7 @@ export function SalesPerformancePanel() {
   const { user, profile } = useAuth();
   const { isAdmin } = usePermissions();
   const { data: members = [] } = useTeamMembers();
-  const { selectedMemberId } = useTeamFilter();
+  const { selectedMemberId, canFilterByTeam, isTeamLeader, teamMemberIds, dataScope } = useTeamFilter();
   const { selectedMonth } = useDashboardPeriod();
   const { objectives, isLoading: objLoading } = useMonthlyObjectives(selectedMonth);
   const { data: salesMetrics = [], isLoading: salesLoading } = useMonthSalesMetrics(selectedMonth);
@@ -64,8 +64,21 @@ export function SalesPerformancePanel() {
   const currentMonthLabel = format(startOfMonth(selectedMonth), "MMMM yyyy", { locale: pt });
   const loading = objLoading || salesLoading;
 
-  const memberList = members.length > 0 ? members : (user?.id ? [{ user_id: user.id, full_name: profile?.full_name || "Eu" }] : []);
-  const filteredMembers = selectedMemberId ? memberList.filter((m) => m.user_id === selectedMemberId) : memberList;
+  const allMemberList = members.length > 0 ? members : (user?.id ? [{ user_id: user.id, full_name: profile?.full_name || "Eu" }] : []);
+
+  const filteredMembers = useMemo(() => {
+    if (dataScope === 'own' || !canFilterByTeam) {
+      return allMemberList.filter(m => m.user_id === user?.id);
+    }
+    if (selectedMemberId) {
+      return allMemberList.filter(m => m.user_id === selectedMemberId);
+    }
+    if (dataScope === 'team' && isTeamLeader) {
+      const allowed = new Set([user?.id, ...teamMemberIds].filter(Boolean));
+      return allMemberList.filter(m => allowed.has(m.user_id));
+    }
+    return allMemberList;
+  }, [allMemberList, dataScope, canFilterByTeam, selectedMemberId, isTeamLeader, teamMemberIds, user?.id]);
 
   const objectiveRows: RowData[] = filteredMembers.map((m) => {
     const obj = objectives.find((o) => o.user_id === m.user_id);
