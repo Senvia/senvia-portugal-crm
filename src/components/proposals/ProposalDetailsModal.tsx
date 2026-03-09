@@ -264,9 +264,9 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
           </div>
           ` : ''}
           
-          <div class="total-box">
-            <div class="label">${orgData?.niche === 'telecom' ? 'Consumo Total MWh' : 'Valor Total'}</div>
-            <div class="value">${orgData?.niche === 'telecom' 
+           <div class="total-box">
+            <div class="label">${showEnergy ? 'Consumo Total MWh' : 'Valor Total'}</div>
+            <div class="value">${showEnergy 
               ? `${(recalculatedCpes.reduce((sum, cpe) => sum + (Number(cpe.consumo_anual) || 0), 0) / 1000).toLocaleString('pt-PT', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} MWh`
               : formatCurrency(proposal.total_value)}</div>
             ${orgData?.niche === 'telecom' && proposal.proposal_type === 'energia' && recalculatedCpes.length > 0 ? `
