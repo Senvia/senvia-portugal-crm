@@ -215,13 +215,16 @@ export function useCreateLead() {
         description: 'O lead foi adicionado com sucesso.',
       });
     },
-    onError: (error) => {
+    onError: (error: any) => {
+      const msg = error?.message || error?.details || JSON.stringify(error);
       toast({
-        title: 'Erro',
-        description: 'Não foi possível criar o lead.',
+        title: 'Erro ao criar lead',
+        description: msg?.includes('row-level security')
+          ? 'Erro de permissão. Tente sair e entrar novamente.'
+          : 'Não foi possível criar o lead.',
         variant: 'destructive',
       });
-      console.error('Error creating lead:', error);
+      console.error('Error creating lead:', { message: msg, code: error?.code, details: error?.details, hint: error?.hint });
     },
   });
 }
