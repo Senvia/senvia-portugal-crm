@@ -65,10 +65,6 @@ function buildLeadSchema(settings: LeadFieldsSettings | undefined, niche?: strin
 
   const strField = (key: keyof LeadFieldsSettings, minLen = 1) => {
     const cfg = s[key];
-    // For telecom, company_name is always required
-    if (key === 'company_name' && isTelecom) {
-      return z.string().min(minLen, `${cfg?.label || 'Nome da Empresa'} é obrigatório`);
-    }
     if (!cfg?.visible || !cfg?.required) return z.string().optional().or(z.literal(""));
     return z.string().min(minLen, `${cfg.label} é obrigatório`);
   };
