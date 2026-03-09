@@ -442,7 +442,7 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
                             ))}
                           </SelectContent>
                         </Select>
-                        {orgData?.niche === 'telecom' && proposal.negotiation_type && (
+                        {isTelecom && proposal.negotiation_type && (
                           <Badge variant="outline" className="text-xs">
                             {NEGOTIATION_TYPE_LABELS[proposal.negotiation_type as NegotiationType]}
                           </Badge>
