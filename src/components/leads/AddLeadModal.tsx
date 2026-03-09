@@ -497,7 +497,7 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
                         />
                       )}
 
-                      {isVisible('consumo_anual') && isTelecom ? (
+                      {isVisible('consumo_anual') && showEnergy ? (
                         <FormField
                           control={form.control}
                           name="consumo_anual"
