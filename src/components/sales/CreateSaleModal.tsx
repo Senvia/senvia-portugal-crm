@@ -694,7 +694,7 @@ export function CreateSaleModal({
     }
   };
 
-  const isValid = (items.length > 0 || total > 0);
+  const isValid = (items.length > 0 || total > 0 || isPlanSale);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
