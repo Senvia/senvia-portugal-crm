@@ -13,6 +13,7 @@ import { Separator } from '@/components/ui/separator';
 
 import { Checkbox } from '@/components/ui/checkbox';
 import { useUpdateProposal, useProposalProducts, useUpdateProposalProducts } from '@/hooks/useProposals';
+import { useModules } from '@/hooks/useModules';
 import { useClients } from '@/hooks/useClients';
 import { useActiveProducts } from '@/hooks/useProducts';
 import { useAuth } from '@/contexts/AuthContext';
