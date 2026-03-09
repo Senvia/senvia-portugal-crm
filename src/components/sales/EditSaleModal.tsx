@@ -398,8 +398,10 @@ export function EditSaleModal({
           modelo_servico: (modeloServico as ModeloServico) || null,
           kwp: parseFloat(kwp) || null,
           servicos_produtos: servicosProdutos.length > 0 ? servicosProdutos : null,
-          activation_date: activationDate || null,
-          edp_proposal_number: edpProposalNumber.trim() || null,
+          ...(isTelecom ? {
+            activation_date: activationDate || null,
+            edp_proposal_number: edpProposalNumber.trim() || null,
+          } : {}),
         },
       });
 

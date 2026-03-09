@@ -893,8 +893,8 @@ export function CreateSaleModal({
                         </Select>
                       </div>
 
-                      {/* Data de Ativação - quando estado é Concluída */}
-                      {saleStatus === 'delivered' && (
+                      {/* Data de Ativação - quando estado é Concluída (apenas telecom) */}
+                      {isTelecom && saleStatus === 'delivered' && (
                         <div className="col-span-1 sm:col-span-2 space-y-2">
                           <Label>Data de Ativação <span className="text-destructive">*</span></Label>
                           <Popover>
