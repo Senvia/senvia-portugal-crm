@@ -26,6 +26,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { useOrganization } from "@/hooks/useOrganization";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { useModules } from "@/hooks/useModules";
 import { format, parseISO } from "date-fns";
 import { ClientFiscalCard, VatBadge, useVatCalculation, isInvoiceXpressActive, getOrgTaxValue } from "./SaleFiscalInfo";
 import { supabase } from "@/integrations/supabase/client";
@@ -100,6 +101,8 @@ export function EditSaleModal({
   const { organization } = useAuth();
   const { isAdmin } = usePermissions();
   const isTelecom = organization?.niche === 'telecom';
+  const { modules } = useModules();
+  const showEnergy = isTelecom && modules.energy;
   const { data: saleFields } = useSaleFieldsSettings();
   const { calculateCommission, isAutoCalculated, calculateEnergyCommission, hasEnergyConfig } = useCommissionMatrix();
   const { data: orgData } = useOrganization();
@@ -637,7 +640,7 @@ export function EditSaleModal({
                   )}
 
                   {/* Energy Data (editable) */}
-                  {isTelecom && sale?.proposal_type === 'energia' && (
+                  {showEnergy && sale?.proposal_type === 'energia' && (
                     <Card>
                       <CardHeader className="pb-2 p-4">
                         <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">

@@ -41,6 +41,7 @@ import { formatCurrency } from "@/lib/format";
 import { getPlanById } from "@/lib/stripe-plans";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { useModules } from "@/hooks/useModules";
 import { format, addMonths } from "date-fns";
 import { ClientFiscalCard, VatBadge, useVatCalculation, isInvoiceXpressActive, getOrgTaxValue } from "./SaleFiscalInfo";
 import { pt } from "date-fns/locale";
@@ -117,6 +118,8 @@ export function CreateSaleModal({
   const updateLeadStatus = useUpdateLeadStatus();
   const { organization } = useAuth();
   const isTelecom = organization?.niche === 'telecom';
+  const { modules } = useModules();
+  const showEnergy = isTelecom && modules.energy;
   const isSenviaOrg = organization?.id === '06fe9e1d-9670-45b0-8717-c5a6e90be380';
   const { data: saleFields } = useSaleFieldsSettings();
   const { calculateCommission, isAutoCalculated, calculateEnergyCommission, hasEnergyConfig, energyConfig } = useCommissionMatrix();
@@ -928,7 +931,7 @@ export function CreateSaleModal({
                 </Card>
 
                 {/* Telecom Data Section */}
-                {isTelecom && proposalId && (negotiationType || proposalType) && (
+                {showEnergy && proposalId && (negotiationType || proposalType) && (
                   <Card>
                     <CardHeader className="pb-2 p-4">
                       <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
@@ -1015,7 +1018,7 @@ export function CreateSaleModal({
                 )}
 
                 {/* Telecom CPE/CUI Details */}
-                {isTelecom && proposalCpes.length > 0 && (
+                {showEnergy && proposalCpes.length > 0 && (
                   <Card>
                     <CardHeader className="pb-2 p-4">
                       <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">

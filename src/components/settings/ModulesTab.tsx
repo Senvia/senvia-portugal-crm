@@ -1,9 +1,10 @@
-import { FileText, Calendar, ShoppingBag, Store, UserCheck, Mail, Wallet } from "lucide-react";
+import { FileText, Calendar, ShoppingBag, Store, UserCheck, Mail, Wallet, Zap } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useModules, EnabledModules } from "@/hooks/useModules";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useAuth } from "@/contexts/AuthContext";
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface ModuleConfig {
@@ -26,6 +27,8 @@ const MODULES: ModuleConfig[] = [
 export function ModulesTab() {
   const { modules, isLoading, updateModule, isUpdating } = useModules();
   const { isModuleLocked, getRequiredPlan } = useSubscription();
+  const { organization } = useAuth();
+  const isTelecom = organization?.niche === 'telecom';
 
   if (isLoading) {
     return (
@@ -85,6 +88,40 @@ export function ModulesTab() {
             </Card>
           );
         })}
+
+        {/* Energy toggle - Telecom only */}
+        {isTelecom && (
+          <Card className={!modules.energy ? "border-amber-500/30" : undefined}>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-500/10">
+                    <Zap className="h-5 w-5 text-amber-500" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <CardTitle className="text-base">Energias</CardTitle>
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-500/50 text-amber-600 dark:text-amber-400">
+                        Telecom
+                      </Badge>
+                    </div>
+                    <CardDescription className="text-sm">
+                      Campos de energia (EE, Gás), CPEs, consumo anual e tipologia
+                    </CardDescription>
+                  </div>
+                </div>
+                <Switch
+                  id="energy"
+                  checked={modules.energy}
+                  onCheckedChange={(checked) => 
+                    updateModule({ module: 'energy', enabled: checked })
+                  }
+                  disabled={isUpdating}
+                />
+              </div>
+            </CardHeader>
+          </Card>
+        )}
       </div>
 
       <p className="text-xs text-muted-foreground">

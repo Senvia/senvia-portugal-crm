@@ -23,6 +23,7 @@ import { useProposalCpes } from '@/hooks/useProposalCpes';
 import { useUpdateLeadStatus, useUpdateLead } from '@/hooks/useLeads';
 import { useFinalStages } from '@/hooks/usePipelineStages';
 import { useOrganization } from '@/hooks/useOrganization';
+import { useModules } from '@/hooks/useModules';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCommissionMatrix, getVolumeTier } from '@/hooks/useCommissionMatrix';
 import { 
@@ -64,6 +65,9 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
   const { data: proposalProducts = [] } = useProposalProducts(proposal?.id);
   const { data: proposalCpes = [] } = useProposalCpes(proposal?.id);
   const { data: orgData } = useOrganization();
+  const { modules } = useModules();
+  const isTelecom = orgData?.niche === 'telecom';
+  const showEnergy = isTelecom && modules.energy;
   const updateProposal = useUpdateProposal();
   const deleteProposal = useDeleteProposal();
   const updateLeadStatus = useUpdateLeadStatus();
@@ -260,19 +264,19 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
           </div>
           ` : ''}
           
-          <div class="total-box">
-            <div class="label">${orgData?.niche === 'telecom' ? 'Consumo Total MWh' : 'Valor Total'}</div>
-            <div class="value">${orgData?.niche === 'telecom' 
+           <div class="total-box">
+            <div class="label">${showEnergy ? 'Consumo Total MWh' : 'Valor Total'}</div>
+            <div class="value">${showEnergy 
               ? `${(recalculatedCpes.reduce((sum, cpe) => sum + (Number(cpe.consumo_anual) || 0), 0) / 1000).toLocaleString('pt-PT', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} MWh`
               : formatCurrency(proposal.total_value)}</div>
-            ${orgData?.niche === 'telecom' && proposal.proposal_type === 'energia' && recalculatedCpes.length > 0 ? `
+            ${showEnergy && proposal.proposal_type === 'energia' && recalculatedCpes.length > 0 ? `
               <div style="font-size: 12px; color: #666; margin-top: 6px;">
                 Margem Total: <strong>${formatCurrency(recalculatedCpes.reduce((sum, cpe) => sum + (Number(cpe.margem) || 0), 0))}</strong>
                 &nbsp;|&nbsp;
                 Comissão Total: <strong>${formatCurrency(recalculatedCpes.reduce((sum, cpe) => sum + (Number(cpe.comissao) || 0), 0))}</strong>
               </div>
             ` : ''}
-            ${orgData?.niche === 'telecom' && proposal.proposal_type === 'servicos' ? `
+            ${isTelecom && proposal.proposal_type === 'servicos' ? `
               <div style="font-size: 12px; color: #666; margin-top: 6px;">
                 ${proposal.kwp != null ? `kWp: <strong>${Number(proposal.kwp).toLocaleString('pt-PT')}</strong>` : ''}
                 ${proposal.kwp != null && proposal.comissao != null ? '&nbsp;|&nbsp;' : ''}
@@ -281,7 +285,7 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
             ` : ''}
           </div>
 
-          ${orgData?.niche === 'telecom' && recalculatedCpes.length > 0 ? `
+          ${showEnergy && recalculatedCpes.length > 0 ? `
             <div class="cpes">
               <h3>CPEs / Pontos de Consumo</h3>
               ${recalculatedCpes.map(cpe => `
@@ -302,7 +306,7 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
             </div>
           ` : ''}
 
-          ${orgData?.niche !== 'telecom' && proposalProducts.length > 0 ? `
+          ${!showEnergy && proposalProducts.length > 0 ? `
             <div class="cpes">
               <h3>Produtos / Serviços</h3>
               <table style="width:100%; border-collapse:collapse;">
@@ -438,12 +442,12 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
                             ))}
                           </SelectContent>
                         </Select>
-                        {orgData?.niche === 'telecom' && proposal.negotiation_type && (
+                        {isTelecom && proposal.negotiation_type && (
                           <Badge variant="outline" className="text-xs">
                             {NEGOTIATION_TYPE_LABELS[proposal.negotiation_type as NegotiationType]}
                           </Badge>
                         )}
-                        {orgData?.niche === 'telecom' && proposal.proposal_type && (
+                        {showEnergy && proposal.proposal_type && (
                           <Badge variant="outline" className={cn(
                             "flex items-center gap-1 text-xs",
                             proposal.proposal_type === 'energia' 
@@ -483,7 +487,7 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
 
 
                   {/* CPEs - Telecom only */}
-                  {orgData?.niche === 'telecom' && recalculatedCpes.length > 0 && (
+                  {showEnergy && recalculatedCpes.length > 0 && (
                     <Card>
                       <CardHeader className="pb-2 p-4">
                         <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
@@ -571,7 +575,7 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
                   )}
 
                   {/* Serviços telecom */}
-                  {orgData?.niche === 'telecom' && proposal.proposal_type === 'servicos' && (
+                  {isTelecom && proposal.proposal_type === 'servicos' && (
                     <Card>
                       <CardContent className="p-4">
                         <div className="space-y-3 p-4 rounded-lg border bg-secondary/30 border-border">
@@ -677,7 +681,7 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
                   </Card>
 
                   {/* Faturas Anexadas da Lead - Telecom only */}
-                  {orgData?.niche === 'telecom' && proposal.lead_id && (
+                  {isTelecom && proposal.lead_id && (
                     <Card>
                       <CardContent className="p-4">
                         <LeadAttachments leadId={proposal.lead_id} readOnly />
@@ -693,7 +697,7 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
                     <Card>
                       <CardContent className="p-4 space-y-3">
                         <div className="p-4 rounded-lg bg-primary/10 border border-primary/20 text-center">
-                          {orgData?.niche === 'telecom' ? (
+                          {showEnergy ? (
                             <>
                               <p className="text-sm text-muted-foreground mb-1">Consumo Total</p>
                               <p className="text-2xl font-bold text-primary">
@@ -711,7 +715,7 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
                         </div>
 
                         {/* Resumo Telecom */}
-                        {orgData?.niche === 'telecom' && (
+                        {showEnergy && (
                           <div className="space-y-2 text-sm">
                             <div className="flex justify-between">
                               <span className="text-muted-foreground">Consumo Total</span>

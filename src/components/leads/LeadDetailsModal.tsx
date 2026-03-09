@@ -5,6 +5,7 @@ import { formatDate, formatDateTime, getWhatsAppUrl } from "@/lib/format";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTeamMembers } from "@/hooks/useTeam";
+import { useModules } from "@/hooks/useModules";
 
 // Formata número com espaços nos milhares (estilo PT)
 const formatNumberWithSpaces = (value: string | number): string => {
@@ -124,6 +125,8 @@ export function LeadDetailsModal({
   
   // Check if telecom template
   const isTelecom = organization?.niche === 'telecom';
+  const { modules } = useModules();
+  const showEnergy = isTelecom && modules.energy;
 
   // Get form settings for custom field labels
   const formSettings = organization?.form_settings as FormSettings | undefined;
@@ -332,7 +335,7 @@ export function LeadDetailsModal({
                     </div>
 
                     {/* Tipologia - Only for Telecom */}
-                    {isTelecom && (
+                    {showEnergy && (
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-muted-foreground">Tipologia</span>
                         <Select
@@ -396,12 +399,12 @@ export function LeadDetailsModal({
                 <Card>
                   <CardHeader className="pb-3">
                     <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                      {isTelecom ? <Zap className="h-4 w-4" /> : <Euro className="h-4 w-4" />}
-                      {isTelecom ? 'Consumo Anual/kWp (kWh)' : 'Valor do Negócio'}
+                      {showEnergy ? <Zap className="h-4 w-4" /> : <Euro className="h-4 w-4" />}
+                      {showEnergy ? 'Consumo Anual/kWp (kWh)' : 'Valor do Negócio'}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    {isTelecom ? (
+                    {showEnergy ? (
                       <div className="relative">
                         <Input
                           type="text"

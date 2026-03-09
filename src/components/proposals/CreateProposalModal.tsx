@@ -13,6 +13,7 @@ import { Separator } from '@/components/ui/separator';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2 } from 'lucide-react';
 import { useCreateProposal } from '@/hooks/useProposals';
+import { useModules } from '@/hooks/useModules';
 import { useClients } from '@/hooks/useClients';
 import { useCreateProposalCpesBatch } from '@/hooks/useProposalCpes';
 import { useActiveProducts } from '@/hooks/useProducts';
@@ -56,6 +57,8 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
   const createProposalCpesBatch = useCreateProposalCpesBatch();
   
   const isTelecom = organization?.niche === 'telecom';
+  const { modules } = useModules();
+  const showEnergy = isTelecom && modules.energy;
   
   const [selectedClientId, setSelectedClientId] = useState<string | null>(client?.id || null);
   const [notes, setNotes] = useState('');
@@ -440,7 +443,7 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
                   )}
 
                   {/* Tipo de Proposta (apenas telecom) */}
-                  {isTelecom && (
+                  {showEnergy && (
                     <Card>
                       <CardHeader className="pb-2 p-4">
                         <CardTitle className="text-sm font-medium text-muted-foreground">Tipo de Proposta</CardTitle>

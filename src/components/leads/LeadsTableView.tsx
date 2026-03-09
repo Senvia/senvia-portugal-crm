@@ -13,6 +13,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import { useModules } from '@/hooks/useModules';
 import {
   Select,
   SelectContent,
@@ -75,6 +76,8 @@ export function LeadsTableView({
   const { organization } = useAuth();
   const { isAdmin } = usePermissions();
   const isTelecom = organization?.niche === 'telecom';
+  const { modules } = useModules();
+  const showEnergy = isTelecom && modules.energy;
   
   const [sortField, setSortField] = useState<SortField>('created_at');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
@@ -227,13 +230,13 @@ export function LeadsTableView({
               <TableHead className="hidden sm:table-cell">
                 <SortableHeader field="temperature">Temp.</SortableHeader>
               </TableHead>
-              {isTelecom && (
+              {showEnergy && (
                 <TableHead className="hidden sm:table-cell">
                   <SortableHeader field="tipologia">Tipologia</SortableHeader>
                 </TableHead>
               )}
               <TableHead className="hidden lg:table-cell">
-                {isTelecom ? (
+                {showEnergy ? (
                   <SortableHeader field="consumo_anual">Consumo (kWh)</SortableHeader>
                 ) : (
                   <SortableHeader field="value">Valor</SortableHeader>
@@ -251,7 +254,7 @@ export function LeadsTableView({
           <TableBody>
             {sortedLeads.length === 0 ? (
             <TableRow>
-                <TableCell colSpan={isTelecom ? 11 : 10} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={showEnergy ? 11 : 10} className="h-24 text-center text-muted-foreground">
                   Nenhum lead encontrado.
                 </TableCell>
               </TableRow>
@@ -368,7 +371,7 @@ export function LeadsTableView({
                       </Select>
                     </TableCell>
                     {/* Tipologia column - Only for Telecom */}
-                    {isTelecom && (
+                    {showEnergy && (
                       <TableCell className="hidden sm:table-cell">
                         {lead.tipologia ? (
                           <Badge 
@@ -385,7 +388,7 @@ export function LeadsTableView({
                     )}
                     {/* Conditional: Consumo for Telecom, Value for others */}
                     <TableCell className="hidden lg:table-cell">
-                      {isTelecom ? (
+                      {showEnergy ? (
                         lead.consumo_anual ? (
                           <span className="font-medium text-primary">
                             {new Intl.NumberFormat('pt-PT').format(lead.consumo_anual)} kWh

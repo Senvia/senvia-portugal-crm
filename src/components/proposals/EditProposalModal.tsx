@@ -13,6 +13,7 @@ import { Separator } from '@/components/ui/separator';
 
 import { Checkbox } from '@/components/ui/checkbox';
 import { useUpdateProposal, useProposalProducts, useUpdateProposalProducts } from '@/hooks/useProposals';
+import { useModules } from '@/hooks/useModules';
 import { useClients } from '@/hooks/useClients';
 import { useActiveProducts } from '@/hooks/useProducts';
 import { useAuth } from '@/contexts/AuthContext';
@@ -55,6 +56,8 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
   const updateProposalProducts = useUpdateProposalProducts();
   
   const isTelecom = organization?.niche === 'telecom';
+  const { modules } = useModules();
+  const showEnergy = isTelecom && modules.energy;
   
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [notes, setNotes] = useState('');
@@ -504,7 +507,7 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
                   )}
 
                   {/* Tipo de Proposta - Apenas Telecom */}
-                  {isTelecom && (
+                  {showEnergy && (
                     <Card>
                       <CardHeader className="pb-2 p-4">
                         <CardTitle className="text-sm font-medium text-muted-foreground">Tipo de Proposta</CardTitle>
@@ -535,7 +538,7 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
                   )}
 
                   {/* CPE Selector para propostas de Energia - Apenas Telecom */}
-                  {isTelecom && proposalType === 'energia' && (
+                  {showEnergy && proposalType === 'energia' && (
                     <Card>
                       <CardContent className="p-4">
                         <ProposalCpeSelector

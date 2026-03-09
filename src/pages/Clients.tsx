@@ -22,6 +22,7 @@ import { formatCurrency } from "@/lib/format";
 import { mapClientsForExport, exportToCsv, exportToExcel } from "@/lib/export";
 import { useClientProposalTypes } from "@/hooks/useClientProposalTypes";
 import { toast } from "sonner";
+import { useModules } from "@/hooks/useModules";
 import { format, isWithinInterval, startOfDay, endOfDay, parseISO } from "date-fns";
 
 export default function Clients() {
@@ -42,6 +43,8 @@ export default function Clients() {
   const deleteClient = useDeleteClient();
   const labels = useClientLabels();
   const { clientTypesMap, isTelecom } = useClientProposalTypes();
+  const { modules } = useModules();
+  const showEnergy = isTelecom && modules.energy;
 
   const filteredClients = useMemo(() => {
     if (!clients) return [];
@@ -274,7 +277,7 @@ export default function Clients() {
             filters={filters}
             onFiltersChange={setFilters}
             onClearFilters={handleClearFilters}
-            isTelecom={isTelecom}
+            isTelecom={showEnergy}
           />
         </div>
 

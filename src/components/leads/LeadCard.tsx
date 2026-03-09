@@ -3,6 +3,7 @@ import { Lead, LeadTemperature, LeadTipologia, TEMPERATURE_LABELS, TEMPERATURE_S
 import { formatRelativeTime, getWhatsAppUrl, formatCurrency } from "@/lib/format";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useAuth } from "@/contexts/AuthContext";
+import { useModules } from "@/hooks/useModules";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { MessageCircle, Phone, Mail, MoreVertical, GripVertical, Thermometer, CalendarClock, Zap } from "lucide-react";
@@ -54,6 +55,8 @@ export function LeadCard({
   const { organization } = useAuth();
   const [showEmailModal, setShowEmailModal] = useState(false);
   const isTelecom = organization?.niche === 'telecom';
+  const { modules } = useModules();
+  const showEnergy = isTelecom && modules.energy;
   
   const temperature = lead.temperature || 'cold';
   const tempStyle = TEMPERATURE_STYLES[temperature];
@@ -219,7 +222,7 @@ export function LeadCard({
         )}
         
         {/* Tipologia badge for Telecom */}
-        {isTelecom && lead.tipologia && (
+        {showEnergy && lead.tipologia && (
           <Badge 
             variant="outline" 
             className={cn("mt-2 gap-1", TIPOLOGIA_STYLES[lead.tipologia].color, TIPOLOGIA_STYLES[lead.tipologia].bgClass)}
@@ -230,7 +233,7 @@ export function LeadCard({
         )}
         
         {/* Conditional: Show consumo_anual for Telecom, value for others */}
-        {isTelecom ? (
+        {showEnergy ? (
           lead.consumo_anual ? (
             <p className="mt-1 text-lg font-bold text-primary">
               {new Intl.NumberFormat('pt-PT').format(lead.consumo_anual)} kWh

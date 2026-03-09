@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { cn } from "@/lib/utils";
+import { useModules } from "@/hooks/useModules";
 import { Progress } from "@/components/ui/progress";
 import { format } from "date-fns";
 import { pt } from "date-fns/locale";
@@ -152,6 +153,8 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
 
   // Conditional labels based on organization niche
   const isTelecom = organization?.niche === 'telecom';
+  const { modules } = useModules();
+  const showEnergy = isTelecom && modules.energy;
   const { data: saleFields } = useSaleFieldsSettings();
   const cpeLabel = isTelecom ? 'CPE/CUI (Pontos de Consumo)' : 'CPEs (Equipamentos)';
   const serialLabel = isTelecom ? 'Local de Consumo' : 'Nº Série';
@@ -411,7 +414,7 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                   )}
 
                   {/* Telecom: Energy Data */}
-                  {isTelecom && hasEnergyData && (
+                  {showEnergy && hasEnergyData && (
                     <Card>
                       <CardHeader className="pb-2 p-4">
                         <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
@@ -513,7 +516,7 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                   )}
 
                   {/* Telecom: CPEs (proposal CPEs first, fallback to client CPEs) */}
-                  {isTelecom && (proposalCpes.length > 0 || clientCpes.length > 0) && (
+                  {showEnergy && (proposalCpes.length > 0 || clientCpes.length > 0) && (
                     <Card>
                       <CardHeader className="pb-2 p-4">
                         <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">

@@ -40,6 +40,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useUploadLeadAttachment } from "@/hooks/useLeadAttachments";
 import { useLeadFieldsSettings } from "@/hooks/useLeadFieldsSettings";
 import { LeadFieldsSettings, DEFAULT_LEAD_FIELDS_SETTINGS } from "@/types/field-settings";
+import { useModules } from "@/hooks/useModules";
 import type { LeadTemperature, LeadTipologia } from "@/types";
 import { ROLE_LABELS as RoleLabels, TIPOLOGIA_LABELS, TIPOLOGIA_STYLES } from "@/types";
 
@@ -117,6 +118,8 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isTelecom = organization?.niche === 'telecom';
+  const { modules } = useModules();
+  const showEnergy = isTelecom && modules.energy;
 
   const form = useForm<AddLeadFormData>({
     resolver: zodResolver(schema),
@@ -200,13 +203,13 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
       phone: data.phone || '',
       source: data.source,
       temperature: data.temperature as LeadTemperature,
-      value: isTelecom ? undefined : (data.value ? Number(data.value) : undefined),
+      value: showEnergy ? undefined : (data.value ? Number(data.value) : undefined),
       notes: data.notes,
       gdpr_consent: data.gdpr_consent,
       automation_enabled: data.automation_enabled,
       assigned_to: data.assigned_to && data.assigned_to !== 'unassigned' ? data.assigned_to : undefined,
-      tipologia: isTelecom ? data.tipologia as LeadTipologia : undefined,
-      consumo_anual: isTelecom && data.consumo_anual ? Number(data.consumo_anual) : undefined,
+      tipologia: showEnergy ? data.tipologia as LeadTipologia : undefined,
+      consumo_anual: showEnergy && data.consumo_anual ? Number(data.consumo_anual) : undefined,
     });
 
     if (pendingFiles.length > 0 && lead?.id) {
@@ -465,7 +468,7 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
                         )}
                       </div>
 
-                      {isVisible('tipologia') && isTelecom && (
+                      {isVisible('tipologia') && showEnergy && (
                         <FormField
                           control={form.control}
                           name="tipologia"
@@ -495,7 +498,7 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
                         />
                       )}
 
-                      {isVisible('consumo_anual') && isTelecom ? (
+                      {isVisible('consumo_anual') && showEnergy ? (
                         <FormField
                           control={form.control}
                           name="consumo_anual"
@@ -509,7 +512,7 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
                             </FormItem>
                           )}
                         />
-                      ) : isVisible('value') && !isTelecom ? (
+                      ) : isVisible('value') && !showEnergy ? (
                         <FormField
                           control={form.control}
                           name="value"
@@ -660,16 +663,16 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
                               value={`${TEMPERATURE_LABELS[watchedValues.temperature]?.emoji} ${TEMPERATURE_LABELS[watchedValues.temperature]?.label}`}
                             />
                           )}
-                          {isVisible('value') && !isTelecom && watchedValues.value && (
+                          {isVisible('value') && !showEnergy && watchedValues.value && (
                             <SummaryRow label={getLabel('value', 'Valor')} value={`€${watchedValues.value}`} />
                           )}
-                          {isVisible('tipologia') && isTelecom && watchedValues.tipologia && (
+                          {isVisible('tipologia') && showEnergy && watchedValues.tipologia && (
                             <SummaryRow
                               label={getLabel('tipologia', 'Tipologia')}
                               value={`${TIPOLOGIA_STYLES[watchedValues.tipologia as LeadTipologia]?.emoji} ${TIPOLOGIA_LABELS[watchedValues.tipologia as LeadTipologia]}`}
                             />
                           )}
-                          {isVisible('consumo_anual') && isTelecom && watchedValues.consumo_anual && (
+                          {isVisible('consumo_anual') && showEnergy && watchedValues.consumo_anual && (
                             <SummaryRow label={getLabel('consumo_anual', 'Consumo')} value={`${watchedValues.consumo_anual} kWh`} />
                           )}
                         </div>

@@ -45,6 +45,7 @@ import type { Lead, LeadTemperature, LeadTipologia } from "@/types";
 import { TIPOLOGIA_LABELS } from "@/types";
 import { LeadsReportPanel } from "@/components/leads/LeadsReportPanel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useModules } from "@/hooks/useModules";
 
 export default function Leads() {
   // Subscribe to realtime updates
@@ -90,6 +91,8 @@ export default function Leads() {
   const [statusFilter, setStatusFilter] = usePersistedState<string[]>("leads-status-v1", []);
   const [dateRange, setDateRange] = usePersistedState<{ from: Date | undefined; to: Date | undefined }>("leads-daterange-v1", { from: undefined, to: undefined });
   const isTelecom = organization?.niche === 'telecom';
+  const { modules } = useModules();
+  const showEnergy = isTelecom && modules.energy;
   const [tipologiaFilter, setTipologiaFilter] = usePersistedState<'all' | LeadTipologia>('leads-tipologia-v1', 'all');
   const [viewMode, setViewMode] = useState<'kanban' | 'table'>(() => {
     const saved = localStorage.getItem('leads-view-mode');
@@ -630,7 +633,7 @@ export default function Leads() {
             </Select>
 
             {/* Tipologia Filter (Telecom only) */}
-            {isTelecom && (
+            {showEnergy && (
               <Select value={tipologiaFilter} onValueChange={(v) => setTipologiaFilter(v as 'all' | LeadTipologia)}>
                 <SelectTrigger className="w-[140px] h-8 shrink-0">
                   <Zap className="h-3.5 w-3.5 mr-1" />
