@@ -222,7 +222,7 @@ export function LeadCard({
         )}
         
         {/* Tipologia badge for Telecom */}
-        {isTelecom && lead.tipologia && (
+        {showEnergy && lead.tipologia && (
           <Badge 
             variant="outline" 
             className={cn("mt-2 gap-1", TIPOLOGIA_STYLES[lead.tipologia].color, TIPOLOGIA_STYLES[lead.tipologia].bgClass)}
