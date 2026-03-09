@@ -117,6 +117,8 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isTelecom = organization?.niche === 'telecom';
+  const { modules } = useModules();
+  const showEnergy = isTelecom && modules.energy;
 
   const form = useForm<AddLeadFormData>({
     resolver: zodResolver(schema),
