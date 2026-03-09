@@ -60,6 +60,7 @@ import { useCommissionMatrix, getVolumeTier } from "@/hooks/useCommissionMatrix"
 import type { NegotiationType, ModeloServico } from "@/types/proposals";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CPE_STATUS_LABELS, CPE_STATUS_STYLES } from "@/types/cpes";
+import { useSaleFieldsSettings } from "@/hooks/useSaleFieldsSettings";
 
 interface SaleItemDraft {
   id: string;
@@ -99,6 +100,7 @@ export function EditSaleModal({
   const { organization } = useAuth();
   const { isAdmin } = usePermissions();
   const isTelecom = organization?.niche === 'telecom';
+  const { data: saleFields } = useSaleFieldsSettings();
   const { calculateCommission, isAutoCalculated, calculateEnergyCommission, hasEnergyConfig } = useCommissionMatrix();
   const { data: orgData } = useOrganization();
   const salesSettings = (orgData?.sales_settings as { lock_delivered_sales?: boolean }) || {};
@@ -398,10 +400,8 @@ export function EditSaleModal({
           modelo_servico: (modeloServico as ModeloServico) || null,
           kwp: parseFloat(kwp) || null,
           servicos_produtos: servicosProdutos.length > 0 ? servicosProdutos : null,
-          ...(isTelecom ? {
-            activation_date: activationDate || null,
-            edp_proposal_number: edpProposalNumber.trim() || null,
-          } : {}),
+          ...(isTelecom ? { activation_date: activationDate || null } : {}),
+          ...(saleFields?.edp_proposal_number?.visible ? { edp_proposal_number: edpProposalNumber.trim() || null } : {}),
         },
       });
 
@@ -1122,16 +1122,18 @@ export function EditSaleModal({
 
                     {/* Notes */}
                     {/* EDP Proposal Number */}
-                    {isTelecom && (<Card>
+                    {saleFields?.edp_proposal_number?.visible && (<Card>
                       <CardHeader className="pb-2 p-4">
-                        <CardTitle className="text-sm font-medium text-muted-foreground">Numero Proposta EDP *</CardTitle>
+                        <CardTitle className="text-sm font-medium text-muted-foreground">
+                          {saleFields.edp_proposal_number.label}{saleFields.edp_proposal_number.required ? ' *' : ''}
+                        </CardTitle>
                       </CardHeader>
                       <CardContent className="p-4 pt-0">
                         <Input
                           placeholder="Ex: EDP-2024-001234"
                           value={edpProposalNumber}
                           onChange={(e) => setEdpProposalNumber(e.target.value)}
-                          required
+                          required={saleFields.edp_proposal_number.required}
                         />
                     </CardContent>
                     </Card>)}

@@ -79,6 +79,7 @@ import { InvoiceDetailsModal } from "./InvoiceDetailsModal";
 import { CreateCreditNoteModal } from "./CreateCreditNoteModal";
 import { openPdfInNewTab } from "@/lib/download";
 import { useSaleActivationHistory } from "@/hooks/useSaleActivationHistory";
+import { useSaleFieldsSettings } from "@/hooks/useSaleFieldsSettings";
 
 interface SaleDetailsModalProps {
   sale: SaleWithDetails | null;
@@ -151,6 +152,7 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
 
   // Conditional labels based on organization niche
   const isTelecom = organization?.niche === 'telecom';
+  const { data: saleFields } = useSaleFieldsSettings();
   const cpeLabel = isTelecom ? 'CPE/CUI (Pontos de Consumo)' : 'CPEs (Equipamentos)';
   const serialLabel = isTelecom ? 'Local de Consumo' : 'Nº Série';
 
@@ -305,9 +307,9 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                             </SelectContent>
                           </Select>
                         </div>
-                        {isTelecom && (sale as any).edp_proposal_number && (
+                        {saleFields?.edp_proposal_number?.visible && (sale as any).edp_proposal_number && (
                           <div>
-                            <p className="text-xs text-muted-foreground">Nº Proposta EDP</p>
+                            <p className="text-xs text-muted-foreground">{saleFields.edp_proposal_number.label}</p>
                             <p className="text-sm font-medium font-mono">{(sale as any).edp_proposal_number}</p>
                           </div>
                         )}

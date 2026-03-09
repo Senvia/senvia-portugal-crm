@@ -60,6 +60,7 @@ import {
 } from "lucide-react";
 import type { Proposal, ServicosProductDetail } from "@/types/proposals";
 import { NEGOTIATION_TYPE_LABELS, SERVICOS_PRODUCTS, SERVICOS_PRODUCT_CONFIGS } from "@/types/proposals";
+import { useSaleFieldsSettings } from "@/hooks/useSaleFieldsSettings";
 import { useCommissionMatrix, getVolumeTier, getTierRuleLabel } from "@/hooks/useCommissionMatrix";
 import { 
   type ProposalType,
@@ -117,6 +118,7 @@ export function CreateSaleModal({
   const { organization } = useAuth();
   const isTelecom = organization?.niche === 'telecom';
   const isSenviaOrg = organization?.id === '06fe9e1d-9670-45b0-8717-c5a6e90be380';
+  const { data: saleFields } = useSaleFieldsSettings();
   const { calculateCommission, isAutoCalculated, calculateEnergyCommission, hasEnergyConfig, energyConfig } = useCommissionMatrix();
   
   // Fiscal info
@@ -1355,16 +1357,18 @@ export function CreateSaleModal({
                   </Card>
 
                   {/* EDP Proposal Number */}
-                  {isTelecom && (<Card>
+                  {saleFields?.edp_proposal_number?.visible && (<Card>
                     <CardHeader className="pb-2 p-4">
-                      <CardTitle className="text-sm font-medium text-muted-foreground">Numero Proposta EDP *</CardTitle>
+                      <CardTitle className="text-sm font-medium text-muted-foreground">
+                        {saleFields.edp_proposal_number.label}{saleFields.edp_proposal_number.required ? ' *' : ''}
+                      </CardTitle>
                     </CardHeader>
                     <CardContent className="p-4 pt-0">
                       <Input
                         placeholder="Ex: EDP-2024-001234"
                         value={edpProposalNumber}
                         onChange={(e) => setEdpProposalNumber(e.target.value)}
-                        required
+                        required={saleFields.edp_proposal_number.required}
                       />
                     </CardContent>
                   </Card>)}
