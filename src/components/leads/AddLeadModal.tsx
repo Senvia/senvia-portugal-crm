@@ -154,8 +154,7 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
   const getLabel = (key: keyof LeadFieldsSettings, fallback: string) => fs[key]?.label || fallback;
   // Helper: label with optional asterisk
   const labelText = (key: keyof LeadFieldsSettings, fallback: string) => {
-    const forced = key === 'company_name' && isTelecom;
-    return `${getLabel(key, fallback)}${(isRequired(key) || forced) ? ' *' : ''}`;
+    return `${getLabel(key, fallback)}${isRequired(key) ? ' *' : ''}`;
   };
 
   const searchExistingClient = async (nifValue: string) => {
