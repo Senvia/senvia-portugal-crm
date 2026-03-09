@@ -125,6 +125,8 @@ export function LeadDetailsModal({
   
   // Check if telecom template
   const isTelecom = organization?.niche === 'telecom';
+  const { modules } = useModules();
+  const showEnergy = isTelecom && modules.energy;
 
   // Get form settings for custom field labels
   const formSettings = organization?.form_settings as FormSettings | undefined;
