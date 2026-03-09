@@ -1,21 +1,10 @@
-## Recorrência de Vendas de Plano — Ativar apenas após pagamento Stripe
 
-### Estado: ✅ Implementado
 
-### Alterações Realizadas
+## Alterar datas padrão de recontacto para 15/30/45 dias
 
-**1. `src/types/sales.ts`**
-- Adicionado `'pending'` ao tipo `RecurringStatus`
-- Adicionado label "Pendente" e cor azul para o novo estado
+### Alteração
+No ficheiro `src/components/leads/LostLeadDialog.tsx`, os botões rápidos de data estão hardcoded como 30/60/90 dias. Alterar para **15/30/45 dias**.
 
-**2. `src/hooks/useSales.ts`**
-- Atualizado tipos de `recurring_status` para incluir `'pending'`
+### Ficheiro
+- `src/components/leads/LostLeadDialog.tsx` — linha ~143: trocar o array `[{ days: 30 }, { days: 60 }, { days: 90 }]` para `[{ days: 15, label: "15 dias" }, { days: 30, label: "30 dias" }, { days: 45, label: "45 dias" }]`
 
-**3. `src/components/sales/CreateSaleModal.tsx`**
-- Vendas de plano (`isPlanSale`) agora criadas com `recurring_status: 'pending'` em vez de `'active'`
-- `next_renewal_date` fica `undefined` para vendas de plano (sem data até pagamento real)
-
-**4. `supabase/functions/stripe-webhook/index.ts` — `handleInvoicePaid`**
-- Ao atualizar a venda vinculada, também define:
-  - `recurring_status: 'active'`
-  - `next_renewal_date: periodEnd` (data real do Stripe)
