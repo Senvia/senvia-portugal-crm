@@ -963,41 +963,21 @@ serve(async (req) => {
         continue;
       }
 
-      // No tool calls — we have the final answer. Stream it back.
-      // Make a streaming call with the final conversation
-      const streamPayload: any = {
-        model: "google/gemini-3-flash-preview",
-        messages: conversationMessages,
-        stream: true,
-        temperature: 0,
-      };
-      // Don't include tools in the final streaming call
-      const streamResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(streamPayload),
-      });
-
-      if (!streamResp.ok) {
-        // If the non-tool response already has content, just return it as a simple SSE
-        if (assistantMessage.content) {
-          const simpleSSE = `data: ${JSON.stringify({ choices: [{ delta: { content: assistantMessage.content } }] })}\n\ndata: [DONE]\n\n`;
-          return new Response(simpleSSE, {
-            headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
-          });
-        }
-        return new Response(
-          JSON.stringify({ error: "Erro na resposta do Otto." }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+      // No tool calls — we have the final answer. Return it directly as SSE.
+      // This avoids a redundant second call to the model which would regenerate
+      // a different response and break multi-step flows (e.g. support tickets).
+      if (assistantMessage.content) {
+        const simpleSSE = `data: ${JSON.stringify({ choices: [{ delta: { content: assistantMessage.content } }] })}\n\ndata: [DONE]\n\n`;
+        return new Response(simpleSSE, {
+          headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
+        });
       }
 
-      return new Response(streamResp.body, {
-        headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
-      });
+      // Edge case: model returned no content and no tool calls
+      return new Response(
+        JSON.stringify({ error: "Resposta vazia do Otto." }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     // If we hit max iterations, return a fallback message
