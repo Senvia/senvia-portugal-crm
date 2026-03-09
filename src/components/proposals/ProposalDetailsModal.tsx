@@ -285,7 +285,7 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
             ` : ''}
           </div>
 
-          ${orgData?.niche === 'telecom' && recalculatedCpes.length > 0 ? `
+          ${showEnergy && recalculatedCpes.length > 0 ? `
             <div class="cpes">
               <h3>CPEs / Pontos de Consumo</h3>
               ${recalculatedCpes.map(cpe => `
