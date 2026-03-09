@@ -1,35 +1,21 @@
+## Recorrência de Vendas de Plano — Ativar apenas após pagamento Stripe
 
+### Estado: ✅ Implementado
 
-## Problema Identificado
+### Alterações Realizadas
 
-Quando uma venda de plano Senvia (`isPlanSale`) é criada, o código na linha 592-598 do `CreateSaleModal.tsx` força:
-- `has_recurring: true`
-- `recurring_status: 'active'`
-- `recurring_value: 0` (porque o total é 0)
-- `next_renewal_date: saleDate + 1 mês`
+**1. `src/types/sales.ts`**
+- Adicionado `'pending'` ao tipo `RecurringStatus`
+- Adicionado label "Pendente" e cor azul para o novo estado
 
-Ou seja, a recorrência é marcada como **ativa** imediatamente, mesmo que o cliente ainda esteja em trial e nunca tenha pago. O Daniel Moreira aparece com renovação a 8 de abril porque a venda foi criada ~8 de março com `addMonths(saleDate, 1)`.
+**2. `src/hooks/useSales.ts`**
+- Atualizado tipos de `recurring_status` para incluir `'pending'`
 
-## Solução
+**3. `src/components/sales/CreateSaleModal.tsx`**
+- Vendas de plano (`isPlanSale`) agora criadas com `recurring_status: 'pending'` em vez de `'active'`
+- `next_renewal_date` fica `undefined` para vendas de plano (sem data até pagamento real)
 
-Para vendas de plano, a recorrência só deve ficar ativa após o primeiro pagamento no Stripe.
-
-### 1. `src/components/sales/CreateSaleModal.tsx` (linhas 592-598)
-- Quando `isPlanSale`, criar a venda com:
-  - `has_recurring: true` (manter, para saber que é recorrente)
-  - `recurring_status: 'pending'` em vez de `'active'`
-  - `recurring_value: 0`
-  - `next_renewal_date: undefined` (sem data até o Stripe confirmar)
-
-### 2. `supabase/functions/stripe-webhook/index.ts` — `handleInvoicePaid`
-- Quando atualiza a venda vinculada, também ativar a recorrência:
+**4. `supabase/functions/stripe-webhook/index.ts` — `handleInvoicePaid`**
+- Ao atualizar a venda vinculada, também define:
   - `recurring_status: 'active'`
-  - `next_renewal_date: periodEnd` (usar o `period_end` da invoice do Stripe)
-- Isto garante que a recorrência só fica ativa após pagamento real
-
-### Resultado
-- Vendas de plano são criadas com recorrência **pendente** (sem data de renovação)
-- Primeiro `invoice.paid` do Stripe ativa a recorrência e define a data de renovação real
-- Pagamentos subsequentes atualizam a data de renovação automaticamente
-- 2 ficheiros editados
-
+  - `next_renewal_date: periodEnd` (data real do Stripe)
