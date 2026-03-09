@@ -447,7 +447,7 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
                             {NEGOTIATION_TYPE_LABELS[proposal.negotiation_type as NegotiationType]}
                           </Badge>
                         )}
-                        {orgData?.niche === 'telecom' && proposal.proposal_type && (
+                        {showEnergy && proposal.proposal_type && (
                           <Badge variant="outline" className={cn(
                             "flex items-center gap-1 text-xs",
                             proposal.proposal_type === 'energia' 
