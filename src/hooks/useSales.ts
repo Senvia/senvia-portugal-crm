@@ -78,7 +78,7 @@ export function useCreateSale() {
       // Campos de recorrência
       has_recurring?: boolean;
       recurring_value?: number;
-      recurring_status?: 'active' | 'cancelled' | 'paused';
+      recurring_status?: 'active' | 'cancelled' | 'paused' | 'pending';
       next_renewal_date?: string;
       activation_date?: string;
     }) => {
