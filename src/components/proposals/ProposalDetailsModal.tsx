@@ -276,7 +276,7 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
                 Comissão Total: <strong>${formatCurrency(recalculatedCpes.reduce((sum, cpe) => sum + (Number(cpe.comissao) || 0), 0))}</strong>
               </div>
             ` : ''}
-            ${orgData?.niche === 'telecom' && proposal.proposal_type === 'servicos' ? `
+            ${isTelecom && proposal.proposal_type === 'servicos' ? `
               <div style="font-size: 12px; color: #666; margin-top: 6px;">
                 ${proposal.kwp != null ? `kWp: <strong>${Number(proposal.kwp).toLocaleString('pt-PT')}</strong>` : ''}
                 ${proposal.kwp != null && proposal.comissao != null ? '&nbsp;|&nbsp;' : ''}
