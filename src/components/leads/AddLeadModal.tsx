@@ -133,7 +133,7 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
       temperature: "cold",
       value: "",
       notes: "",
-      gdpr_consent: false as unknown as true,
+      gdpr_consent: false as unknown as true as unknown as true,
       automation_enabled: true,
       assigned_to: "",
       tipologia: undefined,
@@ -736,7 +736,7 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
                         Cancelar
                       </Button>
                       <Button
-                        type="submit"
+           button       type="submit"
                         className="flex-1"
                         disabled={createLead.isPending || nifValidation.isDuplicate}
                         onClick={() => {
