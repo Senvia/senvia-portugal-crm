@@ -133,7 +133,7 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
       temperature: "cold",
       value: "",
       notes: "",
-      gdpr_consent: undefined,
+      gdpr_consent: false,
       automation_enabled: true,
       assigned_to: "",
       tipologia: undefined,
