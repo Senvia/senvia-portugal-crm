@@ -237,7 +237,7 @@ export function LeadDetailsModal({
     if (numValue !== currentConsumo) {
       handleFieldSave("consumo_anual" as keyof Lead, numValue);
     }
-    setIsEditingConsumo(false);
+    setTimeout(() => setIsEditingConsumo(false), 600);
   };
 
   const handleNotesBlur = () => {
