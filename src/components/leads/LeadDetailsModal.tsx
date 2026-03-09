@@ -5,6 +5,7 @@ import { formatDate, formatDateTime, getWhatsAppUrl } from "@/lib/format";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTeamMembers } from "@/hooks/useTeam";
+import { useModules } from "@/hooks/useModules";
 
 // Formata número com espaços nos milhares (estilo PT)
 const formatNumberWithSpaces = (value: string | number): string => {
