@@ -37,6 +37,8 @@ interface ClientDetailsModalProps {
 export function ClientDetailsModal({ client, open, onOpenChange, onEdit }: ClientDetailsModalProps) {
   const { organization } = useAuth();
   const isTelecom = organization?.niche === 'telecom';
+  const { modules } = useModules();
+  const showEnergy = isTelecom && modules.energy;
   
   if (!client) return null;
 
