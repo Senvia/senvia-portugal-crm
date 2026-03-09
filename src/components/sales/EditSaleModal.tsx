@@ -60,6 +60,7 @@ import { useCommissionMatrix, getVolumeTier } from "@/hooks/useCommissionMatrix"
 import type { NegotiationType, ModeloServico } from "@/types/proposals";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CPE_STATUS_LABELS, CPE_STATUS_STYLES } from "@/types/cpes";
+import { useSaleFieldsSettings } from "@/hooks/useSaleFieldsSettings";
 
 interface SaleItemDraft {
   id: string;
