@@ -681,7 +681,7 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
                   </Card>
 
                   {/* Faturas Anexadas da Lead - Telecom only */}
-                  {orgData?.niche === 'telecom' && proposal.lead_id && (
+                  {isTelecom && proposal.lead_id && (
                     <Card>
                       <CardContent className="p-4">
                         <LeadAttachments leadId={proposal.lead_id} readOnly />
