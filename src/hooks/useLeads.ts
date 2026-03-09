@@ -23,8 +23,13 @@ export function useLeads() {
         .order('created_at', { ascending: false });
       
       // Filter by user IDs (admin with filter, leader with team, or single user)
+      // Include unassigned leads so they don't vanish during reassignment
       if (effectiveUserIds) {
-        query = query.in('assigned_to', effectiveUserIds);
+        const orFilters = effectiveUserIds
+          .map(id => `assigned_to.eq.${id}`)
+          .concat('assigned_to.is.null')
+          .join(',');
+        query = query.or(orFilters);
       }
       
       const { data, error } = await query;
