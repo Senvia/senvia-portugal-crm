@@ -487,7 +487,7 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
 
 
                   {/* CPEs - Telecom only */}
-                  {orgData?.niche === 'telecom' && recalculatedCpes.length > 0 && (
+                  {showEnergy && recalculatedCpes.length > 0 && (
                     <Card>
                       <CardHeader className="pb-2 p-4">
                         <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
