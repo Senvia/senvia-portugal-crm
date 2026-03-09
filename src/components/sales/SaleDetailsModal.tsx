@@ -311,7 +311,7 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                             <p className="text-sm font-medium font-mono">{(sale as any).edp_proposal_number}</p>
                           </div>
                         )}
-                        {sale.activation_date && (
+                        {isTelecom && sale.activation_date && (
                           <div>
                             <p className="text-xs text-muted-foreground">Data de Ativação</p>
                             <p className="text-sm font-medium">
