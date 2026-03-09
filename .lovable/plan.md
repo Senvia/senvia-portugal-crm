@@ -1,21 +1,35 @@
-## Recorrência de Vendas de Plano — Ativar apenas após pagamento Stripe
 
-### Estado: ✅ Implementado
 
-### Alterações Realizadas
+## Fix: Otto bugado ao abrir suporte
 
-**1. `src/types/sales.ts`**
-- Adicionado `'pending'` ao tipo `RecurringStatus`
-- Adicionado label "Pendente" e cor azul para o novo estado
+### Problema identificado (2 causas)
 
-**2. `src/hooks/useSales.ts`**
-- Atualizado tipos de `recurring_status` para incluir `'pending'`
+**1. Resposta duplicada (double-call):** Quando o Otto termina de processar (sem mais tools), o edge function faz uma SEGUNDA chamada streaming ao modelo com as mesmas mensagens. Isto gera uma resposta DIFERENTE da original, causando inconsistências — o Otto pode saltar passos, reordenar perguntas ou perder contexto.
 
-**3. `src/components/sales/CreateSaleModal.tsx`**
-- Vendas de plano (`isPlanSale`) agora criadas com `recurring_status: 'pending'` em vez de `'active'`
-- `next_renewal_date` fica `undefined` para vendas de plano (sem data até pagamento real)
+**2. Botão "Abrir Ticket" sempre visível:** O botão "Abrir Ticket de Suporte" no fundo do chat está SEMPRE visível, mesmo quando o Otto já está a meio de recolher dados para um ticket. Se o utilizador clica, envia "Preciso de abrir um ticket de suporte" que reinicia todo o fluxo.
 
-**4. `supabase/functions/stripe-webhook/index.ts` — `handleInvoicePaid`**
-- Ao atualizar a venda vinculada, também define:
-  - `recurring_status: 'active'`
-  - `next_renewal_date: periodEnd` (data real do Stripe)
+### Correções
+
+#### 1. `supabase/functions/otto-chat/index.ts` — Eliminar double-call
+- Quando o modelo retorna uma resposta final (sem tool_calls), usar `assistantMessage.content` diretamente, embrulhando-o em SSE manualmente — em vez de fazer uma segunda chamada streaming ao modelo.
+- Isto garante que a resposta que o modelo gerou (com contexto dos tool results) é a que o utilizador recebe, sem regeneração.
+
+```typescript
+// Linha ~966: Em vez de fazer nova chamada streaming, devolver o content diretamente
+if (assistantMessage.content) {
+  const simpleSSE = `data: ${JSON.stringify({ choices: [{ delta: { content: assistantMessage.content } }] })}\n\ndata: [DONE]\n\n`;
+  return new Response(simpleSSE, {
+    headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
+  });
+}
+```
+
+#### 2. `src/components/otto/OttoChatWindow.tsx` — Esconder botão de ticket durante fluxo
+- Detectar se a conversa já contém mensagens sobre "ticket de suporte" e esconder o botão nesse caso.
+- Condição: se alguma mensagem do assistente contém "assunto do teu ticket" ou "ticket" nos últimos N mensagens, esconder o botão.
+
+### Resultado
+- Respostas consistentes do Otto (sem regeneração)
+- Utilizador não reinicia acidentalmente o fluxo de ticket
+- 2 ficheiros editados
+
