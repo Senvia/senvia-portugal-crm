@@ -223,7 +223,7 @@ export function LeadDetailsModal({
     if (numValue !== currentValue) {
       handleFieldSave("value", numValue);
     }
-    setIsEditingValue(false);
+    setTimeout(() => setIsEditingValue(false), 600);
   };
 
   const handleConsumoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
