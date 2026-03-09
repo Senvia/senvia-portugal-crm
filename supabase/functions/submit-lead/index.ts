@@ -459,10 +459,14 @@ Deno.serve(async (req) => {
       console.error('Error dispatching CAPI events:', capiError);
     }
 
-    // ===== EMAIL NOTIFICATION (Brevo SENVIA global) =====
-    // Always send via Senvia's own Brevo account, regardless of client config
+    // ===== EMAIL NOTIFICATION (org Brevo or fallback to Senvia) =====
     try {
-      const brevoKey = Deno.env.get('BREVO_API_KEY');
+      // Priority: org's own Brevo credentials → fallback to Senvia global
+      const orgBrevoKey = org.brevo_api_key;
+      const orgBrevoEmail = org.brevo_sender_email;
+      const brevoKey = orgBrevoKey || Deno.env.get('BREVO_API_KEY');
+      const senderEmail = orgBrevoEmail || 'geral@senvia.pt';
+      const senderName = orgBrevoEmail ? org.name : 'Senvia';
 
       if (brevoKey) {
         // Fetch admin emails
@@ -529,6 +533,8 @@ Deno.serve(async (req) => {
 </body>
 </html>`;
 
+            console.log(`Sending new-lead email via ${orgBrevoKey ? 'org Brevo' : 'Senvia global'} from ${senderEmail}`);
+
             fetch('https://api.brevo.com/v3/smtp/email', {
               method: 'POST',
               headers: {
@@ -536,7 +542,7 @@ Deno.serve(async (req) => {
                 'api-key': brevoKey,
               },
               body: JSON.stringify({
-                sender: { email: 'notificacoes@senvia.pt', name: 'Senvia OS' },
+                sender: { email: senderEmail, name: senderName },
                 to: recipients,
                 subject: `🚀 Novo Lead: ${lead.name} - ${lead.source || 'Formulário'}`,
                 htmlContent,
@@ -547,7 +553,7 @@ Deno.serve(async (req) => {
           }
         }
       } else {
-        console.warn('BREVO_API_KEY secret not set, skipping new-lead email notification');
+        console.warn('No Brevo API key available (org or global), skipping new-lead email notification');
       }
     } catch (emailError) {
       console.error('Error sending new-lead email:', emailError);
