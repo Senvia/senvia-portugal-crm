@@ -55,6 +55,8 @@ export function LeadCard({
   const { organization } = useAuth();
   const [showEmailModal, setShowEmailModal] = useState(false);
   const isTelecom = organization?.niche === 'telecom';
+  const { modules } = useModules();
+  const showEnergy = isTelecom && modules.energy;
   
   const temperature = lead.temperature || 'cold';
   const tempStyle = TEMPERATURE_STYLES[temperature];
