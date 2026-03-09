@@ -236,7 +236,7 @@ export function LeadsTableView({
                 </TableHead>
               )}
               <TableHead className="hidden lg:table-cell">
-                {isTelecom ? (
+                {showEnergy ? (
                   <SortableHeader field="consumo_anual">Consumo (kWh)</SortableHeader>
                 ) : (
                   <SortableHeader field="value">Valor</SortableHeader>
