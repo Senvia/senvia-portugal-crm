@@ -76,6 +76,8 @@ export function LeadsTableView({
   const { organization } = useAuth();
   const { isAdmin } = usePermissions();
   const isTelecom = organization?.niche === 'telecom';
+  const { modules } = useModules();
+  const showEnergy = isTelecom && modules.energy;
   
   const [sortField, setSortField] = useState<SortField>('created_at');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
