@@ -23,6 +23,7 @@ import { useProposalCpes } from '@/hooks/useProposalCpes';
 import { useUpdateLeadStatus, useUpdateLead } from '@/hooks/useLeads';
 import { useFinalStages } from '@/hooks/usePipelineStages';
 import { useOrganization } from '@/hooks/useOrganization';
+import { useModules } from '@/hooks/useModules';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCommissionMatrix, getVolumeTier } from '@/hooks/useCommissionMatrix';
 import { 
