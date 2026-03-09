@@ -739,7 +739,15 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
                         type="submit"
                         className="flex-1"
                         disabled={createLead.isPending || nifValidation.isDuplicate}
-                        onClick={form.handleSubmit(onSubmit)}
+                        onClick={() => {
+                          form.handleSubmit(onSubmit, (errors) => {
+                            const firstErrorKey = Object.keys(errors)[0];
+                            if (firstErrorKey) {
+                              const el = document.querySelector(`[name="${firstErrorKey}"]`);
+                              el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            }
+                          })();
+                        }}
                       >
                         {createLead.isPending ? (
                           <>
