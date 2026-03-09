@@ -34,13 +34,9 @@ const AlertDialogContent = React.forwardRef<
     <AlertDialogPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed left-1/2 -translate-x-1/2 z-50 grid w-full max-w-lg max-w-[calc(100vw-2rem)] overflow-y-auto gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 sm:rounded-lg",
+        "fixed left-1/2 -translate-x-1/2 z-50 grid w-[calc(100vw-2rem)] max-w-lg h-auto overflow-y-auto gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 rounded-lg top-[calc(3.5rem+env(safe-area-inset-top,0px)+1rem)] bottom-auto max-h-[calc(100vh-3.5rem-env(safe-area-inset-top,0px)-2rem)] sm:top-[50%] sm:-translate-y-[50%] sm:max-h-[calc(100vh-2rem)]",
         className,
       )}
-      style={{
-        top: "calc(clamp(20px, var(--safe-area-top), 50px) + 1rem)",
-        bottom: "calc(clamp(0px, var(--safe-area-bottom), 50px) + 1rem)",
-      }}
       {...props}
     />
   </AlertDialogPortal>
