@@ -202,13 +202,13 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
       phone: data.phone || '',
       source: data.source,
       temperature: data.temperature as LeadTemperature,
-      value: isTelecom ? undefined : (data.value ? Number(data.value) : undefined),
+      value: showEnergy ? undefined : (data.value ? Number(data.value) : undefined),
       notes: data.notes,
       gdpr_consent: data.gdpr_consent,
       automation_enabled: data.automation_enabled,
       assigned_to: data.assigned_to && data.assigned_to !== 'unassigned' ? data.assigned_to : undefined,
-      tipologia: isTelecom ? data.tipologia as LeadTipologia : undefined,
-      consumo_anual: isTelecom && data.consumo_anual ? Number(data.consumo_anual) : undefined,
+      tipologia: showEnergy ? data.tipologia as LeadTipologia : undefined,
+      consumo_anual: showEnergy && data.consumo_anual ? Number(data.consumo_anual) : undefined,
     });
 
     if (pendingFiles.length > 0 && lead?.id) {
