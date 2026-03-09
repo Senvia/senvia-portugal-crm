@@ -745,9 +745,19 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
                           form.handleSubmit(onSubmit, (errors) => {
                             const firstErrorKey = Object.keys(errors)[0];
                             if (firstErrorKey) {
-                              const el = document.querySelector(`[name="${firstErrorKey}"]`);
-                              el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                              const el = document.querySelector(`[name="${firstErrorKey}"]`)
+                                || document.querySelector(`[data-field="${firstErrorKey}"]`)
+                                || document.querySelector('.text-destructive');
+                              if (el) {
+                                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                              }
                             }
+                            const firstError = Object.values(errors)[0];
+                            toast({
+                              title: 'Campos obrigatórios',
+                              description: (firstError?.message as string) || 'Preencha todos os campos obrigatórios.',
+                              variant: 'destructive',
+                            });
                           })();
                         }}
                       >
