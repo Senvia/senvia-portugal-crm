@@ -368,7 +368,28 @@ export function CreateSaleModal({
     }
   }, [open, proposalProducts, prefillProposal, selectedProposalId, initializedProposalId, proposals]);
 
-  // Filter proposals based on selected client
+  // Auto-fill plan price when selecting client org for plan sale
+  useEffect(() => {
+    if (!isPlanSale || !clientOrgId) return;
+    supabase
+      .from("organizations")
+      .select("plan")
+      .eq("id", clientOrgId)
+      .single()
+      .then(({ data }) => {
+        const plan = data?.plan ? getPlanById(data.plan) : null;
+        if (plan) {
+          setItems([{
+            id: crypto.randomUUID(),
+            product_id: null,
+            name: `Plano ${plan.name}`,
+            quantity: 1,
+            unit_price: plan.priceMonthly,
+          }]);
+        }
+      });
+  }, [clientOrgId, isPlanSale]);
+
   const filteredProposals = useMemo(() => {
     if (!proposals) return [];
     
