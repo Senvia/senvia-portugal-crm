@@ -1,20 +1,32 @@
+## Toggle "Energias" no Módulos (Telecom Only)
 
+### Estado: ✅ Implementado
 
-## Corrigir contagem de propostas no quadro B) Ritmo
+### Alterações Realizadas
 
-### Problema
+**1. `src/hooks/useModules.ts`**
+- Adicionado `energy: boolean` ao `EnabledModules` (default: `true`)
 
-A query de propostas no Ritmo filtra por `["draft", "sent", "negotiating"]` (linha 85). O utilizador quer que conte apenas propostas nos estados **enviado** (`sent`) e **em negociação** (`negotiating`), excluindo rascunhos (`draft`). A deduplicação por NIF já garante que ao mudar de "enviado" para "negociação" não conta duas vezes.
+**2. `src/components/settings/ModulesTab.tsx`**
+- Adicionado card especial "Energias" com ícone ⚡ que só renderiza quando `organization.niche === 'telecom'`
+- Badge "Telecom" para identificar que é exclusivo do nicho
 
-Adicionalmente, os valores de Energia/Solar/Comissão no Ritmo vêm da tabela `sales` com campos directos (`consumo_anual`, `kwp`, `comissao`) — que podem estar NULL. Isto deve seguir a mesma lógica corrigida no `useMonthSalesMetrics`, buscando os dados reais de `proposal_cpes`.
+**3. Componentes atualizados com `showEnergy = isTelecom && modules.energy`:**
 
-### Alterações
+| Ficheiro | O que é ocultado quando energy=off |
+|---|---|
+| `src/pages/Leads.tsx` | Filtro de tipologia |
+| `src/components/leads/AddLeadModal.tsx` | Campos tipologia, consumo_anual, summary |
+| `src/components/leads/LeadDetailsModal.tsx` | Secção tipologia, card consumo_anual |
+| `src/components/leads/LeadCard.tsx` | Badge tipologia, consumo_anual |
+| `src/components/leads/LeadsTableView.tsx` | Coluna tipologia, coluna consumo |
+| `src/components/proposals/CreateProposalModal.tsx` | Tipo de proposta selector (energia) |
+| `src/components/proposals/EditProposalModal.tsx` | Tipo de proposta, CPE selector energia |
+| `src/components/proposals/ProposalDetailsModal.tsx` | CPEs, consumo total, resumo energia, badges energia |
+| `src/components/sales/CreateSaleModal.tsx` | Dados energia, CPE/CUI |
+| `src/components/sales/EditSaleModal.tsx` | Dados energia editáveis |
+| `src/components/sales/SaleDetailsModal.tsx` | Dados energia, CPEs |
+| `src/components/clients/ClientDetailsModal.tsx` | Stats MWh/kWp/Comissão |
+| `src/pages/Clients.tsx` | Filtro tipo proposta (energia/servicos) |
 
-**`src/components/dashboard/MetricsPanel.tsx`**
-
-1. **Linha 85** — Alterar filtro de `.in("status", ["draft", "sent", "negotiating"])` para `.in("status", ["sent", "negotiating"])`
-
-2. **Linhas 118-133** — Alterar a query de `salesRaw` para incluir `proposal_id` no select, e após obter os resultados, fazer query a `proposal_cpes` para buscar `consumo_anual` e `comissao` reais (mesma lógica do `useMonthSalesMetrics` corrigido). Buscar `kwp` de `proposals.servicos_details`.
-
-3. **Linhas 155-161** — Usar os valores agregados dos CPEs em vez dos campos directos da tabela `sales`.
-
+**Nota**: Funcionalidades gerais de telecom (empresa, serviços, ativação, anexos) continuam visíveis independentemente do toggle de energia.
