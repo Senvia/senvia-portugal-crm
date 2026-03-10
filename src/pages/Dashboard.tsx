@@ -9,6 +9,7 @@ import { CommitmentPanel } from "@/components/dashboard/CommitmentPanel";
 import { SalesPerformancePanel } from "@/components/dashboard/SalesPerformancePanel";
 import { MetricsPanel } from "@/components/dashboard/MetricsPanel";
 import { CommissionsWidget } from "@/components/dashboard/CommissionsWidget";
+import { TeamPerformanceTable } from "@/components/dashboard/TeamPerformanceTable";
 import { Loader2 } from "lucide-react";
 import { NicheType } from "@/lib/dashboard-templates";
 import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription";
@@ -86,9 +87,13 @@ export default function Dashboard() {
           {commissionsEnabled && (
             <CommissionsWidget />
           )}
+
+          {visibleWidgets.some(w => w.widget_type === 'team_performance_table') && (
+            <TeamPerformanceTable />
+          )}
           
           <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {visibleWidgets.map((widget) => (
+            {visibleWidgets.filter(w => w.widget_type !== 'team_performance_table').map((widget) => (
               <DynamicWidget
                 key={widget.id || widget.widget_type}
                 widgetType={widget.widget_type as any}

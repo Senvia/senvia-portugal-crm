@@ -49,7 +49,9 @@ export type WidgetType =
   // Telecom specific
   | 'pending_installations'
   | 'active_customers'
-  | 'monthly_commissions';
+  | 'monthly_commissions'
+  // Panel widgets
+  | 'team_performance_table';
 
 export type ChartType = 'area' | 'bar' | 'donut' | 'pie' | 'progress' | 'none';
 
@@ -328,6 +330,15 @@ export const WIDGET_DEFINITIONS: Record<WidgetType, WidgetTemplate> = {
     requiredModule: 'sales',
     chartType: 'bar',
     description: 'Total de comissões acumuladas',
+  },
+  // Panel widgets
+  team_performance_table: {
+    type: 'team_performance_table',
+    title: 'Performance da Equipa',
+    icon: Users,
+    defaultVisible: false,
+    chartType: 'none',
+    description: 'Tabela com leads, propostas, vendas e comissões por colaborador',
   },
 };
 
