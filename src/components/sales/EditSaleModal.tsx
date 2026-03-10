@@ -712,7 +712,7 @@ export function EditSaleModal({
                           <div className="col-span-2 space-y-1.5">
                             <Label className="text-xs text-muted-foreground">Serviços/Produtos</Label>
                             <div className="flex flex-wrap gap-3 mt-1">
-                              {SERVICOS_PRODUCTS.map(sp => (
+                              {catalogProductNames.map(sp => (
                                 <label key={sp} className="flex items-center gap-2 text-sm cursor-pointer">
                                   <Checkbox checked={servicosProdutos.includes(sp)} onCheckedChange={(checked) => { if (checked) { setServicosProdutos(prev => [...prev, sp]); } else { setServicosProdutos(prev => prev.filter(s => s !== sp)); } }} />
                                   {sp}
