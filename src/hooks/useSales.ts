@@ -73,6 +73,7 @@ export function useCreateSale() {
       comissao?: number;
       negotiation_type?: NegotiationType;
       servicos_produtos?: string[];
+      servicos_details?: Record<string, any>;
       edp_proposal_number?: string;
       client_org_id?: string;
       // Campos de recorrência
