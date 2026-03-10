@@ -2,12 +2,13 @@
  * Shared "Outros Serviços" section for proposals/sales.
  * Supports both legacy (fields-based) and new catalog format.
  */
-import { Wrench } from 'lucide-react';
+import { Wrench, X } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
+import { SearchableCombobox, type ComboboxOption } from '@/components/ui/searchable-combobox';
 import type {
   ServicosDetails,
   ServicosProductDetail,
