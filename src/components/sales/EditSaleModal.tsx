@@ -691,8 +691,53 @@ export function EditSaleModal({
                     </Card>
                   )}
 
-                  {/* Service Data (editable) */}
-                  {isTelecom && sale?.proposal_type === 'servicos' && (
+                  {/* Service Data (editable) - new catalog format */}
+                  {isTelecom && isNewFormat && catalog && (sale?.proposal_type === 'servicos' || !sale?.proposal_type) && (
+                    <Card>
+                      <CardContent className="p-4">
+                        <ServicosSection
+                          modeloServico={(modeloServico as 'transacional' | 'saas') || 'transacional'}
+                          onModeloServicoChange={(v) => setModeloServico(v)}
+                          servicosProdutos={servicosProdutos}
+                          servicosDetails={servicosDetails}
+                          isNewFormat={isNewFormat}
+                          catalog={catalog}
+                          configs={SERVICOS_PRODUCT_CONFIGS}
+                          onToggleProduct={(name) => {
+                            if (servicosProdutos.includes(name)) {
+                              setServicosProdutos(prev => prev.filter(p => p !== name));
+                              setServicosDetails(prev => {
+                                const next = { ...prev };
+                                delete next[name];
+                                return next;
+                              });
+                            } else {
+                              setServicosProdutos(prev => [...prev, name]);
+                              const catProduct = catalog?.find(c => c.name === name);
+                              if (catProduct) {
+                                const comissaoVal = catProduct.has_commission ? Math.round(catProduct.price * catProduct.commission_pct) / 100 : 0;
+                                setServicosDetails(prev => ({
+                                  ...prev,
+                                  [name]: {
+                                    price: catProduct.price,
+                                    commission_pct: catProduct.commission_pct,
+                                    comissao: comissaoVal,
+                                  },
+                                }));
+                              }
+                            }
+                          }}
+                          onUpdateDetail={() => {}}
+                          onSetProductDetail={(product, detail) => {
+                            setServicosDetails(prev => ({ ...prev, [product]: detail }));
+                          }}
+                        />
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Service Data (editable) - legacy format */}
+                  {isTelecom && !isNewFormat && sale?.proposal_type === 'servicos' && (
                     <Card>
                       <CardHeader className="pb-2 p-4">
                         <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
