@@ -57,7 +57,9 @@ import { useProposalCpes, useUpdateProposalCpes } from "@/hooks/useProposalCpes"
 import type { CreateProposalCpeData } from "@/hooks/useProposalCpes";
 import { useCpes } from "@/hooks/useCpes";
 import { NEGOTIATION_TYPE_LABELS, NEGOTIATION_TYPES, MODELO_SERVICO_LABELS } from "@/types/proposals";
+import type { ServicosDetails } from "@/types/proposals";
 import { useServicosProducts } from '@/hooks/useServicosProducts';
+import { ServicosSection } from '@/components/proposals/ServicosSection';
 import { useCommissionMatrix, getVolumeTier } from "@/hooks/useCommissionMatrix";
 import type { NegotiationType, ModeloServico } from "@/types/proposals";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -90,7 +92,7 @@ export function EditSaleModal({
   onSuccess
 }: EditSaleModalProps) {
   const { data: clients } = useClients();
-  const { products: SERVICOS_PRODUCTS, configs: SERVICOS_PRODUCT_CONFIGS } = useServicosProducts();
+  const { products: catalogProductNames, configs: SERVICOS_PRODUCT_CONFIGS, catalog, isNewFormat } = useServicosProducts();
   const { data: products } = useProducts();
   const { data: existingItems = [] } = useSaleItems(sale?.id);
   
@@ -146,6 +148,7 @@ export function EditSaleModal({
   const [modeloServico, setModeloServico] = useState<string>("");
   const [kwp, setKwp] = useState<string>("");
   const [servicosProdutos, setServicosProdutos] = useState<string[]>([]);
+  const [servicosDetails, setServicosDetails] = useState<ServicosDetails>({});
 
   // Manual total value (for sales without items)
   const [manualTotalValue, setManualTotalValue] = useState<string>("");
@@ -171,6 +174,7 @@ export function EditSaleModal({
       setModeloServico(sale.modelo_servico || "");
       setKwp(sale.kwp?.toString() || "");
       setServicosProdutos(sale.servicos_produtos || []);
+      setServicosDetails((sale as any).servicos_details || {});
       setManualTotalValue(sale.total_value?.toString() || "0");
       setActivationDate(sale.activation_date || "");
       setEdpProposalNumber((sale as any).edp_proposal_number || "");
@@ -405,6 +409,7 @@ export function EditSaleModal({
           modelo_servico: (modeloServico as ModeloServico) || null,
           kwp: parseFloat(kwp) || null,
           servicos_produtos: servicosProdutos.length > 0 ? servicosProdutos : null,
+          servicos_details: Object.keys(servicosDetails).length > 0 ? servicosDetails : null,
           ...(isTelecom ? { activation_date: activationDate || null } : {}),
           ...(saleFields?.edp_proposal_number?.visible ? { edp_proposal_number: edpProposalNumber.trim() || null } : {}),
         },
@@ -686,8 +691,53 @@ export function EditSaleModal({
                     </Card>
                   )}
 
-                  {/* Service Data (editable) */}
-                  {isTelecom && sale?.proposal_type === 'servicos' && (
+                  {/* Service Data (editable) - new catalog format */}
+                  {isTelecom && isNewFormat && catalog && (sale?.proposal_type === 'servicos' || !sale?.proposal_type) && (
+                    <Card>
+                      <CardContent className="p-4">
+                        <ServicosSection
+                          modeloServico={(modeloServico as 'transacional' | 'saas') || 'transacional'}
+                          onModeloServicoChange={(v) => setModeloServico(v)}
+                          servicosProdutos={servicosProdutos}
+                          servicosDetails={servicosDetails}
+                          isNewFormat={isNewFormat}
+                          catalog={catalog}
+                          configs={SERVICOS_PRODUCT_CONFIGS}
+                          onToggleProduct={(name) => {
+                            if (servicosProdutos.includes(name)) {
+                              setServicosProdutos(prev => prev.filter(p => p !== name));
+                              setServicosDetails(prev => {
+                                const next = { ...prev };
+                                delete next[name];
+                                return next;
+                              });
+                            } else {
+                              setServicosProdutos(prev => [...prev, name]);
+                              const catProduct = catalog?.find(c => c.name === name);
+                              if (catProduct) {
+                                const comissaoVal = catProduct.has_commission ? Math.round(catProduct.price * catProduct.commission_pct) / 100 : 0;
+                                setServicosDetails(prev => ({
+                                  ...prev,
+                                  [name]: {
+                                    price: catProduct.price,
+                                    commission_pct: catProduct.commission_pct,
+                                    comissao: comissaoVal,
+                                  },
+                                }));
+                              }
+                            }
+                          }}
+                          onUpdateDetail={() => {}}
+                          onSetProductDetail={(product, detail) => {
+                            setServicosDetails(prev => ({ ...prev, [product]: detail }));
+                          }}
+                        />
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Service Data (editable) - legacy format */}
+                  {isTelecom && !isNewFormat && sale?.proposal_type === 'servicos' && (
                     <Card>
                       <CardHeader className="pb-2 p-4">
                         <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
@@ -709,7 +759,7 @@ export function EditSaleModal({
                           <div className="col-span-2 space-y-1.5">
                             <Label className="text-xs text-muted-foreground">Serviços/Produtos</Label>
                             <div className="flex flex-wrap gap-3 mt-1">
-                              {SERVICOS_PRODUCTS.map(sp => (
+                              {catalogProductNames.map(sp => (
                                 <label key={sp} className="flex items-center gap-2 text-sm cursor-pointer">
                                   <Checkbox checked={servicosProdutos.includes(sp)} onCheckedChange={(checked) => { if (checked) { setServicosProdutos(prev => [...prev, sp]); } else { setServicosProdutos(prev => prev.filter(s => s !== sp)); } }} />
                                   {sp}

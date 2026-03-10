@@ -3534,6 +3534,7 @@ export type Database = {
           recurring_status: string | null
           recurring_value: number | null
           sale_date: string | null
+          servicos_details: Json | null
           servicos_produtos: string[] | null
           status: string
           subtotal: number | null
@@ -3580,6 +3581,7 @@ export type Database = {
           recurring_status?: string | null
           recurring_value?: number | null
           sale_date?: string | null
+          servicos_details?: Json | null
           servicos_produtos?: string[] | null
           status?: string
           subtotal?: number | null
@@ -3626,6 +3628,7 @@ export type Database = {
           recurring_status?: string | null
           recurring_value?: number | null
           sale_date?: string | null
+          servicos_details?: Json | null
           servicos_produtos?: string[] | null
           status?: string
           subtotal?: number | null
@@ -4300,6 +4303,7 @@ export type Database = {
           recurring_status: string | null
           recurring_value: number | null
           sale_date: string | null
+          servicos_details: Json | null
           servicos_produtos: string[] | null
           status: string
           subtotal: number | null

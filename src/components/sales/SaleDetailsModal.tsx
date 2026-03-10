@@ -237,7 +237,8 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
   const hasEnergyData = sale.proposal_type === 'energia' && (
     sale.consumo_anual || sale.margem || sale.dbl || sale.anos_contrato || sale.comissao || sale.negotiation_type
   );
-  const hasServiceData = sale.proposal_type === 'servicos' && (
+  const saleServicosDetails = (sale as any).servicos_details as Record<string, { price?: number; commission_pct?: number; comissao?: number; name?: string }> | null;
+  const hasServiceData = (sale.proposal_type === 'servicos' || (!sale.proposal_type && sale.servicos_produtos && sale.servicos_produtos.length > 0)) && (
     sale.modelo_servico || sale.kwp || sale.comissao || (sale.servicos_produtos && sale.servicos_produtos.length > 0)
   );
 
@@ -481,13 +482,37 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                             </div>
                           )}
                           {sale.servicos_produtos && sale.servicos_produtos.length > 0 && (
-                            <div className="col-span-2">
+                            <div className="col-span-2 space-y-2">
                               <p className="text-xs text-muted-foreground">Serviços/Produtos</p>
-                              <div className="flex flex-wrap gap-1 mt-1">
-                                {sale.servicos_produtos.map((s) => (
-                                  <Badge key={s} variant="secondary" className="text-xs">{s}</Badge>
-                                ))}
-                              </div>
+                              {saleServicosDetails ? (
+                                <div className="space-y-2">
+                                  {sale.servicos_produtos.map((s) => {
+                                    const detail = saleServicosDetails[s];
+                                    return (
+                                      <div key={s} className="p-2.5 rounded-lg border bg-muted/30 space-y-1">
+                                        <div className="flex items-center justify-between">
+                                          <span className="text-sm font-medium">{detail?.name || s}</span>
+                                          {detail?.price != null && (
+                                            <span className="text-sm font-medium">{formatCurrency(detail.price)}</span>
+                                          )}
+                                        </div>
+                                        {detail?.comissao != null && detail.comissao > 0 && (
+                                          <p className="text-xs text-muted-foreground">
+                                            Comissão: <span className="text-green-500 font-medium">{formatCurrency(detail.comissao)}</span>
+                                            {detail.commission_pct != null && ` (${detail.commission_pct}%)`}
+                                          </p>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              ) : (
+                                <div className="flex flex-wrap gap-1">
+                                  {sale.servicos_produtos.map((s) => (
+                                    <Badge key={s} variant="secondary" className="text-xs">{s}</Badge>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                           )}
                           {sale.modelo_servico && (

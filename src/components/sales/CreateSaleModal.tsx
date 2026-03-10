@@ -59,8 +59,10 @@ import {
   CreditCard,
   Trash2
 } from "lucide-react";
-import type { Proposal, ServicosProductDetail } from "@/types/proposals";
+import type { Proposal, ServicosProductDetail, ServicosDetails } from "@/types/proposals";
 import { NEGOTIATION_TYPE_LABELS } from "@/types/proposals";
+import { useServicosProducts } from "@/hooks/useServicosProducts";
+import { ServicosSection } from "@/components/proposals/ServicosSection";
 
 import { useSaleFieldsSettings } from "@/hooks/useSaleFieldsSettings";
 import { useCommissionMatrix, getVolumeTier, getTierRuleLabel } from "@/hooks/useCommissionMatrix";
@@ -124,6 +126,7 @@ export function CreateSaleModal({
   const isSenviaOrg = organization?.id === '06fe9e1d-9670-45b0-8717-c5a6e90be380';
   const { data: saleFields } = useSaleFieldsSettings();
   const { calculateCommission, isAutoCalculated, calculateEnergyCommission, hasEnergyConfig, energyConfig } = useCommissionMatrix();
+  const { products: catalogProductNames, configs: servicosConfigs, catalog, isNewFormat } = useServicosProducts();
   
   // Fiscal info
   const ixActive = isInvoiceXpressActive(organization);
@@ -176,6 +179,7 @@ export function CreateSaleModal({
   const [comissao, setComissao] = useState<string>("");
   const [negotiationType, setNegotiationType] = useState<NegotiationType | null>(null);
   const [servicosProdutos, setServicosProdutos] = useState<string[]>([]);
+  const [servicosDetails, setServicosDetails] = useState<ServicosDetails>({});
 
   // Sale status
   const [saleStatus, setSaleStatus] = useState<SaleStatus>("in_progress");
@@ -253,7 +257,7 @@ export function CreateSaleModal({
         setKwp(prefillProposal.kwp?.toString() || "");
         setNegotiationType(prefillProposal.negotiation_type || null);
         setServicosProdutos(prefillProposal.servicos_produtos || []);
-        
+        setServicosDetails((prefillProposal as any).servicos_details || {});
         // Recalculate commission using matrix
         const recalcedComissao = recalcComissaoFromProposal(prefillProposal);
         setComissao(recalcedComissao !== null ? recalcedComissao.toString() : (prefillProposal.comissao?.toString() || ""));
@@ -271,6 +275,7 @@ export function CreateSaleModal({
         setComissao("");
         setNegotiationType(null);
         setServicosProdutos([]);
+        setServicosDetails({});
       } else {
         setClientId("");
         setProposalId("");
@@ -286,6 +291,7 @@ export function CreateSaleModal({
         setComissao("");
         setNegotiationType(null);
         setServicosProdutos([]);
+        setServicosDetails({});
       }
       
       setSaleDate(new Date());
@@ -446,10 +452,33 @@ export function CreateSaleModal({
 
   // Plan sale no longer needs plan selection - value comes from Stripe automatically
 
+  // Calculate totals from catalog products (telecom) 
+  const catalogTotalPrice = useMemo(() => {
+    if (!isTelecom || !isNewFormat) return 0;
+    return servicosProdutos.reduce((sum, p) => sum + (servicosDetails[p]?.price || 0), 0);
+  }, [isTelecom, isNewFormat, servicosProdutos, servicosDetails]);
+
+  const catalogTotalComissao = useMemo(() => {
+    if (!isTelecom || !isNewFormat) return 0;
+    return servicosProdutos.reduce((sum, p) => sum + (servicosDetails[p]?.comissao || 0), 0);
+  }, [isTelecom, isNewFormat, servicosProdutos, servicosDetails]);
+
+  // Auto-sync comissao from catalog products
+  useEffect(() => {
+    if (isTelecom && isNewFormat && !proposalId && servicosProdutos.length > 0) {
+      setComissao(catalogTotalComissao.toString());
+    }
+  }, [isTelecom, isNewFormat, proposalId, catalogTotalComissao, servicosProdutos]);
+
   // Calculate totals
   const subtotal = useMemo(() => {
-    return items.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
-  }, [items]);
+    const itemsTotal = items.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
+    // For telecom direct sales with catalog, use catalog price as subtotal
+    if (isTelecom && isNewFormat && !proposalId && servicosProdutos.length > 0 && itemsTotal === 0) {
+      return catalogTotalPrice;
+    }
+    return itemsTotal;
+  }, [items, isTelecom, isNewFormat, proposalId, servicosProdutos, catalogTotalPrice]);
 
   const discountValue = parseFloat(discount) || 0;
   const total = Math.max(0, subtotal - discountValue);
@@ -497,6 +526,7 @@ export function CreateSaleModal({
       setComissao("");
       setNegotiationType(null);
       setServicosProdutos([]);
+      setServicosDetails({});
       return;
     }
     
@@ -529,6 +559,7 @@ export function CreateSaleModal({
       setKwp(proposal.kwp?.toString() || "");
       setNegotiationType(proposal.negotiation_type || null);
       setServicosProdutos(proposal.servicos_produtos || []);
+      setServicosDetails((proposal as any).servicos_details || {});
       
       // Recalculate commission using matrix
       const recalcedComissao = recalcComissaoFromProposal(proposal);
@@ -635,8 +666,8 @@ export function CreateSaleModal({
         discount: discountValue,
         sale_date: format(saleDate, 'yyyy-MM-dd'),
         notes: notes.trim() || undefined,
-        ...(isTelecom && proposalId ? {
-          proposal_type: proposalType || undefined,
+        ...(isTelecom ? {
+          proposal_type: proposalType || (servicosProdutos.length > 0 ? 'servicos' : undefined),
           consumo_anual: parseFloat(consumoAnual) || undefined,
           margem: parseFloat(margem) || undefined,
           dbl: parseFloat(dbl) || undefined,
@@ -646,6 +677,7 @@ export function CreateSaleModal({
           comissao: parseFloat(comissao) || undefined,
           negotiation_type: negotiationType || undefined,
           servicos_produtos: servicosProdutos.length > 0 ? servicosProdutos : undefined,
+          servicos_details: Object.keys(servicosDetails).length > 0 ? servicosDetails : undefined,
         } : {}),
         edp_proposal_number: edpProposalNumber.trim() || undefined,
         activation_date: activationDate ? format(activationDate, 'yyyy-MM-dd') : undefined,
@@ -1092,6 +1124,51 @@ export function CreateSaleModal({
                           )}
                         </div>
                       ))}
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Telecom Servicos Section (direct sale without proposal or servicos proposal) */}
+                {isTelecom && (isNewFormat && catalog) && (!proposalId || proposalType === 'servicos') && (
+                  <Card>
+                    <CardContent className="p-4">
+                      <ServicosSection
+                        modeloServico={modeloServico || 'transacional'}
+                        onModeloServicoChange={(v) => setModeloServico(v)}
+                        servicosProdutos={servicosProdutos}
+                        servicosDetails={servicosDetails}
+                        isNewFormat={isNewFormat}
+                        catalog={catalog}
+                        configs={servicosConfigs}
+                        onToggleProduct={(name) => {
+                          if (servicosProdutos.includes(name)) {
+                            setServicosProdutos(prev => prev.filter(p => p !== name));
+                            setServicosDetails(prev => {
+                              const next = { ...prev };
+                              delete next[name];
+                              return next;
+                            });
+                          } else {
+                            setServicosProdutos(prev => [...prev, name]);
+                            const catProduct = catalog?.find(c => c.name === name);
+                            if (catProduct) {
+                              const comissaoVal = catProduct.has_commission ? Math.round(catProduct.price * catProduct.commission_pct) / 100 : 0;
+                              setServicosDetails(prev => ({
+                                ...prev,
+                                [name]: {
+                                  price: catProduct.price,
+                                  commission_pct: catProduct.commission_pct,
+                                  comissao: comissaoVal,
+                                },
+                              }));
+                            }
+                          }
+                        }}
+                        onUpdateDetail={() => {}}
+                        onSetProductDetail={(product, detail) => {
+                          setServicosDetails(prev => ({ ...prev, [product]: detail }));
+                        }}
+                      />
                     </CardContent>
                   </Card>
                 )}
