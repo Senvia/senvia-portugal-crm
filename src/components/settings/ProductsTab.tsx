@@ -179,6 +179,8 @@ export function ProductsTab() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {isTelecom && <ServicosProductsManager />}
     </div>
   );
 }
