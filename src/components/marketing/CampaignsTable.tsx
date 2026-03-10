@@ -19,6 +19,7 @@ interface CampaignsTableProps {
   onView: (campaign: EmailCampaign) => void;
   onEdit: (campaign: EmailCampaign) => void;
   onDelete: (id: string) => void;
+  onReopen?: (id: string) => void;
 }
 
 const STATUS_DOT_COLORS: Record<CampaignStatus, string> = {
