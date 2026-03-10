@@ -56,6 +56,7 @@ export default function Campaigns() {
             onView={handleCampaignClick}
             onEdit={setEditingCampaign}
             onDelete={(id) => deleteCampaign.mutate(id)}
+            onReopen={(id) => reopenCampaign.mutate(id)}
           />
         )}
 

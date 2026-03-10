@@ -154,6 +154,11 @@ export function CampaignsTable({ campaigns, onView, onEdit, onDelete, onReopen }
                           <DropdownMenuItem onClick={() => onView(campaign)}>
                             <BarChart3 className="mr-2 h-4 w-4" /> Ver detalhes
                           </DropdownMenuItem>
+                          {(campaign.status === 'failed' || campaign.status === 'scheduled') && onReopen && (
+                            <DropdownMenuItem onClick={() => onReopen(campaign.id)}>
+                              <RotateCcw className="mr-2 h-4 w-4" /> Reabrir como rascunho
+                            </DropdownMenuItem>
+                          )}
                           <DropdownMenuItem className="text-destructive" onClick={() => onDelete(campaign.id)}>
                             <Trash2 className="mr-2 h-4 w-4" /> Eliminar
                           </DropdownMenuItem>
