@@ -452,10 +452,33 @@ export function CreateSaleModal({
 
   // Plan sale no longer needs plan selection - value comes from Stripe automatically
 
+  // Calculate totals from catalog products (telecom) 
+  const catalogTotalPrice = useMemo(() => {
+    if (!isTelecom || !isNewFormat) return 0;
+    return servicosProdutos.reduce((sum, p) => sum + (servicosDetails[p]?.price || 0), 0);
+  }, [isTelecom, isNewFormat, servicosProdutos, servicosDetails]);
+
+  const catalogTotalComissao = useMemo(() => {
+    if (!isTelecom || !isNewFormat) return 0;
+    return servicosProdutos.reduce((sum, p) => sum + (servicosDetails[p]?.comissao || 0), 0);
+  }, [isTelecom, isNewFormat, servicosProdutos, servicosDetails]);
+
+  // Auto-sync comissao from catalog products
+  useEffect(() => {
+    if (isTelecom && isNewFormat && !proposalId && servicosProdutos.length > 0) {
+      setComissao(catalogTotalComissao.toString());
+    }
+  }, [isTelecom, isNewFormat, proposalId, catalogTotalComissao, servicosProdutos]);
+
   // Calculate totals
   const subtotal = useMemo(() => {
-    return items.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
-  }, [items]);
+    const itemsTotal = items.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
+    // For telecom direct sales with catalog, use catalog price as subtotal
+    if (isTelecom && isNewFormat && !proposalId && servicosProdutos.length > 0 && itemsTotal === 0) {
+      return catalogTotalPrice;
+    }
+    return itemsTotal;
+  }, [items, isTelecom, isNewFormat, proposalId, servicosProdutos, catalogTotalPrice]);
 
   const discountValue = parseFloat(discount) || 0;
   const total = Math.max(0, subtotal - discountValue);
