@@ -1,32 +1,30 @@
-## Produtos de Serviços Configuráveis por Organização
 
-### Estado: ✅ Implementado
 
-### Alterações Realizadas
+## Problema
 
-**1. Migração DB**
-- Nova coluna `servicos_products_config JSONB DEFAULT NULL` na tabela `organizations`
-- Quando `NULL` → fallback para constantes hardcoded (Solar, Baterias, etc.)
-- Quando preenchido → lista personalizada da organização
+No `CreateSaleModal`, orgs telecom sem energias ativadas não conseguem adicionar produtos porque:
+1. A secção "Produtos/Serviços" genérica está escondida com `!isTelecom` (linha 1100)
+2. A secção "Dados Energia" só aparece com `showEnergy && proposalId` (linha 935)
+3. Não existe nenhuma secção `ServicosSection` (catálogo) para vendas diretas telecom
 
-**2. Hook `useServicosProducts` (`src/hooks/useServicosProducts.ts`)**
-- Lê `servicos_products_config` da organização via `useOrganization()`
-- Retorna `{ products, configs }` com fallback automático
+O mesmo problema pode existir no `EditSaleModal` e `SaleDetailsModal`.
 
-**3. UI — `ServicosProductsManager` (`src/components/settings/ServicosProductsManager.tsx`)**
-- Secção "Produtos Telecom" em Definições → Produtos (apenas `niche === 'telecom'`)
-- Adicionar/remover produtos com seleção de campos (duração, valor, kWp, comissão)
+## Solução
 
-**4. Componentes atualizados (constantes → hook):**
+Adicionar a `ServicosSection` (com produtos do catálogo) ao `CreateSaleModal` para orgs telecom, independentemente de terem energias ativadas ou de terem proposta selecionada.
 
-| Ficheiro | Mudança |
-|---|---|
-| `CreateProposalModal.tsx` | `useServicosProducts()` substitui imports hardcoded |
-| `EditProposalModal.tsx` | Idem |
-| `ProposalDetailsModal.tsx` | Idem |
-| `EditSaleModal.tsx` | Idem |
-| `CommissionMatrixTab.tsx` | Idem |
-| `proposal-servicos-validation.ts` | Aceita `configs` como parâmetro opcional |
+### Ficheiros a alterar
 
-**5. Impacto na Perfect2Gether**
-**Zero.** Coluna `NULL` por default → fallback para constantes hardcoded.
+**1. `src/components/sales/CreateSaleModal.tsx`**
+- Importar `useServicosProducts` e `ServicosSection`
+- Adicionar state para `servicosProdutos`, `servicosDetails`, `modeloServico` (quando é venda direta sem proposta)
+- Renderizar `ServicosSection` para telecom quando `isTelecom && !proposalId` (venda direta) ou quando `proposalType === 'servicos'`
+- Sincronizar `comissao` e `total_value` com o total calculado dos produtos selecionados
+- Guardar `servicos_produtos` e `servicos_details` no insert da venda
+
+**2. `src/components/sales/EditSaleModal.tsx`**
+- Mesma lógica: mostrar `ServicosSection` editável para vendas telecom de serviços
+
+**3. `src/components/sales/SaleDetailsModal.tsx`**
+- Exibir os produtos de serviços com os valores editados na venda
+
