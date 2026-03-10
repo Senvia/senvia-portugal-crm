@@ -200,7 +200,7 @@ export function MetricsPanel() {
       const opEnergia = energiaNifs.size;
       const opSolar = solarNifs.size;
 
-      const userSales = salesRaw.filter((s: any) => s.created_by === m.user_id);
+      const userSales = salesAggregated.filter((s: any) => s.created_by === m.user_id);
       let energia = 0, solar = 0, comissao = 0;
       for (const s of userSales) {
         energia += Number(s.consumo_anual || 0) / 1000;
