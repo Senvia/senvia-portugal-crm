@@ -119,13 +119,25 @@ export function ClientsTable({ clients, onEdit, onView, onDelete, selectedIds = 
                   />
                 </TableHead>
               )}
-              <TableHead>Cliente</TableHead>
-              <TableHead className="hidden md:table-cell">Contacto</TableHead>
-              <TableHead className="hidden lg:table-cell">Empresa</TableHead>
-              <TableHead className="hidden xl:table-cell">Responsável</TableHead>
-              <TableHead>{labels.statusFieldLabel}</TableHead>
-              <TableHead className="hidden sm:table-cell">Data</TableHead>
-              <TableHead className="w-[60px]"></TableHead>
+              {isTelecom ? (
+                <>
+                  <TableHead className="hidden lg:table-cell">Empresa</TableHead>
+                  <TableHead className="hidden md:table-cell">Contacto</TableHead>
+                  <TableHead>Cliente</TableHead>
+                  <TableHead className="hidden xl:table-cell">Responsável</TableHead>
+                  <TableHead>{labels.statusFieldLabel}</TableHead>
+                  <TableHead className="hidden sm:table-cell">Data</TableHead>
+                </>
+              ) : (
+                <>
+                  <TableHead>Cliente</TableHead>
+                  <TableHead className="hidden md:table-cell">Contacto</TableHead>
+                  <TableHead className="hidden lg:table-cell">Empresa</TableHead>
+                  <TableHead className="hidden xl:table-cell">Responsável</TableHead>
+                  <TableHead>{labels.statusFieldLabel}</TableHead>
+                  <TableHead className="hidden sm:table-cell">Data</TableHead>
+                </>
+              )}
             </TableRow>
           </TableHeader>
           <TableBody>
