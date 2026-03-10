@@ -1,0 +1,265 @@
+import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+serve(async (req: Request): Promise<Response> => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Find campaigns that are scheduled and due
+    const { data: campaigns, error: campaignsError } = await supabase
+      .from("email_campaigns")
+      .select("*")
+      .eq("status", "scheduled")
+      .lte("scheduled_at", new Date().toISOString());
+
+    if (campaignsError) {
+      console.error("Error fetching scheduled campaigns:", campaignsError);
+      return new Response(
+        JSON.stringify({ error: campaignsError.message }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (!campaigns || campaigns.length === 0) {
+      return new Response(
+        JSON.stringify({ message: "No scheduled campaigns to process" }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const results: { campaignId: string; status: string; sent: number; failed: number }[] = [];
+
+    for (const campaign of campaigns) {
+      try {
+        console.log(`Processing scheduled campaign: ${campaign.id} - ${campaign.name}`);
+
+        // Mark as sending
+        await supabase
+          .from("email_campaigns")
+          .update({ status: "sending" })
+          .eq("id", campaign.id);
+
+        // Get recipients from queued email_sends
+        const { data: queuedSends, error: queuedError } = await supabase
+          .from("email_sends")
+          .select("*")
+          .eq("campaign_id", campaign.id)
+          .eq("status", "queued");
+
+        if (queuedError || !queuedSends || queuedSends.length === 0) {
+          console.warn(`No queued recipients for campaign ${campaign.id}`);
+          await supabase
+            .from("email_campaigns")
+            .update({ status: "failed", sent_count: 0, failed_count: 0 })
+            .eq("id", campaign.id);
+          results.push({ campaignId: campaign.id, status: "failed", sent: 0, failed: 0 });
+          continue;
+        }
+
+        // Get org Brevo config
+        const { data: org } = await supabase
+          .from("organizations")
+          .select("name, brevo_api_key, brevo_sender_email")
+          .eq("id", campaign.organization_id)
+          .single();
+
+        if (!org?.brevo_api_key || !org?.brevo_sender_email) {
+          console.error(`Brevo not configured for org ${campaign.organization_id}`);
+          await supabase
+            .from("email_campaigns")
+            .update({ status: "failed" })
+            .eq("id", campaign.id);
+          results.push({ campaignId: campaign.id, status: "failed", sent: 0, failed: 0 });
+          continue;
+        }
+
+        // Get template content if needed
+        let emailSubject = campaign.subject || "";
+        let emailHtml = campaign.html_content || "";
+
+        if (campaign.template_id) {
+          const { data: template } = await supabase
+            .from("email_templates")
+            .select("subject, html_content")
+            .eq("id", campaign.template_id)
+            .single();
+
+          if (template) {
+            emailSubject = template.subject;
+            emailHtml = template.html_content;
+          }
+        }
+
+        // Get sender override from campaign creator
+        let senderEmail = org.brevo_sender_email;
+        let senderName = org.name;
+
+        if (campaign.created_by) {
+          const { data: creatorProfile } = await supabase
+            .from("profiles")
+            .select("brevo_sender_email, full_name")
+            .eq("id", campaign.created_by)
+            .single();
+
+          if (creatorProfile?.brevo_sender_email) {
+            senderEmail = creatorProfile.brevo_sender_email;
+            senderName = creatorProfile.full_name || org.name;
+          }
+        }
+
+        const campaignSettings = (campaign.settings as Record<string, boolean>) || {};
+        const campaignSettingsData = (campaign.settings_data as Record<string, string>) || {};
+
+        let sentCount = 0;
+        let failedCount = 0;
+
+        for (const send of queuedSends) {
+          try {
+            // Replace variables in subject and HTML
+            const variables: Record<string, string> = {
+              nome: send.recipient_name || "",
+              email: send.recipient_email || "",
+              organizacao: org.name || "",
+              data: new Date().toLocaleDateString("pt-PT", { day: "2-digit", month: "long", year: "numeric" }),
+            };
+
+            let finalSubject = emailSubject;
+            let finalHtml = emailHtml;
+
+            for (const [key, value] of Object.entries(variables)) {
+              const regex = new RegExp(`{{\\s*${key}\\s*}}`, "gi");
+              finalSubject = finalSubject.replace(regex, value || "");
+              finalHtml = finalHtml.replace(regex, value || "");
+            }
+
+            // Apply settings (header, footer, UTM, etc.)
+            if (campaignSettings.custom_header && campaignSettingsData.custom_header) {
+              finalHtml = campaignSettingsData.custom_header + finalHtml;
+            }
+            if (campaignSettings.custom_footer && campaignSettingsData.custom_footer) {
+              finalHtml = finalHtml + campaignSettingsData.custom_footer;
+            }
+            if (campaignSettings.custom_unsubscribe && campaignSettingsData.custom_unsubscribe) {
+              finalHtml = finalHtml.replace(/\{\{\s*unsubscribe\s*\}\}/gi, campaignSettingsData.custom_unsubscribe);
+            }
+            if (campaignSettings.ga_tracking && campaignSettingsData.ga_tracking) {
+              finalHtml = finalHtml.replace(
+                /href="(https?:\/\/[^"]+)"/gi,
+                (_match: string, url: string) => {
+                  try {
+                    const u = new URL(url);
+                    u.searchParams.set("utm_source", "brevo");
+                    u.searchParams.set("utm_medium", "email");
+                    u.searchParams.set("utm_campaign", campaignSettingsData.ga_tracking);
+                    return `href="${u.toString()}"`;
+                  } catch {
+                    return _match;
+                  }
+                }
+              );
+            }
+
+            const brevoPayload: Record<string, unknown> = {
+              sender: { name: senderName, email: senderEmail },
+              to: [{ email: send.recipient_email, name: send.recipient_name || send.recipient_email }],
+              subject: finalSubject,
+              htmlContent: finalHtml,
+            };
+
+            if (campaignSettings.different_reply_to && campaignSettingsData.different_reply_to) {
+              brevoPayload.replyTo = { email: campaignSettingsData.different_reply_to };
+            }
+            if (campaignSettings.tag && campaignSettingsData.tag) {
+              brevoPayload.tags = [campaignSettingsData.tag];
+            }
+
+            const brevoResponse = await fetch("https://api.brevo.com/v3/smtp/email", {
+              method: "POST",
+              headers: {
+                accept: "application/json",
+                "api-key": org.brevo_api_key,
+                "content-type": "application/json",
+              },
+              body: JSON.stringify(brevoPayload),
+            });
+
+            if (brevoResponse.ok) {
+              let brevoMessageId: string | null = null;
+              try {
+                const brevoData = await brevoResponse.json();
+                brevoMessageId = brevoData.messageId || null;
+              } catch { /* ignore */ }
+
+              await supabase
+                .from("email_sends")
+                .update({
+                  status: "sent",
+                  sent_at: new Date().toISOString(),
+                  brevo_message_id: brevoMessageId,
+                })
+                .eq("id", send.id);
+              sentCount++;
+            } else {
+              const errorText = await brevoResponse.text();
+              await supabase
+                .from("email_sends")
+                .update({ status: "failed", error_message: errorText })
+                .eq("id", send.id);
+              failedCount++;
+            }
+          } catch (sendError) {
+            const errMsg = sendError instanceof Error ? sendError.message : "Unknown error";
+            await supabase
+              .from("email_sends")
+              .update({ status: "failed", error_message: errMsg })
+              .eq("id", send.id);
+            failedCount++;
+          }
+        }
+
+        // Update campaign status
+        await supabase
+          .from("email_campaigns")
+          .update({
+            status: failedCount === queuedSends.length ? "failed" : "sent",
+            sent_count: sentCount,
+            failed_count: failedCount,
+            sent_at: new Date().toISOString(),
+          })
+          .eq("id", campaign.id);
+
+        results.push({ campaignId: campaign.id, status: "sent", sent: sentCount, failed: failedCount });
+        console.log(`Campaign ${campaign.id}: ${sentCount} sent, ${failedCount} failed`);
+      } catch (campaignError) {
+        console.error(`Error processing campaign ${campaign.id}:`, campaignError);
+        await supabase
+          .from("email_campaigns")
+          .update({ status: "failed" })
+          .eq("id", campaign.id);
+        results.push({ campaignId: campaign.id, status: "failed", sent: 0, failed: 0 });
+      }
+    }
+
+    return new Response(
+      JSON.stringify({ success: true, processed: results.length, results }),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  } catch (error) {
+    console.error("Error in process-scheduled-campaigns:", error);
+    return new Response(
+      JSON.stringify({ error: error instanceof Error ? error.message : "Internal server error" }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+});
