@@ -5,6 +5,7 @@ import { useTeamFilter } from "@/hooks/useTeamFilter";
 import { useCommitments } from "@/hooks/useCommitments";
 import { useTeamMembers } from "@/hooks/useTeam";
 import { useDashboardPeriod } from "@/stores/useDashboardPeriod";
+import { useModules } from "@/hooks/useModules";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -34,15 +35,17 @@ interface RowData {
 }
 
 export function CommitmentPanel() {
-  const { user, profile } = useAuth();
+  const { user, profile, organization } = useAuth();
   const { isAdmin } = usePermissions();
   const { data: members = [] } = useTeamMembers();
   const { selectedMemberId } = useTeamFilter();
   const { selectedMonth } = useDashboardPeriod();
   const { commitment, isLoading, allCommitments, allLoading } = useCommitments(user?.id, selectedMonth);
+  const { modules } = useModules();
   const [editOpen, setEditOpen] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
 
+  const showEnergy = organization?.niche === 'telecom' && modules.energy;
   const currentMonthLabel = format(startOfMonth(selectedMonth), "MMMM yyyy", { locale: pt });
 
   const buildRows = (): RowData[] => {
@@ -130,8 +133,8 @@ export function CommitmentPanel() {
                 <TableRow>
                   <TableHead className="text-xs">Colaborador</TableHead>
                   <TableHead className="text-xs text-right">NIFs</TableHead>
-                  <TableHead className="text-xs text-right">Energia (MWh)</TableHead>
-                  <TableHead className="text-xs text-right hidden sm:table-cell">Solar (kWp)</TableHead>
+                  {showEnergy && <TableHead className="text-xs text-right">Energia (MWh)</TableHead>}
+                  {showEnergy && <TableHead className="text-xs text-right hidden sm:table-cell">Solar (kWp)</TableHead>}
                   <TableHead className="text-xs text-right">Comissão</TableHead>
                 </TableRow>
               </TableHeader>
@@ -140,8 +143,8 @@ export function CommitmentPanel() {
                   <TableRow key={row.userId}>
                     <TableCell className="text-xs py-1.5 font-medium">{row.name}</TableCell>
                     <TableCell className="text-xs text-right py-1.5">{row.nifs}</TableCell>
-                    <TableCell className="text-xs text-right py-1.5">{formatNumber(row.energia)}</TableCell>
-                    <TableCell className="text-xs text-right py-1.5 hidden sm:table-cell">{formatNumber(row.solar)}</TableCell>
+                    {showEnergy && <TableCell className="text-xs text-right py-1.5">{formatNumber(row.energia)}</TableCell>}
+                    {showEnergy && <TableCell className="text-xs text-right py-1.5 hidden sm:table-cell">{formatNumber(row.solar)}</TableCell>}
                     <TableCell className="text-xs text-right py-1.5 font-medium text-green-500">{formatCurrency(row.comissao)}</TableCell>
                   </TableRow>
                 ))}
@@ -149,8 +152,8 @@ export function CommitmentPanel() {
                   <TableRow className="bg-muted/20 hover:bg-muted/20">
                     <TableCell className="text-xs font-semibold py-1.5">TOTAL</TableCell>
                     <TableCell className="text-xs text-right font-semibold py-1.5">{totals.nifs}</TableCell>
-                    <TableCell className="text-xs text-right font-semibold py-1.5">{formatNumber(totals.energia)}</TableCell>
-                    <TableCell className="text-xs text-right font-semibold py-1.5 hidden sm:table-cell">{formatNumber(totals.solar)}</TableCell>
+                    {showEnergy && <TableCell className="text-xs text-right font-semibold py-1.5">{formatNumber(totals.energia)}</TableCell>}
+                    {showEnergy && <TableCell className="text-xs text-right font-semibold py-1.5 hidden sm:table-cell">{formatNumber(totals.solar)}</TableCell>}
                     <TableCell className="text-xs text-right font-semibold py-1.5 text-green-500">{formatCurrency(totals.comissao)}</TableCell>
                   </TableRow>
                 )}

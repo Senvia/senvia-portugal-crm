@@ -5,6 +5,7 @@ import { useTeamFilter } from "@/hooks/useTeamFilter";
 import { useTeamMembers } from "@/hooks/useTeam";
 import { useMonthlyMetrics } from "@/hooks/useMonthlyMetrics";
 import { useDashboardPeriod } from "@/stores/useDashboardPeriod";
+import { useModules } from "@/hooks/useModules";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -57,19 +58,20 @@ export function MetricsPanel() {
   const { selectedMemberId } = useTeamFilter();
   const { selectedMonth } = useDashboardPeriod();
   const { metrics, isLoading: metricsLoading } = useMonthlyMetrics(selectedMonth);
+  const { modules } = useModules();
   const [editOpen, setEditOpen] = useState(false);
   const [metricasOpen, setMetricasOpen] = useState(true);
   const [ritmoOpen, setRitmoOpen] = useState(true);
   const [concOpen, setConcOpen] = useState(true);
   const cardRef = useRef<HTMLDivElement>(null);
 
+  const showEnergy = organization?.niche === 'telecom' && modules.energy;
   const orgId = organization?.id;
   const currentMonthLabel = format(startOfMonth(selectedMonth), "MMMM yyyy", { locale: pt });
 
   const monthStart = format(startOfMonth(selectedMonth), "yyyy-MM-dd");
   const monthEndStr = format(endOfMonth(selectedMonth), "yyyy-MM-dd");
 
-  // Query proposals for OP counts (not concluded) - include client_id for NIF lookup
   const { data: proposalsRaw = [], isLoading: proposalsLoading } = useQuery({
     queryKey: ["metrics-proposals-ops", orgId, monthStart],
     queryFn: async () => {
@@ -87,7 +89,6 @@ export function MetricsPanel() {
     enabled: !!orgId,
   });
 
-  // Query client NIFs for distinct NIF counting
   const proposalClientIds = useMemo(() => {
     const ids = new Set<string>();
     for (const p of proposalsRaw) {
@@ -114,7 +115,6 @@ export function MetricsPanel() {
     enabled: proposalClientIds.length > 0,
   });
 
-  // Query sales for values (only fulfilled)
   const { data: salesRaw = [], isLoading: salesLoading } = useQuery({
     queryKey: ["metrics-sales-ops", orgId, monthStart],
     queryFn: async () => {
@@ -139,7 +139,6 @@ export function MetricsPanel() {
 
   const ritmoRows: RitmoRow[] = useMemo(() => {
     return filteredMembers.map((m) => {
-      // OP counts from proposals - count distinct NIFs
       const userProposals = proposalsRaw.filter((p: any) => p.created_by === m.user_id);
       
       const energiaNifs = new Set<string>();
@@ -153,7 +152,6 @@ export function MetricsPanel() {
       const opEnergia = energiaNifs.size;
       const opSolar = solarNifs.size;
 
-      // Values from fulfilled sales
       const userSales = salesRaw.filter((s: any) => s.created_by === m.user_id);
       let energia = 0, solar = 0, comissao = 0;
       for (const s of userSales) {
@@ -184,10 +182,10 @@ export function MetricsPanel() {
   const headers = (
     <TableRow>
       <TableHead className="text-xs whitespace-nowrap">Consultor</TableHead>
-      <TableHead className="text-xs text-right whitespace-nowrap">OP</TableHead>
-      <TableHead className="text-xs text-right whitespace-nowrap">Energia</TableHead>
-      <TableHead className="text-xs text-right whitespace-nowrap">OP</TableHead>
-      <TableHead className="text-xs text-right whitespace-nowrap">Solar</TableHead>
+      {showEnergy && <TableHead className="text-xs text-right whitespace-nowrap">OP</TableHead>}
+      {showEnergy && <TableHead className="text-xs text-right whitespace-nowrap">Energia</TableHead>}
+      {showEnergy && <TableHead className="text-xs text-right whitespace-nowrap">OP</TableHead>}
+      {showEnergy && <TableHead className="text-xs text-right whitespace-nowrap">Solar</TableHead>}
       <TableHead className="text-xs text-right whitespace-nowrap">OP</TableHead>
       <TableHead className="text-xs text-right whitespace-nowrap">Comissão</TableHead>
     </TableRow>
@@ -237,10 +235,10 @@ export function MetricsPanel() {
                           return (
                             <TableRow key={m.user_id}>
                               <TableCell className="text-xs py-1.5 font-medium whitespace-nowrap">{m.full_name}{m.user_id === user?.id ? " (eu)" : ""}</TableCell>
-                              <TableCell className="text-xs text-right py-1.5">{target?.op_energia || 0}</TableCell>
-                              <TableCell className="text-xs text-right py-1.5">{formatNumber(target?.energia || 0)}</TableCell>
-                              <TableCell className="text-xs text-right py-1.5">{target?.op_solar || 0}</TableCell>
-                              <TableCell className="text-xs text-right py-1.5">{formatNumber(target?.solar || 0)}</TableCell>
+                              {showEnergy && <TableCell className="text-xs text-right py-1.5">{target?.op_energia || 0}</TableCell>}
+                              {showEnergy && <TableCell className="text-xs text-right py-1.5">{formatNumber(target?.energia || 0)}</TableCell>}
+                              {showEnergy && <TableCell className="text-xs text-right py-1.5">{target?.op_solar || 0}</TableCell>}
+                              {showEnergy && <TableCell className="text-xs text-right py-1.5">{formatNumber(target?.solar || 0)}</TableCell>}
                               <TableCell className="text-xs text-right py-1.5">{target?.op_comissao || 0}</TableCell>
                               <TableCell className="text-xs text-right py-1.5 font-medium text-primary">{formatCurrency(target?.comissao || 0)}</TableCell>
                             </TableRow>
@@ -249,10 +247,10 @@ export function MetricsPanel() {
                         {showTotals && (
                           <TableRow className="bg-muted/20 hover:bg-muted/20">
                             <TableCell className="text-xs font-semibold py-1.5">TOTAL</TableCell>
-                            <TableCell className="text-xs text-right font-semibold py-1.5">{metrics.reduce((a, m) => a + m.op_energia, 0)}</TableCell>
-                            <TableCell className="text-xs text-right font-semibold py-1.5">{formatNumber(metrics.reduce((a, m) => a + m.energia, 0))}</TableCell>
-                            <TableCell className="text-xs text-right font-semibold py-1.5">{metrics.reduce((a, m) => a + m.op_solar, 0)}</TableCell>
-                            <TableCell className="text-xs text-right font-semibold py-1.5">{formatNumber(metrics.reduce((a, m) => a + m.solar, 0))}</TableCell>
+                            {showEnergy && <TableCell className="text-xs text-right font-semibold py-1.5">{metrics.reduce((a, m) => a + m.op_energia, 0)}</TableCell>}
+                            {showEnergy && <TableCell className="text-xs text-right font-semibold py-1.5">{formatNumber(metrics.reduce((a, m) => a + m.energia, 0))}</TableCell>}
+                            {showEnergy && <TableCell className="text-xs text-right font-semibold py-1.5">{metrics.reduce((a, m) => a + m.op_solar, 0)}</TableCell>}
+                            {showEnergy && <TableCell className="text-xs text-right font-semibold py-1.5">{formatNumber(metrics.reduce((a, m) => a + m.solar, 0))}</TableCell>}
                             <TableCell className="text-xs text-right font-semibold py-1.5">{metrics.reduce((a, m) => a + m.op_comissao, 0)}</TableCell>
                             <TableCell className="text-xs text-right font-semibold py-1.5 text-primary">{formatCurrency(metrics.reduce((a, m) => a + m.comissao, 0))}</TableCell>
                           </TableRow>
@@ -276,10 +274,10 @@ export function MetricsPanel() {
                         {ritmoRows.map((row) => (
                           <TableRow key={row.userId}>
                             <TableCell className="text-xs py-1.5 font-medium whitespace-nowrap">{row.name}</TableCell>
-                            <TableCell className="text-xs text-right py-1.5">{row.opEnergia}</TableCell>
-                            <TableCell className="text-xs text-right py-1.5">{formatNumber(row.energia)}</TableCell>
-                            <TableCell className="text-xs text-right py-1.5">{row.opSolar}</TableCell>
-                            <TableCell className="text-xs text-right py-1.5">{formatNumber(row.solar)}</TableCell>
+                            {showEnergy && <TableCell className="text-xs text-right py-1.5">{row.opEnergia}</TableCell>}
+                            {showEnergy && <TableCell className="text-xs text-right py-1.5">{formatNumber(row.energia)}</TableCell>}
+                            {showEnergy && <TableCell className="text-xs text-right py-1.5">{row.opSolar}</TableCell>}
+                            {showEnergy && <TableCell className="text-xs text-right py-1.5">{formatNumber(row.solar)}</TableCell>}
                             <TableCell className="text-xs text-right py-1.5">{row.opComissao}</TableCell>
                             <TableCell className="text-xs text-right py-1.5 font-medium text-primary">{formatCurrency(row.comissao)}</TableCell>
                           </TableRow>
@@ -287,10 +285,10 @@ export function MetricsPanel() {
                         {showTotals && (
                           <TableRow className="bg-muted/20 hover:bg-muted/20">
                             <TableCell className="text-xs font-semibold py-1.5">TOTAL</TableCell>
-                            <TableCell className="text-xs text-right font-semibold py-1.5">{ritmoTotals.opEnergia}</TableCell>
-                            <TableCell className="text-xs text-right font-semibold py-1.5">{formatNumber(ritmoTotals.energia)}</TableCell>
-                            <TableCell className="text-xs text-right font-semibold py-1.5">{ritmoTotals.opSolar}</TableCell>
-                            <TableCell className="text-xs text-right font-semibold py-1.5">{formatNumber(ritmoTotals.solar)}</TableCell>
+                            {showEnergy && <TableCell className="text-xs text-right font-semibold py-1.5">{ritmoTotals.opEnergia}</TableCell>}
+                            {showEnergy && <TableCell className="text-xs text-right font-semibold py-1.5">{formatNumber(ritmoTotals.energia)}</TableCell>}
+                            {showEnergy && <TableCell className="text-xs text-right font-semibold py-1.5">{ritmoTotals.opSolar}</TableCell>}
+                            {showEnergy && <TableCell className="text-xs text-right font-semibold py-1.5">{formatNumber(ritmoTotals.solar)}</TableCell>}
                             <TableCell className="text-xs text-right font-semibold py-1.5">{ritmoTotals.opComissao}</TableCell>
                             <TableCell className="text-xs text-right font-semibold py-1.5 text-primary">{formatCurrency(ritmoTotals.comissao)}</TableCell>
                           </TableRow>
@@ -322,10 +320,10 @@ export function MetricsPanel() {
                           return (
                             <TableRow key={row.userId}>
                               <TableCell className="text-xs py-1.5 font-medium whitespace-nowrap">{row.name}</TableCell>
-                              <TableCell className={`text-xs text-right py-1.5 ${percentColor(row.opEnergia, tOpE)}`}>{formatPercent(row.opEnergia, tOpE)}</TableCell>
-                              <TableCell className={`text-xs text-right py-1.5 ${percentColor(row.energia, tE)}`}>{formatPercent(row.energia, tE)}</TableCell>
-                              <TableCell className={`text-xs text-right py-1.5 ${percentColor(row.opSolar, tOpS)}`}>{formatPercent(row.opSolar, tOpS)}</TableCell>
-                              <TableCell className={`text-xs text-right py-1.5 ${percentColor(row.solar, tS)}`}>{formatPercent(row.solar, tS)}</TableCell>
+                              {showEnergy && <TableCell className={`text-xs text-right py-1.5 ${percentColor(row.opEnergia, tOpE)}`}>{formatPercent(row.opEnergia, tOpE)}</TableCell>}
+                              {showEnergy && <TableCell className={`text-xs text-right py-1.5 ${percentColor(row.energia, tE)}`}>{formatPercent(row.energia, tE)}</TableCell>}
+                              {showEnergy && <TableCell className={`text-xs text-right py-1.5 ${percentColor(row.opSolar, tOpS)}`}>{formatPercent(row.opSolar, tOpS)}</TableCell>}
+                              {showEnergy && <TableCell className={`text-xs text-right py-1.5 ${percentColor(row.solar, tS)}`}>{formatPercent(row.solar, tS)}</TableCell>}
                               <TableCell className={`text-xs text-right py-1.5 ${percentColor(row.opComissao, tOpC)}`}>{formatPercent(row.opComissao, tOpC)}</TableCell>
                               <TableCell className={`text-xs text-right py-1.5 font-medium ${percentColor(row.comissao, tC)}`}>{formatPercent(row.comissao, tC)}</TableCell>
                             </TableRow>
@@ -341,10 +339,10 @@ export function MetricsPanel() {
                           return (
                             <TableRow className="bg-muted/20 hover:bg-muted/20">
                               <TableCell className="text-xs font-semibold py-1.5">TOTAL</TableCell>
-                              <TableCell className={`text-xs text-right font-semibold py-1.5 ${percentColor(ritmoTotals.opEnergia, tOpE)}`}>{formatPercent(ritmoTotals.opEnergia, tOpE)}</TableCell>
-                              <TableCell className={`text-xs text-right font-semibold py-1.5 ${percentColor(ritmoTotals.energia, tE)}`}>{formatPercent(ritmoTotals.energia, tE)}</TableCell>
-                              <TableCell className={`text-xs text-right font-semibold py-1.5 ${percentColor(ritmoTotals.opSolar, tOpS)}`}>{formatPercent(ritmoTotals.opSolar, tOpS)}</TableCell>
-                              <TableCell className={`text-xs text-right font-semibold py-1.5 ${percentColor(ritmoTotals.solar, tS)}`}>{formatPercent(ritmoTotals.solar, tS)}</TableCell>
+                              {showEnergy && <TableCell className={`text-xs text-right font-semibold py-1.5 ${percentColor(ritmoTotals.opEnergia, tOpE)}`}>{formatPercent(ritmoTotals.opEnergia, tOpE)}</TableCell>}
+                              {showEnergy && <TableCell className={`text-xs text-right font-semibold py-1.5 ${percentColor(ritmoTotals.energia, tE)}`}>{formatPercent(ritmoTotals.energia, tE)}</TableCell>}
+                              {showEnergy && <TableCell className={`text-xs text-right font-semibold py-1.5 ${percentColor(ritmoTotals.opSolar, tOpS)}`}>{formatPercent(ritmoTotals.opSolar, tOpS)}</TableCell>}
+                              {showEnergy && <TableCell className={`text-xs text-right font-semibold py-1.5 ${percentColor(ritmoTotals.solar, tS)}`}>{formatPercent(ritmoTotals.solar, tS)}</TableCell>}
                               <TableCell className={`text-xs text-right font-semibold py-1.5 ${percentColor(ritmoTotals.opComissao, tOpC)}`}>{formatPercent(ritmoTotals.opComissao, tOpC)}</TableCell>
                               <TableCell className={`text-xs text-right font-semibold py-1.5 ${percentColor(ritmoTotals.comissao, tC)}`}>{formatPercent(ritmoTotals.comissao, tC)}</TableCell>
                             </TableRow>

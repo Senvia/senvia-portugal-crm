@@ -6,6 +6,7 @@ import { useTeamMembers } from "@/hooks/useTeam";
 import { useMonthlyObjectives } from "@/hooks/useMonthlyObjectives";
 import { useMonthSalesMetrics } from "@/hooks/useMonthSalesMetrics";
 import { useDashboardPeriod } from "@/stores/useDashboardPeriod";
+import { useModules } from "@/hooks/useModules";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -48,19 +49,21 @@ interface RowData {
 }
 
 export function SalesPerformancePanel() {
-  const { user, profile } = useAuth();
+  const { user, profile, organization } = useAuth();
   const { isAdmin } = usePermissions();
   const { data: members = [] } = useTeamMembers();
   const { selectedMemberId, canFilterByTeam, isTeamLeader, teamMemberIds, dataScope } = useTeamFilter();
   const { selectedMonth } = useDashboardPeriod();
   const { objectives, isLoading: objLoading } = useMonthlyObjectives(selectedMonth);
   const { data: salesMetrics = [], isLoading: salesLoading } = useMonthSalesMetrics(selectedMonth);
+  const { modules } = useModules();
   const [editOpen, setEditOpen] = useState(false);
   const [objOpen, setObjOpen] = useState(true);
   const [salesOpen, setSalesOpen] = useState(true);
   const [concOpen, setConcOpen] = useState(true);
   const cardRef = useRef<HTMLDivElement>(null);
 
+  const showEnergy = organization?.niche === 'telecom' && modules.energy;
   const currentMonthLabel = format(startOfMonth(selectedMonth), "MMMM yyyy", { locale: pt });
   const loading = objLoading || salesLoading;
 
@@ -111,24 +114,26 @@ export function SalesPerformancePanel() {
   const objTotals = sumRows(objectiveRows);
   const showTotals = isAdmin && salesRows.length > 1;
 
+  const TableHeaders = () => (
+    <TableRow>
+      <TableHead className="text-xs">Colaborador</TableHead>
+      <TableHead className="text-xs text-right">NIFs</TableHead>
+      {showEnergy && <TableHead className="text-xs text-right">Energia</TableHead>}
+      {showEnergy && <TableHead className="text-xs text-right hidden sm:table-cell">Solar</TableHead>}
+      <TableHead className="text-xs text-right">Comissão</TableHead>
+    </TableRow>
+  );
+
   const ObjectiveTable = () => (
     <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead className="text-xs">Colaborador</TableHead>
-          <TableHead className="text-xs text-right">NIFs</TableHead>
-          <TableHead className="text-xs text-right">Energia</TableHead>
-          <TableHead className="text-xs text-right hidden sm:table-cell">Solar</TableHead>
-          <TableHead className="text-xs text-right">Comissão</TableHead>
-        </TableRow>
-      </TableHeader>
+      <TableHeader><TableHeaders /></TableHeader>
       <TableBody>
         {objectiveRows.map((row) => (
           <TableRow key={row.userId}>
             <TableCell className="text-xs py-1.5 font-medium">{row.name}</TableCell>
             <TableCell className="text-xs text-right py-1.5">{row.nifs}</TableCell>
-            <TableCell className="text-xs text-right py-1.5">{formatNumber(row.energia)}</TableCell>
-            <TableCell className="text-xs text-right py-1.5 hidden sm:table-cell">{formatNumber(row.solar)}</TableCell>
+            {showEnergy && <TableCell className="text-xs text-right py-1.5">{formatNumber(row.energia)}</TableCell>}
+            {showEnergy && <TableCell className="text-xs text-right py-1.5 hidden sm:table-cell">{formatNumber(row.solar)}</TableCell>}
             <TableCell className="text-xs text-right py-1.5 font-medium text-primary">{formatCurrency(row.comissao)}</TableCell>
           </TableRow>
         ))}
@@ -136,8 +141,8 @@ export function SalesPerformancePanel() {
           <TableRow className="bg-muted/20 hover:bg-muted/20">
             <TableCell className="text-xs font-semibold py-1.5">TOTAL</TableCell>
             <TableCell className="text-xs text-right font-semibold py-1.5">{objTotals.nifs}</TableCell>
-            <TableCell className="text-xs text-right font-semibold py-1.5">{formatNumber(objTotals.energia)}</TableCell>
-            <TableCell className="text-xs text-right font-semibold py-1.5 hidden sm:table-cell">{formatNumber(objTotals.solar)}</TableCell>
+            {showEnergy && <TableCell className="text-xs text-right font-semibold py-1.5">{formatNumber(objTotals.energia)}</TableCell>}
+            {showEnergy && <TableCell className="text-xs text-right font-semibold py-1.5 hidden sm:table-cell">{formatNumber(objTotals.solar)}</TableCell>}
             <TableCell className="text-xs text-right font-semibold py-1.5 text-primary">{formatCurrency(objTotals.comissao)}</TableCell>
           </TableRow>
         )}
@@ -147,22 +152,14 @@ export function SalesPerformancePanel() {
 
   const SalesTable = () => (
     <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead className="text-xs">Colaborador</TableHead>
-          <TableHead className="text-xs text-right">NIFs</TableHead>
-          <TableHead className="text-xs text-right">Energia</TableHead>
-          <TableHead className="text-xs text-right hidden sm:table-cell">Solar</TableHead>
-          <TableHead className="text-xs text-right">Comissão</TableHead>
-        </TableRow>
-      </TableHeader>
+      <TableHeader><TableHeaders /></TableHeader>
       <TableBody>
         {salesRows.map((row) => (
           <TableRow key={row.userId}>
             <TableCell className="text-xs py-1.5 font-medium">{row.name}</TableCell>
             <TableCell className="text-xs text-right py-1.5">{row.nifs}</TableCell>
-            <TableCell className="text-xs text-right py-1.5">{formatNumber(row.energia)}</TableCell>
-            <TableCell className="text-xs text-right py-1.5 hidden sm:table-cell">{formatNumber(row.solar)}</TableCell>
+            {showEnergy && <TableCell className="text-xs text-right py-1.5">{formatNumber(row.energia)}</TableCell>}
+            {showEnergy && <TableCell className="text-xs text-right py-1.5 hidden sm:table-cell">{formatNumber(row.solar)}</TableCell>}
             <TableCell className="text-xs text-right py-1.5 font-medium text-green-500">{formatCurrency(row.comissao)}</TableCell>
           </TableRow>
         ))}
@@ -170,8 +167,8 @@ export function SalesPerformancePanel() {
           <TableRow className="bg-muted/20 hover:bg-muted/20">
             <TableCell className="text-xs font-semibold py-1.5">TOTAL</TableCell>
             <TableCell className="text-xs text-right font-semibold py-1.5">{salesTotals.nifs}</TableCell>
-            <TableCell className="text-xs text-right font-semibold py-1.5">{formatNumber(salesTotals.energia)}</TableCell>
-            <TableCell className="text-xs text-right font-semibold py-1.5 hidden sm:table-cell">{formatNumber(salesTotals.solar)}</TableCell>
+            {showEnergy && <TableCell className="text-xs text-right font-semibold py-1.5">{formatNumber(salesTotals.energia)}</TableCell>}
+            {showEnergy && <TableCell className="text-xs text-right font-semibold py-1.5 hidden sm:table-cell">{formatNumber(salesTotals.solar)}</TableCell>}
             <TableCell className="text-xs text-right font-semibold py-1.5 text-green-500">{formatCurrency(salesTotals.comissao)}</TableCell>
           </TableRow>
         )}
@@ -181,15 +178,7 @@ export function SalesPerformancePanel() {
 
   const ConcretizacaoTable = () => (
     <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead className="text-xs">Colaborador</TableHead>
-          <TableHead className="text-xs text-right">NIFs</TableHead>
-          <TableHead className="text-xs text-right">Energia</TableHead>
-          <TableHead className="text-xs text-right hidden sm:table-cell">Solar</TableHead>
-          <TableHead className="text-xs text-right">Comissão</TableHead>
-        </TableRow>
-      </TableHeader>
+      <TableHeader><TableHeaders /></TableHeader>
       <TableBody>
         {salesRows.map((row, i) => {
           const obj = objectiveRows[i];
@@ -197,8 +186,8 @@ export function SalesPerformancePanel() {
             <TableRow key={row.userId}>
               <TableCell className="text-xs py-1.5 font-medium">{row.name}</TableCell>
               <TableCell className={`text-xs text-right py-1.5 ${percentColor(row.nifs, obj.nifs)}`}>{formatPercent(row.nifs, obj.nifs)}</TableCell>
-              <TableCell className={`text-xs text-right py-1.5 ${percentColor(row.energia, obj.energia)}`}>{formatPercent(row.energia, obj.energia)}</TableCell>
-              <TableCell className={`text-xs text-right py-1.5 hidden sm:table-cell ${percentColor(row.solar, obj.solar)}`}>{formatPercent(row.solar, obj.solar)}</TableCell>
+              {showEnergy && <TableCell className={`text-xs text-right py-1.5 ${percentColor(row.energia, obj.energia)}`}>{formatPercent(row.energia, obj.energia)}</TableCell>}
+              {showEnergy && <TableCell className={`text-xs text-right py-1.5 hidden sm:table-cell ${percentColor(row.solar, obj.solar)}`}>{formatPercent(row.solar, obj.solar)}</TableCell>}
               <TableCell className={`text-xs text-right py-1.5 font-medium ${percentColor(row.comissao, obj.comissao)}`}>{formatPercent(row.comissao, obj.comissao)}</TableCell>
             </TableRow>
           );
@@ -207,8 +196,8 @@ export function SalesPerformancePanel() {
           <TableRow className="bg-muted/20 hover:bg-muted/20">
             <TableCell className="text-xs font-semibold py-1.5">TOTAL</TableCell>
             <TableCell className={`text-xs text-right font-semibold py-1.5 ${percentColor(salesTotals.nifs, objTotals.nifs)}`}>{formatPercent(salesTotals.nifs, objTotals.nifs)}</TableCell>
-            <TableCell className={`text-xs text-right font-semibold py-1.5 ${percentColor(salesTotals.energia, objTotals.energia)}`}>{formatPercent(salesTotals.energia, objTotals.energia)}</TableCell>
-            <TableCell className={`text-xs text-right font-semibold py-1.5 hidden sm:table-cell ${percentColor(salesTotals.solar, objTotals.solar)}`}>{formatPercent(salesTotals.solar, objTotals.solar)}</TableCell>
+            {showEnergy && <TableCell className={`text-xs text-right font-semibold py-1.5 ${percentColor(salesTotals.energia, objTotals.energia)}`}>{formatPercent(salesTotals.energia, objTotals.energia)}</TableCell>}
+            {showEnergy && <TableCell className={`text-xs text-right font-semibold py-1.5 hidden sm:table-cell ${percentColor(salesTotals.solar, objTotals.solar)}`}>{formatPercent(salesTotals.solar, objTotals.solar)}</TableCell>}
             <TableCell className={`text-xs text-right font-semibold py-1.5 ${percentColor(salesTotals.comissao, objTotals.comissao)}`}>{formatPercent(salesTotals.comissao, objTotals.comissao)}</TableCell>
           </TableRow>
         )}
