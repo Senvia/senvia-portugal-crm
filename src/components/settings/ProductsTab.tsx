@@ -26,6 +26,7 @@ export function ProductsTab() {
   const deleteProduct = useDeleteProduct();
   const syncItems = useSyncInvoiceXpressItems();
   const { organization } = useAuth();
+  const isTelecom = (organization as any)?.niche === 'telecom';
   const hasInvoiceXpress = !!(organization as any)?.invoicexpress_api_key && !!(organization as any)?.invoicexpress_account_name;
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
