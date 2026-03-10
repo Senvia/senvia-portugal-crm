@@ -27,8 +27,6 @@ import {
   PROPOSAL_STATUSES, 
   NEGOTIATION_TYPE_LABELS,
   NEGOTIATION_TYPES,
-  SERVICOS_PRODUCTS,
-  SERVICOS_PRODUCT_CONFIGS,
   FIELD_LABELS,
   type ServicosDetails,
   type ServicosProductDetail,
@@ -38,6 +36,7 @@ import {
   type NegotiationType,
   type Proposal 
 } from '@/types/proposals';
+import { useServicosProducts } from '@/hooks/useServicosProducts';
 
 interface CreateProposalModalProps {
   client?: CrmClient | null;

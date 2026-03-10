@@ -33,7 +33,6 @@ import {
   PROPOSAL_TYPE_LABELS, 
   MODELO_SERVICO_LABELS,
   NEGOTIATION_TYPE_LABELS,
-  SERVICOS_PRODUCT_CONFIGS,
   FIELD_LABELS,
   type NegotiationType,
   type ServicosDetails,
