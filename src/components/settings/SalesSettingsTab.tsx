@@ -55,6 +55,7 @@ export function SalesSettingsTab() {
         lock_fulfilled_sales: lockFulfilled,
         prevent_payment_deletion: preventDeletion,
         auto_assign_leads: autoAssign,
+        exclude_admins_from_assignment: excludeAdmins,
         round_robin_index: currentSettings.round_robin_index || 0,
         commissions_enabled: commissionsEnabled,
         commission_percentage: parsedPercentage && parsedPercentage > 0 ? parsedPercentage : null,
