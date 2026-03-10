@@ -257,7 +257,7 @@ export function CreateSaleModal({
         setKwp(prefillProposal.kwp?.toString() || "");
         setNegotiationType(prefillProposal.negotiation_type || null);
         setServicosProdutos(prefillProposal.servicos_produtos || []);
-        
+        setServicosDetails((prefillProposal as any).servicos_details || {});
         // Recalculate commission using matrix
         const recalcedComissao = recalcComissaoFromProposal(prefillProposal);
         setComissao(recalcedComissao !== null ? recalcedComissao.toString() : (prefillProposal.comissao?.toString() || ""));
