@@ -1,32 +1,23 @@
-## Produtos de Serviços Configuráveis por Organização
+## Adaptar "Serviços" para telecom sem módulo energy
 
 ### Estado: ✅ Implementado
 
 ### Alterações Realizadas
 
-**1. Migração DB**
-- Nova coluna `servicos_products_config JSONB DEFAULT NULL` na tabela `organizations`
-- Quando `NULL` → fallback para constantes hardcoded (Solar, Baterias, etc.)
-- Quando preenchido → lista personalizada da organização
+**1. `src/hooks/useActivationObjectives.ts`**
+- `sumActivations` agora aceita parâmetro opcional `countMode: 'value' | 'count'`
+- Quando `countMode === 'count'`, retorna `filtered.length` (número de vendas delivered)
+- Default: `'value'` (comportamento atual preservado)
 
-**2. Hook `useServicosProducts` (`src/hooks/useServicosProducts.ts`)**
-- Lê `servicos_products_config` da organização via `useOrganization()`
-- Retorna `{ products, configs }` com fallback automático
+**2. `src/components/dashboard/ActivationsPanel.tsx`**
+- Blocos de Serviços usam `countMode = 'count'` quando `modules.energy = false`
+- Unidade exibida: `"kWp"` → `"contratos"` quando energy desativado
+- Blocos de Energia não afetados
 
-**3. UI — `ServicosProductsManager` (`src/components/settings/ServicosProductsManager.tsx`)**
-- Secção "Produtos Telecom" em Definições → Produtos (apenas `niche === 'telecom'`)
-- Adicionar/remover produtos com seleção de campos (duração, valor, kWp, comissão)
+### Resultado
+| Org | Energy module | Serviços unit | Contagem |
+|-----|--------------|---------------|----------|
+| Perfect2Gether | ✅ on | kWp | soma kWp |
+| Escolha Inteligente | ❌ off | contratos | count vendas delivered |
 
-**4. Componentes atualizados (constantes → hook):**
-
-| Ficheiro | Mudança |
-|---|---|
-| `CreateProposalModal.tsx` | `useServicosProducts()` substitui imports hardcoded |
-| `EditProposalModal.tsx` | Idem |
-| `ProposalDetailsModal.tsx` | Idem |
-| `EditSaleModal.tsx` | Idem |
-| `CommissionMatrixTab.tsx` | Idem |
-| `proposal-servicos-validation.ts` | Aceita `configs` como parâmetro opcional |
-
-**5. Impacto na Perfect2Gether**
-**Zero.** Coluna `NULL` por default → fallback para constantes hardcoded.
+**Impacto**: Zero alteração para orgs com energy ativo.
