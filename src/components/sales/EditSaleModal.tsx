@@ -409,6 +409,7 @@ export function EditSaleModal({
           modelo_servico: (modeloServico as ModeloServico) || null,
           kwp: parseFloat(kwp) || null,
           servicos_produtos: servicosProdutos.length > 0 ? servicosProdutos : null,
+          servicos_details: Object.keys(servicosDetails).length > 0 ? servicosDetails : null,
           ...(isTelecom ? { activation_date: activationDate || null } : {}),
           ...(saleFields?.edp_proposal_number?.visible ? { edp_proposal_number: edpProposalNumber.trim() || null } : {}),
         },
