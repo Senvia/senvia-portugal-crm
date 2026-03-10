@@ -6,6 +6,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const BATCH_SIZE = 10;
+
 interface Recipient {
   email: string;
   name: string;
@@ -25,7 +27,6 @@ interface SendTemplateRequest {
   htmlContent?: string;
 }
 
-// Sanitize: remove HTML tags that break {{ }} variable syntax (e.g. <strong>{{</strong>Email<strong>}}</strong>)
 function sanitizeVariableTags(html: string): string {
   return html.replace(/\{\{[^}]*\}\}/g, (match) => match.replace(/<[^>]*>/g, ''));
 }
@@ -40,14 +41,9 @@ function replaceVariables(content: string, variables: Record<string, string>): s
 }
 
 function formatDate(): string {
-  return new Date().toLocaleDateString('pt-PT', {
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric'
-  });
+  return new Date().toLocaleDateString('pt-PT', { day: '2-digit', month: 'long', year: 'numeric' });
 }
 
-// Add UTM parameters to all links in HTML
 function addUtmTracking(html: string, campaignName: string): string {
   return html.replace(
     /href="(https?:\/\/[^"]+)"/gi,
@@ -65,38 +61,33 @@ function addUtmTracking(html: string, campaignName: string): string {
   );
 }
 
-// Apply campaign settings to HTML content
 function applyHtmlSettings(
   html: string,
   settings: Record<string, boolean>,
   settingsData: Record<string, string>
 ): string {
   let result = html;
-
-  // Custom header
   if (settings.custom_header && settingsData.custom_header) {
     result = settingsData.custom_header + result;
   }
-
-  // Custom footer
   if (settings.custom_footer && settingsData.custom_footer) {
     result = result + settingsData.custom_footer;
   }
-
-  // Custom unsubscribe URL
   if (settings.custom_unsubscribe && settingsData.custom_unsubscribe) {
-    result = result.replace(
-      /\{\{\s*unsubscribe\s*\}\}/gi,
-      settingsData.custom_unsubscribe
-    );
+    result = result.replace(/\{\{\s*unsubscribe\s*\}\}/gi, settingsData.custom_unsubscribe);
   }
-
-  // GA tracking
   if (settings.ga_tracking && settingsData.ga_tracking) {
     result = addUtmTracking(result, settingsData.ga_tracking);
   }
-
   return result;
+}
+
+function chunk<T>(arr: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) {
+    chunks.push(arr.slice(i, i + size));
+  }
+  return chunks;
 }
 
 serve(async (req: Request): Promise<Response> => {
@@ -122,7 +113,6 @@ serve(async (req: Request): Promise<Response> => {
       );
     }
 
-    // Need either a templateId or custom subject+htmlContent
     if (!templateId && (!customSubject || !customHtmlContent)) {
       return new Response(
         JSON.stringify({ error: "Missing template or custom content" }),
@@ -143,7 +133,6 @@ serve(async (req: Request): Promise<Response> => {
         .single();
 
       if (templateError || !template) {
-        console.error("Template not found:", templateError);
         return new Response(
           JSON.stringify({ error: "Template not found" }),
           { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -174,16 +163,18 @@ serve(async (req: Request): Promise<Response> => {
       );
     }
 
-    // Get user ID from auth header
+    // Get user ID and sender info from auth header
     const authHeader = req.headers.get("authorization");
     let userId: string | null = null;
     let senderSignature: string | null = null;
+    let senderEmailOverride: string | null = null;
+    let senderNameOverride: string | null = null;
+
     if (authHeader) {
       const token = authHeader.replace("Bearer ", "");
       const { data: { user } } = await supabase.auth.getUser(token);
       userId = user?.id || null;
 
-      // Fetch sender's email signature
       if (userId) {
         const { data: senderProfile } = await supabase
           .from("profiles")
@@ -191,79 +182,93 @@ serve(async (req: Request): Promise<Response> => {
           .eq("id", userId)
           .single();
         senderSignature = (senderProfile as any)?.email_signature || null;
-        // Use sender's own Brevo email if configured
         const senderBrevoEmail = (senderProfile as any)?.brevo_sender_email;
-        const senderFullName = (senderProfile as any)?.full_name;
         if (senderBrevoEmail) {
-          (org as any)._sender_email_override = senderBrevoEmail;
-          (org as any)._sender_name_override = senderFullName || org.name;
+          senderEmailOverride = senderBrevoEmail;
+          senderNameOverride = (senderProfile as any)?.full_name || org.name;
         }
       }
     }
 
-    const results: { email: string; status: string; error?: string }[] = [];
+    // Pre-load vendor data for all recipients with clientIds (batch query)
+    const clientIds = [...new Set(recipients.filter(r => r.clientId).map(r => r.clientId!))];
+    const vendorMap: Record<string, { name: string; email: string; phone: string }> = {};
 
-    for (const recipient of recipients) {
-      try {
-        // Resolve vendedor (assigned_to) from client record
-        let vendedorName = '';
-        let vendedorEmail = '';
-        let vendedorPhone = '';
-        if (recipient.clientId) {
-          const { data: clientData } = await supabase
-            .from('crm_clients')
-            .select('assigned_to')
-            .eq('id', recipient.clientId)
-            .single();
+    if (clientIds.length > 0) {
+      const { data: clientsData } = await supabase
+        .from('crm_clients')
+        .select('id, assigned_to')
+        .in('id', clientIds);
 
-          if (clientData?.assigned_to) {
-            const { data: profileData } = await supabase
-              .from('profiles')
-              .select('full_name, email, phone')
-              .eq('id', clientData.assigned_to)
-              .single();
-            vendedorName = profileData?.full_name || '';
-            vendedorEmail = profileData?.email || '';
-            vendedorPhone = profileData?.phone || '';
+      if (clientsData) {
+        const profileIds = [...new Set(clientsData.filter(c => c.assigned_to).map(c => c.assigned_to!))];
+        const profileMap: Record<string, any> = {};
+
+        if (profileIds.length > 0) {
+          const { data: profilesData } = await supabase
+            .from('profiles')
+            .select('id, full_name, email, phone')
+            .in('id', profileIds);
+
+          if (profilesData) {
+            for (const p of profilesData) {
+              profileMap[p.id] = p;
+            }
           }
         }
+
+        for (const client of clientsData) {
+          if (client.assigned_to && profileMap[client.assigned_to]) {
+            const p = profileMap[client.assigned_to];
+            vendorMap[client.id] = {
+              name: p.full_name || '',
+              email: p.email || '',
+              phone: p.phone || '',
+            };
+          }
+        }
+      }
+    }
+
+    const finalSenderEmail = senderEmailOverride || org.brevo_sender_email;
+    const finalSenderName = senderNameOverride || org.name;
+    const formattedDate = formatDate();
+
+    // Process a single recipient
+    async function processRecipient(recipient: Recipient): Promise<{ email: string; status: string; error?: string }> {
+      try {
+        const vendor = recipient.clientId ? vendorMap[recipient.clientId] : undefined;
 
         const variables: Record<string, string> = {
           nome: recipient.name || '',
           email: recipient.email || '',
           organizacao: org.name || '',
-          data: formatDate(),
-          vendedor: vendedorName,
-          vendedor_email: vendedorEmail,
-          vendedor_telefone: vendedorPhone,
+          data: formattedDate,
+          vendedor: vendor?.name || '',
+          vendedor_email: vendor?.email || '',
+          vendedor_telefone: vendor?.phone || '',
           assinatura: senderSignature || '',
           ...recipient.variables,
         };
 
         const subject = replaceVariables(templateSubject, variables);
         let htmlContent = replaceVariables(templateHtmlContent, variables);
-
-        // Apply campaign settings to HTML
         htmlContent = applyHtmlSettings(htmlContent, settings, settingsData);
 
-        // Build Brevo payload
         const toName = settings.customize_to && recipient.variables?.empresa
           ? `${recipient.name} - ${recipient.variables.empresa}`
           : (recipient.name || recipient.email);
 
         const brevoPayload: Record<string, unknown> = {
-          sender: { name: (org as any)._sender_name_override || org.name, email: (org as any)._sender_email_override || org.brevo_sender_email },
+          sender: { name: finalSenderName, email: finalSenderEmail },
           to: [{ email: recipient.email, name: toName }],
           subject,
           htmlContent,
         };
 
-        // Reply-to
         if (settings.different_reply_to && settingsData.different_reply_to) {
           brevoPayload.replyTo = { email: settingsData.different_reply_to };
         }
-
-        // Tags
         if (settings.tag && settingsData.tag) {
           brevoPayload.tags = [settingsData.tag];
         }
@@ -306,18 +311,13 @@ serve(async (req: Request): Promise<Response> => {
         };
 
         const { error: insertError } = await supabase.from("email_sends").insert(emailSendRecord);
-        
-        // Fallback: if insert fails (e.g. FK constraint on client_id), retry without client_id
         if (insertError) {
-          console.warn(`Insert failed for ${recipient.email}, retrying without client_id:`, insertError.message);
           await supabase.from("email_sends").insert({ ...emailSendRecord, client_id: null });
         }
 
-        results.push({ email: recipient.email, status, error: errorMessage || undefined });
-        console.log(`Email to ${recipient.email}: ${status}`);
+        return { email: recipient.email, status, error: errorMessage || undefined };
       } catch (recipientError) {
         const errorMsg = recipientError instanceof Error ? recipientError.message : "Unknown error";
-        console.error(`Failed to send to ${recipient.email}:`, errorMsg);
 
         const failRecord = {
           organization_id: organizationId,
@@ -335,12 +335,20 @@ serve(async (req: Request): Promise<Response> => {
 
         const { error: failInsertError } = await supabase.from("email_sends").insert(failRecord);
         if (failInsertError) {
-          console.warn(`Fail record insert failed for ${recipient.email}, retrying without client_id`);
           await supabase.from("email_sends").insert({ ...failRecord, client_id: null });
         }
 
-        results.push({ email: recipient.email, status: "failed", error: errorMsg });
+        return { email: recipient.email, status: "failed", error: errorMsg };
       }
+    }
+
+    // Process recipients in parallel batches
+    const results: { email: string; status: string; error?: string }[] = [];
+    const batches = chunk(recipients, BATCH_SIZE);
+
+    for (const batch of batches) {
+      const batchResults = await Promise.all(batch.map(processRecipient));
+      results.push(...batchResults);
     }
 
     const successful = results.filter(r => r.status === "sent").length;

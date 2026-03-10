@@ -6,6 +6,16 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const BATCH_SIZE = 10;
+
+function chunk<T>(arr: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) {
+    chunks.push(arr.slice(i, i + size));
+  }
+  return chunks;
+}
+
 serve(async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -16,7 +26,6 @@ serve(async (req: Request): Promise<Response> => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Find campaigns that are scheduled and due
     const { data: campaigns, error: campaignsError } = await supabase
       .from("email_campaigns")
       .select("*")
@@ -24,7 +33,6 @@ serve(async (req: Request): Promise<Response> => {
       .lte("scheduled_at", new Date().toISOString());
 
     if (campaignsError) {
-      console.error("Error fetching scheduled campaigns:", campaignsError);
       return new Response(
         JSON.stringify({ error: campaignsError.message }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -44,13 +52,11 @@ serve(async (req: Request): Promise<Response> => {
       try {
         console.log(`Processing scheduled campaign: ${campaign.id} - ${campaign.name}`);
 
-        // Mark as sending
         await supabase
           .from("email_campaigns")
           .update({ status: "sending" })
           .eq("id", campaign.id);
 
-        // Get recipients from queued email_sends
         const { data: queuedSends, error: queuedError } = await supabase
           .from("email_sends")
           .select("*")
@@ -58,7 +64,6 @@ serve(async (req: Request): Promise<Response> => {
           .eq("status", "queued");
 
         if (queuedError || !queuedSends || queuedSends.length === 0) {
-          console.warn(`No queued recipients for campaign ${campaign.id}`);
           await supabase
             .from("email_campaigns")
             .update({ status: "failed", sent_count: 0, failed_count: 0 })
@@ -67,7 +72,6 @@ serve(async (req: Request): Promise<Response> => {
           continue;
         }
 
-        // Get org Brevo config
         const { data: org } = await supabase
           .from("organizations")
           .select("name, brevo_api_key, brevo_sender_email")
@@ -75,7 +79,6 @@ serve(async (req: Request): Promise<Response> => {
           .single();
 
         if (!org?.brevo_api_key || !org?.brevo_sender_email) {
-          console.error(`Brevo not configured for org ${campaign.organization_id}`);
           await supabase
             .from("email_campaigns")
             .update({ status: "failed" })
@@ -84,7 +87,6 @@ serve(async (req: Request): Promise<Response> => {
           continue;
         }
 
-        // Get template content if needed
         let emailSubject = campaign.subject || "";
         let emailHtml = campaign.html_content || "";
 
@@ -94,14 +96,12 @@ serve(async (req: Request): Promise<Response> => {
             .select("subject, html_content")
             .eq("id", campaign.template_id)
             .single();
-
           if (template) {
             emailSubject = template.subject;
             emailHtml = template.html_content;
           }
         }
 
-        // Get sender override from campaign creator
         let senderEmail = org.brevo_sender_email;
         let senderName = org.name;
 
@@ -111,7 +111,6 @@ serve(async (req: Request): Promise<Response> => {
             .select("brevo_sender_email, full_name")
             .eq("id", campaign.created_by)
             .single();
-
           if (creatorProfile?.brevo_sender_email) {
             senderEmail = creatorProfile.brevo_sender_email;
             senderName = creatorProfile.full_name || org.name;
@@ -121,12 +120,9 @@ serve(async (req: Request): Promise<Response> => {
         const campaignSettings = (campaign.settings as Record<string, boolean>) || {};
         const campaignSettingsData = (campaign.settings_data as Record<string, string>) || {};
 
-        let sentCount = 0;
-        let failedCount = 0;
-
-        for (const send of queuedSends) {
+        // Process a single send
+        async function processSend(send: typeof queuedSends[0]): Promise<{ sent: boolean }> {
           try {
-            // Replace variables in subject and HTML
             const variables: Record<string, string> = {
               nome: send.recipient_name || "",
               email: send.recipient_email || "",
@@ -143,7 +139,6 @@ serve(async (req: Request): Promise<Response> => {
               finalHtml = finalHtml.replace(regex, value || "");
             }
 
-            // Apply settings (header, footer, UTM, etc.)
             if (campaignSettings.custom_header && campaignSettingsData.custom_header) {
               finalHtml = campaignSettingsData.custom_header + finalHtml;
             }
@@ -209,14 +204,14 @@ serve(async (req: Request): Promise<Response> => {
                   brevo_message_id: brevoMessageId,
                 })
                 .eq("id", send.id);
-              sentCount++;
+              return { sent: true };
             } else {
               const errorText = await brevoResponse.text();
               await supabase
                 .from("email_sends")
                 .update({ status: "failed", error_message: errorText })
                 .eq("id", send.id);
-              failedCount++;
+              return { sent: false };
             }
           } catch (sendError) {
             const errMsg = sendError instanceof Error ? sendError.message : "Unknown error";
@@ -224,11 +219,23 @@ serve(async (req: Request): Promise<Response> => {
               .from("email_sends")
               .update({ status: "failed", error_message: errMsg })
               .eq("id", send.id);
-            failedCount++;
+            return { sent: false };
           }
         }
 
-        // Update campaign status
+        // Process in parallel batches
+        let sentCount = 0;
+        let failedCount = 0;
+        const batches = chunk(queuedSends, BATCH_SIZE);
+
+        for (const batch of batches) {
+          const batchResults = await Promise.all(batch.map(processSend));
+          for (const r of batchResults) {
+            if (r.sent) sentCount++;
+            else failedCount++;
+          }
+        }
+
         await supabase
           .from("email_campaigns")
           .update({
