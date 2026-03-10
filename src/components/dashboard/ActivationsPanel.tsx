@@ -212,6 +212,12 @@ export function ActivationsPanel() {
     );
   }
 
+  const servicosUnit = showEnergy ? "kWp" : "contratos";
+  const servicosCountActivations = showEnergy
+    ? countActivations
+    : (userId: string | null, periodType: "monthly" | "annual", proposalType: "energia" | "servicos") =>
+        countActivations(userId, periodType, proposalType, "count");
+
   const blockProps = {
     members: memberList,
     filteredMembers,
@@ -245,6 +251,8 @@ export function ActivationsPanel() {
             periodType="monthly"
             proposalType="servicos"
             {...blockProps}
+            countActivations={servicosCountActivations}
+            unit={servicosUnit}
             onEdit={() => openEdit("monthly", "servicos")}
           />
         </div>
@@ -265,6 +273,8 @@ export function ActivationsPanel() {
             periodType="annual"
             proposalType="servicos"
             {...blockProps}
+            countActivations={servicosCountActivations}
+            unit={servicosUnit}
             onEdit={() => openEdit("annual", "servicos")}
           />
         </div>
