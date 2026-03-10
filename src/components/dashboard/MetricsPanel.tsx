@@ -82,7 +82,7 @@ export function MetricsPanel() {
         .eq("organization_id", orgId)
         .gte("proposal_date", monthStart)
         .lte("proposal_date", monthEndStr)
-        .in("status", ["draft", "sent", "negotiating"]);
+        .in("status", ["sent", "negotiating"]);
       if (error) throw error;
       return data || [];
     },
