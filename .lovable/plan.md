@@ -1,32 +1,32 @@
-## Toggle "Energias" no Módulos (Telecom Only)
+## Produtos de Serviços Configuráveis por Organização
 
 ### Estado: ✅ Implementado
 
 ### Alterações Realizadas
 
-**1. `src/hooks/useModules.ts`**
-- Adicionado `energy: boolean` ao `EnabledModules` (default: `true`)
+**1. Migração DB**
+- Nova coluna `servicos_products_config JSONB DEFAULT NULL` na tabela `organizations`
+- Quando `NULL` → fallback para constantes hardcoded (Solar, Baterias, etc.)
+- Quando preenchido → lista personalizada da organização
 
-**2. `src/components/settings/ModulesTab.tsx`**
-- Adicionado card especial "Energias" com ícone ⚡ que só renderiza quando `organization.niche === 'telecom'`
-- Badge "Telecom" para identificar que é exclusivo do nicho
+**2. Hook `useServicosProducts` (`src/hooks/useServicosProducts.ts`)**
+- Lê `servicos_products_config` da organização via `useOrganization()`
+- Retorna `{ products, configs }` com fallback automático
 
-**3. Componentes atualizados com `showEnergy = isTelecom && modules.energy`:**
+**3. UI — `ServicosProductsManager` (`src/components/settings/ServicosProductsManager.tsx`)**
+- Secção "Produtos Telecom" em Definições → Produtos (apenas `niche === 'telecom'`)
+- Adicionar/remover produtos com seleção de campos (duração, valor, kWp, comissão)
 
-| Ficheiro | O que é ocultado quando energy=off |
+**4. Componentes atualizados (constantes → hook):**
+
+| Ficheiro | Mudança |
 |---|---|
-| `src/pages/Leads.tsx` | Filtro de tipologia |
-| `src/components/leads/AddLeadModal.tsx` | Campos tipologia, consumo_anual, summary |
-| `src/components/leads/LeadDetailsModal.tsx` | Secção tipologia, card consumo_anual |
-| `src/components/leads/LeadCard.tsx` | Badge tipologia, consumo_anual |
-| `src/components/leads/LeadsTableView.tsx` | Coluna tipologia, coluna consumo |
-| `src/components/proposals/CreateProposalModal.tsx` | Tipo de proposta selector (energia) |
-| `src/components/proposals/EditProposalModal.tsx` | Tipo de proposta, CPE selector energia |
-| `src/components/proposals/ProposalDetailsModal.tsx` | CPEs, consumo total, resumo energia, badges energia |
-| `src/components/sales/CreateSaleModal.tsx` | Dados energia, CPE/CUI |
-| `src/components/sales/EditSaleModal.tsx` | Dados energia editáveis |
-| `src/components/sales/SaleDetailsModal.tsx` | Dados energia, CPEs |
-| `src/components/clients/ClientDetailsModal.tsx` | Stats MWh/kWp/Comissão |
-| `src/pages/Clients.tsx` | Filtro tipo proposta (energia/servicos) |
+| `CreateProposalModal.tsx` | `useServicosProducts()` substitui imports hardcoded |
+| `EditProposalModal.tsx` | Idem |
+| `ProposalDetailsModal.tsx` | Idem |
+| `EditSaleModal.tsx` | Idem |
+| `CommissionMatrixTab.tsx` | Idem |
+| `proposal-servicos-validation.ts` | Aceita `configs` como parâmetro opcional |
 
-**Nota**: Funcionalidades gerais de telecom (empresa, serviços, ativação, anexos) continuam visíveis independentemente do toggle de energia.
+**5. Impacto na Perfect2Gether**
+**Zero.** Coluna `NULL` por default → fallback para constantes hardcoded.
