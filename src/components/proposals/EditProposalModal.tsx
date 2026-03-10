@@ -50,7 +50,7 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
   const { data: existingCpes = [] } = useProposalCpes(proposal.id);
   const { data: existingProducts = [] } = useProposalProducts(proposal.id);
   const { organization } = useAuth();
-  const { products: SERVICOS_PRODUCTS, configs: SERVICOS_PRODUCT_CONFIGS } = useServicosProducts();
+  const { products: SERVICOS_PRODUCTS, configs: SERVICOS_PRODUCT_CONFIGS, catalog, isNewFormat } = useServicosProducts();
   const { calculateCommission, isAutoCalculated, calculateEnergyCommission, hasEnergyConfig } = useCommissionMatrix();
   const updateProposal = useUpdateProposal();
   const updateProposalCpes = useUpdateProposalCpes();
