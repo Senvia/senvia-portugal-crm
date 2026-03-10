@@ -35,6 +35,7 @@ interface ServicosSectionProps {
   isAutoCalculated?: (product: string) => boolean;
   totalKwp?: number;
   totalComissao?: number;
+  hideModeloServico?: boolean;
 }
 
 export function ServicosSection({
