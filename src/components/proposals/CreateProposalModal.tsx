@@ -134,12 +134,31 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
   const handleToggleServicoProduto = (produto: string) => {
     setServicosProdutos(prev => {
       if (prev.includes(produto)) {
-        // Remove details when unchecking
         setServicosDetails(d => { const n = { ...d }; delete n[produto]; return n; });
         return prev.filter(p => p !== produto);
       }
+      // For new catalog format, initialize with catalog values
+      if (isNewFormat && catalog) {
+        const catProduct = catalog.find(c => c.name === produto);
+        if (catProduct) {
+          const comissao = catProduct.has_commission ? Math.round(catProduct.price * catProduct.commission_pct) / 100 : 0;
+          setServicosDetails(d => ({
+            ...d,
+            [produto]: {
+              name: catProduct.name,
+              price: catProduct.price,
+              commission_pct: catProduct.commission_pct,
+              comissao,
+            },
+          }));
+        }
+      }
       return [...prev, produto];
     });
+  };
+
+  const handleSetProductDetail = (produto: string, detail: import('@/types/proposals').ServicosProductDetail) => {
+    setServicosDetails(prev => ({ ...prev, [produto]: detail }));
   };
 
   const handleUpdateProductDetail = (produto: string, field: string, value: number | undefined) => {
