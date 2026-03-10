@@ -49,14 +49,19 @@ async function handleWebhookMode(req: Request, token: string): Promise<Response>
   console.log('Webhook payload received:', JSON.stringify(rawBody).substring(0, 500));
 
   // Map common field names from Facebook Lead Ads / Zapier / Make
-  const name = rawBody.full_name || rawBody.name || rawBody.nome || rawBody.first_name
-    ? [rawBody.first_name, rawBody.last_name].filter(Boolean).join(' ') || rawBody.full_name || rawBody.name || rawBody.nome
-    : 'Lead Externo';
+  const name = 
+    rawBody.full_name?.trim() || 
+    rawBody.name?.trim() || 
+    rawBody.nome?.trim() || 
+    [rawBody.first_name, rawBody.last_name].filter(Boolean).join(' ').trim() || 
+    'Lead Externo';
   const email = rawBody.email || rawBody.e_mail || rawBody.mail || null;
   const phone = rawBody.phone || rawBody.phone_number || rawBody.telefone || rawBody.tel || null;
   const company = rawBody.company || rawBody.company_name || rawBody.empresa || null;
   const notes = rawBody.notes || rawBody.message || rawBody.mensagem || rawBody.observacoes || null;
   const source = rawBody.source || rawBody.fonte || 'Webhook Externo';
+
+  console.log('Webhook mapped fields:', { name, email, phone, notes, source });
 
   // Clean phone
   let cleanPhone = null;
