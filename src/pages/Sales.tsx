@@ -23,6 +23,7 @@ import { SALE_STATUS_LABELS, SALE_STATUS_COLORS, SALE_STATUSES } from "@/types/s
 
 import { useAuth } from "@/contexts/AuthContext";
 import { useTelecomSaleMetrics } from "@/hooks/useTelecomSaleMetrics";
+import { useModules } from "@/hooks/useModules";
 
 export default function Sales() {
   // Subscribe to realtime updates
