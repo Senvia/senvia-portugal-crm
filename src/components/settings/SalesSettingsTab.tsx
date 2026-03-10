@@ -73,6 +73,7 @@ export function SalesSettingsTab() {
     lockFulfilled !== !!currentSettings.lock_fulfilled_sales ||
     preventDeletion !== !!currentSettings.prevent_payment_deletion ||
     autoAssign !== !!currentSettings.auto_assign_leads ||
+    excludeAdmins !== !!currentSettings.exclude_admins_from_assignment ||
     commissionsEnabled !== !!currentSettings.commissions_enabled ||
     (parsedPct || null) !== (currentParsedPct || null);
 
