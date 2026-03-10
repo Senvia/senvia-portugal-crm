@@ -1,32 +1,31 @@
-## Toggle "Energias" no Módulos (Telecom Only)
 
-### Estado: ✅ Implementado
 
-### Alterações Realizadas
+## Plano: Ativações mostram Consumo Contratado (MWh) e kWp em vez de contagem
 
-**1. `src/hooks/useModules.ts`**
-- Adicionado `energy: boolean` ao `EnabledModules` (default: `true`)
+### Problema atual
+A coluna "Ativ." nos cards Energia Mensal e Serviços Mensal mostra uma **contagem** de vendas concluídas (delivered). O pedido é:
+- **Energia Mensal** → somar o **Consumo Anual** (da tabela `proposal_cpes.consumo_anual`) das vendas concluídas
+- **Serviços Mensal** → somar o **kWp** (de `proposals.servicos_details`) das vendas concluídas
 
-**2. `src/components/settings/ModulesTab.tsx`**
-- Adicionado card especial "Energias" com ícone ⚡ que só renderiza quando `organization.niche === 'telecom'`
-- Badge "Telecom" para identificar que é exclusivo do nicho
+### Alterações
 
-**3. Componentes atualizados com `showEnergy = isTelecom && modules.energy`:**
+**1. `src/hooks/useActivationObjectives.ts`**
+- Nas queries de `monthlyActivations` e `annualActivations`, adicionar `proposal_id` ao select
+- Adicionar queries para buscar `proposal_cpes` (consumo_anual) e `proposals` (servicos_details → kWp) associados às vendas concluídas
+- Alterar `countActivations` para retornar:
+  - Quando `proposalType === "energia"`: soma de `consumo_anual` (convertido a MWh, /1000)
+  - Quando `proposalType === "servicos"`: soma de `kWp`
+- Renomear internamente para `sumActivations` ou manter nome mas mudar semântica
 
-| Ficheiro | O que é ocultado quando energy=off |
-|---|---|
-| `src/pages/Leads.tsx` | Filtro de tipologia |
-| `src/components/leads/AddLeadModal.tsx` | Campos tipologia, consumo_anual, summary |
-| `src/components/leads/LeadDetailsModal.tsx` | Secção tipologia, card consumo_anual |
-| `src/components/leads/LeadCard.tsx` | Badge tipologia, consumo_anual |
-| `src/components/leads/LeadsTableView.tsx` | Coluna tipologia, coluna consumo |
-| `src/components/proposals/CreateProposalModal.tsx` | Tipo de proposta selector (energia) |
-| `src/components/proposals/EditProposalModal.tsx` | Tipo de proposta, CPE selector energia |
-| `src/components/proposals/ProposalDetailsModal.tsx` | CPEs, consumo total, resumo energia, badges energia |
-| `src/components/sales/CreateSaleModal.tsx` | Dados energia, CPE/CUI |
-| `src/components/sales/EditSaleModal.tsx` | Dados energia editáveis |
-| `src/components/sales/SaleDetailsModal.tsx` | Dados energia, CPEs |
-| `src/components/clients/ClientDetailsModal.tsx` | Stats MWh/kWp/Comissão |
-| `src/pages/Clients.tsx` | Filtro tipo proposta (energia/servicos) |
+**2. `src/components/dashboard/ActivationsPanel.tsx`**
+- Atualizar labels: "ativações" → "MWh" para energia, "kWp" para serviços
+- Formatar valores com casas decimais adequadas (ex: `1.5 MWh`, `3.2 kWp`)
+- Ajustar o cálculo de percentagem (%) com os novos valores numéricos vs objetivo
 
-**Nota**: Funcionalidades gerais de telecom (empresa, serviços, ativação, anexos) continuam visíveis independentemente do toggle de energia.
+### Lógica de dados
+```text
+Vendas (status=delivered, activation_date no período)
+  └─ proposal_id → proposal_cpes.consumo_anual  (Energia: soma kWh/1000 = MWh)
+  └─ proposal_id → proposals.servicos_details    (Serviços: soma kWp)
+```
+
