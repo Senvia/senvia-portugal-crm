@@ -291,6 +291,7 @@ export function CreateSaleModal({
         setComissao("");
         setNegotiationType(null);
         setServicosProdutos([]);
+        setServicosDetails({});
       }
       
       setSaleDate(new Date());
