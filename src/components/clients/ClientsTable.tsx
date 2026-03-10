@@ -42,9 +42,10 @@ interface ClientsTableProps {
   onDelete: (clientId: string) => void;
   selectedIds?: string[];
   onSelectionChange?: (ids: string[]) => void;
+  isTelecom?: boolean;
 }
 
-export function ClientsTable({ clients, onEdit, onView, onDelete, selectedIds = [], onSelectionChange }: ClientsTableProps) {
+export function ClientsTable({ clients, onEdit, onView, onDelete, selectedIds = [], onSelectionChange, isTelecom = false }: ClientsTableProps) {
   const [deleteClientId, setDeleteClientId] = useState<string | null>(null);
   const { canDeleteLeads } = usePermissions();
   const { data: teamMembers = [] } = useTeamMembers();
@@ -118,13 +119,25 @@ export function ClientsTable({ clients, onEdit, onView, onDelete, selectedIds = 
                   />
                 </TableHead>
               )}
-              <TableHead>Cliente</TableHead>
-              <TableHead className="hidden md:table-cell">Contacto</TableHead>
-              <TableHead className="hidden lg:table-cell">Empresa</TableHead>
-              <TableHead className="hidden xl:table-cell">Responsável</TableHead>
-              <TableHead>{labels.statusFieldLabel}</TableHead>
-              <TableHead className="hidden sm:table-cell">Data</TableHead>
-              <TableHead className="w-[60px]"></TableHead>
+              {isTelecom ? (
+                <>
+                  <TableHead className="hidden lg:table-cell">Empresa</TableHead>
+                  <TableHead className="hidden md:table-cell">Contacto</TableHead>
+                  <TableHead>Cliente</TableHead>
+                  <TableHead className="hidden xl:table-cell">Responsável</TableHead>
+                  <TableHead>{labels.statusFieldLabel}</TableHead>
+                  <TableHead className="hidden sm:table-cell">Data</TableHead>
+                </>
+              ) : (
+                <>
+                  <TableHead>Cliente</TableHead>
+                  <TableHead className="hidden md:table-cell">Contacto</TableHead>
+                  <TableHead className="hidden lg:table-cell">Empresa</TableHead>
+                  <TableHead className="hidden xl:table-cell">Responsável</TableHead>
+                  <TableHead>{labels.statusFieldLabel}</TableHead>
+                  <TableHead className="hidden sm:table-cell">Data</TableHead>
+                </>
+              )}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -148,43 +161,87 @@ export function ClientsTable({ clients, onEdit, onView, onDelete, selectedIds = 
                       />
                     </TableCell>
                   )}
-                <TableCell>
-                  <div>
-                    <p className="font-medium">{client.name}</p>
-                    {client.nif && (
-                      <p className="text-xs text-muted-foreground">NIF: {client.nif}</p>
-                    )}
-                  </div>
-                </TableCell>
-                <TableCell className="hidden md:table-cell">
-                  <div className="space-y-1">
-                    {client.email && (
-                      <div className="flex items-center gap-1 text-sm">
-                        <Mail className="h-3 w-3 text-muted-foreground" />
-                        <span className="truncate max-w-[180px]">{client.email}</span>
-                      </div>
-                    )}
-                    {client.phone && (
-                      <div className="flex items-center gap-1 text-sm">
-                        <Phone className="h-3 w-3 text-muted-foreground" />
-                        <span>{client.phone}</span>
-                      </div>
-                    )}
-                  </div>
-                </TableCell>
-                <TableCell className="hidden lg:table-cell">
-                  {client.company && (
-                    <div className="flex items-center gap-1">
-                      <Building2 className="h-3 w-3 text-muted-foreground shrink-0 mt-0.5" />
-                      <div>
-                        <p className="truncate max-w-[150px]">{client.company}</p>
-                        {client.company_nif && (
-                          <p className="text-xs text-muted-foreground">NIF: {client.company_nif}</p>
+                {isTelecom ? (
+                  <>
+                    <TableCell className="hidden lg:table-cell">
+                      {client.company ? (
+                        <div className="flex items-center gap-1">
+                          <Building2 className="h-3 w-3 text-muted-foreground shrink-0 mt-0.5" />
+                          <div>
+                            <p className="truncate max-w-[150px]">{client.company}</p>
+                            {client.company_nif && (
+                              <p className="text-xs text-muted-foreground">NIF: {client.company_nif}</p>
+                            )}
+                          </div>
+                        </div>
+                      ) : null}
+                    </TableCell>
+                    <TableCell className="hidden md:table-cell">
+                      <div className="space-y-1">
+                        {client.email && (
+                          <div className="flex items-center gap-1 text-sm">
+                            <Mail className="h-3 w-3 text-muted-foreground" />
+                            <span className="truncate max-w-[180px]">{client.email}</span>
+                          </div>
+                        )}
+                        {client.phone && (
+                          <div className="flex items-center gap-1 text-sm">
+                            <Phone className="h-3 w-3 text-muted-foreground" />
+                            <span>{client.phone}</span>
+                          </div>
                         )}
                       </div>
-                    </div>
-                  )}
-                </TableCell>
+                    </TableCell>
+                    <TableCell>
+                      <div>
+                        <p className="font-medium">{client.name}</p>
+                        {client.nif && (
+                          <p className="text-xs text-muted-foreground">NIF: {client.nif}</p>
+                        )}
+                      </div>
+                    </TableCell>
+                  </>
+                ) : (
+                  <>
+                    <TableCell>
+                      <div>
+                        <p className="font-medium">{client.name}</p>
+                        {client.nif && (
+                          <p className="text-xs text-muted-foreground">NIF: {client.nif}</p>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="hidden md:table-cell">
+                      <div className="space-y-1">
+                        {client.email && (
+                          <div className="flex items-center gap-1 text-sm">
+                            <Mail className="h-3 w-3 text-muted-foreground" />
+                            <span className="truncate max-w-[180px]">{client.email}</span>
+                          </div>
+                        )}
+                        {client.phone && (
+                          <div className="flex items-center gap-1 text-sm">
+                            <Phone className="h-3 w-3 text-muted-foreground" />
+                            <span>{client.phone}</span>
+                          </div>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="hidden lg:table-cell">
+                      {client.company ? (
+                        <div className="flex items-center gap-1">
+                          <Building2 className="h-3 w-3 text-muted-foreground shrink-0 mt-0.5" />
+                          <div>
+                            <p className="truncate max-w-[150px]">{client.company}</p>
+                            {client.company_nif && (
+                              <p className="text-xs text-muted-foreground">NIF: {client.company_nif}</p>
+                            )}
+                          </div>
+                        </div>
+                      ) : null}
+                    </TableCell>
+                  </>
+                )}
                 <TableCell className="hidden xl:table-cell">
                   {getTeamMemberName(client.assigned_to) ? (
                     <div className="flex items-center gap-1 text-sm">
