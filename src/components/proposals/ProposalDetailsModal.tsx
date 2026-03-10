@@ -37,6 +37,7 @@ import {
   type NegotiationType,
   type ServicosDetails,
 } from '@/types/proposals';
+import { useServicosProducts } from '@/hooks/useServicosProducts';
 import type { Proposal, ProposalStatus, ProposalType } from '@/types/proposals';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
