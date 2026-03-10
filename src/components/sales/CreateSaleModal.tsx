@@ -1105,6 +1105,51 @@ export function CreateSaleModal({
                   </Card>
                 )}
 
+                {/* Telecom Servicos Section (direct sale without proposal or servicos proposal) */}
+                {isTelecom && (isNewFormat && catalog) && (!proposalId || proposalType === 'servicos') && (
+                  <Card>
+                    <CardContent className="p-4">
+                      <ServicosSection
+                        modeloServico={modeloServico || 'transacional'}
+                        onModeloServicoChange={(v) => setModeloServico(v)}
+                        servicosProdutos={servicosProdutos}
+                        servicosDetails={servicosDetails}
+                        isNewFormat={isNewFormat}
+                        catalog={catalog}
+                        configs={servicosConfigs}
+                        onToggleProduct={(name) => {
+                          if (servicosProdutos.includes(name)) {
+                            setServicosProdutos(prev => prev.filter(p => p !== name));
+                            setServicosDetails(prev => {
+                              const next = { ...prev };
+                              delete next[name];
+                              return next;
+                            });
+                          } else {
+                            setServicosProdutos(prev => [...prev, name]);
+                            const catProduct = catalog?.find(c => c.name === name);
+                            if (catProduct) {
+                              const comissaoVal = catProduct.has_commission ? Math.round(catProduct.price * catProduct.commission_pct) / 100 : 0;
+                              setServicosDetails(prev => ({
+                                ...prev,
+                                [name]: {
+                                  price: catProduct.price,
+                                  commission_pct: catProduct.commission_pct,
+                                  comissao: comissaoVal,
+                                },
+                              }));
+                            }
+                          }
+                        }}
+                        onUpdateDetail={() => {}}
+                        onSetProductDetail={(product, detail) => {
+                          setServicosDetails(prev => ({ ...prev, [product]: detail }));
+                        }}
+                      />
+                    </CardContent>
+                  </Card>
+                )}
+
                 {/* Products/Services */}
                 {!isTelecom && (
                 <Card>
