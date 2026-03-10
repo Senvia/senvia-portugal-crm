@@ -148,6 +148,7 @@ export function EditSaleModal({
   const [modeloServico, setModeloServico] = useState<string>("");
   const [kwp, setKwp] = useState<string>("");
   const [servicosProdutos, setServicosProdutos] = useState<string[]>([]);
+  const [servicosDetails, setServicosDetails] = useState<ServicosDetails>({});
 
   // Manual total value (for sales without items)
   const [manualTotalValue, setManualTotalValue] = useState<string>("");
