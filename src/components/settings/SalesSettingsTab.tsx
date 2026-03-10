@@ -29,6 +29,7 @@ export function SalesSettingsTab() {
   const [lockFulfilled, setLockFulfilled] = useState(false);
   const [preventDeletion, setPreventDeletion] = useState(false);
   const [autoAssign, setAutoAssign] = useState(false);
+  const [excludeAdmins, setExcludeAdmins] = useState(false);
   const [commissionsEnabled, setCommissionsEnabled] = useState(false);
   const [commissionPercentage, setCommissionPercentage] = useState("");
 
