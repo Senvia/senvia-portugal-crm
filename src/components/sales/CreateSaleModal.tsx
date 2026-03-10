@@ -643,8 +643,8 @@ export function CreateSaleModal({
         discount: discountValue,
         sale_date: format(saleDate, 'yyyy-MM-dd'),
         notes: notes.trim() || undefined,
-        ...(isTelecom && proposalId ? {
-          proposal_type: proposalType || undefined,
+        ...(isTelecom ? {
+          proposal_type: proposalType || (servicosProdutos.length > 0 ? 'servicos' : undefined),
           consumo_anual: parseFloat(consumoAnual) || undefined,
           margem: parseFloat(margem) || undefined,
           dbl: parseFloat(dbl) || undefined,
@@ -654,6 +654,7 @@ export function CreateSaleModal({
           comissao: parseFloat(comissao) || undefined,
           negotiation_type: negotiationType || undefined,
           servicos_produtos: servicosProdutos.length > 0 ? servicosProdutos : undefined,
+          servicos_details: Object.keys(servicosDetails).length > 0 ? servicosDetails : undefined,
         } : {}),
         edp_proposal_number: edpProposalNumber.trim() || undefined,
         activation_date: activationDate ? format(activationDate, 'yyyy-MM-dd') : undefined,
