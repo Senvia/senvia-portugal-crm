@@ -49,7 +49,9 @@ export type WidgetType =
   // Telecom specific
   | 'pending_installations'
   | 'active_customers'
-  | 'monthly_commissions';
+  | 'monthly_commissions'
+  // Panel widgets
+  | 'team_performance_table';
 
 export type ChartType = 'area' | 'bar' | 'donut' | 'pie' | 'progress' | 'none';
 
