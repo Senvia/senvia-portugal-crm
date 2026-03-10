@@ -114,6 +114,7 @@ export function useCreateSale() {
           comissao: data.comissao || null,
           negotiation_type: data.negotiation_type || null,
           servicos_produtos: data.servicos_produtos || null,
+          servicos_details: data.servicos_details || null,
           edp_proposal_number: data.edp_proposal_number || null,
           client_org_id: (data as any).client_org_id || null,
           // Campos de recorrência
