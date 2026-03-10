@@ -174,6 +174,7 @@ export function EditSaleModal({
       setModeloServico(sale.modelo_servico || "");
       setKwp(sale.kwp?.toString() || "");
       setServicosProdutos(sale.servicos_produtos || []);
+      setServicosDetails((sale as any).servicos_details || {});
       setManualTotalValue(sale.total_value?.toString() || "0");
       setActivationDate(sale.activation_date || "");
       setEdpProposalNumber((sale as any).edp_proposal_number || "");
