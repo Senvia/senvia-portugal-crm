@@ -142,7 +142,7 @@ export function ClientDetailsDrawer({
   const hasAddress = client.address_line1 || client.city || client.postal_code;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <>
       <DialogContent variant="fullScreen" className="flex flex-col p-0 gap-0">
         {/* Header */}
         <DialogHeader className="px-4 sm:px-6 py-3 border-b shrink-0">
