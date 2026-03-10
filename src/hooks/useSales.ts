@@ -268,6 +268,7 @@ export function useUpdateSale() {
         comissao?: number | null;
         negotiation_type?: string | null;
         servicos_produtos?: string[] | null;
+        servicos_details?: Record<string, any> | null;
         edp_proposal_number?: string | null;
         // Campos de recorrência
         has_recurring?: boolean;
