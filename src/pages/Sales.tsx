@@ -276,8 +276,7 @@ export default function Sales() {
                         >
                           {(sale as any).proposal_type === 'energia' ? '⚡ Energia' : '🔧 Serviços'}
                         </Badge>
-                      )
-                      </Badge>
+                      )}
                       {sale.code && (
                         <span className="text-xs font-medium text-primary">{sale.code}</span>
                       )}
