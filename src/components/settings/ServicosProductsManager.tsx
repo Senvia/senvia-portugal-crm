@@ -73,7 +73,7 @@ export function ServicosProductsManager() {
               </Button>
             </div>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-start">
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">Preço Base (€)</Label>
                 <Input
@@ -86,10 +86,10 @@ export function ServicosProductsManager() {
                   className="h-9"
                 />
               </div>
-              
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <Label className="text-xs text-muted-foreground">Tem Comissão?</Label>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Tem Comissão?</Label>
+                <div className="flex items-center h-9">
                   <Switch
                     checked={product.has_commission}
                     onCheckedChange={(checked) => updateProduct(product.name, {
@@ -98,23 +98,23 @@ export function ServicosProductsManager() {
                     })}
                   />
                 </div>
-                
-                {product.has_commission && (
-                  <div className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">Comissão (%)</Label>
-                    <Input
-                      type="number"
-                      step="0.1"
-                      min="0"
-                      max="100"
-                      value={product.commission_pct || ''}
-                      onChange={(e) => updateProduct(product.name, { commission_pct: parseFloat(e.target.value) || 0 })}
-                      placeholder="0"
-                      className="h-9"
-                    />
-                  </div>
-                )}
               </div>
+
+              {product.has_commission && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Comissão (%)</Label>
+                  <Input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="100"
+                    value={product.commission_pct || ''}
+                    onChange={(e) => updateProduct(product.name, { commission_pct: parseFloat(e.target.value) || 0 })}
+                    placeholder="0"
+                    className="h-9"
+                  />
+                </div>
+              )}
             </div>
           </div>
         ))}
