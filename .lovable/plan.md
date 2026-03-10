@@ -1,35 +1,23 @@
+## Adaptar "Serviços" para telecom sem módulo energy
 
+### Estado: ✅ Implementado
 
-## Diagnóstico
+### Alterações Realizadas
 
-O `ProposalDetailsModal` (que é um `Dialog`) está renderizado **dentro** do `DialogContent` do drawer de clientes (linha 549-553). Isto cria um **Dialog aninhado dentro de outro Dialog**, o que causa o ecrã branco — o Radix UI perde o contexto e bloqueia a interação.
+**1. `src/hooks/useActivationObjectives.ts`**
+- `sumActivations` agora aceita parâmetro opcional `countMode: 'value' | 'count'`
+- Quando `countMode === 'count'`, retorna `filtered.length` (número de vendas delivered)
+- Default: `'value'` (comportamento atual preservado)
 
-O mesmo problema não afeta o `AddCommunicationModal` porque provavelmente usa `Sheet` ou outro componente, mas o `ProposalDetailsModal` usa `Dialog`.
+**2. `src/components/dashboard/ActivationsPanel.tsx`**
+- Blocos de Serviços usam `countMode = 'count'` quando `modules.energy = false`
+- Unidade exibida: `"kWp"` → `"contratos"` quando energy desativado
+- Blocos de Energia não afetados
 
-## Correção
+### Resultado
+| Org | Energy module | Serviços unit | Contagem |
+|-----|--------------|---------------|----------|
+| Perfect2Gether | ✅ on | kWp | soma kWp |
+| Escolha Inteligente | ❌ off | contratos | count vendas delivered |
 
-**Ficheiro: `src/components/clients/ClientDetailsDrawer.tsx`**
-
-Mover o `ProposalDetailsModal` para **fora** do componente `<Dialog>` principal (após o `</Dialog>` de fecho, antes do return final):
-
-```tsx
-// Antes (linha 544-555):
-    </DialogContent>
-  </Dialog>
-
-// Depois:
-    </DialogContent>
-  </Dialog>
-
-  {/* Proposal Details Modal - fora do Dialog principal */}
-  <ProposalDetailsModal
-    proposal={selectedProposal}
-    open={!!selectedProposal}
-    onOpenChange={(open) => { if (!open) setSelectedProposal(null); }}
-  />
-```
-
-Remover o bloco do `ProposalDetailsModal` de dentro do `DialogContent` (linhas 548-553) e colocá-lo após o `</Dialog>` de fecho. Envolver o return num fragment `<>...</>`.
-
-1 ficheiro, ~10 linhas movidas.
-
+**Impacto**: Zero alteração para orgs com energy ativo.

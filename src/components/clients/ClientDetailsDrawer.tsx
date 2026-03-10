@@ -142,6 +142,7 @@ export function ClientDetailsDrawer({
   const hasAddress = client.address_line1 || client.city || client.postal_code;
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent variant="fullScreen" className="flex flex-col p-0 gap-0">
         {/* Header */}
@@ -545,13 +546,15 @@ export function ClientDetailsDrawer({
           defaultDirection={defaultCommDirection}
         />
 
-        {/* Proposal Details Modal */}
-        <ProposalDetailsModal
-          proposal={selectedProposal}
-          open={!!selectedProposal}
-          onOpenChange={(open) => { if (!open) setSelectedProposal(null); }}
-        />
       </DialogContent>
     </Dialog>
+
+    {/* Proposal Details Modal - fora do Dialog principal para evitar nested dialogs */}
+    <ProposalDetailsModal
+      proposal={selectedProposal}
+      open={!!selectedProposal}
+      onOpenChange={(open) => { if (!open) setSelectedProposal(null); }}
+    />
+  </>
   );
 }
