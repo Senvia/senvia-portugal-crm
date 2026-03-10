@@ -38,6 +38,7 @@ interface ActivationBlockProps {
   getTarget: (userId: string, periodType: "monthly" | "annual", proposalType: "energia" | "servicos") => number;
   countActivations: (userId: string | null, periodType: "monthly" | "annual", proposalType: "energia" | "servicos") => number;
   onEdit: () => void;
+  unit?: string;
 }
 
 function ActivationBlock({
