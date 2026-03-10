@@ -219,11 +219,32 @@ export function CreateCampaignModal({ open, onOpenChange, campaign }: CreateCamp
         });
 
         // Update scheduled_at via supabase directly
-        const { supabase } = await import("@/integrations/supabase/client");
         await supabase
           .from("email_campaigns")
           .update({ scheduled_at: scheduledAt.toISOString() } as any)
           .eq("id", campaignId);
+
+        // Pre-create email_sends with status 'queued' so cron knows who to send to
+        const queuedRecords = selectedClients
+          .filter(c => c.email)
+          .map(client => ({
+            organization_id: org?.id,
+            campaign_id: campaignId,
+            template_id: contentMode === "template" ? templateId : null,
+            client_id: client.id.startsWith('marketing_') ? null : client.id,
+            recipient_email: client.email!,
+            recipient_name: client.name,
+            subject: subject,
+            status: 'queued',
+          }));
+
+        if (queuedRecords.length > 0) {
+          // Insert in batches of 100
+          for (let i = 0; i < queuedRecords.length; i += 100) {
+            const batch = queuedRecords.slice(i, i + 100);
+            await supabase.from("email_sends").insert(batch as any);
+          }
+        }
 
         handleClose();
         return;
