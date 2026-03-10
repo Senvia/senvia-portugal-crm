@@ -24,21 +24,64 @@ export function useMonthSalesMetrics(referenceDate?: Date) {
     queryFn: async (): Promise<UserSalesMetrics[]> => {
       if (!orgId) return [];
 
-      const { data, error } = await supabase
+      // 1. Fetch fulfilled sales
+      const { data: sales, error } = await supabase
         .from("sales")
-        .select("created_by, consumo_anual, kwp, comissao, client_id, status")
+        .select("id, created_by, proposal_id")
         .eq("organization_id", orgId)
         .gte("sale_date", monthStart)
         .lte("sale_date", monthEnd)
         .eq("status", "fulfilled");
 
       if (error) throw error;
-      if (!data) return [];
+      if (!sales?.length) return [];
 
-      // Group by created_by
+      // 2. Get proposal_ids and fetch proposal_cpes
+      const proposalIds = [...new Set(sales.map(s => s.proposal_id).filter(Boolean))] as string[];
+
+      let cpesByProposal = new Map<string, { consumo: number; comissao: number }>();
+      if (proposalIds.length > 0) {
+        const { data: cpes } = await supabase
+          .from("proposal_cpes")
+          .select("proposal_id, consumo_anual, comissao")
+          .in("proposal_id", proposalIds);
+
+        if (cpes) {
+          for (const cpe of cpes) {
+            const existing = cpesByProposal.get(cpe.proposal_id) || { consumo: 0, comissao: 0 };
+            existing.consumo += Number(cpe.consumo_anual || 0);
+            existing.comissao += Number(cpe.comissao || 0);
+            cpesByProposal.set(cpe.proposal_id, existing);
+          }
+        }
+      }
+
+      // 3. Get kWp from proposals servicos_details
+      let kwpByProposal = new Map<string, number>();
+      if (proposalIds.length > 0) {
+        const { data: proposals } = await supabase
+          .from("proposals")
+          .select("id, servicos_details")
+          .in("id", proposalIds);
+
+        if (proposals) {
+          for (const p of proposals) {
+            let totalKwp = 0;
+            const details = p.servicos_details as Record<string, { kwp?: number }> | null;
+            if (details && typeof details === "object") {
+              for (const prod of Object.values(details)) {
+                totalKwp += prod?.kwp || 0;
+              }
+            }
+            kwpByProposal.set(p.id, totalKwp);
+          }
+        }
+      }
+
+      // 4. Group by created_by
       const grouped = new Map<string, { contracts: number; energia: number; solar: number; comissao: number }>();
 
-      for (const sale of data) {
+      for (const sale of sales) {
         const uid = sale.created_by;
         if (!uid) continue;
 
@@ -47,10 +90,12 @@ export function useMonthSalesMetrics(referenceDate?: Date) {
         }
         const g = grouped.get(uid)!;
 
+        const cpeData = sale.proposal_id ? cpesByProposal.get(sale.proposal_id) : null;
+
         g.contracts += 1;
-        g.energia += Number(sale.consumo_anual || 0) / 1000; // kWh → MWh
-        g.solar += Number(sale.kwp || 0);
-        g.comissao += Number(sale.comissao || 0);
+        g.energia += (cpeData?.consumo ?? 0) / 1000; // kWh → MWh
+        g.solar += sale.proposal_id ? (kwpByProposal.get(sale.proposal_id) || 0) : 0;
+        g.comissao += cpeData?.comissao ?? 0;
       }
 
       return Array.from(grouped.entries()).map(([userId, g]) => ({
