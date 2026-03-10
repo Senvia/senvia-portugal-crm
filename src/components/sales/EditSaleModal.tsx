@@ -92,7 +92,7 @@ export function EditSaleModal({
   onSuccess
 }: EditSaleModalProps) {
   const { data: clients } = useClients();
-  const { products: SERVICOS_PRODUCTS, configs: SERVICOS_PRODUCT_CONFIGS } = useServicosProducts();
+  const { products: catalogProductNames, configs: SERVICOS_PRODUCT_CONFIGS, catalog, isNewFormat } = useServicosProducts();
   const { data: products } = useProducts();
   const { data: existingItems = [] } = useSaleItems(sale?.id);
   
