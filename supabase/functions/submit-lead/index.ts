@@ -37,6 +37,16 @@ Deno.serve(async (req) => {
       );
     }
 
+    const url = new URL(req.url);
+    const mode = url.searchParams.get('mode');
+    const token = url.searchParams.get('token');
+
+    // ===== WEBHOOK MODE (Zapier/Make) =====
+    if (mode === 'webhook' && token) {
+      return await handleWebhookMode(req, token);
+    }
+
+    // ===== STANDARD FORM MODE =====
     // Parse request body
     const body: LeadSubmission = await req.json();
     console.log('Lead submission received:', { ...body, email: '[REDACTED]' });
