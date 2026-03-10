@@ -295,7 +295,8 @@ export function CreateSaleModal({
       }
       
       setSaleDate(new Date());
-      setSaleStatus("in_progress");
+      // Para telecom, quando vem de proposta, estado padrão = fulfilled (Entregue)
+      setSaleStatus(isTelecom && prefillProposal ? 'fulfilled' : 'in_progress');
       setEdpProposalNumber("");
       setActivationDate(undefined);
       setItems([]);
