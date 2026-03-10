@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { useProducts, useDeleteProduct } from '@/hooks/useProducts';
 import { useSyncInvoiceXpressItems } from '@/hooks/useSyncInvoiceXpressItems';
 import { useAuth } from '@/contexts/AuthContext';
+import { ServicosProductsManager } from './ServicosProductsManager';
 import { CreateProductModal } from './CreateProductModal';
 import { EditProductModal } from './EditProductModal';
 import type { Product } from '@/types/proposals';
