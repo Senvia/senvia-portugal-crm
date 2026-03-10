@@ -31,6 +31,7 @@ export default function Sales() {
   const { profile, organization } = useAuth();
   const { data: sales, isLoading } = useSales();
   const isTelecom = organization?.niche === 'telecom';
+  const { modules } = useModules();
   const { data: telecomMetrics } = useTelecomSaleMetrics();
   const [search, setSearch] = usePersistedState("sales-search-v1", "");
   const [statusFilter, setStatusFilter] = usePersistedState<SaleStatus | "all">("sales-status-v1", "all");
