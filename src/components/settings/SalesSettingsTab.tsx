@@ -38,6 +38,7 @@ export function SalesSettingsTab() {
     setLockFulfilled(!!currentSettings.lock_fulfilled_sales);
     setPreventDeletion(!!currentSettings.prevent_payment_deletion);
     setAutoAssign(!!currentSettings.auto_assign_leads);
+    setExcludeAdmins(!!currentSettings.exclude_admins_from_assignment);
     setCommissionsEnabled(!!currentSettings.commissions_enabled);
     setCommissionPercentage(
       currentSettings.commission_percentage != null && currentSettings.commission_percentage > 0
