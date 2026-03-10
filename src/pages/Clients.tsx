@@ -237,9 +237,11 @@ export default function Clients() {
                   <div>
                     <p className="text-sm text-muted-foreground">Comissão Total</p>
                     <p className="text-2xl font-bold">{formatCurrency(stats.totalComissao)}</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {stats.totalMwh.toFixed(1)} MWh · {stats.totalKwp.toFixed(1)} kWp
-                    </p>
+                    {showEnergy && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {stats.totalMwh.toFixed(1)} MWh · {stats.totalKwp.toFixed(1)} kWp
+                      </p>
+                    )}
                   </div>
                 </div>
               </CardContent>

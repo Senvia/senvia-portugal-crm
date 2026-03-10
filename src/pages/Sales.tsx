@@ -216,7 +216,7 @@ export default function Sales() {
           </SelectContent>
         </Select>
         <DateRangePicker value={dateRange} onChange={setDateRange} className="w-full sm:w-auto" />
-        {isTelecom && (
+        {isTelecom && modules.energy && (
           <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as 'all' | 'energia' | 'servicos')}>
             <SelectTrigger className="w-full sm:w-[180px] bg-card/50 border-border/50">
               <Zap className="h-4 w-4 mr-2" />
