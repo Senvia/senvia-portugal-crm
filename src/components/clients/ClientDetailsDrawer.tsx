@@ -74,6 +74,8 @@ export function ClientDetailsDrawer({
   const { organization } = useAuth();
   
   const isTelecom = organization?.niche === 'telecom';
+  const { modules } = useModules();
+  const showEnergy = isTelecom && modules.energy;
   const { data: cpes = [] } = useCpes(isTelecom ? client?.id : null);
   const CpeIcon = isTelecom ? Zap : Router;
 
