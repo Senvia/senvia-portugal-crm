@@ -23,6 +23,7 @@ import { SALE_STATUS_LABELS, SALE_STATUS_COLORS, SALE_STATUSES } from "@/types/s
 
 import { useAuth } from "@/contexts/AuthContext";
 import { useTelecomSaleMetrics } from "@/hooks/useTelecomSaleMetrics";
+import { useModules } from "@/hooks/useModules";
 
 export default function Sales() {
   // Subscribe to realtime updates
@@ -30,6 +31,7 @@ export default function Sales() {
   const { profile, organization } = useAuth();
   const { data: sales, isLoading } = useSales();
   const isTelecom = organization?.niche === 'telecom';
+  const { modules } = useModules();
   const { data: telecomMetrics } = useTelecomSaleMetrics();
   const [search, setSearch] = usePersistedState("sales-search-v1", "");
   const [statusFilter, setStatusFilter] = usePersistedState<SaleStatus | "all">("sales-status-v1", "all");
@@ -143,7 +145,7 @@ export default function Sales() {
             </div>
             <p className="text-2xl font-bold">{stats.total}</p>
             <p className="text-xs text-muted-foreground">{formatCurrency(stats.totalValue)}</p>
-            {isTelecom && telecomMetrics && (
+            {isTelecom && modules.energy && telecomMetrics && (
               <p className="text-xs text-muted-foreground mt-1">
                 {telecomMetrics.totalMWh.toFixed(1)} MWh · {telecomMetrics.totalKWp.toFixed(1)} kWp
               </p>
@@ -180,7 +182,7 @@ export default function Sales() {
             </div>
             <p className="text-2xl font-bold text-green-500">{stats.delivered}</p>
             <p className="text-xs text-muted-foreground">{formatCurrency(stats.deliveredValue)}</p>
-            {isTelecom && telecomMetrics && (
+            {isTelecom && modules.energy && telecomMetrics && (
               <p className="text-xs text-muted-foreground mt-1">
                 {telecomMetrics.deliveredMWh.toFixed(1)} MWh · {telecomMetrics.deliveredKWp.toFixed(1)} kWp
               </p>
@@ -215,7 +217,7 @@ export default function Sales() {
           </SelectContent>
         </Select>
         <DateRangePicker value={dateRange} onChange={setDateRange} className="w-full sm:w-auto" />
-        {isTelecom && (
+        {isTelecom && modules.energy && (
           <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as 'all' | 'energia' | 'servicos')}>
             <SelectTrigger className="w-full sm:w-[180px] bg-card/50 border-border/50">
               <Zap className="h-4 w-4 mr-2" />
