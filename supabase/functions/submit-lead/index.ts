@@ -22,7 +22,195 @@ interface LeadSubmission {
   custom_data?: Record<string, unknown>;
 }
 
-Deno.serve(async (req) => {
+// ===== WEBHOOK MODE HANDLER (Zapier/Make/External) =====
+async function handleWebhookMode(req: Request, token: string): Promise<Response> {
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const supabase = createClient(supabaseUrl, serviceRoleKey);
+
+  // Validate token against organizations
+  const { data: org, error: orgError } = await supabase
+    .from('organizations')
+    .select('id, name, niche, webhook_url, whatsapp_instance, whatsapp_api_key, whatsapp_base_url, meta_pixels, sales_settings, brevo_api_key, brevo_sender_email, slug')
+    .eq('webhook_token', token)
+    .maybeSingle();
+
+  if (orgError || !org) {
+    console.error('Invalid webhook token');
+    return new Response(
+      JSON.stringify({ error: 'Token inválido' }),
+      { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+
+  console.log('Webhook mode: org found:', org.name);
+
+  const rawBody = await req.json();
+  console.log('Webhook payload received:', JSON.stringify(rawBody).substring(0, 500));
+
+  // Map common field names from Facebook Lead Ads / Zapier / Make
+  const name = rawBody.full_name || rawBody.name || rawBody.nome || rawBody.first_name
+    ? [rawBody.first_name, rawBody.last_name].filter(Boolean).join(' ') || rawBody.full_name || rawBody.name || rawBody.nome
+    : 'Lead Externo';
+  const email = rawBody.email || rawBody.e_mail || rawBody.mail || null;
+  const phone = rawBody.phone || rawBody.phone_number || rawBody.telefone || rawBody.tel || null;
+  const company = rawBody.company || rawBody.company_name || rawBody.empresa || null;
+  const notes = rawBody.notes || rawBody.message || rawBody.mensagem || rawBody.observacoes || null;
+  const source = rawBody.source || rawBody.fonte || 'Webhook Externo';
+
+  // Clean phone
+  let cleanPhone = null;
+  if (phone) {
+    cleanPhone = String(phone).replace(/\s/g, '');
+    if (cleanPhone.length < 9 || cleanPhone.length > 15) cleanPhone = null;
+  }
+
+  // Clean email
+  let cleanEmail = null;
+  if (email) {
+    const emailStr = String(email).trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (emailRegex.test(emailStr)) cleanEmail = emailStr;
+  }
+
+  // Deduplication check (same phone within 60s)
+  if (cleanPhone && cleanPhone !== '000000000') {
+    const sixtySecondsAgo = new Date(Date.now() - 60000).toISOString();
+    const { data: existingLead } = await supabase
+      .from('leads')
+      .select('id')
+      .eq('phone', cleanPhone)
+      .eq('organization_id', org.id)
+      .gte('created_at', sixtySecondsAgo)
+      .limit(1)
+      .maybeSingle();
+
+    if (existingLead) {
+      return new Response(
+        JSON.stringify({ success: true, lead_id: existingLead.id, duplicate: true }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+  }
+
+  // Round-robin auto-assign
+  let autoAssignedTo: string | null = null;
+  const salesSettings = (org.sales_settings as any) || {};
+  if (salesSettings.auto_assign_leads) {
+    try {
+      const { data: members } = await supabase
+        .from('organization_members')
+        .select('user_id')
+        .eq('organization_id', org.id)
+        .eq('is_active', true)
+        .order('joined_at', { ascending: true });
+
+      if (members && members.length > 0) {
+        const currentIndex = salesSettings.round_robin_index || 0;
+        const safeIndex = currentIndex % members.length;
+        autoAssignedTo = members[safeIndex].user_id;
+        const nextIndex = (safeIndex + 1) % members.length;
+        await supabase.from('organizations').update({
+          sales_settings: { ...salesSettings, round_robin_index: nextIndex },
+        }).eq('id', org.id);
+      }
+    } catch (rrErr) {
+      console.error('Round-robin failed:', rrErr);
+    }
+  }
+
+  // Collect extra fields as custom_data
+  const knownFields = ['full_name', 'name', 'nome', 'first_name', 'last_name', 'email', 'e_mail', 'mail', 'phone', 'phone_number', 'telefone', 'tel', 'company', 'company_name', 'empresa', 'notes', 'message', 'mensagem', 'observacoes', 'source', 'fonte'];
+  const customData: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(rawBody)) {
+    if (!knownFields.includes(key) && value !== null && value !== undefined && value !== '') {
+      customData[key] = value;
+    }
+  }
+
+  // Insert lead
+  const { data: lead, error: leadError } = await supabase
+    .from('leads')
+    .insert({
+      organization_id: org.id,
+      assigned_to: autoAssignedTo,
+      name: String(name).substring(0, 200),
+      email: cleanEmail || 'nao-fornecido@placeholder.local',
+      phone: cleanPhone || '000000000',
+      company_name: company ? String(company).substring(0, 200) : null,
+      gdpr_consent: true,
+      source: String(source).substring(0, 100),
+      status: 'new',
+      notes: notes ? String(notes).substring(0, 2000) : null,
+      custom_data: Object.keys(customData).length > 0 ? customData : {},
+    })
+    .select()
+    .single();
+
+  if (leadError) {
+    console.error('Error inserting webhook lead:', leadError);
+    return new Response(
+      JSON.stringify({ error: 'Erro ao guardar lead' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+
+  console.log('Webhook lead created:', lead.id);
+
+  // Fire outbound webhooks (non-blocking)
+  const { data: activeWebhooks } = await supabase
+    .from('organization_webhooks')
+    .select('url')
+    .eq('organization_id', org.id)
+    .eq('is_active', true);
+
+  const webhookUrls: string[] = [SENVIA_SYSTEM_WEBHOOK_URL];
+  if (activeWebhooks) {
+    for (const wh of activeWebhooks) {
+      if (wh.url && !webhookUrls.includes(wh.url)) webhookUrls.push(wh.url);
+    }
+  }
+  if (org.webhook_url && !webhookUrls.includes(org.webhook_url)) webhookUrls.push(org.webhook_url);
+
+  const webhookPayload = {
+    event: 'lead.created',
+    timestamp: new Date().toISOString(),
+    organization: { id: org.id, name: org.name },
+    lead: {
+      id: lead.id, name: lead.name, email: lead.email,
+      phone: lead.phone, company_name: lead.company_name,
+      source: lead.source, status: lead.status, notes: lead.notes,
+      custom_data: customData, created_at: lead.created_at,
+    },
+  };
+
+  for (const whUrl of webhookUrls) {
+    fetch(whUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(webhookPayload),
+    }).catch((err) => console.error(`Webhook failed: ${whUrl}`, err.message));
+  }
+
+  // Push notification (non-blocking)
+  fetch(`${supabaseUrl}/functions/v1/send-push-notification`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${serviceRoleKey}` },
+    body: JSON.stringify({
+      organization_id: org.id,
+      title: '🚀 Novo Lead!',
+      body: `${lead.name} - ${lead.source}`,
+      url: '/leads',
+      tag: `lead-${lead.id}`,
+    }),
+  }).catch((err) => console.error('Push failed:', err.message));
+
+  return new Response(
+    JSON.stringify({ success: true, lead_id: lead.id }),
+    { status: 201, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+  );
+}
+
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
