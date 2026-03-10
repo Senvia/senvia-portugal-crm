@@ -237,7 +237,8 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
   const hasEnergyData = sale.proposal_type === 'energia' && (
     sale.consumo_anual || sale.margem || sale.dbl || sale.anos_contrato || sale.comissao || sale.negotiation_type
   );
-  const hasServiceData = sale.proposal_type === 'servicos' && (
+  const saleServicosDetails = (sale as any).servicos_details as Record<string, { price?: number; commission_pct?: number; comissao?: number; name?: string }> | null;
+  const hasServiceData = (sale.proposal_type === 'servicos' || (!sale.proposal_type && sale.servicos_produtos && sale.servicos_produtos.length > 0)) && (
     sale.modelo_servico || sale.kwp || sale.comissao || (sale.servicos_produtos && sale.servicos_produtos.length > 0)
   );
 
