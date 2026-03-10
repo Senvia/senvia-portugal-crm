@@ -119,6 +119,7 @@ export const IntegrationsContent = (props: IntegrationsContentProps) => {
   const isConfigured = (key: IntegrationKey): boolean => {
     switch (key) {
       case 'webhook': return webhooks.length > 0;
+      case 'webhook_inbound': return true; // Always configured (auto-generated token)
       case 'whatsapp': return !!(whatsappBaseUrl && whatsappInstance && whatsappApiKey);
       case 'brevo': return !!(brevoApiKey && brevoSenderEmail);
       case 'invoicexpress': return !!(invoiceXpressAccountName && invoiceXpressApiKey);
