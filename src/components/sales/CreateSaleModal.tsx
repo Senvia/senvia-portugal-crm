@@ -179,6 +179,7 @@ export function CreateSaleModal({
   const [comissao, setComissao] = useState<string>("");
   const [negotiationType, setNegotiationType] = useState<NegotiationType | null>(null);
   const [servicosProdutos, setServicosProdutos] = useState<string[]>([]);
+  const [servicosDetails, setServicosDetails] = useState<ServicosDetails>({});
 
   // Sale status
   const [saleStatus, setSaleStatus] = useState<SaleStatus>("in_progress");
