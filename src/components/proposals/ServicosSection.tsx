@@ -53,6 +53,7 @@ export function ServicosSection({
   isAutoCalculated,
   totalKwp,
   totalComissao,
+  hideModeloServico,
 }: ServicosSectionProps) {
   return (
     <div className="space-y-4 p-4 rounded-lg border bg-secondary/30 border-border">
