@@ -696,6 +696,7 @@ export function EditSaleModal({
                     <Card>
                       <CardContent className="p-4">
                         <ServicosSection
+                          hideModeloServico
                           modeloServico={(modeloServico as 'transacional' | 'saas') || 'transacional'}
                           onModeloServicoChange={(v) => setModeloServico(v)}
                           servicosProdutos={servicosProdutos}

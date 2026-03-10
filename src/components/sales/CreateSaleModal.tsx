@@ -1133,6 +1133,7 @@ export function CreateSaleModal({
                   <Card>
                     <CardContent className="p-4">
                       <ServicosSection
+                        hideModeloServico
                         modeloServico={modeloServico || 'transacional'}
                         onModeloServicoChange={(v) => setModeloServico(v)}
                         servicosProdutos={servicosProdutos}
