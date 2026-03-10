@@ -1,32 +1,26 @@
-## Toggle "Energias" no Módulos (Telecom Only)
 
-### Estado: ✅ Implementado
 
-### Alterações Realizadas
+## Corrigir tabela B) Vendas — contar contratos, mostrar valores corretos e incluir "Concluídas"
 
-**1. `src/hooks/useModules.ts`**
-- Adicionado `energy: boolean` ao `EnabledModules` (default: `true`)
+### Problemas identificados
 
-**2. `src/components/settings/ModulesTab.tsx`**
-- Adicionado card especial "Energias" com ícone ⚡ que só renderiza quando `organization.niche === 'telecom'`
-- Badge "Telecom" para identificar que é exclusivo do nicho
+1. **NIFs conta clientes distintos** — deveria contar nº de contratos (vendas), pois 1 NIF pode ter 2 contratos (energia + serviços)
+2. **Energia mostra 0** — o campo `consumo_anual` existe mas o filtro de status só inclui `fulfilled`, excluindo `delivered`
+3. **Comissão não soma vendas Concluídas (delivered)** — o hook `useMonthSalesMetrics` filtra apenas `status = 'fulfilled'`, ignorando vendas `delivered` (ex: DNR)
 
-**3. Componentes atualizados com `showEnergy = isTelecom && modules.energy`:**
+### Alterações
 
-| Ficheiro | O que é ocultado quando energy=off |
-|---|---|
-| `src/pages/Leads.tsx` | Filtro de tipologia |
-| `src/components/leads/AddLeadModal.tsx` | Campos tipologia, consumo_anual, summary |
-| `src/components/leads/LeadDetailsModal.tsx` | Secção tipologia, card consumo_anual |
-| `src/components/leads/LeadCard.tsx` | Badge tipologia, consumo_anual |
-| `src/components/leads/LeadsTableView.tsx` | Coluna tipologia, coluna consumo |
-| `src/components/proposals/CreateProposalModal.tsx` | Tipo de proposta selector (energia) |
-| `src/components/proposals/EditProposalModal.tsx` | Tipo de proposta, CPE selector energia |
-| `src/components/proposals/ProposalDetailsModal.tsx` | CPEs, consumo total, resumo energia, badges energia |
-| `src/components/sales/CreateSaleModal.tsx` | Dados energia, CPE/CUI |
-| `src/components/sales/EditSaleModal.tsx` | Dados energia editáveis |
-| `src/components/sales/SaleDetailsModal.tsx` | Dados energia, CPEs |
-| `src/components/clients/ClientDetailsModal.tsx` | Stats MWh/kWp/Comissão |
-| `src/pages/Clients.tsx` | Filtro tipo proposta (energia/servicos) |
+**Ficheiro: `src/hooks/useMonthSalesMetrics.ts`**
 
-**Nota**: Funcionalidades gerais de telecom (empresa, serviços, ativação, anexos) continuam visíveis independentemente do toggle de energia.
+1. **Incluir status `delivered`**: Mudar `.eq("status", "fulfilled")` para `.in("status", ["fulfilled", "delivered"])`
+2. **Contar contratos em vez de NIFs distintos**: Substituir o `Set<string>` de `client_id` por um contador simples que incrementa por cada venda
+3. Manter os campos `energia` (consumo_anual/1000 → MWh) e `solar` (kwp) como estão — os valores apareciam a 0 porque as vendas `delivered` estavam excluídas
+
+### Resultado esperado
+
+- NIFs passa a mostrar **nº total de contratos** (vendas), não clientes únicos
+- Energia e Solar mostram os valores reais de todas as vendas entregues + concluídas
+- Comissão soma correctamente incluindo vendas com estado `delivered`
+
+**1 ficheiro, ~3 linhas alteradas.**
+
