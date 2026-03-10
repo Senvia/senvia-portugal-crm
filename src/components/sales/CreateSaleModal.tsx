@@ -59,8 +59,10 @@ import {
   CreditCard,
   Trash2
 } from "lucide-react";
-import type { Proposal, ServicosProductDetail } from "@/types/proposals";
+import type { Proposal, ServicosProductDetail, ServicosDetails } from "@/types/proposals";
 import { NEGOTIATION_TYPE_LABELS } from "@/types/proposals";
+import { useServicosProducts } from "@/hooks/useServicosProducts";
+import { ServicosSection } from "@/components/proposals/ServicosSection";
 
 import { useSaleFieldsSettings } from "@/hooks/useSaleFieldsSettings";
 import { useCommissionMatrix, getVolumeTier, getTierRuleLabel } from "@/hooks/useCommissionMatrix";
