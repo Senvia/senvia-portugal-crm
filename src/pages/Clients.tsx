@@ -308,6 +308,7 @@ export default function Clients() {
             onDelete={handleDelete}
             selectedIds={selectedIds}
             onSelectionChange={setSelectedIds}
+            isTelecom={showEnergy}
           />
         )}
       </div>

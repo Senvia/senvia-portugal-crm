@@ -42,6 +42,7 @@ interface ClientsTableProps {
   onDelete: (clientId: string) => void;
   selectedIds?: string[];
   onSelectionChange?: (ids: string[]) => void;
+  isTelecom?: boolean;
 }
 
 export function ClientsTable({ clients, onEdit, onView, onDelete, selectedIds = [], onSelectionChange }: ClientsTableProps) {
