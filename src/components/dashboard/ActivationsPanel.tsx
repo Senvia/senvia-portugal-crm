@@ -5,6 +5,7 @@ import { useTeamFilter } from "@/hooks/useTeamFilter";
 import { useTeamMembers } from "@/hooks/useTeam";
 import { useActivationObjectives } from "@/hooks/useActivationObjectives";
 import { useDashboardPeriod } from "@/stores/useDashboardPeriod";
+import { useModules } from "@/hooks/useModules";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -156,12 +157,15 @@ function ActivationBlock({
 }
 
 export function ActivationsPanel() {
-  const { user, profile } = useAuth();
+  const { user, profile, organization } = useAuth();
   const { isAdmin } = usePermissions();
   const { data: members = [] } = useTeamMembers();
   const { selectedMemberId } = useTeamFilter();
   const { selectedMonth } = useDashboardPeriod();
   const { isLoading, getTarget, countActivations } = useActivationObjectives(selectedMonth);
+  const { modules } = useModules();
+
+  const showEnergy = organization?.niche === 'telecom' && modules.energy;
 
   const [editModal, setEditModal] = useState<{
     open: boolean;
@@ -194,7 +198,7 @@ export function ActivationsPanel() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {[1, 2, 3, 4].map((i) => (
+            {[1, 2].map((i) => (
               <Skeleton key={i} className="h-48 w-full" />
             ))}
           </div>
@@ -221,14 +225,16 @@ export function ActivationsPanel() {
         </h3>
 
         {/* Monthly row */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <ActivationBlock
-            title="Energia — Mensal"
-            periodType="monthly"
-            proposalType="energia"
-            {...blockProps}
-            onEdit={() => openEdit("monthly", "energia")}
-          />
+        <div className={`grid grid-cols-1 ${showEnergy ? 'md:grid-cols-2' : ''} gap-4`}>
+          {showEnergy && (
+            <ActivationBlock
+              title="Energia — Mensal"
+              periodType="monthly"
+              proposalType="energia"
+              {...blockProps}
+              onEdit={() => openEdit("monthly", "energia")}
+            />
+          )}
           <ActivationBlock
             title="Serviços — Mensal"
             periodType="monthly"
@@ -239,14 +245,16 @@ export function ActivationsPanel() {
         </div>
 
         {/* Annual row */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <ActivationBlock
-            title="Energia — Anual"
-            periodType="annual"
-            proposalType="energia"
-            {...blockProps}
-            onEdit={() => openEdit("annual", "energia")}
-          />
+        <div className={`grid grid-cols-1 ${showEnergy ? 'md:grid-cols-2' : ''} gap-4`}>
+          {showEnergy && (
+            <ActivationBlock
+              title="Energia — Anual"
+              periodType="annual"
+              proposalType="energia"
+              {...blockProps}
+              onEdit={() => openEdit("annual", "energia")}
+            />
+          )}
           <ActivationBlock
             title="Serviços — Anual"
             periodType="annual"

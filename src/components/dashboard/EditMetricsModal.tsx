@@ -6,6 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useTeamMembers } from "@/hooks/useTeam";
 import { useMonthlyMetrics, MonthlyMetric, MetricValues } from "@/hooks/useMonthlyMetrics";
+import { useAuth } from "@/contexts/AuthContext";
+import { useModules } from "@/hooks/useModules";
 import { Loader2 } from "lucide-react";
 
 interface EditMetricsModalProps {
@@ -17,6 +19,10 @@ interface EditMetricsModalProps {
 export function EditMetricsModal({ open, onOpenChange, metrics }: EditMetricsModalProps) {
   const { data: members = [] } = useTeamMembers();
   const { saveMetric } = useMonthlyMetrics();
+  const { organization } = useAuth();
+  const { modules } = useModules();
+  const showEnergy = organization?.niche === 'telecom' && modules.energy;
+
   const [selectedUser, setSelectedUser] = useState<string>("");
   const [values, setValues] = useState<MetricValues>({
     op_energia: 0, energia: 0, op_solar: 0, solar: 0, op_comissao: 0, comissao: 0,
@@ -80,22 +86,26 @@ export function EditMetricsModal({ open, onOpenChange, metrics }: EditMetricsMod
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Label className="text-xs">OP Energia</Label>
-              <Input type="number" value={values.op_energia} onChange={(e) => handleChange("op_energia", e.target.value)} />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Energia (MWh)</Label>
-              <Input type="number" step="0.01" value={values.energia} onChange={(e) => handleChange("energia", e.target.value)} />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">OP Solar</Label>
-              <Input type="number" value={values.op_solar} onChange={(e) => handleChange("op_solar", e.target.value)} />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Solar (kWp)</Label>
-              <Input type="number" step="0.01" value={values.solar} onChange={(e) => handleChange("solar", e.target.value)} />
-            </div>
+            {showEnergy && (
+              <>
+                <div className="space-y-1">
+                  <Label className="text-xs">OP Energia</Label>
+                  <Input type="number" value={values.op_energia} onChange={(e) => handleChange("op_energia", e.target.value)} />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Energia (MWh)</Label>
+                  <Input type="number" step="0.01" value={values.energia} onChange={(e) => handleChange("energia", e.target.value)} />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">OP Solar</Label>
+                  <Input type="number" value={values.op_solar} onChange={(e) => handleChange("op_solar", e.target.value)} />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Solar (kWp)</Label>
+                  <Input type="number" step="0.01" value={values.solar} onChange={(e) => handleChange("solar", e.target.value)} />
+                </div>
+              </>
+            )}
             <div className="space-y-1">
               <Label className="text-xs">OP Comissão</Label>
               <Input type="number" value={values.op_comissao} onChange={(e) => handleChange("op_comissao", e.target.value)} />

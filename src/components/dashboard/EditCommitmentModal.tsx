@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
 import { useCommitments, CommitmentTotals } from "@/hooks/useCommitments";
 import { useAuth } from "@/contexts/AuthContext";
+import { useModules } from "@/hooks/useModules";
 
 interface EditCommitmentModalProps {
   open: boolean;
@@ -14,8 +15,11 @@ interface EditCommitmentModalProps {
 }
 
 export function EditCommitmentModal({ open, onOpenChange, existing }: EditCommitmentModalProps) {
-  const { user } = useAuth();
+  const { user, organization } = useAuth();
   const { saveCommitment } = useCommitments(user?.id);
+  const { modules } = useModules();
+  const showEnergy = organization?.niche === 'telecom' && modules.energy;
+
   const [totals, setTotals] = useState<CommitmentTotals>({
     total_nifs: 0,
     total_energia_mwh: 0,
@@ -53,28 +57,32 @@ export function EditCommitmentModal({ open, onOpenChange, existing }: EditCommit
               className="h-9 text-sm"
             />
           </div>
-          <div>
-            <Label className="text-xs">Total Energia (MWh)</Label>
-            <Input
-              type="number"
-              step="0.01"
-              value={totals.total_energia_mwh || ""}
-              onChange={(e) => setTotals({ ...totals, total_energia_mwh: Number(e.target.value) || 0 })}
-              placeholder="Ex: 12.5"
-              className="h-9 text-sm"
-            />
-          </div>
-          <div>
-            <Label className="text-xs">Total Solar (kWp)</Label>
-            <Input
-              type="number"
-              step="0.01"
-              value={totals.total_solar_kwp || ""}
-              onChange={(e) => setTotals({ ...totals, total_solar_kwp: Number(e.target.value) || 0 })}
-              placeholder="Ex: 8.0"
-              className="h-9 text-sm"
-            />
-          </div>
+          {showEnergy && (
+            <>
+              <div>
+                <Label className="text-xs">Total Energia (MWh)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={totals.total_energia_mwh || ""}
+                  onChange={(e) => setTotals({ ...totals, total_energia_mwh: Number(e.target.value) || 0 })}
+                  placeholder="Ex: 12.5"
+                  className="h-9 text-sm"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Total Solar (kWp)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={totals.total_solar_kwp || ""}
+                  onChange={(e) => setTotals({ ...totals, total_solar_kwp: Number(e.target.value) || 0 })}
+                  placeholder="Ex: 8.0"
+                  className="h-9 text-sm"
+                />
+              </div>
+            </>
+          )}
           <div>
             <Label className="text-xs">Total Comissão (€)</Label>
             <Input
