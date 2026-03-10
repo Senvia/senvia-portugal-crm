@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Mail, Eye, MousePointer, MoreHorizontal, Trash2, BarChart3, Search, Pencil } from "lucide-react";
+import { Mail, Eye, MousePointer, MoreHorizontal, Trash2, BarChart3, Search, Pencil, RotateCcw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +19,7 @@ interface CampaignsTableProps {
   onView: (campaign: EmailCampaign) => void;
   onEdit: (campaign: EmailCampaign) => void;
   onDelete: (id: string) => void;
+  onReopen?: (id: string) => void;
 }
 
 const STATUS_DOT_COLORS: Record<CampaignStatus, string> = {
@@ -29,7 +30,7 @@ const STATUS_DOT_COLORS: Record<CampaignStatus, string> = {
   scheduled: 'bg-blue-500',
 };
 
-export function CampaignsTable({ campaigns, onView, onEdit, onDelete }: CampaignsTableProps) {
+export function CampaignsTable({ campaigns, onView, onEdit, onDelete, onReopen }: CampaignsTableProps) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
@@ -153,6 +154,11 @@ export function CampaignsTable({ campaigns, onView, onEdit, onDelete }: Campaign
                           <DropdownMenuItem onClick={() => onView(campaign)}>
                             <BarChart3 className="mr-2 h-4 w-4" /> Ver detalhes
                           </DropdownMenuItem>
+                          {(campaign.status === 'failed' || campaign.status === 'scheduled') && onReopen && (
+                            <DropdownMenuItem onClick={() => onReopen(campaign.id)}>
+                              <RotateCcw className="mr-2 h-4 w-4" /> Reabrir como rascunho
+                            </DropdownMenuItem>
+                          )}
                           <DropdownMenuItem className="text-destructive" onClick={() => onDelete(campaign.id)}>
                             <Trash2 className="mr-2 h-4 w-4" /> Eliminar
                           </DropdownMenuItem>

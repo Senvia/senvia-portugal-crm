@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { CampaignsTable } from "@/components/marketing/CampaignsTable";
 import { CreateCampaignModal } from "@/components/marketing/CreateCampaignModal";
 import { CampaignDetailsModal } from "@/components/marketing/CampaignDetailsModal";
-import { useCampaigns, useDeleteCampaign } from "@/hooks/useCampaigns";
+import { useCampaigns, useDeleteCampaign, useReopenCampaign } from "@/hooks/useCampaigns";
 import type { EmailCampaign } from "@/types/marketing";
 
 export default function Campaigns() {
@@ -15,6 +15,7 @@ export default function Campaigns() {
   const [editingCampaign, setEditingCampaign] = useState<EmailCampaign | null>(null);
   const { data: campaigns = [], isLoading } = useCampaigns();
   const deleteCampaign = useDeleteCampaign();
+  const reopenCampaign = useReopenCampaign();
 
   const handleCampaignClick = (campaign: EmailCampaign) => {
     if (campaign.status === 'draft') {
@@ -55,6 +56,7 @@ export default function Campaigns() {
             onView={handleCampaignClick}
             onEdit={setEditingCampaign}
             onDelete={(id) => deleteCampaign.mutate(id)}
+            onReopen={(id) => reopenCampaign.mutate(id)}
           />
         )}
 

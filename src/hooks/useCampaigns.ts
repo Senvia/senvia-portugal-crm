@@ -200,6 +200,46 @@ export function useUpdateCampaign() {
   });
 }
 
+export function useReopenCampaign() {
+  const { organization } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      if (!organization?.id) throw new Error('Sem organização');
+
+      // Clear associated email_sends
+      await supabase
+        .from('email_sends')
+        .delete()
+        .eq('campaign_id', id)
+        .eq('organization_id', organization.id);
+
+      // Reset campaign to draft
+      const { error } = await supabase
+        .from('email_campaigns')
+        .update({
+          status: 'draft',
+          sent_at: null,
+          sent_count: 0,
+          failed_count: 0,
+          total_recipients: 0,
+        } as any)
+        .eq('id', id)
+        .eq('organization_id', organization.id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['email-campaigns'] });
+      toast.success('Campanha reaberta como rascunho');
+    },
+    onError: () => {
+      toast.error('Erro ao reabrir campanha');
+    },
+  });
+}
+
 export function useDeleteCampaign() {
   const { organization } = useAuth();
   const queryClient = useQueryClient();
