@@ -87,6 +87,10 @@ export default function Dashboard() {
           {commissionsEnabled && (
             <CommissionsWidget />
           )}
+
+          {visibleWidgets.some(w => w.widget_type === 'team_performance_table') && (
+            <TeamPerformanceTable />
+          )}
           
           <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {visibleWidgets.map((widget) => (
