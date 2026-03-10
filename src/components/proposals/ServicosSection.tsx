@@ -123,6 +123,31 @@ function CatalogProducts({
   const totalComissao = servicosProdutos.reduce((sum, p) => sum + (servicosDetails[p]?.comissao || 0), 0);
   const totalPrice = servicosProdutos.reduce((sum, p) => sum + (servicosDetails[p]?.price || 0), 0);
 
+  // Build combobox options from catalog, excluding already selected
+  const comboboxOptions: ComboboxOption[] = catalog
+    .filter((c) => !servicosProdutos.includes(c.name))
+    .map((c) => ({
+      value: c.name,
+      label: c.name,
+      sublabel: c.price.toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' }),
+    }));
+
+  const handleAddProduct = (value: string | null) => {
+    if (!value) return;
+    onToggleProduct(value);
+    const catProduct = catalog.find((c) => c.name === value);
+    if (catProduct) {
+      const comissaoVal = catProduct.has_commission
+        ? Math.round(catProduct.price * catProduct.commission_pct) / 100
+        : 0;
+      onSetProductDetail(value, {
+        price: catProduct.price,
+        commission_pct: catProduct.commission_pct,
+        comissao: comissaoVal,
+      });
+    }
+  };
+
   return (
     <>
       <div className="space-y-3">
@@ -130,93 +155,99 @@ function CatalogProducts({
         {attempted && servicosProdutos.length === 0 && (
           <p className="text-xs text-destructive">Selecione pelo menos 1 produto</p>
         )}
-        
-        {catalog.map((catProduct) => {
-          const isActive = servicosProdutos.includes(catProduct.name);
-          const detail = servicosDetails[catProduct.name] || {};
+
+        {/* Searchable dropdown to add products */}
+        <SearchableCombobox
+          options={comboboxOptions}
+          value={null}
+          onValueChange={handleAddProduct}
+          placeholder="Pesquisar e adicionar produto..."
+          searchPlaceholder="Escreva para pesquisar..."
+          emptyText="Nenhum produto encontrado."
+          emptyValue="__none__"
+          emptyLabel="Nenhum"
+        />
+
+        {/* Selected products as editable cards */}
+        {servicosProdutos.map((productName) => {
+          const catProduct = catalog.find((c) => c.name === productName);
+          if (!catProduct) return null;
+          const detail = servicosDetails[productName] || {};
           const price = detail.price ?? catProduct.price;
           const commissionPct = detail.commission_pct ?? catProduct.commission_pct;
-          
+
           return (
-            <div key={catProduct.name} className="space-y-2">
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id={`cat-produto-${catProduct.name}`}
-                  checked={isActive}
-                  onCheckedChange={() => onToggleProduct(catProduct.name)}
-                />
-                <Label htmlFor={`cat-produto-${catProduct.name}`} className="text-sm cursor-pointer font-medium flex items-center gap-2">
-                  {catProduct.name}
-                  <span className="text-xs text-muted-foreground font-normal">
-                    ({catProduct.price.toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' })})
-                  </span>
+            <div key={productName} className="p-3 rounded-md bg-muted/50 border border-border/50 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium">{detail.name ?? productName}</span>
                   {catProduct.has_commission && (
                     <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">
-                      {catProduct.commission_pct}% comissão
+                      {commissionPct}% comissão
                     </Badge>
                   )}
-                </Label>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                  onClick={() => onToggleProduct(productName)}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </Button>
               </div>
-
-              {isActive && (
-                <div className="ml-6 p-3 rounded-md bg-muted/50 border border-border/50 space-y-2">
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide">
-                    Valores editáveis para esta proposta/venda
-                  </p>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">Nome</Label>
-                      <Input
-                        value={detail.name ?? catProduct.name}
-                        onChange={(e) => {
-                          const newDetail = { ...detail, name: e.target.value };
-                          onSetProductDetail(catProduct.name, newDetail);
-                        }}
-                        className="h-8 text-sm"
-                        placeholder={catProduct.name}
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">Preço (€)</Label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={price}
-                        onChange={(e) => {
-                          const newPrice = parseFloat(e.target.value) || 0;
-                          const comissao = catProduct.has_commission ? Math.round(newPrice * commissionPct) / 100 : 0;
-                          onSetProductDetail(catProduct.name, { ...detail, price: newPrice, comissao });
-                        }}
-                        className="h-8"
-                      />
-                    </div>
-                    {catProduct.has_commission && (
-                      <div className="space-y-1">
-                        <Label className="text-xs text-muted-foreground">Comissão (%)</Label>
-                        <Input
-                          type="number"
-                          step="0.1"
-                          min="0"
-                          max="100"
-                          value={commissionPct}
-                          onChange={(e) => {
-                            const newPct = parseFloat(e.target.value) || 0;
-                            const comissao = Math.round(price * newPct) / 100;
-                            onSetProductDetail(catProduct.name, { ...detail, commission_pct: newPct, comissao });
-                          }}
-                          className="h-8"
-                        />
-                      </div>
-                    )}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Nome</Label>
+                  <Input
+                    value={detail.name ?? catProduct.name}
+                    onChange={(e) => {
+                      onSetProductDetail(productName, { ...detail, name: e.target.value });
+                    }}
+                    className="h-8 text-sm"
+                    placeholder={catProduct.name}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Preço (€)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={price}
+                    onChange={(e) => {
+                      const newPrice = parseFloat(e.target.value) || 0;
+                      const comissao = catProduct.has_commission ? Math.round(newPrice * commissionPct) / 100 : 0;
+                      onSetProductDetail(productName, { ...detail, price: newPrice, comissao });
+                    }}
+                    className="h-8"
+                  />
+                </div>
+                {catProduct.has_commission && (
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Comissão (%)</Label>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      max="100"
+                      value={commissionPct}
+                      onChange={(e) => {
+                        const newPct = parseFloat(e.target.value) || 0;
+                        const comissao = Math.round(price * newPct) / 100;
+                        onSetProductDetail(productName, { ...detail, commission_pct: newPct, comissao });
+                      }}
+                      className="h-8"
+                    />
                   </div>
-                  {catProduct.has_commission && (
-                    <div className="text-xs text-muted-foreground">
-                      Comissão: <span className="font-medium text-foreground">
-                        {(price * commissionPct / 100).toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' })}
-                      </span>
-                    </div>
-                  )}
+                )}
+              </div>
+              {catProduct.has_commission && (
+                <div className="text-xs text-muted-foreground">
+                  Comissão: <span className="font-medium text-foreground">
+                    {(price * commissionPct / 100).toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' })}
+                  </span>
                 </div>
               )}
             </div>
