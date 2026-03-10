@@ -215,7 +215,7 @@ export function MetricsPanel() {
         comissao,
       };
     });
-  }, [filteredMembers, proposalsRaw, salesRaw, clientNifMap, user?.id]);
+  }, [filteredMembers, proposalsRaw, salesAggregated, clientNifMap, user?.id]);
 
   const sumRitmo = (rows: RitmoRow[]) =>
     rows.reduce((acc, r) => ({
