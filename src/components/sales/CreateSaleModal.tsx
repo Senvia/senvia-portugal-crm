@@ -61,7 +61,7 @@ import {
 } from "lucide-react";
 import type { Proposal, ServicosProductDetail } from "@/types/proposals";
 import { NEGOTIATION_TYPE_LABELS } from "@/types/proposals";
-import { useServicosProducts } from '@/hooks/useServicosProducts';
+
 import { useSaleFieldsSettings } from "@/hooks/useSaleFieldsSettings";
 import { useCommissionMatrix, getVolumeTier, getTierRuleLabel } from "@/hooks/useCommissionMatrix";
 import { 

@@ -70,7 +70,6 @@ import { useCpes } from "@/hooks/useCpes";
 import { formatCurrency } from "@/lib/format";
 import { CPE_STATUS_LABELS, CPE_STATUS_STYLES } from "@/types/cpes";
 import { MODELO_SERVICO_LABELS, NEGOTIATION_TYPE_LABELS } from "@/types/proposals";
-import { useServicosProducts } from '@/hooks/useServicosProducts';
 import type { SaleWithDetails, SaleStatus } from "@/types/sales";
 import { SALE_STATUS_LABELS, SALE_STATUS_COLORS, SALE_STATUSES } from "@/types/sales";
 import { SalePaymentsList } from "./SalePaymentsList";
