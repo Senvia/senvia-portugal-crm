@@ -68,6 +68,7 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
   const { modules } = useModules();
   const isTelecom = orgData?.niche === 'telecom';
   const showEnergy = isTelecom && modules.energy;
+  const { configs: SERVICOS_PRODUCT_CONFIGS } = useServicosProducts();
   const updateProposal = useUpdateProposal();
   const deleteProposal = useDeleteProposal();
   const updateLeadStatus = useUpdateLeadStatus();

@@ -63,6 +63,7 @@ function getDefaultRule(method: string): CommissionRule {
 export function CommissionMatrixTab() {
   const { data: org } = useOrganization();
   const updateOrg = useUpdateOrganization();
+  const { products: SERVICOS_PRODUCTS } = useServicosProducts();
   const [localMatrix, setLocalMatrix] = useState<CommissionMatrix>({});
   const [openProduct, setOpenProduct] = useState<string | null>(null);
   const [openEnergy, setOpenEnergy] = useState(false);
