@@ -507,12 +507,15 @@ Deno.serve(async (req) => {
       const salesSettings = (org.sales_settings as any) || {};
       if (salesSettings.auto_assign_leads) {
         try {
-          const { data: members } = await supabase
+          let membersQuery2 = supabase
             .from('organization_members')
             .select('user_id')
             .eq('organization_id', org.id)
-            .eq('is_active', true)
-            .order('joined_at', { ascending: true });
+            .eq('is_active', true);
+          if (salesSettings.exclude_admins_from_assignment) {
+            membersQuery2 = membersQuery2.neq('role', 'admin');
+          }
+          const { data: members } = await membersQuery2.order('joined_at', { ascending: true });
 
           if (members && members.length > 0) {
             const currentIndex = salesSettings.round_robin_index || 0;

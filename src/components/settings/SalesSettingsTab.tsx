@@ -13,6 +13,7 @@ interface SalesSettings {
   lock_fulfilled_sales?: boolean;
   prevent_payment_deletion?: boolean;
   auto_assign_leads?: boolean;
+  exclude_admins_from_assignment?: boolean;
   round_robin_index?: number;
   commissions_enabled?: boolean;
   commission_percentage?: number | null;
