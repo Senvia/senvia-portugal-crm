@@ -181,7 +181,7 @@ export default function Sales() {
             </div>
             <p className="text-2xl font-bold text-green-500">{stats.delivered}</p>
             <p className="text-xs text-muted-foreground">{formatCurrency(stats.deliveredValue)}</p>
-            {isTelecom && telecomMetrics && (
+            {isTelecom && modules.energy && telecomMetrics && (
               <p className="text-xs text-muted-foreground mt-1">
                 {telecomMetrics.deliveredMWh.toFixed(1)} MWh · {telecomMetrics.deliveredKWp.toFixed(1)} kWp
               </p>
