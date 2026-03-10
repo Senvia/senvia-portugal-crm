@@ -34,6 +34,7 @@ import {
   type NegotiationType,
   type Proposal 
 } from '@/types/proposals';
+import { useServicosProducts } from '@/hooks/useServicosProducts';
 
 interface EditProposalModalProps {
   proposal: Proposal;
