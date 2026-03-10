@@ -229,16 +229,9 @@ function CatalogProducts({
                     <Label className="text-xs text-muted-foreground">Comissão (%)</Label>
                     <Input
                       type="number"
-                      step="0.1"
-                      min="0"
-                      max="100"
                       value={commissionPct}
-                      onChange={(e) => {
-                        const newPct = parseFloat(e.target.value) || 0;
-                        const comissao = Math.round(price * newPct) / 100;
-                        onSetProductDetail(productName, { ...detail, commission_pct: newPct, comissao });
-                      }}
-                      className="h-8"
+                      readOnly
+                      className="h-8 bg-muted cursor-not-allowed opacity-70"
                     />
                   </div>
                 )}
