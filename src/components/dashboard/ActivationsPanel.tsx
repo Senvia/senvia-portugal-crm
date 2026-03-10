@@ -51,8 +51,9 @@ function ActivationBlock({
   getTarget,
   countActivations,
   onEdit,
+  unit: unitOverride,
 }: ActivationBlockProps) {
-  const unit = proposalType === "energia" ? "MWh" : "kWp";
+  const unit = unitOverride || (proposalType === "energia" ? "MWh" : "kWp");
   const formatVal = (v: number) => v % 1 === 0 ? v.toString() : v.toFixed(1);
 
   const rows = filteredMembers.map((m) => {
