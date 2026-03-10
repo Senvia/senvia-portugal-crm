@@ -143,6 +143,7 @@ export function ClientDetailsDrawer({
 
   return (
     <>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent variant="fullScreen" className="flex flex-col p-0 gap-0">
         {/* Header */}
         <DialogHeader className="px-4 sm:px-6 py-3 border-b shrink-0">
