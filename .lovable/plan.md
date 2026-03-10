@@ -1,14 +1,32 @@
+## Toggle "Energias" no Módulos (Telecom Only)
 
+### Estado: ✅ Implementado
 
-## Corrigir métricas de energia no ClientDetailsDrawer
+### Alterações Realizadas
 
-O `ClientDetailsDrawer.tsx` tem dois blocos que mostram MWh e kWp (linhas 372-379) e o card CPE/CUI (linha 270-282) condicionados apenas por `isTelecom`, sem verificar `modules.energy`.
+**1. `src/hooks/useModules.ts`**
+- Adicionado `energy: boolean` ao `EnabledModules` (default: `true`)
 
-### Alterações em `src/components/clients/ClientDetailsDrawer.tsx`
+**2. `src/components/settings/ModulesTab.tsx`**
+- Adicionado card especial "Energias" com ícone ⚡ que só renderiza quando `organization.niche === 'telecom'`
+- Badge "Telecom" para identificar que é exclusivo do nicho
 
-1. Importar `useModules` do hook existente
-2. Criar `const showEnergy = isTelecom && modules.energy`
-3. **Métricas (linhas 366-386)**: Usar `showEnergy` em vez de `isTelecom` para os blocos MWh e kWp — manter o bloco Comissão visível para telecom
-4. **CPE/CUI card (linhas 270-282)**: Condicionar com `showEnergy` em vez de `isTelecom`
-5. Ajustar o grid de métricas para usar `showEnergy` no className
+**3. Componentes atualizados com `showEnergy = isTelecom && modules.energy`:**
 
+| Ficheiro | O que é ocultado quando energy=off |
+|---|---|
+| `src/pages/Leads.tsx` | Filtro de tipologia |
+| `src/components/leads/AddLeadModal.tsx` | Campos tipologia, consumo_anual, summary |
+| `src/components/leads/LeadDetailsModal.tsx` | Secção tipologia, card consumo_anual |
+| `src/components/leads/LeadCard.tsx` | Badge tipologia, consumo_anual |
+| `src/components/leads/LeadsTableView.tsx` | Coluna tipologia, coluna consumo |
+| `src/components/proposals/CreateProposalModal.tsx` | Tipo de proposta selector (energia) |
+| `src/components/proposals/EditProposalModal.tsx` | Tipo de proposta, CPE selector energia |
+| `src/components/proposals/ProposalDetailsModal.tsx` | CPEs, consumo total, resumo energia, badges energia |
+| `src/components/sales/CreateSaleModal.tsx` | Dados energia, CPE/CUI |
+| `src/components/sales/EditSaleModal.tsx` | Dados energia editáveis |
+| `src/components/sales/SaleDetailsModal.tsx` | Dados energia, CPEs |
+| `src/components/clients/ClientDetailsModal.tsx` | Stats MWh/kWp/Comissão |
+| `src/pages/Clients.tsx` | Filtro tipo proposta (energia/servicos) |
+
+**Nota**: Funcionalidades gerais de telecom (empresa, serviços, ativação, anexos) continuam visíveis independentemente do toggle de energia.

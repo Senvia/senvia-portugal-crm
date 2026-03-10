@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useModules } from "@/hooks/useModules";
 import {
   Dialog,
   DialogContent,
@@ -73,6 +74,8 @@ export function ClientDetailsDrawer({
   const { organization } = useAuth();
   
   const isTelecom = organization?.niche === 'telecom';
+  const { modules } = useModules();
+  const showEnergy = isTelecom && modules.energy;
   const { data: cpes = [] } = useCpes(isTelecom ? client?.id : null);
   const CpeIcon = isTelecom ? Zap : Router;
 
@@ -267,7 +270,7 @@ export function ClientDetailsDrawer({
                 </Card>
 
                 {/* CPEs - Telecom only */}
-                {isTelecom && (
+                {showEnergy && (
                   <Card>
                     <CardHeader className="pb-3">
                       <CardTitle className="text-base flex items-center gap-2">
@@ -354,7 +357,7 @@ export function ClientDetailsDrawer({
                       <CardTitle className="text-base">Métricas</CardTitle>
                     </CardHeader>
                     <CardContent>
-                    <div className={cn("grid gap-3", isTelecom ? "grid-cols-2 sm:grid-cols-3" : "grid-cols-3")}>
+                    <div className={cn("grid gap-3", showEnergy ? "grid-cols-2 sm:grid-cols-3" : isTelecom ? "grid-cols-3" : "grid-cols-3")}>
                         <div className="text-center p-3 bg-muted/50 rounded-lg">
                           <p className="text-xl font-bold text-primary">{client.total_proposals}</p>
                           <p className="text-xs text-muted-foreground">Propostas</p>
@@ -363,12 +366,14 @@ export function ClientDetailsDrawer({
                           <p className="text-xl font-bold text-success">{client.total_sales}</p>
                           <p className="text-xs text-muted-foreground">Vendas</p>
                         </div>
-                        {isTelecom ? (
+                        {isTelecom && (
+                          <div className="text-center p-3 bg-muted/50 rounded-lg">
+                            <p className="text-xl font-bold">{formatCurrency(client.total_comissao || 0)}</p>
+                            <p className="text-xs text-muted-foreground">Comissão</p>
+                          </div>
+                        )}
+                        {showEnergy && (
                           <>
-                            <div className="text-center p-3 bg-muted/50 rounded-lg">
-                              <p className="text-xl font-bold">{formatCurrency(client.total_comissao || 0)}</p>
-                              <p className="text-xs text-muted-foreground">Comissão</p>
-                            </div>
                             <div className="text-center p-3 bg-muted/50 rounded-lg">
                               <p className="text-xl font-bold">{(client.total_mwh || 0).toFixed(2)}</p>
                               <p className="text-xs text-muted-foreground">MWh</p>
@@ -378,7 +383,8 @@ export function ClientDetailsDrawer({
                               <p className="text-xs text-muted-foreground">kWp</p>
                             </div>
                           </>
-                        ) : (
+                        )}
+                        {!isTelecom && (
                           <div className="text-center p-3 bg-muted/50 rounded-lg">
                             <p className="text-xl font-bold">{formatCurrency(client.total_value)}</p>
                             <p className="text-xs text-muted-foreground">Valor Total</p>
