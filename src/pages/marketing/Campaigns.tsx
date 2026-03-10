@@ -15,6 +15,7 @@ export default function Campaigns() {
   const [editingCampaign, setEditingCampaign] = useState<EmailCampaign | null>(null);
   const { data: campaigns = [], isLoading } = useCampaigns();
   const deleteCampaign = useDeleteCampaign();
+  const reopenCampaign = useReopenCampaign();
 
   const handleCampaignClick = (campaign: EmailCampaign) => {
     if (campaign.status === 'draft') {
