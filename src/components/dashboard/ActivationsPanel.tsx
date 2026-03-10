@@ -38,6 +38,7 @@ interface ActivationBlockProps {
   getTarget: (userId: string, periodType: "monthly" | "annual", proposalType: "energia" | "servicos") => number;
   countActivations: (userId: string | null, periodType: "monthly" | "annual", proposalType: "energia" | "servicos") => number;
   onEdit: () => void;
+  unit?: string;
 }
 
 function ActivationBlock({
@@ -50,8 +51,9 @@ function ActivationBlock({
   getTarget,
   countActivations,
   onEdit,
+  unit: unitOverride,
 }: ActivationBlockProps) {
-  const unit = proposalType === "energia" ? "MWh" : "kWp";
+  const unit = unitOverride || (proposalType === "energia" ? "MWh" : "kWp");
   const formatVal = (v: number) => v % 1 === 0 ? v.toString() : v.toFixed(1);
 
   const rows = filteredMembers.map((m) => {
@@ -210,6 +212,12 @@ export function ActivationsPanel() {
     );
   }
 
+  const servicosUnit = showEnergy ? "kWp" : "contratos";
+  const servicosCountActivations = showEnergy
+    ? countActivations
+    : (userId: string | null, periodType: "monthly" | "annual", proposalType: "energia" | "servicos") =>
+        countActivations(userId, periodType, proposalType, "count");
+
   const blockProps = {
     members: memberList,
     filteredMembers,
@@ -243,6 +251,8 @@ export function ActivationsPanel() {
             periodType="monthly"
             proposalType="servicos"
             {...blockProps}
+            countActivations={servicosCountActivations}
+            unit={servicosUnit}
             onEdit={() => openEdit("monthly", "servicos")}
           />
         </div>
@@ -263,6 +273,8 @@ export function ActivationsPanel() {
             periodType="annual"
             proposalType="servicos"
             {...blockProps}
+            countActivations={servicosCountActivations}
+            unit={servicosUnit}
             onEdit={() => openEdit("annual", "servicos")}
           />
         </div>

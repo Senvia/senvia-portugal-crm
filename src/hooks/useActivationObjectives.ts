@@ -147,10 +147,12 @@ export function useActivationObjectives(referenceDate?: Date) {
   }, [objectives, currentMonthStart, currentYearStart]);
 
   // Sum activations: MWh for energia, kWp for servicos
+  // Sum activations: MWh for energia, kWp for servicos (or count when countMode='count')
   const sumActivations = useCallback((
     userId: string | null,
     periodType: "monthly" | "annual",
-    proposalType: "energia" | "servicos"
+    proposalType: "energia" | "servicos",
+    countMode: "value" | "count" = "value"
   ): number => {
     const source = periodType === "monthly" ? monthlyActivations : annualActivations;
     const filtered = source.filter((s: any) => {
@@ -160,6 +162,10 @@ export function useActivationObjectives(referenceDate?: Date) {
       const matchUser = userId ? s.created_by === userId : true;
       return matchType && matchUser;
     });
+
+    if (countMode === "count") {
+      return filtered.length;
+    }
 
     if (proposalType === "energia") {
       // Sum consumo_anual from proposal_cpes, convert to MWh
