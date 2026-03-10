@@ -13,6 +13,7 @@ interface SalesSettings {
   lock_fulfilled_sales?: boolean;
   prevent_payment_deletion?: boolean;
   auto_assign_leads?: boolean;
+  exclude_admins_from_assignment?: boolean;
   round_robin_index?: number;
   commissions_enabled?: boolean;
   commission_percentage?: number | null;
@@ -28,6 +29,7 @@ export function SalesSettingsTab() {
   const [lockFulfilled, setLockFulfilled] = useState(false);
   const [preventDeletion, setPreventDeletion] = useState(false);
   const [autoAssign, setAutoAssign] = useState(false);
+  const [excludeAdmins, setExcludeAdmins] = useState(false);
   const [commissionsEnabled, setCommissionsEnabled] = useState(false);
   const [commissionPercentage, setCommissionPercentage] = useState("");
 
@@ -36,6 +38,7 @@ export function SalesSettingsTab() {
     setLockFulfilled(!!currentSettings.lock_fulfilled_sales);
     setPreventDeletion(!!currentSettings.prevent_payment_deletion);
     setAutoAssign(!!currentSettings.auto_assign_leads);
+    setExcludeAdmins(!!currentSettings.exclude_admins_from_assignment);
     setCommissionsEnabled(!!currentSettings.commissions_enabled);
     setCommissionPercentage(
       currentSettings.commission_percentage != null && currentSettings.commission_percentage > 0
@@ -52,6 +55,7 @@ export function SalesSettingsTab() {
         lock_fulfilled_sales: lockFulfilled,
         prevent_payment_deletion: preventDeletion,
         auto_assign_leads: autoAssign,
+        exclude_admins_from_assignment: excludeAdmins,
         round_robin_index: currentSettings.round_robin_index || 0,
         commissions_enabled: commissionsEnabled,
         commission_percentage: parsedPercentage && parsedPercentage > 0 ? parsedPercentage : null,
@@ -69,6 +73,7 @@ export function SalesSettingsTab() {
     lockFulfilled !== !!currentSettings.lock_fulfilled_sales ||
     preventDeletion !== !!currentSettings.prevent_payment_deletion ||
     autoAssign !== !!currentSettings.auto_assign_leads ||
+    excludeAdmins !== !!currentSettings.exclude_admins_from_assignment ||
     commissionsEnabled !== !!currentSettings.commissions_enabled ||
     (parsedPct || null) !== (currentParsedPct || null);
 
@@ -151,6 +156,23 @@ export function SalesSettingsTab() {
                 Quando todos receberem, o ciclo recomeça do primeiro.
               </p>
             </div>
+            {autoAssign && (
+              <div className="mt-3 flex items-start gap-3">
+                <Checkbox
+                  id="exclude_admins"
+                  checked={excludeAdmins}
+                  onCheckedChange={(checked) => setExcludeAdmins(!!checked)}
+                />
+                <div className="space-y-0.5">
+                  <Label htmlFor="exclude_admins" className="font-medium cursor-pointer">
+                    Excluir administradores do round-robin
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Apenas comerciais (vendedores) recebem leads automaticamente.
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="border-t pt-5">

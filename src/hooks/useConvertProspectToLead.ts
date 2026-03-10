@@ -31,12 +31,15 @@ export function useConvertProspectToLead() {
 
         salesSettings = (org?.sales_settings as any) || {};
         if (salesSettings.auto_assign_leads) {
-          const { data: m } = await supabase
+          let membersQuery = supabase
             .from('organization_members')
             .select('user_id')
             .eq('organization_id', organization.id)
-            .eq('is_active', true)
-            .order('joined_at', { ascending: true });
+            .eq('is_active', true);
+          if (salesSettings.exclude_admins_from_assignment) {
+            membersQuery = membersQuery.neq('role', 'admin');
+          }
+          const { data: m } = await membersQuery.order('joined_at', { ascending: true });
           members = m || [];
         }
       }
