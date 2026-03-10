@@ -115,19 +115,67 @@ export function MetricsPanel() {
     enabled: proposalClientIds.length > 0,
   });
 
-  const { data: salesRaw = [], isLoading: salesLoading } = useQuery({
-    queryKey: ["metrics-sales-ops", orgId, monthStart],
+  const { data: salesAggregated = [], isLoading: salesLoading } = useQuery({
+    queryKey: ["metrics-sales-ops-v2", orgId, monthStart],
     queryFn: async () => {
       if (!orgId) return [];
-      const { data, error } = await supabase
+      const { data: sales, error } = await supabase
         .from("sales")
-        .select("created_by, consumo_anual, kwp, comissao")
+        .select("id, created_by, proposal_id")
         .eq("organization_id", orgId)
         .gte("sale_date", monthStart)
         .lte("sale_date", monthEndStr)
         .eq("status", "fulfilled");
       if (error) throw error;
-      return data || [];
+      if (!sales?.length) return [];
+
+      const proposalIds = [...new Set(sales.map(s => s.proposal_id).filter(Boolean))] as string[];
+
+      let cpesByProposal = new Map<string, { consumo: number; comissao: number }>();
+      if (proposalIds.length > 0) {
+        const { data: cpes } = await supabase
+          .from("proposal_cpes")
+          .select("proposal_id, consumo_anual, comissao")
+          .in("proposal_id", proposalIds);
+        if (cpes) {
+          for (const cpe of cpes) {
+            const existing = cpesByProposal.get(cpe.proposal_id) || { consumo: 0, comissao: 0 };
+            existing.consumo += Number(cpe.consumo_anual || 0);
+            existing.comissao += Number(cpe.comissao || 0);
+            cpesByProposal.set(cpe.proposal_id, existing);
+          }
+        }
+      }
+
+      let kwpByProposal = new Map<string, number>();
+      if (proposalIds.length > 0) {
+        const { data: proposals } = await supabase
+          .from("proposals")
+          .select("id, servicos_details")
+          .in("id", proposalIds);
+        if (proposals) {
+          for (const p of proposals) {
+            let totalKwp = 0;
+            const details = p.servicos_details as Record<string, { kwp?: number }> | null;
+            if (details && typeof details === "object") {
+              for (const prod of Object.values(details)) {
+                totalKwp += prod?.kwp || 0;
+              }
+            }
+            kwpByProposal.set(p.id, totalKwp);
+          }
+        }
+      }
+
+      return sales.map(s => {
+        const cpeData = s.proposal_id ? cpesByProposal.get(s.proposal_id) : null;
+        return {
+          created_by: s.created_by,
+          consumo_anual: cpeData?.consumo ?? 0,
+          kwp: s.proposal_id ? (kwpByProposal.get(s.proposal_id) || 0) : 0,
+          comissao: cpeData?.comissao ?? 0,
+        };
+      });
     },
     enabled: !!orgId,
   });
