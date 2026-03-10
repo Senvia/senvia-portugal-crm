@@ -45,7 +45,7 @@ interface ClientsTableProps {
   isTelecom?: boolean;
 }
 
-export function ClientsTable({ clients, onEdit, onView, onDelete, selectedIds = [], onSelectionChange }: ClientsTableProps) {
+export function ClientsTable({ clients, onEdit, onView, onDelete, selectedIds = [], onSelectionChange, isTelecom = false }: ClientsTableProps) {
   const [deleteClientId, setDeleteClientId] = useState<string | null>(null);
   const { canDeleteLeads } = usePermissions();
   const { data: teamMembers = [] } = useTeamMembers();
