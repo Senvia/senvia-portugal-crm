@@ -1,14 +1,15 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Webhook, Send, Loader2, Eye, EyeOff, MessageCircle, Mail, Receipt, ArrowLeft, ChevronRight, Plus, Trash2 } from "lucide-react";
+import { Webhook, Send, Loader2, Eye, EyeOff, MessageCircle, Mail, Receipt, ArrowLeft, ChevronRight, Plus, Trash2, Link2, Copy, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LucideIcon } from "lucide-react";
 import { useOrganizationWebhooks, useCreateWebhook, useToggleWebhook, useDeleteWebhook, OrganizationWebhook } from "@/hooks/useOrganizationWebhooks";
 import { useTestWebhook } from "@/hooks/useOrganization";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface IntegrationsContentProps {
   isLoadingIntegrations: boolean;
@@ -47,7 +48,7 @@ interface IntegrationsContentProps {
   handleSaveKeyInvoice: () => void;
 }
 
-type IntegrationKey = 'webhook' | 'whatsapp' | 'brevo' | 'invoicexpress' | 'keyinvoice';
+type IntegrationKey = 'webhook' | 'webhook_inbound' | 'whatsapp' | 'brevo' | 'invoicexpress' | 'keyinvoice';
 
 interface IntegrationDef {
   key: IntegrationKey;
@@ -62,6 +63,7 @@ const integrationGroups = ['Automações', 'Comunicações', 'Faturação'] as c
 
 const integrations: IntegrationDef[] = [
   { key: 'webhook', icon: Webhook, title: 'Webhooks', description: 'Notificações de novos leads', toggleKey: 'webhook', group: 'Automações' },
+  { key: 'webhook_inbound', icon: Link2, title: 'Webhook de Entrada', description: 'Receber leads via Zapier/Make', toggleKey: 'webhook_inbound', group: 'Automações' },
   { key: 'whatsapp', icon: MessageCircle, title: 'WhatsApp Business', description: 'Integração com Evolution API', toggleKey: 'whatsapp', group: 'Comunicações' },
   { key: 'brevo', icon: Mail, title: 'Email (Brevo)', description: 'Envio de emails e propostas', toggleKey: 'brevo', group: 'Comunicações' },
   { key: 'invoicexpress', icon: Receipt, title: 'InvoiceXpress', description: 'Emissão de faturas automática', toggleKey: 'invoicexpress', group: 'Faturação' },
@@ -117,6 +119,7 @@ export const IntegrationsContent = (props: IntegrationsContentProps) => {
   const isConfigured = (key: IntegrationKey): boolean => {
     switch (key) {
       case 'webhook': return webhooks.length > 0;
+      case 'webhook_inbound': return true; // Always configured (auto-generated token)
       case 'whatsapp': return !!(whatsappBaseUrl && whatsappInstance && whatsappApiKey);
       case 'brevo': return !!(brevoApiKey && brevoSenderEmail);
       case 'invoicexpress': return !!(invoiceXpressAccountName && invoiceXpressApiKey);
@@ -209,6 +212,7 @@ export const IntegrationsContent = (props: IntegrationsContentProps) => {
       ) : (
         <div className="space-y-4">
           {active === 'webhook' && <WebhooksManager />}
+          {active === 'webhook_inbound' && <InboundWebhookSection />}
           {active === 'whatsapp' && <WhatsAppForm {...props} />}
           {active === 'brevo' && <BrevoForm {...props} />}
           {active === 'invoicexpress' && <InvoiceXpressForm {...props} />}
@@ -342,6 +346,125 @@ function WebhooksManager() {
           Adicionar Webhook
         </Button>
       )}
+    </div>
+  );
+}
+
+// --- Inbound Webhook (Zapier/Make) ---
+
+function InboundWebhookSection() {
+  const { organization } = useAuth();
+  const [copied, setCopied] = useState(false);
+  const [webhookToken, setWebhookToken] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch webhook_token from organization
+  import('react').then(({ useEffect: _useEffect }) => {});
+  
+  // Using a proper pattern - fetch on mount
+  const fetchToken = async () => {
+    if (!organization?.id) return;
+    const { supabase } = await import('@/integrations/supabase/client');
+    const { data } = await supabase
+      .from('organizations')
+      .select('webhook_token')
+      .eq('id', organization.id)
+      .single();
+    setWebhookToken((data as any)?.webhook_token || null);
+    setLoading(false);
+  };
+
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  useState(() => { fetchToken(); });
+
+  const webhookUrl = webhookToken
+    ? `https://zppcobirzgpfcrnxznwe.supabase.co/functions/v1/submit-lead?mode=webhook&token=${webhookToken}`
+    : '';
+
+  const handleCopy = () => {
+    if (!webhookUrl) return;
+    navigator.clipboard.writeText(webhookUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        <span className="text-sm">A carregar...</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-lg bg-primary/5 border border-primary/20 p-4">
+        <h4 className="font-medium text-sm mb-1">🔗 Receber leads de fontes externas</h4>
+        <p className="text-sm text-muted-foreground">
+          Use este URL para receber leads automaticamente do <strong>Zapier</strong>, <strong>Make (Integromat)</strong>, ou qualquer outra plataforma de automação. Ideal para integrar com <strong>Facebook Lead Ads</strong>, Google Forms, etc.
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <Label>URL do Webhook</Label>
+        <div className="flex items-center gap-2">
+          <Input
+            readOnly
+            value={webhookUrl}
+            className="text-xs font-mono bg-muted"
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleCopy}
+            className="shrink-0"
+          >
+            {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+            {copied ? 'Copiado' : 'Copiar'}
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground">Cole este URL como destino do webhook no Zapier ou Make.</p>
+      </div>
+
+      <div className="rounded-lg border p-4 space-y-3">
+        <h4 className="font-medium text-sm">📋 Como configurar no Zapier</h4>
+        <ol className="text-sm text-muted-foreground space-y-2 list-decimal list-inside">
+          <li>Crie um novo Zap com o trigger <strong>"Facebook Lead Ads → New Lead"</strong></li>
+          <li>Adicione a ação <strong>"Webhooks by Zapier → POST"</strong></li>
+          <li>Cole o URL acima no campo <strong>"URL"</strong></li>
+          <li>Em <strong>"Payload Type"</strong>, selecione <strong>"JSON"</strong></li>
+          <li>Mapeie os campos:
+            <ul className="ml-4 mt-1 space-y-1 list-disc">
+              <li><code className="bg-muted px-1 rounded text-xs">name</code> → Nome completo do lead</li>
+              <li><code className="bg-muted px-1 rounded text-xs">email</code> → Email</li>
+              <li><code className="bg-muted px-1 rounded text-xs">phone</code> → Telefone</li>
+              <li><code className="bg-muted px-1 rounded text-xs">company</code> → Empresa (opcional)</li>
+              <li><code className="bg-muted px-1 rounded text-xs">source</code> → Fonte (opcional, ex: "Facebook Ads")</li>
+              <li><code className="bg-muted px-1 rounded text-xs">notes</code> → Notas (opcional)</li>
+            </ul>
+          </li>
+          <li>Ative o Zap e teste!</li>
+        </ol>
+      </div>
+
+      <div className="rounded-lg border p-4 space-y-3">
+        <h4 className="font-medium text-sm">📋 Como configurar no Make</h4>
+        <ol className="text-sm text-muted-foreground space-y-2 list-decimal list-inside">
+          <li>Crie um cenário com o módulo <strong>"Facebook Lead Ads → Watch Leads"</strong></li>
+          <li>Adicione o módulo <strong>"HTTP → Make a request"</strong></li>
+          <li>Método: <strong>POST</strong>, URL: cole o URL acima</li>
+          <li>Body type: <strong>JSON</strong></li>
+          <li>Mapeie os mesmos campos indicados acima</li>
+        </ol>
+      </div>
+
+      <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-3">
+        <p className="text-sm text-amber-600 dark:text-amber-400">
+          ⚠️ <strong>Importante:</strong> Não partilhe este URL publicamente. Ele contém um token de autenticação único da sua organização.
+        </p>
+      </div>
     </div>
   );
 }

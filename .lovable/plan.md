@@ -1,44 +1,32 @@
+## Toggle "Energias" no Módulos (Telecom Only)
 
+### Estado: ✅ Implementado
 
-## Plano: Receber leads do Facebook via Zapier/Make webhook
+### Alterações Realizadas
 
-### Contexto
-O cliente quer receber leads do formulário nativo do Facebook sem criar uma Facebook App. A solução é usar Zapier ou Make como ponte: Facebook Lead Ads → Zapier → Webhook Senvia OS.
+**1. `src/hooks/useModules.ts`**
+- Adicionado `energy: boolean` ao `EnabledModules` (default: `true`)
 
-### O que já existe
-- Edge function `submit-lead` que recebe leads externos
-- Sistema de webhooks por organização (`organization_webhooks`)
-- Formulários públicos com tracking params
+**2. `src/components/settings/ModulesTab.tsx`**
+- Adicionado card especial "Energias" com ícone ⚡ que só renderiza quando `organization.niche === 'telecom'`
+- Badge "Telecom" para identificar que é exclusivo do nicho
 
-### Alterações necessárias
+**3. Componentes atualizados com `showEnergy = isTelecom && modules.energy`:**
 
-**1. Edge function `submit-lead/index.ts`**
-- Adicionar um endpoint/modo "webhook externo" que aceita payloads genéricos (JSON com name, email, phone, etc.)
-- Mapear campos comuns do Facebook Lead Ads (full_name, email, phone_number) para o schema interno
-- Autenticar via API key da organização (já existe `organization_webhooks.url` com token)
-- Retornar 200 com o lead_id criado
+| Ficheiro | O que é ocultado quando energy=off |
+|---|---|
+| `src/pages/Leads.tsx` | Filtro de tipologia |
+| `src/components/leads/AddLeadModal.tsx` | Campos tipologia, consumo_anual, summary |
+| `src/components/leads/LeadDetailsModal.tsx` | Secção tipologia, card consumo_anual |
+| `src/components/leads/LeadCard.tsx` | Badge tipologia, consumo_anual |
+| `src/components/leads/LeadsTableView.tsx` | Coluna tipologia, coluna consumo |
+| `src/components/proposals/CreateProposalModal.tsx` | Tipo de proposta selector (energia) |
+| `src/components/proposals/EditProposalModal.tsx` | Tipo de proposta, CPE selector energia |
+| `src/components/proposals/ProposalDetailsModal.tsx` | CPEs, consumo total, resumo energia, badges energia |
+| `src/components/sales/CreateSaleModal.tsx` | Dados energia, CPE/CUI |
+| `src/components/sales/EditSaleModal.tsx` | Dados energia editáveis |
+| `src/components/sales/SaleDetailsModal.tsx` | Dados energia, CPEs |
+| `src/components/clients/ClientDetailsModal.tsx` | Stats MWh/kWp/Comissão |
+| `src/pages/Clients.tsx` | Filtro tipo proposta (energia/servicos) |
 
-**2. Gerar URL de webhook único por organização**
-- Na tabela `organization_webhooks`, usar o webhook existente ou criar um dedicado
-- URL formato: `https://{supabase_url}/functions/v1/submit-lead?org={org_id}&token={webhook_token}`
-- O token serve como autenticação simples
-
-**3. UI nas Definições → Integrações**
-- Mostrar a URL do webhook copiável para o cliente colar no Zapier/Make
-- Instruções simples: "Cole esta URL como destino no seu Zapier/Make"
-- Campo de mapeamento opcional (qual campo do Zapier → qual campo do lead)
-
-### Fluxo do cliente
-```text
-1. Cria um Zap: Trigger = "Facebook Lead Ads" → Action = "Webhooks by Zapier (POST)"
-2. Cola a URL do webhook do Senvia OS
-3. Mapeia os campos (name, email, phone)
-4. Ativa o Zap
-5. Leads aparecem automaticamente no Senvia OS
-```
-
-### Ficheiros a alterar
-- `supabase/functions/submit-lead/index.ts` — aceitar payload genérico com auth por token
-- `src/components/settings/IntegrationsContent.tsx` — secção com URL copiável e instruções
-- Possível migração para adicionar coluna `webhook_token` à tabela `organization_webhooks`
-
+**Nota**: Funcionalidades gerais de telecom (empresa, serviços, ativação, anexos) continuam visíveis independentemente do toggle de energia.
