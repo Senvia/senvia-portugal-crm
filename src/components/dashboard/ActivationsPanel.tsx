@@ -80,7 +80,7 @@ function ActivationBlock({
           <CardTitle className="text-sm font-semibold">{title}</CardTitle>
           <div className="flex items-center gap-1">
             <PrintCardButton targetRef={blockRef} />
-            {isAdmin && (
+            {isAdmin && periodType === "annual" && (
               <Button variant="ghost" size="icon-sm" onClick={onEdit}>
                 <Pencil className="h-3.5 w-3.5" />
               </Button>
