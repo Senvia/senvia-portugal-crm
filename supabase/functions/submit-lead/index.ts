@@ -210,6 +210,104 @@ async function handleWebhookMode(req: Request, token: string): Promise<Response>
     }),
   }).catch((err) => console.error('Push failed:', err.message));
 
+  // ===== EMAIL NOTIFICATION (org Brevo or fallback to Senvia) =====
+  try {
+    const orgBrevoKey = org.brevo_api_key;
+    const orgBrevoEmail = org.brevo_sender_email;
+    const brevoKey = orgBrevoKey || Deno.env.get('BREVO_API_KEY');
+    const senderEmail = orgBrevoEmail || 'geral@senvia.pt';
+    const senderName = orgBrevoEmail ? org.name : 'Senvia';
+
+    if (brevoKey) {
+      // Fetch admin emails
+      const { data: adminMembers } = await supabase
+        .from('organization_members')
+        .select('user_id')
+        .eq('organization_id', org.id)
+        .eq('role', 'admin')
+        .eq('is_active', true);
+
+      const adminIds = (adminMembers || []).map((m: any) => m.user_id);
+
+      // Add assigned salesperson if not already admin
+      if (autoAssignedTo && !adminIds.includes(autoAssignedTo)) {
+        adminIds.push(autoAssignedTo);
+      }
+
+      if (adminIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, email, full_name')
+          .in('id', adminIds);
+
+        const recipients = (profiles || [])
+          .filter((p: any) => p.email)
+          .map((p: any) => ({ email: p.email, name: p.full_name || p.email }));
+
+        if (recipients.length > 0) {
+          const leadsUrl = 'https://senvia-portugal-crm.lovable.app/leads';
+          const logoUrl = 'https://senvia-portugal-crm.lovable.app/senvia-logo-white.png';
+
+          const htmlContent = `
+<!DOCTYPE html>
+<html lang="pt">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background-color:#0f172a;font-family:'Segoe UI',Roboto,Arial,sans-serif">
+<table width="100%" cellpadding="0" cellspacing="0" style="background-color:#0f172a;padding:40px 16px">
+<tr><td align="center">
+<table width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background-color:#1e293b;border-radius:16px;overflow:hidden">
+  <tr><td style="padding:32px 32px 24px;text-align:center">
+    <img src="${logoUrl}" alt="Senvia OS" width="140" style="display:inline-block;margin-bottom:24px" />
+    <h1 style="color:#ffffff;font-size:22px;margin:0 0 4px">🚀 Novo Lead Recebido</h1>
+    <p style="color:#94a3b8;font-size:14px;margin:0">Organização: <strong style="color:#cbd5e1">${org.name}</strong></p>
+  </td></tr>
+  <tr><td style="padding:0 32px 24px">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#0f172a;border-radius:12px;border:1px solid #334155">
+      ${lead.name && lead.name !== 'Lead Externo' && lead.name !== 'Anónimo' ? `<tr><td style="padding:12px 16px 0;color:#94a3b8;font-size:13px;font-weight:600">Nome</td><td style="padding:12px 16px 0;color:#f1f5f9;font-size:14px;text-align:right">${lead.name}</td></tr>` : ''}
+      ${lead.phone && lead.phone !== '000000000' ? `<tr><td style="padding:12px 16px 0;color:#94a3b8;font-size:13px;font-weight:600">Telefone</td><td style="padding:12px 16px 0;color:#f1f5f9;font-size:14px;text-align:right">${lead.phone}</td></tr>` : ''}
+      ${lead.email && lead.email !== 'nao-fornecido@placeholder.local' ? `<tr><td style="padding:12px 16px 0;color:#94a3b8;font-size:13px;font-weight:600">Email</td><td style="padding:12px 16px 0;color:#f1f5f9;font-size:14px;text-align:right">${lead.email}</td></tr>` : ''}
+      <tr><td style="padding:12px 16px 0;color:#94a3b8;font-size:13px;font-weight:600">Fonte</td><td style="padding:12px 16px 0;color:#f1f5f9;font-size:14px;text-align:right">${lead.source || 'Webhook Externo'}</td></tr>
+      ${lead.company_name ? `<tr><td style="padding:12px 16px;color:#94a3b8;font-size:13px;font-weight:600">Empresa</td><td style="padding:12px 16px;color:#f1f5f9;font-size:14px;text-align:right">${lead.company_name}</td></tr>` : '<tr><td style="padding:0 0 12px" colspan="2"></td></tr>'}
+    </table>
+  </td></tr>
+  <tr><td style="padding:0 32px 32px;text-align:center">
+    <a href="${leadsUrl}" style="display:inline-block;background:#10b981;color:#ffffff;padding:14px 32px;border-radius:10px;text-decoration:none;font-weight:700;font-size:15px">Ver Lead no Senvia</a>
+  </td></tr>
+  <tr><td style="padding:16px 32px;border-top:1px solid #334155;text-align:center">
+    <p style="color:#64748b;font-size:12px;margin:0">Senvia OS · <a href="https://senvia.pt" style="color:#64748b;text-decoration:underline">senvia.pt</a></p>
+  </td></tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>`;
+
+          console.log(`[Webhook] Sending new-lead email via ${orgBrevoKey ? 'org Brevo' : 'Senvia global'} from ${senderEmail} to ${recipients.length} recipients`);
+
+          fetch('https://api.brevo.com/v3/smtp/email', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'api-key': brevoKey,
+            },
+            body: JSON.stringify({
+              sender: { email: senderEmail, name: senderName },
+              to: recipients,
+              subject: `🚀 Novo Lead: ${lead.name} - ${lead.source || 'Webhook'}`,
+              htmlContent,
+            }),
+          })
+            .then((res) => console.info(`[Webhook] Brevo new-lead email sent, status: ${res.status}`))
+            .catch((err) => console.error('[Webhook] Brevo new-lead email failed:', err.message));
+        }
+      }
+    } else {
+      console.warn('[Webhook] No Brevo API key available (org or global), skipping email notification');
+    }
+  } catch (emailError) {
+    console.error('[Webhook] Error sending new-lead email:', emailError);
+  }
+
   return new Response(
     JSON.stringify({ success: true, lead_id: lead.id }),
     { status: 201, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
