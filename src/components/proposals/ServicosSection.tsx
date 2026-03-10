@@ -1,22 +1,16 @@
 /**
- * Shared component for rendering the "Outros Serviços" section in proposals/sales.
+ * Shared "Outros Serviços" section for proposals/sales.
  * Supports both legacy (fields-based) and new catalog format.
  */
-import { Wrench, Trash2 } from 'lucide-react';
+import { Wrench } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import type {
   ServicosDetails,
+  ServicosProductDetail,
   ServicosProductConfig,
   CatalogProduct,
   ModeloServico,
@@ -24,26 +18,20 @@ import type {
 import { FIELD_LABELS } from '@/types/proposals';
 
 interface ServicosSectionProps {
-  // Common
   modeloServico: ModeloServico;
   onModeloServicoChange: (v: ModeloServico) => void;
   servicosProdutos: string[];
   servicosDetails: ServicosDetails;
   attempted?: boolean;
-
-  // Legacy format
   isNewFormat: boolean;
   configs?: ServicosProductConfig[];
   catalog?: CatalogProduct[] | null;
-
-  // Handlers
   onToggleProduct: (name: string) => void;
+  /** For legacy format: update a single numeric field */
   onUpdateDetail: (product: string, field: string, value: number | undefined) => void;
-
-  // Legacy-specific
+  /** For new format: set the full details for a product */
+  onSetProductDetail: (product: string, detail: ServicosProductDetail) => void;
   isAutoCalculated?: (product: string) => boolean;
-
-  // Totals (legacy)
   totalKwp?: number;
   totalComissao?: number;
 }
@@ -59,73 +47,11 @@ export function ServicosSection({
   catalog,
   onToggleProduct,
   onUpdateDetail,
+  onSetProductDetail,
   isAutoCalculated,
   totalKwp,
   totalComissao,
 }: ServicosSectionProps) {
-  if (isNewFormat && catalog) {
-    return (
-      <NewFormatSection
-        catalog={catalog}
-        modeloServico={modeloServico}
-        onModeloServicoChange={onModeloServicoChange}
-        servicosProdutos={servicosProdutos}
-        servicosDetails={servicosDetails}
-        onToggleProduct={onToggleProduct}
-        onUpdateDetail={onUpdateDetail}
-        attempted={attempted}
-      />
-    );
-  }
-
-  return (
-    <LegacyFormatSection
-      configs={configs}
-      modeloServico={modeloServico}
-      onModeloServicoChange={onModeloServicoChange}
-      servicosProdutos={servicosProdutos}
-      servicosDetails={servicosDetails}
-      onToggleProduct={onToggleProduct}
-      onUpdateDetail={onUpdateDetail}
-      isAutoCalculated={isAutoCalculated}
-      attempted={attempted}
-      totalKwp={totalKwp}
-      totalComissao={totalComissao}
-    />
-  );
-}
-
-// ─── New Catalog Format ───
-
-function NewFormatSection({
-  catalog,
-  modeloServico,
-  onModeloServicoChange,
-  servicosProdutos,
-  servicosDetails,
-  onToggleProduct,
-  onUpdateDetail,
-  attempted,
-}: {
-  catalog: CatalogProduct[];
-  modeloServico: ModeloServico;
-  onModeloServicoChange: (v: ModeloServico) => void;
-  servicosProdutos: string[];
-  servicosDetails: ServicosDetails;
-  onToggleProduct: (name: string) => void;
-  onUpdateDetail: (product: string, field: string, value: number | undefined) => void;
-  attempted?: boolean;
-}) {
-  const totalComissao = servicosProdutos.reduce((sum, p) => {
-    const d = servicosDetails[p];
-    return sum + (d?.comissao || 0);
-  }, 0);
-
-  const totalPrice = servicosProdutos.reduce((sum, p) => {
-    const d = servicosDetails[p];
-    return sum + (d?.price || 0);
-  }, 0);
-
   return (
     <div className="space-y-4 p-4 rounded-lg border bg-secondary/30 border-border">
       <div className="flex items-center gap-2 text-foreground">
@@ -137,28 +63,63 @@ function NewFormatSection({
       <div className="space-y-2">
         <Label className="text-sm">Modelo de Serviço</Label>
         <div className="grid grid-cols-2 gap-2">
-          <Button
-            type="button"
-            variant={modeloServico === 'transacional' ? 'default' : 'outline'}
-            size="sm"
-            className="h-9"
-            onClick={() => onModeloServicoChange('transacional')}
-          >
+          <Button type="button" variant={modeloServico === 'transacional' ? 'default' : 'outline'} size="sm" className="h-9" onClick={() => onModeloServicoChange('transacional')}>
             Transacional
           </Button>
-          <Button
-            type="button"
-            variant={modeloServico === 'saas' ? 'default' : 'outline'}
-            size="sm"
-            className="h-9"
-            onClick={() => onModeloServicoChange('saas')}
-          >
+          <Button type="button" variant={modeloServico === 'saas' ? 'default' : 'outline'} size="sm" className="h-9" onClick={() => onModeloServicoChange('saas')}>
             SAAS
           </Button>
         </div>
       </div>
 
-      {/* Product catalog selection */}
+      {isNewFormat && catalog ? (
+        <CatalogProducts
+          catalog={catalog}
+          servicosProdutos={servicosProdutos}
+          servicosDetails={servicosDetails}
+          onToggleProduct={onToggleProduct}
+          onSetProductDetail={onSetProductDetail}
+          attempted={attempted}
+        />
+      ) : (
+        <LegacyProducts
+          configs={configs}
+          servicosProdutos={servicosProdutos}
+          servicosDetails={servicosDetails}
+          onToggleProduct={onToggleProduct}
+          onUpdateDetail={onUpdateDetail}
+          isAutoCalculated={isAutoCalculated}
+          attempted={attempted}
+          totalKwp={totalKwp}
+          totalComissao={totalComissao}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── New Catalog Format ───
+
+function CatalogProducts({
+  catalog,
+  servicosProdutos,
+  servicosDetails,
+  onToggleProduct,
+  onSetProductDetail,
+  attempted,
+}: {
+  catalog: CatalogProduct[];
+  servicosProdutos: string[];
+  servicosDetails: ServicosDetails;
+  onToggleProduct: (name: string) => void;
+  onSetProductDetail: (product: string, detail: ServicosProductDetail) => void;
+  attempted?: boolean;
+}) {
+  const totalComissao = servicosProdutos.reduce((sum, p) => sum + (servicosDetails[p]?.comissao || 0), 0);
+  const totalPrice = servicosProdutos.reduce((sum, p) => sum + (servicosDetails[p]?.price || 0), 0);
+
+  return (
+    <>
       <div className="space-y-3">
         <Label className="text-sm">Produtos do Catálogo</Label>
         {attempted && servicosProdutos.length === 0 && (
@@ -168,6 +129,8 @@ function NewFormatSection({
         {catalog.map((catProduct) => {
           const isActive = servicosProdutos.includes(catProduct.name);
           const detail = servicosDetails[catProduct.name] || {};
+          const price = detail.price ?? catProduct.price;
+          const commissionPct = detail.commission_pct ?? catProduct.commission_pct;
           
           return (
             <div key={catProduct.name} className="space-y-2">
@@ -193,19 +156,16 @@ function NewFormatSection({
               {isActive && (
                 <div className="ml-6 p-3 rounded-md bg-muted/50 border border-border/50 space-y-2">
                   <p className="text-[10px] text-muted-foreground uppercase tracking-wide">
-                    Valores para esta proposta/venda (editáveis)
+                    Valores editáveis para esta proposta/venda
                   </p>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                     <div className="space-y-1">
                       <Label className="text-xs text-muted-foreground">Nome</Label>
                       <Input
                         value={detail.name ?? catProduct.name}
-                        onChange={(e) => onUpdateDetail(catProduct.name, 'name', undefined)}
-                        onChangeCapture={(e) => {
-                          // Handle string field via custom event
-                          const input = e.target as HTMLInputElement;
-                          onUpdateDetail(catProduct.name, 'name', undefined);
-                          // We need a different approach for string fields
+                        onChange={(e) => {
+                          const newDetail = { ...detail, name: e.target.value };
+                          onSetProductDetail(catProduct.name, newDetail);
                         }}
                         className="h-8 text-sm"
                         placeholder={catProduct.name}
@@ -217,10 +177,13 @@ function NewFormatSection({
                         type="number"
                         step="0.01"
                         min="0"
-                        value={detail.price ?? catProduct.price}
-                        onChange={(e) => onUpdateDetail(catProduct.name, 'price', e.target.value ? parseFloat(e.target.value) : undefined)}
+                        value={price}
+                        onChange={(e) => {
+                          const newPrice = parseFloat(e.target.value) || 0;
+                          const comissao = catProduct.has_commission ? Math.round(newPrice * commissionPct) / 100 : 0;
+                          onSetProductDetail(catProduct.name, { ...detail, price: newPrice, comissao });
+                        }}
                         className="h-8"
-                        placeholder="0.00"
                       />
                     </div>
                     {catProduct.has_commission && (
@@ -231,10 +194,13 @@ function NewFormatSection({
                           step="0.1"
                           min="0"
                           max="100"
-                          value={detail.commission_pct ?? catProduct.commission_pct}
-                          onChange={(e) => onUpdateDetail(catProduct.name, 'commission_pct', e.target.value ? parseFloat(e.target.value) : undefined)}
+                          value={commissionPct}
+                          onChange={(e) => {
+                            const newPct = parseFloat(e.target.value) || 0;
+                            const comissao = Math.round(price * newPct) / 100;
+                            onSetProductDetail(catProduct.name, { ...detail, commission_pct: newPct, comissao });
+                          }}
                           className="h-8"
-                          placeholder="0"
                         />
                       </div>
                     )}
@@ -242,7 +208,7 @@ function NewFormatSection({
                   {catProduct.has_commission && (
                     <div className="text-xs text-muted-foreground">
                       Comissão: <span className="font-medium text-foreground">
-                        {((detail.price ?? catProduct.price) * (detail.commission_pct ?? catProduct.commission_pct) / 100).toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' })}
+                        {(price * commissionPct / 100).toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' })}
                       </span>
                     </div>
                   )}
@@ -253,7 +219,6 @@ function NewFormatSection({
         })}
       </div>
 
-      {/* Totals */}
       {servicosProdutos.length > 0 && (
         <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border/50">
           <div className="space-y-1">
@@ -270,16 +235,14 @@ function NewFormatSection({
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
 
-// ─── Legacy Format (Perfect2Gether) ───
+// ─── Legacy Format ───
 
-function LegacyFormatSection({
+function LegacyProducts({
   configs,
-  modeloServico,
-  onModeloServicoChange,
   servicosProdutos,
   servicosDetails,
   onToggleProduct,
@@ -290,8 +253,6 @@ function LegacyFormatSection({
   totalComissao,
 }: {
   configs: ServicosProductConfig[];
-  modeloServico: ModeloServico;
-  onModeloServicoChange: (v: ModeloServico) => void;
   servicosProdutos: string[];
   servicosDetails: ServicosDetails;
   onToggleProduct: (name: string) => void;
@@ -302,38 +263,7 @@ function LegacyFormatSection({
   totalComissao?: number;
 }) {
   return (
-    <div className="space-y-4 p-4 rounded-lg border bg-secondary/30 border-border">
-      <div className="flex items-center gap-2 text-foreground">
-        <Wrench className="h-4 w-4" />
-        <span className="font-medium text-sm">Outros Serviços</span>
-      </div>
-
-      {/* Modelo de Serviço */}
-      <div className="space-y-2">
-        <Label className="text-sm">Modelo de Serviço</Label>
-        <div className="grid grid-cols-2 gap-2">
-          <Button
-            type="button"
-            variant={modeloServico === 'transacional' ? 'default' : 'outline'}
-            size="sm"
-            className="h-9"
-            onClick={() => onModeloServicoChange('transacional')}
-          >
-            Transacional
-          </Button>
-          <Button
-            type="button"
-            variant={modeloServico === 'saas' ? 'default' : 'outline'}
-            size="sm"
-            className="h-9"
-            onClick={() => onModeloServicoChange('saas')}
-          >
-            SAAS
-          </Button>
-        </div>
-      </div>
-
-      {/* Produtos em linha */}
+    <>
       <div className="space-y-3">
         <Label className="text-sm">Produtos</Label>
         {attempted && servicosProdutos.length === 0 && (
@@ -387,7 +317,6 @@ function LegacyFormatSection({
         })}
       </div>
 
-      {/* kWp Total + Comissão Total */}
       <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border/50">
         <div className="space-y-1">
           <Label className="text-xs text-muted-foreground">kWp Total</Label>
@@ -402,6 +331,6 @@ function LegacyFormatSection({
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
