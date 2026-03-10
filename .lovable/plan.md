@@ -1,32 +1,47 @@
-## Produtos de Serviços Configuráveis por Organização
 
-### Estado: ✅ Implementado
 
-### Alterações Realizadas
+## Diagnóstico
 
-**1. Migração DB**
-- Nova coluna `servicos_products_config JSONB DEFAULT NULL` na tabela `organizations`
-- Quando `NULL` → fallback para constantes hardcoded (Solar, Baterias, etc.)
-- Quando preenchido → lista personalizada da organização
+O lead recebido (`f164b077`) confirma que os dados vieram com chaves genéricas (`_1`, `_2`, `""`) — isto foi do mapeamento antigo do Make. O cliente corrigiu agora, mas **ainda não fez novo teste**.
 
-**2. Hook `useServicosProducts` (`src/hooks/useServicosProducts.ts`)**
-- Lê `servicos_products_config` da organização via `useOrganization()`
-- Retorna `{ products, configs }` com fallback automático
+Contudo, o código da edge function tem um bug real na lógica de parsing do nome (linhas 52-53):
 
-**3. UI — `ServicosProductsManager` (`src/components/settings/ServicosProductsManager.tsx`)**
-- Secção "Produtos Telecom" em Definições → Produtos (apenas `niche === 'telecom'`)
-- Adicionar/remover produtos com seleção de campos (duração, valor, kWp, comissão)
+```js
+const name = rawBody.full_name || rawBody.name || rawBody.nome || rawBody.first_name
+    ? [rawBody.first_name, rawBody.last_name].filter(Boolean).join(' ') || rawBody.full_name || rawBody.name || rawBody.nome
+    : 'Lead Externo';
+```
 
-**4. Componentes atualizados (constantes → hook):**
+Este ternário tem uma precedência confusa — se `full_name` for uma string vazia `""` (que o Facebook/Make pode enviar), toda a condição será `falsy` e o nome fica "Lead Externo".
 
-| Ficheiro | Mudança |
-|---|---|
-| `CreateProposalModal.tsx` | `useServicosProducts()` substitui imports hardcoded |
-| `EditProposalModal.tsx` | Idem |
-| `ProposalDetailsModal.tsx` | Idem |
-| `EditSaleModal.tsx` | Idem |
-| `CommissionMatrixTab.tsx` | Idem |
-| `proposal-servicos-validation.ts` | Aceita `configs` como parâmetro opcional |
+## Plano
 
-**5. Impacto na Perfect2Gether**
-**Zero.** Coluna `NULL` por default → fallback para constantes hardcoded.
+### 1. Corrigir parsing do nome na edge function `submit-lead`
+
+Simplificar a lógica de resolução do nome no `handleWebhookMode` (linhas 52-54):
+
+```js
+const name = 
+  rawBody.full_name?.trim() || 
+  rawBody.name?.trim() || 
+  rawBody.nome?.trim() || 
+  [rawBody.first_name, rawBody.last_name].filter(Boolean).join(' ').trim() || 
+  'Lead Externo';
+```
+
+### 2. Adicionar logging do body para debug
+
+Já existe na linha 49, mas vamos garantir que loga os campos mapeados para facilitar debug futuro:
+
+```js
+console.log('Webhook mapped fields:', { name, email, phone, notes, source });
+```
+
+### 3. Pedir ao cliente para fazer novo teste
+
+Depois da correção, o cliente deve executar novamente o cenário do Make para confirmar que os dados chegam corretamente.
+
+---
+
+**Impacto**: Apenas a edge function `submit-lead/index.ts` será alterada. Sem alterações na base de dados ou no frontend.
+
