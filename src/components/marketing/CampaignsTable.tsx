@@ -30,7 +30,7 @@ const STATUS_DOT_COLORS: Record<CampaignStatus, string> = {
   scheduled: 'bg-blue-500',
 };
 
-export function CampaignsTable({ campaigns, onView, onEdit, onDelete }: CampaignsTableProps) {
+export function CampaignsTable({ campaigns, onView, onEdit, onDelete, onReopen }: CampaignsTableProps) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
