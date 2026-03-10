@@ -36,18 +36,18 @@ export function useMonthSalesMetrics(referenceDate?: Date) {
       if (!data) return [];
 
       // Group by created_by
-      const grouped = new Map<string, { clients: Set<string>; energia: number; solar: number; comissao: number }>();
+      const grouped = new Map<string, { contracts: number; energia: number; solar: number; comissao: number }>();
 
       for (const sale of data) {
         const uid = sale.created_by;
         if (!uid) continue;
 
         if (!grouped.has(uid)) {
-          grouped.set(uid, { clients: new Set(), energia: 0, solar: 0, comissao: 0 });
+          grouped.set(uid, { contracts: 0, energia: 0, solar: 0, comissao: 0 });
         }
         const g = grouped.get(uid)!;
 
-        if (sale.client_id) g.clients.add(sale.client_id);
+        g.contracts += 1;
         g.energia += Number(sale.consumo_anual || 0) / 1000; // kWh → MWh
         g.solar += Number(sale.kwp || 0);
         g.comissao += Number(sale.comissao || 0);
