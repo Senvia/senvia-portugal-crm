@@ -48,7 +48,7 @@ interface IntegrationsContentProps {
   handleSaveKeyInvoice: () => void;
 }
 
-type IntegrationKey = 'webhook' | 'whatsapp' | 'brevo' | 'invoicexpress' | 'keyinvoice';
+type IntegrationKey = 'webhook' | 'webhook_inbound' | 'whatsapp' | 'brevo' | 'invoicexpress' | 'keyinvoice';
 
 interface IntegrationDef {
   key: IntegrationKey;
