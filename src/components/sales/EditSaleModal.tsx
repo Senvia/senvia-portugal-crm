@@ -57,7 +57,9 @@ import { useProposalCpes, useUpdateProposalCpes } from "@/hooks/useProposalCpes"
 import type { CreateProposalCpeData } from "@/hooks/useProposalCpes";
 import { useCpes } from "@/hooks/useCpes";
 import { NEGOTIATION_TYPE_LABELS, NEGOTIATION_TYPES, MODELO_SERVICO_LABELS } from "@/types/proposals";
+import type { ServicosDetails } from "@/types/proposals";
 import { useServicosProducts } from '@/hooks/useServicosProducts';
+import { ServicosSection } from '@/components/proposals/ServicosSection';
 import { useCommissionMatrix, getVolumeTier } from "@/hooks/useCommissionMatrix";
 import type { NegotiationType, ModeloServico } from "@/types/proposals";
 import { Checkbox } from "@/components/ui/checkbox";
