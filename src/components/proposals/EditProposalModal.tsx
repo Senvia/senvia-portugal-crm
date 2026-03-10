@@ -612,7 +612,7 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
                                     <Checkbox
                                       id={`edit-produto-${config.name}`}
                                       checked={isActive}
-                                      onCheckedChange={(checked) => handleServicosProdutoToggle(config.name, !!checked)}
+                                      onCheckedChange={() => handleServicosProdutoToggle(config.name)}
                                     />
                                     <Label htmlFor={`edit-produto-${config.name}`} className="text-sm cursor-pointer font-medium">
                                       {config.name}
