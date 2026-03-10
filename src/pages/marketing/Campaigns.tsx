@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { CampaignsTable } from "@/components/marketing/CampaignsTable";
 import { CreateCampaignModal } from "@/components/marketing/CreateCampaignModal";
 import { CampaignDetailsModal } from "@/components/marketing/CampaignDetailsModal";
-import { useCampaigns, useDeleteCampaign } from "@/hooks/useCampaigns";
+import { useCampaigns, useDeleteCampaign, useReopenCampaign } from "@/hooks/useCampaigns";
 import type { EmailCampaign } from "@/types/marketing";
 
 export default function Campaigns() {
