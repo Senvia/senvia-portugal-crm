@@ -41,7 +41,7 @@ export function TeamPerformanceTable() {
   const currentMonthLabel = format(startOfMonth(selectedMonth), "MMMM yyyy", { locale: pt });
 
   const allMemberList = members.length > 0
-    ? members
+    ? members.filter(m => !m.is_banned)
     : (user?.id ? [{ user_id: user.id, full_name: profile?.full_name || "Eu" }] : []);
 
   const filteredMembers = useMemo(() => {
