@@ -119,7 +119,7 @@ export const NEGOTIATION_TYPE_LABELS: Record<NegotiationType, string> = {
 
 export const NEGOTIATION_TYPES: NegotiationType[] = ['angariacao', 'angariacao_indexado', 'renovacao', 'sem_volume'];
 
-// Produtos fixos para Outros Serviços (telecom)
+// ─── Legacy: Produtos fixos para Outros Serviços (Perfect2Gether) ───
 export const SERVICOS_PRODUCTS = [
   'Solar',
   'Baterias',
@@ -128,17 +128,21 @@ export const SERVICOS_PRODUCTS = [
   'Coberturas',
 ];
 
-// Detalhes por produto de serviço
+// Detalhes por produto de serviço (legacy format - duracao/valor/kwp/comissao)
 export interface ServicosProductDetail {
   duracao?: number;
   valor?: number;
   kwp?: number;
   comissao?: number;
+  // New catalog format fields (coexist with legacy)
+  name?: string;
+  price?: number;
+  commission_pct?: number;
 }
 
 export type ServicosDetails = Record<string, ServicosProductDetail>;
 
-// Config de campos por produto
+// ─── Legacy config de campos por produto (Perfect2Gether) ───
 export interface ServicosProductConfig {
   name: string;
   fields: ('duracao' | 'valor' | 'kwp' | 'comissao')[];
@@ -159,3 +163,11 @@ export const FIELD_LABELS: Record<string, string> = {
   kwp: 'kWp',
   comissao: 'Comissão (€)',
 };
+
+// ─── New catalog format (Escolha Inteligente, etc.) ───
+export interface CatalogProduct {
+  name: string;
+  price: number;
+  has_commission: boolean;
+  commission_pct: number;
+}
