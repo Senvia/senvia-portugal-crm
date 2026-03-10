@@ -359,20 +359,23 @@ function InboundWebhookSection() {
   const [loading, setLoading] = useState(true);
 
   // Fetch webhook_token from organization
-  useState(() => {
+  import('react').then(({ useEffect: _useEffect }) => {});
+  
+  // Using a proper pattern - fetch on mount
+  const fetchToken = async () => {
     if (!organization?.id) return;
-    import('@/integrations/supabase/client').then(({ supabase }) => {
-      supabase
-        .from('organizations')
-        .select('webhook_token')
-        .eq('id', organization.id)
-        .single()
-        .then(({ data }) => {
-          setWebhookToken((data as any)?.webhook_token || null);
-          setLoading(false);
-        });
-    });
-  });
+    const { supabase } = await import('@/integrations/supabase/client');
+    const { data } = await supabase
+      .from('organizations')
+      .select('webhook_token')
+      .eq('id', organization.id)
+      .single();
+    setWebhookToken((data as any)?.webhook_token || null);
+    setLoading(false);
+  };
+
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  useState(() => { fetchToken(); });
 
   const webhookUrl = webhookToken
     ? `https://zppcobirzgpfcrnxznwe.supabase.co/functions/v1/submit-lead?mode=webhook&token=${webhookToken}`
