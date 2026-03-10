@@ -63,17 +63,19 @@ export function ServicosSection({
       </div>
 
       {/* Modelo de Serviço */}
-      <div className="space-y-2">
-        <Label className="text-sm">Modelo de Serviço</Label>
-        <div className="grid grid-cols-2 gap-2">
-          <Button type="button" variant={modeloServico === 'transacional' ? 'default' : 'outline'} size="sm" className="h-9" onClick={() => onModeloServicoChange('transacional')}>
-            Transacional
-          </Button>
-          <Button type="button" variant={modeloServico === 'saas' ? 'default' : 'outline'} size="sm" className="h-9" onClick={() => onModeloServicoChange('saas')}>
-            SAAS
-          </Button>
+      {!hideModeloServico && (
+        <div className="space-y-2">
+          <Label className="text-sm">Modelo de Serviço</Label>
+          <div className="grid grid-cols-2 gap-2">
+            <Button type="button" variant={modeloServico === 'transacional' ? 'default' : 'outline'} size="sm" className="h-9" onClick={() => onModeloServicoChange('transacional')}>
+              Transacional
+            </Button>
+            <Button type="button" variant={modeloServico === 'saas' ? 'default' : 'outline'} size="sm" className="h-9" onClick={() => onModeloServicoChange('saas')}>
+              SAAS
+            </Button>
+          </div>
         </div>
-      </div>
+      )}
 
       {isNewFormat && catalog ? (
         <CatalogProducts
