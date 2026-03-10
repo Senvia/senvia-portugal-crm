@@ -1,32 +1,17 @@
-## Produtos de Serviços Configuráveis por Organização
 
-### Estado: ✅ Implementado
 
-### Alterações Realizadas
+## Bloquear edição da percentagem de comissão
 
-**1. Migração DB**
-- Nova coluna `servicos_products_config JSONB DEFAULT NULL` na tabela `organizations`
-- Quando `NULL` → fallback para constantes hardcoded (Solar, Baterias, etc.)
-- Quando preenchido → lista personalizada da organização
+### Problema
+O campo "Comissão (%)" nos produtos do catálogo é editável — um comercial pode alterar a percentagem à vontade.
 
-**2. Hook `useServicosProducts` (`src/hooks/useServicosProducts.ts`)**
-- Lê `servicos_products_config` da organização via `useOrganization()`
-- Retorna `{ products, configs }` com fallback automático
+### Solução
+Tornar o campo "Comissão (%)" **read-only** no `CatalogProducts` (dentro de `ServicosSection.tsx`). A percentagem vem do catálogo definido pelo admin e não deve ser alterável pelo utilizador. O valor da comissão em € continua a ser recalculado automaticamente com base no preço × percentagem fixa.
 
-**3. UI — `ServicosProductsManager` (`src/components/settings/ServicosProductsManager.tsx`)**
-- Secção "Produtos Telecom" em Definições → Produtos (apenas `niche === 'telecom'`)
-- Adicionar/remover produtos com seleção de campos (duração, valor, kWp, comissão)
+### Alteração
 
-**4. Componentes atualizados (constantes → hook):**
+**`src/components/proposals/ServicosSection.tsx`** (linhas 227-244):
+- Adicionar `readOnly` ao `<Input>` da comissão (%)
+- Adicionar classes visuais de read-only (`bg-muted cursor-not-allowed opacity-70`)
+- Remover o `onChange` handler desse input
 
-| Ficheiro | Mudança |
-|---|---|
-| `CreateProposalModal.tsx` | `useServicosProducts()` substitui imports hardcoded |
-| `EditProposalModal.tsx` | Idem |
-| `ProposalDetailsModal.tsx` | Idem |
-| `EditSaleModal.tsx` | Idem |
-| `CommissionMatrixTab.tsx` | Idem |
-| `proposal-servicos-validation.ts` | Aceita `configs` como parâmetro opcional |
-
-**5. Impacto na Perfect2Gether**
-**Zero.** Coluna `NULL` por default → fallback para constantes hardcoded.
