@@ -63,6 +63,7 @@ const integrationGroups = ['Automações', 'Comunicações', 'Faturação'] as c
 
 const integrations: IntegrationDef[] = [
   { key: 'webhook', icon: Webhook, title: 'Webhooks', description: 'Notificações de novos leads', toggleKey: 'webhook', group: 'Automações' },
+  { key: 'webhook_inbound', icon: Link2, title: 'Webhook de Entrada', description: 'Receber leads via Zapier/Make', toggleKey: 'webhook_inbound', group: 'Automações' },
   { key: 'whatsapp', icon: MessageCircle, title: 'WhatsApp Business', description: 'Integração com Evolution API', toggleKey: 'whatsapp', group: 'Comunicações' },
   { key: 'brevo', icon: Mail, title: 'Email (Brevo)', description: 'Envio de emails e propostas', toggleKey: 'brevo', group: 'Comunicações' },
   { key: 'invoicexpress', icon: Receipt, title: 'InvoiceXpress', description: 'Emissão de faturas automática', toggleKey: 'invoicexpress', group: 'Faturação' },
