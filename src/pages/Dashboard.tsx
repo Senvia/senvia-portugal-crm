@@ -93,7 +93,7 @@ export default function Dashboard() {
           )}
           
           <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {visibleWidgets.map((widget) => (
+            {visibleWidgets.filter(w => w.widget_type !== 'team_performance_table').map((widget) => (
               <DynamicWidget
                 key={widget.id || widget.widget_type}
                 widgetType={widget.widget_type as any}
