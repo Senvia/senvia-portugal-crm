@@ -114,7 +114,7 @@ function ActivationBlock({
               <span className={`text-2xl font-bold ${percentColor(totalPct)}`}>{totalPct}%</span>
             </div>
             <p className="text-xs text-muted-foreground">
-              {totalActual} de {totalTarget} ativações
+              {formatVal(totalActual)} de {formatVal(totalTarget)} {unit}
             </p>
           </div>
         </div>
