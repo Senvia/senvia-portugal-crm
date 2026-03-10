@@ -212,6 +212,7 @@ export const IntegrationsContent = (props: IntegrationsContentProps) => {
       ) : (
         <div className="space-y-4">
           {active === 'webhook' && <WebhooksManager />}
+          {active === 'webhook_inbound' && <InboundWebhookSection />}
           {active === 'whatsapp' && <WhatsAppForm {...props} />}
           {active === 'brevo' && <BrevoForm {...props} />}
           {active === 'invoicexpress' && <InvoiceXpressForm {...props} />}
