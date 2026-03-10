@@ -26,8 +26,6 @@ import {
   PROPOSAL_STATUSES, 
   NEGOTIATION_TYPE_LABELS,
   NEGOTIATION_TYPES,
-  SERVICOS_PRODUCTS,
-  SERVICOS_PRODUCT_CONFIGS,
   FIELD_LABELS,
   type ServicosDetails,
   type ProposalStatus, 
@@ -36,6 +34,7 @@ import {
   type NegotiationType,
   type Proposal 
 } from '@/types/proposals';
+import { useServicosProducts } from '@/hooks/useServicosProducts';
 
 interface EditProposalModalProps {
   proposal: Proposal;
@@ -50,6 +49,7 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
   const { data: existingCpes = [] } = useProposalCpes(proposal.id);
   const { data: existingProducts = [] } = useProposalProducts(proposal.id);
   const { organization } = useAuth();
+  const { products: SERVICOS_PRODUCTS, configs: SERVICOS_PRODUCT_CONFIGS } = useServicosProducts();
   const { calculateCommission, isAutoCalculated, calculateEnergyCommission, hasEnergyConfig } = useCommissionMatrix();
   const updateProposal = useUpdateProposal();
   const updateProposalCpes = useUpdateProposalCpes();

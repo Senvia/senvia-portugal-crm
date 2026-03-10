@@ -56,7 +56,8 @@ import { Progress } from "@/components/ui/progress";
 import { useProposalCpes, useUpdateProposalCpes } from "@/hooks/useProposalCpes";
 import type { CreateProposalCpeData } from "@/hooks/useProposalCpes";
 import { useCpes } from "@/hooks/useCpes";
-import { NEGOTIATION_TYPE_LABELS, NEGOTIATION_TYPES, MODELO_SERVICO_LABELS, SERVICOS_PRODUCTS, SERVICOS_PRODUCT_CONFIGS } from "@/types/proposals";
+import { NEGOTIATION_TYPE_LABELS, NEGOTIATION_TYPES, MODELO_SERVICO_LABELS } from "@/types/proposals";
+import { useServicosProducts } from '@/hooks/useServicosProducts';
 import { useCommissionMatrix, getVolumeTier } from "@/hooks/useCommissionMatrix";
 import type { NegotiationType, ModeloServico } from "@/types/proposals";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -89,6 +90,7 @@ export function EditSaleModal({
   onSuccess
 }: EditSaleModalProps) {
   const { data: clients } = useClients();
+  const { products: SERVICOS_PRODUCTS, configs: SERVICOS_PRODUCT_CONFIGS } = useServicosProducts();
   const { data: products } = useProducts();
   const { data: existingItems = [] } = useSaleItems(sale?.id);
   

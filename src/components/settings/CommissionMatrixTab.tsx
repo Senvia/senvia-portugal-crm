@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { useOrganization, useUpdateOrganization } from '@/hooks/useOrganization';
-import { SERVICOS_PRODUCTS } from '@/types/proposals';
+import { useServicosProducts } from '@/hooks/useServicosProducts';
 import type { CommissionMatrix, CommissionRule, SolarTier, EnergyCommissionConfig, EnergyMarginBand, TierDerivationRule, TierRules } from '@/hooks/useCommissionMatrix';
 import { DEFAULT_ENERGY_CONFIG, DEFAULT_TIER_RULES } from '@/hooks/useCommissionMatrix';
 
@@ -63,6 +63,7 @@ function getDefaultRule(method: string): CommissionRule {
 export function CommissionMatrixTab() {
   const { data: org } = useOrganization();
   const updateOrg = useUpdateOrganization();
+  const { products: SERVICOS_PRODUCTS } = useServicosProducts();
   const [localMatrix, setLocalMatrix] = useState<CommissionMatrix>({});
   const [openProduct, setOpenProduct] = useState<string | null>(null);
   const [openEnergy, setOpenEnergy] = useState(false);
@@ -81,7 +82,7 @@ export function CommissionMatrixTab() {
     });
     setLocalMatrix(initial);
     setLocalEnergy(saved?.ee_gas ?? DEFAULT_ENERGY_CONFIG);
-  }, [org]);
+  }, [org, SERVICOS_PRODUCTS]);
 
   const handleSave = (product: string) => {
     const fullMatrix = { ...localMatrix, ee_gas: localEnergy };

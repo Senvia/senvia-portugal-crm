@@ -27,8 +27,6 @@ import {
   PROPOSAL_STATUSES, 
   NEGOTIATION_TYPE_LABELS,
   NEGOTIATION_TYPES,
-  SERVICOS_PRODUCTS,
-  SERVICOS_PRODUCT_CONFIGS,
   FIELD_LABELS,
   type ServicosDetails,
   type ServicosProductDetail,
@@ -38,6 +36,7 @@ import {
   type NegotiationType,
   type Proposal 
 } from '@/types/proposals';
+import { useServicosProducts } from '@/hooks/useServicosProducts';
 
 interface CreateProposalModalProps {
   client?: CrmClient | null;
@@ -52,6 +51,7 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
   const { data: clients = [] } = useClients();
   const { data: products = [] } = useActiveProducts();
   const { organization } = useAuth();
+  const { products: SERVICOS_PRODUCTS, configs: SERVICOS_PRODUCT_CONFIGS } = useServicosProducts();
   const { calculateCommission, isAutoCalculated } = useCommissionMatrix();
   const createProposal = useCreateProposal();
   const createProposalCpesBatch = useCreateProposalCpesBatch();

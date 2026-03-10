@@ -33,11 +33,11 @@ import {
   PROPOSAL_TYPE_LABELS, 
   MODELO_SERVICO_LABELS,
   NEGOTIATION_TYPE_LABELS,
-  SERVICOS_PRODUCT_CONFIGS,
   FIELD_LABELS,
   type NegotiationType,
   type ServicosDetails,
 } from '@/types/proposals';
+import { useServicosProducts } from '@/hooks/useServicosProducts';
 import type { Proposal, ProposalStatus, ProposalType } from '@/types/proposals';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -68,6 +68,7 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
   const { modules } = useModules();
   const isTelecom = orgData?.niche === 'telecom';
   const showEnergy = isTelecom && modules.energy;
+  const { configs: SERVICOS_PRODUCT_CONFIGS } = useServicosProducts();
   const updateProposal = useUpdateProposal();
   const deleteProposal = useDeleteProposal();
   const updateLeadStatus = useUpdateLeadStatus();

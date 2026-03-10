@@ -54,6 +54,7 @@ interface UpdateOrganizationData {
   sales_settings?: Json;
   commission_matrix?: Json;
   finance_email?: string | null;
+  servicos_products_config?: Json;
 }
 
 export function useUpdateOrganization() {

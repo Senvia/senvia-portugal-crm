@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { useProducts, useDeleteProduct } from '@/hooks/useProducts';
 import { useSyncInvoiceXpressItems } from '@/hooks/useSyncInvoiceXpressItems';
 import { useAuth } from '@/contexts/AuthContext';
+import { ServicosProductsManager } from './ServicosProductsManager';
 import { CreateProductModal } from './CreateProductModal';
 import { EditProductModal } from './EditProductModal';
 import type { Product } from '@/types/proposals';
@@ -25,6 +26,7 @@ export function ProductsTab() {
   const deleteProduct = useDeleteProduct();
   const syncItems = useSyncInvoiceXpressItems();
   const { organization } = useAuth();
+  const isTelecom = (organization as any)?.niche === 'telecom';
   const hasInvoiceXpress = !!(organization as any)?.invoicexpress_api_key && !!(organization as any)?.invoicexpress_account_name;
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -177,6 +179,8 @@ export function ProductsTab() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {isTelecom && <ServicosProductsManager />}
     </div>
   );
 }

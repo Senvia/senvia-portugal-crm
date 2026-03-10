@@ -2605,6 +2605,7 @@ export type Database = {
           public_key: string
           sale_fields_settings: Json | null
           sales_settings: Json | null
+          servicos_products_config: Json | null
           slug: string
           tax_config: Json | null
           trial_ends_at: string | null
@@ -2659,6 +2660,7 @@ export type Database = {
           public_key?: string
           sale_fields_settings?: Json | null
           sales_settings?: Json | null
+          servicos_products_config?: Json | null
           slug: string
           tax_config?: Json | null
           trial_ends_at?: string | null
@@ -2713,6 +2715,7 @@ export type Database = {
           public_key?: string
           sale_fields_settings?: Json | null
           sales_settings?: Json | null
+          servicos_products_config?: Json | null
           slug?: string
           tax_config?: Json | null
           trial_ends_at?: string | null

@@ -60,7 +60,8 @@ import {
   Trash2
 } from "lucide-react";
 import type { Proposal, ServicosProductDetail } from "@/types/proposals";
-import { NEGOTIATION_TYPE_LABELS, SERVICOS_PRODUCTS, SERVICOS_PRODUCT_CONFIGS } from "@/types/proposals";
+import { NEGOTIATION_TYPE_LABELS } from "@/types/proposals";
+
 import { useSaleFieldsSettings } from "@/hooks/useSaleFieldsSettings";
 import { useCommissionMatrix, getVolumeTier, getTierRuleLabel } from "@/hooks/useCommissionMatrix";
 import { 

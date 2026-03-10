@@ -1,9 +1,4 @@
-import { SERVICOS_PRODUCT_CONFIGS, type ServicosDetails } from '@/types/proposals';
-
-/**
- * Products that require both `valor` and `kwp` fields to be filled (> 0).
- */
-const PRODUCTS_REQUIRING_VALOR_KWP = ['Carregadores', 'Condensadores'];
+import { SERVICOS_PRODUCT_CONFIGS, type ServicosDetails, type ServicosProductConfig } from '@/types/proposals';
 
 export interface ServicosValidationError {
   product: string;
@@ -13,16 +8,17 @@ export interface ServicosValidationError {
 
 /**
  * Validates that all selected servicos products have their required fields filled.
- * Specifically enforces valor and kwp for Carregadores and Condensadores.
+ * Accepts an optional configs array; falls back to the hardcoded defaults.
  */
 export function validateServicosDetails(
   servicosProdutos: string[],
-  servicosDetails: ServicosDetails
+  servicosDetails: ServicosDetails,
+  configs: ServicosProductConfig[] = SERVICOS_PRODUCT_CONFIGS
 ): ServicosValidationError[] {
   const errors: ServicosValidationError[] = [];
 
   for (const produto of servicosProdutos) {
-    const config = SERVICOS_PRODUCT_CONFIGS.find(c => c.name === produto);
+    const config = configs.find(c => c.name === produto);
     if (!config) continue;
 
     const detail = servicosDetails[produto] || {};
@@ -46,10 +42,11 @@ export function validateServicosDetails(
  */
 export function isServicosDetailsValid(
   servicosProdutos: string[],
-  servicosDetails: ServicosDetails
+  servicosDetails: ServicosDetails,
+  configs?: ServicosProductConfig[]
 ): boolean {
   if (servicosProdutos.length === 0) return false;
-  return validateServicosDetails(servicosProdutos, servicosDetails).length === 0;
+  return validateServicosDetails(servicosProdutos, servicosDetails, configs).length === 0;
 }
 
 /**
