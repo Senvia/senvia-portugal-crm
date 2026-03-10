@@ -82,7 +82,7 @@ export function CommissionMatrixTab() {
     });
     setLocalMatrix(initial);
     setLocalEnergy(saved?.ee_gas ?? DEFAULT_ENERGY_CONFIG);
-  }, [org]);
+  }, [org, SERVICOS_PRODUCTS]);
 
   const handleSave = (product: string) => {
     const fullMatrix = { ...localMatrix, ee_gas: localEnergy };
