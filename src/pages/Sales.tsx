@@ -144,7 +144,7 @@ export default function Sales() {
             </div>
             <p className="text-2xl font-bold">{stats.total}</p>
             <p className="text-xs text-muted-foreground">{formatCurrency(stats.totalValue)}</p>
-            {isTelecom && telecomMetrics && (
+            {isTelecom && modules.energy && telecomMetrics && (
               <p className="text-xs text-muted-foreground mt-1">
                 {telecomMetrics.totalMWh.toFixed(1)} MWh · {telecomMetrics.totalKWp.toFixed(1)} kWp
               </p>
