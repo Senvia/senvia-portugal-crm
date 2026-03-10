@@ -1,32 +1,27 @@
-## Produtos de Serviços Configuráveis por Organização
 
-### Estado: ✅ Implementado
 
-### Alterações Realizadas
+## Plano: Substituir checkboxes por pesquisa no catálogo de serviços
 
-**1. Migração DB**
-- Nova coluna `servicos_products_config JSONB DEFAULT NULL` na tabela `organizations`
-- Quando `NULL` → fallback para constantes hardcoded (Solar, Baterias, etc.)
-- Quando preenchido → lista personalizada da organização
+### Problema
+A seleção de produtos do catálogo usa checkboxes — o utilizador quer poder **pesquisar** produtos por texto numa dropdown e adicioná-los, em vez de percorrer uma lista de checkboxes.
 
-**2. Hook `useServicosProducts` (`src/hooks/useServicosProducts.ts`)**
-- Lê `servicos_products_config` da organização via `useOrganization()`
-- Retorna `{ products, configs }` com fallback automático
+### Solução
+Substituir a lista de checkboxes na `CatalogProducts` por um **SearchableCombobox** (já existe no projeto) + lista de produtos adicionados com edição inline.
 
-**3. UI — `ServicosProductsManager` (`src/components/settings/ServicosProductsManager.tsx`)**
-- Secção "Produtos Telecom" em Definições → Produtos (apenas `niche === 'telecom'`)
-- Adicionar/remover produtos com seleção de campos (duração, valor, kWp, comissão)
+### Alterações
 
-**4. Componentes atualizados (constantes → hook):**
+**`src/components/proposals/ServicosSection.tsx`** — Refazer `CatalogProducts`:
+- Remover a lista de checkboxes
+- Adicionar um `SearchableCombobox` no topo com as opções do catálogo (filtradas para excluir já selecionados)
+- Ao selecionar um produto, chamar `onToggleProduct` para o adicionar e pré-preencher os defaults do catálogo via `onSetProductDetail`
+- Abaixo do combobox, mostrar os produtos já adicionados como cards editáveis (preço, comissão) com botão de remover (X)
+- Manter os totais no fundo
 
-| Ficheiro | Mudança |
-|---|---|
-| `CreateProposalModal.tsx` | `useServicosProducts()` substitui imports hardcoded |
-| `EditProposalModal.tsx` | Idem |
-| `ProposalDetailsModal.tsx` | Idem |
-| `EditSaleModal.tsx` | Idem |
-| `CommissionMatrixTab.tsx` | Idem |
-| `proposal-servicos-validation.ts` | Aceita `configs` como parâmetro opcional |
+**Também remover "Modelo de Serviço"** (Transacional/SAAS) **quando usado nas vendas** — adicionar prop opcional `hideModeloServico` à `ServicosSection`, e passá-la como `true` no `CreateSaleModal` e `EditSaleModal`.
 
-**5. Impacto na Perfect2Gether**
-**Zero.** Coluna `NULL` por default → fallback para constantes hardcoded.
+### UX Final
+1. Dropdown pesquisável → utilizador escreve texto → filtra produtos do catálogo
+2. Seleciona produto → aparece na lista abaixo com preço e comissão editáveis
+3. Botão X para remover produto da lista
+4. Totais atualizados automaticamente
+
