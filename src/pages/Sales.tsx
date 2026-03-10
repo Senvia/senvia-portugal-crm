@@ -267,6 +267,17 @@ export default function Sales() {
                       >
                         {SALE_STATUS_LABELS[sale.status]}
                       </Badge>
+                      {isTelecom && modules.energy && (sale as any).proposal_type && (
+                        <Badge 
+                          variant="outline" 
+                          className={(sale as any).proposal_type === 'energia' 
+                            ? 'bg-yellow-500/20 text-yellow-600 border-yellow-500/30 text-xs' 
+                            : 'bg-cyan-500/20 text-cyan-600 border-cyan-500/30 text-xs'}
+                        >
+                          {(sale as any).proposal_type === 'energia' ? '⚡ Energia' : '🔧 Serviços'}
+                        </Badge>
+                      )
+                      </Badge>
                       {sale.code && (
                         <span className="text-xs font-medium text-primary">{sale.code}</span>
                       )}
