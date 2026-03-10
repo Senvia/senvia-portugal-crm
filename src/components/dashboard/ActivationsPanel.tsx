@@ -134,8 +134,8 @@ function ActivationBlock({
               {rows.map((row) => (
                 <TableRow key={row.userId}>
                   <TableCell className="text-xs py-1.5 font-medium whitespace-nowrap">{row.name}</TableCell>
-                  <TableCell className="text-xs text-right py-1.5">{row.target}</TableCell>
-                  <TableCell className="text-xs text-right py-1.5">{row.actual}</TableCell>
+                  <TableCell className="text-xs text-right py-1.5">{formatVal(row.target)}</TableCell>
+                  <TableCell className="text-xs text-right py-1.5">{formatVal(row.actual)}</TableCell>
                   <TableCell className={`text-xs text-right py-1.5 font-medium ${percentColor(row.pct)}`}>
                     {row.target > 0 ? `${row.pct}%` : "—"}
                   </TableCell>
