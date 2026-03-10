@@ -1,4 +1,6 @@
 import { useAuth } from "@/contexts/AuthContext";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { 
   WidgetType, 
   NicheType, 
@@ -21,7 +23,24 @@ export interface DashboardWidget {
 
 export function useDashboardWidgets() {
   const { user, organization } = useAuth();
-  const { profileDashboardWidgets } = usePermissions();
+  const { profileDashboardWidgets, isAdmin, isSuperAdmin } = usePermissions();
+
+  // Fallback: fetch admin profile widgets when user has no profile assigned
+  const { data: adminProfileWidgets } = useQuery({
+    queryKey: ['admin-profile-widgets', organization?.id],
+    queryFn: async () => {
+      if (!organization?.id) return null;
+      const { data } = await supabase
+        .from('organization_profiles')
+        .select('dashboard_widgets')
+        .eq('organization_id', organization.id)
+        .eq('base_role', 'admin')
+        .limit(1)
+        .maybeSingle();
+      return (data as any)?.dashboard_widgets as Array<{ type: string; is_visible: boolean }> | null;
+    },
+    enabled: !!organization?.id && !profileDashboardWidgets && (isAdmin || isSuperAdmin),
+  });
 
   // Get enabled modules from organization
   const enabledModules = (organization?.enabled_modules as Record<string, boolean>) || {
@@ -50,9 +69,12 @@ export function useDashboardWidgets() {
     created_at: new Date().toISOString(),
   }));
 
+  // Use profile widgets, or admin profile fallback, or niche defaults
+  const rawProfileWidgets = profileDashboardWidgets || adminProfileWidgets;
+
   // Build profile-level widgets if available
-  const profileWidgets: DashboardWidget[] | null = profileDashboardWidgets
-    ? profileDashboardWidgets
+  const profileWidgets: DashboardWidget[] | null = rawProfileWidgets
+    ? rawProfileWidgets
         .filter(pw => {
           const def = WIDGET_DEFINITIONS[pw.type as WidgetType];
           if (!def) return false;
@@ -65,13 +87,13 @@ export function useDashboardWidgets() {
           user_id: user?.id || '',
           widget_type: pw.type as WidgetType,
           position: index,
-          is_visible: pw.is_visible,
+          is_visible: pw.is_visible !== false, // default true when missing
           config: {},
           created_at: new Date().toISOString(),
         }))
     : null;
 
-  // Priority: Profile defaults → Niche defaults
+  // Priority: Profile defaults → Admin profile fallback → Niche defaults
   const widgets = profileWidgets || defaultWidgets;
   const visibleWidgets = widgets.filter(w => w.is_visible);
 
