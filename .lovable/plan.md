@@ -1,53 +1,32 @@
+## Produtos de Serviços Configuráveis por Organização
 
+### Estado: ✅ Implementado
 
-## Plano: Simplificar Produtos Telecom (Serviços)
+### Alterações Realizadas
 
-### O que o utilizador quer
-Os produtos telecom devem funcionar como um **catálogo simples**: nome, preço base, se tem comissão e a percentagem. Na hora da venda/proposta, os dados são **copiados** do catálogo e podem ser **editados livremente** sem alterar o produto original.
+**1. Migração DB**
+- Nova coluna `servicos_products_config JSONB DEFAULT NULL` na tabela `organizations`
+- Quando `NULL` → fallback para constantes hardcoded (Solar, Baterias, etc.)
+- Quando preenchido → lista personalizada da organização
 
-### O que existe hoje (e está errado)
-- Sistema complexo de "campos por produto" (duração, valor, kWp, comissão) guardado como JSONB na organização (`servicos_products_config`)
-- `ServicosProductsManager` com checkboxes de campos — confuso e não intuitivo
-- `servicos_details` JSONB nas propostas/vendas com sub-campos por produto
-- Hook `useServicosProducts` que lê da config JSONB
+**2. Hook `useServicosProducts` (`src/hooks/useServicosProducts.ts`)**
+- Lê `servicos_products_config` da organização via `useOrganization()`
+- Retorna `{ products, configs }` com fallback automático
 
-### Solução
+**3. UI — `ServicosProductsManager` (`src/components/settings/ServicosProductsManager.tsx`)**
+- Secção "Produtos Telecom" em Definições → Produtos (apenas `niche === 'telecom'`)
+- Adicionar/remover produtos com seleção de campos (duração, valor, kWp, comissão)
 
-**1. Reformular o `ServicosProductsManager`**
-- Remover o sistema de checkboxes de campos (duracao, valor, kwp, comissao)
-- Cada produto passa a ter: **Nome**, **Preço Base (€)**, **Tem Comissão (sim/não)**, **% Comissão**
-- Novo formato JSONB na `servicos_products_config`:
-```json
-[
-  { "name": "Internet Fibra", "price": 59, "has_commission": true, "commission_pct": 10 },
-  { "name": "NOS TV", "price": 39, "has_commission": false, "commission_pct": 0 }
-]
-```
-
-**2. Atualizar `useServicosProducts` hook**
-- Retornar a nova estrutura (nome, preço, comissão)
-- Manter fallback para os hardcoded antigos (Perfect2Gether não é afetada)
-
-**3. Reformular a UI de seleção de serviços nas Propostas/Vendas**
-- Ao selecionar um produto do catálogo, os campos são **pré-preenchidos** (nome, preço, comissão)
-- O utilizador pode **editar nome, preço e comissão** diretamente na proposta/venda
-- As edições são guardadas no `servicos_details` JSONB da proposta/venda, **sem alterar o catálogo**
-- Estrutura: cada entrada no `servicos_details` passa a ter: `{ name: string, price: number, commission_pct: number, commission_value: number }`
-
-**4. Ficheiros a alterar**
+**4. Componentes atualizados (constantes → hook):**
 
 | Ficheiro | Mudança |
 |---|---|
-| `ServicosProductsManager.tsx` | Reformular UI: nome, preço, comissão toggle + % |
-| `useServicosProducts.ts` | Adaptar ao novo formato JSONB |
-| `CreateProposalModal.tsx` | Produtos copiados e editáveis inline |
+| `CreateProposalModal.tsx` | `useServicosProducts()` substitui imports hardcoded |
 | `EditProposalModal.tsx` | Idem |
-| `CreateSaleModal.tsx` | Idem — valores da proposta são copiados e editáveis |
+| `ProposalDetailsModal.tsx` | Idem |
 | `EditSaleModal.tsx` | Idem |
-| `ProposalDetailsModal.tsx` | Exibir dados editados |
-| `SaleDetailsModal.tsx` | Idem |
-| `types/proposals.ts` | Atualizar tipos `ServicosProductDetail` e `ServicosProductConfig` |
+| `CommissionMatrixTab.tsx` | Idem |
+| `proposal-servicos-validation.ts` | Aceita `configs` como parâmetro opcional |
 
 **5. Impacto na Perfect2Gether**
-Zero. Se `servicos_products_config` é `NULL`, o hook continua a usar os hardcoded existentes com o formato antigo. Os componentes detetam o formato e adaptam-se.
-
+**Zero.** Coluna `NULL` por default → fallback para constantes hardcoded.

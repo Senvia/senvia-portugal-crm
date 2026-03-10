@@ -37,6 +37,7 @@ import {
   type Proposal 
 } from '@/types/proposals';
 import { useServicosProducts } from '@/hooks/useServicosProducts';
+import { ServicosSection } from '@/components/proposals/ServicosSection';
 
 interface CreateProposalModalProps {
   client?: CrmClient | null;
@@ -51,7 +52,7 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
   const { data: clients = [] } = useClients();
   const { data: products = [] } = useActiveProducts();
   const { organization } = useAuth();
-  const { products: SERVICOS_PRODUCTS, configs: SERVICOS_PRODUCT_CONFIGS } = useServicosProducts();
+  const { products: SERVICOS_PRODUCTS, configs: SERVICOS_PRODUCT_CONFIGS, catalog, isNewFormat } = useServicosProducts();
   const { calculateCommission, isAutoCalculated } = useCommissionMatrix();
   const createProposal = useCreateProposal();
   const createProposalCpesBatch = useCreateProposalCpesBatch();
@@ -133,12 +134,31 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
   const handleToggleServicoProduto = (produto: string) => {
     setServicosProdutos(prev => {
       if (prev.includes(produto)) {
-        // Remove details when unchecking
         setServicosDetails(d => { const n = { ...d }; delete n[produto]; return n; });
         return prev.filter(p => p !== produto);
       }
+      // For new catalog format, initialize with catalog values
+      if (isNewFormat && catalog) {
+        const catProduct = catalog.find(c => c.name === produto);
+        if (catProduct) {
+          const comissao = catProduct.has_commission ? Math.round(catProduct.price * catProduct.commission_pct) / 100 : 0;
+          setServicosDetails(d => ({
+            ...d,
+            [produto]: {
+              name: catProduct.name,
+              price: catProduct.price,
+              commission_pct: catProduct.commission_pct,
+              comissao,
+            },
+          }));
+        }
+      }
       return [...prev, produto];
     });
+  };
+
+  const handleSetProductDetail = (produto: string, detail: import('@/types/proposals').ServicosProductDetail) => {
+    setServicosDetails(prev => ({ ...prev, [produto]: detail }));
   };
 
   const handleUpdateProductDetail = (produto: string, field: string, value: number | undefined) => {
@@ -497,113 +517,22 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
                   {isTelecom && proposalType === 'servicos' && (
                     <Card>
                       <CardContent className="p-4">
-                        <div className="space-y-4 p-4 rounded-lg border bg-secondary/30 border-border">
-                          <div className="flex items-center gap-2 text-foreground">
-                            <Wrench className="h-4 w-4" />
-                            <span className="font-medium text-sm">Outros Serviços</span>
-                          </div>
-
-                          {/* Modelo de Serviço PRIMEIRO */}
-                          <div className="space-y-2">
-                            <Label className="text-sm">Modelo de Serviço</Label>
-                            <div className="grid grid-cols-2 gap-2">
-                              <Button
-                                type="button"
-                                variant={modeloServico === 'transacional' ? 'default' : 'outline'}
-                                size="sm"
-                                className="h-9"
-                                onClick={() => setModeloServico('transacional')}
-                              >
-                                Transacional
-                              </Button>
-                              <Button
-                                type="button"
-                                variant={modeloServico === 'saas' ? 'default' : 'outline'}
-                                size="sm"
-                                className="h-9"
-                                onClick={() => setModeloServico('saas')}
-                              >
-                                SAAS
-                              </Button>
-                            </div>
-                          </div>
-
-                          {/* Produtos em linha */}
-                          <div className="space-y-3">
-                            <Label className="text-sm">Produtos</Label>
-                            {attempted && servicosProdutos.length === 0 && (
-                              <p className="text-xs text-destructive">Selecione pelo menos 1 produto</p>
-                            )}
-                            {SERVICOS_PRODUCT_CONFIGS.map((config) => {
-                              const isActive = servicosProdutos.includes(config.name);
-                              const detail = servicosDetails[config.name] || {};
-                              return (
-                                <div key={config.name} className="space-y-2">
-                                  <div className="flex items-center space-x-2">
-                                    <Checkbox
-                                      id={`produto-${config.name}`}
-                                      checked={isActive}
-                                      onCheckedChange={() => handleToggleServicoProduto(config.name)}
-                                    />
-                                    <Label htmlFor={`produto-${config.name}`} className="text-sm cursor-pointer font-medium">
-                                      {config.name}
-                                    </Label>
-                                  </div>
-                                  {isActive && (
-                                    <div className="ml-6 flex flex-wrap gap-2">
-                                      {config.fields.map((field) => {
-                                        const isComissaoAuto = field === 'comissao' && isAutoCalculated(config.name);
-                                        return (
-                                        <div key={field} className="space-y-1 min-w-[100px] flex-1">
-                          <Label className="text-xs text-muted-foreground">
-                                             {FIELD_LABELS[field]} <span className="text-destructive">*</span>
-                                             {isComissaoAuto && <span className="ml-1 text-primary">(auto)</span>}
-                                           </Label>
-                                           {attempted && (detail[field] === undefined || detail[field] <= 0) && (
-                                             <p className="text-[10px] text-destructive">Obrigatório</p>
-                                           )}
-                                          <Input
-                                            type="number"
-                                            step="0.01"
-                                            min="0"
-                                            value={detail[field] ?? ''}
-                                            onChange={(e) => handleUpdateProductDetail(config.name, field, e.target.value ? parseFloat(e.target.value) : undefined)}
-                                            placeholder={field === 'kwp' && config.kwpAuto ? 'Auto' : '0'}
-                                            className="h-8"
-                                            readOnly={(field === 'kwp' && !!config.kwpAuto && detail.valor !== undefined) || isComissaoAuto}
-                                          />
-                                        </div>
-                                        );
-                                      })}
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-
-                          {/* kWp Total + Comissão Total */}
-                          <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border/50">
-                            <div className="space-y-1">
-                              <Label className="text-xs text-muted-foreground">kWp Total</Label>
-                              <div className="h-8 flex items-center text-sm font-medium px-3 rounded-md bg-muted">
-                                {totalKwp ? totalKwp.toLocaleString('pt-PT', { maximumFractionDigits: 2 }) : '—'}
-                              </div>
-                              {attempted && totalKwp <= 0 && (
-                                <p className="text-xs text-destructive">Potência total deve ser maior que 0</p>
-                              )}
-                            </div>
-                            <div className="space-y-1">
-                              <Label className="text-xs text-muted-foreground">Comissão Total (€)</Label>
-                              <div className="h-8 flex items-center text-sm font-medium px-3 rounded-md bg-muted">
-                                {totalComissao ? totalComissao.toLocaleString('pt-PT', { maximumFractionDigits: 2 }) : '—'}
-                              </div>
-                              {attempted && totalComissao <= 0 && (
-                                <p className="text-xs text-destructive">Comissão obrigatória</p>
-                              )}
-                            </div>
-                          </div>
-                        </div>
+                        <ServicosSection
+                          modeloServico={modeloServico}
+                          onModeloServicoChange={setModeloServico}
+                          servicosProdutos={servicosProdutos}
+                          servicosDetails={servicosDetails}
+                          attempted={attempted}
+                          isNewFormat={isNewFormat}
+                          configs={SERVICOS_PRODUCT_CONFIGS}
+                          catalog={catalog}
+                          onToggleProduct={handleToggleServicoProduto}
+                          onUpdateDetail={handleUpdateProductDetail}
+                          onSetProductDetail={handleSetProductDetail}
+                          isAutoCalculated={isAutoCalculated}
+                          totalKwp={totalKwp}
+                          totalComissao={totalComissao}
+                        />
                       </CardContent>
                     </Card>
                   )}

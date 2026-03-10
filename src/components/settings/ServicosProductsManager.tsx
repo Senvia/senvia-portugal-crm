@@ -1,35 +1,27 @@
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, GripVertical, Settings2 } from 'lucide-react';
+import { Plus, Trash2, Settings2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 import { useOrganization, useUpdateOrganization } from '@/hooks/useOrganization';
-import { SERVICOS_PRODUCT_CONFIGS, FIELD_LABELS } from '@/types/proposals';
+import type { CatalogProduct } from '@/types/proposals';
 import type { Json } from '@/integrations/supabase/types';
-
-const ALL_FIELDS = ['duracao', 'valor', 'kwp', 'comissao'] as const;
-
-interface ProductConfig {
-  name: string;
-  fields: string[];
-}
 
 export function ServicosProductsManager() {
   const { data: org } = useOrganization();
   const updateOrg = useUpdateOrganization();
-  const [products, setProducts] = useState<ProductConfig[]>([]);
+  const [products, setProducts] = useState<CatalogProduct[]>([]);
   const [newName, setNewName] = useState('');
 
   useEffect(() => {
-    const saved = (org as any)?.servicos_products_config as ProductConfig[] | null;
-    if (saved && Array.isArray(saved) && saved.length > 0) {
+    const saved = (org as any)?.servicos_products_config as CatalogProduct[] | null;
+    if (saved && Array.isArray(saved) && saved.length > 0 && typeof saved[0].price === 'number') {
       setProducts(saved);
     } else {
-      // Initialize from defaults
-      setProducts(SERVICOS_PRODUCT_CONFIGS.map(c => ({ name: c.name, fields: [...c.fields] })));
+      // Start with empty catalog for new orgs
+      setProducts([]);
     }
   }, [org]);
 
@@ -40,7 +32,12 @@ export function ServicosProductsManager() {
   const addProduct = () => {
     if (!newName.trim()) return;
     if (products.some(p => p.name.toLowerCase() === newName.trim().toLowerCase())) return;
-    setProducts(prev => [...prev, { name: newName.trim(), fields: ['valor', 'comissao'] }]);
+    setProducts(prev => [...prev, {
+      name: newName.trim(),
+      price: 0,
+      has_commission: false,
+      commission_pct: 0,
+    }]);
     setNewName('');
   };
 
@@ -48,12 +45,10 @@ export function ServicosProductsManager() {
     setProducts(prev => prev.filter(p => p.name !== name));
   };
 
-  const toggleField = (productName: string, field: string) => {
-    setProducts(prev => prev.map(p => {
-      if (p.name !== productName) return p;
-      const has = p.fields.includes(field);
-      return { ...p, fields: has ? p.fields.filter(f => f !== field) : [...p.fields, field] };
-    }));
+  const updateProduct = (name: string, updates: Partial<CatalogProduct>) => {
+    setProducts(prev => prev.map(p =>
+      p.name === name ? { ...p, ...updates } : p
+    ));
   };
 
   return (
@@ -64,31 +59,62 @@ export function ServicosProductsManager() {
           Produtos Telecom (Serviços)
         </CardTitle>
         <CardDescription>
-          Configure os produtos disponíveis para propostas e vendas de "Outros Serviços".
+          Configure os produtos disponíveis para propostas e vendas de "Outros Serviços". 
+          Na hora da venda, os valores podem ser editados sem alterar o catálogo.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {products.map((product) => (
-          <div key={product.name} className="flex flex-col gap-2 p-3 rounded-lg border bg-card">
+          <div key={product.name} className="p-4 rounded-lg border bg-card space-y-3">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <GripVertical className="h-4 w-4 text-muted-foreground" />
-                <span className="font-medium text-sm">{product.name}</span>
-              </div>
+              <span className="font-medium text-sm">{product.name}</span>
               <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeProduct(product.name)}>
                 <Trash2 className="h-3.5 w-3.5 text-destructive" />
               </Button>
             </div>
-            <div className="flex flex-wrap gap-3 pl-6">
-              {ALL_FIELDS.map(field => (
-                <label key={field} className="flex items-center gap-1.5 text-xs cursor-pointer">
-                  <Checkbox
-                    checked={product.fields.includes(field)}
-                    onCheckedChange={() => toggleField(product.name, field)}
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Preço Base (€)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={product.price || ''}
+                  onChange={(e) => updateProduct(product.name, { price: parseFloat(e.target.value) || 0 })}
+                  placeholder="0.00"
+                  className="h-9"
+                />
+              </div>
+              
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs text-muted-foreground">Tem Comissão?</Label>
+                  <Switch
+                    checked={product.has_commission}
+                    onCheckedChange={(checked) => updateProduct(product.name, {
+                      has_commission: checked,
+                      commission_pct: checked ? product.commission_pct : 0,
+                    })}
                   />
-                  {FIELD_LABELS[field] || field}
-                </label>
-              ))}
+                </div>
+                
+                {product.has_commission && (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Comissão (%)</Label>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      max="100"
+                      value={product.commission_pct || ''}
+                      onChange={(e) => updateProduct(product.name, { commission_pct: parseFloat(e.target.value) || 0 })}
+                      placeholder="0"
+                      className="h-9"
+                    />
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         ))}
