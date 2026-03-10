@@ -144,8 +144,8 @@ function ActivationBlock({
               {showTotals && (
                 <TableRow className="bg-muted/20 hover:bg-muted/20">
                   <TableCell className="text-xs font-semibold py-1.5">TOTAL</TableCell>
-                  <TableCell className="text-xs text-right font-semibold py-1.5">{totalTarget}</TableCell>
-                  <TableCell className="text-xs text-right font-semibold py-1.5">{totalActual}</TableCell>
+                  <TableCell className="text-xs text-right font-semibold py-1.5">{formatVal(totalTarget)}</TableCell>
+                  <TableCell className="text-xs text-right font-semibold py-1.5">{formatVal(totalActual)}</TableCell>
                   <TableCell className={`text-xs text-right font-semibold py-1.5 ${percentColor(totalPct)}`}>
                     {totalTarget > 0 ? `${totalPct}%` : "—"}
                   </TableCell>
