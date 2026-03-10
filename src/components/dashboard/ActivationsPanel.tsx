@@ -51,6 +51,9 @@ function ActivationBlock({
   countActivations,
   onEdit,
 }: ActivationBlockProps) {
+  const unit = proposalType === "energia" ? "MWh" : "kWp";
+  const formatVal = (v: number) => v % 1 === 0 ? v.toString() : v.toFixed(1);
+
   const rows = filteredMembers.map((m) => {
     const target = getTarget(m.user_id, periodType, proposalType);
     const actual = countActivations(m.user_id, periodType, proposalType);
@@ -77,7 +80,7 @@ function ActivationBlock({
           <CardTitle className="text-sm font-semibold">{title}</CardTitle>
           <div className="flex items-center gap-1">
             <PrintCardButton targetRef={blockRef} />
-            {isAdmin && (
+            {isAdmin && periodType === "annual" && (
               <Button variant="ghost" size="icon-sm" onClick={onEdit}>
                 <Pencil className="h-3.5 w-3.5" />
               </Button>
@@ -111,7 +114,7 @@ function ActivationBlock({
               <span className={`text-2xl font-bold ${percentColor(totalPct)}`}>{totalPct}%</span>
             </div>
             <p className="text-xs text-muted-foreground">
-              {totalActual} de {totalTarget} ativações
+              {formatVal(totalActual)} de {formatVal(totalTarget)} {unit}
             </p>
           </div>
         </div>
@@ -131,8 +134,8 @@ function ActivationBlock({
               {rows.map((row) => (
                 <TableRow key={row.userId}>
                   <TableCell className="text-xs py-1.5 font-medium whitespace-nowrap">{row.name}</TableCell>
-                  <TableCell className="text-xs text-right py-1.5">{row.target}</TableCell>
-                  <TableCell className="text-xs text-right py-1.5">{row.actual}</TableCell>
+                  <TableCell className="text-xs text-right py-1.5">{formatVal(row.target)}</TableCell>
+                  <TableCell className="text-xs text-right py-1.5">{formatVal(row.actual)}</TableCell>
                   <TableCell className={`text-xs text-right py-1.5 font-medium ${percentColor(row.pct)}`}>
                     {row.target > 0 ? `${row.pct}%` : "—"}
                   </TableCell>
@@ -141,8 +144,8 @@ function ActivationBlock({
               {showTotals && (
                 <TableRow className="bg-muted/20 hover:bg-muted/20">
                   <TableCell className="text-xs font-semibold py-1.5">TOTAL</TableCell>
-                  <TableCell className="text-xs text-right font-semibold py-1.5">{totalTarget}</TableCell>
-                  <TableCell className="text-xs text-right font-semibold py-1.5">{totalActual}</TableCell>
+                  <TableCell className="text-xs text-right font-semibold py-1.5">{formatVal(totalTarget)}</TableCell>
+                  <TableCell className="text-xs text-right font-semibold py-1.5">{formatVal(totalActual)}</TableCell>
                   <TableCell className={`text-xs text-right font-semibold py-1.5 ${percentColor(totalPct)}`}>
                     {totalTarget > 0 ? `${totalPct}%` : "—"}
                   </TableCell>

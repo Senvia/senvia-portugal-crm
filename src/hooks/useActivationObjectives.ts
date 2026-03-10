@@ -15,11 +15,6 @@ export interface ActivationObjective {
   target_quantity: number;
 }
 
-export interface ActivationCount {
-  user_id: string;
-  count: number;
-}
-
 export function useActivationObjectives(referenceDate?: Date) {
   const { organization } = useAuth();
   const queryClient = useQueryClient();
@@ -47,14 +42,14 @@ export function useActivationObjectives(referenceDate?: Date) {
     enabled: !!orgId,
   });
 
-  // Fetch activations (sales with activation_date) for current month
+  // Fetch delivered sales with proposal_id for current month
   const { data: monthlyActivations = [], isLoading: monthlyLoading } = useQuery({
     queryKey: ["activations-monthly", orgId, currentMonthStart],
     queryFn: async () => {
       if (!orgId) return [];
       const { data, error } = await supabase
         .from("sales")
-        .select("created_by, proposal_type, activation_date")
+        .select("created_by, proposal_type, activation_date, proposal_id")
         .eq("organization_id", orgId)
         .not("activation_date", "is", null)
         .gte("activation_date", currentMonthStart)
@@ -66,14 +61,14 @@ export function useActivationObjectives(referenceDate?: Date) {
     enabled: !!orgId,
   });
 
-  // Fetch activations for current year
+  // Fetch delivered sales with proposal_id for current year
   const { data: annualActivations = [], isLoading: annualLoading } = useQuery({
     queryKey: ["activations-annual", orgId, currentYearStart],
     queryFn: async () => {
       if (!orgId) return [];
       const { data, error } = await supabase
         .from("sales")
-        .select("created_by, proposal_type, activation_date")
+        .select("created_by, proposal_type, activation_date, proposal_id")
         .eq("organization_id", orgId)
         .not("activation_date", "is", null)
         .gte("activation_date", currentYearStart)
@@ -85,6 +80,63 @@ export function useActivationObjectives(referenceDate?: Date) {
     enabled: !!orgId,
   });
 
+  // Get all unique proposal_ids from activations
+  const allProposalIds = [...new Set(
+    [...monthlyActivations, ...annualActivations]
+      .map((s: any) => s.proposal_id)
+      .filter(Boolean)
+  )];
+
+  // Fetch proposal_cpes consumo_anual for energia
+  const { data: proposalCpes = [], isLoading: cpesLoading } = useQuery({
+    queryKey: ["activation-proposal-cpes", orgId, allProposalIds],
+    queryFn: async () => {
+      if (!orgId || allProposalIds.length === 0) return [];
+      const { data, error } = await supabase
+        .from("proposal_cpes")
+        .select("proposal_id, consumo_anual")
+        .in("proposal_id", allProposalIds);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!orgId && allProposalIds.length > 0,
+  });
+
+  // Fetch proposals servicos_details for kWp
+  const { data: proposalsDetails = [], isLoading: detailsLoading } = useQuery({
+    queryKey: ["activation-proposals-details", orgId, allProposalIds],
+    queryFn: async () => {
+      if (!orgId || allProposalIds.length === 0) return [];
+      const { data, error } = await supabase
+        .from("proposals")
+        .select("id, servicos_details")
+        .in("id", allProposalIds)
+        .eq("proposal_type", "servicos");
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!orgId && allProposalIds.length > 0,
+  });
+
+  // Build lookup maps
+  const cpesByProposal = proposalCpes.reduce((acc: Record<string, number>, cpe: any) => {
+    const pid = cpe.proposal_id;
+    acc[pid] = (acc[pid] || 0) + (cpe.consumo_anual || 0);
+    return acc;
+  }, {});
+
+  const kwpByProposal = proposalsDetails.reduce((acc: Record<string, number>, p: any) => {
+    const details = p.servicos_details;
+    if (details && typeof details === "object") {
+      let totalKwp = 0;
+      for (const productKey of Object.keys(details)) {
+        totalKwp += Number(details[productKey]?.kwp) || 0;
+      }
+      acc[p.id] = totalKwp;
+    }
+    return acc;
+  }, {});
+
   // Helper to get objective target
   const getTarget = useCallback((userId: string, periodType: "monthly" | "annual", proposalType: "energia" | "servicos"): number => {
     const month = periodType === "monthly" ? currentMonthStart : currentYearStart;
@@ -94,21 +146,35 @@ export function useActivationObjectives(referenceDate?: Date) {
     return obj?.target_quantity || 0;
   }, [objectives, currentMonthStart, currentYearStart]);
 
-  // Helper to count activations
-  const countActivations = useCallback((
+  // Sum activations: MWh for energia, kWp for servicos
+  const sumActivations = useCallback((
     userId: string | null,
     periodType: "monthly" | "annual",
     proposalType: "energia" | "servicos"
   ): number => {
     const source = periodType === "monthly" ? monthlyActivations : annualActivations;
-    return source.filter((s: any) => {
+    const filtered = source.filter((s: any) => {
       const matchType = proposalType === "energia"
         ? s.proposal_type === "energia" || (!s.proposal_type && true)
         : s.proposal_type === "servicos";
       const matchUser = userId ? s.created_by === userId : true;
       return matchType && matchUser;
-    }).length;
-  }, [monthlyActivations, annualActivations]);
+    });
+
+    if (proposalType === "energia") {
+      // Sum consumo_anual from proposal_cpes, convert to MWh
+      return filtered.reduce((total: number, s: any) => {
+        const consumo = s.proposal_id ? (cpesByProposal[s.proposal_id] || 0) : 0;
+        return total + consumo / 1000;
+      }, 0);
+    } else {
+      // Sum kWp from proposals.servicos_details
+      return filtered.reduce((total: number, s: any) => {
+        const kwp = s.proposal_id ? (kwpByProposal[s.proposal_id] || 0) : 0;
+        return total + kwp;
+      }, 0);
+    }
+  }, [monthlyActivations, annualActivations, cpesByProposal, kwpByProposal]);
 
   // Upsert objective
   const saveObjective = useMutation({
@@ -155,9 +221,9 @@ export function useActivationObjectives(referenceDate?: Date) {
 
   return {
     objectives,
-    isLoading: objectivesLoading || monthlyLoading || annualLoading,
+    isLoading: objectivesLoading || monthlyLoading || annualLoading || cpesLoading || detailsLoading,
     getTarget,
-    countActivations,
+    countActivations: sumActivations,
     saveObjective,
     currentMonthStart,
     currentYearStart,
