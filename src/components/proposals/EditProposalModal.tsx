@@ -211,13 +211,27 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
     setSelectedClientId(newClientId);
   };
 
-  const handleServicosProdutoToggle = (produto: string, checked: boolean) => {
-    if (checked) {
-      setServicosProdutos(prev => [...prev, produto]);
-    } else {
+  const handleServicosProdutoToggle = (produto: string) => {
+    if (servicosProdutos.includes(produto)) {
       setServicosProdutos(prev => prev.filter(p => p !== produto));
       setServicosDetails(d => { const n = { ...d }; delete n[produto]; return n; });
+    } else {
+      setServicosProdutos(prev => [...prev, produto]);
+      if (isNewFormat && catalog) {
+        const catProduct = catalog.find(c => c.name === produto);
+        if (catProduct) {
+          const comissao = catProduct.has_commission ? Math.round(catProduct.price * catProduct.commission_pct) / 100 : 0;
+          setServicosDetails(d => ({
+            ...d,
+            [produto]: { name: catProduct.name, price: catProduct.price, commission_pct: catProduct.commission_pct, comissao },
+          }));
+        }
+      }
     }
+  };
+
+  const handleSetProductDetail = (produto: string, detail: import('@/types/proposals').ServicosProductDetail) => {
+    setServicosDetails(prev => ({ ...prev, [produto]: detail }));
   };
 
   const handleUpdateProductDetail = (produto: string, field: string, value: number | undefined) => {
