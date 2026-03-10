@@ -545,13 +545,15 @@ export function ClientDetailsDrawer({
           defaultDirection={defaultCommDirection}
         />
 
-        {/* Proposal Details Modal */}
-        <ProposalDetailsModal
-          proposal={selectedProposal}
-          open={!!selectedProposal}
-          onOpenChange={(open) => { if (!open) setSelectedProposal(null); }}
-        />
       </DialogContent>
     </Dialog>
+
+    {/* Proposal Details Modal - fora do Dialog principal para evitar nested dialogs */}
+    <ProposalDetailsModal
+      proposal={selectedProposal}
+      open={!!selectedProposal}
+      onOpenChange={(open) => { if (!open) setSelectedProposal(null); }}
+    />
+  </>
   );
 }
