@@ -1,14 +1,32 @@
+## Toggle "Energias" no Módulos (Telecom Only)
 
+### Estado: ✅ Implementado
 
-## Corrigir filtro de status em B) Vendas — apenas "Entregues"
+### Alterações Realizadas
 
-O filtro foi alterado anteriormente para incluir `fulfilled` + `delivered`, mas o correcto para o quadro B) Vendas é apenas vendas com estado **Entregue** (`fulfilled`).
+**1. `src/hooks/useModules.ts`**
+- Adicionado `energy: boolean` ao `EnabledModules` (default: `true`)
 
-### Alteração
+**2. `src/components/settings/ModulesTab.tsx`**
+- Adicionado card especial "Energias" com ícone ⚡ que só renderiza quando `organization.niche === 'telecom'`
+- Badge "Telecom" para identificar que é exclusivo do nicho
 
-**`src/hooks/useMonthSalesMetrics.ts` (linha 33)**
+**3. Componentes atualizados com `showEnergy = isTelecom && modules.energy`:**
 
-Reverter `.in("status", ["fulfilled", "delivered"])` para `.eq("status", "fulfilled")`.
+| Ficheiro | O que é ocultado quando energy=off |
+|---|---|
+| `src/pages/Leads.tsx` | Filtro de tipologia |
+| `src/components/leads/AddLeadModal.tsx` | Campos tipologia, consumo_anual, summary |
+| `src/components/leads/LeadDetailsModal.tsx` | Secção tipologia, card consumo_anual |
+| `src/components/leads/LeadCard.tsx` | Badge tipologia, consumo_anual |
+| `src/components/leads/LeadsTableView.tsx` | Coluna tipologia, coluna consumo |
+| `src/components/proposals/CreateProposalModal.tsx` | Tipo de proposta selector (energia) |
+| `src/components/proposals/EditProposalModal.tsx` | Tipo de proposta, CPE selector energia |
+| `src/components/proposals/ProposalDetailsModal.tsx` | CPEs, consumo total, resumo energia, badges energia |
+| `src/components/sales/CreateSaleModal.tsx` | Dados energia, CPE/CUI |
+| `src/components/sales/EditSaleModal.tsx` | Dados energia editáveis |
+| `src/components/sales/SaleDetailsModal.tsx` | Dados energia, CPEs |
+| `src/components/clients/ClientDetailsModal.tsx` | Stats MWh/kWp/Comissão |
+| `src/pages/Clients.tsx` | Filtro tipo proposta (energia/servicos) |
 
-Uma linha alterada.
-
+**Nota**: Funcionalidades gerais de telecom (empresa, serviços, ativação, anexos) continuam visíveis independentemente do toggle de energia.
