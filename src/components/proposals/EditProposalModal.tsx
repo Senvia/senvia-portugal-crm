@@ -35,6 +35,7 @@ import {
   type Proposal 
 } from '@/types/proposals';
 import { useServicosProducts } from '@/hooks/useServicosProducts';
+import { ServicosSection } from '@/components/proposals/ServicosSection';
 
 interface EditProposalModalProps {
   proposal: Proposal;
