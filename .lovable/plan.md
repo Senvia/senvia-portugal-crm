@@ -1,29 +1,23 @@
+## Adaptar "Serviços" para telecom sem módulo energy
 
+### Estado: ✅ Implementado
 
-## Plano: Adicionar tag Energia/Serviços nos cards de vendas
+### Alterações Realizadas
 
-### Alteração
+**1. `src/hooks/useActivationObjectives.ts`**
+- `sumActivations` agora aceita parâmetro opcional `countMode: 'value' | 'count'`
+- Quando `countMode === 'count'`, retorna `filtered.length` (número de vendas delivered)
+- Default: `'value'` (comportamento atual preservado)
 
-**Ficheiro: `src/pages/Sales.tsx`** (linhas 263-275)
-
-Adicionar um `Badge` com a tag do tipo de proposta (`Energia` / `Serviços`) ao lado do badge de status, visível apenas para orgs telecom com módulo energy ativo.
-
-```tsx
-// Após o badge de status (linha 269), adicionar:
-{isTelecom && modules.energy && sale.proposal_type && (
-  <Badge 
-    variant="outline" 
-    className={sale.proposal_type === 'energia' 
-      ? 'bg-yellow-500/20 text-yellow-600 border-yellow-500/30 text-xs' 
-      : 'bg-cyan-500/20 text-cyan-600 border-cyan-500/30 text-xs'}
-  >
-    {sale.proposal_type === 'energia' ? '⚡ Energia' : '🔧 Serviços'}
-  </Badge>
-)}
-```
+**2. `src/components/dashboard/ActivationsPanel.tsx`**
+- Blocos de Serviços usam `countMode = 'count'` quando `modules.energy = false`
+- Unidade exibida: `"kWp"` → `"contratos"` quando energy desativado
+- Blocos de Energia não afetados
 
 ### Resultado
-- Cada card de venda mostra a tag colorida (amarelo para Energia, cyan para Serviços)
-- Apenas visível em orgs telecom com energy ativo (Perfect2Gether)
-- 1 ficheiro, ~8 linhas adicionadas
+| Org | Energy module | Serviços unit | Contagem |
+|-----|--------------|---------------|----------|
+| Perfect2Gether | ✅ on | kWp | soma kWp |
+| Escolha Inteligente | ❌ off | contratos | count vendas delivered |
 
+**Impacto**: Zero alteração para orgs com energy ativo.
