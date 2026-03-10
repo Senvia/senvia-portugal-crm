@@ -55,7 +55,7 @@ export function useMonthSalesMetrics(referenceDate?: Date) {
 
       return Array.from(grouped.entries()).map(([userId, g]) => ({
         userId,
-        nifs: g.clients.size,
+        nifs: g.contracts,
         energia: g.energia,
         solar: g.solar,
         comissao: g.comissao,
