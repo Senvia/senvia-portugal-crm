@@ -275,6 +275,7 @@ export function CreateSaleModal({
         setComissao("");
         setNegotiationType(null);
         setServicosProdutos([]);
+        setServicosDetails({});
       } else {
         setClientId("");
         setProposalId("");
