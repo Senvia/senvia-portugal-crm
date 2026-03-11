@@ -699,10 +699,22 @@ Deno.serve(async (req) => {
         });
     }
 
-    // Send push notification to organization members (non-blocking)
+    // Send push notification to admins + assigned salesperson (non-blocking)
     try {
+      const { data: pushAdmins } = await supabase
+        .from('organization_members')
+        .select('user_id')
+        .eq('organization_id', org.id)
+        .eq('role', 'admin')
+        .eq('is_active', true);
+      const pushUserIds = (pushAdmins || []).map((m: any) => m.user_id);
+      if (autoAssignedTo && !pushUserIds.includes(autoAssignedTo)) {
+        pushUserIds.push(autoAssignedTo);
+      }
+
       const pushPayload = {
         organization_id: org.id,
+        user_ids: pushUserIds,
         title: '🚀 Novo Lead!',
         body: `${lead.name} - ${lead.source || 'Formulário Público'}`,
         url: '/leads',
