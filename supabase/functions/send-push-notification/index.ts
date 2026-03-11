@@ -2,6 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 interface PushNotificationRequest {
   organization_id: string;
+  user_ids?: string[];
   title?: string;
   body?: string;
   url?: string;
