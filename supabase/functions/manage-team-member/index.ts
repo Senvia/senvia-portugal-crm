@@ -6,7 +6,7 @@ const corsHeaders = {
 };
 
 interface ManageMemberRequest {
-  action: 'change_password' | 'change_role' | 'toggle_status' | 'update_profile';
+  action: 'change_password' | 'change_role' | 'toggle_status' | 'update_profile' | 'delete_member';
   user_id: string;
   new_password?: string;
   new_role?: 'admin' | 'viewer' | 'salesperson';
