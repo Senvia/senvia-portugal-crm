@@ -254,6 +254,13 @@ Deno.serve(async (req) => {
             );
           }
 
+          // Sync organization_members.is_active
+          await supabaseAdmin
+            .from('organization_members')
+            .update({ is_active: true })
+            .eq('user_id', user_id)
+            .eq('organization_id', sharedOrgId);
+
           console.log(`User ${user_id} activated`);
         } else {
           // Ban user for 100 years (effectively permanent)
