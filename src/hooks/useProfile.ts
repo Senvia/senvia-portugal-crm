@@ -126,6 +126,13 @@ export function useManageTeamMember() {
           );
         });
       }
+
+      if (variables.action === 'delete_member') {
+        queryClient.setQueryData<TeamMember[]>(['team-members', organization?.id], (old) => {
+          if (!old) return old;
+          return old.filter(member => member.user_id !== variables.user_id);
+        });
+      }
       
       if (variables.action === 'change_role' && variables.new_role) {
         queryClient.setQueryData<TeamMember[]>(['team-members', organization?.id], (old) => {
