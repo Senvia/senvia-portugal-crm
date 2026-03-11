@@ -1,21 +1,23 @@
+## Adaptar "Serviços" para telecom sem módulo energy
 
+### Estado: ✅ Implementado
 
-## Adicionar fórmula automática kWp = Valor / 1000 para Condensadores
+### Alterações Realizadas
 
-### Problema
-O produto "Condensadores" não tem a função `kwpAuto` definida, pelo que o campo kWp tem de ser preenchido manualmente. A fórmula pretendida é `kWp = valor / 1000`.
+**1. `src/hooks/useActivationObjectives.ts`**
+- `sumActivations` agora aceita parâmetro opcional `countMode: 'value' | 'count'`
+- Quando `countMode === 'count'`, retorna `filtered.length` (número de vendas delivered)
+- Default: `'value'` (comportamento atual preservado)
 
-### Alteração
+**2. `src/components/dashboard/ActivationsPanel.tsx`**
+- Blocos de Serviços usam `countMode = 'count'` quando `modules.energy = false`
+- Unidade exibida: `"kWp"` → `"contratos"` quando energy desativado
+- Blocos de Energia não afetados
 
-**`src/types/proposals.ts`** — Adicionar `kwpAuto` à configuração de Condensadores:
+### Resultado
+| Org | Energy module | Serviços unit | Contagem |
+|-----|--------------|---------------|----------|
+| Perfect2Gether | ✅ on | kWp | soma kWp |
+| Escolha Inteligente | ❌ off | contratos | count vendas delivered |
 
-```typescript
-// Antes
-{ name: 'Condensadores', fields: ['duracao', 'valor', 'kwp', 'comissao'] },
-
-// Depois
-{ name: 'Condensadores', fields: ['duracao', 'valor', 'kwp', 'comissao'], kwpAuto: (d) => d.valor != null ? d.valor / 1000 : null },
-```
-
-O campo kWp passará a ser calculado automaticamente quando o utilizador preencher o campo "Valor (€)". A lógica existente no `CreateProposalModal` e no `EditProposalModal` já suporta `kwpAuto` — não são necessárias outras alterações.
-
+**Impacto**: Zero alteração para orgs com energy ativo.
