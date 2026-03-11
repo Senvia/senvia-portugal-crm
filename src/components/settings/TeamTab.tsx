@@ -718,6 +718,14 @@ export function TeamTab() {
                                   </>
                                 )}
                               </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                onClick={() => handleDeleteMember(member)}
+                                className="text-destructive focus:text-destructive"
+                                disabled={manageTeamMember.isPending}
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Eliminar Acesso
+                              </DropdownMenuItem>
                             </>
                           )}
                         </DropdownMenuContent>
