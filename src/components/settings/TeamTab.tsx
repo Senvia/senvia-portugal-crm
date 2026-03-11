@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -18,7 +19,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
-import { Users, UserPlus, Copy, X, Check, Clock, Loader2, RefreshCw, Eye, EyeOff, MoreHorizontal, Key, UserCog, Ban, CheckCircle, Mail, Pencil, Phone } from 'lucide-react';
+import { Users, UserPlus, Copy, X, Check, Clock, Loader2, RefreshCw, Eye, EyeOff, MoreHorizontal, Key, UserCog, Ban, CheckCircle, Mail, Pencil, Phone, Trash2 } from 'lucide-react';
 
 import { formatDistanceToNow } from 'date-fns';
 import { pt } from 'date-fns/locale';
@@ -95,6 +96,10 @@ export function TeamTab() {
   // Send access email modal state
   const [sendAccessOpen, setSendAccessOpen] = useState(false);
   const [sendingAccessEmail, setSendingAccessEmail] = useState(false);
+
+  // Delete member confirmation state
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [memberToDelete, setMemberToDelete] = useState<TeamMember | null>(null);
 
   const handleCreateMember = async () => {
     if (!fullName.trim() || !email.trim() || !password || !confirmPassword) {
@@ -262,6 +267,24 @@ export function TeamTab() {
 
   const handleToggleStatus = (member: TeamMember) => {
     manageTeamMember.mutate({ action: 'toggle_status', user_id: member.user_id });
+  };
+
+  const handleDeleteMember = (member: TeamMember) => {
+    setMemberToDelete(member);
+    setDeleteConfirmOpen(true);
+  };
+
+  const confirmDeleteMember = () => {
+    if (!memberToDelete) return;
+    manageTeamMember.mutate(
+      { action: 'delete_member', user_id: memberToDelete.user_id },
+      {
+        onSuccess: () => {
+          setDeleteConfirmOpen(false);
+          setMemberToDelete(null);
+        },
+      }
+    );
   };
 
   const openEditProfileModal = async (member: TeamMember) => {
@@ -695,6 +718,14 @@ export function TeamTab() {
                                   </>
                                 )}
                               </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                onClick={() => handleDeleteMember(member)}
+                                className="text-destructive focus:text-destructive"
+                                disabled={manageTeamMember.isPending}
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Eliminar Acesso
+                              </DropdownMenuItem>
                             </>
                           )}
                         </DropdownMenuContent>
@@ -1033,6 +1064,28 @@ export function TeamTab() {
           </CardContent>
         </Card>
       )}
+      {/* Delete member confirmation */}
+      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminar acesso</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem a certeza que deseja eliminar o acesso de <strong>{memberToDelete?.full_name}</strong>? 
+              Esta ação é irreversível. O colaborador será removido da organização e não poderá mais iniciar sessão.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={confirmDeleteMember}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {manageTeamMember.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

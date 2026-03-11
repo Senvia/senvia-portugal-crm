@@ -76,7 +76,7 @@ export function useChangePassword() {
 }
 
 interface ManageTeamMemberParams {
-  action: 'change_password' | 'change_role' | 'toggle_status' | 'update_profile';
+  action: 'change_password' | 'change_role' | 'toggle_status' | 'update_profile' | 'delete_member';
   user_id: string;
   new_password?: string;
   new_role?: 'admin' | 'viewer' | 'salesperson';
@@ -126,6 +126,13 @@ export function useManageTeamMember() {
           );
         });
       }
+
+      if (variables.action === 'delete_member') {
+        queryClient.setQueryData<TeamMember[]>(['team-members', organization?.id], (old) => {
+          if (!old) return old;
+          return old.filter(member => member.user_id !== variables.user_id);
+        });
+      }
       
       if (variables.action === 'change_role' && variables.new_role) {
         queryClient.setQueryData<TeamMember[]>(['team-members', organization?.id], (old) => {
@@ -171,11 +178,12 @@ export function useManageTeamMember() {
       // Revalidar para garantir sincronização
       queryClient.invalidateQueries({ queryKey: ['team-members', organization?.id] });
       
-      const messages = {
+      const messages: Record<string, { title: string; description: string }> = {
         change_password: { title: 'Password redefinida', description: 'A password do colaborador foi alterada com sucesso.' },
         change_role: { title: 'Perfil alterado', description: 'O perfil do colaborador foi atualizado com sucesso.' },
         toggle_status: { title: 'Estado alterado', description: 'O estado do colaborador foi atualizado com sucesso.' },
         update_profile: { title: 'Dados atualizados', description: 'Os dados do colaborador foram atualizados com sucesso.' },
+        delete_member: { title: 'Acesso eliminado', description: 'O colaborador foi removido da organização.' },
       };
 
       const msg = messages[variables.action];

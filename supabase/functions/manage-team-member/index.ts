@@ -6,7 +6,7 @@ const corsHeaders = {
 };
 
 interface ManageMemberRequest {
-  action: 'change_password' | 'change_role' | 'toggle_status' | 'update_profile';
+  action: 'change_password' | 'change_role' | 'toggle_status' | 'update_profile' | 'delete_member';
   user_id: string;
   new_password?: string;
   new_role?: 'admin' | 'viewer' | 'salesperson';
@@ -139,7 +139,7 @@ Deno.serve(async (req) => {
     }
 
     // Prevent admin from modifying themselves for certain actions
-    if (user_id === currentUser.id && (action === 'toggle_status' || action === 'change_role')) {
+    if (user_id === currentUser.id && (action === 'toggle_status' || action === 'change_role' || action === 'delete_member')) {
       return new Response(
         JSON.stringify({ error: 'Não pode modificar o seu próprio estado ou perfil' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -315,6 +315,44 @@ Deno.serve(async (req) => {
         }
 
         console.log(`Profile updated for user ${user_id}:`, Object.keys(updateData));
+        break;
+      }
+
+      case 'delete_member': {
+        // Remove from organization_members
+        const { error: deleteMemberError } = await supabaseAdmin
+          .from('organization_members')
+          .delete()
+          .eq('user_id', user_id)
+          .eq('organization_id', sharedOrgId);
+
+        if (deleteMemberError) {
+          console.error('Delete member error:', deleteMemberError);
+          return new Response(
+            JSON.stringify({ error: 'Erro ao remover membro da organização' }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // Remove user roles (except super_admin)
+        await supabaseAdmin
+          .from('user_roles')
+          .delete()
+          .eq('user_id', user_id)
+          .neq('role', 'super_admin');
+
+        // Clear organization_id from profile
+        await supabaseAdmin
+          .from('profiles')
+          .update({ organization_id: null })
+          .eq('id', user_id);
+
+        // Ban the user so they can't log in
+        await supabaseAdmin.auth.admin.updateUserById(user_id, {
+          ban_duration: '876600h',
+        });
+
+        console.log(`Member ${user_id} deleted from org ${sharedOrgId}`);
         break;
       }
 
