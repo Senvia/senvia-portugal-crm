@@ -267,7 +267,7 @@ Deno.serve(async (req) => {
     const body: PushNotificationRequest = await req.json();
     console.log('Push notification request:', body);
 
-    const { organization_id, title, body: messageBody, url, tag, ping_only } = body;
+    const { organization_id, user_ids, title, body: messageBody, url, tag, ping_only } = body;
 
     if (!organization_id) {
       return new Response(JSON.stringify({ error: 'organization_id is required' }), {
