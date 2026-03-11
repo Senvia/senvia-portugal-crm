@@ -97,6 +97,10 @@ export function TeamTab() {
   const [sendAccessOpen, setSendAccessOpen] = useState(false);
   const [sendingAccessEmail, setSendingAccessEmail] = useState(false);
 
+  // Delete member confirmation state
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [memberToDelete, setMemberToDelete] = useState<TeamMember | null>(null);
+
   const handleCreateMember = async () => {
     if (!fullName.trim() || !email.trim() || !password || !confirmPassword) {
       toast({ title: 'Preencha todos os campos', variant: 'destructive' });
