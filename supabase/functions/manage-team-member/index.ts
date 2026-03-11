@@ -139,7 +139,7 @@ Deno.serve(async (req) => {
     }
 
     // Prevent admin from modifying themselves for certain actions
-    if (user_id === currentUser.id && (action === 'toggle_status' || action === 'change_role')) {
+    if (user_id === currentUser.id && (action === 'toggle_status' || action === 'change_role' || action === 'delete_member')) {
       return new Response(
         JSON.stringify({ error: 'Não pode modificar o seu próprio estado ou perfil' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
