@@ -289,10 +289,17 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { data: subscriptions, error: fetchError } = await supabase
+    let query = supabase
       .from('push_subscriptions')
       .select('*')
       .eq('organization_id', organization_id);
+
+    if (user_ids && user_ids.length > 0) {
+      query = query.in('user_id', user_ids);
+      console.log(`Filtering push to ${user_ids.length} specific users`);
+    }
+
+    const { data: subscriptions, error: fetchError } = await query;
 
     if (fetchError) {
       console.error('Error fetching subscriptions:', fetchError);
