@@ -200,18 +200,34 @@ async function handleWebhookMode(req: Request, token: string): Promise<Response>
     }).catch((err) => console.error(`Webhook failed: ${whUrl}`, err.message));
   }
 
-  // Push notification (non-blocking)
-  fetch(`${supabaseUrl}/functions/v1/send-push-notification`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${serviceRoleKey}` },
-    body: JSON.stringify({
-      organization_id: org.id,
-      title: '🚀 Novo Lead!',
-      body: `${lead.name} - ${lead.source}`,
-      url: '/leads',
-      tag: `lead-${lead.id}`,
-    }),
-  }).catch((err) => console.error('Push failed:', err.message));
+  // Push notification - fetch admin IDs to target only admins + assigned
+  try {
+    const { data: pushAdminMembers } = await supabase
+      .from('organization_members')
+      .select('user_id')
+      .eq('organization_id', org.id)
+      .eq('role', 'admin')
+      .eq('is_active', true);
+    const pushUserIds = (pushAdminMembers || []).map((m: any) => m.user_id);
+    if (autoAssignedTo && !pushUserIds.includes(autoAssignedTo)) {
+      pushUserIds.push(autoAssignedTo);
+    }
+
+    fetch(`${supabaseUrl}/functions/v1/send-push-notification`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${serviceRoleKey}` },
+      body: JSON.stringify({
+        organization_id: org.id,
+        user_ids: pushUserIds,
+        title: '🚀 Novo Lead!',
+        body: `${lead.name} - ${lead.source}`,
+        url: '/leads',
+        tag: `lead-${lead.id}`,
+      }),
+    }).catch((err) => console.error('Push failed:', err.message));
+  } catch (pushErr) {
+    console.error('Error preparing push notification:', pushErr);
+  }
 
   // ===== EMAIL NOTIFICATION (org Brevo or fallback to Senvia) =====
   try {
