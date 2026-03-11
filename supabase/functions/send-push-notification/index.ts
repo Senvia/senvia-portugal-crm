@@ -2,6 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 interface PushNotificationRequest {
   organization_id: string;
+  user_ids?: string[];
   title?: string;
   body?: string;
   url?: string;
@@ -266,7 +267,7 @@ Deno.serve(async (req) => {
     const body: PushNotificationRequest = await req.json();
     console.log('Push notification request:', body);
 
-    const { organization_id, title, body: messageBody, url, tag, ping_only } = body;
+    const { organization_id, user_ids, title, body: messageBody, url, tag, ping_only } = body;
 
     if (!organization_id) {
       return new Response(JSON.stringify({ error: 'organization_id is required' }), {
@@ -288,10 +289,17 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { data: subscriptions, error: fetchError } = await supabase
+    let query = supabase
       .from('push_subscriptions')
       .select('*')
       .eq('organization_id', organization_id);
+
+    if (user_ids && user_ids.length > 0) {
+      query = query.in('user_id', user_ids);
+      console.log(`Filtering push to ${user_ids.length} specific users`);
+    }
+
+    const { data: subscriptions, error: fetchError } = await query;
 
     if (fetchError) {
       console.error('Error fetching subscriptions:', fetchError);
