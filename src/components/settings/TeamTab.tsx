@@ -269,6 +269,24 @@ export function TeamTab() {
     manageTeamMember.mutate({ action: 'toggle_status', user_id: member.user_id });
   };
 
+  const handleDeleteMember = (member: TeamMember) => {
+    setMemberToDelete(member);
+    setDeleteConfirmOpen(true);
+  };
+
+  const confirmDeleteMember = () => {
+    if (!memberToDelete) return;
+    manageTeamMember.mutate(
+      { action: 'delete_member', user_id: memberToDelete.user_id },
+      {
+        onSuccess: () => {
+          setDeleteConfirmOpen(false);
+          setMemberToDelete(null);
+        },
+      }
+    );
+  };
+
   const openEditProfileModal = async (member: TeamMember) => {
     setSelectedMember(member);
     setEditFullName(member.full_name || '');
