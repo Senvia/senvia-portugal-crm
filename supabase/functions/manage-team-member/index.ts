@@ -146,6 +146,75 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Helper: redistribute leads from a deactivated user to active members via round-robin
+    async function redistributeLeads(deactivatedUserId: string, orgId: string) {
+      try {
+        // Get leads assigned to this user in this org
+        const { data: leadsToReassign } = await supabaseAdmin
+          .from('leads')
+          .select('id')
+          .eq('assigned_to', deactivatedUserId)
+          .eq('organization_id', orgId);
+
+        if (!leadsToReassign || leadsToReassign.length === 0) {
+          console.log('No leads to redistribute');
+          return;
+        }
+
+        // Get org sales settings
+        const { data: orgData } = await supabaseAdmin
+          .from('organizations')
+          .select('sales_settings')
+          .eq('id', orgId)
+          .single();
+
+        const salesSettings = (orgData?.sales_settings as any) || {};
+
+        // Get active members (excluding the deactivated user)
+        let membersQuery = supabaseAdmin
+          .from('organization_members')
+          .select('user_id')
+          .eq('organization_id', orgId)
+          .eq('is_active', true)
+          .neq('user_id', deactivatedUserId);
+
+        if (salesSettings.exclude_admins_from_assignment) {
+          membersQuery = membersQuery.neq('role', 'admin');
+        }
+
+        const { data: activeMembers } = await membersQuery.order('joined_at', { ascending: true });
+
+        if (!activeMembers || activeMembers.length === 0) {
+          console.log('No active members to reassign leads to');
+          return;
+        }
+
+        let currentIndex = salesSettings.round_robin_index || 0;
+
+        for (const lead of leadsToReassign) {
+          const safeIndex = currentIndex % activeMembers.length;
+          const newAssignee = activeMembers[safeIndex].user_id;
+
+          await supabaseAdmin
+            .from('leads')
+            .update({ assigned_to: newAssignee })
+            .eq('id', lead.id);
+
+          currentIndex = (safeIndex + 1) % activeMembers.length;
+        }
+
+        // Update round_robin_index
+        await supabaseAdmin
+          .from('organizations')
+          .update({ sales_settings: { ...salesSettings, round_robin_index: currentIndex } })
+          .eq('id', orgId);
+
+        console.log(`Redistributed ${leadsToReassign.length} leads from user ${deactivatedUserId}`);
+      } catch (err) {
+        console.error('Lead redistribution error:', err);
+      }
+    }
+
     // Execute the action
     switch (action) {
       case 'change_password': {
