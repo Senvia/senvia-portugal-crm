@@ -424,6 +424,9 @@ Deno.serve(async (req) => {
           ban_duration: '876600h',
         });
 
+        // Redistribute leads from deleted member
+        await redistributeLeads(user_id, sharedOrgId);
+
         console.log(`Member ${user_id} deleted from org ${sharedOrgId}`);
         break;
       }
