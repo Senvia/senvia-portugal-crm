@@ -353,6 +353,9 @@ Deno.serve(async (req) => {
             .eq('organization_id', sharedOrgId);
 
           console.log(`User ${user_id} deactivated`);
+
+          // Redistribute leads from deactivated user
+          await redistributeLeads(user_id, sharedOrgId);
         }
         break;
       }
