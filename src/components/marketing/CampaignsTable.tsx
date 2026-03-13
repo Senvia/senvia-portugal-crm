@@ -112,9 +112,11 @@ export function CampaignsTable({ campaigns, onView, onEdit, onDelete, onReopen }
                       </Badge>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      {campaign.sent_at
-                        ? `Enviada a ${format(new Date(campaign.sent_at), "dd/MM/yyyy 'às' HH:mm")}`
-                        : `Editada a ${format(new Date(campaign.updated_at), "dd/MM/yyyy 'às' HH:mm")}`
+                      {campaign.status === 'scheduled' && campaign.scheduled_at
+                        ? `Agendada para ${format(new Date(campaign.scheduled_at), "dd/MM/yyyy 'às' HH:mm")}`
+                        : campaign.sent_at
+                          ? `Enviada a ${format(new Date(campaign.sent_at), "dd/MM/yyyy 'às' HH:mm")}`
+                          : `Editada a ${format(new Date(campaign.updated_at), "dd/MM/yyyy 'às' HH:mm")}`
                       }
                     </p>
                   </div>
