@@ -37,7 +37,7 @@ serve(async (req: Request): Promise<Response> => {
     // Get campaign details
     const { data: campaign, error: campaignError } = await supabase
       .from("email_campaigns")
-      .select("sent_at, subject, name, settings_data")
+      .select("sent_at, subject, name, settings_data, status")
       .eq("id", campaignId)
       .eq("organization_id", organizationId)
       .single();
@@ -49,6 +49,26 @@ serve(async (req: Request): Promise<Response> => {
       );
     }
 
+    // Skip sync for draft/scheduled campaigns
+    if (campaign.status === 'draft' || campaign.status === 'scheduled') {
+      // Still recalculate from email_sends for accuracy
+      const metrics = await recalculateMetricsFromSends(supabase, campaignId);
+      if (metrics.total > 0) {
+        await supabase
+          .from("email_campaigns")
+          .update({
+            total_recipients: metrics.total,
+            sent_count: metrics.sent,
+            failed_count: metrics.failed,
+          })
+          .eq("id", campaignId);
+      }
+      return new Response(
+        JSON.stringify({ success: true, inserted: 0, updated: 0, errors: 0, skipped: true, ...metrics }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Get org brevo key
     const { data: org, error: orgError } = await supabase
       .from("organizations")
@@ -57,9 +77,21 @@ serve(async (req: Request): Promise<Response> => {
       .single();
 
     if (orgError || !org?.brevo_api_key) {
+      // No Brevo key — still recalculate from existing email_sends
+      const metrics = await recalculateMetricsFromSends(supabase, campaignId);
+      if (metrics.total > 0) {
+        await supabase
+          .from("email_campaigns")
+          .update({
+            total_recipients: metrics.total,
+            sent_count: metrics.sent,
+            failed_count: metrics.failed,
+          })
+          .eq("id", campaignId);
+      }
       return new Response(
-        JSON.stringify({ error: "Brevo API key not configured" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ success: true, inserted: 0, updated: 0, errors: 0, noBrevoKey: true, ...metrics }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -110,7 +142,7 @@ serve(async (req: Request): Promise<Response> => {
 
       if (events.length < limit) break;
       offset += limit;
-      if (offset > 10000) break; // safety
+      if (offset > 10000) break;
     }
 
     console.log(`Total Brevo events fetched: ${allEvents.length}`);
@@ -147,7 +179,6 @@ serve(async (req: Request): Promise<Response> => {
       }
 
       const record = emailMap.get(event.email)!;
-      // Always keep the messageId from the earliest event
       if (!record.messageId) record.messageId = event.messageId;
 
       switch (event.event) {
@@ -156,7 +187,6 @@ serve(async (req: Request): Promise<Response> => {
           break;
         case "opened":
         case "unique_opened": {
-          // Filter out false positives from email client pre-fetching (e.g. Gmail proxy)
           const eventTime = new Date(event.date).getTime();
           const sentTime = record.sentAt ? new Date(record.sentAt).getTime() : 0;
           const diffSeconds = sentTime ? (eventTime - sentTime) / 1000 : Infinity;
@@ -199,7 +229,6 @@ serve(async (req: Request): Promise<Response> => {
     let errors = 0;
 
     for (const [email, record] of emailMap) {
-      // Check if record already exists
       const { data: existing } = await supabase
         .from("email_sends")
         .select("id")
@@ -208,7 +237,6 @@ serve(async (req: Request): Promise<Response> => {
         .maybeSingle();
 
       if (existing) {
-        // Update existing record
         const { error } = await supabase
           .from("email_sends")
           .update({
@@ -227,7 +255,6 @@ serve(async (req: Request): Promise<Response> => {
           updated++;
         }
       } else {
-        // Insert new record
         const { error } = await supabase
           .from("email_sends")
           .insert({
@@ -253,25 +280,22 @@ serve(async (req: Request): Promise<Response> => {
       }
     }
 
-    // Update campaign counts
-    const sentCount = Array.from(emailMap.values()).filter(r => r.status !== "failed" && r.status !== "bounced" && r.status !== "blocked" && r.status !== "spam").length;
-    const failedCount = Array.from(emailMap.values()).filter(r => r.status === "failed" || r.status === "bounced" || r.status === "blocked" || r.status === "spam").length;
+    // CRITICAL: Always recalculate metrics from email_sends (source of truth)
+    const metrics = await recalculateMetricsFromSends(supabase, campaignId);
 
-    // Only update total_recipients if we have data — never overwrite with 0
-    const updateData: Record<string, number> = {
-      sent_count: sentCount,
-      failed_count: failedCount,
-    };
-    if (emailMap.size > 0) {
-      updateData.total_recipients = emailMap.size;
+    // Only update if we have real data — never overwrite with zeros
+    if (metrics.total > 0) {
+      await supabase
+        .from("email_campaigns")
+        .update({
+          total_recipients: metrics.total,
+          sent_count: metrics.sent,
+          failed_count: metrics.failed,
+        })
+        .eq("id", campaignId);
     }
 
-    await supabase
-      .from("email_campaigns")
-      .update(updateData)
-      .eq("id", campaignId);
-
-    const summary = { inserted, updated, errors, totalEvents: relevantEvents.length, uniqueRecipients: emailMap.size };
+    const summary = { inserted, updated, errors, totalEvents: relevantEvents.length, uniqueRecipients: metrics.total };
     console.log("Sync complete:", summary);
 
     return new Response(
@@ -287,3 +311,34 @@ serve(async (req: Request): Promise<Response> => {
   }
 });
 
+/** Recalculate campaign metrics from email_sends table (source of truth) */
+async function recalculateMetricsFromSends(
+  supabase: ReturnType<typeof createClient>,
+  campaignId: string
+): Promise<{ total: number; sent: number; failed: number }> {
+  const { data: sends, error } = await supabase
+    .from("email_sends")
+    .select("recipient_email, status")
+    .eq("campaign_id", campaignId);
+
+  if (error || !sends || sends.length === 0) {
+    return { total: 0, sent: 0, failed: 0 };
+  }
+
+  // Deduplicate by email, keeping the "best" status
+  const emailStatuses = new Map<string, string>();
+  for (const s of sends) {
+    emailStatuses.set(s.recipient_email, s.status);
+  }
+
+  const total = emailStatuses.size;
+  let sent = 0;
+  let failed = 0;
+
+  for (const status of emailStatuses.values()) {
+    if (status === 'sent' || status === 'delivered') sent++;
+    else if (status === 'failed' || status === 'bounced' || status === 'blocked' || status === 'spam') failed++;
+  }
+
+  return { total, sent, failed };
+}

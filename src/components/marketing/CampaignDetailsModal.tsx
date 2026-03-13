@@ -29,17 +29,20 @@ export function CampaignDetailsModal({ campaign, open, onOpenChange }: CampaignD
   const [activeFilter, setActiveFilter] = useState<MetricFilter | null>(null);
   const hasSyncedRef = useRef<string | null>(null);
 
-  // Auto-sync when modal opens
+  // Auto-sync when modal opens — only for sent/sending campaigns
   useEffect(() => {
     if (open && campaign?.id && hasSyncedRef.current !== campaign.id) {
       hasSyncedRef.current = campaign.id;
-      syncSends(campaign.id);
+      // Only trigger Brevo sync for campaigns that were actually sent
+      if (campaign.status === 'sent' || campaign.status === 'sending' || campaign.status === 'failed') {
+        syncSends(campaign.id);
+      }
     }
     if (!open) {
       hasSyncedRef.current = null;
       setActiveFilter(null);
     }
-  }, [open, campaign?.id, syncSends]);
+  }, [open, campaign?.id, campaign?.status, syncSends]);
 
   const opened = sends.filter(s => s.opened_at).length;
   const clicked = sends.filter(s => s.clicked_at).length;
