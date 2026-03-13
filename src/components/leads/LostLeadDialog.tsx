@@ -245,33 +245,31 @@ export function LostLeadDialog({
           <Button variant="ghost" onClick={() => handleClose(false)} className="w-full sm:w-auto">
             Cancelar
           </Button>
-          {!isTelecom && (
-            <Button
-              variant="destructive"
-              disabled={!canMarkLost}
-              className="w-full sm:w-auto"
-              onClick={() => {
-                if (!lossReason) return;
-                onConfirm({
-                  lossReason,
-                  notes,
-                  followUpDate: "",
-                  followUpTime: "",
-                  eventType,
-                  scheduleFollowUp: false,
-                  reminderMinutes: null,
-                });
-                setLossReason("");
-                setNotes("");
-                setFollowUpDate("");
-                setFollowUpTime("10:00");
-                setEventType("call");
-                setReminderMinutes("");
-              }}
-            >
-              Marcar como Perdido
-            </Button>
-          )}
+          <Button
+            variant="destructive"
+            disabled={!canMarkLost}
+            className="w-full sm:w-auto"
+            onClick={() => {
+              if (!lossReason) return;
+              onConfirm({
+                lossReason,
+                notes,
+                followUpDate: "",
+                followUpTime: "",
+                eventType,
+                scheduleFollowUp: false,
+                reminderMinutes: null,
+              });
+              setLossReason("");
+              setNotes("");
+              setFollowUpDate("");
+              setFollowUpTime("10:00");
+              setEventType("call");
+              setReminderMinutes("");
+            }}
+          >
+            Marcar como Perdido
+          </Button>
           <Button onClick={handleConfirm} disabled={!canSchedule} className="w-full sm:w-auto">
             <CalendarClock className="h-4 w-4 mr-2" />Agendar Recontacto
           </Button>
