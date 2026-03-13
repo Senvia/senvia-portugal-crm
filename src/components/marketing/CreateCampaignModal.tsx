@@ -239,11 +239,18 @@ export function CreateCampaignModal({ open, onOpenChange, campaign }: CreateCamp
           }));
 
         if (queuedRecords.length > 0) {
-          // Insert in batches of 100
+          // Insert in batches of 100 with error handling
+          let totalInserted = 0;
           for (let i = 0; i < queuedRecords.length; i += 100) {
             const batch = queuedRecords.slice(i, i + 100);
-            await supabase.from("email_sends").insert(batch as any);
+            const { error: insertError } = await supabase.from("email_sends").insert(batch as any);
+            if (insertError) {
+              console.error("Erro ao inserir fila de envio:", insertError);
+              throw new Error(`Falha ao agendar destinatários: ${insertError.message}`);
+            }
+            totalInserted += batch.length;
           }
+          console.log(`Agendados ${totalInserted} destinatários na fila`);
         }
 
         handleClose();
