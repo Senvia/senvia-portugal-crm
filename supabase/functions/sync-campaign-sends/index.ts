@@ -257,13 +257,18 @@ serve(async (req: Request): Promise<Response> => {
     const sentCount = Array.from(emailMap.values()).filter(r => r.status !== "failed" && r.status !== "bounced" && r.status !== "blocked" && r.status !== "spam").length;
     const failedCount = Array.from(emailMap.values()).filter(r => r.status === "failed" || r.status === "bounced" || r.status === "blocked" || r.status === "spam").length;
 
+    // Only update total_recipients if we have data — never overwrite with 0
+    const updateData: Record<string, number> = {
+      sent_count: sentCount,
+      failed_count: failedCount,
+    };
+    if (emailMap.size > 0) {
+      updateData.total_recipients = emailMap.size;
+    }
+
     await supabase
       .from("email_campaigns")
-      .update({
-        sent_count: sentCount,
-        failed_count: failedCount,
-        total_recipients: emailMap.size,
-      })
+      .update(updateData)
       .eq("id", campaignId);
 
     const summary = { inserted, updated, errors, totalEvents: relevantEvents.length, uniqueRecipients: emailMap.size };
