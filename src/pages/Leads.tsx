@@ -361,6 +361,9 @@ export default function Leads() {
       const scheduledStage = stages?.find(s => isScheduledStage(s.key));
       if (scheduledStage) {
         updateStatus.mutate({ leadId: pendingLostStatus.leadId, status: scheduledStage.key });
+      } else {
+        // Fallback: no scheduled stage exists, mark as lost anyway
+        updateStatus.mutate({ leadId: pendingLostStatus.leadId, status: pendingLostStatus.status });
       }
     }
 
