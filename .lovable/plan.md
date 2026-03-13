@@ -1,22 +1,23 @@
+## Adaptar "Serviços" para telecom sem módulo energy
 
+### Estado: ✅ Implementado
 
-## Mostrar data de agendamento nas campanhas
+### Alterações Realizadas
 
-### Problema
-Na `CampaignsTable`, a data exibida por baixo do nome da campanha só mostra duas opções:
-- "Enviada a ..." (se `sent_at` existe)
-- "Editada a ..." (se não)
+**1. `src/hooks/useActivationObjectives.ts`**
+- `sumActivations` agora aceita parâmetro opcional `countMode: 'value' | 'count'`
+- Quando `countMode === 'count'`, retorna `filtered.length` (número de vendas delivered)
+- Default: `'value'` (comportamento atual preservado)
 
-Campanhas com estado **"Agendada"** têm o campo `scheduled_at` preenchido, mas este nunca é mostrado na interface.
+**2. `src/components/dashboard/ActivationsPanel.tsx`**
+- Blocos de Serviços usam `countMode = 'count'` quando `modules.energy = false`
+- Unidade exibida: `"kWp"` → `"contratos"` quando energy desativado
+- Blocos de Energia não afetados
 
-### Correção
-Alterar a lógica de exibição de data (linhas 114-119 de `CampaignsTable.tsx`) para incluir um terceiro caso:
+### Resultado
+| Org | Energy module | Serviços unit | Contagem |
+|-----|--------------|---------------|----------|
+| Perfect2Gether | ✅ on | kWp | soma kWp |
+| Escolha Inteligente | ❌ off | contratos | count vendas delivered |
 
-```
-Se scheduled_at e status === 'scheduled' → "Agendada para dd/MM/yyyy às HH:mm"
-Se sent_at → "Enviada a dd/MM/yyyy às HH:mm"
-Senão → "Editada a dd/MM/yyyy às HH:mm"
-```
-
-Alteração de ~5 linhas num único ficheiro.
-
+**Impacto**: Zero alteração para orgs com energy ativo.
