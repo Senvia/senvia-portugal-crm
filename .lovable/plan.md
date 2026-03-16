@@ -1,55 +1,48 @@
 
-Objetivo: alinhar o módulo Financeiro com a regra de negócio que definiste.
+Estado atual: ainda não foi aplicado no código.
 
-1. Ajustar a lógica dos cards financeiros
-- Em `src/hooks/useFinanceStats.ts`, vou separar os pagamentos em 2 universos:
-  - pagamentos normais
-  - pagamentos de vendas Stripe/plano
-- Para identificar vendas Stripe/plano, vou enriquecer a query de `sale_payments` com campos da `sale` já existentes no modelo, sobretudo `client_org_id` e `recurring_status`.
-- Regra nova:
-  - vendas Stripe só entram no Financeiro quando houver pagamento confirmado (`status = paid`)
-  - pagamentos pendentes de Stripe não contam em:
-    - `Pendente`
-    - `Atrasados`
-    - `A Vencer`
-    - fluxo de caixa “Agendado”
-- Isto corrige o caso do Daniel.
+O que confirmei na codebase:
+- `src/hooks/useFinanceStats.ts` continua com a lógica antiga:
+  - `totalPending` é calculado com `filteredPayments`, logo ainda depende do filtro de datas
+  - pagamentos `pending` entram todos nas métricas, sem excluir vendas Stripe/planos não confirmadas
+  - `dueSoon`, `overdue` e `cashflowTrend.scheduled/overdue` também ainda usam todos os pendentes
+  - a query de `sale_payments` ainda não traz `client_org_id`, `recurring_status` nem `next_renewal_date`
+- `src/pages/Finance.tsx` ainda não foi atualizado:
+  - o `RenewalAlertsWidget` não está importado nem renderizado no separador `Resumo`
+  - o card `Pendente` ainda mostra apenas “A receber”, sem indicar que deve ser saldo global
+- A memória do projeto confirma a regra pretendida:
+  - vendas de plano/Stripe começam como `recurring_status = pending`
+  - só após `invoice.paid` passam a `active` e ganham próxima renovação
+  - o dashboard financeiro deve excluir Stripe não confirmada e mostrar renovações manuais no Resumo
 
-2. Mostrar renovação manual como lembrete no Resumo
-- Vou reutilizar `src/components/finance/RenewalAlertsWidget.tsx`, que já existe e já lista recorrências ativas com renovação próxima/vencida.
-- Em `src/pages/Finance.tsx`, vou inserir esse widget no separador `Resumo`, como card próprio.
-- Assim, a venda do João deixa de aparecer como “pendente a receber” e passa a aparecer como lembrete operacional para renovares manualmente.
+Plano de implementação:
+1. Atualizar `useFinanceStats`
+- Enriquecer a query de `sale_payments` com dados da venda:
+  - `client_org_id`
+  - `recurring_status`
+  - `next_renewal_date`
+- Classificar pagamentos:
+  - normal
+  - venda Stripe/plano confirmada
+  - venda Stripe/plano não confirmada
+- Aplicar regra:
+  - Stripe/plano só entra no financeiro quando `status = paid`
+  - Stripe/plano não confirmada fica fora de:
+    - `totalPending`
+    - `dueSoon`
+    - `totalOverdue`
+    - `cashflowTrend.scheduled`
+    - `cashflowTrend.overdue`
+- Calcular `totalPending` com todos os pagamentos elegíveis da organização, ignorando `dateRange`
 
-3. Corrigir o card “Pendente”
-- Hoje `totalPending` é calculado com `filteredPayments`, então muda com o filtro de período.
-- Vou alterar para calcular o card `Pendente` com base no saldo pendente total da organização, ignorando o `dateRange`.
-- O restante resumo pode continuar filtrado por período, mas:
-  - `Pendente` passa a refletir sempre o valor total por receber
-- Em `src/pages/Finance.tsx`, também vou ajustar o subtítulo/copy do card para deixar claro que é saldo global pendente.
+2. Ajustar tipos
+- Expandir `PaymentWithSale` em `src/types/finance.ts` para suportar os novos campos da venda usados na filtragem
 
-4. Preservar a lógica existente de faturado/recebido
-- Vou manter a regra já documentada de coerência entre faturado e recebido.
-- A única exceção será o tratamento das vendas Stripe ainda não confirmadas, que ficarão fora do resumo financeiro até confirmação real do pagamento.
+3. Atualizar a UI do Financeiro
+- Em `src/pages/Finance.tsx`, importar e renderizar `RenewalAlertsWidget` no separador `Resumo`
+- Ajustar o texto do card `Pendente` para deixar claro que mostra saldo global, não apenas o período filtrado
 
-Detalhes técnicos
-- Ficheiros principais:
-  - `src/hooks/useFinanceStats.ts`
-  - `src/pages/Finance.tsx`
-  - possivelmente `src/types/finance.ts` se eu precisar separar métricas filtradas vs globais
-- Alterações previstas em `useFinanceStats`:
-  - enriquecer `sales:sale_id!inner(...)` com `client_org_id`, `recurring_status`, `next_renewal_date`
-  - criar filtros auxiliares tipo:
-    - pagamento normal
-    - pagamento Stripe confirmado
-    - pagamento Stripe não confirmado
-  - recalcular:
-    - `totalPending` usando todos os pagamentos pendentes elegíveis do histórico inteiro
-    - `dueSoon`, `overdue`, `cashflowTrend.scheduled/overdue` excluindo Stripe não confirmado
-- Alterações previstas em `Finance.tsx`:
-  - inserir `RenewalAlertsWidget` no `Resumo`
-  - atualizar texto do card `Pendente` para não sugerir que está filtrado por período
-
-Resultado esperado
-- Daniel (Stripe): não aparece no Financeiro enquanto o pagamento não estiver confirmado pela Stripe.
-- João (recorrência manual): aparece no Resumo como lembrete de renovação.
-- Card `Pendente`: mostra sempre o total real em dívida, mesmo com filtro de datas ativo.
+Resultado esperado depois da implementação:
+- Daniel (Stripe/plano): não aparece como pendente/atrasado/a vencer antes da confirmação
+- João (renovação manual): aparece no Resumo como lembrete operacional
+- Card `Pendente`: mostra sempre o total real pendente da organização, mesmo com filtro ativo
