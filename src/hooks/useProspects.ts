@@ -179,8 +179,13 @@ export function useProspectSalespeople() {
 }
 
 export function useImportProspects() {
-  const { organization, user } = useAuth();
+  const { organization, organizations, isSuperAdmin, user } = useAuth();
   const queryClient = useQueryClient();
+  const hasAccess = hasPerfect2GetherAccess({
+    organizationId: organization?.id,
+    memberships: organizations,
+    isSuperAdmin,
+  });
 
   return useMutation({
     mutationFn: async ({
@@ -191,6 +196,7 @@ export function useImportProspects() {
       rows: Record<string, unknown>[];
     }): Promise<ProspectImportResult> => {
       if (!organization?.id) throw new Error("Sem organização ativa.");
+      if (!hasAccess) throw new Error(PROSPECTS_ACCESS_ERROR);
 
       const client = supabase as any;
       const { data: existingRows, error: existingError } = await client
@@ -198,7 +204,7 @@ export function useImportProspects() {
         .select("nif, cpe, email")
         .eq("organization_id", organization.id);
 
-      if (existingError) throw existingError;
+      if (existingError) throw new Error(mapProspectsError(existingError));
 
       const existingPairKeys = new Set<string>();
       const existingEmailKeys = new Set<string>();
@@ -250,7 +256,7 @@ export function useImportProspects() {
       for (let index = 0; index < prospectsToInsert.length; index += 200) {
         const chunk = prospectsToInsert.slice(index, index + 200);
         const { error } = await client.from("prospects").insert(chunk);
-        if (error) throw error;
+        if (error) throw new Error(mapProspectsError(error));
       }
 
       return {
@@ -263,7 +269,7 @@ export function useImportProspects() {
       toast.success(`${inserted} prospects importados${skipped ? ` • ${skipped} ignorados` : ""}`);
     },
     onError: (error: Error) => {
-      toast.error(error.message || "Erro ao importar prospects");
+      toast.error(mapProspectsError(error));
     },
   });
 }
