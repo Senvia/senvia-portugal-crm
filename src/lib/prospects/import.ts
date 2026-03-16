@@ -96,7 +96,8 @@ export const buildProspectPayload = ({
 
   const nif = normalizeIdentifierValue(findValue(row, ["NIF"]));
   const cpe = normalizeIdentifierValue(findValue(row, ["CPE"]));
-  const segment = normalizeTextValue(findValue(row, ["Segmento", "Segment"]));
+  const com = normalizeTextValue(findValue(row, ["COM", "Concorrência", "Concorrencia", "Comercializador", "Comercializadora"]));
+  const segment = normalizeTextValue(findValue(row, ["Segmento", "Segment"])) || com;
   const status = normalizeTextValue(findValue(row, ["Estado", "Status"])) || "new";
   const annualConsumption = parseNumericValue(findValue(row, ["kWhAno", "kWh Ano", "Consumo Anual", "kwhano"]));
   const observations = normalizeTextValue(findValue(row, ["Observações", "Observacoes", "Notas", "Notes"]));
@@ -120,7 +121,7 @@ export const buildProspectPayload = ({
       numero: normalizeTextValue(findValue(row, ["Numero", "Número"])) || null,
       nt: normalizeTextValue(findValue(row, ["NT"])) || null,
       pc: parseNumericValue(findValue(row, ["PC"])),
-      com: normalizeTextValue(findValue(row, ["COM"])) || null,
+      com: com || null,
       gestor_totallink: normalizeTextValue(findValue(row, ["Gestor Totallink", "Gestor"])) || null,
       raw_row: sanitizeForJson(row),
     },

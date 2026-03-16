@@ -9,6 +9,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useProspects, useProspectSalespeople } from "@/hooks/useProspects";
 import { hasPerfect2GetherAccess } from "@/lib/perfect2gether";
 import { mapProspectsForExport, exportToCsv, exportToExcel } from "@/lib/export";
+import { getProspectSegment } from "@/lib/prospects/segment";
 import { normalizeString } from "@/lib/utils";
 import { ImportProspectsDialog } from "@/components/prospects/ImportProspectsDialog";
 import { DistributeProspectsDialog } from "@/components/prospects/DistributeProspectsDialog";
@@ -201,6 +202,7 @@ export default function Prospects() {
                     </div>
                     <div className="grid gap-2 text-sm text-muted-foreground">
                       <p><span className="font-medium text-foreground">CPE:</span> {prospect.cpe || "—"}</p>
+                      <p><span className="font-medium text-foreground">Segmento:</span> {getProspectSegment(prospect) || "Sem segmento"}</p>
                       <p><span className="font-medium text-foreground">kWh/Ano:</span> {formatConsumption(prospect.annual_consumption_kwh)}</p>
                       <p><span className="font-medium text-foreground">Comercial:</span> {formatAssignedLabel(salespersonMap.get(prospect.assigned_to || ""))}</p>
                       <p><span className="font-medium text-foreground">Contacto:</span> {prospect.phone || prospect.email || "—"}</p>
@@ -229,7 +231,7 @@ export default function Prospects() {
                       <TableCell>
                         <div>
                           <p className="font-medium">{prospect.company_name}</p>
-                          <p className="text-xs text-muted-foreground">{prospect.segment || "Sem segmento"}</p>
+                          <p className="text-xs text-muted-foreground">{getProspectSegment(prospect) || "Sem segmento"}</p>
                         </div>
                       </TableCell>
                       <TableCell>{prospect.nif || "—"}</TableCell>
