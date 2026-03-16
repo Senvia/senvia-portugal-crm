@@ -201,6 +201,7 @@ export const mapProspectsError = (error: unknown) => {
 
 export const createEmptyImportResult = (): ProspectImportResult => ({
   inserted: 0,
+  updated: 0,
   skipped: 0,
   failed: 0,
   firstError: null,

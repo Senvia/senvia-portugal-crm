@@ -105,28 +105,29 @@ export function useImportProspects() {
       const result = createEmptyImportResult();
       const { data: existingRows, error: existingError } = await client
         .from("prospects")
-        .select("nif, cpe, email")
+        .select("id, nif, cpe, email")
         .eq("organization_id", organization.id);
 
       if (existingError) {
         throw new Error(`Erro ao validar duplicados: ${mapProspectsError(existingError)}`);
       }
 
-      const existingPairKeys = new Set<string>();
-      const existingEmailKeys = new Set<string>();
+      const existingPairMap = new Map<string, string>();
+      const existingEmailMap = new Map<string, string>();
 
-      for (const item of (existingRows || []) as Array<{ nif?: string | null; cpe?: string | null; email?: string | null }>) {
+      for (const item of (existingRows || []) as Array<{ id: string; nif?: string | null; cpe?: string | null; email?: string | null }>) {
         const nif = normalizeIdentifierValue(item.nif);
         const cpe = normalizeIdentifierValue(item.cpe);
         const email = normalizeEmail(item.email);
 
-        if (nif && cpe) existingPairKeys.add(`${nif}::${cpe}`);
-        if (email) existingEmailKeys.add(email);
+        if (nif && cpe) existingPairMap.set(`${nif}::${cpe}`, item.id);
+        if (email) existingEmailMap.set(email, item.id);
       }
 
       const queuedPairKeys = new Set<string>();
       const queuedEmailKeys = new Set<string>();
       const prospectsToInsert: Record<string, unknown>[] = [];
+      const prospectsToUpdate: Array<{ id: string; payload: Record<string, unknown> }> = [];
 
       for (const row of rows) {
         try {
@@ -145,17 +146,27 @@ export function useImportProspects() {
           const pairKey = payload.nif && payload.cpe ? `${payload.nif}::${payload.cpe}` : null;
           const emailKey = payload.email ? normalizeEmail(payload.email) : null;
 
-          const isDuplicate =
-            (pairKey && (existingPairKeys.has(pairKey) || queuedPairKeys.has(pairKey))) ||
-            (emailKey && (existingEmailKeys.has(emailKey) || queuedEmailKeys.has(emailKey)));
+          const duplicatedInFile =
+            (pairKey && queuedPairKeys.has(pairKey)) ||
+            (emailKey && queuedEmailKeys.has(emailKey));
 
-          if (isDuplicate) {
+          if (duplicatedInFile) {
             result.skipped += 1;
             continue;
           }
 
+          const existingId =
+            (pairKey ? existingPairMap.get(pairKey) : null) ||
+            (emailKey ? existingEmailMap.get(emailKey) : null);
+
           if (pairKey) queuedPairKeys.add(pairKey);
           if (emailKey) queuedEmailKeys.add(emailKey);
+
+          if (existingId) {
+            prospectsToUpdate.push({ id: existingId, payload });
+            continue;
+          }
+
           prospectsToInsert.push(payload);
         } catch (error) {
           result.failed += 1;
@@ -180,6 +191,18 @@ export function useImportProspects() {
         result.firstError ??= mapProspectsError(error);
       };
 
+      const updateSingle = async ({ id, payload }: { id: string; payload: Record<string, unknown> }) => {
+        const { error } = await client.from("prospects").update(payload).eq("id", id);
+
+        if (!error) {
+          result.updated += 1;
+          return;
+        }
+
+        result.failed += 1;
+        result.firstError ??= mapProspectsError(error);
+      };
+
       for (let index = 0; index < prospectsToInsert.length; index += 200) {
         const chunk = prospectsToInsert.slice(index, index + 200);
         const { error } = await client.from("prospects").insert(chunk);
@@ -194,18 +217,22 @@ export function useImportProspects() {
         }
       }
 
+      for (const prospect of prospectsToUpdate) {
+        await updateSingle(prospect);
+      }
+
       return result;
     },
-    onSuccess: ({ inserted, skipped, failed, firstError }) => {
+    onSuccess: ({ inserted, updated, skipped, failed, firstError }) => {
       queryClient.invalidateQueries({ queryKey: ["prospects"] });
 
       if (failed > 0) {
-        toast.warning(`${inserted} importados • ${skipped} ignorados • ${failed} falhados`);
+        toast.warning(`${inserted} novos • ${updated} atualizados • ${skipped} ignorados • ${failed} falhados`);
         if (firstError) toast.error(firstError);
         return;
       }
 
-      toast.success(`${inserted} prospects importados${skipped ? ` • ${skipped} ignorados` : ""}`);
+      toast.success(`${inserted} novos • ${updated} atualizados${skipped ? ` • ${skipped} ignorados` : ""}`);
     },
     onError: (error: Error) => {
       toast.error(mapProspectsError(error));
