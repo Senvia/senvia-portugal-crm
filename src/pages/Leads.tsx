@@ -555,8 +555,8 @@ export default function Leads() {
 
                 {/* Date Range Picker */}
                 <DateRangePicker
-                  value={dateRange.from || dateRange.to ? dateRange : undefined}
-                  onChange={(range) => setDateRange(range ?? { from: undefined, to: undefined })}
+                  value={dateRange.from ? { from: dateRange.from, to: dateRange.to } : undefined}
+                  onChange={(range) => setDateRange({ from: range?.from, to: range?.to })}
                   placeholder="Período"
                   className="h-8 w-full sm:w-[240px] justify-start"
                 />
