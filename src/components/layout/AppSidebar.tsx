@@ -130,7 +130,7 @@ export function AppSidebar({
               );
             })}
 
-            {isPerfect2GetherOrg(organization?.id) && (
+            {canAccessProspects && (
               <NavLink
                 to="/prospects"
                 className={cn(

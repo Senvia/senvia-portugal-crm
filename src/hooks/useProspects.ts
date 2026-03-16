@@ -225,7 +225,9 @@ export function useDistributeProspects() {
   return useMutation({
     mutationFn: async ({ quantity }: { quantity: number }) => {
       if (!organization?.id) throw new Error("Sem organização ativa.");
-      if (!hasAccess) throw new Error(PROSPECTS_ACCESS_ERROR);
+      if (!hasAccess) {
+        throw new Error(getProspectsAccessMessage({ organizationId: organization.id, isSuperAdmin }));
+      }
 
       const { data, error } = await (supabase as any).rpc("distribute_prospects_round_robin", {
         p_organization_id: organization.id,

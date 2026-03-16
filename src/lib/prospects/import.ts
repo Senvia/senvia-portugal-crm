@@ -1,6 +1,6 @@
 import type { ProspectImportResult } from "@/types/prospects";
 
-export const PROSPECTS_ACCESS_ERROR = "A tua conta não tem acesso à organização Perfect2Gether.";
+export const PROSPECTS_ACCESS_ERROR = "A tua conta não tem acesso aos Prospects desta organização.";
 
 const normalizeHeader = (value: string) =>
   value
