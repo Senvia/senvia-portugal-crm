@@ -10,7 +10,6 @@ import {
   normalizeEmail,
   normalizeIdentifierValue,
   PROSPECTS_ACCESS_ERROR,
-  stringify,
 } from "@/lib/prospects/import";
 import { toast } from "sonner";
 import type { Prospect, ProspectImportResult, ProspectSalesperson } from "@/types/prospects";
