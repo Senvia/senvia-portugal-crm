@@ -466,12 +466,12 @@ export function CreateCampaignModal({ open, onOpenChange, campaign }: CreateCamp
                 <StepperSection
                   title="Remetente"
                   complete={true}
-                  summary={org?.name || 'A sua organização'}
+                  summary={organization?.name || 'A sua organização'}
                   expanded={expandedSection === 'sender'}
                   onToggle={() => setExpandedSection(expandedSection === 'sender' ? null : 'sender')}
                 >
                   <div className="text-sm text-muted-foreground">
-                    <p><span className="font-medium text-foreground">{org?.name || '—'}</span></p>
+                    <p><span className="font-medium text-foreground">{organization?.name || '—'}</span></p>
                     <p className="text-xs mt-1">O remetente é configurado nas definições da organização.</p>
                   </div>
                 </StepperSection>
