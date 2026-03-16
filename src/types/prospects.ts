@@ -32,6 +32,7 @@ export interface ProspectSalesperson {
 
 export interface ProspectImportResult {
   inserted: number;
+  updated: number;
   skipped: number;
   failed: number;
   firstError: string | null;
