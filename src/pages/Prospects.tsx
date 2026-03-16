@@ -88,7 +88,7 @@ export default function Prospects() {
       <div className="space-y-6 p-4 pb-24 md:p-6 md:pb-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Prospects</h1>
-          <p className="text-muted-foreground">Este módulo está disponível apenas para a Perfect2Gether.</p>
+          <p className="text-muted-foreground">Este módulo está disponível apenas para membros com acesso ativo à Perfect2Gether.</p>
         </div>
       </div>
     );

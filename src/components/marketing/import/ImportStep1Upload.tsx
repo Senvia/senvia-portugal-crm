@@ -183,9 +183,6 @@ export function ImportStep1Upload({ fileName, headers, rows, onFileLoaded, onCle
             </div>
           )}
 
-          <div className="flex justify-end">
-            <Button onClick={onConfirm}>Confirme seu arquivo</Button>
-          </div>
         </>
       )}
     </div>

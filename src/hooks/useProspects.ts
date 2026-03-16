@@ -275,19 +275,25 @@ export function useImportProspects() {
 }
 
 export function useDistributeProspects() {
-  const { organization } = useAuth();
+  const { organization, organizations, isSuperAdmin } = useAuth();
   const queryClient = useQueryClient();
+  const hasAccess = hasPerfect2GetherAccess({
+    organizationId: organization?.id,
+    memberships: organizations,
+    isSuperAdmin,
+  });
 
   return useMutation({
     mutationFn: async ({ quantity }: { quantity: number }) => {
       if (!organization?.id) throw new Error("Sem organização ativa.");
+      if (!hasAccess) throw new Error(PROSPECTS_ACCESS_ERROR);
 
       const { data, error } = await (supabase as any).rpc("distribute_prospects_round_robin", {
         p_organization_id: organization.id,
         p_quantity: quantity,
       });
 
-      if (error) throw error;
+      if (error) throw new Error(mapProspectsError(error));
 
       const result = Array.isArray(data) ? data[0] : data;
       return {
@@ -301,7 +307,7 @@ export function useDistributeProspects() {
       toast.success(`${distributedCount} prospects distribuídos • ${createdLeadsCount} leads criadas`);
     },
     onError: (error: Error) => {
-      toast.error(error.message || "Erro ao distribuir prospects");
+      toast.error(mapProspectsError(error));
     },
   });
 }
