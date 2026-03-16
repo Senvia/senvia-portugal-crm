@@ -10,7 +10,7 @@ import { APP_VERSION } from "@/lib/constants";
 import type { AppRole } from "@/types";
 import { OrganizationSwitcher } from "./OrganizationSwitcher";
 import { UpgradeModal } from "@/components/shared/UpgradeModal";
-import { isPerfect2GetherOrg } from "@/lib/perfect2gether";
+import { hasPerfect2GetherAccess } from "@/lib/perfect2gether";
 
 interface NavItem {
   to: string;

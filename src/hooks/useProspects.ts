@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { hasPerfect2GetherAccess } from "@/lib/perfect2gether";
+import { hasPerfect2GetherAccess, isPerfect2GetherOrg } from "@/lib/perfect2gether";
 import {
   buildProspectPayload,
   createEmptyImportResult,
