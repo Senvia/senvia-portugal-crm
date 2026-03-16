@@ -548,132 +548,134 @@ export default function Leads() {
           </div>
 
           {activeTab === 'pipeline' && (
-          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
-            {/* Team Member Filter (Admin Only) */}
-            <TeamMemberFilter className="w-[160px] shrink-0" />
-            
-            {/* Date Range Picker */}
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className={cn("h-8 shrink-0", dateRange.from && "border-primary")}>
-                  <CalendarIcon className="mr-1.5 h-3.5 w-3.5" />
-                  <span className="text-xs">{dateRange.from ? format(dateRange.from, "dd/MM", { locale: pt }) : "De"}</span>
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={dateRange.from}
-                  onSelect={(date) => setDateRange(prev => ({ ...prev, from: date }))}
-                  className="pointer-events-auto"
-                  locale={pt}
-                />
-              </PopoverContent>
-            </Popover>
+            <div className="flex flex-col gap-3 pb-1">
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Team Member Filter (Admin Only) */}
+                <TeamMemberFilter className="w-full sm:w-[220px]" />
 
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className={cn("h-8 shrink-0", dateRange.to && "border-primary")}>
-                  <CalendarIcon className="mr-1.5 h-3.5 w-3.5" />
-                  <span className="text-xs">{dateRange.to ? format(dateRange.to, "dd/MM", { locale: pt }) : "Até"}</span>
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={dateRange.to}
-                  onSelect={(date) => setDateRange(prev => ({ ...prev, to: date }))}
-                  className="pointer-events-auto"
-                  locale={pt}
-                />
-              </PopoverContent>
-            </Popover>
+                {/* Date Range Picker */}
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className={cn("h-8 shrink-0", dateRange.from && "border-primary")}>
+                      <CalendarIcon className="mr-1.5 h-3.5 w-3.5" />
+                      <span className="text-xs">{dateRange.from ? format(dateRange.from, "dd/MM", { locale: pt }) : "De"}</span>
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={dateRange.from}
+                      onSelect={(date) => setDateRange(prev => ({ ...prev, from: date }))}
+                      className="pointer-events-auto"
+                      locale={pt}
+                    />
+                  </PopoverContent>
+                </Popover>
 
-            <div className="h-4 w-px bg-border shrink-0 hidden md:block" />
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className={cn("h-8 shrink-0", dateRange.to && "border-primary")}>
+                      <CalendarIcon className="mr-1.5 h-3.5 w-3.5" />
+                      <span className="text-xs">{dateRange.to ? format(dateRange.to, "dd/MM", { locale: pt }) : "Até"}</span>
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={dateRange.to}
+                      onSelect={(date) => setDateRange(prev => ({ ...prev, to: date }))}
+                      className="pointer-events-auto"
+                      locale={pt}
+                    />
+                  </PopoverContent>
+                </Popover>
 
-            {/* Mobile View Mode Toggle */}
-            <div className="flex sm:hidden items-center border border-border rounded-lg p-1 bg-background shrink-0">
-              <Button 
-                variant={viewMode === 'kanban' ? 'secondary' : 'ghost'} 
-                size="icon"
-                className="h-6 w-6"
-                onClick={() => setViewMode('kanban')}
-              >
-                <LayoutGrid className="h-3.5 w-3.5" />
-              </Button>
-              <Button 
-                variant={viewMode === 'table' ? 'secondary' : 'ghost'} 
-                size="icon"
-                className="h-6 w-6"
-                onClick={() => setViewMode('table')}
-              >
-                <List className="h-3.5 w-3.5" />
-              </Button>
-            </div>
+                <div className="h-4 w-px bg-border shrink-0 hidden md:block" />
 
-            {/* Mobile: Select dropdown for status filter */}
-            <Select
-              value={statusFilter.length === 1 ? statusFilter[0] : "all"}
-              onValueChange={(value) => {
-                if (value === "all") {
-                  setStatusFilter([]);
-                } else {
-                  setStatusFilter([value]);
-                }
-              }}
-            >
-              <SelectTrigger className="w-full h-8 md:hidden shrink-0">
-                <SelectValue placeholder="Filtrar status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os status</SelectItem>
-                {stages.map((stage) => (
-                  <SelectItem key={stage.id} value={stage.key}>
-                    {stage.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+                {/* Mobile View Mode Toggle */}
+                <div className="flex sm:hidden items-center border border-border rounded-lg p-1 bg-background shrink-0">
+                  <Button 
+                    variant={viewMode === 'kanban' ? 'secondary' : 'ghost'} 
+                    size="icon"
+                    className="h-6 w-6"
+                    onClick={() => setViewMode('kanban')}
+                  >
+                    <LayoutGrid className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button 
+                    variant={viewMode === 'table' ? 'secondary' : 'ghost'} 
+                    size="icon"
+                    className="h-6 w-6"
+                    onClick={() => setViewMode('table')}
+                  >
+                    <List className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
 
-            {/* Tipologia Filter (Telecom only) */}
-            {showEnergy && (
-              <Select value={tipologiaFilter} onValueChange={(v) => setTipologiaFilter(v as 'all' | LeadTipologia)}>
-                <SelectTrigger className="w-[140px] h-8 shrink-0">
-                  <Zap className="h-3.5 w-3.5 mr-1" />
-                  <SelectValue placeholder="Tipologia" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas</SelectItem>
-                  {(Object.entries(TIPOLOGIA_LABELS) as [LeadTipologia, string][]).map(([key, label]) => (
-                    <SelectItem key={key} value={key}>{label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-
-            {/* Desktop: Status Filter Badges */}
-            <div className="hidden md:flex items-center gap-2">
-              {stages.map((stage) => (
-                <Badge
-                  key={stage.id}
-                  variant="outline"
-                  className="cursor-pointer transition-colors hover:opacity-80 shrink-0 text-xs"
-                  style={getBadgeStyle(stage.color, statusFilter.includes(stage.key))}
-                  onClick={() => toggleStatus(stage.key)}
+                {/* Mobile: Select dropdown for status filter */}
+                <Select
+                  value={statusFilter.length === 1 ? statusFilter[0] : "all"}
+                  onValueChange={(value) => {
+                    if (value === "all") {
+                      setStatusFilter([]);
+                    } else {
+                      setStatusFilter([value]);
+                    }
+                  }}
                 >
-                  {stage.name}
-                </Badge>
-              ))}
-            </div>
+                  <SelectTrigger className="h-8 w-full md:hidden sm:w-[180px] shrink-0">
+                    <SelectValue placeholder="Filtrar status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos os status</SelectItem>
+                    {stages.map((stage) => (
+                      <SelectItem key={stage.id} value={stage.key}>
+                        {stage.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
 
-            {/* Clear Filters */}
-            {hasActiveFilters && (
-              <Button variant="ghost" size="sm" onClick={clearFilters} className="h-8 text-muted-foreground hover:text-foreground shrink-0">
-                <X className="mr-1 h-3.5 w-3.5" />
-                <span className="text-xs">Limpar</span>
-              </Button>
-            )}
-          </div>
+                {/* Tipologia Filter (Telecom only) */}
+                {showEnergy && (
+                  <Select value={tipologiaFilter} onValueChange={(v) => setTipologiaFilter(v as 'all' | LeadTipologia)}>
+                    <SelectTrigger className="w-[140px] h-8 shrink-0">
+                      <Zap className="h-3.5 w-3.5 mr-1" />
+                      <SelectValue placeholder="Tipologia" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas</SelectItem>
+                      {(Object.entries(TIPOLOGIA_LABELS) as [LeadTipologia, string][]).map(([key, label]) => (
+                        <SelectItem key={key} value={key}>{label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+
+                {/* Clear Filters */}
+                {hasActiveFilters && (
+                  <Button variant="ghost" size="sm" onClick={clearFilters} className="h-8 text-muted-foreground hover:text-foreground shrink-0">
+                    <X className="mr-1 h-3.5 w-3.5" />
+                    <span className="text-xs">Limpar</span>
+                  </Button>
+                )}
+              </div>
+
+              {/* Desktop: Status Filter Badges */}
+              <div className="hidden md:flex flex-wrap items-center gap-2">
+                {stages.map((stage) => (
+                  <Badge
+                    key={stage.id}
+                    variant="outline"
+                    className="cursor-pointer transition-colors hover:opacity-80 text-xs"
+                    style={getBadgeStyle(stage.color, statusFilter.includes(stage.key))}
+                    onClick={() => toggleStatus(stage.key)}
+                  >
+                    {stage.name}
+                  </Badge>
+                ))}
+              </div>
+            </div>
           )}
         </div>
 
