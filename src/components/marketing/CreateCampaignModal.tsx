@@ -120,7 +120,8 @@ export function CreateCampaignModal({ open, onOpenChange, campaign }: CreateCamp
   const sendTemplate = useSendTemplateEmail();
   const { data: contactLists = [] } = useContactLists();
   const [loadingListMembers, setLoadingListMembers] = useState(false);
-  const { data: org } = useOrganization();
+  const { organization } = useAuth();
+  const organizationId = organization?.id;
 
   // Sync state when editing a campaign
   useEffect(() => {
