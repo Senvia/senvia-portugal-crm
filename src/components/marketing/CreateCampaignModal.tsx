@@ -29,13 +29,14 @@ import { useClientLabels } from "@/hooks/useClientLabels";
 import { CLIENT_STATUS_STYLES } from "@/types/clients";
 import { useContactLists } from "@/hooks/useContactLists";
 import { supabase } from "@/integrations/supabase/client";
-import { useOrganization } from "@/hooks/useOrganization";
+import { useAuth } from "@/contexts/AuthContext";
 import { normalizeString } from "@/lib/utils";
 import { TemplateEditor } from "@/components/marketing/TemplateEditor";
 import type { CrmClient } from "@/types/clients";
 import type { EmailCampaign } from "@/types/marketing";
 import { format } from "date-fns";
 import { pt } from "date-fns/locale";
+import { toast } from "sonner";
 
 interface CreateCampaignModalProps {
   open: boolean;
@@ -119,7 +120,8 @@ export function CreateCampaignModal({ open, onOpenChange, campaign }: CreateCamp
   const sendTemplate = useSendTemplateEmail();
   const { data: contactLists = [] } = useContactLists();
   const [loadingListMembers, setLoadingListMembers] = useState(false);
-  const { data: org } = useOrganization();
+  const { organization } = useAuth();
+  const organizationId = organization?.id;
 
   // Sync state when editing a campaign
   useEffect(() => {
@@ -208,51 +210,70 @@ export function CreateCampaignModal({ open, onOpenChange, campaign }: CreateCamp
       }
 
       if (sendMode === "scheduled" && scheduleDate) {
+        if (!organizationId) {
+          throw new Error("Sem organização ativa para agendar a campanha.");
+        }
+
+        const queuedRecipients = selectedClients.filter((client) => client.email);
+        if (queuedRecipients.length === 0) {
+          throw new Error("Selecione pelo menos um destinatário com email válido.");
+        }
+
         const [h, m] = scheduleTime.split(":").map(Number);
         const scheduledAt = new Date(scheduleDate);
         scheduledAt.setHours(h, m, 0, 0);
 
-        await updateStatus.mutateAsync({
-          id: campaignId,
-          status: 'scheduled' as any,
-          total_recipients: selectedClients.length,
-        });
+        const queuedRecords = queuedRecipients.map((client) => ({
+          organization_id: organizationId,
+          campaign_id: campaignId,
+          template_id: contentMode === "template" ? templateId : null,
+          client_id: client.id.startsWith("marketing_") ? null : client.id,
+          recipient_email: client.email!,
+          recipient_name: client.name,
+          subject,
+          status: "queued",
+        }));
 
-        // Update scheduled_at via supabase directly
-        await supabase
-          .from("email_campaigns")
-          .update({ scheduled_at: scheduledAt.toISOString() } as any)
-          .eq("id", campaignId);
+        let queueWasCreated = false;
 
-        // Pre-create email_sends with status 'queued' so cron knows who to send to
-        const queuedRecords = selectedClients
-          .filter(c => c.email)
-          .map(client => ({
-            organization_id: org?.id,
-            campaign_id: campaignId,
-            template_id: contentMode === "template" ? templateId : null,
-            client_id: client.id.startsWith('marketing_') ? null : client.id,
-            recipient_email: client.email!,
-            recipient_name: client.name,
-            subject: subject,
-            status: 'queued',
-          }));
-
-        if (queuedRecords.length > 0) {
-          // Insert in batches of 100 with error handling
-          let totalInserted = 0;
+        try {
           for (let i = 0; i < queuedRecords.length; i += 100) {
             const batch = queuedRecords.slice(i, i + 100);
             const { error: insertError } = await supabase.from("email_sends").insert(batch as any);
+
             if (insertError) {
               console.error("Erro ao inserir fila de envio:", insertError);
               throw new Error(`Falha ao agendar destinatários: ${insertError.message}`);
             }
-            totalInserted += batch.length;
+
+            queueWasCreated = true;
           }
-          console.log(`Agendados ${totalInserted} destinatários na fila`);
+
+          const { error: scheduleError } = await supabase
+            .from("email_campaigns")
+            .update({
+              status: "scheduled",
+              scheduled_at: scheduledAt.toISOString(),
+              total_recipients: queuedRecords.length,
+            } as any)
+            .eq("id", campaignId);
+
+          if (scheduleError) {
+            throw new Error(`Falha ao guardar o agendamento: ${scheduleError.message}`);
+          }
+        } catch (scheduleError) {
+          if (queueWasCreated) {
+            await supabase
+              .from("email_sends")
+              .delete()
+              .eq("campaign_id", campaignId)
+              .eq("status", "queued");
+          }
+
+          throw scheduleError;
         }
 
+        toast.success(`Campanha agendada para ${format(scheduledAt, "dd 'de' MMMM 'às' HH:mm", { locale: pt })}`);
         handleClose();
         return;
       }
@@ -293,7 +314,9 @@ export function CreateCampaignModal({ open, onOpenChange, campaign }: CreateCamp
       });
 
       handleClose();
-    } catch {
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Não foi possível processar a campanha.";
+      toast.error(message);
       setIsSending(false);
     }
   };
@@ -443,12 +466,12 @@ export function CreateCampaignModal({ open, onOpenChange, campaign }: CreateCamp
                 <StepperSection
                   title="Remetente"
                   complete={true}
-                  summary={org?.name || 'A sua organização'}
+                  summary={organization?.name || 'A sua organização'}
                   expanded={expandedSection === 'sender'}
                   onToggle={() => setExpandedSection(expandedSection === 'sender' ? null : 'sender')}
                 >
                   <div className="text-sm text-muted-foreground">
-                    <p><span className="font-medium text-foreground">{org?.name || '—'}</span></p>
+                    <p><span className="font-medium text-foreground">{organization?.name || '—'}</span></p>
                     <p className="text-xs mt-1">O remetente é configurado nas definições da organização.</p>
                   </div>
                 </StepperSection>

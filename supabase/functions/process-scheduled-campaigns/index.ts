@@ -63,7 +63,12 @@ serve(async (req: Request): Promise<Response> => {
           .eq("campaign_id", campaign.id)
           .eq("status", "queued");
 
-        if (queuedError || !queuedSends || queuedSends.length === 0) {
+        if (queuedError) {
+          console.error(`Campaign ${campaign.id} failed to load queued recipients:`, queuedError);
+        }
+
+        if (!queuedSends || queuedSends.length === 0) {
+          console.warn(`Campaign ${campaign.id} has no queued recipients and will be marked as failed.`);
           await supabase
             .from("email_campaigns")
             .update({ status: "failed", sent_count: 0, failed_count: 0 })
@@ -72,13 +77,22 @@ serve(async (req: Request): Promise<Response> => {
           continue;
         }
 
-        const { data: org } = await supabase
+        const { data: org, error: orgError } = await supabase
           .from("organizations")
           .select("name, brevo_api_key, brevo_sender_email")
           .eq("id", campaign.organization_id)
           .single();
 
+        if (orgError) {
+          console.error(`Campaign ${campaign.id} failed to load organization sender config:`, orgError);
+        }
+
         if (!org?.brevo_api_key || !org?.brevo_sender_email) {
+          console.error(`Campaign ${campaign.id} is missing sender configuration.`, {
+            hasApiKey: Boolean(org?.brevo_api_key),
+            hasSenderEmail: Boolean(org?.brevo_sender_email),
+            organizationId: campaign.organization_id,
+          });
           await supabase
             .from("email_campaigns")
             .update({ status: "failed" })
@@ -91,15 +105,36 @@ serve(async (req: Request): Promise<Response> => {
         let emailHtml = campaign.html_content || "";
 
         if (campaign.template_id) {
-          const { data: template } = await supabase
+          const { data: template, error: templateError } = await supabase
             .from("email_templates")
             .select("subject, html_content")
             .eq("id", campaign.template_id)
             .single();
+
+          if (templateError) {
+            console.error(`Campaign ${campaign.id} failed to load template ${campaign.template_id}:`, templateError);
+          }
+
           if (template) {
             emailSubject = template.subject;
             emailHtml = template.html_content;
+          } else {
+            console.error(`Campaign ${campaign.id} template ${campaign.template_id} was not found.`);
           }
+        }
+
+        if (!emailSubject.trim() || !emailHtml.trim()) {
+          console.error(`Campaign ${campaign.id} is missing subject or HTML content.`, {
+            hasSubject: Boolean(emailSubject.trim()),
+            hasHtml: Boolean(emailHtml.trim()),
+            templateId: campaign.template_id,
+          });
+          await supabase
+            .from("email_campaigns")
+            .update({ status: "failed" })
+            .eq("id", campaign.id);
+          results.push({ campaignId: campaign.id, status: "failed", sent: 0, failed: 0 });
+          continue;
         }
 
         let senderEmail = org.brevo_sender_email;
