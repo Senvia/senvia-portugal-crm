@@ -202,6 +202,7 @@ export default function Prospects() {
                     </div>
                     <div className="grid gap-2 text-sm text-muted-foreground">
                       <p><span className="font-medium text-foreground">CPE:</span> {prospect.cpe || "—"}</p>
+                      <p><span className="font-medium text-foreground">Segmento:</span> {getProspectSegment(prospect) || "Sem segmento"}</p>
                       <p><span className="font-medium text-foreground">kWh/Ano:</span> {formatConsumption(prospect.annual_consumption_kwh)}</p>
                       <p><span className="font-medium text-foreground">Comercial:</span> {formatAssignedLabel(salespersonMap.get(prospect.assigned_to || ""))}</p>
                       <p><span className="font-medium text-foreground">Contacto:</span> {prospect.phone || prospect.email || "—"}</p>
