@@ -1,20 +1,34 @@
-import { useRef, useMemo } from "react";
-import { useAuth } from "@/contexts/AuthContext";
-import { useTeamFilter } from "@/hooks/useTeamFilter";
-import { useTeamMembers } from "@/hooks/useTeam";
-import { useDashboardPeriod } from "@/stores/useDashboardPeriod";
+import { useMemo, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Users } from "lucide-react";
-import { startOfMonth, endOfMonth, format } from "date-fns";
+import { endOfMonth, format, startOfMonth } from "date-fns";
 import { pt } from "date-fns/locale";
+import { Users } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { useProposals } from "@/hooks/useProposals";
+import { useTeamMembers, type TeamMember } from "@/hooks/useTeam";
+import { useTeamFilter } from "@/hooks/useTeamFilter";
+import { supabase } from "@/integrations/supabase/client";
+import { useDashboardPeriod } from "@/stores/useDashboardPeriod";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PrintCardButton } from "./PrintCardButton";
 
 function formatCurrency(val: number) {
   return new Intl.NumberFormat("pt-PT", { style: "currency", currency: "EUR" }).format(val);
+}
+
+function getConversionTone(rate: number) {
+  if (rate >= 50) return "text-primary";
+  if (rate >= 25) return "text-foreground";
+  return "text-destructive";
+}
+
+function getScopeLabel(dataScope: string, selectedMemberName: string | null, isTeamLeader: boolean) {
+  if (selectedMemberName) return `Filtro ativo: ${selectedMemberName}`;
+  if (dataScope === "all") return "A mostrar todos os colaboradores";
+  if (dataScope === "team" && isTeamLeader) return "A mostrar a sua equipa";
+  return "A mostrar apenas os seus dados";
 }
 
 interface MemberPerformance {
@@ -31,83 +45,107 @@ interface MemberPerformance {
 export function TeamPerformanceTable() {
   const { user, profile, organization } = useAuth();
   const { data: members = [] } = useTeamMembers();
+  const { data: scopedProposals = [], isLoading: proposalsLoading } = useProposals();
   const { selectedMemberId, canFilterByTeam, isTeamLeader, teamMemberIds, dataScope } = useTeamFilter();
   const { selectedMonth } = useDashboardPeriod();
   const cardRef = useRef<HTMLDivElement>(null);
 
   const orgId = organization?.id;
-  const monthStart = startOfMonth(selectedMonth).toISOString();
-  const monthEnd = endOfMonth(selectedMonth).toISOString();
-  const currentMonthLabel = format(startOfMonth(selectedMonth), "MMMM yyyy", { locale: pt });
+  const monthStartDate = startOfMonth(selectedMonth);
+  const monthEndDate = endOfMonth(selectedMonth);
+  const monthStart = monthStartDate.toISOString();
+  const monthEnd = monthEndDate.toISOString();
+  const monthStartMs = monthStartDate.getTime();
+  const monthEndMs = monthEndDate.getTime();
+  const currentMonthLabel = format(monthStartDate, "MMMM yyyy", { locale: pt });
 
-  const allMemberList = members.length > 0
-    ? members.filter(m => !m.is_banned)
-    : (user?.id ? [{ user_id: user.id, full_name: profile?.full_name || "Eu" }] : []);
+  const allMemberList = useMemo(() => {
+    const activeMembers = members.filter((member) => !member.is_banned);
+    const membersMap = new Map(activeMembers.map((member) => [member.user_id, member]));
+
+    if (user?.id && !membersMap.has(user.id)) {
+      const fallbackCurrentUser: TeamMember = {
+        id: user.id,
+        user_id: user.id,
+        full_name: profile?.full_name || "Eu",
+        avatar_url: null,
+        email: null,
+        phone: null,
+        organization_id: orgId || null,
+        role: "viewer",
+        is_banned: false,
+        profile_id: null,
+        profile_name: null,
+      };
+
+      membersMap.set(user.id, fallbackCurrentUser);
+    }
+
+    return Array.from(membersMap.values());
+  }, [members, orgId, profile?.full_name, user?.id]);
 
   const filteredMembers = useMemo(() => {
-    if (dataScope === 'own' || !canFilterByTeam) {
-      return allMemberList.filter(m => m.user_id === user?.id);
+    if (dataScope === "own" || !canFilterByTeam) {
+      return allMemberList.filter((member) => member.user_id === user?.id);
     }
+
     if (selectedMemberId) {
-      return allMemberList.filter(m => m.user_id === selectedMemberId);
+      return allMemberList.filter((member) => member.user_id === selectedMemberId);
     }
-    if (dataScope === 'team' && isTeamLeader) {
+
+    if (dataScope === "team" && isTeamLeader) {
       const allowed = new Set([user?.id, ...teamMemberIds].filter(Boolean));
-      return allMemberList.filter(m => allowed.has(m.user_id));
+      return allMemberList.filter((member) => allowed.has(member.user_id));
     }
+
     return allMemberList;
-  }, [allMemberList, dataScope, canFilterByTeam, selectedMemberId, isTeamLeader, teamMemberIds, user?.id]);
+  }, [allMemberList, canFilterByTeam, dataScope, isTeamLeader, selectedMemberId, teamMemberIds, user?.id]);
 
-  const memberIds = filteredMembers.map(m => m.user_id);
+  const memberIds = filteredMembers.map((member) => member.user_id);
 
-  // Fetch leads count per member
+  const selectedMemberName = useMemo(() => {
+    if (!selectedMemberId) return null;
+    return allMemberList.find((member) => member.user_id === selectedMemberId)?.full_name || null;
+  }, [allMemberList, selectedMemberId]);
+
+  const proposalsInPeriod = useMemo(() => {
+    if (memberIds.length === 0) return [];
+
+    return scopedProposals.filter((proposal) => {
+      if (!proposal.created_by || !memberIds.includes(proposal.created_by)) return false;
+      const createdAtMs = new Date(proposal.created_at).getTime();
+      return createdAtMs >= monthStartMs && createdAtMs <= monthEndMs;
+    });
+  }, [memberIds, monthEndMs, monthStartMs, scopedProposals]);
+
   const { data: leadsData, isLoading: leadsLoading } = useQuery({
-    queryKey: ['team-perf-leads', orgId, monthStart, memberIds],
+    queryKey: ["team-perf-leads", orgId, monthStart, monthEnd, memberIds],
     queryFn: async () => {
       if (!orgId || memberIds.length === 0) return [];
       const { data, error } = await supabase
-        .from('leads')
-        .select('assigned_to')
-        .eq('organization_id', orgId)
-        .gte('created_at', monthStart)
-        .lte('created_at', monthEnd)
-        .in('assigned_to', memberIds);
+        .from("leads")
+        .select("assigned_to")
+        .eq("organization_id", orgId)
+        .gte("created_at", monthStart)
+        .lte("created_at", monthEnd)
+        .in("assigned_to", memberIds);
       if (error) throw error;
       return data || [];
     },
     enabled: !!orgId && memberIds.length > 0,
   });
 
-  // Fetch proposals per member
-  const { data: proposalsData, isLoading: proposalsLoading } = useQuery({
-    queryKey: ['team-perf-proposals', orgId, monthStart, memberIds],
-    queryFn: async () => {
-      if (!orgId || memberIds.length === 0) return [];
-      const { data, error } = await supabase
-        .from('proposals')
-        .select('created_by, total_value, status')
-        .eq('organization_id', orgId)
-        .gte('created_at', monthStart)
-        .lte('created_at', monthEnd)
-        .in('created_by', memberIds);
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!orgId && memberIds.length > 0,
-  });
-
-  // Fetch sales per member
   const { data: salesData, isLoading: salesLoading } = useQuery({
-    queryKey: ['team-perf-sales', orgId, monthStart, memberIds],
+    queryKey: ["team-perf-sales", orgId, monthStart, monthEnd, memberIds],
     queryFn: async () => {
       if (!orgId || memberIds.length === 0) return [];
       const { data, error } = await supabase
-        .from('sales')
-        .select('created_by, status, comissao')
-        .eq('organization_id', orgId)
-        .gte('created_at', monthStart)
-        .lte('created_at', monthEnd)
-        .in('created_by', memberIds);
+        .from("sales")
+        .select("created_by, status, comissao")
+        .eq("organization_id", orgId)
+        .gte("created_at", monthStart)
+        .lte("created_at", monthEnd)
+        .in("created_by", memberIds);
       if (error) throw error;
       return data || [];
     },
@@ -117,20 +155,20 @@ export function TeamPerformanceTable() {
   const loading = leadsLoading || proposalsLoading || salesLoading;
 
   const rows: MemberPerformance[] = useMemo(() => {
-    return filteredMembers.map((m) => {
-      const memberLeads = (leadsData || []).filter(l => l.assigned_to === m.user_id).length;
-      const memberProposals = (proposalsData || []).filter(p => p.created_by === m.user_id);
+    return filteredMembers.map((member) => {
+      const memberLeads = (leadsData || []).filter((lead) => lead.assigned_to === member.user_id).length;
+      const memberProposals = proposalsInPeriod.filter((proposal) => proposal.created_by === member.user_id);
       const openProposalValue = memberProposals
-        .filter(p => p.status === 'pending' || p.status === 'sent')
-        .reduce((sum, p) => sum + (p.total_value || 0), 0);
-      const memberSales = (salesData || []).filter(s => s.created_by === m.user_id);
-      const delivered = memberSales.filter(s => s.status === 'delivered' || s.status === 'completed');
-      const commission = delivered.reduce((sum, s) => sum + (s.comissao || 0), 0);
+        .filter((proposal) => proposal.status === "draft" || proposal.status === "sent" || proposal.status === "negotiating")
+        .reduce((sum, proposal) => sum + (proposal.total_value || 0), 0);
+      const memberSales = (salesData || []).filter((sale) => sale.created_by === member.user_id);
+      const delivered = memberSales.filter((sale) => sale.status === "delivered" || sale.status === "completed");
+      const commission = delivered.reduce((sum, sale) => sum + (sale.comissao || 0), 0);
       const conversionRate = memberLeads > 0 ? (delivered.length / memberLeads) * 100 : 0;
 
       return {
-        userId: m.user_id,
-        name: m.full_name + (m.user_id === user?.id ? " (eu)" : ""),
+        userId: member.user_id,
+        name: member.full_name + (member.user_id === user?.id ? " (eu)" : ""),
         leads: memberLeads,
         proposals: memberProposals.length,
         openProposalValue,
@@ -139,33 +177,37 @@ export function TeamPerformanceTable() {
         conversionRate,
       };
     });
-  }, [filteredMembers, leadsData, proposalsData, salesData, user?.id]);
+  }, [filteredMembers, leadsData, proposalsInPeriod, salesData, user?.id]);
 
   const totals = useMemo(() => {
     return rows.reduce(
-      (acc, r) => ({
-        leads: acc.leads + r.leads,
-        proposals: acc.proposals + r.proposals,
-        openProposalValue: acc.openProposalValue + r.openProposalValue,
-        salesDelivered: acc.salesDelivered + r.salesDelivered,
-        commission: acc.commission + r.commission,
+      (acc, row) => ({
+        leads: acc.leads + row.leads,
+        proposals: acc.proposals + row.proposals,
+        openProposalValue: acc.openProposalValue + row.openProposalValue,
+        salesDelivered: acc.salesDelivered + row.salesDelivered,
+        commission: acc.commission + row.commission,
       }),
-      { leads: 0, proposals: 0, openProposalValue: 0, salesDelivered: 0, commission: 0 }
+      { leads: 0, proposals: 0, openProposalValue: 0, salesDelivered: 0, commission: 0 },
     );
   }, [rows]);
 
   const totalConversion = totals.leads > 0 ? (totals.salesDelivered / totals.leads) * 100 : 0;
   const showTotals = rows.length > 1;
+  const scopeLabel = getScopeLabel(dataScope, selectedMemberName, isTeamLeader);
 
   return (
     <Card ref={cardRef}>
       <CardHeader className="pb-3">
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <div className="flex items-center gap-2">
-            <Users className="h-5 w-5 text-primary" />
-            <CardTitle className="text-base capitalize">
-              Performance da Equipa — {currentMonthLabel}
-            </CardTitle>
+        <div className="flex items-start justify-between gap-2 flex-wrap">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-primary" />
+              <CardTitle className="text-base capitalize">
+                Performance da Equipa — {currentMonthLabel}
+              </CardTitle>
+            </div>
+            <p className="text-xs text-muted-foreground">{scopeLabel}</p>
           </div>
           <PrintCardButton targetRef={cardRef} />
         </div>
@@ -199,11 +241,9 @@ export function TeamPerformanceTable() {
                     <TableCell className="text-xs text-right py-1.5">{row.proposals}</TableCell>
                     <TableCell className="text-xs text-right py-1.5 hidden sm:table-cell">{formatCurrency(row.openProposalValue)}</TableCell>
                     <TableCell className="text-xs text-right py-1.5">{row.salesDelivered}</TableCell>
-                    <TableCell className="text-xs text-right py-1.5 hidden sm:table-cell text-green-500 font-medium">{formatCurrency(row.commission)}</TableCell>
+                    <TableCell className="text-xs text-right py-1.5 hidden sm:table-cell text-primary font-medium">{formatCurrency(row.commission)}</TableCell>
                     <TableCell className="text-xs text-right py-1.5 font-medium">
-                      <span className={row.conversionRate >= 50 ? "text-green-500" : row.conversionRate >= 25 ? "text-amber-500" : "text-red-500"}>
-                        {row.conversionRate.toFixed(0)}%
-                      </span>
+                      <span className={getConversionTone(row.conversionRate)}>{row.conversionRate.toFixed(0)}%</span>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -214,11 +254,9 @@ export function TeamPerformanceTable() {
                     <TableCell className="text-xs text-right font-semibold py-1.5">{totals.proposals}</TableCell>
                     <TableCell className="text-xs text-right font-semibold py-1.5 hidden sm:table-cell">{formatCurrency(totals.openProposalValue)}</TableCell>
                     <TableCell className="text-xs text-right font-semibold py-1.5">{totals.salesDelivered}</TableCell>
-                    <TableCell className="text-xs text-right font-semibold py-1.5 hidden sm:table-cell text-green-500">{formatCurrency(totals.commission)}</TableCell>
+                    <TableCell className="text-xs text-right font-semibold py-1.5 hidden sm:table-cell text-primary">{formatCurrency(totals.commission)}</TableCell>
                     <TableCell className="text-xs text-right font-semibold py-1.5">
-                      <span className={totalConversion >= 50 ? "text-green-500" : totalConversion >= 25 ? "text-amber-500" : "text-red-500"}>
-                        {totalConversion.toFixed(0)}%
-                      </span>
+                      <span className={getConversionTone(totalConversion)}>{totalConversion.toFixed(0)}%</span>
                     </TableCell>
                   </TableRow>
                 )}
