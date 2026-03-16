@@ -4164,6 +4164,18 @@ export type Database = {
             Args: {
               p_organization_id: string
               p_prospect_ids: string[]
+              p_quantity: number
+              p_salesperson_ids?: string[]
+            }
+            Returns: {
+              created_leads_count: number
+              distributed_count: number
+            }[]
+          }
+        | {
+            Args: {
+              p_organization_id: string
+              p_prospect_ids: string[]
               p_salesperson_ids?: string[]
             }
             Returns: {
