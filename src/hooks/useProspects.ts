@@ -253,10 +253,7 @@ export function useDistributeProspects() {
     mutationFn: async ({
       prospectIds,
       salespersonIds,
-    }: {
-      prospectIds: string[];
-      salespersonIds?: string[];
-    }) => {
+    }: DistributeProspectsPayload) => {
       if (!organization?.id) throw new Error("Sem organização ativa.");
       if (!hasAccess) {
         throw new Error(getProspectsAccessMessage({ organizationId: organization.id, isSuperAdmin }));
