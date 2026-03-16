@@ -97,7 +97,9 @@ export function useImportProspects() {
       rows: Record<string, unknown>[];
     }): Promise<ProspectImportResult> => {
       if (!organization?.id) throw new Error("Sem organização ativa.");
-      if (!hasAccess) throw new Error(PROSPECTS_ACCESS_ERROR);
+      if (!hasAccess) {
+        throw new Error(getProspectsAccessMessage({ organizationId: organization.id, isSuperAdmin }));
+      }
 
       const client = supabase as any;
       const result = createEmptyImportResult();
