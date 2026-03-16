@@ -3,6 +3,7 @@ import { format as formatDate } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import type { Lead } from '@/types';
 import type { CrmClient } from '@/types/clients';
+import { getProspectSegment } from '@/lib/prospects/segment';
 import type { Prospect } from '@/types/prospects';
 
 // Status labels for clients
