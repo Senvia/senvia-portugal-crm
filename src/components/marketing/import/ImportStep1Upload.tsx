@@ -77,7 +77,6 @@ export function ImportStep1Upload({ fileName, headers, rows, onFileLoaded, onCle
       reader.onload = (e) => {
         const buffer = e.target?.result as ArrayBuffer;
         let text = new TextDecoder("utf-8").decode(buffer);
-        // If UTF-8 produced replacement chars, try Latin-1
         if (text.includes("\ufffd")) {
           text = new TextDecoder("iso-8859-1").decode(buffer);
         }
@@ -86,19 +85,20 @@ export function ImportStep1Upload({ fileName, headers, rows, onFileLoaded, onCle
         onFileLoaded(file.name, csvHeaders, csvRows);
       };
       reader.readAsArrayBuffer(file);
-    } else {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const data = new Uint8Array(e.target?.result as ArrayBuffer);
-        const wb = XLSX.read(data, { type: "array" });
-        const ws = wb.Sheets[wb.SheetNames[0]];
-        const json = XLSX.utils.sheet_to_json<Record<string, string>>(ws, { defval: "" });
-        if (json.length === 0) { toast.error("Ficheiro vazio"); return; }
-        const fileHeaders = Object.keys(json[0]);
-        onFileLoaded(file.name, fileHeaders, json.slice(0, 1000));
-      };
-      reader.readAsArrayBuffer(file);
+      return;
     }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const data = new Uint8Array(e.target?.result as ArrayBuffer);
+      const wb = XLSX.read(data, { type: "array" });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const json = XLSX.utils.sheet_to_json<Record<string, string>>(ws, { defval: "" });
+      if (json.length === 0) { toast.error("Ficheiro vazio"); return; }
+      const fileHeaders = Object.keys(json[0]);
+      onFileLoaded(file.name, fileHeaders, json.slice(0, 1000));
+    };
+    reader.readAsArrayBuffer(file);
   }, [onFileLoaded]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -122,32 +122,32 @@ export function ImportStep1Upload({ fileName, headers, rows, onFileLoaded, onCle
 
   return (
     <div className="space-y-4">
-      <button onClick={downloadSample} className="text-sm text-primary hover:underline flex items-center gap-1.5">
+      <button onClick={downloadSample} className="flex items-center gap-1.5 text-sm text-primary hover:underline">
         <Download className="h-3.5 w-3.5" />
         Baixe um arquivo de exemplo (.csv)
       </button>
 
       {!fileName ? (
         <div
-          className="border-2 border-dashed rounded-lg p-8 text-center cursor-pointer hover:border-primary/50 transition-colors"
+          className="cursor-pointer rounded-lg border-2 border-dashed p-8 text-center transition-colors hover:border-primary/50"
           onDragOver={e => e.preventDefault()}
           onDrop={handleDrop}
           onClick={() => fileRef.current?.click()}
         >
-          <Upload className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
+          <Upload className="mx-auto mb-3 h-10 w-10 text-muted-foreground" />
           <p className="text-sm font-medium">Selecione seu arquivo ou arraste e solte aqui</p>
-          <p className="text-xs text-muted-foreground mt-1">.csv, .xlsx ou .txt (máx. 1000 linhas)</p>
-          <input ref={fileRef} type="file" className="hidden" accept=".xlsx,.xls,.csv,.txt" onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
+          <p className="mt-1 text-xs text-muted-foreground">.xlsb, .xlsx, .xls, .csv ou .txt (máx. 1000 linhas)</p>
+          <input ref={fileRef} type="file" className="hidden" accept=".xlsb,.xlsx,.xls,.csv,.txt" onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
         </div>
       ) : (
         <>
-          <div className="flex items-center gap-3 p-3 bg-primary/10 border border-primary/20 rounded-lg">
-            <CheckCircle2 className="h-5 w-5 text-primary flex-shrink-0" />
-            <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-3 rounded-lg border border-primary/20 bg-primary/10 p-3">
+            <CheckCircle2 className="h-5 w-5 flex-shrink-0 text-primary" />
+            <div className="min-w-0 flex-1">
               <p className="text-sm font-medium">Seu arquivo foi carregado.</p>
-              <div className="flex items-center gap-2 mt-0.5">
+              <div className="mt-0.5 flex items-center gap-2">
                 <FileSpreadsheet className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="text-xs text-muted-foreground truncate">{fileName}</span>
+                <span className="truncate text-xs text-muted-foreground">{fileName}</span>
                 <span className="text-xs text-muted-foreground">• {rows.length} linhas</span>
               </div>
             </div>
@@ -158,14 +158,14 @@ export function ImportStep1Upload({ fileName, headers, rows, onFileLoaded, onCle
 
           {previewRows.length > 0 && (
             <div>
-              <p className="text-xs text-muted-foreground mb-2">Pré-visualização (primeiras {previewRows.length} linhas):</p>
-              <ScrollArea className="max-h-[200px] border rounded-md">
+              <p className="mb-2 text-xs text-muted-foreground">Pré-visualização (primeiras {previewRows.length} linhas):</p>
+              <ScrollArea className="max-h-[200px] rounded-md border">
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="border-b bg-muted/50">
                         {headers.map(h => (
-                          <th key={h} className="px-3 py-2 text-left font-medium whitespace-nowrap">{h}</th>
+                          <th key={h} className="whitespace-nowrap px-3 py-2 text-left font-medium">{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -173,7 +173,7 @@ export function ImportStep1Upload({ fileName, headers, rows, onFileLoaded, onCle
                       {previewRows.map((row, i) => (
                         <tr key={i} className="border-b last:border-0">
                           {headers.map(h => (
-                            <td key={h} className="px-3 py-1.5 whitespace-nowrap max-w-[150px] truncate">{row[h] || "—"}</td>
+                            <td key={h} className="max-w-[150px] truncate whitespace-nowrap px-3 py-1.5">{row[h] || "—"}</td>
                           ))}
                         </tr>
                       ))}

@@ -117,8 +117,9 @@ export function useProspects() {
     queryFn: async () => {
       if (!organization?.id) return [] as Prospect[];
 
-      const { data, error } = await supabase
-        .from("prospects" as any)
+      const client = supabase as any;
+      const { data, error } = await client
+        .from("prospects")
         .select("*")
         .eq("organization_id", organization.id)
         .order("imported_at", { ascending: false });
@@ -163,8 +164,9 @@ export function useImportProspects() {
     }): Promise<ProspectImportResult> => {
       if (!organization?.id) throw new Error("Sem organização ativa.");
 
-      const { data: existingRows, error: existingError } = await supabase
-        .from("prospects" as any)
+      const client = supabase as any;
+      const { data: existingRows, error: existingError } = await client
+        .from("prospects")
         .select("nif, cpe, email")
         .eq("organization_id", organization.id);
 
@@ -173,7 +175,7 @@ export function useImportProspects() {
       const existingPairKeys = new Set<string>();
       const existingEmailKeys = new Set<string>();
 
-      for (const item of existingRows || []) {
+      for (const item of (existingRows || []) as Array<{ nif?: string | null; cpe?: string | null; email?: string | null }>) {
         const nif = stringify(item.nif);
         const cpe = stringify(item.cpe);
         const email = normalizeEmail(stringify(item.email));
@@ -219,7 +221,7 @@ export function useImportProspects() {
 
       for (let index = 0; index < prospectsToInsert.length; index += 200) {
         const chunk = prospectsToInsert.slice(index, index + 200);
-        const { error } = await supabase.from("prospects" as any).insert(chunk as any);
+        const { error } = await client.from("prospects").insert(chunk);
         if (error) throw error;
       }
 
