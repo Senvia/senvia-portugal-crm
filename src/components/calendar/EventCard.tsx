@@ -31,12 +31,15 @@ export function EventCard({ event, compact = false, onClick }: EventCardProps) {
       <button
         onClick={handleClick}
         className={cn(
-          'w-full text-left px-2 py-1 rounded text-xs font-medium truncate',
+          'w-full text-left px-2 py-1 rounded text-xs font-medium',
           colorClass,
           'text-white hover:opacity-90 transition-opacity'
         )}
       >
-        {event.lead ? `${event.title} - ${event.lead.name}` : event.title}
+        <p className="truncate">{event.lead ? `${event.title} - ${event.lead.name}` : event.title}</p>
+        <p className="truncate text-[10px] text-primary-foreground/80">
+          Comercial: {event.user?.full_name || 'Não identificado'}
+        </p>
       </button>
     );
   }
@@ -71,6 +74,10 @@ export function EventCard({ event, compact = false, onClick }: EventCardProps) {
             <span className="truncate">{event.lead.name}</span>
           </div>
         )}
+        <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
+          <User className="h-3 w-3" />
+          <span className="truncate">Comercial: {event.user?.full_name || 'Não identificado'}</span>
+        </div>
       </div>
       <span
         className={cn(
