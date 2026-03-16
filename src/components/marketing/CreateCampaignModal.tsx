@@ -29,13 +29,14 @@ import { useClientLabels } from "@/hooks/useClientLabels";
 import { CLIENT_STATUS_STYLES } from "@/types/clients";
 import { useContactLists } from "@/hooks/useContactLists";
 import { supabase } from "@/integrations/supabase/client";
-import { useOrganization } from "@/hooks/useOrganization";
+import { useAuth } from "@/contexts/AuthContext";
 import { normalizeString } from "@/lib/utils";
 import { TemplateEditor } from "@/components/marketing/TemplateEditor";
 import type { CrmClient } from "@/types/clients";
 import type { EmailCampaign } from "@/types/marketing";
 import { format } from "date-fns";
 import { pt } from "date-fns/locale";
+import { toast } from "sonner";
 
 interface CreateCampaignModalProps {
   open: boolean;
