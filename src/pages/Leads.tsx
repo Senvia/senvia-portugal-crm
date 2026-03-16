@@ -152,9 +152,11 @@ export default function Leads() {
     
     // 3. Filtro de data
     const leadDate = lead.created_at ? new Date(lead.created_at) : null;
-    const matchesDate = 
-      (!dateRange.from || (leadDate && leadDate >= dateRange.from)) &&
-      (!dateRange.to || (leadDate && leadDate <= endOfDay(dateRange.to)));
+    const fromDate = dateRange.from ? startOfDay(dateRange.from) : null;
+    const toDate = dateRange.to ? endOfDay(dateRange.to) : null;
+    const matchesDate =
+      (!fromDate || (leadDate && leadDate >= fromDate)) &&
+      (!toDate || (leadDate && leadDate <= toDate));
     
     const matchesTipologia = tipologiaFilter === 'all' || lead.tipologia === tipologiaFilter;
     
