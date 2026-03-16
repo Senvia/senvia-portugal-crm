@@ -12,7 +12,7 @@ import {
   PROSPECTS_ACCESS_ERROR,
 } from "@/lib/prospects/import";
 import { toast } from "sonner";
-import type { Prospect, ProspectImportResult, ProspectSalesperson } from "@/types/prospects";
+import type { DistributeProspectsPayload, Prospect, ProspectImportResult, ProspectSalesperson } from "@/types/prospects";
 
 const getProspectsAccessMessage = ({
   organizationId,
