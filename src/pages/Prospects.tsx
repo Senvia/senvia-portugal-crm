@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProspects, useProspectSalespeople } from "@/hooks/useProspects";
-import { isPerfect2GetherOrg } from "@/lib/perfect2gether";
+import { hasPerfect2GetherAccess } from "@/lib/perfect2gether";
 import { mapProspectsForExport, exportToCsv, exportToExcel } from "@/lib/export";
 import { normalizeString } from "@/lib/utils";
 import { ImportProspectsDialog } from "@/components/prospects/ImportProspectsDialog";

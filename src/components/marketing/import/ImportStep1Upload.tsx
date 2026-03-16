@@ -11,10 +11,9 @@ interface Props {
   rows: Record<string, string>[];
   onFileLoaded: (fileName: string, headers: string[], rows: Record<string, string>[]) => void;
   onClearFile: () => void;
-  onConfirm: () => void;
 }
 
-export function ImportStep1Upload({ fileName, headers, rows, onFileLoaded, onClearFile, onConfirm }: Props) {
+export function ImportStep1Upload({ fileName, headers, rows, onFileLoaded, onClearFile }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const parseCSVLine = (line: string, delimiter: string): string[] => {
