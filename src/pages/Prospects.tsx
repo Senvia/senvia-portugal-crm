@@ -30,6 +30,7 @@ export default function Prospects() {
   const { data: salespeople = [], isLoading: salespeopleLoading } = useProspectSalespeople();
   const [searchQuery, setSearchQuery] = useState("");
   const [salespersonFilter, setSalespersonFilter] = useState("all");
+  const [comFilter, setComFilter] = useState("all");
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isDistributeOpen, setIsDistributeOpen] = useState(false);
 
@@ -42,10 +43,22 @@ export default function Prospects() {
     () => new Map(salespeople.map((salesperson) => [salesperson.user_id, salesperson.full_name])),
     [salespeople]
   );
+  const comOptions = useMemo(() => {
+    const values = Array.from(
+      new Set(
+        prospects
+          .map((prospect) => getProspectCom(prospect))
+          .filter((value): value is string => Boolean(value))
+      )
+    );
+
+    return values.sort((a, b) => a.localeCompare(b, "pt-PT"));
+  }, [prospects]);
 
   const filteredProspects = useMemo(() => {
     return prospects.filter((prospect) => {
       const query = normalizeString(searchQuery);
+      const prospectCom = getProspectCom(prospect);
       const matchesSearch =
         !query ||
         normalizeString(prospect.company_name).includes(query) ||
@@ -59,9 +72,11 @@ export default function Prospects() {
         (salespersonFilter === "unassigned" && !prospect.assigned_to) ||
         prospect.assigned_to === salespersonFilter;
 
-      return matchesSearch && matchesSalesperson;
+      const matchesCom = comFilter === "all" || prospectCom === comFilter;
+
+      return matchesSearch && matchesSalesperson && matchesCom;
     });
-  }, [prospects, salespersonFilter, searchQuery]);
+  }, [comFilter, prospects, salespersonFilter, searchQuery]);
 
   const totals = useMemo(() => {
     const assigned = prospects.filter((prospect) => !!prospect.assigned_to).length;
