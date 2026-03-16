@@ -8,7 +8,13 @@ const normalizeMetadataText = (value: unknown): string | null => {
 };
 
 export const getProspectSegment = (
-  prospect: Pick<Prospect, "segment" | "metadata">
+  prospect: Pick<Prospect, "segment">
 ): string | null => {
-  return prospect.segment?.trim() || normalizeMetadataText(prospect.metadata?.com);
+  return normalizeMetadataText(prospect.segment);
+};
+
+export const getProspectCom = (
+  prospect: Pick<Prospect, "metadata">
+): string | null => {
+  return normalizeMetadataText(prospect.metadata?.com);
 };

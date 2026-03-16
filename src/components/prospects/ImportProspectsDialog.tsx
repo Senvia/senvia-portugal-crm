@@ -53,7 +53,7 @@ export function ImportProspectsDialog({ open, onOpenChange }: ImportProspectsDia
         <DialogHeader className="border-b px-4 py-4 md:px-6">
           <DialogTitle>Importar prospects</DialogTitle>
           <DialogDescription>
-            Suporta .xlsb, .xlsx, .xls, .csv e .txt com deduplicação automática por NIF + CPE e email.
+            Suporta .xlsb, .xlsx, .xls, .csv e .txt com atualização automática por NIF + CPE ou email.
           </DialogDescription>
         </DialogHeader>
 
@@ -67,7 +67,7 @@ export function ImportProspectsDialog({ open, onOpenChange }: ImportProspectsDia
 
             {importSummary ? (
               <div className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm text-foreground">
-                <strong className="font-medium">Resultado:</strong> {importSummary.inserted} importados • {importSummary.skipped} ignorados • {importSummary.failed} falhados
+                <strong className="font-medium">Resultado:</strong> {importSummary.inserted} novos • {importSummary.updated} atualizados • {importSummary.skipped} ignorados • {importSummary.failed} falhados
                 {importSummary.firstError ? <div className="mt-1 text-muted-foreground">Primeiro erro: {importSummary.firstError}</div> : null}
               </div>
             ) : null}

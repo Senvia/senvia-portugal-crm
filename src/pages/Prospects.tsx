@@ -202,7 +202,8 @@ export default function Prospects() {
                     </div>
                     <div className="grid gap-2 text-sm text-muted-foreground">
                       <p><span className="font-medium text-foreground">CPE:</span> {prospect.cpe || "—"}</p>
-                      <p><span className="font-medium text-foreground">Segmento:</span> {getProspectSegment(prospect) || "Sem segmento"}</p>
+                      <p><span className="font-medium text-foreground">Segmento:</span> {getProspectSegment(prospect) || "—"}</p>
+                      <p><span className="font-medium text-foreground">COM:</span> {getProspectCom(prospect) || "—"}</p>
                       <p><span className="font-medium text-foreground">kWh/Ano:</span> {formatConsumption(prospect.annual_consumption_kwh)}</p>
                       <p><span className="font-medium text-foreground">Comercial:</span> {formatAssignedLabel(salespersonMap.get(prospect.assigned_to || ""))}</p>
                       <p><span className="font-medium text-foreground">Contacto:</span> {prospect.phone || prospect.email || "—"}</p>
@@ -219,6 +220,8 @@ export default function Prospects() {
                     <TableHead>Empresa</TableHead>
                     <TableHead>NIF</TableHead>
                     <TableHead>CPE</TableHead>
+                    <TableHead>Segmento</TableHead>
+                    <TableHead>COM</TableHead>
                     <TableHead>Contacto</TableHead>
                     <TableHead>kWh/Ano</TableHead>
                     <TableHead>Comercial</TableHead>
@@ -228,14 +231,11 @@ export default function Prospects() {
                 <TableBody>
                   {filteredProspects.map((prospect) => (
                     <TableRow key={prospect.id}>
-                      <TableCell>
-                        <div>
-                          <p className="font-medium">{prospect.company_name}</p>
-                          <p className="text-xs text-muted-foreground">{getProspectSegment(prospect) || "Sem segmento"}</p>
-                        </div>
-                      </TableCell>
+                      <TableCell className="font-medium">{prospect.company_name}</TableCell>
                       <TableCell>{prospect.nif || "—"}</TableCell>
                       <TableCell className="max-w-[240px] truncate">{prospect.cpe || "—"}</TableCell>
+                      <TableCell>{getProspectSegment(prospect) || "—"}</TableCell>
+                      <TableCell>{getProspectCom(prospect) || "—"}</TableCell>
                       <TableCell>{prospect.phone || prospect.email || "—"}</TableCell>
                       <TableCell>{formatConsumption(prospect.annual_consumption_kwh)}</TableCell>
                       <TableCell>{formatAssignedLabel(salespersonMap.get(prospect.assigned_to || ""))}</TableCell>

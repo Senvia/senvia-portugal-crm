@@ -3,7 +3,7 @@ import { format as formatDate } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import type { Lead } from '@/types';
 import type { CrmClient } from '@/types/clients';
-import { getProspectSegment } from '@/lib/prospects/segment';
+import { getProspectCom, getProspectSegment } from '@/lib/prospects/segment';
 import type { Prospect } from '@/types/prospects';
 
 // Status labels for clients
@@ -77,6 +77,7 @@ export function mapProspectsForExport(
     'Email': prospect.email || '',
     'Telefone': prospect.phone || '',
     'Segmento': getProspectSegment(prospect) || '',
+    'COM': getProspectCom(prospect) || '',
     'kWh/Ano': prospect.annual_consumption_kwh || 0,
     'Comercial': prospect.assigned_to ? salespersonMap.get(prospect.assigned_to) || '—' : 'Não atribuído',
     'Estado': prospect.converted_to_lead ? 'Convertido' : 'Por distribuir',
