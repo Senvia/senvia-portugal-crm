@@ -50,10 +50,15 @@ export function AppSidebar({
 }: AppSidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { signOut, roles, isSuperAdmin, organization } = useAuth();
+  const { signOut, roles, isSuperAdmin, organization, organizations } = useAuth();
   const { modules } = useModules();
   const { canViewModule } = usePermissions();
   const { isModuleLocked, getRequiredPlan } = useSubscription();
+  const canAccessProspects = hasPerfect2GetherAccess({
+    organizationId: organization?.id,
+    memberships: organizations,
+    isSuperAdmin,
+  });
 
   const [upgradeModal, setUpgradeModal] = useState<{ open: boolean; feature: string; plan: string }>({
     open: false, feature: '', plan: ''
