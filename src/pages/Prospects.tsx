@@ -147,20 +147,35 @@ export default function Prospects() {
           </Card>
         </div>
 
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
+          <Button variant="outline" onClick={() => setIsImportOpen(true)}>
+            <Upload className="mr-2 h-4 w-4" />
+            Importar
+          </Button>
+          <Button variant="outline" onClick={handleExportCsv} disabled={filteredProspects.length === 0}>
+            <Download className="mr-2 h-4 w-4" />
+            CSV
+          </Button>
+          <Button variant="outline" onClick={handleExportExcel} disabled={filteredProspects.length === 0}>
+            <Download className="mr-2 h-4 w-4" />
+            Excel
+          </Button>
+        </div>
+
         <Card>
           <CardContent className="space-y-4 p-4 md:p-6">
-            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-              <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px] xl:w-full xl:max-w-3xl">
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    value={searchQuery}
-                    onChange={(event) => setSearchQuery(event.target.value)}
-                    placeholder="Pesquisar empresa, NIF, CPE, email ou telefone"
-                    className="pl-9"
-                  />
-                </div>
+            <div className="space-y-3">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder="Pesquisar empresa, NIF, CPE, email ou telefone"
+                  className="pl-9"
+                />
+              </div>
 
+              <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-center">
                 <Select value={salespersonFilter} onValueChange={setSalespersonFilter}>
                   <SelectTrigger>
                     <SelectValue placeholder="Filtrar por comercial" />
@@ -175,22 +190,26 @@ export default function Prospects() {
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
 
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <Button variant="outline" onClick={handleExportCsv} disabled={filteredProspects.length === 0}>
-                  <Download className="mr-2 h-4 w-4" />
-                  CSV
-                </Button>
-                <Button variant="outline" onClick={handleExportExcel} disabled={filteredProspects.length === 0}>
-                  <Download className="mr-2 h-4 w-4" />
-                  Excel
-                </Button>
-                <Button variant="outline" onClick={() => setIsImportOpen(true)}>
-                  <Upload className="mr-2 h-4 w-4" />
-                  Importar
-                </Button>
-                <Button onClick={() => setIsDistributeOpen(true)} disabled={totals.remaining === 0 || salespeople.length === 0}>
+                <Select value={comFilter} onValueChange={setComFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Filtrar por COM" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos os COM</SelectItem>
+                    {comOptions.map((com) => (
+                      <SelectItem key={com} value={com}>
+                        {com}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Button
+                  onClick={() => setIsDistributeOpen(true)}
+                  disabled={totals.remaining === 0 || salespeople.length === 0}
+                  className="w-full md:w-auto"
+                >
                   <Users className="mr-2 h-4 w-4" />
                   Distribuir leads
                 </Button>
