@@ -231,7 +231,7 @@ export default function Prospects() {
                       <TableCell>
                         <div>
                           <p className="font-medium">{prospect.company_name}</p>
-                          <p className="text-xs text-muted-foreground">{prospect.segment || "Sem segmento"}</p>
+                          <p className="text-xs text-muted-foreground">{getProspectSegment(prospect) || "Sem segmento"}</p>
                         </div>
                       </TableCell>
                       <TableCell>{prospect.nif || "—"}</TableCell>

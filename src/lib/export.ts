@@ -76,7 +76,7 @@ export function mapProspectsForExport(
     'CPE': prospect.cpe || '',
     'Email': prospect.email || '',
     'Telefone': prospect.phone || '',
-    'Segmento': prospect.segment || '',
+    'Segmento': getProspectSegment(prospect) || '',
     'kWh/Ano': prospect.annual_consumption_kwh || 0,
     'Comercial': prospect.assigned_to ? salespersonMap.get(prospect.assigned_to) || '—' : 'Não atribuído',
     'Estado': prospect.converted_to_lead ? 'Convertido' : 'Por distribuir',
