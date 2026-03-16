@@ -3308,6 +3308,83 @@ export type Database = {
           },
         ]
       }
+      renewal_automation_runs: {
+        Row: {
+          created_at: string
+          failed_at: string | null
+          id: string
+          last_error: string | null
+          organization_id: string
+          renewal_date: string
+          renewal_payment_id: string | null
+          sale_id: string
+          sent_at: string | null
+          status: string
+          template_id: string
+          trigger_type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          failed_at?: string | null
+          id?: string
+          last_error?: string | null
+          organization_id: string
+          renewal_date: string
+          renewal_payment_id?: string | null
+          sale_id: string
+          sent_at?: string | null
+          status?: string
+          template_id: string
+          trigger_type: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          failed_at?: string | null
+          id?: string
+          last_error?: string | null
+          organization_id?: string
+          renewal_date?: string
+          renewal_payment_id?: string | null
+          sale_id?: string
+          sent_at?: string | null
+          status?: string
+          template_id?: string
+          trigger_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "renewal_automation_runs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "renewal_automation_runs_renewal_payment_id_fkey"
+            columns: ["renewal_payment_id"]
+            isOneToOne: false
+            referencedRelation: "sale_payments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "renewal_automation_runs_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "renewal_automation_runs_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "email_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sale_activation_history: {
         Row: {
           activation_date: string
@@ -3974,6 +4051,17 @@ export type Database = {
         Args: { _token: string; _user_id: string }
         Returns: boolean
       }
+      acquire_renewal_automation_run: {
+        Args: {
+          p_organization_id: string
+          p_renewal_date: string
+          p_renewal_payment_id?: string
+          p_sale_id: string
+          p_template_id: string
+          p_trigger_type: string
+        }
+        Returns: string
+      }
       calc_bank_running_balance: {
         Args: { _bank_account_id: string; _transaction_date: string }
         Returns: number
@@ -4069,6 +4157,10 @@ export type Database = {
         Returns: boolean
       }
       is_slug_available: { Args: { _slug: string }; Returns: boolean }
+      mark_renewal_automation_run: {
+        Args: { p_last_error?: string; p_run_id: string; p_status: string }
+        Returns: undefined
+      }
       search_clients_unaccent: {
         Args: { max_results?: number; org_id: string; search_term: string }
         Returns: {
