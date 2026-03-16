@@ -24,7 +24,7 @@ const formatConsumption = (value: number | null) => {
 const formatAssignedLabel = (name?: string | null) => name || "Não atribuído";
 
 export default function Prospects() {
-  const { organization } = useAuth();
+  const { organization, organizations, isSuperAdmin } = useAuth();
   const { data: prospects = [], isLoading } = useProspects();
   const { data: salespeople = [], isLoading: salespeopleLoading } = useProspectSalespeople();
   const [searchQuery, setSearchQuery] = useState("");
@@ -32,7 +32,11 @@ export default function Prospects() {
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isDistributeOpen, setIsDistributeOpen] = useState(false);
 
-  const isPerfect2Gether = isPerfect2GetherOrg(organization?.id);
+  const isPerfect2Gether = hasPerfect2GetherAccess({
+    organizationId: organization?.id,
+    memberships: organizations,
+    isSuperAdmin,
+  });
   const salespersonMap = useMemo(
     () => new Map(salespeople.map((salesperson) => [salesperson.user_id, salesperson.full_name])),
     [salespeople]
