@@ -37,3 +37,8 @@ export interface ProspectImportResult {
   failed: number;
   firstError: string | null;
 }
+
+export interface DistributeProspectsPayload {
+  prospectIds: string[];
+  salespersonIds?: string[];
+}
