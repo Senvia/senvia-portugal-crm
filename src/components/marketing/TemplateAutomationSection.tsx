@@ -110,7 +110,7 @@ export function TemplateAutomationSection({
           </div>
 
           <p className="text-xs text-muted-foreground">
-            O email será enviado automaticamente para o contacto que ativou o gatilho (lead, cliente, etc.)
+            O email será enviado automaticamente para o contacto associado ao gatilho, incluindo vendas recorrentes e avisos de renovação.
           </p>
         </div>
       )}

@@ -46,6 +46,9 @@ serve(async (req: Request): Promise<Response> => {
 
     for (const item of items) {
       try {
+        const variables = (item.variables as Record<string, unknown>) || {};
+        const clientId = typeof variables.client_id === "string" && variables.client_id ? variables.client_id : undefined;
+
         const { error: sendError } = await supabase.functions.invoke("send-template-email", {
           body: {
             organizationId: item.organization_id,
@@ -54,7 +57,8 @@ serve(async (req: Request): Promise<Response> => {
             recipients: [{
               email: item.recipient_email,
               name: item.recipient_name || '',
-              variables: item.variables || {},
+              clientId,
+              variables: Object.fromEntries(Object.entries(variables).map(([key, value]) => [key, String(value ?? '')])),
             }],
           },
         });

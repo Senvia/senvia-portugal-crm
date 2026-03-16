@@ -147,7 +147,10 @@ serve(async (req: Request): Promise<Response> => {
           organization_id,
           recipient_email: recipientEmail,
           recipient_name: recipientName,
-          variables,
+          variables: {
+            ...variables,
+            client_id: clientId || '',
+          },
           template_id: template.id,
           scheduled_for: scheduledFor.toISOString(),
           status: "pending",
