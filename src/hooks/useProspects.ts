@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { hasPerfect2GetherAccess } from "@/lib/perfect2gether";
+import { hasPerfect2GetherAccess, isPerfect2GetherOrg } from "@/lib/perfect2gether";
 import {
   buildProspectPayload,
   createEmptyImportResult,
@@ -13,6 +13,20 @@ import {
 } from "@/lib/prospects/import";
 import { toast } from "sonner";
 import type { Prospect, ProspectImportResult, ProspectSalesperson } from "@/types/prospects";
+
+const getProspectsAccessMessage = ({
+  organizationId,
+  isSuperAdmin,
+}: {
+  organizationId?: string | null;
+  isSuperAdmin?: boolean;
+}) => {
+  if (isSuperAdmin && !isPerfect2GetherOrg(organizationId)) {
+    return "Os Prospects estão disponíveis apenas na organização Perfect2Gether.";
+  }
+
+  return PROSPECTS_ACCESS_ERROR;
+};
 
 export function useProspects() {
   const { organization, organizations, isSuperAdmin } = useAuth();
@@ -83,7 +97,9 @@ export function useImportProspects() {
       rows: Record<string, unknown>[];
     }): Promise<ProspectImportResult> => {
       if (!organization?.id) throw new Error("Sem organização ativa.");
-      if (!hasAccess) throw new Error(PROSPECTS_ACCESS_ERROR);
+      if (!hasAccess) {
+        throw new Error(getProspectsAccessMessage({ organizationId: organization.id, isSuperAdmin }));
+      }
 
       const client = supabase as any;
       const result = createEmptyImportResult();
@@ -209,7 +225,9 @@ export function useDistributeProspects() {
   return useMutation({
     mutationFn: async ({ quantity }: { quantity: number }) => {
       if (!organization?.id) throw new Error("Sem organização ativa.");
-      if (!hasAccess) throw new Error(PROSPECTS_ACCESS_ERROR);
+      if (!hasAccess) {
+        throw new Error(getProspectsAccessMessage({ organizationId: organization.id, isSuperAdmin }));
+      }
 
       const { data, error } = await (supabase as any).rpc("distribute_prospects_round_robin", {
         p_organization_id: organization.id,
