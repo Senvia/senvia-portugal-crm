@@ -544,7 +544,7 @@ export default function Leads() {
 
           {activeTab === 'pipeline' && (
             <div className="flex flex-col gap-3 pb-1">
-              <div className="flex flex-wrap items-center gap-2 md:flex-nowrap md:gap-3">
+              <div className="flex flex-wrap items-center gap-2 lg:flex-nowrap lg:gap-3">
                 <div className="relative w-full min-w-0 md:flex-1 md:min-w-[260px] lg:min-w-[320px]">
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input placeholder="Pesquisar..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9 h-9" />
@@ -560,9 +560,9 @@ export default function Leads() {
                   placeholder="Período"
                   className="h-9 w-full md:w-[240px] lg:w-[260px] shrink-0 justify-start"
                 />
+              </div>
 
-                <div className="h-4 w-px bg-border shrink-0 hidden xl:block" />
-
+              <div className="flex flex-wrap items-center gap-2">
                 {/* Mobile View Mode Toggle */}
                 <div className="flex sm:hidden items-center border border-border rounded-lg p-1 bg-background shrink-0">
                   <Button 
