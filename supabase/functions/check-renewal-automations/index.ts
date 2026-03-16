@@ -273,6 +273,7 @@ serve(async (req: Request): Promise<Response> => {
         data_renovacao: formatDate(sale.next_renewal_date),
         dias_para_renovacao: String(daysUntil),
         data: formatDate(todayDate),
+        client_id: sale.client_id || "",
       };
 
       for (const template of matchingTemplates) {

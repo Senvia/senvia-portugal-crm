@@ -38,6 +38,7 @@ export function TemplateAutomationSection({
 
   const showStatusConfig = ['lead_status_changed', 'client_status_changed', 'sale_status_changed', 'proposal_status_changed'].includes(triggerType);
   const usesPipelineStages = triggerType === 'lead_status_changed' || triggerType === 'client_status_changed';
+  const isRenewalTrigger = ['sale_renewal_due_today', 'sale_renewal_due_in_2_days'].includes(triggerType);
 
   const renderStatusOptions = () => {
     if (usesPipelineStages) {
@@ -110,7 +111,7 @@ export function TemplateAutomationSection({
           </div>
 
           <p className="text-xs text-muted-foreground">
-            O email será enviado automaticamente para o contacto que ativou o gatilho (lead, cliente, etc.)
+            O email será enviado automaticamente para o contacto associado ao gatilho, incluindo vendas recorrentes e avisos de renovação.
           </p>
         </div>
       )}
