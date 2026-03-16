@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Toggle } from "@/components/ui/toggle";
 import { Separator } from "@/components/ui/separator";
-import { TEMPLATE_VARIABLES_CLIENT, TEMPLATE_VARIABLES_ORG } from "@/types/marketing";
+import { TEMPLATE_VARIABLES_CLIENT, TEMPLATE_VARIABLES_ORG, TEMPLATE_VARIABLES_RENEWAL } from "@/types/marketing";
 import { cn } from "@/lib/utils";
 import {
   Bold,
