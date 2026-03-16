@@ -32,13 +32,11 @@ import { useLeadsRealtime, useProposalsRealtime } from "@/hooks/useRealtimeSubsc
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Users, Loader2, CalendarIcon, X, Plus, LayoutGrid, List, Zap, BarChart3 } from "lucide-react";
-import { format, endOfDay } from "date-fns";
-import { pt } from "date-fns/locale";
-import { normalizeString, cn } from "@/lib/utils";
+import { Search, Users, Loader2, X, Plus, LayoutGrid, List, Zap, BarChart3 } from "lucide-react";
+import { format, endOfDay, startOfDay } from "date-fns";
+import { normalizeString } from "@/lib/utils";
 import { mapLeadsForExport, exportToCsv, exportToExcel } from "@/lib/export";
 import { toast } from "sonner";
 import type { Lead, LeadTemperature, LeadTipologia } from "@/types";
@@ -89,7 +87,7 @@ export default function Leads() {
   const [pendingWonData, setPendingWonData] = useState<{ leadId: string; status: string } | null>(null);
   const [searchQuery, setSearchQuery] = usePersistedState("leads-search-v1", "");
   const [statusFilter, setStatusFilter] = usePersistedState<string[]>("leads-status-v1", []);
-  const [dateRange, setDateRange] = usePersistedState<{ from: Date | undefined; to: Date | undefined }>("leads-daterange-v1", { from: undefined, to: undefined });
+  const [dateRange, setDateRange] = usePersistedState<{ from?: Date; to?: Date }>("leads-daterange-v1", { from: undefined, to: undefined });
   const isTelecom = organization?.niche === 'telecom';
   const { modules } = useModules();
   const showEnergy = isTelecom && modules.energy;
@@ -154,9 +152,11 @@ export default function Leads() {
     
     // 3. Filtro de data
     const leadDate = lead.created_at ? new Date(lead.created_at) : null;
-    const matchesDate = 
-      (!dateRange.from || (leadDate && leadDate >= dateRange.from)) &&
-      (!dateRange.to || (leadDate && leadDate <= endOfDay(dateRange.to)));
+    const fromDate = dateRange.from ? startOfDay(dateRange.from) : null;
+    const toDate = dateRange.to ? endOfDay(dateRange.to) : null;
+    const matchesDate =
+      (!fromDate || (leadDate && leadDate >= fromDate)) &&
+      (!toDate || (leadDate && leadDate <= toDate));
     
     const matchesTipologia = tipologiaFilter === 'all' || lead.tipologia === tipologiaFilter;
     
@@ -554,41 +554,12 @@ export default function Leads() {
                 <TeamMemberFilter className="w-full sm:w-[220px]" />
 
                 {/* Date Range Picker */}
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" size="sm" className={cn("h-8 shrink-0", dateRange.from && "border-primary")}>
-                      <CalendarIcon className="mr-1.5 h-3.5 w-3.5" />
-                      <span className="text-xs">{dateRange.from ? format(dateRange.from, "dd/MM", { locale: pt }) : "De"}</span>
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={dateRange.from}
-                      onSelect={(date) => setDateRange(prev => ({ ...prev, from: date }))}
-                      className="pointer-events-auto"
-                      locale={pt}
-                    />
-                  </PopoverContent>
-                </Popover>
-
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" size="sm" className={cn("h-8 shrink-0", dateRange.to && "border-primary")}>
-                      <CalendarIcon className="mr-1.5 h-3.5 w-3.5" />
-                      <span className="text-xs">{dateRange.to ? format(dateRange.to, "dd/MM", { locale: pt }) : "Até"}</span>
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={dateRange.to}
-                      onSelect={(date) => setDateRange(prev => ({ ...prev, to: date }))}
-                      className="pointer-events-auto"
-                      locale={pt}
-                    />
-                  </PopoverContent>
-                </Popover>
+                <DateRangePicker
+                  value={dateRange.from ? { from: dateRange.from, to: dateRange.to } : undefined}
+                  onChange={(range) => setDateRange({ from: range?.from, to: range?.to })}
+                  placeholder="Período"
+                  className="h-8 w-full sm:w-[240px] justify-start"
+                />
 
                 <div className="h-4 w-px bg-border shrink-0 hidden md:block" />
 
