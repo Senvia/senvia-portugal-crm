@@ -2,130 +2,17 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { hasPerfect2GetherAccess } from "@/lib/perfect2gether";
+import {
+  buildProspectPayload,
+  createEmptyImportResult,
+  isDuplicateConflictError,
+  mapProspectsError,
+  normalizeEmail,
+  normalizeIdentifierValue,
+  PROSPECTS_ACCESS_ERROR,
+} from "@/lib/prospects/import";
 import { toast } from "sonner";
 import type { Prospect, ProspectImportResult, ProspectSalesperson } from "@/types/prospects";
-
-const normalizeHeader = (value: string) =>
-  value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "");
-
-const stringify = (value: unknown) => {
-  if (value === null || value === undefined) return "";
-  return String(value).trim();
-};
-
-const normalizeEmail = (value: string) => {
-  const email = stringify(value).toLowerCase();
-  return email.includes("@") ? email : "";
-};
-
-const parseNumericValue = (value: unknown) => {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-
-  const input = stringify(value);
-  if (!input) return null;
-
-  const sanitized = input.replace(/\s/g, "");
-  const normalized = sanitized.includes(",") && sanitized.includes(".")
-    ? sanitized.replace(/\./g, "").replace(/,/g, ".")
-    : sanitized.replace(/,/g, ".");
-
-  const numeric = Number(normalized.replace(/[^0-9.-]/g, ""));
-  return Number.isFinite(numeric) ? numeric : null;
-};
-
-const findValue = (row: Record<string, unknown>, aliases: string[]) => {
-  const aliasSet = new Set(aliases.map(normalizeHeader));
-
-  for (const [key, value] of Object.entries(row)) {
-    if (aliasSet.has(normalizeHeader(key))) {
-      return value;
-    }
-  }
-
-  return "";
-};
-
-const parseContactField = (value: unknown) => {
-  const raw = stringify(value);
-  if (!raw) return { phone: null as string | null, contactName: null as string | null };
-
-  const digitCount = raw.replace(/\D/g, "").length;
-  if (digitCount >= 8) {
-    return { phone: raw, contactName: null };
-  }
-
-  return { phone: null, contactName: raw };
-};
-
-const buildProspectPayload = ({
-  row,
-  fileName,
-  organizationId,
-  userId,
-}: {
-  row: Record<string, unknown>;
-  fileName: string;
-  organizationId: string;
-  userId?: string;
-}) => {
-  const companyName = stringify(findValue(row, ["Nome da Empresa", "Empresa", "Company", "Nome"]));
-  const email = normalizeEmail(stringify(findValue(row, ["Email", "E-mail", "Mail"])));
-  const contactField = findValue(row, ["Contato", "Contacto", "Telefone", "Phone"]);
-  const { phone, contactName } = parseContactField(contactField);
-
-  const nif = stringify(findValue(row, ["NIF"]));
-  const cpe = stringify(findValue(row, ["CPE"]));
-  const segment = stringify(findValue(row, ["Segmento", "Segment"]));
-  const status = stringify(findValue(row, ["Estado", "Status"])) || "new";
-  const annualConsumption = parseNumericValue(findValue(row, ["kWhAno", "kWh Ano", "Consumo Anual", "kwhano"]));
-  const observations = stringify(findValue(row, ["Observações", "Observacoes", "Notas", "Notes"]));
-
-  return {
-    organization_id: organizationId,
-    company_name: companyName,
-    contact_name: contactName,
-    email: email || null,
-    phone,
-    nif: nif || null,
-    cpe: cpe || null,
-    segment: segment || null,
-    status,
-    annual_consumption_kwh: annualConsumption,
-    observations: observations || null,
-    source: "import",
-    source_file_name: fileName,
-    imported_by: userId || null,
-    metadata: {
-      numero: stringify(findValue(row, ["Numero", "Número"])) || null,
-      nt: stringify(findValue(row, ["NT"])) || null,
-      pc: parseNumericValue(findValue(row, ["PC"])),
-      com: stringify(findValue(row, ["COM"])) || null,
-      gestor_totallink: stringify(findValue(row, ["Gestor Totallink", "Gestor"])) || null,
-      raw_row: row,
-    },
-  };
-};
-
-const PROSPECTS_ACCESS_ERROR = "A tua conta não tem acesso à organização Perfect2Gether.";
-
-const mapProspectsError = (error: unknown) => {
-  const message = error instanceof Error ? error.message : String(error || "");
-  const normalizedMessage = message.toLowerCase();
-
-  if (
-    normalizedMessage.includes("row-level security") ||
-    normalizedMessage.includes("violates row-level security policy") ||
-    normalizedMessage.includes("permission denied")
-  ) {
-    return PROSPECTS_ACCESS_ERROR;
-  }
-
-  return message || "Erro ao importar prospects";
-};
 
 export function useProspects() {
   const { organization, organizations, isSuperAdmin } = useAuth();
@@ -199,20 +86,23 @@ export function useImportProspects() {
       if (!hasAccess) throw new Error(PROSPECTS_ACCESS_ERROR);
 
       const client = supabase as any;
+      const result = createEmptyImportResult();
       const { data: existingRows, error: existingError } = await client
         .from("prospects")
         .select("nif, cpe, email")
         .eq("organization_id", organization.id);
 
-      if (existingError) throw new Error(mapProspectsError(existingError));
+      if (existingError) {
+        throw new Error(`Erro ao validar duplicados: ${mapProspectsError(existingError)}`);
+      }
 
       const existingPairKeys = new Set<string>();
       const existingEmailKeys = new Set<string>();
 
       for (const item of (existingRows || []) as Array<{ nif?: string | null; cpe?: string | null; email?: string | null }>) {
-        const nif = stringify(item.nif);
-        const cpe = stringify(item.cpe);
-        const email = normalizeEmail(stringify(item.email));
+        const nif = normalizeIdentifierValue(item.nif);
+        const cpe = normalizeIdentifierValue(item.cpe);
+        const email = normalizeEmail(item.email);
 
         if (nif && cpe) existingPairKeys.add(`${nif}::${cpe}`);
         if (email) existingEmailKeys.add(email);
@@ -221,51 +111,84 @@ export function useImportProspects() {
       const queuedPairKeys = new Set<string>();
       const queuedEmailKeys = new Set<string>();
       const prospectsToInsert: Record<string, unknown>[] = [];
-      let skipped = 0;
 
       for (const row of rows) {
-        const payload = buildProspectPayload({
-          row,
-          fileName,
-          organizationId: organization.id,
-          userId: user?.id,
-        });
+        try {
+          const payload = buildProspectPayload({
+            row,
+            fileName,
+            organizationId: organization.id,
+            userId: user?.id,
+          });
 
-        if (!payload.company_name) {
-          skipped += 1;
-          continue;
+          if (!payload.company_name) {
+            result.skipped += 1;
+            continue;
+          }
+
+          const pairKey = payload.nif && payload.cpe ? `${payload.nif}::${payload.cpe}` : null;
+          const emailKey = payload.email ? normalizeEmail(payload.email) : null;
+
+          const isDuplicate =
+            (pairKey && (existingPairKeys.has(pairKey) || queuedPairKeys.has(pairKey))) ||
+            (emailKey && (existingEmailKeys.has(emailKey) || queuedEmailKeys.has(emailKey)));
+
+          if (isDuplicate) {
+            result.skipped += 1;
+            continue;
+          }
+
+          if (pairKey) queuedPairKeys.add(pairKey);
+          if (emailKey) queuedEmailKeys.add(emailKey);
+          prospectsToInsert.push(payload);
+        } catch (error) {
+          result.failed += 1;
+          result.firstError ??= `Erro ao preparar linha: ${mapProspectsError(error)}`;
         }
-
-        const pairKey = payload.nif && payload.cpe ? `${payload.nif}::${payload.cpe}` : null;
-        const emailKey = payload.email ? normalizeEmail(payload.email) : null;
-
-        const isDuplicate =
-          (pairKey && (existingPairKeys.has(pairKey) || queuedPairKeys.has(pairKey))) ||
-          (emailKey && (existingEmailKeys.has(emailKey) || queuedEmailKeys.has(emailKey)));
-
-        if (isDuplicate) {
-          skipped += 1;
-          continue;
-        }
-
-        if (pairKey) queuedPairKeys.add(pairKey);
-        if (emailKey) queuedEmailKeys.add(emailKey);
-        prospectsToInsert.push(payload);
       }
+
+      const insertSingle = async (payload: Record<string, unknown>) => {
+        const { error } = await client.from("prospects").insert(payload);
+
+        if (!error) {
+          result.inserted += 1;
+          return;
+        }
+
+        if (isDuplicateConflictError(error)) {
+          result.skipped += 1;
+          return;
+        }
+
+        result.failed += 1;
+        result.firstError ??= mapProspectsError(error);
+      };
 
       for (let index = 0; index < prospectsToInsert.length; index += 200) {
         const chunk = prospectsToInsert.slice(index, index + 200);
         const { error } = await client.from("prospects").insert(chunk);
-        if (error) throw new Error(mapProspectsError(error));
+
+        if (!error) {
+          result.inserted += chunk.length;
+          continue;
+        }
+
+        for (const payload of chunk) {
+          await insertSingle(payload);
+        }
       }
 
-      return {
-        inserted: prospectsToInsert.length,
-        skipped,
-      };
+      return result;
     },
-    onSuccess: ({ inserted, skipped }) => {
+    onSuccess: ({ inserted, skipped, failed, firstError }) => {
       queryClient.invalidateQueries({ queryKey: ["prospects"] });
+
+      if (failed > 0) {
+        toast.warning(`${inserted} importados • ${skipped} ignorados • ${failed} falhados`);
+        if (firstError) toast.error(firstError);
+        return;
+      }
+
       toast.success(`${inserted} prospects importados${skipped ? ` • ${skipped} ignorados` : ""}`);
     },
     onError: (error: Error) => {
