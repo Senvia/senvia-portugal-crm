@@ -7,6 +7,8 @@ export const TRIGGER_TYPES = [
   { value: 'client_created', label: 'Novo Cliente Criado' },
   { value: 'client_status_changed', label: 'Cliente Muda de Estado' },
   { value: 'sale_status_changed', label: 'Venda Muda de Estado' },
+  { value: 'sale_renewal_due_today', label: 'Renovação Vence Hoje' },
+  { value: 'sale_renewal_due_in_2_days', label: 'Renovação Vence em 2 Dias' },
   { value: 'proposal_created', label: 'Nova Proposta Criada' },
   { value: 'proposal_status_changed', label: 'Proposta Muda de Estado' },
 ] as const;

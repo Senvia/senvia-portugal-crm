@@ -219,6 +219,16 @@ export function TemplateEditor({ value, onChange, className }: TemplateEditorPro
             ))}
           </div>
         </div>
+        <div>
+          <Label className="text-xs text-muted-foreground mb-1.5 block">Venda / Renovação</Label>
+          <div className="flex flex-wrap gap-2">
+            {TEMPLATE_VARIABLES_RENEWAL.map((v) => (
+              <Button key={v.key} type="button" variant="outline" size="sm" className="h-7 text-xs" onMouseDown={(e) => e.preventDefault()} onClick={() => insertVariable(v.key)}>
+                {v.key}
+              </Button>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* Editor and Preview */}
