@@ -513,11 +513,6 @@ export default function Leads() {
 
               {activeTab === 'pipeline' && (
                 <>
-                  <div className="relative flex-1 sm:w-64">
-                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input placeholder="Pesquisar..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9 h-9 lg:h-10" />
-                  </div>
-                  
                   {/* View Mode Toggle */}
                   <div className="hidden sm:flex items-center border border-border rounded-lg p-1 bg-background">
                     <Button 
