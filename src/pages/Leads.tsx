@@ -32,13 +32,11 @@ import { useLeadsRealtime, useProposalsRealtime } from "@/hooks/useRealtimeSubsc
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Users, Loader2, CalendarIcon, X, Plus, LayoutGrid, List, Zap, BarChart3 } from "lucide-react";
-import { format, endOfDay } from "date-fns";
-import { pt } from "date-fns/locale";
-import { normalizeString, cn } from "@/lib/utils";
+import { Search, Users, Loader2, X, Plus, LayoutGrid, List, Zap, BarChart3 } from "lucide-react";
+import { format, endOfDay, startOfDay } from "date-fns";
+import { normalizeString } from "@/lib/utils";
 import { mapLeadsForExport, exportToCsv, exportToExcel } from "@/lib/export";
 import { toast } from "sonner";
 import type { Lead, LeadTemperature, LeadTipologia } from "@/types";

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useTeams, useAllTeamMembersEntries } from '@/hooks/useTeams';
+import { useTeamMembers } from '@/hooks/useTeam';
 import { useEffect, useMemo } from 'react';
 
 interface TeamFilterStore {
