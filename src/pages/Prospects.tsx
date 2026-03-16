@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useAuth } from "@/contexts/AuthContext";
@@ -23,6 +24,8 @@ const formatConsumption = (value: number | null) => {
 };
 
 const formatAssignedLabel = (name?: string | null) => name || "Não atribuído";
+const isProspectEligibleForDistribution = (prospect: { assigned_to: string | null; converted_to_lead: boolean }) =>
+  !prospect.assigned_to && !prospect.converted_to_lead;
 
 export default function Prospects() {
   const { organization, organizations, isSuperAdmin } = useAuth();
@@ -31,6 +34,7 @@ export default function Prospects() {
   const [searchQuery, setSearchQuery] = useState("");
   const [salespersonFilter, setSalespersonFilter] = useState("all");
   const [comFilter, setComFilter] = useState("all");
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isDistributeOpen, setIsDistributeOpen] = useState(false);
 
@@ -78,6 +82,24 @@ export default function Prospects() {
     });
   }, [comFilter, prospects, salespersonFilter, searchQuery]);
 
+  const eligibleFilteredProspects = useMemo(
+    () => filteredProspects.filter(isProspectEligibleForDistribution),
+    [filteredProspects]
+  );
+  const eligibleFilteredIds = useMemo(
+    () => eligibleFilteredProspects.map((prospect) => prospect.id),
+    [eligibleFilteredProspects]
+  );
+  const selectedEligibleIds = useMemo(
+    () => selectedIds.filter((id) => eligibleFilteredIds.includes(id)),
+    [eligibleFilteredIds, selectedIds]
+  );
+  const allEligibleFilteredSelected = eligibleFilteredIds.length > 0 && selectedEligibleIds.length === eligibleFilteredIds.length;
+
+  useEffect(() => {
+    setSelectedIds([]);
+  }, [searchQuery, salespersonFilter, comFilter]);
+
   const totals = useMemo(() => {
     const assigned = prospects.filter((prospect) => !!prospect.assigned_to).length;
     const remaining = prospects.filter((prospect) => !prospect.assigned_to && !prospect.converted_to_lead).length;
@@ -88,6 +110,26 @@ export default function Prospects() {
       remaining,
     };
   }, [prospects]);
+
+  const handleToggleProspect = (prospectId: string, checked: boolean) => {
+    setSelectedIds((current) => {
+      if (checked) {
+        return current.includes(prospectId) ? current : [...current, prospectId];
+      }
+
+      return current.filter((id) => id !== prospectId);
+    });
+  };
+
+  const handleToggleAllEligible = (checked: boolean) => {
+    setSelectedIds((current) => {
+      if (!checked) {
+        return current.filter((id) => !eligibleFilteredIds.includes(id));
+      }
+
+      return Array.from(new Set([...current, ...eligibleFilteredIds]));
+    });
+  };
 
   const handleExportCsv = () => {
     exportToCsv(mapProspectsForExport(filteredProspects, salespersonMap), `prospects_${format(new Date(), "yyyy-MM-dd")}`);
@@ -207,11 +249,11 @@ export default function Prospects() {
 
                 <Button
                   onClick={() => setIsDistributeOpen(true)}
-                  disabled={totals.remaining === 0 || salespeople.length === 0}
+                  disabled={selectedEligibleIds.length === 0 || salespeople.length === 0}
                   className="w-full md:w-auto"
                 >
                   <Users className="mr-2 h-4 w-4" />
-                  Distribuir leads
+                  Distribuir leads{selectedEligibleIds.length ? ` (${selectedEligibleIds.length})` : ""}
                 </Button>
               </div>
             </div>
@@ -219,38 +261,77 @@ export default function Prospects() {
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               {(isLoading || salespeopleLoading) ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               <span>{filteredProspects.length} resultados</span>
+              {eligibleFilteredIds.length > 0 ? <span>• {selectedEligibleIds.length} selecionados</span> : null}
             </div>
 
             <div className="space-y-3 md:hidden">
-              {filteredProspects.map((prospect) => (
-                <Card key={prospect.id} className="border-border/70">
-                  <CardContent className="space-y-3 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="font-medium">{prospect.company_name}</p>
-                        <p className="text-sm text-muted-foreground">{prospect.nif || "Sem NIF"}</p>
+              {eligibleFilteredIds.length > 0 ? (
+                <div className="flex items-center gap-3 rounded-xl border bg-card p-4">
+                  <Checkbox
+                    checked={allEligibleFilteredSelected}
+                    onCheckedChange={(checked) => handleToggleAllEligible(checked === true)}
+                    aria-label="Selecionar todos os prospects elegíveis filtrados"
+                  />
+                  <div>
+                    <p className="text-sm font-medium">Selecionar todos os elegíveis</p>
+                    <p className="text-xs text-muted-foreground">{eligibleFilteredIds.length} disponíveis nesta vista</p>
+                  </div>
+                </div>
+              ) : null}
+
+              {filteredProspects.map((prospect) => {
+                const isEligible = isProspectEligibleForDistribution(prospect);
+                const isSelected = selectedIds.includes(prospect.id);
+
+                return (
+                  <Card key={prospect.id} className="border-border/70">
+                    <CardContent className="space-y-3 p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-start gap-3">
+                          <Checkbox
+                            checked={isSelected}
+                            disabled={!isEligible}
+                            onCheckedChange={(checked) => handleToggleProspect(prospect.id, checked === true)}
+                            aria-label={`Selecionar prospect ${prospect.company_name}`}
+                          />
+                          <div>
+                            <p className="font-medium">{prospect.company_name}</p>
+                            <p className="text-sm text-muted-foreground">{prospect.nif || "Sem NIF"}</p>
+                          </div>
+                        </div>
+                        <Badge variant={prospect.converted_to_lead ? "default" : "secondary"}>
+                          {prospect.converted_to_lead ? "Convertido" : prospect.assigned_to ? "Atribuído" : "Por distribuir"}
+                        </Badge>
                       </div>
-                      <Badge variant={prospect.converted_to_lead ? "default" : "secondary"}>
-                        {prospect.converted_to_lead ? "Convertido" : "Por distribuir"}
-                      </Badge>
-                    </div>
-                    <div className="grid gap-2 text-sm text-muted-foreground">
-                      <p><span className="font-medium text-foreground">CPE:</span> {prospect.cpe || "—"}</p>
-                      <p><span className="font-medium text-foreground">Segmento:</span> {getProspectSegment(prospect) || "—"}</p>
-                      <p><span className="font-medium text-foreground">COM:</span> {getProspectCom(prospect) || "—"}</p>
-                      <p><span className="font-medium text-foreground">kWh/Ano:</span> {formatConsumption(prospect.annual_consumption_kwh)}</p>
-                      <p><span className="font-medium text-foreground">Comercial:</span> {formatAssignedLabel(salespersonMap.get(prospect.assigned_to || ""))}</p>
-                      <p><span className="font-medium text-foreground">Contacto:</span> {prospect.phone || prospect.email || "—"}</p>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                      <div className="grid gap-2 text-sm text-muted-foreground">
+                        <p><span className="font-medium text-foreground">CPE:</span> {prospect.cpe || "—"}</p>
+                        <p><span className="font-medium text-foreground">Segmento:</span> {getProspectSegment(prospect) || "—"}</p>
+                        <p><span className="font-medium text-foreground">COM:</span> {getProspectCom(prospect) || "—"}</p>
+                        <p><span className="font-medium text-foreground">kWh/Ano:</span> {formatConsumption(prospect.annual_consumption_kwh)}</p>
+                        <p><span className="font-medium text-foreground">Comercial:</span> {formatAssignedLabel(salespersonMap.get(prospect.assigned_to || ""))}</p>
+                        <p><span className="font-medium text-foreground">Contacto:</span> {prospect.phone || prospect.email || "—"}</p>
+                        {!isEligible ? (
+                          <p className="text-xs text-muted-foreground">Este prospect já foi atribuído ou convertido.</p>
+                        ) : null}
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
 
             <div className="hidden overflow-hidden rounded-xl border md:block">
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead>
+                      <Checkbox
+                        checked={allEligibleFilteredSelected}
+                        disabled={eligibleFilteredIds.length === 0}
+                        onCheckedChange={(checked) => handleToggleAllEligible(checked === true)}
+                        aria-label="Selecionar todos os prospects elegíveis filtrados"
+                      />
+                    </TableHead>
                     <TableHead>Empresa</TableHead>
                     <TableHead>NIF</TableHead>
                     <TableHead>CPE</TableHead>
@@ -263,23 +344,36 @@ export default function Prospects() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredProspects.map((prospect) => (
-                    <TableRow key={prospect.id}>
-                      <TableCell className="font-medium">{prospect.company_name}</TableCell>
-                      <TableCell>{prospect.nif || "—"}</TableCell>
-                      <TableCell className="max-w-[240px] truncate">{prospect.cpe || "—"}</TableCell>
-                      <TableCell>{getProspectSegment(prospect) || "—"}</TableCell>
-                      <TableCell>{getProspectCom(prospect) || "—"}</TableCell>
-                      <TableCell>{prospect.phone || prospect.email || "—"}</TableCell>
-                      <TableCell>{formatConsumption(prospect.annual_consumption_kwh)}</TableCell>
-                      <TableCell>{formatAssignedLabel(salespersonMap.get(prospect.assigned_to || ""))}</TableCell>
-                      <TableCell>
-                        <Badge variant={prospect.converted_to_lead ? "default" : "secondary"}>
-                          {prospect.converted_to_lead ? "Convertido" : "Por distribuir"}
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {filteredProspects.map((prospect) => {
+                    const isEligible = isProspectEligibleForDistribution(prospect);
+                    const isSelected = selectedIds.includes(prospect.id);
+
+                    return (
+                      <TableRow key={prospect.id} data-state={isSelected ? "selected" : undefined}>
+                        <TableCell>
+                          <Checkbox
+                            checked={isSelected}
+                            disabled={!isEligible}
+                            onCheckedChange={(checked) => handleToggleProspect(prospect.id, checked === true)}
+                            aria-label={`Selecionar prospect ${prospect.company_name}`}
+                          />
+                        </TableCell>
+                        <TableCell className="font-medium">{prospect.company_name}</TableCell>
+                        <TableCell>{prospect.nif || "—"}</TableCell>
+                        <TableCell className="max-w-[240px] truncate">{prospect.cpe || "—"}</TableCell>
+                        <TableCell>{getProspectSegment(prospect) || "—"}</TableCell>
+                        <TableCell>{getProspectCom(prospect) || "—"}</TableCell>
+                        <TableCell>{prospect.phone || prospect.email || "—"}</TableCell>
+                        <TableCell>{formatConsumption(prospect.annual_consumption_kwh)}</TableCell>
+                        <TableCell>{formatAssignedLabel(salespersonMap.get(prospect.assigned_to || ""))}</TableCell>
+                        <TableCell>
+                          <Badge variant={prospect.converted_to_lead ? "default" : "secondary"}>
+                            {prospect.converted_to_lead ? "Convertido" : prospect.assigned_to ? "Atribuído" : "Por distribuir"}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
@@ -297,8 +391,10 @@ export default function Prospects() {
       <DistributeProspectsDialog
         open={isDistributeOpen}
         onOpenChange={setIsDistributeOpen}
-        remainingCount={totals.remaining}
+        selectedCount={selectedEligibleIds.length}
+        selectedIds={selectedEligibleIds}
         salespeople={salespeople}
+        onDistributed={() => setSelectedIds([])}
       />
     </>
   );

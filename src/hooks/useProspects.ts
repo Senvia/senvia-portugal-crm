@@ -12,7 +12,7 @@ import {
   PROSPECTS_ACCESS_ERROR,
 } from "@/lib/prospects/import";
 import { toast } from "sonner";
-import type { Prospect, ProspectImportResult, ProspectSalesperson } from "@/types/prospects";
+import type { DistributeProspectsPayload, Prospect, ProspectImportResult, ProspectSalesperson } from "@/types/prospects";
 
 const getProspectsAccessMessage = ({
   organizationId,
@@ -250,15 +250,22 @@ export function useDistributeProspects() {
   });
 
   return useMutation({
-    mutationFn: async ({ quantity }: { quantity: number }) => {
+    mutationFn: async ({
+      prospectIds,
+      salespersonIds,
+    }: DistributeProspectsPayload) => {
       if (!organization?.id) throw new Error("Sem organização ativa.");
       if (!hasAccess) {
         throw new Error(getProspectsAccessMessage({ organizationId: organization.id, isSuperAdmin }));
       }
+      if (prospectIds.length === 0) {
+        throw new Error("Selecione pelo menos um prospect para distribuir.");
+      }
 
       const { data, error } = await (supabase as any).rpc("distribute_prospects_round_robin", {
         p_organization_id: organization.id,
-        p_quantity: quantity,
+        p_prospect_ids: prospectIds,
+        p_salesperson_ids: salespersonIds?.length ? salespersonIds : null,
       });
 
       if (error) throw new Error(mapProspectsError(error));
