@@ -4159,17 +4159,29 @@ export type Database = {
         Args: { _name: string; _slug: string }
         Returns: string
       }
-      distribute_prospects_round_robin: {
-        Args: {
-          p_organization_id: string
-          p_quantity: number
-          p_salesperson_ids?: string[]
-        }
-        Returns: {
-          created_leads_count: number
-          distributed_count: number
-        }[]
-      }
+      distribute_prospects_round_robin:
+        | {
+            Args: {
+              p_organization_id: string
+              p_prospect_ids: string[]
+              p_salesperson_ids?: string[]
+            }
+            Returns: {
+              created_leads_count: number
+              distributed_count: number
+            }[]
+          }
+        | {
+            Args: {
+              p_organization_id: string
+              p_quantity: number
+              p_salesperson_ids?: string[]
+            }
+            Returns: {
+              created_leads_count: number
+              distributed_count: number
+            }[]
+          }
       ensure_org_auto_lists: { Args: { p_org_id: string }; Returns: undefined }
       ensure_stripe_auto_lists: {
         Args: { p_org_id: string }
