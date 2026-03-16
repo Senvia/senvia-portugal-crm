@@ -252,6 +252,7 @@ export function useDistributeProspects() {
   return useMutation({
     mutationFn: async ({
       prospectIds,
+      quantity,
       salespersonIds,
     }: DistributeProspectsPayload) => {
       if (!organization?.id) throw new Error("Sem organização ativa.");
@@ -261,10 +262,17 @@ export function useDistributeProspects() {
       if (prospectIds.length === 0) {
         throw new Error("Selecione pelo menos um prospect para distribuir.");
       }
+      if (!Number.isInteger(quantity) || quantity <= 0) {
+        throw new Error("Introduza uma quantidade válida para distribuir.");
+      }
+      if (quantity > prospectIds.length) {
+        throw new Error("A quantidade a distribuir não pode ser superior aos prospects selecionados.");
+      }
 
       const { data, error } = await (supabase as any).rpc("distribute_prospects_round_robin", {
         p_organization_id: organization.id,
         p_prospect_ids: prospectIds,
+        p_quantity: quantity,
         p_salesperson_ids: salespersonIds?.length ? salespersonIds : null,
       });
 
