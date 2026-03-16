@@ -37,7 +37,7 @@ export function EventCard({ event, compact = false, onClick }: EventCardProps) {
         )}
       >
         <p className="truncate">{event.lead ? `${event.title} - ${event.lead.name}` : event.title}</p>
-        <p className="truncate text-[10px] text-white/80">
+        <p className="truncate text-[10px] text-primary-foreground/80">
           Comercial: {event.user?.full_name || 'Não identificado'}
         </p>
       </button>
