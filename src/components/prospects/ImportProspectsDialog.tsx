@@ -56,7 +56,6 @@ export function ImportProspectsDialog({ open, onOpenChange }: ImportProspectsDia
               setHeaders([]);
               setRows([]);
             }}
-            onConfirm={handleImport}
           />
         </div>
 

@@ -11,7 +11,7 @@ interface Props {
   rows: Record<string, string>[];
   onFileLoaded: (fileName: string, headers: string[], rows: Record<string, string>[]) => void;
   onClearFile: () => void;
-  onConfirm: () => void;
+  onConfirm?: () => void;
 }
 
 export function ImportStep1Upload({ fileName, headers, rows, onFileLoaded, onClearFile, onConfirm }: Props) {
@@ -184,9 +184,12 @@ export function ImportStep1Upload({ fileName, headers, rows, onFileLoaded, onCle
             </div>
           )}
 
-          <div className="flex justify-end">
-            <Button onClick={onConfirm}>Confirme seu arquivo</Button>
-          </div>
+          {onConfirm ? (
+            <div className="flex justify-end">
+              <Button onClick={onConfirm}>Confirme seu arquivo</Button>
+            </div>
+          ) : null}
+
         </>
       )}
     </div>

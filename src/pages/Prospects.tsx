@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProspects, useProspectSalespeople } from "@/hooks/useProspects";
-import { isPerfect2GetherOrg } from "@/lib/perfect2gether";
+import { hasPerfect2GetherAccess } from "@/lib/perfect2gether";
 import { mapProspectsForExport, exportToCsv, exportToExcel } from "@/lib/export";
 import { normalizeString } from "@/lib/utils";
 import { ImportProspectsDialog } from "@/components/prospects/ImportProspectsDialog";
@@ -24,7 +24,7 @@ const formatConsumption = (value: number | null) => {
 const formatAssignedLabel = (name?: string | null) => name || "Não atribuído";
 
 export default function Prospects() {
-  const { organization } = useAuth();
+  const { organization, organizations, isSuperAdmin } = useAuth();
   const { data: prospects = [], isLoading } = useProspects();
   const { data: salespeople = [], isLoading: salespeopleLoading } = useProspectSalespeople();
   const [searchQuery, setSearchQuery] = useState("");
@@ -32,7 +32,11 @@ export default function Prospects() {
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isDistributeOpen, setIsDistributeOpen] = useState(false);
 
-  const isPerfect2Gether = isPerfect2GetherOrg(organization?.id);
+  const isPerfect2Gether = hasPerfect2GetherAccess({
+    organizationId: organization?.id,
+    memberships: organizations,
+    isSuperAdmin,
+  });
   const salespersonMap = useMemo(
     () => new Map(salespeople.map((salesperson) => [salesperson.user_id, salesperson.full_name])),
     [salespeople]
@@ -84,7 +88,7 @@ export default function Prospects() {
       <div className="space-y-6 p-4 pb-24 md:p-6 md:pb-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Prospects</h1>
-          <p className="text-muted-foreground">Este módulo está disponível apenas para a Perfect2Gether.</p>
+          <p className="text-muted-foreground">Este módulo está disponível apenas para membros com acesso ativo à Perfect2Gether.</p>
         </div>
       </div>
     );
