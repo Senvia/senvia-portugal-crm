@@ -3270,6 +3270,95 @@ export type Database = {
           },
         ]
       }
+      prospects: {
+        Row: {
+          annual_consumption_kwh: number | null
+          assigned_at: string | null
+          assigned_to: string | null
+          company_name: string
+          contact_name: string | null
+          converted_at: string | null
+          converted_lead_id: string | null
+          converted_to_lead: boolean
+          cpe: string | null
+          created_at: string
+          email: string | null
+          id: string
+          imported_at: string
+          imported_by: string | null
+          metadata: Json
+          nif: string | null
+          observations: string | null
+          organization_id: string
+          phone: string | null
+          segment: string | null
+          source: string
+          source_file_name: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          annual_consumption_kwh?: number | null
+          assigned_at?: string | null
+          assigned_to?: string | null
+          company_name: string
+          contact_name?: string | null
+          converted_at?: string | null
+          converted_lead_id?: string | null
+          converted_to_lead?: boolean
+          cpe?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          imported_at?: string
+          imported_by?: string | null
+          metadata?: Json
+          nif?: string | null
+          observations?: string | null
+          organization_id: string
+          phone?: string | null
+          segment?: string | null
+          source?: string
+          source_file_name?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          annual_consumption_kwh?: number | null
+          assigned_at?: string | null
+          assigned_to?: string | null
+          company_name?: string
+          contact_name?: string | null
+          converted_at?: string | null
+          converted_lead_id?: string | null
+          converted_to_lead?: boolean
+          cpe?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          imported_at?: string
+          imported_by?: string | null
+          metadata?: Json
+          nif?: string | null
+          observations?: string | null
+          organization_id?: string
+          phone?: string | null
+          segment?: string | null
+          source?: string
+          source_file_name?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prospects_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       push_subscriptions: {
         Row: {
           auth: string
@@ -4070,6 +4159,17 @@ export type Database = {
         Args: { _name: string; _slug: string }
         Returns: string
       }
+      distribute_prospects_round_robin: {
+        Args: {
+          p_organization_id: string
+          p_quantity: number
+          p_salesperson_ids?: string[]
+        }
+        Returns: {
+          created_leads_count: number
+          distributed_count: number
+        }[]
+      }
       ensure_org_auto_lists: { Args: { p_org_id: string }; Returns: undefined }
       ensure_stripe_auto_lists: {
         Args: { p_org_id: string }
@@ -4107,6 +4207,13 @@ export type Database = {
       get_org_name_by_invite_token: {
         Args: { _token: string }
         Returns: string
+      }
+      get_org_salespeople: {
+        Args: { p_org_id: string }
+        Returns: {
+          full_name: string
+          user_id: string
+        }[]
       }
       get_public_form_by_key: {
         Args: { _public_key: string }

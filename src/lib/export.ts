@@ -3,6 +3,7 @@ import { format as formatDate } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import type { Lead } from '@/types';
 import type { CrmClient } from '@/types/clients';
+import type { Prospect } from '@/types/prospects';
 
 // Status labels for clients
 const CLIENT_STATUS_LABELS: Record<string, string> = {
@@ -62,6 +63,24 @@ export function mapClientsForExport(clients: CrmClient[], isTelecom = false) {
     base['Data de Criação'] = formatExportDate(client.created_at);
     return base;
   });
+}
+
+export function mapProspectsForExport(
+  prospects: Prospect[],
+  salespersonMap: Map<string, string>
+) {
+  return prospects.map((prospect) => ({
+    'Empresa': prospect.company_name,
+    'NIF': prospect.nif || '',
+    'CPE': prospect.cpe || '',
+    'Email': prospect.email || '',
+    'Telefone': prospect.phone || '',
+    'Segmento': prospect.segment || '',
+    'kWh/Ano': prospect.annual_consumption_kwh || 0,
+    'Comercial': prospect.assigned_to ? salespersonMap.get(prospect.assigned_to) || '—' : 'Não atribuído',
+    'Estado': prospect.converted_to_lead ? 'Convertido' : 'Por distribuir',
+    'Data de Importação': formatExportDate(prospect.imported_at),
+  }));
 }
 
 // Helper to download file
