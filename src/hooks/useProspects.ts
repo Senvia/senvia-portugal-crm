@@ -14,6 +14,20 @@ import {
 import { toast } from "sonner";
 import type { Prospect, ProspectImportResult, ProspectSalesperson } from "@/types/prospects";
 
+const getProspectsAccessMessage = ({
+  organizationId,
+  isSuperAdmin,
+}: {
+  organizationId?: string | null;
+  isSuperAdmin?: boolean;
+}) => {
+  if (isSuperAdmin && !isPerfect2GetherOrg(organizationId)) {
+    return "Os Prospects estão disponíveis apenas na organização Perfect2Gether.";
+  }
+
+  return PROSPECTS_ACCESS_ERROR;
+};
+
 export function useProspects() {
   const { organization, organizations, isSuperAdmin } = useAuth();
   const hasAccess = hasPerfect2GetherAccess({
