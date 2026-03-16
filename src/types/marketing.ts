@@ -44,7 +44,20 @@ export const TEMPLATE_VARIABLES_ORG = [
   { key: '{{assinatura}}', label: 'Assinatura do comercial' },
 ] as const;
 
-export const TEMPLATE_VARIABLES = [...TEMPLATE_VARIABLES_CLIENT, ...TEMPLATE_VARIABLES_ORG];
+export const TEMPLATE_VARIABLES_RENEWAL = [
+  { key: '{{codigo_venda}}', label: 'Código da venda' },
+  { key: '{{produto_servico}}', label: 'Serviço/produto recorrente' },
+  { key: '{{valor_recorrente}}', label: 'Valor recorrente da venda' },
+  { key: '{{valor_pagamento}}', label: 'Valor do pagamento associado' },
+  { key: '{{data_renovacao}}', label: 'Data da renovação' },
+  { key: '{{dias_para_renovacao}}', label: 'Dias até à renovação' },
+] as const;
+
+export const TEMPLATE_VARIABLES = [
+  ...TEMPLATE_VARIABLES_CLIENT,
+  ...TEMPLATE_VARIABLES_ORG,
+  ...TEMPLATE_VARIABLES_RENEWAL,
+];
 
 // Campaign types
 export type CampaignStatus = 'draft' | 'sending' | 'sent' | 'failed' | 'scheduled';

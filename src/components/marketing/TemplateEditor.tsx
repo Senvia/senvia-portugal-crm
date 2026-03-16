@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Toggle } from "@/components/ui/toggle";
 import { Separator } from "@/components/ui/separator";
-import { TEMPLATE_VARIABLES_CLIENT, TEMPLATE_VARIABLES_ORG } from "@/types/marketing";
+import { TEMPLATE_VARIABLES_CLIENT, TEMPLATE_VARIABLES_ORG, TEMPLATE_VARIABLES_RENEWAL } from "@/types/marketing";
 import { cn } from "@/lib/utils";
 import {
   Bold,
@@ -213,6 +213,16 @@ export function TemplateEditor({ value, onChange, className }: TemplateEditorPro
           <Label className="text-xs text-muted-foreground mb-1.5 block">Organização / Comercial</Label>
           <div className="flex flex-wrap gap-2">
             {TEMPLATE_VARIABLES_ORG.map((v) => (
+              <Button key={v.key} type="button" variant="outline" size="sm" className="h-7 text-xs" onMouseDown={(e) => e.preventDefault()} onClick={() => insertVariable(v.key)}>
+                {v.key}
+              </Button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <Label className="text-xs text-muted-foreground mb-1.5 block">Venda / Renovação</Label>
+          <div className="flex flex-wrap gap-2">
+            {TEMPLATE_VARIABLES_RENEWAL.map((v) => (
               <Button key={v.key} type="button" variant="outline" size="sm" className="h-7 text-xs" onMouseDown={(e) => e.preventDefault()} onClick={() => insertVariable(v.key)}>
                 {v.key}
               </Button>
