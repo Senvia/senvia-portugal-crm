@@ -92,7 +92,7 @@ export function CreateTemplateModal({ open, onOpenChange }: CreateTemplateModalP
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[calc(100vw-1rem)] max-w-3xl max-h-[90vh] overflow-y-auto sm:w-full">
         <DialogHeader>
           <DialogTitle>Novo Template de Email</DialogTitle>
         </DialogHeader>
