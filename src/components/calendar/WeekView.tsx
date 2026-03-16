@@ -102,6 +102,7 @@ export function WeekView({ currentDate, events, selectedDay, onDayClick, onEvent
                     onClick={(e) => {
                       e.stopPropagation();
                       onDayClick(day);
+                      onEventClick(event);
                     }}
                       className={cn(
                         'w-full text-left rounded px-1 py-0.5 text-[10px] text-white font-medium truncate hover:opacity-90',
