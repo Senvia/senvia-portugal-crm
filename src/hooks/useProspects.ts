@@ -110,13 +110,35 @@ const buildProspectPayload = ({
   };
 };
 
+const PROSPECTS_ACCESS_ERROR = "A tua conta não tem acesso à organização Perfect2Gether.";
+
+const mapProspectsError = (error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error || "");
+  const normalizedMessage = message.toLowerCase();
+
+  if (
+    normalizedMessage.includes("row-level security") ||
+    normalizedMessage.includes("violates row-level security policy") ||
+    normalizedMessage.includes("permission denied")
+  ) {
+    return PROSPECTS_ACCESS_ERROR;
+  }
+
+  return message || "Erro ao importar prospects";
+};
+
 export function useProspects() {
-  const { organization } = useAuth();
+  const { organization, organizations, isSuperAdmin } = useAuth();
+  const hasAccess = hasPerfect2GetherAccess({
+    organizationId: organization?.id,
+    memberships: organizations,
+    isSuperAdmin,
+  });
 
   return useQuery({
     queryKey: ["prospects", organization?.id],
     queryFn: async () => {
-      if (!organization?.id) return [] as Prospect[];
+      if (!organization?.id || !hasAccess) return [] as Prospect[];
 
       const client = supabase as any;
       const { data, error } = await client
@@ -125,29 +147,34 @@ export function useProspects() {
         .eq("organization_id", organization.id)
         .order("imported_at", { ascending: false });
 
-      if (error) throw error;
+      if (error) throw new Error(mapProspectsError(error));
       return (data || []) as Prospect[];
     },
-    enabled: !!organization?.id,
+    enabled: !!organization?.id && hasAccess,
   });
 }
 
 export function useProspectSalespeople() {
-  const { organization } = useAuth();
+  const { organization, organizations, isSuperAdmin } = useAuth();
+  const hasAccess = hasPerfect2GetherAccess({
+    organizationId: organization?.id,
+    memberships: organizations,
+    isSuperAdmin,
+  });
 
   return useQuery({
     queryKey: ["prospect-salespeople", organization?.id],
     queryFn: async () => {
-      if (!organization?.id) return [] as ProspectSalesperson[];
+      if (!organization?.id || !hasAccess) return [] as ProspectSalesperson[];
 
       const { data, error } = await (supabase as any).rpc("get_org_salespeople", {
         p_org_id: organization.id,
       });
 
-      if (error) throw error;
+      if (error) throw new Error(mapProspectsError(error));
       return (data || []) as ProspectSalesperson[];
     },
-    enabled: !!organization?.id,
+    enabled: !!organization?.id && hasAccess,
   });
 }
 
