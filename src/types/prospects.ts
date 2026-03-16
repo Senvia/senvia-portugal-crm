@@ -40,5 +40,6 @@ export interface ProspectImportResult {
 
 export interface DistributeProspectsPayload {
   prospectIds: string[];
+  quantity: number;
   salespersonIds?: string[];
 }
