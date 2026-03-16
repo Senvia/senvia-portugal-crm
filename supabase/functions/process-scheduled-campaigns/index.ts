@@ -105,15 +105,36 @@ serve(async (req: Request): Promise<Response> => {
         let emailHtml = campaign.html_content || "";
 
         if (campaign.template_id) {
-          const { data: template } = await supabase
+          const { data: template, error: templateError } = await supabase
             .from("email_templates")
             .select("subject, html_content")
             .eq("id", campaign.template_id)
             .single();
+
+          if (templateError) {
+            console.error(`Campaign ${campaign.id} failed to load template ${campaign.template_id}:`, templateError);
+          }
+
           if (template) {
             emailSubject = template.subject;
             emailHtml = template.html_content;
+          } else {
+            console.error(`Campaign ${campaign.id} template ${campaign.template_id} was not found.`);
           }
+        }
+
+        if (!emailSubject.trim() || !emailHtml.trim()) {
+          console.error(`Campaign ${campaign.id} is missing subject or HTML content.`, {
+            hasSubject: Boolean(emailSubject.trim()),
+            hasHtml: Boolean(emailHtml.trim()),
+            templateId: campaign.template_id,
+          });
+          await supabase
+            .from("email_campaigns")
+            .update({ status: "failed" })
+            .eq("id", campaign.id);
+          results.push({ campaignId: campaign.id, status: "failed", sent: 0, failed: 0 });
+          continue;
         }
 
         let senderEmail = org.brevo_sender_email;
