@@ -197,6 +197,11 @@ export function EventDetailsModal({ open, onOpenChange, event, onEdit }: EventDe
               <span className="text-sm">{reminderLabel}</span>
             </div>
 
+            <div className="flex items-center gap-3">
+              <User className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm">Comercial: {event.user?.full_name || 'Comercial não identificado'}</span>
+            </div>
+
             {/* Lead */}
             {event.lead && (
               <div className="flex items-center gap-3">

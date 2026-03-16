@@ -77,10 +77,11 @@ export function MonthView({ currentDate, events, selectedDay, onDayClick, onEven
                     key={event.id}
                     event={event}
                     compact
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDayClick(day);
-                    }}
+                     onClick={(e) => {
+                       e.stopPropagation();
+                       onDayClick(day);
+                       onEventClick(event);
+                     }}
                   />
                 ))}
                 {dayEvents.length > 2 && (

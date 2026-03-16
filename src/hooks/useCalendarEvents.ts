@@ -32,7 +32,7 @@ interface UpdateEventParams {
 }
 
 export function useCalendarEvents(startDate?: Date, endDate?: Date) {
-  const { user, organization } = useAuth();
+  const { organization } = useAuth();
   const { effectiveUserId } = useTeamFilter();
 
   return useQuery({
@@ -49,7 +49,6 @@ export function useCalendarEvents(startDate?: Date, endDate?: Date) {
         .eq('organization_id', organization.id)
         .order('start_time', { ascending: true });
 
-      // Se há filtro de utilizador, filtrar por user_id
       if (effectiveUserId) {
         query = query.eq('user_id', effectiveUserId);
       }
@@ -68,23 +67,28 @@ export function useCalendarEvents(startDate?: Date, endDate?: Date) {
         throw error;
       }
 
-      // Fetch user names separately
-      const eventsWithUsers = await Promise.all(
-        (data || []).map(async (event) => {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('id, full_name')
-            .eq('id', event.user_id)
-            .single();
-          
-          return {
-            ...event,
-            user: profile || null,
-          } as CalendarEvent;
-        })
-      );
+      const events = data || [];
+      const uniqueUserIds = [...new Set(events.map((event) => event.user_id).filter(Boolean))];
 
-      return eventsWithUsers;
+      let profilesById = new Map<string, { id: string; full_name: string | null }>();
+
+      if (uniqueUserIds.length > 0) {
+        const { data: profiles, error: profilesError } = await supabase
+          .from('profiles')
+          .select('id, full_name')
+          .in('id', uniqueUserIds);
+
+        if (profilesError) {
+          console.error('Error fetching event users:', profilesError);
+        } else {
+          profilesById = new Map((profiles || []).map((profile) => [profile.id, profile]));
+        }
+      }
+
+      return events.map((event) => ({
+        ...event,
+        user: profilesById.get(event.user_id) || null,
+      })) as CalendarEvent[];
     },
     enabled: !!organization?.id,
   });

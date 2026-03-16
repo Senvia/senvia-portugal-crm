@@ -74,6 +74,10 @@ export function EventCard({ event, compact = false, onClick }: EventCardProps) {
             <span className="truncate">{event.lead.name}</span>
           </div>
         )}
+        <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
+          <User className="h-3 w-3" />
+          <span className="truncate">Comercial: {event.user?.full_name || 'Não identificado'}</span>
+        </div>
       </div>
       <span
         className={cn(
