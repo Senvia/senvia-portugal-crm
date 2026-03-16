@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from "@/components/ui/button";
 import { ImportStep1Upload } from "@/components/marketing/import/ImportStep1Upload";
 import { useImportProspects } from "@/hooks/useProspects";
+import type { ProspectImportResult } from "@/types/prospects";
 import { Loader2 } from "lucide-react";
 
 interface ImportProspectsDialogProps {
@@ -14,6 +15,8 @@ export function ImportProspectsDialog({ open, onOpenChange }: ImportProspectsDia
   const [fileName, setFileName] = useState("");
   const [headers, setHeaders] = useState<string[]>([]);
   const [rows, setRows] = useState<Record<string, string>[]>([]);
+  const [importSummary, setImportSummary] = useState<ProspectImportResult | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const importProspects = useImportProspects();
 
   useEffect(() => {
@@ -21,14 +24,27 @@ export function ImportProspectsDialog({ open, onOpenChange }: ImportProspectsDia
       setFileName("");
       setHeaders([]);
       setRows([]);
+      setImportSummary(null);
+      setErrorMessage(null);
     }
   }, [open]);
 
   const handleImport = async () => {
     if (!fileName || rows.length === 0 || importProspects.isPending) return;
 
-    await importProspects.mutateAsync({ fileName, rows });
-    onOpenChange(false);
+    setErrorMessage(null);
+    setImportSummary(null);
+
+    try {
+      const result = await importProspects.mutateAsync({ fileName, rows });
+      setImportSummary(result);
+
+      if (result.failed === 0) {
+        onOpenChange(false);
+      }
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Erro ao importar prospects");
+    }
   };
 
   return (
@@ -42,21 +58,40 @@ export function ImportProspectsDialog({ open, onOpenChange }: ImportProspectsDia
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto px-4 py-4 md:px-6">
-          <ImportStep1Upload
-            fileName={fileName}
-            headers={headers}
-            rows={rows}
-            onFileLoaded={(nextFileName, nextHeaders, nextRows) => {
-              setFileName(nextFileName);
-              setHeaders(nextHeaders);
-              setRows(nextRows);
-            }}
-            onClearFile={() => {
-              setFileName("");
-              setHeaders([]);
-              setRows([]);
-            }}
-          />
+          <div className="space-y-4">
+            {errorMessage ? (
+              <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                {errorMessage}
+              </div>
+            ) : null}
+
+            {importSummary ? (
+              <div className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm text-foreground">
+                <strong className="font-medium">Resultado:</strong> {importSummary.inserted} importados • {importSummary.skipped} ignorados • {importSummary.failed} falhados
+                {importSummary.firstError ? <div className="mt-1 text-muted-foreground">Primeiro erro: {importSummary.firstError}</div> : null}
+              </div>
+            ) : null}
+
+            <ImportStep1Upload
+              fileName={fileName}
+              headers={headers}
+              rows={rows}
+              onFileLoaded={(nextFileName, nextHeaders, nextRows) => {
+                setFileName(nextFileName);
+                setHeaders(nextHeaders);
+                setRows(nextRows);
+                setImportSummary(null);
+                setErrorMessage(null);
+              }}
+              onClearFile={() => {
+                setFileName("");
+                setHeaders([]);
+                setRows([]);
+                setImportSummary(null);
+                setErrorMessage(null);
+              }}
+            />
+          </div>
         </div>
 
         <div className="border-t px-4 py-4 md:px-6">
