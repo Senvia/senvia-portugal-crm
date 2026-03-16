@@ -9,7 +9,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useProspects, useProspectSalespeople } from "@/hooks/useProspects";
 import { hasPerfect2GetherAccess } from "@/lib/perfect2gether";
 import { mapProspectsForExport, exportToCsv, exportToExcel } from "@/lib/export";
-import { getProspectSegment } from "@/lib/prospects/segment";
+import { getProspectCom, getProspectSegment } from "@/lib/prospects/segment";
 import { normalizeString } from "@/lib/utils";
 import { ImportProspectsDialog } from "@/components/prospects/ImportProspectsDialog";
 import { DistributeProspectsDialog } from "@/components/prospects/DistributeProspectsDialog";
