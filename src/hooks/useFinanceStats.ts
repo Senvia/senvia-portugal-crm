@@ -2,21 +2,22 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { startOfMonth, endOfMonth, addDays, format, parseISO, isWithinInterval, subDays, startOfDay, endOfDay } from 'date-fns';
-import type { FinanceStats, PaymentWithSale, CashflowPoint } from '@/types/finance';
-import type { PaymentMethod, PaymentRecordStatus } from '@/types/sales';
+import { addDays, endOfDay, format, isWithinInterval, parseISO, startOfDay, subDays } from 'date-fns';
+import type { CashflowPoint, FinanceStats, PaymentWithSale } from '@/types/finance';
+import type { PaymentMethod, PaymentRecordStatus, RecurringStatus } from '@/types/sales';
 import { DateRange } from 'react-day-picker';
 
 interface UseFinanceStatsOptions {
   dateRange?: DateRange;
 }
 
+const isStripePlanPayment = (payment: PaymentWithSale) => Boolean(payment.sale.client_org_id);
+
 export function useFinanceStats(options?: UseFinanceStatsOptions) {
   const { organization } = useAuth();
   const organizationId = organization?.id;
   const dateRange = options?.dateRange;
 
-  // Fetch sales for totalBilled
   const { data: sales, isLoading: loadingSales } = useQuery({
     queryKey: ['finance-sales', organizationId],
     queryFn: async () => {
@@ -26,7 +27,7 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
         .select('id, total_value, created_at, sale_date')
         .eq('organization_id', organizationId);
       if (error) throw error;
-      return (data || []).map(s => ({ ...s, total_value: Number(s.total_value || 0) }));
+      return (data || []).map((sale) => ({ ...sale, total_value: Number(sale.total_value || 0) }));
     },
     enabled: !!organizationId,
   });
@@ -45,6 +46,9 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
             code,
             status,
             total_value,
+            client_org_id,
+            recurring_status,
+            next_renewal_date,
             leads:lead_id (name),
             crm_clients:client_id (name)
           )
@@ -83,6 +87,9 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
           credit_note_id: null,
           credit_note_reference: null,
           invoice_pdf_url: null,
+          client_org_id: (payment.sales as { client_org_id?: string | null } | null)?.client_org_id ?? null,
+          recurring_status: (payment.sales as { recurring_status?: RecurringStatus | null } | null)?.recurring_status ?? null,
+          next_renewal_date: (payment.sales as { next_renewal_date?: string | null } | null)?.next_renewal_date ?? null,
         },
         client_name: payment.sales?.crm_clients?.name || null,
         lead_name: payment.sales?.leads?.name || null,
@@ -91,7 +98,6 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
     enabled: !!organizationId,
   });
 
-  // Fetch expenses
   const { data: expenses, isLoading: loadingExpenses } = useQuery({
     queryKey: ['expenses-stats', organizationId],
     queryFn: async () => {
@@ -108,9 +114,9 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
         throw error;
       }
 
-      return (data || []).map((e) => ({
-        ...e,
-        amount: Number(e.amount),
+      return (data || []).map((expense) => ({
+        ...expense,
+        amount: Number(expense.amount),
       }));
     },
     enabled: !!organizationId,
@@ -118,36 +124,33 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
 
   const isLoading = loadingPayments || loadingExpenses || loadingSales;
 
-  // Filter sales by date range
   const filteredSales = useMemo(() => {
     if (!sales) return [];
     if (!dateRange?.from) return sales;
-    return sales.filter(s => {
-      const date = parseISO(s.sale_date);
+    return sales.filter((sale) => {
+      const date = parseISO(sale.sale_date);
       if (dateRange.from && date < startOfDay(dateRange.from)) return false;
       if (dateRange.to && date > endOfDay(dateRange.to)) return false;
       return true;
     });
   }, [sales, dateRange]);
 
-  // Filter payments by date range
   const filteredPayments = useMemo(() => {
     if (!payments) return [];
     if (!dateRange?.from) return payments;
-    return payments.filter(p => {
-      const date = parseISO(p.payment_date);
+    return payments.filter((payment) => {
+      const date = parseISO(payment.payment_date);
       if (dateRange.from && date < startOfDay(dateRange.from)) return false;
       if (dateRange.to && date > endOfDay(dateRange.to)) return false;
       return true;
     });
   }, [payments, dateRange]);
 
-  // Filter expenses by date range
   const filteredExpenses = useMemo(() => {
     if (!expenses) return [];
     if (!dateRange?.from) return expenses;
-    return expenses.filter(e => {
-      const date = parseISO(e.expense_date);
+    return expenses.filter((expense) => {
+      const date = parseISO(expense.expense_date);
       if (dateRange.from && date < startOfDay(dateRange.from)) return false;
       if (dateRange.to && date > endOfDay(dateRange.to)) return false;
       return true;
@@ -169,75 +172,67 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
       overdueCount: 0,
     };
 
-    if (!filteredSales?.length && !filteredPayments?.length && !filteredExpenses?.length) {
+    if (!filteredSales?.length && !filteredPayments?.length && !filteredExpenses?.length && !payments?.length) {
       return empty;
     }
 
     const now = new Date();
     const next7Days = addDays(now, 7);
+    const eligibleFilteredPayments = filteredPayments.filter((payment) => !isStripePlanPayment(payment) || payment.status === 'paid');
+    const globalPendingPayments = (payments || []).filter((payment) => payment.status === 'pending' && !isStripePlanPayment(payment));
 
-    // Total billed from sales
-    const totalBilled = filteredSales.reduce((sum, s) => sum + s.total_value, 0);
+    const totalBilled = filteredSales.reduce((sum, sale) => sum + sale.total_value, 0);
 
-    // Totals based on filtered payments
-    const totalReceived = filteredPayments
-      .filter(p => p.status === 'paid')
-      .reduce((sum, p) => sum + p.amount, 0);
+    const totalReceived = eligibleFilteredPayments
+      .filter((payment) => payment.status === 'paid')
+      .reduce((sum, payment) => sum + payment.amount, 0);
 
-    const totalPending = filteredPayments
-      .filter(p => p.status === 'pending')
-      .reduce((sum, p) => sum + p.amount, 0);
+    const totalPending = globalPendingPayments.reduce((sum, payment) => sum + payment.amount, 0);
 
-    // Due in next 7 days
-    const dueSoonPayments = filteredPayments
-      .filter(p => {
-        if (p.status !== 'pending') return false;
-        const date = parseISO(p.payment_date);
+    const dueSoonPayments = eligibleFilteredPayments
+      .filter((payment) => {
+        if (payment.status !== 'pending') return false;
+        const date = parseISO(payment.payment_date);
         return isWithinInterval(date, { start: startOfDay(now), end: endOfDay(next7Days) });
       })
       .sort((a, b) => new Date(a.payment_date).getTime() - new Date(b.payment_date).getTime());
 
-    const dueSoon = dueSoonPayments.reduce((sum, p) => sum + p.amount, 0);
+    const dueSoon = dueSoonPayments.reduce((sum, payment) => sum + payment.amount, 0);
 
-    // Overdue payments (pending with date before today)
-    const overduePayments = filteredPayments.filter(p => {
-      if (p.status !== 'pending') return false;
-      const date = parseISO(p.payment_date);
+    const overduePayments = eligibleFilteredPayments.filter((payment) => {
+      if (payment.status !== 'pending') return false;
+      const date = parseISO(payment.payment_date);
       return date < startOfDay(now);
     });
-    const totalOverdue = overduePayments.reduce((sum, p) => sum + p.amount, 0);
+    const totalOverdue = overduePayments.reduce((sum, payment) => sum + payment.amount, 0);
 
-    // Expenses totals
-    const totalExpenses = filteredExpenses.reduce((sum, e) => sum + e.amount, 0);
-
-    // Balance
+    const totalExpenses = filteredExpenses.reduce((sum, expense) => sum + expense.amount, 0);
     const balance = totalReceived - totalExpenses;
 
-    // Cashflow trend
     const trendStart = dateRange?.from ? startOfDay(dateRange.from) : subDays(now, 30);
     const trendEnd = dateRange?.to ? endOfDay(dateRange.to) : next7Days;
     const cashflowTrend: CashflowPoint[] = [];
 
-    for (let d = trendStart; d <= trendEnd; d = addDays(d, 1)) {
-      const dayStr = format(d, 'yyyy-MM-dd');
-      
-      const received = filteredPayments
-        .filter(p => p.status === 'paid' && p.payment_date === dayStr)
-        .reduce((sum, p) => sum + p.amount, 0);
+    for (let day = trendStart; day <= trendEnd; day = addDays(day, 1)) {
+      const dayStr = format(day, 'yyyy-MM-dd');
 
-      const scheduled = filteredPayments
-        .filter(p => p.status === 'pending' && p.payment_date === dayStr && parseISO(p.payment_date) >= startOfDay(now))
-        .reduce((sum, p) => sum + p.amount, 0);
+      const received = eligibleFilteredPayments
+        .filter((payment) => payment.status === 'paid' && payment.payment_date === dayStr)
+        .reduce((sum, payment) => sum + payment.amount, 0);
+
+      const scheduled = eligibleFilteredPayments
+        .filter((payment) => payment.status === 'pending' && payment.payment_date === dayStr && parseISO(payment.payment_date) >= startOfDay(now))
+        .reduce((sum, payment) => sum + payment.amount, 0);
 
       const expensesOnDay = filteredExpenses
-        .filter(e => e.expense_date === dayStr)
-        .reduce((sum, e) => sum + e.amount, 0);
+        .filter((expense) => expense.expense_date === dayStr)
+        .reduce((sum, expense) => sum + expense.amount, 0);
 
-      const overdueOnDay = filteredPayments
-        .filter(p => p.status === 'pending' && p.payment_date === dayStr && parseISO(p.payment_date) < startOfDay(now))
-        .reduce((sum, p) => sum + p.amount, 0);
+      const overdue = eligibleFilteredPayments
+        .filter((payment) => payment.status === 'pending' && payment.payment_date === dayStr && parseISO(payment.payment_date) < startOfDay(now))
+        .reduce((sum, payment) => sum + payment.amount, 0);
 
-      cashflowTrend.push({ date: dayStr, received, scheduled, expenses: expensesOnDay, overdue: overdueOnDay });
+      cashflowTrend.push({ date: dayStr, received, scheduled, expenses: expensesOnDay, overdue });
     }
 
     return {
@@ -253,7 +248,7 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
       totalOverdue,
       overdueCount: overduePayments.length,
     };
-  }, [filteredSales, filteredPayments, filteredExpenses, dateRange]);
+  }, [dateRange, filteredExpenses, filteredPayments, filteredSales, payments]);
 
   return {
     stats,

@@ -1,4 +1,4 @@
-import { PaymentMethod, PaymentRecordStatus } from './sales';
+import { PaymentMethod, PaymentRecordStatus, RecurringStatus } from './sales';
 
 export interface PaymentWithSale {
   id: string;
@@ -26,6 +26,9 @@ export interface PaymentWithSale {
     credit_note_id: number | null;
     credit_note_reference: string | null;
     invoice_pdf_url: string | null;
+    client_org_id?: string | null;
+    recurring_status?: RecurringStatus | null;
+    next_renewal_date?: string | null;
   };
   client_name: string | null;
   lead_name: string | null;
