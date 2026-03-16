@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { LayoutDashboard, Users, Settings, LogOut, Shield, Calendar, FileText, ShoppingBag, Store, UserCheck, Mail, Wallet, Lock } from "lucide-react";
+import { LayoutDashboard, Users, Settings, LogOut, Shield, Calendar, FileText, ShoppingBag, Store, UserCheck, Mail, Wallet, Lock, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useModules, EnabledModules } from "@/hooks/useModules";
@@ -10,6 +10,7 @@ import { APP_VERSION } from "@/lib/constants";
 import type { AppRole } from "@/types";
 import { OrganizationSwitcher } from "./OrganizationSwitcher";
 import { UpgradeModal } from "@/components/shared/UpgradeModal";
+import { isPerfect2GetherOrg } from "@/lib/perfect2gether";
 
 interface NavItem {
   to: string;
