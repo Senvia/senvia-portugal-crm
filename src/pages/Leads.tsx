@@ -554,41 +554,12 @@ export default function Leads() {
                 <TeamMemberFilter className="w-full sm:w-[220px]" />
 
                 {/* Date Range Picker */}
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" size="sm" className={cn("h-8 shrink-0", dateRange.from && "border-primary")}>
-                      <CalendarIcon className="mr-1.5 h-3.5 w-3.5" />
-                      <span className="text-xs">{dateRange.from ? format(dateRange.from, "dd/MM", { locale: pt }) : "De"}</span>
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={dateRange.from}
-                      onSelect={(date) => setDateRange(prev => ({ ...prev, from: date }))}
-                      className="pointer-events-auto"
-                      locale={pt}
-                    />
-                  </PopoverContent>
-                </Popover>
-
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" size="sm" className={cn("h-8 shrink-0", dateRange.to && "border-primary")}>
-                      <CalendarIcon className="mr-1.5 h-3.5 w-3.5" />
-                      <span className="text-xs">{dateRange.to ? format(dateRange.to, "dd/MM", { locale: pt }) : "Até"}</span>
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={dateRange.to}
-                      onSelect={(date) => setDateRange(prev => ({ ...prev, to: date }))}
-                      className="pointer-events-auto"
-                      locale={pt}
-                    />
-                  </PopoverContent>
-                </Popover>
+                <DateRangePicker
+                  value={dateRange.from || dateRange.to ? dateRange : undefined}
+                  onChange={(range) => setDateRange(range ?? { from: undefined, to: undefined })}
+                  placeholder="Período"
+                  className="h-8 w-full sm:w-[240px] justify-start"
+                />
 
                 <div className="h-4 w-px bg-border shrink-0 hidden md:block" />
 

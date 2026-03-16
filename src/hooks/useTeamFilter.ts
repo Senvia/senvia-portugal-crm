@@ -22,6 +22,7 @@ export function useTeamFilter() {
   const { selectedMemberId, setSelectedMemberId } = useTeamFilterStore();
   const { data: teams = [] } = useTeams();
   const { data: allEntries = [] } = useAllTeamMembersEntries();
+  const { data: organizationMembers = [] } = useTeamMembers();
 
   const canSeeAll = dataScope === 'all';
   const canSeeTeam = dataScope === 'team';
@@ -40,7 +41,11 @@ export function useTeamFilter() {
 
   const allowedSelectionIds = useMemo(() => {
     if (canSeeAll) {
-      return new Set(allEntries.map(entry => entry.user_id).concat(user?.id ? [user.id] : []));
+      return new Set(
+        organizationMembers
+          .map((member) => member.user_id)
+          .concat(user?.id ? [user.id] : [])
+      );
     }
 
     if (canSeeTeam && isTeamLeader) {
@@ -48,7 +53,7 @@ export function useTeamFilter() {
     }
 
     return new Set(user?.id ? [user.id] : []);
-  }, [allEntries, canSeeAll, canSeeTeam, isTeamLeader, teamMemberIds, user?.id]);
+  }, [organizationMembers, canSeeAll, canSeeTeam, isTeamLeader, teamMemberIds, user?.id]);
 
   useEffect(() => {
     if (!selectedMemberId) return;
