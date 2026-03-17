@@ -333,7 +333,7 @@ export function CreateCampaignModal({ open, onOpenChange, campaign }: CreateCamp
           subject,
           html_content: contentMode === "custom" ? customHtml : null,
           settings,
-          settings_data: settingsData,
+          settings_data: persistedSettingsData,
         });
         campaignId = campaign!.id;
       } else {
@@ -343,7 +343,7 @@ export function CreateCampaignModal({ open, onOpenChange, campaign }: CreateCamp
           subject,
           html_content: contentMode === "custom" ? customHtml : undefined,
           settings,
-          settings_data: settingsData,
+          settings_data: persistedSettingsData,
         });
         campaignId = newCampaign.id;
       }
