@@ -119,6 +119,7 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
 
   const isTelecom = organization?.niche === 'telecom';
   const { modules } = useModules();
+  const showEnergy = isTelecom && modules.energy;
   const hasActiveWhatsappAutomation = useMemo(() => {
     const integrationsEnabled = organization?.integrations_enabled as Record<string, boolean> | null | undefined;
 
