@@ -5,6 +5,8 @@ import type { Lead } from '@/types';
 import type { CrmClient } from '@/types/clients';
 import { getProspectCom, getProspectSegment } from '@/lib/prospects/segment';
 import type { Prospect } from '@/types/prospects';
+import { PAYMENT_METHOD_LABELS, type SaleWithDetails } from '@/types/sales';
+import { NEGOTIATION_TYPE_LABELS, PROPOSAL_TYPE_LABELS } from '@/types/proposals';
 
 // Status labels for clients
 const CLIENT_STATUS_LABELS: Record<string, string> = {

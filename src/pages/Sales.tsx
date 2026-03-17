@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { usePersistedState } from "@/hooks/usePersistedState";
-import { ShoppingBag, Search, TrendingUp, Package, CheckCircle, Plus, Zap } from "lucide-react";
+import { ShoppingBag, Search, TrendingUp, Package, CheckCircle, Plus, Zap, Download, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -15,15 +15,18 @@ import { EditSaleModal } from "@/components/sales/EditSaleModal";
 import { TeamMemberFilter } from "@/components/dashboard/TeamMemberFilter";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { formatCurrency } from "@/lib/format";
+import { exportToExcel, mapPerfect2GetherSalesForExport } from "@/lib/export";
+import { hasPerfect2GetherAccess } from "@/lib/perfect2gether";
 import { format, parseISO, startOfDay, endOfDay } from "date-fns";
 import { pt } from "date-fns/locale";
 import type { DateRange } from "react-day-picker";
 import type { SaleWithDetails, SaleStatus } from "@/types/sales";
 import { SALE_STATUS_LABELS, SALE_STATUS_COLORS, SALE_STATUSES } from "@/types/sales";
-
 import { useAuth } from "@/contexts/AuthContext";
 import { useTelecomSaleMetrics } from "@/hooks/useTelecomSaleMetrics";
 import { useModules } from "@/hooks/useModules";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 export default function Sales() {
   // Subscribe to realtime updates
