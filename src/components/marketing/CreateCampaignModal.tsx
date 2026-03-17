@@ -186,7 +186,7 @@ export function CreateCampaignModal({ open, onOpenChange, campaign }: CreateCamp
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedClients, setSelectedClients] = useState<CrmClient[]>([]);
   const [statusFilter, setStatusFilter] = useState("all");
-  const [selectionMode, setSelectionMode] = useState<"individual" | "filter" | "list">("individual");
+  const [selectionMode, setSelectionMode] = useState<CampaignSelectionMode>("individual");
   const [selectedListIds, setSelectedListIds] = useState<string[]>([]);
   const [isSending, setIsSending] = useState(false);
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
@@ -197,6 +197,8 @@ export function CreateCampaignModal({ open, onOpenChange, campaign }: CreateCamp
   const [scheduleTime, setScheduleTime] = useState("09:00");
   const [showSchedulePicker, setShowSchedulePicker] = useState(false);
   const [sendMode, setSendMode] = useState<"immediate" | "scheduled">("immediate");
+  const [loadingListMembers, setLoadingListMembers] = useState(false);
+  const [pendingAutoLoadListIds, setPendingAutoLoadListIds] = useState<string[]>([]);
 
   const { data: templates = [] } = useEmailTemplates();
   const { data: clients = [], isLoading: loadingClients } = useClients();
@@ -206,26 +208,68 @@ export function CreateCampaignModal({ open, onOpenChange, campaign }: CreateCamp
   const updateStatus = useUpdateCampaignStatus();
   const sendTemplate = useSendTemplateEmail();
   const { data: contactLists = [] } = useContactLists();
-  const [loadingListMembers, setLoadingListMembers] = useState(false);
   const { organization } = useAuth();
   const organizationId = organization?.id;
+
+  const activeTemplates = useMemo(() => templates.filter(t => t.is_active), [templates]);
+  const selectedTemplate = useMemo(() => templates.find(t => t.id === templateId), [templates, templateId]);
+
+  const loadContactsFromLists = async (listIds: string[]) => {
+    if (listIds.length === 0) return;
+
+    setLoadingListMembers(true);
+    try {
+      const { data: members } = await supabase
+        .from('marketing_list_members' as any)
+        .select('*, contact:marketing_contacts(id, name, email, phone, company)')
+        .in('list_id', listIds);
+
+      const newClients = ((members as any[]) || [])
+        .filter((m: any) => m.contact?.email)
+        .map((m: any) => ({
+          id: `marketing_${m.contact.id}`,
+          name: m.contact.name,
+          email: m.contact.email,
+          phone: m.contact.phone,
+          company: m.contact.company,
+          status: 'active',
+          organization_id: '',
+        } as CrmClient));
+
+      setSelectedClients((prev) => mergeUniqueClients([...prev, ...newClients]));
+    } finally {
+      setLoadingListMembers(false);
+    }
+  };
 
   // Sync state when editing a campaign
   useEffect(() => {
     if (campaign && open) {
+      const restoredSettingsData = (campaign.settings_data as Record<string, string>) || {};
+      const restoredAudience = parseAudienceSettings(restoredSettingsData);
+
       setName(campaign.name || "");
       setSubject(campaign.subject || "");
       setTemplateId(campaign.template_id || "");
       setContentMode(campaign.template_id ? "template" : campaign.html_content ? "custom" : "template");
       setCustomHtml(campaign.html_content || "");
       setSettings((campaign.settings as Record<string, boolean>) || {});
-      setSettingsData((campaign.settings_data as Record<string, string>) || {});
+      setSettingsData(restoredSettingsData);
+      setSelectionMode(restoredAudience.selectionMode);
+      setStatusFilter(restoredAudience.statusFilter);
+      setSelectedListIds(restoredAudience.selectedListIds);
+      setSelectedClients(restoredAudience.selectedClients);
+      setPendingAutoLoadListIds(restoredAudience.selectionMode === "list" ? restoredAudience.selectedListIds : []);
       setStep(3);
     }
   }, [campaign, open]);
 
-  const activeTemplates = useMemo(() => templates.filter(t => t.is_active), [templates]);
-  const selectedTemplate = useMemo(() => templates.find(t => t.id === templateId), [templates, templateId]);
+  useEffect(() => {
+    if (!open || pendingAutoLoadListIds.length === 0) return;
+
+    void loadContactsFromLists(pendingAutoLoadListIds);
+    setPendingAutoLoadListIds([]);
+  }, [open, pendingAutoLoadListIds]);
 
   const filteredClients = useMemo(() => {
     return clients.filter((client) => {
@@ -262,6 +306,14 @@ export function CreateCampaignModal({ open, onOpenChange, campaign }: CreateCamp
       setSubject(tpl.subject);
     }
   };
+
+  const persistedSettingsData = useMemo(() => buildAudienceSettingsData({
+    base: settingsData,
+    selectionMode,
+    statusFilter,
+    selectedListIds,
+    selectedClients,
+  }), [settingsData, selectionMode, statusFilter, selectedListIds, selectedClients]);
 
   const contentComplete = contentMode === "template" ? !!templateId : customHtml.trim().length > 0;
   const allSectionsComplete = !!name.trim() && selectedClients.length > 0 && !!subject.trim() && contentComplete;
