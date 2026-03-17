@@ -481,6 +481,7 @@ export function CreateCampaignModal({ open, onOpenChange, campaign }: CreateCamp
     setScheduleTime("09:00");
     setShowSchedulePicker(false);
     setSendMode("immediate");
+    setPendingAutoLoadListIds([]);
     onOpenChange(false);
   };
 
