@@ -232,6 +232,7 @@ interface UpdateProposalData {
   status?: ProposalStatus;
   notes?: string | null;
   proposal_date?: string;
+  accepted_at?: string | null;
   proposal_type?: 'energia' | 'servicos';
   negotiation_type?: 'angariacao' | 'angariacao_indexado' | 'renovacao' | 'sem_volume' | null;
   consumo_anual?: number | null;
@@ -259,9 +260,16 @@ export function useUpdateProposal() {
         }
       }
 
+      const payload = {
+        ...data,
+        ...(data.status === 'accepted' && data.accepted_at === undefined
+          ? { accepted_at: new Date().toISOString() }
+          : {}),
+      };
+
       const { error } = await supabase
         .from('proposals')
-        .update(data)
+        .update(payload)
         .eq('id', id);
       
       if (error) throw error;
