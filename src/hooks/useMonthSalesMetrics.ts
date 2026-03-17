@@ -56,12 +56,18 @@ export function useMonthSalesMetrics(referenceDate?: Date) {
         }
       }
 
-      // 3. Get kWp from proposals servicos_details
-      let kwpByProposal = new Map<string, number>();
+      // 3. Get proposal metadata + kWp from proposals
+      const eligibleEnergyNegotiationTypes = new Set(["angariacao", "angariacao_indexado"]);
+      const proposalMetricsById = new Map<string, {
+        proposalType: string | null;
+        negotiationType: string | null;
+        solar: number;
+      }>();
+
       if (proposalIds.length > 0) {
         const { data: proposals } = await supabase
           .from("proposals")
-          .select("id, servicos_details")
+          .select("id, proposal_type, negotiation_type, servicos_details")
           .in("id", proposalIds);
 
         if (proposals) {
@@ -73,7 +79,12 @@ export function useMonthSalesMetrics(referenceDate?: Date) {
                 totalKwp += prod?.kwp || 0;
               }
             }
-            kwpByProposal.set(p.id, totalKwp);
+
+            proposalMetricsById.set(p.id, {
+              proposalType: p.proposal_type,
+              negotiationType: p.negotiation_type,
+              solar: totalKwp,
+            });
           }
         }
       }
@@ -91,11 +102,15 @@ export function useMonthSalesMetrics(referenceDate?: Date) {
         const g = grouped.get(uid)!;
 
         const cpeData = sale.proposal_id ? cpesByProposal.get(sale.proposal_id) : null;
+        const proposalMetrics = sale.proposal_id ? proposalMetricsById.get(sale.proposal_id) : null;
+        const countsForEnergyMetrics =
+          proposalMetrics?.proposalType === "energia" &&
+          eligibleEnergyNegotiationTypes.has(proposalMetrics.negotiationType || "");
 
         g.contracts += 1;
-        g.energia += (cpeData?.consumo ?? 0) / 1000; // kWh → MWh
-        g.solar += sale.proposal_id ? (kwpByProposal.get(sale.proposal_id) || 0) : 0;
-        g.comissao += cpeData?.comissao ?? 0;
+        g.energia += countsForEnergyMetrics ? (cpeData?.consumo ?? 0) / 1000 : 0; // kWh → MWh
+        g.solar += proposalMetrics?.solar || 0;
+        g.comissao += countsForEnergyMetrics ? cpeData?.comissao ?? 0 : 0;
       }
 
       return Array.from(grouped.entries()).map(([userId, g]) => ({
