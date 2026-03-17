@@ -78,7 +78,7 @@ function CampaignDetailsPanel({
               activeFilter === metric.filterKey ? 'border-primary ring-2 ring-primary' : ''
             }`}
           >
-            <metric.icon className={`mx-auto mb-2 h-5 w-5 ${metric.color}`} />
+            <metric.icon className="mx-auto mb-2 h-5 w-5" style={metric.iconStyle} />
             <p className="text-2xl font-bold">
               {metric.value}
               {metric.pct !== undefined && <span className="ml-1 text-xs font-normal text-muted-foreground">({metric.pct}%)</span>}
