@@ -241,7 +241,22 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
 
     setMatchedClient(null);
     setPendingFiles([]);
-    form.reset();
+    form.reset({
+      company_nif: "",
+      company_name: "",
+      name: "",
+      email: "",
+      phone: "",
+      source: "Entrada Manual",
+      temperature: "cold",
+      value: "",
+      notes: "",
+      gdpr_consent: false as unknown as true as unknown as true,
+      automation_enabled: hasActiveWhatsappAutomation,
+      assigned_to: "",
+      tipologia: undefined,
+      consumo_anual: "",
+    });
     onOpenChange(false);
   };
 
