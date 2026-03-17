@@ -467,37 +467,57 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                         </CardTitle>
                       </CardHeader>
                       <CardContent className="p-4 pt-0">
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           {sale.negotiation_type && (
-                            <div className="col-span-2">
+                            <div className="sm:col-span-2">
                               <p className="text-xs text-muted-foreground">Tipo de Negociação</p>
                               <p className="text-sm font-medium">
                                 {NEGOTIATION_TYPE_LABELS[sale.negotiation_type as keyof typeof NEGOTIATION_TYPE_LABELS] || sale.negotiation_type}
                               </p>
                             </div>
                           )}
-                          {sale.consumo_anual && (
+                          {displayConsumoAnual != null && (
                             <div>
                               <p className="text-xs text-muted-foreground">Consumo Anual</p>
-                              <p className="text-sm font-medium">{sale.consumo_anual.toLocaleString('pt-PT')} kWh</p>
+                              <p className="text-sm font-medium">{displayConsumoAnual.toLocaleString('pt-PT')} kWh</p>
                             </div>
                           )}
-                          {sale.anos_contrato && (
+                          {displayAnosContrato != null && (
                             <div>
                               <p className="text-xs text-muted-foreground">Contrato</p>
-                              <p className="text-sm font-medium">{sale.anos_contrato} {sale.anos_contrato === 1 ? 'ano' : 'anos'}</p>
+                              <p className="text-sm font-medium">{displayAnosContrato} {displayAnosContrato === 1 ? 'ano' : 'anos'}</p>
                             </div>
                           )}
-                          {sale.dbl != null && (
+                          {displayDbl != null && (
                             <div>
                               <p className="text-xs text-muted-foreground">DBL</p>
-                              <p className="text-sm font-medium">{sale.dbl.toLocaleString('pt-PT', { minimumFractionDigits: 2 })}</p>
+                              <p className="text-sm font-medium">{displayDbl.toLocaleString('pt-PT', { minimumFractionDigits: 2 })}</p>
                             </div>
                           )}
-                          {sale.comissao && (
-                            <div className="col-span-2">
+                          {displayMargem != null && (
+                            <div>
+                              <p className="text-xs text-muted-foreground">Margem</p>
+                              <p className="text-sm font-medium">{formatCurrency(displayMargem)}</p>
+                            </div>
+                          )}
+                          {displayComissao != null && (
+                            <div>
                               <p className="text-xs text-muted-foreground">Comissão</p>
-                              <p className="text-sm font-medium text-green-500">{formatCurrency(sale.comissao)}</p>
+                              <p className="text-sm font-medium text-green-500">{formatCurrency(displayComissao)}</p>
+                            </div>
+                          )}
+                          {(displayContratoInicio || displayContratoFim) && (
+                            <div className="sm:col-span-2">
+                              <p className="text-xs text-muted-foreground">Período do Contrato</p>
+                              <p className="text-sm font-medium">
+                                {displayContratoInicio
+                                  ? format(new Date(displayContratoInicio), "dd/MM/yyyy", { locale: pt })
+                                  : '—'}
+                                {' → '}
+                                {displayContratoFim
+                                  ? format(new Date(displayContratoFim), "dd/MM/yyyy", { locale: pt })
+                                  : '—'}
+                              </p>
                             </div>
                           )}
                         </div>
