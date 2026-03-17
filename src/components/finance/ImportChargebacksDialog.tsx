@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { forwardRef, useEffect, useMemo, useState } from "react";
 import { Loader2, FileSearch } from "lucide-react";
 import { toast } from "sonner";
 import { ImportStep1Upload } from "@/components/marketing/import/ImportStep1Upload";
@@ -53,7 +53,7 @@ function detectAmountColumn(headers: string[]) {
   return scored[0]?.header;
 }
 
-export function ImportChargebacksDialog({ open, onOpenChange }: ImportChargebacksDialogProps) {
+export const ImportChargebacksDialog = forwardRef<HTMLDivElement, ImportChargebacksDialogProps>(function ImportChargebacksDialog({ open, onOpenChange }, ref) {
   const importChargebacks = useImportCommissionChargebacks();
   const [fileName, setFileName] = useState("");
   const [headers, setHeaders] = useState<string[]>([]);
@@ -114,7 +114,7 @@ export function ImportChargebacksDialog({ open, onOpenChange }: ImportChargeback
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent variant="fullScreen" className="flex h-full flex-col overflow-hidden p-0">
+      <DialogContent ref={ref} variant="fullScreen" className="flex h-full flex-col overflow-hidden p-0">
         <DialogHeader className="shrink-0 border-b px-4 py-4 pr-14 sm:px-6">
           <DialogTitle>Importar chargebacks</DialogTitle>
           <DialogDescription>
@@ -243,4 +243,4 @@ export function ImportChargebacksDialog({ open, onOpenChange }: ImportChargeback
       </DialogContent>
     </Dialog>
   );
-}
+});

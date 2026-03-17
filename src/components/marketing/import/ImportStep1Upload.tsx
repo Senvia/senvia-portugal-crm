@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { forwardRef, useCallback, useRef } from "react";
 import { Upload, FileSpreadsheet, Download, X, CheckCircle2 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,7 @@ interface Props {
   onConfirm?: () => void;
 }
 
-export function ImportStep1Upload({ fileName, headers, rows, onFileLoaded, onClearFile, onConfirm }: Props) {
+export const ImportStep1Upload = forwardRef<HTMLDivElement, Props>(function ImportStep1Upload({ fileName, headers, rows, onFileLoaded, onClearFile, onConfirm }, ref) {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const parseCSVLine = (line: string, delimiter: string): string[] => {
@@ -121,7 +121,7 @@ export function ImportStep1Upload({ fileName, headers, rows, onFileLoaded, onCle
   const previewRows = rows.slice(0, 10);
 
   return (
-    <div className="space-y-4">
+    <div ref={ref} className="space-y-4">
       <button onClick={downloadSample} className="flex items-center gap-1.5 text-sm text-primary hover:underline">
         <Download className="h-3.5 w-3.5" />
         Baixe um arquivo de exemplo (.csv)
@@ -194,4 +194,4 @@ export function ImportStep1Upload({ fileName, headers, rows, onFileLoaded, onCle
       )}
     </div>
   );
-}
+});
