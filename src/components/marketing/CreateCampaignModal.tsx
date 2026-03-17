@@ -269,7 +269,7 @@ export function CreateCampaignModal({ open, onOpenChange, campaign }: CreateCamp
 
     void loadContactsFromLists(pendingAutoLoadListIds);
     setPendingAutoLoadListIds([]);
-  }, [open, pendingAutoLoadListIds]);
+  }, [open, pendingAutoLoadListIds, loadContactsFromLists]);
 
   const filteredClients = useMemo(() => {
     return clients.filter((client) => {
