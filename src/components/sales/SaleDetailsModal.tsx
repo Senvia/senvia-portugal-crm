@@ -617,7 +617,7 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                           proposalCpes.map((cpe) => (
                             <div
                               key={cpe.id}
-                              className="p-3 rounded-lg border bg-muted/30 space-y-2"
+                              className="p-3 rounded-lg border bg-muted/30 space-y-3"
                             >
                               <div className="flex items-center gap-2 flex-wrap">
                                 <Badge variant="outline" className="text-xs">{cpe.equipment_type}</Badge>
@@ -634,22 +634,68 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                                   <p className="text-sm font-mono">{cpe.serial_number}</p>
                                 </div>
                               )}
-                              {(cpe.fidelizacao_start || cpe.fidelizacao_end) && (
-                                <div>
-                                  <p className="text-xs text-muted-foreground">Fidelização</p>
-                                  <p className="text-sm">
-                                    {cpe.fidelizacao_start 
-                                      ? format(new Date(cpe.fidelizacao_start), "dd/MM/yyyy", { locale: pt })
-                                      : '—'
-                                    }
-                                    {' → '}
-                                    {cpe.fidelizacao_end 
-                                      ? format(new Date(cpe.fidelizacao_end), "dd/MM/yyyy", { locale: pt })
-                                      : '—'
-                                    }
-                                  </p>
-                                </div>
-                              )}
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                {cpe.consumo_anual != null && (
+                                  <div>
+                                    <p className="text-xs text-muted-foreground">Consumo Anual</p>
+                                    <p className="text-sm font-medium">{Number(cpe.consumo_anual).toLocaleString('pt-PT')} kWh</p>
+                                  </div>
+                                )}
+                                {cpe.duracao_contrato != null && (
+                                  <div>
+                                    <p className="text-xs text-muted-foreground">Duração</p>
+                                    <p className="text-sm font-medium">{cpe.duracao_contrato} {cpe.duracao_contrato === 1 ? 'ano' : 'anos'}</p>
+                                  </div>
+                                )}
+                                {cpe.dbl != null && (
+                                  <div>
+                                    <p className="text-xs text-muted-foreground">DBL</p>
+                                    <p className="text-sm font-medium">{Number(cpe.dbl).toLocaleString('pt-PT', { minimumFractionDigits: 2 })}</p>
+                                  </div>
+                                )}
+                                {cpe.margem != null && (
+                                  <div>
+                                    <p className="text-xs text-muted-foreground">Margem</p>
+                                    <p className="text-sm font-medium">{formatCurrency(Number(cpe.margem))}</p>
+                                  </div>
+                                )}
+                                {cpe.comissao != null && (
+                                  <div>
+                                    <p className="text-xs text-muted-foreground">Comissão</p>
+                                    <p className="text-sm font-medium text-green-500">{formatCurrency(Number(cpe.comissao))}</p>
+                                  </div>
+                                )}
+                                {(cpe.contrato_inicio || cpe.contrato_fim) && (
+                                  <div>
+                                    <p className="text-xs text-muted-foreground">Contrato</p>
+                                    <p className="text-sm">
+                                      {cpe.contrato_inicio
+                                        ? format(new Date(cpe.contrato_inicio), "dd/MM/yyyy", { locale: pt })
+                                        : '—'}
+                                      {' → '}
+                                      {cpe.contrato_fim
+                                        ? format(new Date(cpe.contrato_fim), "dd/MM/yyyy", { locale: pt })
+                                        : '—'}
+                                    </p>
+                                  </div>
+                                )}
+                                {(cpe.fidelizacao_start || cpe.fidelizacao_end) && (
+                                  <div className="sm:col-span-2">
+                                    <p className="text-xs text-muted-foreground">Fidelização</p>
+                                    <p className="text-sm">
+                                      {cpe.fidelizacao_start 
+                                        ? format(new Date(cpe.fidelizacao_start), "dd/MM/yyyy", { locale: pt })
+                                        : '—'
+                                      }
+                                      {' → '}
+                                      {cpe.fidelizacao_end 
+                                        ? format(new Date(cpe.fidelizacao_end), "dd/MM/yyyy", { locale: pt })
+                                        : '—'
+                                      }
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           ))
                         ) : (
