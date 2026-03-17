@@ -3,7 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useTeamFilter } from "@/hooks/useTeamFilter";
 import { useTeamMembers } from "@/hooks/useTeam";
-import { useActivationObjectives } from "@/hooks/useActivationObjectives";
+import { useActivationObjectives, type ActivationCountMode } from "@/hooks/useActivationObjectives";
 import { useDashboardPeriod } from "@/stores/useDashboardPeriod";
 import { useModules } from "@/hooks/useModules";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,7 +36,12 @@ interface ActivationBlockProps {
   currentUserId?: string;
   isAdmin: boolean;
   getTarget: (userId: string, periodType: "monthly" | "annual", proposalType: "energia" | "servicos") => number;
-  countActivations: (userId: string | null, periodType: "monthly" | "annual", proposalType: "energia" | "servicos") => number;
+  countActivations: (
+    userId: string | null,
+    periodType: "monthly" | "annual",
+    proposalType: "energia" | "servicos",
+    countMode?: ActivationCountMode
+  ) => number;
   onEdit: () => void;
   unit?: string;
 }
@@ -215,8 +220,12 @@ export function ActivationsPanel() {
   const servicosUnit = showEnergy ? "kWp" : "contratos";
   const servicosCountActivations = showEnergy
     ? countActivations
-    : (userId: string | null, periodType: "monthly" | "annual", proposalType: "energia" | "servicos") =>
-        countActivations(userId, periodType, proposalType, "count");
+    : (
+        userId: string | null,
+        periodType: "monthly" | "annual",
+        proposalType: "energia" | "servicos",
+        countMode: ActivationCountMode = "count"
+      ) => countActivations(userId, periodType, proposalType, countMode);
 
   const blockProps = {
     members: memberList,
