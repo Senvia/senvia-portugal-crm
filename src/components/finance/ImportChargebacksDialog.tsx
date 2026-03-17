@@ -243,4 +243,4 @@ export const ImportChargebacksDialog = forwardRef<HTMLDivElement, ImportChargeba
       </DialogContent>
     </Dialog>
   );
-}
+});

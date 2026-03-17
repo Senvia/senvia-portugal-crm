@@ -194,4 +194,4 @@ export const ImportStep1Upload = forwardRef<HTMLDivElement, Props>(function Impo
       )}
     </div>
   );
-}
+});
