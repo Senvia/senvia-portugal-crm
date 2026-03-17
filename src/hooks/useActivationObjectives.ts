@@ -102,16 +102,15 @@ export function useActivationObjectives(referenceDate?: Date) {
     enabled: !!orgId && allProposalIds.length > 0,
   });
 
-  // Fetch proposals servicos_details for kWp
-  const { data: proposalsDetails = [], isLoading: detailsLoading } = useQuery({
-    queryKey: ["activation-proposals-details", orgId, allProposalIds],
+  // Fetch proposal metadata needed for activation filtering and services kWp
+  const { data: proposalsMetadata = [], isLoading: detailsLoading } = useQuery({
+    queryKey: ["activation-proposals-metadata", orgId, allProposalIds],
     queryFn: async () => {
       if (!orgId || allProposalIds.length === 0) return [];
       const { data, error } = await supabase
         .from("proposals")
-        .select("id, servicos_details")
-        .in("id", allProposalIds)
-        .eq("proposal_type", "servicos");
+        .select("id, proposal_type, negotiation_type, servicos_details")
+        .in("id", allProposalIds);
       if (error) throw error;
       return data || [];
     },
@@ -125,7 +124,14 @@ export function useActivationObjectives(referenceDate?: Date) {
     return acc;
   }, {});
 
-  const kwpByProposal = proposalsDetails.reduce((acc: Record<string, number>, p: any) => {
+  const proposalMetadataById = proposalsMetadata.reduce((acc: Record<string, any>, proposal: any) => {
+    acc[proposal.id] = proposal;
+    return acc;
+  }, {});
+
+  const kwpByProposal = proposalsMetadata.reduce((acc: Record<string, number>, p: any) => {
+    if (p.proposal_type !== "servicos") return acc;
+
     const details = p.servicos_details;
     if (details && typeof details === "object") {
       let totalKwp = 0;
@@ -146,7 +152,6 @@ export function useActivationObjectives(referenceDate?: Date) {
     return obj?.target_quantity || 0;
   }, [objectives, currentMonthStart, currentYearStart]);
 
-  // Sum activations: MWh for energia, kWp for servicos
   // Sum activations: MWh for energia, kWp for servicos (or count when countMode='count')
   const sumActivations = useCallback((
     userId: string | null,
@@ -156,9 +161,13 @@ export function useActivationObjectives(referenceDate?: Date) {
   ): number => {
     const source = periodType === "monthly" ? monthlyActivations : annualActivations;
     const filtered = source.filter((s: any) => {
+      const proposal = s.proposal_id ? proposalMetadataById[s.proposal_id] : null;
+      const resolvedProposalType = proposal?.proposal_type ?? s.proposal_type ?? null;
+      const negotiationType = proposal?.negotiation_type ?? null;
+
       const matchType = proposalType === "energia"
-        ? s.proposal_type === "energia" || (!s.proposal_type && true)
-        : s.proposal_type === "servicos";
+        ? resolvedProposalType === "energia" && ["angariacao", "angariacao_indexado"].includes(negotiationType)
+        : resolvedProposalType === "servicos";
       const matchUser = userId ? s.created_by === userId : true;
       return matchType && matchUser;
     });
@@ -173,14 +182,14 @@ export function useActivationObjectives(referenceDate?: Date) {
         const consumo = s.proposal_id ? (cpesByProposal[s.proposal_id] || 0) : 0;
         return total + consumo / 1000;
       }, 0);
-    } else {
-      // Sum kWp from proposals.servicos_details
-      return filtered.reduce((total: number, s: any) => {
-        const kwp = s.proposal_id ? (kwpByProposal[s.proposal_id] || 0) : 0;
-        return total + kwp;
-      }, 0);
     }
-  }, [monthlyActivations, annualActivations, cpesByProposal, kwpByProposal]);
+
+    // Sum kWp from proposals.servicos_details
+    return filtered.reduce((total: number, s: any) => {
+      const kwp = s.proposal_id ? (kwpByProposal[s.proposal_id] || 0) : 0;
+      return total + kwp;
+    }, 0);
+  }, [monthlyActivations, annualActivations, proposalMetadataById, cpesByProposal, kwpByProposal]);
 
   // Upsert objective
   const saveObjective = useMutation({
