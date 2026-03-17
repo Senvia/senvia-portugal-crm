@@ -46,6 +46,9 @@ interface CreateCampaignModalProps {
 
 type Step = 1 | 2 | 3 | 4;
 type ContentMode = "template" | "custom";
+type CampaignSelectionMode = "individual" | "filter" | "list";
+
+type AudienceSnapshotClient = Pick<CrmClient, "id" | "name" | "email" | "phone" | "company" | "status" | "organization_id">;
 
 interface SettingItem {
   key: string;
@@ -54,6 +57,90 @@ interface SettingItem {
   placeholder?: string;
   soon?: boolean;
 }
+
+const AUDIENCE_SETTINGS_KEYS = {
+  mode: "audience_mode",
+  statusFilter: "audience_status_filter",
+  listIds: "audience_list_ids",
+  selectedClients: "audience_selected_clients",
+} as const;
+
+const mergeUniqueClients = (clients: CrmClient[]) => {
+  const emailMap = new Map<string, CrmClient>();
+
+  clients.forEach((client) => {
+    const key = client.email?.trim().toLowerCase() || client.id;
+    if (!emailMap.has(key)) {
+      emailMap.set(key, client);
+    }
+  });
+
+  return Array.from(emailMap.values());
+};
+
+const parseAudienceSettings = (data: Record<string, string>) => {
+  const parseArray = (value?: string) => {
+    if (!value) return [];
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const selectionMode = (data[AUDIENCE_SETTINGS_KEYS.mode] as CampaignSelectionMode) || "individual";
+  const statusFilter = data[AUDIENCE_SETTINGS_KEYS.statusFilter] || "all";
+  const selectedListIds = parseArray(data[AUDIENCE_SETTINGS_KEYS.listIds]).filter((id): id is string => typeof id === "string");
+  const selectedClients = parseArray(data[AUDIENCE_SETTINGS_KEYS.selectedClients])
+    .filter((client): client is AudienceSnapshotClient => !!client && typeof client === "object" && typeof client.id === "string")
+    .map((client) => ({
+      id: client.id,
+      name: client.name || "",
+      email: client.email || "",
+      phone: client.phone || "",
+      company: client.company || "",
+      status: client.status || "active",
+      organization_id: client.organization_id || "",
+    })) as CrmClient[];
+
+  return {
+    selectionMode,
+    statusFilter,
+    selectedListIds,
+    selectedClients,
+  };
+};
+
+const buildAudienceSettingsData = ({
+  base,
+  selectionMode,
+  statusFilter,
+  selectedListIds,
+  selectedClients,
+}: {
+  base: Record<string, string>;
+  selectionMode: CampaignSelectionMode;
+  statusFilter: string;
+  selectedListIds: string[];
+  selectedClients: CrmClient[];
+}) => ({
+  ...base,
+  [AUDIENCE_SETTINGS_KEYS.mode]: selectionMode,
+  [AUDIENCE_SETTINGS_KEYS.statusFilter]: statusFilter,
+  [AUDIENCE_SETTINGS_KEYS.listIds]: JSON.stringify(selectedListIds),
+  [AUDIENCE_SETTINGS_KEYS.selectedClients]: JSON.stringify(
+    selectedClients.map((client) => ({
+      id: client.id,
+      name: client.name,
+      email: client.email,
+      phone: client.phone,
+      company: client.company,
+      status: client.status,
+      organization_id: client.organization_id,
+    }))
+  ),
+});
 
 const CAMPAIGN_SETTINGS_GROUPS: { title: string; items: SettingItem[] }[] = [
   {
