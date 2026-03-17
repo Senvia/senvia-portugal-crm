@@ -300,6 +300,17 @@ export default function Leads() {
       if (existingClient) {
         toast.success('Lead ganha! Cliente já existente.');
         setPrefillSaleClientId(existingClient.id);
+        setPrefillSaleClient({
+          id: existingClient.id,
+          name: existingClient.name,
+          code: existingClient.code,
+          email: existingClient.email,
+          nif: existingClient.nif,
+          address_line1: existingClient.address_line1,
+          city: existingClient.city,
+          postal_code: existingClient.postal_code,
+          country: existingClient.country,
+        });
         setIsCreateSaleModalOpen(true);
       } else {
         convertLeadToClient.mutate({
@@ -317,6 +328,17 @@ export default function Leads() {
             toast.success('Lead ganha! Novo cliente criado.');
             if (newClient?.id) {
               setPrefillSaleClientId(newClient.id);
+              setPrefillSaleClient({
+                id: newClient.id,
+                name: newClient.name,
+                code: newClient.code,
+                email: newClient.email,
+                nif: newClient.nif,
+                address_line1: newClient.address_line1,
+                city: newClient.city,
+                postal_code: newClient.postal_code,
+                country: newClient.country,
+              });
               setIsCreateSaleModalOpen(true);
             }
           },
