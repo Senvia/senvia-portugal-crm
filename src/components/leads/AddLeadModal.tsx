@@ -739,26 +739,28 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
                           )}
                         />
 
-                        <FormField
-                          control={form.control}
-                          name="automation_enabled"
-                          render={({ field }) => (
-                            <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border border-primary/20 bg-primary/5 p-3">
-                              <FormControl>
-                                <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-                              </FormControl>
-                              <div className="space-y-1 leading-none">
-                                <FormLabel className="flex items-center gap-2">
-                                  <Zap className="h-4 w-4 text-primary" />
-                                  Activar automação
-                                </FormLabel>
-                                <p className="text-xs text-muted-foreground">
-                                  Enviar mensagem automática de WhatsApp e notificar equipa.
-                                </p>
-                              </div>
-                            </FormItem>
-                          )}
-                        />
+                        {hasActiveWhatsappAutomation && (
+                          <FormField
+                            control={form.control}
+                            name="automation_enabled"
+                            render={({ field }) => (
+                              <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border border-primary/20 bg-primary/5 p-3">
+                                <FormControl>
+                                  <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                                </FormControl>
+                                <div className="space-y-1 leading-none">
+                                  <FormLabel className="flex items-center gap-2">
+                                    <Zap className="h-4 w-4 text-primary" />
+                                    Activar automação
+                                  </FormLabel>
+                                  <p className="text-xs text-muted-foreground">
+                                    Enviar mensagem automática de WhatsApp e notificar equipa.
+                                  </p>
+                                </div>
+                              </FormItem>
+                            )}
+                          />
+                        )}
                       </CardContent>
                     </Card>
 
