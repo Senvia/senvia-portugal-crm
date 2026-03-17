@@ -23,7 +23,7 @@ type CampaignMetric = {
   value: number;
   pct?: number;
   icon: typeof Mail;
-  color: string;
+  iconStyle?: { color: string };
   filterKey: MetricFilter;
 };
 
