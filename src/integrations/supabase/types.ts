@@ -4327,6 +4327,13 @@ export type Database = {
           organization_slug: string
         }[]
       }
+      handle_email_unsubscribe: {
+        Args: { p_token: string }
+        Returns: {
+          message: string
+          success: boolean
+        }[]
+      }
       has_finance_approve_permission: {
         Args: { _user_id: string }
         Returns: boolean
