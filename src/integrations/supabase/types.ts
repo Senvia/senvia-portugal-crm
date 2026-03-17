@@ -1434,6 +1434,58 @@ export type Database = {
           },
         ]
       }
+      email_unsubscribe_tokens: {
+        Row: {
+          contact_id: string
+          created_at: string
+          email_send_id: string | null
+          id: string
+          organization_id: string
+          token: string
+          used_at: string | null
+        }
+        Insert: {
+          contact_id: string
+          created_at?: string
+          email_send_id?: string | null
+          id?: string
+          organization_id: string
+          token: string
+          used_at?: string | null
+        }
+        Update: {
+          contact_id?: string
+          created_at?: string
+          email_send_id?: string | null
+          id?: string
+          organization_id?: string
+          token?: string
+          used_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_unsubscribe_tokens_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "marketing_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_unsubscribe_tokens_email_send_id_fkey"
+            columns: ["email_send_id"]
+            isOneToOne: false
+            referencedRelation: "email_sends"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_unsubscribe_tokens_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       expense_categories: {
         Row: {
           color: string | null
@@ -4194,6 +4246,10 @@ export type Database = {
               distributed_count: number
             }[]
           }
+      ensure_newsletter_removed_list: {
+        Args: { p_org_id: string }
+        Returns: string
+      }
       ensure_org_auto_lists: { Args: { p_org_id: string }; Returns: undefined }
       ensure_stripe_auto_lists: {
         Args: { p_org_id: string }
@@ -4269,6 +4325,13 @@ export type Database = {
           organization_id: string
           organization_name: string
           organization_slug: string
+        }[]
+      }
+      handle_email_unsubscribe: {
+        Args: { p_token: string }
+        Returns: {
+          message: string
+          success: boolean
         }[]
       }
       has_finance_approve_permission: {
