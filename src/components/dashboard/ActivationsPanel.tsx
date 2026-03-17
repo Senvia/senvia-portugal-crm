@@ -36,7 +36,12 @@ interface ActivationBlockProps {
   currentUserId?: string;
   isAdmin: boolean;
   getTarget: (userId: string, periodType: "monthly" | "annual", proposalType: "energia" | "servicos") => number;
-  countActivations: (userId: string | null, periodType: "monthly" | "annual", proposalType: "energia" | "servicos") => number;
+  countActivations: (
+    userId: string | null,
+    periodType: "monthly" | "annual",
+    proposalType: "energia" | "servicos",
+    countMode?: ActivationCountMode
+  ) => number;
   onEdit: () => void;
   unit?: string;
 }
