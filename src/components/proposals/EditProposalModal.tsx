@@ -367,6 +367,13 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
     setAttempted(true);
     if (!isFormValid) return;
 
+    if (isTelecom && proposalType === 'servicos') {
+      await updateProposalCpes.mutateAsync({
+        proposalId: proposal.id,
+        cpes: [],
+      });
+    }
+
     await updateProposal.mutateAsync({
       id: proposal.id,
       client_id: selectedClientId || null,
@@ -410,7 +417,7 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
       });
     }
 
-    if (!isTelecom && selectedProducts.length > 0) {
+    if (!isTelecom) {
       await updateProposalProducts.mutateAsync({
         proposalId: proposal.id,
         products: selectedProducts.map(p => ({
