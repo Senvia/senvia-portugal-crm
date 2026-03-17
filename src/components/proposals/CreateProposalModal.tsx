@@ -131,6 +131,20 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
     setSelectedClientId(newClientId);
   };
 
+  const handleProposalTypeChange = (nextType: ProposalType) => {
+    setProposalType(nextType);
+
+    if (nextType === 'energia') {
+      setServicosProdutos([]);
+      setServicosDetails({});
+      setModeloServico('transacional');
+      setComissaoServicos('');
+      return;
+    }
+
+    setProposalCpes([]);
+  };
+
   const handleToggleServicoProduto = (produto: string) => {
     setServicosProdutos(prev => {
       if (prev.includes(produto)) {
@@ -308,29 +322,29 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
       comissao: totalComissao || undefined,
       servicos_produtos: proposalType === 'servicos' && servicosProdutos.length > 0 ? servicosProdutos : undefined,
       servicos_details: proposalType === 'servicos' && Object.keys(servicosDetails).length > 0 ? servicosDetails : undefined,
-    }, {
-      onSuccess: async (createdProposal) => {
-        if (proposalCpes.length > 0 && createdProposal?.id) {
-          await createProposalCpesBatch.mutateAsync(
-            proposalCpes.map(cpe => ({
-              proposal_id: createdProposal.id,
-              existing_cpe_id: cpe.existing_cpe_id,
-              equipment_type: cpe.equipment_type,
-              serial_number: cpe.serial_number || null,
-              comercializador: cpe.comercializador,
-              fidelizacao_start: cpe.fidelizacao_start || null,
-              fidelizacao_end: cpe.fidelizacao_end || null,
-              notes: cpe.notes || null,
-              consumo_anual: cpe.consumo_anual ? parseFloat(cpe.consumo_anual) : null,
-              duracao_contrato: cpe.duracao_contrato ? parseInt(cpe.duracao_contrato) : null,
-              dbl: cpe.dbl ? parseFloat(cpe.dbl) : null,
-              margem: cpe.margem ? parseFloat(cpe.margem) : null,
-              comissao: cpe.comissao ? parseFloat(cpe.comissao) : null,
-              contrato_inicio: cpe.contrato_inicio || null,
-              contrato_fim: cpe.contrato_fim || null,
-            }))
-          );
-        }
+      }, {
+        onSuccess: async (createdProposal) => {
+          if (proposalType === 'energia' && proposalCpes.length > 0 && createdProposal?.id) {
+            await createProposalCpesBatch.mutateAsync(
+              proposalCpes.map(cpe => ({
+                proposal_id: createdProposal.id,
+                existing_cpe_id: cpe.existing_cpe_id,
+                equipment_type: cpe.equipment_type,
+                serial_number: cpe.serial_number || null,
+                comercializador: cpe.comercializador,
+                fidelizacao_start: cpe.fidelizacao_start || null,
+                fidelizacao_end: cpe.fidelizacao_end || null,
+                notes: cpe.notes || null,
+                consumo_anual: cpe.consumo_anual ? parseFloat(cpe.consumo_anual) : null,
+                duracao_contrato: cpe.duracao_contrato ? parseInt(cpe.duracao_contrato) : null,
+                dbl: cpe.dbl ? parseFloat(cpe.dbl) : null,
+                margem: cpe.margem ? parseFloat(cpe.margem) : null,
+                comissao: cpe.comissao ? parseFloat(cpe.comissao) : null,
+                contrato_inicio: cpe.contrato_inicio || null,
+                contrato_fim: cpe.contrato_fim || null,
+              }))
+            );
+          }
         
         setSelectedClientId(null);
         setNotes('');
@@ -474,7 +488,7 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
                             type="button"
                             variant={proposalType === 'energia' ? 'default' : 'outline'}
                             className="flex items-center justify-center gap-2 h-12"
-                            onClick={() => setProposalType('energia')}
+                            onClick={() => handleProposalTypeChange('energia')}
                           >
                             <Zap className="h-4 w-4" />
                             Energia
@@ -483,7 +497,7 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
                             type="button"
                             variant={proposalType === 'servicos' ? 'default' : 'outline'}
                             className="flex items-center justify-center gap-2 h-12"
-                            onClick={() => setProposalType('servicos')}
+                            onClick={() => handleProposalTypeChange('servicos')}
                           >
                             <Wrench className="h-4 w-4" />
                             Outros Serviços

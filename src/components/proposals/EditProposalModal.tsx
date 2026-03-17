@@ -211,6 +211,21 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
     setSelectedClientId(newClientId);
   };
 
+  const handleProposalTypeChange = (nextType: ProposalType) => {
+    setProposalType(nextType);
+
+    if (nextType === 'energia') {
+      setServicosProdutos([]);
+      setServicosDetails({});
+      setModeloServico('transacional');
+      setKwp('');
+      setServicosComissao('');
+      return;
+    }
+
+    setProposalCpes([]);
+  };
+
   const handleServicosProdutoToggle = (produto: string) => {
     if (servicosProdutos.includes(produto)) {
       setServicosProdutos(prev => prev.filter(p => p !== produto));
@@ -352,6 +367,13 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
     setAttempted(true);
     if (!isFormValid) return;
 
+    if (isTelecom && proposalType === 'servicos') {
+      await updateProposalCpes.mutateAsync({
+        proposalId: proposal.id,
+        cpes: [],
+      });
+    }
+
     await updateProposal.mutateAsync({
       id: proposal.id,
       client_id: selectedClientId || null,
@@ -395,7 +417,7 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
       });
     }
 
-    if (!isTelecom && selectedProducts.length > 0) {
+    if (!isTelecom) {
       await updateProposalProducts.mutateAsync({
         proposalId: proposal.id,
         products: selectedProducts.map(p => ({
@@ -533,7 +555,7 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
                             type="button"
                             variant={proposalType === 'energia' ? 'default' : 'outline'}
                             className="flex items-center justify-center gap-2 h-10"
-                            onClick={() => setProposalType('energia')}
+                            onClick={() => handleProposalTypeChange('energia')}
                           >
                             <Zap className="h-4 w-4" />
                             Energia
@@ -542,7 +564,7 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
                             type="button"
                             variant={proposalType === 'servicos' ? 'default' : 'outline'}
                             className="flex items-center justify-center gap-2 h-10"
-                            onClick={() => setProposalType('servicos')}
+                            onClick={() => handleProposalTypeChange('servicos')}
                           >
                             <Wrench className="h-4 w-4" />
                             Outros Serviços
