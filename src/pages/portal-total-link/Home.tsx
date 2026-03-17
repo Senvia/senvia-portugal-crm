@@ -155,11 +155,11 @@ export default function PortalTotalLinkHomePage() {
                       </button>
                     </div>
 
-                    <div className="rounded-2xl border border-border/60 bg-muted/20 px-2 py-4">
+                    <div className="mx-auto w-full max-w-5xl rounded-2xl border border-border/60 bg-muted/20 px-2 py-4">
                       <MiniBarChart data={teamBreakdown} height={248} mode="grouped" />
                     </div>
 
-                    <div className="overflow-hidden rounded-2xl border border-border/60 bg-background">
+                    <div className="mx-auto w-full max-w-5xl overflow-hidden rounded-2xl border border-border/60 bg-background">
                       <Table>
                         <TableHeader>
                           <TableRow className="hover:bg-transparent">
@@ -187,13 +187,13 @@ export default function PortalTotalLinkHomePage() {
                     <button
                       type="button"
                       onClick={() => handleOpenTeamView(metric.title)}
-                      className="block w-full rounded-2xl border border-border/60 bg-muted/20 px-2 py-4 text-left transition-colors hover:border-primary/30 hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className="mx-auto block w-full max-w-5xl rounded-2xl border border-border/60 bg-muted/20 px-2 py-4 text-left transition-colors hover:border-primary/30 hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       aria-label={`Abrir vista de equipa para ${metric.title}`}
                     >
                       <MiniBarChart data={chartData} color={metric.color} height={168} showLabels />
                     </button>
 
-                    <div className="grid grid-cols-3 gap-2 border-t border-border/70 pt-4">
+                    <div className="mx-auto grid w-full max-w-3xl gap-2 border-t border-border/70 pt-4 md:grid-cols-3">
                       {summaryItems.map((item) => (
                         <div key={item.key} className="rounded-2xl border border-border/60 bg-muted/20 p-3 text-center">
                           <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
