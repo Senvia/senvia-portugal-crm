@@ -518,12 +518,37 @@ export function LeadDetailsModal({
                     </CardHeader>
                     <CardContent>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        {utmData.map((entry, index) => (
-                          <div key={index} className="rounded-lg bg-muted/50 p-2">
-                            <p className="text-xs text-muted-foreground">{entry.label}</p>
-                            <p className="text-sm text-foreground">{entry.value}</p>
-                          </div>
-                        ))}
+                        {utmData.map((entry, index) => {
+                          const isTechnicalTracking = TECHNICAL_TRACKING_KEYS.includes(entry.key as typeof TECHNICAL_TRACKING_KEYS[number]);
+                          const displayValue = isTechnicalTracking ? shortenTrackingValue(entry.value) : entry.value;
+
+                          return (
+                            <div key={index} className="min-w-0 rounded-lg bg-muted/50 p-2">
+                              <p className="text-xs text-muted-foreground">{entry.label}</p>
+                              <div className="mt-1 flex items-start gap-2 min-w-0">
+                                <p
+                                  className="min-w-0 flex-1 overflow-hidden text-sm text-foreground break-words"
+                                  title={entry.value}
+                                >
+                                  {displayValue}
+                                </p>
+                                {isTechnicalTracking && (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    className="shrink-0"
+                                    onClick={() => copyTrackingValue(entry.value)}
+                                    aria-label={`Copiar ${entry.label}`}
+                                    title={`Copiar ${entry.label}`}
+                                  >
+                                    <Copy className="h-4 w-4" />
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </CardContent>
                   </Card>
