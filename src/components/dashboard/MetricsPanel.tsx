@@ -289,7 +289,6 @@ export function MetricsPanel() {
                               {showEnergy && <TableCell className="text-xs text-right py-1.5">{formatNumber(target?.energia || 0)}</TableCell>}
                               {showEnergy && <TableCell className="text-xs text-right py-1.5">{target?.op_solar || 0}</TableCell>}
                               {showEnergy && <TableCell className="text-xs text-right py-1.5">{formatNumber(target?.solar || 0)}</TableCell>}
-                              <TableCell className="text-xs text-right py-1.5">{target?.op_comissao || 0}</TableCell>
                               <TableCell className="text-xs text-right py-1.5 font-medium text-primary">{formatCurrency(target?.comissao || 0)}</TableCell>
                             </TableRow>
                           );
@@ -301,7 +300,6 @@ export function MetricsPanel() {
                             {showEnergy && <TableCell className="text-xs text-right font-semibold py-1.5">{formatNumber(metrics.reduce((a, m) => a + m.energia, 0))}</TableCell>}
                             {showEnergy && <TableCell className="text-xs text-right font-semibold py-1.5">{metrics.reduce((a, m) => a + m.op_solar, 0)}</TableCell>}
                             {showEnergy && <TableCell className="text-xs text-right font-semibold py-1.5">{formatNumber(metrics.reduce((a, m) => a + m.solar, 0))}</TableCell>}
-                            <TableCell className="text-xs text-right font-semibold py-1.5">{metrics.reduce((a, m) => a + m.op_comissao, 0)}</TableCell>
                             <TableCell className="text-xs text-right font-semibold py-1.5 text-primary">{formatCurrency(metrics.reduce((a, m) => a + m.comissao, 0))}</TableCell>
                           </TableRow>
                         )}
