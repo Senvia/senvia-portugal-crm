@@ -31,10 +31,15 @@ const allNavItems: NavItem[] = [
 
 export function MobileBottomNav() {
   const location = useLocation();
-  const { isSuperAdmin } = useAuth();
+  const { isSuperAdmin, organization, organizations } = useAuth();
   const { modules } = useModules();
   const { canViewModule } = usePermissions();
   const { isModuleLocked, getRequiredPlan } = useSubscription();
+  const hasPerfect2GetherModuleAccess = hasPerfect2GetherAccess({
+    organizationId: organization?.id,
+    memberships: organizations,
+    isSuperAdmin,
+  });
 
   const [upgradeModal, setUpgradeModal] = useState<{ open: boolean; feature: string; plan: string }>({
     open: false, feature: '', plan: ''
