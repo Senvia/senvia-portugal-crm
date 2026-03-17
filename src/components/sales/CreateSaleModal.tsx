@@ -498,11 +498,33 @@ export function CreateSaleModal({
     items, products, orgTaxValue, discount: discountValue, subtotal,
   });
 
+  const clientOptions = useMemo<ComboboxOption[]>(() => {
+    const mappedClients = (clients || []).map((client): ComboboxOption => ({
+      value: client.id,
+      label: client.name,
+      sublabel: client.code || client.email || undefined,
+    }));
+
+    if (
+      prefillClient &&
+      prefillClient.id &&
+      !mappedClients.some((client) => client.value === prefillClient.id)
+    ) {
+      mappedClients.unshift({
+        value: prefillClient.id,
+        label: prefillClient.name,
+        sublabel: prefillClient.code || prefillClient.email || undefined,
+      });
+    }
+
+    return mappedClients;
+  }, [clients, prefillClient]);
+
   // Selected client fiscal data
   const selectedClient = useMemo(() => {
-    if (!clientId || !clients) return null;
-    return clients.find(c => c.id === clientId) || null;
-  }, [clientId, clients]);
+    if (!clientId) return null;
+    return clients?.find(c => c.id === clientId) || (prefillClient?.id === clientId ? prefillClient : null);
+  }, [clientId, clients, prefillClient]);
 
   // Handlers
   const handleClientSelect = (value: string) => {
