@@ -5,13 +5,16 @@ import {
   Settings, 
   LogOut,
   Shield,
-  X
+  X,
+  Building2,
+  Search
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { APP_VERSION } from "@/lib/constants";
 import type { AppRole } from "@/types";
 import { Button } from "@/components/ui/button";
+import { hasPerfect2GetherAccess } from "@/lib/perfect2gether";
 
 const navItems = [
   { to: "/dashboard", icon: LayoutDashboard, label: "Painel" },
@@ -35,7 +38,12 @@ interface MobileMenuProps {
 
 export function MobileMenu({ isOpen, onClose, userName = "Utilizador", organizationName = "A Minha Empresa" }: MobileMenuProps) {
   const navigate = useNavigate();
-  const { signOut, roles, isSuperAdmin } = useAuth();
+  const { signOut, roles, isSuperAdmin, organization, organizations } = useAuth();
+  const hasPerfect2GetherModuleAccess = hasPerfect2GetherAccess({
+    organizationId: organization?.id,
+    memberships: organizations,
+    isSuperAdmin,
+  });
 
   const handleLogout = async () => {
     await signOut();
@@ -94,6 +102,38 @@ export function MobileMenu({ isOpen, onClose, userName = "Utilizador", organizat
             </NavLink>
           ))}
           
+          {hasPerfect2GetherModuleAccess && (
+            <>
+              <NavLink
+                to="/prospects"
+                onClick={handleNavClick}
+                className={({ isActive }) => cn(
+                  "flex items-center gap-4 rounded-xl px-4 py-3.5 text-base font-medium transition-colors",
+                  isActive
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                )}
+              >
+                <Search className="h-5 w-5" />
+                Prospects
+              </NavLink>
+
+              <NavLink
+                to="/portal-total-link"
+                onClick={handleNavClick}
+                className={({ isActive }) => cn(
+                  "flex items-center gap-4 rounded-xl px-4 py-3.5 text-base font-medium transition-colors",
+                  isActive
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                )}
+              >
+                <Building2 className="h-5 w-5" />
+                Portal Total Link
+              </NavLink>
+            </>
+          )}
+
           {isSuperAdmin && (
             <NavLink
               to="/system-admin"

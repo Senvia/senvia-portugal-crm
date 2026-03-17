@@ -17,6 +17,7 @@ import Login from "./pages/Login";
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Leads = lazy(() => import("./pages/Leads"));
 const Prospects = lazy(() => import("./pages/Prospects"));
+const PortalTotalLink = lazy(() => import("./pages/PortalTotalLink"));
 const Clients = lazy(() => import("./pages/Clients"));
 const Calendar = lazy(() => import("./pages/Calendar"));
 const Settings = lazy(() => import("./pages/Settings"));
@@ -85,6 +86,7 @@ const App = () => (
                   <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/leads" element={<Leads />} />
                   <Route path="/prospects" element={<Prospects />} />
+                  <Route path="/portal-total-link" element={<PortalTotalLink />} />
                   <Route path="/clients" element={<Clients />} />
                   <Route path="/calendar" element={<Calendar />} />
                   <Route path="/proposals" element={<Proposals />} />

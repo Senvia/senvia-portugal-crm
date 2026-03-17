@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
-import { LayoutDashboard, Users, Settings, Shield, Calendar, FileText, ShoppingBag, Store, UserCheck, Mail, Wallet, Lock } from "lucide-react";
+import { LayoutDashboard, Users, Settings, Shield, Calendar, FileText, ShoppingBag, Store, UserCheck, Mail, Wallet, Lock, Building2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useModules, EnabledModules } from "@/hooks/useModules";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useSubscription } from "@/hooks/useSubscription";
 import { UpgradeModal } from "@/components/shared/UpgradeModal";
+import { hasPerfect2GetherAccess } from "@/lib/perfect2gether";
 
 interface NavItem {
   to: string;
@@ -30,10 +31,15 @@ const allNavItems: NavItem[] = [
 
 export function MobileBottomNav() {
   const location = useLocation();
-  const { isSuperAdmin } = useAuth();
+  const { isSuperAdmin, organization, organizations } = useAuth();
   const { modules } = useModules();
   const { canViewModule } = usePermissions();
   const { isModuleLocked, getRequiredPlan } = useSubscription();
+  const hasPerfect2GetherModuleAccess = hasPerfect2GetherAccess({
+    organizationId: organization?.id,
+    memberships: organizations,
+    isSuperAdmin,
+  });
 
   const [upgradeModal, setUpgradeModal] = useState<{ open: boolean; feature: string; plan: string }>({
     open: false, feature: '', plan: ''
@@ -48,9 +54,13 @@ export function MobileBottomNav() {
     return true;
   });
 
+  const perfect2GetherItems: NavItem[] = hasPerfect2GetherModuleAccess
+    ? [{ to: "/portal-total-link", icon: Building2, label: "Portal" }]
+    : [];
+
   const allItems = isSuperAdmin 
-    ? [...navItems, { to: "/system-admin", icon: Shield, label: "Admin" }]
-    : navItems;
+    ? [...navItems, ...perfect2GetherItems, { to: "/system-admin", icon: Shield, label: "Admin" }]
+    : [...navItems, ...perfect2GetherItems];
 
   const handleLockedClick = (e: React.MouseEvent, item: NavItem) => {
     if (item.moduleKey && isModuleLocked(item.moduleKey)) {
