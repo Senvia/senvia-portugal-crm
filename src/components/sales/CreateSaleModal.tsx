@@ -93,11 +93,19 @@ interface SaleItemDraft {
   first_due_date?: Date | null; // Data de vencimento para produtos recorrentes
 }
 
+interface PrefillSaleClient {
+  id: string;
+  name: string;
+  code?: string | null;
+  email?: string | null;
+}
+
 interface CreateSaleModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   prefillProposal?: Proposal | null;
   prefillClientId?: string | null;
+  prefillClient?: PrefillSaleClient | null;
   onSaleCreated?: (saleId: string) => void;
 }
 
@@ -106,6 +114,7 @@ export function CreateSaleModal({
   onOpenChange, 
   prefillProposal,
   prefillClientId,
+  prefillClient,
   onSaleCreated
 }: CreateSaleModalProps) {
   // Lead removido - vendas são apenas para clientes
