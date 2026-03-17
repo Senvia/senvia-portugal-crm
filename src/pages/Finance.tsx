@@ -95,6 +95,7 @@ export default function Finance() {
           {!isTelecom && <TabsTrigger value="faturas">Faturas</TabsTrigger>}
           <TabsTrigger value="outros">Outros</TabsTrigger>
           {isTelecom && <TabsTrigger value="comissoes">Comissões</TabsTrigger>}
+          {canViewCommissionAnalysis && <TabsTrigger value="analise-comissoes">Análise de Comissões</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="resumo" className="mt-0 space-y-6">
