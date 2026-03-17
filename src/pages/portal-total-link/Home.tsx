@@ -80,9 +80,9 @@ const portalHomeMetrics = [
 ];
 
 const summaryItems = [
-  { key: "objetivo", label: "Objetivo" },
-  { key: "ativos", label: "Ativos" },
-  { key: "pendentes", label: "Pendentes" },
+  { key: "objetivo", label: "Objetivo", valueClassName: "text-primary" },
+  { key: "ativos", label: "Ativos", valueClassName: "text-[hsl(var(--success))]" },
+  { key: "pendentes", label: "Pendentes", valueClassName: "text-[hsl(var(--warning))]" },
 ] as const;
 
 export default function PortalTotalLinkHomePage() {
