@@ -548,7 +548,7 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
                             type="button"
                             variant={proposalType === 'energia' ? 'default' : 'outline'}
                             className="flex items-center justify-center gap-2 h-10"
-                            onClick={() => setProposalType('energia')}
+                            onClick={() => handleProposalTypeChange('energia')}
                           >
                             <Zap className="h-4 w-4" />
                             Energia
@@ -557,7 +557,7 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
                             type="button"
                             variant={proposalType === 'servicos' ? 'default' : 'outline'}
                             className="flex items-center justify-center gap-2 h-10"
-                            onClick={() => setProposalType('servicos')}
+                            onClick={() => handleProposalTypeChange('servicos')}
                           >
                             <Wrench className="h-4 w-4" />
                             Outros Serviços
