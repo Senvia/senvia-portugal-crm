@@ -106,7 +106,7 @@ export function PortalTotalLinkLayout({ children }: { children: ReactNode }) {
           </div>
         </div>
 
-        <PortalTotalLinkFilters />
+        {isHomeSection ? null : <PortalTotalLinkFilters />}
       </section>
 
       {children}
