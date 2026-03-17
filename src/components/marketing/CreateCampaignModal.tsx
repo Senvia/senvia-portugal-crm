@@ -924,7 +924,7 @@ export function CreateCampaignModal({ open, onOpenChange, campaign }: CreateCamp
                               subject: subject || null,
                               html_content: contentMode === "custom" && customHtml ? customHtml : null,
                               settings,
-                              settings_data: settingsData,
+                              settings_data: persistedSettingsData,
                             });
                           } else {
                             await createCampaign.mutateAsync({
@@ -933,7 +933,7 @@ export function CreateCampaignModal({ open, onOpenChange, campaign }: CreateCamp
                               subject: subject || undefined,
                               html_content: contentMode === "custom" && customHtml ? customHtml : undefined,
                               settings,
-                              settings_data: settingsData,
+                              settings_data: persistedSettingsData,
                             });
                           }
                           handleClose();
