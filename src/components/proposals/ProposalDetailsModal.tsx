@@ -847,13 +847,7 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
         prefillClient={proposal.client ? {
           id: proposal.client.id,
           name: proposal.client.name,
-          code: proposal.client.code,
           email: proposal.client.email,
-          nif: proposal.client.nif,
-          address_line1: proposal.client.address_line1,
-          city: proposal.client.city,
-          postal_code: proposal.client.postal_code,
-          country: proposal.client.country,
         } : null}
         onSaleCreated={handleSaleCreated}
       />
