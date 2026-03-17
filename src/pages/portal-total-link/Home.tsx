@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { MiniBarChart } from "@/components/dashboard/MiniBarChart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { formatCurrency } from "@/lib/format";
 
 type MetricView = "global" | "team";
 
@@ -139,9 +141,32 @@ export default function PortalTotalLinkHomePage() {
 
               <CardContent className="space-y-5 p-5">
                 {isTeamView ? (
-                  <div className="space-y-3">
+                  <div className="space-y-4">
                     <div className="rounded-2xl border border-border/60 bg-muted/20 px-2 py-4">
                       <MiniBarChart data={teamBreakdown} height={248} mode="grouped" />
+                    </div>
+
+                    <div className="overflow-hidden rounded-2xl border border-border/60 bg-background">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="hover:bg-transparent">
+                            <TableHead>Equipa</TableHead>
+                            <TableHead className="text-right">Objetivo</TableHead>
+                            <TableHead className="text-right">Ativos</TableHead>
+                            <TableHead className="text-right">Pendentes</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {teamBreakdown.map((member) => (
+                            <TableRow key={member.name}>
+                              <TableCell className="min-w-[180px] font-medium text-foreground">{member.name}</TableCell>
+                              <TableCell className="text-right text-foreground">{formatCurrency(member.objetivo)}</TableCell>
+                              <TableCell className="text-right text-foreground">{formatCurrency(member.ativos)}</TableCell>
+                              <TableCell className="text-right text-foreground">{formatCurrency(member.pendentes)}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
                     </div>
 
                     <div className="flex items-center justify-between gap-3">
