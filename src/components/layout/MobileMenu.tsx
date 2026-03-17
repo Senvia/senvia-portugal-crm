@@ -38,7 +38,12 @@ interface MobileMenuProps {
 
 export function MobileMenu({ isOpen, onClose, userName = "Utilizador", organizationName = "A Minha Empresa" }: MobileMenuProps) {
   const navigate = useNavigate();
-  const { signOut, roles, isSuperAdmin } = useAuth();
+  const { signOut, roles, isSuperAdmin, organization, organizations } = useAuth();
+  const hasPerfect2GetherModuleAccess = hasPerfect2GetherAccess({
+    organizationId: organization?.id,
+    memberships: organizations,
+    isSuperAdmin,
+  });
 
   const handleLogout = async () => {
     await signOut();
