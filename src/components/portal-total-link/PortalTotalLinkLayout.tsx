@@ -1,6 +1,5 @@
 import { type ReactNode } from "react";
 import { NavLink, useLocation } from "react-router-dom";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { PortalTotalLinkFilters } from "./PortalTotalLinkFilters";
@@ -21,17 +20,9 @@ export function PortalTotalLinkLayout({ children }: { children: ReactNode }) {
       <section className="space-y-4">
         <div className="rounded-3xl border border-border bg-card p-4 shadow-sm md:p-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="space-y-3">
-              <div className="flex flex-wrap gap-2">
-                <Badge variant="secondary">Exclusivo Perfect2Gether</Badge>
-                <Badge variant="outline">Read-only</Badge>
-                <Badge variant="outline">Sem sync CRM</Badge>
-              </div>
-
-              <div className="space-y-1">
-                <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Portal Total Link</h1>
-                <p className="max-w-3xl text-sm text-muted-foreground md:text-base">{currentSection.description}</p>
-              </div>
+            <div className="space-y-1">
+              <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Portal Total Link</h1>
+              <p className="max-w-3xl text-sm text-muted-foreground md:text-base">{currentSection.description}</p>
             </div>
 
             {currentSection.action ? (
@@ -39,11 +30,7 @@ export function PortalTotalLinkLayout({ children }: { children: ReactNode }) {
                 {ActionIcon ? <ActionIcon className="h-4 w-4" /> : null}
                 {currentSection.action.label}
               </Button>
-            ) : (
-              <div className="flex items-center">
-                <Badge variant="outline">Navegação preparada</Badge>
-              </div>
-            )}
+            ) : null}
           </div>
 
           <div className="mt-5 overflow-x-auto">
