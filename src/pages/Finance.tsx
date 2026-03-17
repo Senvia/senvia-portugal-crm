@@ -386,6 +386,12 @@ export default function Finance() {
             <CommissionsTab />
           </TabsContent>
         )}
+
+        {canViewCommissionAnalysis && (
+          <TabsContent value="analise-comissoes" className="mt-0">
+            <CommissionAnalysisTab />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );
