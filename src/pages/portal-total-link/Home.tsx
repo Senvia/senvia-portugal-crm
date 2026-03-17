@@ -114,7 +114,7 @@ export default function PortalTotalLinkHomePage() {
 
   return (
     <section className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4">
         {portalHomeMetrics.map((metric) => {
           const currentView = metricViews[metric.title] ?? "global";
           const isTeamView = currentView === "team";
