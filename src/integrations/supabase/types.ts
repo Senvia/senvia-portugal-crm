@@ -3231,6 +3231,7 @@ export type Database = {
       }
       proposals: {
         Row: {
+          accepted_at: string | null
           anos_contrato: number | null
           client_id: string | null
           code: string | null
@@ -3256,6 +3257,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          accepted_at?: string | null
           anos_contrato?: number | null
           client_id?: string | null
           code?: string | null
@@ -3281,6 +3283,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          accepted_at?: string | null
           anos_contrato?: number | null
           client_id?: string | null
           code?: string | null
@@ -4511,6 +4514,7 @@ export type Database = {
           search_term: string
         }
         Returns: {
+          accepted_at: string | null
           anos_contrato: number | null
           client_id: string | null
           code: string | null
