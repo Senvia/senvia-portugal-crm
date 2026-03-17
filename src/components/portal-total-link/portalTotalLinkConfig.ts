@@ -80,6 +80,18 @@ export const portalTotalLinkCycleOptions = [
 
 const currentYear = new Date().getFullYear();
 
+export const portalTotalLinkHomeCycleOptions = Array.from({ length: 13 }, (_, index) => {
+  const cycle = String(index + 1);
+
+  return { value: cycle, label: `Ciclo ${cycle}` };
+});
+
+export const portalTotalLinkHomeYearOptions = Array.from({ length: 5 }, (_, index) => {
+  const year = String(currentYear - 2 + index);
+
+  return { value: year, label: year };
+});
+
 export const portalTotalLinkYearOptions = [
   { value: "all", label: "Todos os anos" },
   ...Array.from({ length: 7 }, (_, index) => {
