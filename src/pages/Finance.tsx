@@ -34,11 +34,14 @@ import { InvoicesContent } from "@/components/finance/InvoicesContent";
 import InternalRequests from "@/pages/finance/InternalRequests";
 import { BankAccountsTab } from "@/components/finance/BankAccountsTab";
 import { CommissionsTab } from "@/components/finance/CommissionsTab";
+import { CommissionAnalysisTab } from "@/components/finance/CommissionAnalysisTab";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEffect, useState } from "react";
 import { useSalesCommissions } from "@/hooks/useSalesCommissions";
 import { CommissionsPayableModal } from "@/components/finance/CommissionsPayableModal";
 import { RenewalAlertsWidget } from "@/components/finance/RenewalAlertsWidget";
+import { hasPerfect2GetherAccess } from "@/lib/perfect2gether";
+import { usePermissions } from "@/hooks/usePermissions";
 
 export default function Finance() {
   const { organization } = useAuth();
