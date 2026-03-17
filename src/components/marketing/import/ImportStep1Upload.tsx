@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { forwardRef, useCallback, useRef } from "react";
 import { Upload, FileSpreadsheet, Download, X, CheckCircle2 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { Button } from "@/components/ui/button";
