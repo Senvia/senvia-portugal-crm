@@ -1,4 +1,4 @@
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, XAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, XAxis } from "recharts";
 
 type SingleBarDatum = { name: string; value: number };
 type GroupedBarDatum = {
@@ -14,6 +14,16 @@ interface MiniBarChartProps {
   height?: number;
   showLabels?: boolean;
   mode?: "single" | "grouped";
+}
+
+const metricColors: Record<string, string> = {
+  objetivo: "hsl(var(--primary))",
+  ativos: "hsl(var(--success))",
+  pendentes: "hsl(var(--warning))",
+};
+
+function getMetricColor(name: string, fallback: string) {
+  return metricColors[name.trim().toLowerCase()] ?? fallback;
 }
 
 export function MiniBarChart({
@@ -53,20 +63,25 @@ export function MiniBarChart({
             height={isGrouped ? 64 : undefined}
             angle={isGrouped ? -35 : 0}
             textAnchor={isGrouped ? "end" : "middle"}
-            tick={{ fontSize: isGrouped ? 10 : 10, fill: "hsl(var(--muted-foreground))" }}
+            tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
           />
         )}
 
         {isGrouped ? (
           <>
             <Bar dataKey="objetivo" name="Objetivo" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} maxBarSize={18} />
-            <Bar dataKey="ativos" name="Ativos" fill="hsl(var(--secondary-foreground))" radius={[4, 4, 0, 0]} maxBarSize={18} />
-            <Bar dataKey="pendentes" name="Pendentes" fill="hsl(var(--accent-foreground))" radius={[4, 4, 0, 0]} maxBarSize={18} />
+            <Bar dataKey="ativos" name="Ativos" fill="hsl(var(--success))" radius={[4, 4, 0, 0]} maxBarSize={18} />
+            <Bar dataKey="pendentes" name="Pendentes" fill="hsl(var(--warning))" radius={[4, 4, 0, 0]} maxBarSize={18} />
           </>
         ) : (
-          <Bar dataKey="value" fill={color} radius={[4, 4, 0, 0]} maxBarSize={56} />
+          <Bar dataKey="value" radius={[4, 4, 0, 0]} maxBarSize={56}>
+            {(data as SingleBarDatum[]).map((entry) => (
+              <Cell key={entry.name} fill={getMetricColor(entry.name, color)} />
+            ))}
+          </Bar>
         )}
       </BarChart>
     </ResponsiveContainer>
   );
 }
+

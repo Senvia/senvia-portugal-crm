@@ -80,9 +80,9 @@ const portalHomeMetrics = [
 ];
 
 const summaryItems = [
-  { key: "objetivo", label: "Objetivo" },
-  { key: "ativos", label: "Ativos" },
-  { key: "pendentes", label: "Pendentes" },
+  { key: "objetivo", label: "Objetivo", valueClassName: "text-primary" },
+  { key: "ativos", label: "Ativos", valueClassName: "text-[hsl(var(--success))]" },
+  { key: "pendentes", label: "Pendentes", valueClassName: "text-[hsl(var(--warning))]" },
 ] as const;
 
 export default function PortalTotalLinkHomePage() {
@@ -199,7 +199,7 @@ export default function PortalTotalLinkHomePage() {
                           <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
                             {item.label}
                           </p>
-                          <p className="mt-2 text-lg font-semibold text-foreground">{metric.summary[item.key]}</p>
+                          <p className={`mt-2 text-lg font-semibold ${item.valueClassName}`}>{metric.summary[item.key]}</p>
                         </div>
                       ))}
                     </div>
