@@ -211,6 +211,21 @@ export function EditProposalModal({ proposal, open, onOpenChange, onSuccess }: E
     setSelectedClientId(newClientId);
   };
 
+  const handleProposalTypeChange = (nextType: ProposalType) => {
+    setProposalType(nextType);
+
+    if (nextType === 'energia') {
+      setServicosProdutos([]);
+      setServicosDetails({});
+      setModeloServico('transacional');
+      setKwp('');
+      setServicosComissao('');
+      return;
+    }
+
+    setProposalCpes([]);
+  };
+
   const handleServicosProdutoToggle = (produto: string) => {
     if (servicosProdutos.includes(produto)) {
       setServicosProdutos(prev => prev.filter(p => p !== produto));
