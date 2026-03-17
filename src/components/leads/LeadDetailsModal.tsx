@@ -64,11 +64,20 @@ import {
   Target,
   UserCircle,
   Zap,
-  ArrowLeft
+  ArrowLeft,
+  Copy
 } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { cn } from "@/lib/utils";
+import { toast } from "@/hooks/use-toast";
 import { SendLeadEmailModal } from "./SendLeadEmailModal";
+
+const TECHNICAL_TRACKING_KEYS = ['fbclid', 'gclid', 'fbc', 'fbp'] as const;
+
+const shortenTrackingValue = (value: string, visibleChars = 10) => {
+  if (value.length <= visibleChars * 2 + 3) return value;
+  return `${value.slice(0, visibleChars)}...${value.slice(-visibleChars)}`;
+};
 
 interface LeadDetailsModalProps {
   lead: Lead | null;
