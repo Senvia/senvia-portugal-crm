@@ -31,9 +31,14 @@ import { toast } from "sonner";
 export default function Sales() {
   // Subscribe to realtime updates
   useSalesRealtime();
-  const { profile, organization } = useAuth();
+  const { profile, organization, organizations, isSuperAdmin } = useAuth();
   const { data: sales, isLoading } = useSales();
   const isTelecom = organization?.niche === 'telecom';
+  const isPerfect2Gether = hasPerfect2GetherAccess({
+    organizationId: organization?.id,
+    memberships: organizations,
+    isSuperAdmin,
+  });
   const { modules } = useModules();
   const { data: telecomMetrics } = useTelecomSaleMetrics();
   const [search, setSearch] = usePersistedState("sales-search-v1", "");
@@ -44,6 +49,7 @@ export default function Sales() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [saleToEdit, setSaleToEdit] = useState<SaleWithDetails | null>(null);
   const [pendingSaleId, setPendingSaleId] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
 
   // Reactively open sale details when pendingSaleId matches a sale in cache
   useEffect(() => {
