@@ -62,7 +62,7 @@ export function ProductImagesModal({ product, open, onOpenChange }: ProductImage
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>Imagens - {product.name}</DialogTitle>
         </DialogHeader>
