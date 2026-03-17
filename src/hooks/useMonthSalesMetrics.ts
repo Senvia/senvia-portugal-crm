@@ -109,7 +109,7 @@ export function useMonthSalesMetrics(referenceDate?: Date) {
 
         g.contracts += 1;
         g.energia += countsForEnergyMetrics ? (cpeData?.consumo ?? 0) / 1000 : 0; // kWh → MWh
-        g.solar += proposalMetrics?.solar || 0;
+        g.solar += countsForEnergyMetrics ? proposalMetrics?.solar || 0 : 0;
         g.comissao += countsForEnergyMetrics ? cpeData?.comissao ?? 0 : 0;
       }
 
