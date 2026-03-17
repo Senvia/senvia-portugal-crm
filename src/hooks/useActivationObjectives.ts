@@ -15,6 +15,10 @@ export interface ActivationObjective {
   target_quantity: number;
 }
 
+export type ActivationCountMode = "value" | "count";
+
+const ENERGY_ACTIVATION_NEGOTIATION_TYPES = ["angariacao", "angariacao_indexado"] as const;
+
 export function useActivationObjectives(referenceDate?: Date) {
   const { organization } = useAuth();
   const queryClient = useQueryClient();

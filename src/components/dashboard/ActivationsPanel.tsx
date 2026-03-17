@@ -3,7 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useTeamFilter } from "@/hooks/useTeamFilter";
 import { useTeamMembers } from "@/hooks/useTeam";
-import { useActivationObjectives } from "@/hooks/useActivationObjectives";
+import { useActivationObjectives, type ActivationCountMode } from "@/hooks/useActivationObjectives";
 import { useDashboardPeriod } from "@/stores/useDashboardPeriod";
 import { useModules } from "@/hooks/useModules";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
