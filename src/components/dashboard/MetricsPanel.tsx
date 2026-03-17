@@ -220,10 +220,12 @@ export function MetricsPanel() {
 
   const sumRitmo = (rows: RitmoRow[]) =>
     rows.reduce((acc, r) => ({
-      opEnergia: acc.opEnergia + r.opEnergia, energia: acc.energia + r.energia,
-      opSolar: acc.opSolar + r.opSolar, solar: acc.solar + r.solar,
-      opComissao: acc.opComissao + r.opComissao, comissao: acc.comissao + r.comissao,
-    }), { opEnergia: 0, energia: 0, opSolar: 0, solar: 0, opComissao: 0, comissao: 0 });
+      opEnergia: acc.opEnergia + r.opEnergia,
+      energia: acc.energia + r.energia,
+      opSolar: acc.opSolar + r.opSolar,
+      solar: acc.solar + r.solar,
+      comissao: acc.comissao + r.comissao,
+    }), { opEnergia: 0, energia: 0, opSolar: 0, solar: 0, comissao: 0 });
 
   const ritmoTotals = sumRitmo(ritmoRows);
   const showTotals = isAdmin && ritmoRows.length > 1;
