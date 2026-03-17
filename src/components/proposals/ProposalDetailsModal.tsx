@@ -125,6 +125,8 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
     }
   }, [proposal]);
 
+  const navigate = useNavigate();
+
   // Early return if no proposal
   if (!proposal) {
     return null;
@@ -149,8 +151,6 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
       }
     }
   };
-
-  const navigate = useNavigate();
 
   const handleSaleCreated = () => {
     updateProposal.mutate({ id: proposal.id, status: 'accepted' });
