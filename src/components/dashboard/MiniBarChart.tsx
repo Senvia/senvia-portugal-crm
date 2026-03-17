@@ -36,7 +36,12 @@ export function MiniBarChart({
 
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <BarChart data={data} margin={{ top: 8, right: 8, left: 8, bottom: bottomMargin }} barGap={isGrouped ? 4 : 0}>
+      <BarChart
+        data={data}
+        margin={{ top: 8, right: 8, left: 8, bottom: bottomMargin }}
+        barGap={isGrouped ? 4 : 0}
+        barCategoryGap={isGrouped ? "28%" : "40%"}
+      >
         {isGrouped && <CartesianGrid vertical={false} stroke="hsl(var(--border))" strokeDasharray="3 3" />}
 
         {(showLabels || isGrouped) && (
@@ -54,12 +59,12 @@ export function MiniBarChart({
 
         {isGrouped ? (
           <>
-            <Bar dataKey="objetivo" name="Objetivo" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-            <Bar dataKey="ativos" name="Ativos" fill="hsl(var(--secondary-foreground))" radius={[4, 4, 0, 0]} />
-            <Bar dataKey="pendentes" name="Pendentes" fill="hsl(var(--accent-foreground))" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="objetivo" name="Objetivo" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} maxBarSize={18} />
+            <Bar dataKey="ativos" name="Ativos" fill="hsl(var(--secondary-foreground))" radius={[4, 4, 0, 0]} maxBarSize={18} />
+            <Bar dataKey="pendentes" name="Pendentes" fill="hsl(var(--accent-foreground))" radius={[4, 4, 0, 0]} maxBarSize={18} />
           </>
         ) : (
-          <Bar dataKey="value" fill={color} radius={[4, 4, 0, 0]} />
+          <Bar dataKey="value" fill={color} radius={[4, 4, 0, 0]} maxBarSize={56} />
         )}
       </BarChart>
     </ResponsiveContainer>
