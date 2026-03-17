@@ -93,11 +93,24 @@ interface SaleItemDraft {
   first_due_date?: Date | null; // Data de vencimento para produtos recorrentes
 }
 
+interface PrefillSaleClient {
+  id: string;
+  name: string;
+  code?: string | null;
+  email?: string | null;
+  nif?: string | null;
+  address_line1?: string | null;
+  city?: string | null;
+  postal_code?: string | null;
+  country?: string | null;
+}
+
 interface CreateSaleModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   prefillProposal?: Proposal | null;
   prefillClientId?: string | null;
+  prefillClient?: PrefillSaleClient | null;
   onSaleCreated?: (saleId: string) => void;
 }
 
@@ -106,6 +119,7 @@ export function CreateSaleModal({
   onOpenChange, 
   prefillProposal,
   prefillClientId,
+  prefillClient,
   onSaleCreated
 }: CreateSaleModalProps) {
   // Lead removido - vendas são apenas para clientes
@@ -489,11 +503,33 @@ export function CreateSaleModal({
     items, products, orgTaxValue, discount: discountValue, subtotal,
   });
 
+  const clientOptions = useMemo<ComboboxOption[]>(() => {
+    const mappedClients = (clients || []).map((client): ComboboxOption => ({
+      value: client.id,
+      label: client.name,
+      sublabel: client.code || client.email || undefined,
+    }));
+
+    if (
+      prefillClient &&
+      prefillClient.id &&
+      !mappedClients.some((client) => client.value === prefillClient.id)
+    ) {
+      mappedClients.unshift({
+        value: prefillClient.id,
+        label: prefillClient.name,
+        sublabel: prefillClient.code || prefillClient.email || undefined,
+      });
+    }
+
+    return mappedClients;
+  }, [clients, prefillClient]);
+
   // Selected client fiscal data
   const selectedClient = useMemo(() => {
-    if (!clientId || !clients) return null;
-    return clients.find(c => c.id === clientId) || null;
-  }, [clientId, clients]);
+    if (!clientId) return null;
+    return clients?.find(c => c.id === clientId) || (prefillClient?.id === clientId ? prefillClient : null);
+  }, [clientId, clients, prefillClient]);
 
   // Handlers
   const handleClientSelect = (value: string) => {
@@ -852,11 +888,7 @@ export function CreateSaleModal({
                       <div className="space-y-2">
                         <Label>Cliente</Label>
                         <SearchableCombobox
-                          options={(clients || []).map((client): ComboboxOption => ({
-                            value: client.id,
-                            label: client.name,
-                            sublabel: client.code || client.email || undefined,
-                          }))}
+                          options={clientOptions}
                           value={clientId || null}
                           onValueChange={(v) => handleClientSelect(v || "none")}
                           placeholder="Selecionar cliente..."

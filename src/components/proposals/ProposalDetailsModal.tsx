@@ -844,6 +844,11 @@ export function ProposalDetailsModal({ proposal, open, onOpenChange }: ProposalD
         onOpenChange={setShowSaleModal}
         prefillProposal={proposal}
         prefillClientId={proposal.client_id}
+        prefillClient={proposal.client ? {
+          id: proposal.client.id,
+          name: proposal.client.name,
+          email: proposal.client.email,
+        } : null}
         onSaleCreated={handleSaleCreated}
       />
 
