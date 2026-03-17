@@ -883,11 +883,7 @@ export function CreateSaleModal({
                       <div className="space-y-2">
                         <Label>Cliente</Label>
                         <SearchableCombobox
-                          options={(clients || []).map((client): ComboboxOption => ({
-                            value: client.id,
-                            label: client.name,
-                            sublabel: client.code || client.email || undefined,
-                          }))}
+                          options={clientOptions}
                           value={clientId || null}
                           onValueChange={(v) => handleClientSelect(v || "none")}
                           placeholder="Selecionar cliente..."
