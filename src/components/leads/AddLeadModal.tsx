@@ -119,7 +119,6 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
 
   const isTelecom = organization?.niche === 'telecom';
   const { modules } = useModules();
-  const showEnergy = isTelecom && modules.energy;
   const hasActiveWhatsappAutomation = useMemo(() => {
     const integrationsEnabled = organization?.integrations_enabled as Record<string, boolean> | null | undefined;
 
@@ -135,12 +134,6 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
     organization?.whatsapp_instance,
     organization?.whatsapp_api_key,
   ]);
-
-  useEffect(() => {
-    if (!hasActiveWhatsappAutomation) {
-      form.setValue('automation_enabled', false);
-    }
-  }, [form, hasActiveWhatsappAutomation]);
 
   const form = useForm<AddLeadFormData>({
     resolver: zodResolver(schema),
@@ -161,6 +154,12 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
       consumo_anual: "",
     },
   });
+
+  useEffect(() => {
+    if (!hasActiveWhatsappAutomation) {
+      form.setValue('automation_enabled', false);
+    }
+  }, [form, hasActiveWhatsappAutomation]);
 
   const companyNifValue = useWatch({ control: form.control, name: 'company_nif' }) || '';
   const nifValidation = useNifValidation({
