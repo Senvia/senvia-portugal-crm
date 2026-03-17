@@ -435,6 +435,125 @@ export type Database = {
           },
         ]
       }
+      commission_chargeback_imports: {
+        Row: {
+          chargeback_count: number
+          cpe_column_name: string
+          created_at: string
+          file_name: string
+          id: string
+          imported_by: string
+          matched_rows: number
+          organization_id: string
+          total_chargeback_amount: number
+          total_rows: number
+          unmatched_rows: number
+        }
+        Insert: {
+          chargeback_count?: number
+          cpe_column_name: string
+          created_at?: string
+          file_name: string
+          id?: string
+          imported_by: string
+          matched_rows?: number
+          organization_id: string
+          total_chargeback_amount?: number
+          total_rows?: number
+          unmatched_rows?: number
+        }
+        Update: {
+          chargeback_count?: number
+          cpe_column_name?: string
+          created_at?: string
+          file_name?: string
+          id?: string
+          imported_by?: string
+          matched_rows?: number
+          organization_id?: string
+          total_chargeback_amount?: number
+          total_rows?: number
+          unmatched_rows?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "commission_chargeback_imports_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      commission_chargeback_items: {
+        Row: {
+          chargeback_amount: number
+          cpe: string
+          created_at: string
+          id: string
+          import_id: string
+          matched: boolean
+          matched_proposal_cpe_id: string | null
+          matched_proposal_id: string | null
+          matched_sale_id: string | null
+          matched_user_id: string | null
+          normalized_cpe: string | null
+          organization_id: string
+          raw_row: Json
+          row_index: number
+          unmatched_reason: string | null
+        }
+        Insert: {
+          chargeback_amount?: number
+          cpe: string
+          created_at?: string
+          id?: string
+          import_id: string
+          matched?: boolean
+          matched_proposal_cpe_id?: string | null
+          matched_proposal_id?: string | null
+          matched_sale_id?: string | null
+          matched_user_id?: string | null
+          normalized_cpe?: string | null
+          organization_id: string
+          raw_row?: Json
+          row_index: number
+          unmatched_reason?: string | null
+        }
+        Update: {
+          chargeback_amount?: number
+          cpe?: string
+          created_at?: string
+          id?: string
+          import_id?: string
+          matched?: boolean
+          matched_proposal_cpe_id?: string | null
+          matched_proposal_id?: string | null
+          matched_sale_id?: string | null
+          matched_user_id?: string | null
+          normalized_cpe?: string | null
+          organization_id?: string
+          raw_row?: Json
+          row_index?: number
+          unmatched_reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "commission_chargeback_items_import_id_fkey"
+            columns: ["import_id"]
+            isOneToOne: false
+            referencedRelation: "commission_chargeback_imports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commission_chargeback_items_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       commission_closing_items: {
         Row: {
           closing_id: string
@@ -4349,6 +4468,26 @@ export type Database = {
         Returns: boolean
       }
       immutable_unaccent: { Args: { "": string }; Returns: string }
+      import_commission_chargebacks: {
+        Args: {
+          p_cpe_column_name: string
+          p_file_name: string
+          p_organization_id: string
+          p_rows: Json
+        }
+        Returns: {
+          chargeback_count: number
+          import_id: string
+          matched_rows: number
+          total_chargeback_amount: number
+          total_rows: number
+          unmatched_rows: number
+        }[]
+      }
+      is_org_admin: {
+        Args: { _org_id: string; _user_id: string }
+        Returns: boolean
+      }
       is_org_member: {
         Args: { _org_id: string; _user_id: string }
         Returns: boolean
@@ -4358,6 +4497,8 @@ export type Database = {
         Args: { p_last_error?: string; p_run_id: string; p_status: string }
         Returns: undefined
       }
+      normalize_chargeback_cpe: { Args: { p_cpe: string }; Returns: string }
+      parse_chargeback_amount: { Args: { p_value: string }; Returns: number }
       search_clients_unaccent: {
         Args: { max_results?: number; org_id: string; search_term: string }
         Returns: {
