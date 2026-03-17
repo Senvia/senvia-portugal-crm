@@ -326,7 +326,6 @@ export function MetricsPanel() {
                             {showEnergy && <TableCell className="text-xs text-right py-1.5">{formatNumber(row.energia)}</TableCell>}
                             {showEnergy && <TableCell className="text-xs text-right py-1.5">{row.opSolar}</TableCell>}
                             {showEnergy && <TableCell className="text-xs text-right py-1.5">{formatNumber(row.solar)}</TableCell>}
-                            <TableCell className="text-xs text-right py-1.5">{row.opComissao}</TableCell>
                             <TableCell className="text-xs text-right py-1.5 font-medium text-primary">{formatCurrency(row.comissao)}</TableCell>
                           </TableRow>
                         ))}
@@ -337,7 +336,6 @@ export function MetricsPanel() {
                             {showEnergy && <TableCell className="text-xs text-right font-semibold py-1.5">{formatNumber(ritmoTotals.energia)}</TableCell>}
                             {showEnergy && <TableCell className="text-xs text-right font-semibold py-1.5">{ritmoTotals.opSolar}</TableCell>}
                             {showEnergy && <TableCell className="text-xs text-right font-semibold py-1.5">{formatNumber(ritmoTotals.solar)}</TableCell>}
-                            <TableCell className="text-xs text-right font-semibold py-1.5">{ritmoTotals.opComissao}</TableCell>
                             <TableCell className="text-xs text-right font-semibold py-1.5 text-primary">{formatCurrency(ritmoTotals.comissao)}</TableCell>
                           </TableRow>
                         )}
