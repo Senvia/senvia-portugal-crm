@@ -73,35 +73,37 @@ export default function Sales() {
   }, [sales]);
   const filteredSales = useMemo(() => {
     if (!sales) return [];
-    
+
     return sales.filter((sale) => {
       const matchesStatus = statusFilter === "all" || sale.status === statusFilter;
-      const matchesType = typeFilter === 'all' || (sale as any).proposal_type === typeFilter;
-      
+      const matchesType = typeFilter === 'all' || sale.proposal_type === typeFilter;
+
       const matchesDate = (() => {
         if (!dateRange?.from) return true;
-        const saleDate = parseISO(sale.sale_date);
-        if (saleDate < startOfDay(dateRange.from)) return false;
-        if (dateRange.to && saleDate > endOfDay(dateRange.to)) return false;
+        const referenceDate = isPerfect2Gether ? sale.activation_date || sale.sale_date : sale.sale_date;
+        if (!referenceDate) return false;
+        const parsedDate = parseISO(referenceDate);
+        if (parsedDate < startOfDay(dateRange.from)) return false;
+        if (dateRange.to && parsedDate > endOfDay(dateRange.to)) return false;
         return true;
       })();
 
       if (!search.trim()) {
-        return matchesStatus && matchesDate;
+        return matchesStatus && matchesType && matchesDate;
       }
-      
+
       const searchLower = search.toLowerCase();
-      const matchesSearch = 
+      const matchesSearch =
         sale.lead?.name?.toLowerCase().includes(searchLower) ||
         sale.lead?.email?.toLowerCase().includes(searchLower) ||
         sale.client?.name?.toLowerCase().includes(searchLower) ||
         sale.client?.code?.toLowerCase().includes(searchLower) ||
         sale.code?.toLowerCase().includes(searchLower) ||
         sale.notes?.toLowerCase().includes(searchLower);
-      
+
       return matchesSearch && matchesStatus && matchesType && matchesDate;
     });
-  }, [sales, search, statusFilter, dateRange]);
+  }, [sales, search, statusFilter, typeFilter, dateRange, isPerfect2Gether]);
 
   // Summary stats
   const stats = useMemo(() => {
