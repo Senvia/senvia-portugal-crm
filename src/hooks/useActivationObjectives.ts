@@ -124,7 +124,14 @@ export function useActivationObjectives(referenceDate?: Date) {
     return acc;
   }, {});
 
-  const kwpByProposal = proposalsDetails.reduce((acc: Record<string, number>, p: any) => {
+  const proposalMetadataById = proposalsMetadata.reduce((acc: Record<string, any>, proposal: any) => {
+    acc[proposal.id] = proposal;
+    return acc;
+  }, {});
+
+  const kwpByProposal = proposalsMetadata.reduce((acc: Record<string, number>, p: any) => {
+    if (p.proposal_type !== "servicos") return acc;
+
     const details = p.servicos_details;
     if (details && typeof details === "object") {
       let totalKwp = 0;
