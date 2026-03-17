@@ -227,7 +227,7 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
       value: showEnergy ? undefined : (data.value ? Number(data.value) : undefined),
       notes: data.notes,
       gdpr_consent: data.gdpr_consent,
-      automation_enabled: data.automation_enabled,
+      automation_enabled: hasActiveWhatsappAutomation && data.automation_enabled,
       assigned_to: data.assigned_to && data.assigned_to !== 'unassigned' ? data.assigned_to : undefined,
       tipologia: showEnergy ? data.tipologia as LeadTipologia : undefined,
       consumo_anual: showEnergy && data.consumo_anual ? Number(data.consumo_anual) : undefined,
