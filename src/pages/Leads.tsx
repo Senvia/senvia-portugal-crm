@@ -84,6 +84,17 @@ export default function Leads() {
   const [isChainedFlow, setIsChainedFlow] = useState(false);
   const [isCreateSaleModalOpen, setIsCreateSaleModalOpen] = useState(false);
   const [prefillSaleClientId, setPrefillSaleClientId] = useState<string | null>(null);
+  const [prefillSaleClient, setPrefillSaleClient] = useState<{
+    id: string;
+    name: string;
+    code?: string | null;
+    email?: string | null;
+    nif?: string | null;
+    address_line1?: string | null;
+    city?: string | null;
+    postal_code?: string | null;
+    country?: string | null;
+  } | null>(null);
   const [pendingWonData, setPendingWonData] = useState<{ leadId: string; status: string } | null>(null);
   const [searchQuery, setSearchQuery] = usePersistedState("leads-search-v1", "");
   const [statusFilter, setStatusFilter] = usePersistedState<string[]>("leads-status-v1", []);
