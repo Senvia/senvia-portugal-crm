@@ -209,8 +209,10 @@ export function MetricsPanel() {
       return {
         userId: m.user_id,
         name: m.full_name + (m.user_id === user?.id ? " (eu)" : ""),
-        opEnergia, energia, opSolar, solar,
-        opComissao: opEnergia + opSolar,
+        opEnergia,
+        energia,
+        opSolar,
+        solar,
         comissao,
       };
     });
