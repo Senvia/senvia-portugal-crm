@@ -108,11 +108,11 @@ export default function Sales() {
   // Summary stats
   const stats = useMemo(() => {
     if (!filteredSales.length) return { total: 0, totalValue: 0, delivered: 0, deliveredValue: 0, inProgress: 0, fulfilled: 0, fulfilledValue: 0 };
-    
+
     const delivered = filteredSales.filter(s => s.status === 'delivered');
     const inProgress = filteredSales.filter(s => s.status === 'in_progress');
     const fulfilled = filteredSales.filter(s => s.status === 'fulfilled');
-    
+
     return {
       total: filteredSales.length,
       totalValue: filteredSales.reduce((acc, s) => acc + (s.total_value || 0), 0),
@@ -123,6 +123,105 @@ export default function Sales() {
       fulfilledValue: fulfilled.reduce((acc, s) => acc + (s.total_value || 0), 0),
     };
   }, [filteredSales]);
+
+  const handleExportPerfect2Gether = async () => {
+    if (!isPerfect2Gether) return;
+    if (!dateRange?.from) {
+      toast.error("Selecione o período por Data de Adjudicação antes de exportar.");
+      return;
+    }
+
+    const exportSales = filteredSales.filter((sale) => !!sale.activation_date);
+    if (exportSales.length === 0) {
+      toast.error("Não existem vendas adjudicadas no período selecionado.");
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      const proposalIds = Array.from(new Set(exportSales.map((sale) => sale.proposal_id).filter(Boolean))) as string[];
+      const leadIds = Array.from(new Set(exportSales.map((sale) => sale.lead_id).filter(Boolean))) as string[];
+      const consultantIds = Array.from(new Set(exportSales.flatMap((sale) => [sale.created_by, sale.lead?.assigned_to]).filter(Boolean))) as string[];
+      const saleIds = exportSales.map((sale) => sale.id);
+
+      const [proposalsResponse, cpesResponse, paymentsResponse, leadsResponse, consultantsResponse] = await Promise.all([
+        proposalIds.length > 0
+          ? supabase
+              .from("proposals")
+              .select("id, code, accepted_at, proposal_date, proposal_type, negotiation_type, kwp, margem, dbl, anos_contrato, comissao, total_value")
+              .in("id", proposalIds)
+          : Promise.resolve({ data: [], error: null }),
+        proposalIds.length > 0
+          ? supabase
+              .from("proposal_cpes")
+              .select("proposal_id, serial_number, consumo_anual, duracao_contrato, dbl, margem, comissao, contrato_inicio, contrato_fim")
+              .in("proposal_id", proposalIds)
+          : Promise.resolve({ data: [], error: null }),
+        saleIds.length > 0
+          ? supabase
+              .from("sale_payments")
+              .select("sale_id, amount, status")
+              .in("sale_id", saleIds)
+          : Promise.resolve({ data: [], error: null }),
+        leadIds.length > 0
+          ? supabase
+              .from("leads")
+              .select("id, source")
+              .in("id", leadIds)
+          : Promise.resolve({ data: [], error: null }),
+        consultantIds.length > 0
+          ? supabase
+              .from("profiles")
+              .select("id, full_name")
+              .in("id", consultantIds)
+          : Promise.resolve({ data: [], error: null }),
+      ]);
+
+      const firstError = [
+        proposalsResponse.error,
+        cpesResponse.error,
+        paymentsResponse.error,
+        leadsResponse.error,
+        consultantsResponse.error,
+      ].find(Boolean);
+
+      if (firstError) throw firstError;
+
+      const proposalsById = new Map((proposalsResponse.data || []).map((proposal) => [proposal.id, proposal]));
+      const cpesByProposalId = new Map<string, Array<(typeof cpesResponse.data)[number]>>();
+      for (const cpe of cpesResponse.data || []) {
+        const current = cpesByProposalId.get(cpe.proposal_id) || [];
+        current.push(cpe);
+        cpesByProposalId.set(cpe.proposal_id, current);
+      }
+
+      const paymentsBySaleId = new Map<string, Array<(typeof paymentsResponse.data)[number]>>();
+      for (const payment of paymentsResponse.data || []) {
+        const current = paymentsBySaleId.get(payment.sale_id) || [];
+        current.push(payment);
+        paymentsBySaleId.set(payment.sale_id, current);
+      }
+
+      const consultantsById = new Map((consultantsResponse.data || []).map((profile) => [profile.id, profile.full_name || "Comercial"]));
+      const leadSourcesById = new Map((leadsResponse.data || []).map((lead) => [lead.id, lead.source || ""]));
+
+      const rows = mapPerfect2GetherSalesForExport(exportSales, {
+        proposalsById,
+        cpesByProposalId,
+        paymentsBySaleId,
+        consultantsById,
+        leadSourcesById,
+      });
+
+      exportToExcel(rows, `perfect2gether-vendas-${format(dateRange.from, "yyyy-MM")}`);
+      toast.success("Exportação Perfect2Gether concluída.");
+    } catch (error) {
+      console.error("Error exporting Perfect2Gether sales:", error);
+      toast.error("Não foi possível exportar o ficheiro Perfect2Gether.");
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   return (
     <div className="flex flex-col min-h-screen bg-background">
