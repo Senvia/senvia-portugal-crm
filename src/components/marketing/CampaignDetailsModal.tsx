@@ -153,8 +153,8 @@ function CampaignDetailsPanel({
                   <p className="truncate text-xs text-muted-foreground">{send.recipient_email}</p>
                 </div>
                 <div className="flex shrink-0 items-center gap-1.5">
-                  {send.opened_at && <Eye className="h-3.5 w-3.5 text-blue-500" />}
-                  {send.clicked_at && <MousePointer className="h-3.5 w-3.5 text-purple-500" />}
+                  {send.opened_at && <Eye className="h-3.5 w-3.5" style={{ color: 'hsl(var(--accent-foreground))' }} />}
+                  {send.clicked_at && <MousePointer className="h-3.5 w-3.5" style={{ color: 'hsl(var(--primary))' }} />}
                   {(send.status === 'failed' || send.status === 'bounced') ? (
                     <Badge variant="destructive" className="text-xs">Erro</Badge>
                   ) : send.status === 'delivered' ? (
