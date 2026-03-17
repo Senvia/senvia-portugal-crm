@@ -234,8 +234,51 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
   };
 
   // Check if has energy or service data
+  const proposalCpesHaveEnergyValues = proposalCpes.some((cpe) =>
+    cpe.consumo_anual != null ||
+    cpe.margem != null ||
+    cpe.dbl != null ||
+    cpe.comissao != null ||
+    cpe.duracao_contrato != null ||
+    cpe.contrato_inicio != null ||
+    cpe.contrato_fim != null
+  );
+
+  const displayConsumoAnual = sale.consumo_anual ?? (
+    proposalCpes.some((cpe) => cpe.consumo_anual != null)
+      ? proposalCpes.reduce((sum, cpe) => sum + (Number(cpe.consumo_anual) || 0), 0)
+      : null
+  );
+  const displayMargem = sale.margem ?? (
+    proposalCpes.some((cpe) => cpe.margem != null)
+      ? proposalCpes.reduce((sum, cpe) => sum + (Number(cpe.margem) || 0), 0)
+      : null
+  );
+  const displayComissao = sale.comissao ?? (
+    proposalCpes.some((cpe) => cpe.comissao != null)
+      ? proposalCpes.reduce((sum, cpe) => sum + (Number(cpe.comissao) || 0), 0)
+      : null
+  );
+  const displayDbl = sale.dbl ?? proposalCpes.find((cpe) => cpe.dbl != null)?.dbl ?? null;
+  const displayAnosContrato = sale.anos_contrato ?? proposalCpes.find((cpe) => cpe.duracao_contrato != null)?.duracao_contrato ?? null;
+  const displayContratoInicio = proposalCpes
+    .map((cpe) => cpe.contrato_inicio)
+    .filter((value): value is string => Boolean(value))
+    .sort()[0] ?? null;
+  const displayContratoFim = proposalCpes
+    .map((cpe) => cpe.contrato_fim)
+    .filter((value): value is string => Boolean(value))
+    .sort()
+    .at(-1) ?? null;
+
   const hasEnergyData = sale.proposal_type === 'energia' && (
-    sale.consumo_anual || sale.margem || sale.dbl || sale.anos_contrato || sale.comissao || sale.negotiation_type
+    sale.negotiation_type ||
+    displayConsumoAnual != null ||
+    displayMargem != null ||
+    displayDbl != null ||
+    displayAnosContrato != null ||
+    displayComissao != null ||
+    proposalCpesHaveEnergyValues
   );
   const saleServicosDetails = (sale as any).servicos_details as Record<string, { price?: number; commission_pct?: number; comissao?: number; name?: string }> | null;
   const hasServiceData = (sale.proposal_type === 'servicos' || (!sale.proposal_type && sale.servicos_produtos && sale.servicos_produtos.length > 0)) && (
