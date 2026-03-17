@@ -476,7 +476,7 @@ export default function FinancePayments() {
 
       {/* Mark as Paid confirmation */}
       <Dialog open={!!confirmPayment} onOpenChange={(open) => !open && setConfirmPayment(null)}>
-        <DialogContent>
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Marcar pagamento como pago?</DialogTitle>
             <DialogDescription>
