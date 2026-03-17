@@ -361,7 +361,6 @@ export function MetricsPanel() {
                           const tE = target?.energia || 0;
                           const tOpS = target?.op_solar || 0;
                           const tS = target?.solar || 0;
-                          const tOpC = target?.op_comissao || 0;
                           const tC = target?.comissao || 0;
                           return (
                             <TableRow key={row.userId}>
@@ -370,7 +369,6 @@ export function MetricsPanel() {
                               {showEnergy && <TableCell className={`text-xs text-right py-1.5 ${percentColor(row.energia, tE)}`}>{formatPercent(row.energia, tE)}</TableCell>}
                               {showEnergy && <TableCell className={`text-xs text-right py-1.5 ${percentColor(row.opSolar, tOpS)}`}>{formatPercent(row.opSolar, tOpS)}</TableCell>}
                               {showEnergy && <TableCell className={`text-xs text-right py-1.5 ${percentColor(row.solar, tS)}`}>{formatPercent(row.solar, tS)}</TableCell>}
-                              <TableCell className={`text-xs text-right py-1.5 ${percentColor(row.opComissao, tOpC)}`}>{formatPercent(row.opComissao, tOpC)}</TableCell>
                               <TableCell className={`text-xs text-right py-1.5 font-medium ${percentColor(row.comissao, tC)}`}>{formatPercent(row.comissao, tC)}</TableCell>
                             </TableRow>
                           );
@@ -380,7 +378,6 @@ export function MetricsPanel() {
                           const tE = metrics.reduce((a, m) => a + m.energia, 0);
                           const tOpS = metrics.reduce((a, m) => a + m.op_solar, 0);
                           const tS = metrics.reduce((a, m) => a + m.solar, 0);
-                          const tOpC = metrics.reduce((a, m) => a + m.op_comissao, 0);
                           const tC = metrics.reduce((a, m) => a + m.comissao, 0);
                           return (
                             <TableRow className="bg-muted/20 hover:bg-muted/20">
@@ -389,7 +386,6 @@ export function MetricsPanel() {
                               {showEnergy && <TableCell className={`text-xs text-right font-semibold py-1.5 ${percentColor(ritmoTotals.energia, tE)}`}>{formatPercent(ritmoTotals.energia, tE)}</TableCell>}
                               {showEnergy && <TableCell className={`text-xs text-right font-semibold py-1.5 ${percentColor(ritmoTotals.opSolar, tOpS)}`}>{formatPercent(ritmoTotals.opSolar, tOpS)}</TableCell>}
                               {showEnergy && <TableCell className={`text-xs text-right font-semibold py-1.5 ${percentColor(ritmoTotals.solar, tS)}`}>{formatPercent(ritmoTotals.solar, tS)}</TableCell>}
-                              <TableCell className={`text-xs text-right font-semibold py-1.5 ${percentColor(ritmoTotals.opComissao, tOpC)}`}>{formatPercent(ritmoTotals.opComissao, tOpC)}</TableCell>
                               <TableCell className={`text-xs text-right font-semibold py-1.5 ${percentColor(ritmoTotals.comissao, tC)}`}>{formatPercent(ritmoTotals.comissao, tC)}</TableCell>
                             </TableRow>
                           );
