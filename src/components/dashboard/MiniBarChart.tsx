@@ -1,42 +1,66 @@
-import { Bar, BarChart, ResponsiveContainer, XAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, XAxis } from "recharts";
+
+type SingleBarDatum = { name: string; value: number };
+type GroupedBarDatum = {
+  name: string;
+  objetivo: number;
+  ativos: number;
+  pendentes: number;
+};
 
 interface MiniBarChartProps {
-  data: { name: string; value: number }[];
+  data: SingleBarDatum[] | GroupedBarDatum[];
   color?: string;
   height?: number;
   showLabels?: boolean;
+  mode?: "single" | "grouped";
 }
 
-export function MiniBarChart({ 
-  data, 
-  color = "hsl(var(--primary))", 
+export function MiniBarChart({
+  data,
+  color = "hsl(var(--primary))",
   height = 60,
-  showLabels = false 
+  showLabels = false,
+  mode = "single",
 }: MiniBarChartProps) {
   if (!data || data.length === 0) {
     return (
-      <div className="flex items-center justify-center h-full text-muted-foreground text-xs">
+      <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
         Sem dados
       </div>
     );
   }
 
+  const isGrouped = mode === "grouped";
+  const bottomMargin = isGrouped ? 72 : showLabels ? 20 : 0;
+
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <BarChart data={data} margin={{ top: 0, right: 0, left: 0, bottom: showLabels ? 20 : 0 }}>
-        {showLabels && (
-          <XAxis 
-            dataKey="name" 
-            axisLine={false} 
-            tickLine={false} 
-            tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+      <BarChart data={data} margin={{ top: 8, right: 8, left: 8, bottom: bottomMargin }} barGap={isGrouped ? 4 : 0}>
+        {isGrouped && <CartesianGrid vertical={false} stroke="hsl(var(--border))" strokeDasharray="3 3" />}
+
+        {(showLabels || isGrouped) && (
+          <XAxis
+            dataKey="name"
+            axisLine={false}
+            tickLine={false}
+            interval={0}
+            height={isGrouped ? 64 : undefined}
+            angle={isGrouped ? -35 : 0}
+            textAnchor={isGrouped ? "end" : "middle"}
+            tick={{ fontSize: isGrouped ? 10 : 10, fill: "hsl(var(--muted-foreground))" }}
           />
         )}
-        <Bar
-          dataKey="value"
-          fill={color}
-          radius={[4, 4, 0, 0]}
-        />
+
+        {isGrouped ? (
+          <>
+            <Bar dataKey="objetivo" name="Objetivo" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="ativos" name="Ativos" fill="hsl(var(--secondary-foreground))" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="pendentes" name="Pendentes" fill="hsl(var(--accent-foreground))" radius={[4, 4, 0, 0]} />
+          </>
+        ) : (
+          <Bar dataKey="value" fill={color} radius={[4, 4, 0, 0]} />
+        )}
       </BarChart>
     </ResponsiveContainer>
   );
