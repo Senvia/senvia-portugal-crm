@@ -91,7 +91,14 @@ const App = () => (
                   <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/leads" element={<Leads />} />
                   <Route path="/prospects" element={<Prospects />} />
-                  <Route path="/portal-total-link" element={<PortalTotalLink />} />
+                  <Route path="/portal-total-link" element={<PortalTotalLink />}>
+                    <Route index element={<Navigate to="home" replace />} />
+                    <Route path="home" element={<PortalTotalLinkHome />} />
+                    <Route path="contratos" element={<PortalTotalLinkContratos />} />
+                    <Route path="ids" element={<PortalTotalLinkIds />} />
+                    <Route path="pendentes" element={<PortalTotalLinkPendentes />} />
+                    <Route path="reclamacoes" element={<PortalTotalLinkReclamacoes />} />
+                  </Route>
                   <Route path="/clients" element={<Clients />} />
                   <Route path="/calendar" element={<Calendar />} />
                   <Route path="/proposals" element={<Proposals />} />
