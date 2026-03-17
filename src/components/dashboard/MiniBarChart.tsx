@@ -1,4 +1,4 @@
-import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, XAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, XAxis, YAxis } from "recharts";
 
 type SingleBarDatum = { name: string; value: number };
 type GroupedBarDatum = {
@@ -22,8 +22,38 @@ const metricColors: Record<string, string> = {
   pendentes: "hsl(var(--warning))",
 };
 
+const euroAxisFormatter = new Intl.NumberFormat("pt-PT", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
 function getMetricColor(name: string, fallback: string) {
   return metricColors[name.trim().toLowerCase()] ?? fallback;
+}
+
+function getRoundedChartMax(data: GroupedBarDatum[]) {
+  const highestValue = Math.max(
+    ...data.flatMap((item) => [item.objetivo, item.ativos, item.pendentes]),
+    0
+  );
+
+  if (highestValue <= 0) return 500;
+
+  const roughStep = highestValue / 4;
+
+  if (roughStep <= 100) {
+    return Math.ceil(highestValue / 100) * 100;
+  }
+
+  if (roughStep <= 250) {
+    return Math.ceil(highestValue / 250) * 250;
+  }
+
+  if (roughStep <= 500) {
+    return Math.ceil(highestValue / 500) * 500;
+  }
+
+  return Math.ceil(highestValue / 1000) * 1000;
 }
 
 export function MiniBarChart({
@@ -42,13 +72,15 @@ export function MiniBarChart({
   }
 
   const isGrouped = mode === "grouped";
+  const groupedData = isGrouped ? (data as GroupedBarDatum[]) : [];
+  const yAxisMax = isGrouped ? getRoundedChartMax(groupedData) : 0;
   const bottomMargin = isGrouped ? 72 : showLabels ? 20 : 0;
 
   return (
     <ResponsiveContainer width="100%" height={height}>
       <BarChart
         data={data}
-        margin={{ top: 8, right: 8, left: 8, bottom: bottomMargin }}
+        margin={{ top: 8, right: 8, left: isGrouped ? 12 : 8, bottom: bottomMargin }}
         barGap={isGrouped ? 4 : 0}
         barCategoryGap={isGrouped ? "28%" : "40%"}
       >
@@ -63,6 +95,18 @@ export function MiniBarChart({
             height={isGrouped ? 64 : undefined}
             angle={isGrouped ? -35 : 0}
             textAnchor={isGrouped ? "end" : "middle"}
+            tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+          />
+        )}
+
+        {isGrouped && (
+          <YAxis
+            axisLine={false}
+            tickLine={false}
+            width={62}
+            domain={[0, yAxisMax]}
+            tickCount={5}
+            tickFormatter={(value: number) => euroAxisFormatter.format(value)}
             tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
           />
         )}
