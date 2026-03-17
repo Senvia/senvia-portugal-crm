@@ -47,7 +47,6 @@ interface RitmoRow {
   energia: number;
   opSolar: number;
   solar: number;
-  opComissao: number;
   comissao: number;
 }
 
