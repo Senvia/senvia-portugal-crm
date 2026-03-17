@@ -46,6 +46,7 @@ const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const Privacy = lazy(() => import("./pages/Privacy"));
 const Terms = lazy(() => import("./pages/Terms"));
 const Install = lazy(() => import("./pages/Install"));
+const Unsubscribe = lazy(() => import("./pages/Unsubscribe"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const SystemAdminDashboard = lazy(() => import("./pages/system-admin/Dashboard"));
 const SystemAdminOrganizations = lazy(() => import("./pages/system-admin/Organizations"));
