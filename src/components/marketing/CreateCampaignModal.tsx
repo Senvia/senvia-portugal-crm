@@ -752,40 +752,7 @@ export function CreateCampaignModal({ open, onOpenChange, campaign }: CreateCamp
                             variant="outline"
                             size="sm"
                             disabled={loadingListMembers}
-                            onClick={async () => {
-                              setLoadingListMembers(true);
-                              try {
-                                const { data: members } = await supabase
-                                  .from('marketing_list_members' as any)
-                                  .select('*, contact:marketing_contacts(id, name, email, phone, company)')
-                                  .in('list_id', selectedListIds);
-
-                                const newClients = ((members as any[]) || [])
-                                  .filter((m: any) => m.contact?.email)
-                                  .map((m: any) => ({
-                                    id: `marketing_${m.contact.id}`,
-                                    name: m.contact.name,
-                                    email: m.contact.email,
-                                    phone: m.contact.phone,
-                                    company: m.contact.company,
-                                    status: 'active',
-                                    organization_id: '',
-                                  } as CrmClient));
-
-                                // Merge with existing, deduplicate by email
-                                setSelectedClients(prev => {
-                                  const emailMap = new Map<string, CrmClient>();
-                                  [...prev, ...newClients].forEach(c => {
-                                    if (c.email && !emailMap.has(c.email.toLowerCase())) {
-                                      emailMap.set(c.email.toLowerCase(), c);
-                                    }
-                                  });
-                                  return Array.from(emailMap.values());
-                                });
-                              } finally {
-                                setLoadingListMembers(false);
-                              }
-                            }}
+                            onClick={() => void loadContactsFromLists(selectedListIds)}
                           >
                             {loadingListMembers ? <Loader2 className="h-4 w-4 animate-spin" /> : "Carregar contactos"}
                           </Button>
