@@ -1,19 +1,34 @@
 import { type ReactNode } from "react";
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink, useLocation, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { PortalTotalLinkFilters } from "./PortalTotalLinkFilters";
-import { portalTotalLinkSections } from "./portalTotalLinkConfig";
+import {
+  portalTotalLinkHomeCycleOptions,
+  portalTotalLinkHomeYearOptions,
+  portalTotalLinkSections,
+} from "./portalTotalLinkConfig";
 
 export function PortalTotalLinkLayout({ children }: { children: ReactNode }) {
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const currentSection =
     portalTotalLinkSections.find(
       (section) => location.pathname === section.path || location.pathname.startsWith(`${section.path}/`),
     ) ?? portalTotalLinkSections[0];
 
+  const isHomeSection = currentSection.key === "home";
+  const selectedCycle = searchParams.get("homeCycle") ?? portalTotalLinkHomeCycleOptions[0]?.value ?? "1";
+  const selectedYear = searchParams.get("homeYear") ?? portalTotalLinkHomeYearOptions[2]?.value ?? String(new Date().getFullYear());
   const ActionIcon = currentSection.action?.icon;
+
+  const updateHomeParam = (key: "homeCycle" | "homeYear", value: string) => {
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set(key, value);
+    setSearchParams(nextParams, { replace: true });
+  };
 
   return (
     <div className="space-y-6 p-4 pb-24 md:p-6 md:pb-6 lg:p-8">
@@ -22,10 +37,46 @@ export function PortalTotalLinkLayout({ children }: { children: ReactNode }) {
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-1">
               <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Portal Total Link</h1>
-              <p className="max-w-3xl text-sm text-muted-foreground md:text-base">{currentSection.description}</p>
+              {currentSection.description ? (
+                <p className="max-w-3xl text-sm text-muted-foreground md:text-base">{currentSection.description}</p>
+              ) : null}
             </div>
 
-            {currentSection.action ? (
+            {isHomeSection ? (
+              <div className="grid w-full gap-3 sm:grid-cols-2 lg:w-auto lg:min-w-[320px]">
+                <div className="space-y-2">
+                  <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Ciclo</span>
+                  <Select value={selectedCycle} onValueChange={(value) => updateHomeParam("homeCycle", value)}>
+                    <SelectTrigger className="h-11 w-full lg:min-w-[152px]">
+                      <SelectValue placeholder="Selecionar ciclo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {portalTotalLinkHomeCycleOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Ano</span>
+                  <Select value={selectedYear} onValueChange={(value) => updateHomeParam("homeYear", value)}>
+                    <SelectTrigger className="h-11 w-full lg:min-w-[132px]">
+                      <SelectValue placeholder="Selecionar ano" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {portalTotalLinkHomeYearOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            ) : currentSection.action ? (
               <Button type="button" className="w-full sm:w-auto">
                 {ActionIcon ? <ActionIcon className="h-4 w-4" /> : null}
                 {currentSection.action.label}
