@@ -102,16 +102,15 @@ export function useActivationObjectives(referenceDate?: Date) {
     enabled: !!orgId && allProposalIds.length > 0,
   });
 
-  // Fetch proposals servicos_details for kWp
-  const { data: proposalsDetails = [], isLoading: detailsLoading } = useQuery({
-    queryKey: ["activation-proposals-details", orgId, allProposalIds],
+  // Fetch proposal metadata needed for activation filtering and services kWp
+  const { data: proposalsMetadata = [], isLoading: detailsLoading } = useQuery({
+    queryKey: ["activation-proposals-metadata", orgId, allProposalIds],
     queryFn: async () => {
       if (!orgId || allProposalIds.length === 0) return [];
       const { data, error } = await supabase
         .from("proposals")
-        .select("id, servicos_details")
-        .in("id", allProposalIds)
-        .eq("proposal_type", "servicos");
+        .select("id, proposal_type, negotiation_type, servicos_details")
+        .in("id", allProposalIds);
       if (error) throw error;
       return data || [];
     },
