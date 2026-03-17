@@ -220,8 +220,12 @@ export function ActivationsPanel() {
   const servicosUnit = showEnergy ? "kWp" : "contratos";
   const servicosCountActivations = showEnergy
     ? countActivations
-    : (userId: string | null, periodType: "monthly" | "annual", proposalType: "energia" | "servicos") =>
-        countActivations(userId, periodType, proposalType, "count");
+    : (
+        userId: string | null,
+        periodType: "monthly" | "annual",
+        proposalType: "energia" | "servicos",
+        countMode: ActivationCountMode = "count"
+      ) => countActivations(userId, periodType, proposalType, countMode);
 
   const blockProps = {
     members: memberList,

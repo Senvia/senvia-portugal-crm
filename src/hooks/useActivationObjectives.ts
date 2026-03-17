@@ -161,18 +161,21 @@ export function useActivationObjectives(referenceDate?: Date) {
     userId: string | null,
     periodType: "monthly" | "annual",
     proposalType: "energia" | "servicos",
-    countMode: "value" | "count" = "value"
+    countMode: ActivationCountMode = "value"
   ): number => {
     const source = periodType === "monthly" ? monthlyActivations : annualActivations;
     const filtered = source.filter((s: any) => {
       const proposal = s.proposal_id ? proposalMetadataById[s.proposal_id] : null;
       const resolvedProposalType = proposal?.proposal_type ?? s.proposal_type ?? null;
       const negotiationType = proposal?.negotiation_type ?? null;
-
+      const isEligibleEnergyActivation =
+        resolvedProposalType === "energia" &&
+        ENERGY_ACTIVATION_NEGOTIATION_TYPES.includes(negotiationType);
       const matchType = proposalType === "energia"
-        ? resolvedProposalType === "energia" && ["angariacao", "angariacao_indexado"].includes(negotiationType)
+        ? isEligibleEnergyActivation
         : resolvedProposalType === "servicos";
       const matchUser = userId ? s.created_by === userId : true;
+
       return matchType && matchUser;
     });
 
