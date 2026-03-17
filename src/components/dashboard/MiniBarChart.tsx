@@ -8,6 +8,8 @@ type GroupedBarDatum = {
   pendentes: number;
 };
 
+type ChartDatum = SingleBarDatum | GroupedBarDatum;
+
 interface MiniBarChartProps {
   data: SingleBarDatum[] | GroupedBarDatum[];
   color?: string;
@@ -31,9 +33,17 @@ function getMetricColor(name: string, fallback: string) {
   return metricColors[name.trim().toLowerCase()] ?? fallback;
 }
 
-function getRoundedChartMax(data: GroupedBarDatum[]) {
+function getRoundedChartMax(data: ChartDatum[], mode: "single" | "grouped") {
   const highestValue = Math.max(
-    ...data.flatMap((item) => [item.objetivo, item.ativos, item.pendentes]),
+    ...data.map((item) =>
+      mode === "grouped"
+        ? Math.max(
+            (item as GroupedBarDatum).objetivo,
+            (item as GroupedBarDatum).ativos,
+            (item as GroupedBarDatum).pendentes
+          )
+        : (item as SingleBarDatum).value
+    ),
     0
   );
 
@@ -41,17 +51,9 @@ function getRoundedChartMax(data: GroupedBarDatum[]) {
 
   const roughStep = highestValue / 4;
 
-  if (roughStep <= 100) {
-    return Math.ceil(highestValue / 100) * 100;
-  }
-
-  if (roughStep <= 250) {
-    return Math.ceil(highestValue / 250) * 250;
-  }
-
-  if (roughStep <= 500) {
-    return Math.ceil(highestValue / 500) * 500;
-  }
+  if (roughStep <= 100) return Math.ceil(highestValue / 100) * 100;
+  if (roughStep <= 250) return Math.ceil(highestValue / 250) * 250;
+  if (roughStep <= 500) return Math.ceil(highestValue / 500) * 500;
 
   return Math.ceil(highestValue / 1000) * 1000;
 }
@@ -72,18 +74,27 @@ export function MiniBarChart({
   }
 
   const isGrouped = mode === "grouped";
-  const groupedData = isGrouped ? (data as GroupedBarDatum[]) : [];
-  const yAxisMax = isGrouped ? getRoundedChartMax(groupedData) : 0;
+  const yAxisMax = getRoundedChartMax(data as ChartDatum[], mode);
   const bottomMargin = isGrouped ? 72 : showLabels ? 20 : 0;
 
   return (
     <ResponsiveContainer width="100%" height={height}>
       <BarChart
         data={data}
-        margin={{ top: 8, right: 8, left: isGrouped ? 12 : 8, bottom: bottomMargin }}
+        margin={{ top: 8, right: 8, left: 12, bottom: bottomMargin }}
         barGap={isGrouped ? 4 : 0}
         barCategoryGap={isGrouped ? "28%" : "40%"}
       >
+        <YAxis
+          axisLine={false}
+          tickLine={false}
+          width={62}
+          domain={[0, yAxisMax]}
+          tickCount={5}
+          tickFormatter={(value: number) => euroAxisFormatter.format(value)}
+          tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+        />
+
         {isGrouped && <CartesianGrid vertical={false} stroke="hsl(var(--border))" strokeDasharray="3 3" />}
 
         {(showLabels || isGrouped) && (
@@ -95,18 +106,6 @@ export function MiniBarChart({
             height={isGrouped ? 64 : undefined}
             angle={isGrouped ? -35 : 0}
             textAnchor={isGrouped ? "end" : "middle"}
-            tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
-          />
-        )}
-
-        {isGrouped && (
-          <YAxis
-            axisLine={false}
-            tickLine={false}
-            width={62}
-            domain={[0, yAxisMax]}
-            tickCount={5}
-            tickFormatter={(value: number) => euroAxisFormatter.format(value)}
             tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
           />
         )}
