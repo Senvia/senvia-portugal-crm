@@ -149,13 +149,14 @@ export function useActivationObjectives(referenceDate?: Date) {
     if (details && typeof details === "object") {
       let totalKwp = 0;
 
-      for (const [productKey, productDetail] of Object.entries(details)) {
-        const productName = typeof productDetail?.name === "string" ? productDetail.name : productKey;
+      for (const [productKey, rawProductDetail] of Object.entries(details as Record<string, any>)) {
+        const productDetail = rawProductDetail as { name?: string; kwp?: number | string | null };
+        const productName = typeof productDetail.name === "string" ? productDetail.name : productKey;
         const normalizedProductName = normalizeServiceProductName(productName);
 
         if (EXCLUDED_SERVICE_PRODUCT_NAMES.has(normalizedProductName)) continue;
 
-        totalKwp += Number(productDetail?.kwp) || 0;
+        totalKwp += Number(productDetail.kwp) || 0;
       }
 
       acc[p.id] = totalKwp;
