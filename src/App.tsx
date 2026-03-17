@@ -18,6 +18,11 @@ const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Leads = lazy(() => import("./pages/Leads"));
 const Prospects = lazy(() => import("./pages/Prospects"));
 const PortalTotalLink = lazy(() => import("./pages/PortalTotalLink"));
+const PortalTotalLinkHome = lazy(() => import("./pages/portal-total-link/Home"));
+const PortalTotalLinkContratos = lazy(() => import("./pages/portal-total-link/Contratos"));
+const PortalTotalLinkIds = lazy(() => import("./pages/portal-total-link/Ids"));
+const PortalTotalLinkPendentes = lazy(() => import("./pages/portal-total-link/Pendentes"));
+const PortalTotalLinkReclamacoes = lazy(() => import("./pages/portal-total-link/Reclamacoes"));
 const Clients = lazy(() => import("./pages/Clients"));
 const Calendar = lazy(() => import("./pages/Calendar"));
 const Settings = lazy(() => import("./pages/Settings"));
@@ -86,7 +91,14 @@ const App = () => (
                   <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/leads" element={<Leads />} />
                   <Route path="/prospects" element={<Prospects />} />
-                  <Route path="/portal-total-link" element={<PortalTotalLink />} />
+                  <Route path="/portal-total-link" element={<PortalTotalLink />}>
+                    <Route index element={<Navigate to="home" replace />} />
+                    <Route path="home" element={<PortalTotalLinkHome />} />
+                    <Route path="contratos" element={<PortalTotalLinkContratos />} />
+                    <Route path="ids" element={<PortalTotalLinkIds />} />
+                    <Route path="pendentes" element={<PortalTotalLinkPendentes />} />
+                    <Route path="reclamacoes" element={<PortalTotalLinkReclamacoes />} />
+                  </Route>
                   <Route path="/clients" element={<Clients />} />
                   <Route path="/calendar" element={<Calendar />} />
                   <Route path="/proposals" element={<Proposals />} />
