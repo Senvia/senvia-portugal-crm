@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useCalendarEvents } from '@/hooks/useCalendarEvents';
+import { useTeamFilter } from '@/hooks/useTeamFilter';
 import { Calendar, Phone, Users, CheckSquare, RotateCcw, ChevronRight, Loader2, AlertTriangle, Clock } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useNavigate } from 'react-router-dom';
@@ -25,14 +26,20 @@ export function CalendarAlertsWidget() {
   const endRange = useMemo(() => endOfDay(addDays(today, 7)), [today]);
 
   const { data: events, isLoading } = useCalendarEvents(today, endRange);
+  const { effectiveUserIds } = useTeamFilter();
 
   const { todayEvents, upcomingEvents } = useMemo(() => {
-    const pending = (events || []).filter(e => e.status === 'pending');
+    const allowedUserIds = effectiveUserIds ? new Set(effectiveUserIds) : null;
+    const scopedEvents = allowedUserIds
+      ? (events || []).filter((event) => allowedUserIds.has(event.user_id))
+      : (events || []);
+
+    const pending = scopedEvents.filter(e => e.status === 'pending');
     return {
       todayEvents: pending.filter(e => isToday(new Date(e.start_time))),
       upcomingEvents: pending.filter(e => !isToday(new Date(e.start_time))),
     };
-  }, [events]);
+  }, [events, effectiveUserIds]);
 
   const totalAlerts = todayEvents.length + upcomingEvents.length;
   const allEvents = [...todayEvents, ...upcomingEvents];
