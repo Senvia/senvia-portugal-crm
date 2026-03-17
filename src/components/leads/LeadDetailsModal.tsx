@@ -145,7 +145,7 @@ export function LeadDetailsModal({
   const customDataEntries = useMemo(() => {
     if (!lead?.custom_data || typeof lead.custom_data !== 'object') return [];
     
-    const entries: { label: string; value: string; isUtm: boolean }[] = [];
+    const entries: { label: string; value: string; isUtm: boolean; key: string }[] = [];
     const utmKeys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'fbclid', 'gclid', 'fbc', 'fbp', 'ref'];
     const campaignLabels: Record<string, string> = {
       fbclid: 'Facebook Click ID',
@@ -184,11 +184,20 @@ export function LeadDetailsModal({
         displayValue = value.join(', ');
       }
       
-      entries.push({ label, value: displayValue, isUtm });
+      entries.push({ label, value: displayValue, isUtm, key });
     });
     
     return entries;
   }, [lead?.custom_data, customFields]);
+
+  const copyTrackingValue = async (value: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      toast({ title: 'Copiado', description: 'Código copiado para a área de transferência.' });
+    } catch {
+      toast({ title: 'Erro ao copiar', description: 'Não foi possível copiar o código.' });
+    }
+  };
 
   const formResponses = customDataEntries.filter(e => !e.isUtm);
   const utmData = customDataEntries.filter(e => e.isUtm);
