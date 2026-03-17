@@ -22,7 +22,7 @@ export const portalTotalLinkSections: PortalTotalLinkSection[] = [
     label: "Home",
     path: "/portal-total-link/home",
     title: "Home",
-    description: "Entrada principal do portal com visão geral preparada para pesquisa e acompanhamento.",
+    description: "",
   },
   {
     key: "contratos",
