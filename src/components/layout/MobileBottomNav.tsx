@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
-import { LayoutDashboard, Users, Settings, Shield, Calendar, FileText, ShoppingBag, Store, UserCheck, Mail, Wallet, Lock } from "lucide-react";
+import { LayoutDashboard, Users, Settings, Shield, Calendar, FileText, ShoppingBag, Store, UserCheck, Mail, Wallet, Lock, Building2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useModules, EnabledModules } from "@/hooks/useModules";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useSubscription } from "@/hooks/useSubscription";
 import { UpgradeModal } from "@/components/shared/UpgradeModal";
+import { hasPerfect2GetherAccess } from "@/lib/perfect2gether";
 
 interface NavItem {
   to: string;
