@@ -114,7 +114,7 @@ export const ImportChargebacksDialog = forwardRef<HTMLDivElement, ImportChargeba
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent variant="fullScreen" className="flex h-full flex-col overflow-hidden p-0">
+      <DialogContent ref={ref} variant="fullScreen" className="flex h-full flex-col overflow-hidden p-0">
         <DialogHeader className="shrink-0 border-b px-4 py-4 pr-14 sm:px-6">
           <DialogTitle>Importar chargebacks</DialogTitle>
           <DialogDescription>
