@@ -54,7 +54,7 @@ export function AppSidebar({
   const { modules } = useModules();
   const { canViewModule } = usePermissions();
   const { isModuleLocked, getRequiredPlan } = useSubscription();
-  const canAccessProspects = hasPerfect2GetherAccess({
+  const hasPerfect2GetherModuleAccess = hasPerfect2GetherAccess({
     organizationId: organization?.id,
     memberships: organizations,
     isSuperAdmin,
