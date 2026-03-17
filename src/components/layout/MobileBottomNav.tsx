@@ -54,9 +54,13 @@ export function MobileBottomNav() {
     return true;
   });
 
+  const perfect2GetherItems: NavItem[] = hasPerfect2GetherModuleAccess
+    ? [{ to: "/portal-total-link", icon: Building2, label: "Portal" }]
+    : [];
+
   const allItems = isSuperAdmin 
-    ? [...navItems, { to: "/system-admin", icon: Shield, label: "Admin" }]
-    : navItems;
+    ? [...navItems, ...perfect2GetherItems, { to: "/system-admin", icon: Shield, label: "Admin" }]
+    : [...navItems, ...perfect2GetherItems];
 
   const handleLockedClick = (e: React.MouseEvent, item: NavItem) => {
     if (item.moduleKey && isModuleLocked(item.moduleKey)) {
