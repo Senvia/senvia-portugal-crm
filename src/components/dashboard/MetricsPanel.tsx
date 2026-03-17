@@ -237,7 +237,6 @@ export function MetricsPanel() {
       {showEnergy && <TableHead className="text-xs text-right whitespace-nowrap">Energia</TableHead>}
       {showEnergy && <TableHead className="text-xs text-right whitespace-nowrap">OP</TableHead>}
       {showEnergy && <TableHead className="text-xs text-right whitespace-nowrap">Solar</TableHead>}
-      <TableHead className="text-xs text-right whitespace-nowrap">OP</TableHead>
       <TableHead className="text-xs text-right whitespace-nowrap">Comissão</TableHead>
     </TableRow>
   );
