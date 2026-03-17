@@ -44,11 +44,19 @@ import { hasPerfect2GetherAccess } from "@/lib/perfect2gether";
 import { usePermissions } from "@/hooks/usePermissions";
 
 export default function Finance() {
-  const { organization } = useAuth();
+  const { organization, organizations } = useAuth();
+  const { isAdmin, isSuperAdmin } = usePermissions();
   const isTelecom = organization?.niche === "telecom";
   const salesSettings = (organization?.sales_settings as { commissions_enabled?: boolean }) || {};
   const commissionsEnabled = !!salesSettings.commissions_enabled;
-  const validTabs = isTelecom ? ["outros", "comissoes"] : ["resumo", "contas", "faturas", "outros"];
+  const canViewCommissionAnalysis = hasPerfect2GetherAccess({
+    organizationId: organization?.id,
+    memberships: organizations,
+    isSuperAdmin,
+  }) && isAdmin;
+  const validTabs = isTelecom
+    ? ["outros", "comissoes", ...(canViewCommissionAnalysis ? ["analise-comissoes"] : [])]
+    : ["resumo", "contas", "faturas", "outros", ...(canViewCommissionAnalysis ? ["analise-comissoes"] : [])];
   const [dateRange, setDateRange] = usePersistedState<DateRange | undefined>("finance-daterange-v1", undefined);
   const [activeTab, setActiveTab] = usePersistedState("finance-tab-v1", isTelecom ? "outros" : "resumo");
   const [commissionsModalOpen, setCommissionsModalOpen] = useState(false);
