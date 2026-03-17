@@ -14,7 +14,7 @@ interface Props {
   onConfirm?: () => void;
 }
 
-export function ImportStep1Upload({ fileName, headers, rows, onFileLoaded, onClearFile, onConfirm }: Props) {
+export const ImportStep1Upload = forwardRef<HTMLDivElement, Props>(function ImportStep1Upload({ fileName, headers, rows, onFileLoaded, onClearFile, onConfirm }, ref) {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const parseCSVLine = (line: string, delimiter: string): string[] => {
