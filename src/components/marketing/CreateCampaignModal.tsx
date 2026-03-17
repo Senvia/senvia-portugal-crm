@@ -214,7 +214,7 @@ export function CreateCampaignModal({ open, onOpenChange, campaign }: CreateCamp
   const activeTemplates = useMemo(() => templates.filter(t => t.is_active), [templates]);
   const selectedTemplate = useMemo(() => templates.find(t => t.id === templateId), [templates, templateId]);
 
-  const loadContactsFromLists = async (listIds: string[]) => {
+  const loadContactsFromLists = useCallback(async (listIds: string[]) => {
     if (listIds.length === 0) return;
 
     setLoadingListMembers(true);
@@ -240,7 +240,7 @@ export function CreateCampaignModal({ open, onOpenChange, campaign }: CreateCamp
     } finally {
       setLoadingListMembers(false);
     }
-  };
+  }, []);
 
   // Sync state when editing a campaign
   useEffect(() => {
