@@ -78,7 +78,7 @@ const portalHomeMetrics = [
       pendentes: 5,
     },
   },
-] as const;
+];
 
 const summaryItems = [
   { key: "objetivo", label: "Objetivo" },
