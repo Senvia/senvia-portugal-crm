@@ -5,13 +5,16 @@ import {
   Settings, 
   LogOut,
   Shield,
-  X
+  X,
+  Building2,
+  Search
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { APP_VERSION } from "@/lib/constants";
 import type { AppRole } from "@/types";
 import { Button } from "@/components/ui/button";
+import { hasPerfect2GetherAccess } from "@/lib/perfect2gether";
 
 const navItems = [
   { to: "/dashboard", icon: LayoutDashboard, label: "Painel" },
