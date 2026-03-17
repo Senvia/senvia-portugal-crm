@@ -7,6 +7,7 @@ const corsHeaders = {
 };
 
 const BATCH_SIZE = 10;
+const APP_BASE_URL = "https://app.senvia.pt";
 
 function chunk<T>(arr: T[], size: number): T[][] {
   const chunks: T[][] = [];
@@ -14,6 +15,85 @@ function chunk<T>(arr: T[], size: number): T[][] {
     chunks.push(arr.slice(i, i + size));
   }
   return chunks;
+}
+
+function generateUnsubscribeToken(): string {
+  return `${crypto.randomUUID().replace(/-/g, "")}${crypto.randomUUID().replace(/-/g, "")}`;
+}
+
+function buildUnsubscribeUrl(token: string): string {
+  return `${APP_BASE_URL}/unsubscribe?token=${encodeURIComponent(token)}`;
+}
+
+async function ensureMarketingContact(
+  supabase: ReturnType<typeof createClient>,
+  organizationId: string,
+  email: string,
+  name: string | null | undefined,
+): Promise<string | null> {
+  const normalizedEmail = email.trim().toLowerCase();
+  if (!normalizedEmail) return null;
+
+  const { data: existing } = await supabase
+    .from("marketing_contacts")
+    .select("id")
+    .eq("organization_id", organizationId)
+    .eq("email", normalizedEmail)
+    .maybeSingle();
+
+  if (existing?.id) {
+    return existing.id;
+  }
+
+  const { data: inserted, error } = await supabase
+    .from("marketing_contacts")
+    .insert({
+      organization_id: organizationId,
+      email: normalizedEmail,
+      name: name?.trim() || normalizedEmail,
+      source: "campaign",
+      subscribed: true,
+    })
+    .select("id")
+    .single();
+
+  if (!error && inserted?.id) {
+    return inserted.id;
+  }
+
+  const { data: fallback } = await supabase
+    .from("marketing_contacts")
+    .select("id")
+    .eq("organization_id", organizationId)
+    .eq("email", normalizedEmail)
+    .maybeSingle();
+
+  return fallback?.id ?? null;
+}
+
+async function createUnsubscribeUrl(
+  supabase: ReturnType<typeof createClient>,
+  organizationId: string,
+  contactId: string,
+  emailSendId: string,
+): Promise<string | null> {
+  const token = generateUnsubscribeToken();
+
+  const { error } = await supabase
+    .from("email_unsubscribe_tokens")
+    .insert({
+      organization_id: organizationId,
+      contact_id: contactId,
+      email_send_id: emailSendId,
+      token,
+    });
+
+  if (error) {
+    console.error("Failed to create unsubscribe token:", error);
+    return null;
+  }
+
+  return buildUnsubscribeUrl(token);
 }
 
 serve(async (req: Request): Promise<Response> => {
@@ -155,7 +235,6 @@ serve(async (req: Request): Promise<Response> => {
         const campaignSettings = (campaign.settings as Record<string, boolean>) || {};
         const campaignSettingsData = (campaign.settings_data as Record<string, string>) || {};
 
-        // Process a single send
         async function processSend(send: typeof queuedSends[0]): Promise<{ sent: boolean }> {
           try {
             const variables: Record<string, string> = {
@@ -200,6 +279,22 @@ serve(async (req: Request): Promise<Response> => {
               );
             }
 
+            if (/\{\{\s*unsubscribe\s*\}\}/i.test(finalHtml)) {
+              const contactId = await ensureMarketingContact(
+                supabase,
+                campaign.organization_id,
+                send.recipient_email,
+                send.recipient_name,
+              );
+
+              if (contactId) {
+                const unsubscribeUrl = await createUnsubscribeUrl(supabase, campaign.organization_id, contactId, send.id);
+                if (unsubscribeUrl) {
+                  finalHtml = finalHtml.replace(/\{\{\s*unsubscribe\s*\}\}/gi, unsubscribeUrl);
+                }
+              }
+            }
+
             const brevoPayload: Record<string, unknown> = {
               sender: { name: senderName, email: senderEmail },
               to: [{ email: send.recipient_email, name: send.recipient_name || send.recipient_email }],
@@ -229,7 +324,9 @@ serve(async (req: Request): Promise<Response> => {
               try {
                 const brevoData = await brevoResponse.json();
                 brevoMessageId = brevoData.messageId || null;
-              } catch { /* ignore */ }
+              } catch {
+                // ignore parse error
+              }
 
               await supabase
                 .from("email_sends")
@@ -240,14 +337,14 @@ serve(async (req: Request): Promise<Response> => {
                 })
                 .eq("id", send.id);
               return { sent: true };
-            } else {
-              const errorText = await brevoResponse.text();
-              await supabase
-                .from("email_sends")
-                .update({ status: "failed", error_message: errorText })
-                .eq("id", send.id);
-              return { sent: false };
             }
+
+            const errorText = await brevoResponse.text();
+            await supabase
+              .from("email_sends")
+              .update({ status: "failed", error_message: errorText })
+              .eq("id", send.id);
+            return { sent: false };
           } catch (sendError) {
             const errMsg = sendError instanceof Error ? sendError.message : "Unknown error";
             await supabase
@@ -258,7 +355,6 @@ serve(async (req: Request): Promise<Response> => {
           }
         }
 
-        // Process in parallel batches
         let sentCount = 0;
         let failedCount = 0;
         const batches = chunk(queuedSends, BATCH_SIZE);

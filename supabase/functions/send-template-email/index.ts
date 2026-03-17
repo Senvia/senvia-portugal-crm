@@ -7,6 +7,7 @@ const corsHeaders = {
 };
 
 const BATCH_SIZE = 10;
+const APP_BASE_URL = "https://app.senvia.pt";
 
 interface Recipient {
   email: string;
@@ -28,20 +29,20 @@ interface SendTemplateRequest {
 }
 
 function sanitizeVariableTags(html: string): string {
-  return html.replace(/\{\{[^}]*\}\}/g, (match) => match.replace(/<[^>]*>/g, ''));
+  return html.replace(/\{\{[^}]*\}\}/g, (match) => match.replace(/<[^>]*>/g, ""));
 }
 
 function replaceVariables(content: string, variables: Record<string, string>): string {
   let result = sanitizeVariableTags(content);
   for (const [key, value] of Object.entries(variables)) {
-    const regex = new RegExp(`{{\\s*${key}\\s*}}`, 'gi');
-    result = result.replace(regex, value || '');
+    const regex = new RegExp(`{{\\s*${key}\\s*}}`, "gi");
+    result = result.replace(regex, value || "");
   }
   return result;
 }
 
 function formatDate(): string {
-  return new Date().toLocaleDateString('pt-PT', { day: '2-digit', month: 'long', year: 'numeric' });
+  return new Date().toLocaleDateString("pt-PT", { day: "2-digit", month: "long", year: "numeric" });
 }
 
 function addUtmTracking(html: string, campaignName: string): string {
@@ -50,9 +51,9 @@ function addUtmTracking(html: string, campaignName: string): string {
     (_match, url) => {
       try {
         const u = new URL(url);
-        u.searchParams.set('utm_source', 'brevo');
-        u.searchParams.set('utm_medium', 'email');
-        u.searchParams.set('utm_campaign', campaignName);
+        u.searchParams.set("utm_source", "brevo");
+        u.searchParams.set("utm_medium", "email");
+        u.searchParams.set("utm_campaign", campaignName);
         return `href="${u.toString()}"`;
       } catch {
         return _match;
@@ -90,6 +91,117 @@ function chunk<T>(arr: T[], size: number): T[][] {
   return chunks;
 }
 
+function generateUnsubscribeToken(): string {
+  return `${crypto.randomUUID().replace(/-/g, "")}${crypto.randomUUID().replace(/-/g, "")}`;
+}
+
+function buildUnsubscribeUrl(token: string): string {
+  return `${APP_BASE_URL}/unsubscribe?token=${encodeURIComponent(token)}`;
+}
+
+async function ensureMarketingContact(
+  supabase: ReturnType<typeof createClient>,
+  organizationId: string,
+  email: string,
+  name: string | null | undefined,
+  source: string,
+): Promise<string | null> {
+  const normalizedEmail = email.trim().toLowerCase();
+  if (!normalizedEmail) return null;
+
+  const { data: existing } = await supabase
+    .from("marketing_contacts")
+    .select("id")
+    .eq("organization_id", organizationId)
+    .eq("email", normalizedEmail)
+    .maybeSingle();
+
+  if (existing?.id) {
+    return existing.id;
+  }
+
+  const { data: inserted, error } = await supabase
+    .from("marketing_contacts")
+    .insert({
+      organization_id: organizationId,
+      email: normalizedEmail,
+      name: name?.trim() || normalizedEmail,
+      source,
+      subscribed: true,
+    })
+    .select("id")
+    .single();
+
+  if (!error && inserted?.id) {
+    return inserted.id;
+  }
+
+  const { data: fallback } = await supabase
+    .from("marketing_contacts")
+    .select("id")
+    .eq("organization_id", organizationId)
+    .eq("email", normalizedEmail)
+    .maybeSingle();
+
+  return fallback?.id ?? null;
+}
+
+async function createUnsubscribeToken(
+  supabase: ReturnType<typeof createClient>,
+  organizationId: string,
+  contactId: string,
+  emailSendId: string | null,
+): Promise<{ token: string; url: string } | null> {
+  const token = generateUnsubscribeToken();
+
+  const { error } = await supabase
+    .from("email_unsubscribe_tokens")
+    .insert({
+      organization_id: organizationId,
+      contact_id: contactId,
+      email_send_id: emailSendId,
+      token,
+    });
+
+  if (error) {
+    console.error("Failed to create unsubscribe token:", error);
+    return null;
+  }
+
+  return {
+    token,
+    url: buildUnsubscribeUrl(token),
+  };
+}
+
+async function insertEmailSendRecord(
+  supabase: ReturnType<typeof createClient>,
+  emailSendRecord: Record<string, unknown>,
+): Promise<string | null> {
+  const primaryInsert = await supabase
+    .from("email_sends")
+    .insert(emailSendRecord)
+    .select("id")
+    .single();
+
+  if (!primaryInsert.error && primaryInsert.data?.id) {
+    return primaryInsert.data.id;
+  }
+
+  const fallbackInsert = await supabase
+    .from("email_sends")
+    .insert({ ...emailSendRecord, client_id: null })
+    .select("id")
+    .single();
+
+  if (!fallbackInsert.error && fallbackInsert.data?.id) {
+    return fallbackInsert.data.id;
+  }
+
+  console.error("Failed to insert email_sends record", primaryInsert.error || fallbackInsert.error);
+  return null;
+}
+
 serve(async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -120,9 +232,8 @@ serve(async (req: Request): Promise<Response> => {
       );
     }
 
-    // Fetch template if provided
-    let templateSubject = customSubject || '';
-    let templateHtmlContent = customHtmlContent || '';
+    let templateSubject = customSubject || "";
+    let templateHtmlContent = customHtmlContent || "";
 
     if (templateId) {
       const { data: template, error: templateError } = await supabase
@@ -142,7 +253,6 @@ serve(async (req: Request): Promise<Response> => {
       templateHtmlContent = template.html_content;
     }
 
-    // Fetch organization for Brevo config
     const { data: org, error: orgError } = await supabase
       .from("organizations")
       .select("name, brevo_api_key, brevo_sender_email")
@@ -163,7 +273,6 @@ serve(async (req: Request): Promise<Response> => {
       );
     }
 
-    // Get user ID and sender info from auth header
     const authHeader = req.headers.get("authorization");
     let userId: string | null = null;
     let senderSignature: string | null = null;
@@ -190,15 +299,14 @@ serve(async (req: Request): Promise<Response> => {
       }
     }
 
-    // Pre-load vendor data for all recipients with clientIds (batch query)
     const clientIds = [...new Set(recipients.filter(r => r.clientId).map(r => r.clientId!))];
     const vendorMap: Record<string, { name: string; email: string; phone: string }> = {};
 
     if (clientIds.length > 0) {
       const { data: clientsData } = await supabase
-        .from('crm_clients')
-        .select('id, assigned_to')
-        .in('id', clientIds);
+        .from("crm_clients")
+        .select("id, assigned_to")
+        .in("id", clientIds);
 
       if (clientsData) {
         const profileIds = [...new Set(clientsData.filter(c => c.assigned_to).map(c => c.assigned_to!))];
@@ -206,9 +314,9 @@ serve(async (req: Request): Promise<Response> => {
 
         if (profileIds.length > 0) {
           const { data: profilesData } = await supabase
-            .from('profiles')
-            .select('id, full_name, email, phone')
-            .in('id', profileIds);
+            .from("profiles")
+            .select("id, full_name, email, phone")
+            .in("id", profileIds);
 
           if (profilesData) {
             for (const p of profilesData) {
@@ -221,9 +329,9 @@ serve(async (req: Request): Promise<Response> => {
           if (client.assigned_to && profileMap[client.assigned_to]) {
             const p = profileMap[client.assigned_to];
             vendorMap[client.id] = {
-              name: p.full_name || '',
-              email: p.email || '',
-              phone: p.phone || '',
+              name: p.full_name || "",
+              email: p.email || "",
+              phone: p.phone || "",
             };
           }
         }
@@ -234,26 +342,45 @@ serve(async (req: Request): Promise<Response> => {
     const finalSenderName = senderNameOverride || org.name;
     const formattedDate = formatDate();
 
-    // Process a single recipient
     async function processRecipient(recipient: Recipient): Promise<{ email: string; status: string; error?: string }> {
+      let unsubscribeToken: string | null = null;
+
       try {
         const vendor = recipient.clientId ? vendorMap[recipient.clientId] : undefined;
 
         const variables: Record<string, string> = {
-          nome: recipient.name || '',
-          email: recipient.email || '',
-          organizacao: org.name || '',
+          nome: recipient.name || "",
+          email: recipient.email || "",
+          organizacao: org.name || "",
           data: formattedDate,
-          vendedor: vendor?.name || '',
-          vendedor_email: vendor?.email || '',
-          vendedor_telefone: vendor?.phone || '',
-          assinatura: senderSignature || '',
+          vendedor: vendor?.name || "",
+          vendedor_email: vendor?.email || "",
+          vendedor_telefone: vendor?.phone || "",
+          assinatura: senderSignature || "",
           ...recipient.variables,
         };
 
         const subject = replaceVariables(templateSubject, variables);
         let htmlContent = replaceVariables(templateHtmlContent, variables);
         htmlContent = applyHtmlSettings(htmlContent, settings, settingsData);
+
+        if (/\{\{\s*unsubscribe\s*\}\}/i.test(htmlContent)) {
+          const contactId = await ensureMarketingContact(
+            supabase,
+            organizationId,
+            recipient.email,
+            recipient.name,
+            campaignId ? "campaign" : automationId ? "automation" : "manual_email",
+          );
+
+          if (contactId) {
+            const unsubscribeData = await createUnsubscribeToken(supabase, organizationId, contactId, null);
+            if (unsubscribeData) {
+              unsubscribeToken = unsubscribeData.token;
+              htmlContent = htmlContent.replace(/\{\{\s*unsubscribe\s*\}\}/gi, unsubscribeData.url);
+            }
+          }
+        }
 
         const toName = settings.customize_to && recipient.variables?.empresa
           ? `${recipient.name} - ${recipient.variables.empresa}`
@@ -291,7 +418,9 @@ serve(async (req: Request): Promise<Response> => {
           try {
             const brevoData = await brevoResponse.json();
             brevoMessageId = brevoData.messageId || null;
-          } catch { /* ignore */ }
+          } catch {
+            // ignore parse error
+          }
         }
 
         const emailSendRecord = {
@@ -310,9 +439,13 @@ serve(async (req: Request): Promise<Response> => {
           brevo_message_id: brevoMessageId,
         };
 
-        const { error: insertError } = await supabase.from("email_sends").insert(emailSendRecord);
-        if (insertError) {
-          await supabase.from("email_sends").insert({ ...emailSendRecord, client_id: null });
+        const emailSendId = await insertEmailSendRecord(supabase, emailSendRecord);
+
+        if (unsubscribeToken && emailSendId) {
+          await supabase
+            .from("email_unsubscribe_tokens")
+            .update({ email_send_id: emailSendId })
+            .eq("token", unsubscribeToken);
         }
 
         return { email: recipient.email, status, error: errorMessage || undefined };
@@ -333,16 +466,19 @@ serve(async (req: Request): Promise<Response> => {
           sent_by: userId,
         };
 
-        const { error: failInsertError } = await supabase.from("email_sends").insert(failRecord);
-        if (failInsertError) {
-          await supabase.from("email_sends").insert({ ...failRecord, client_id: null });
+        const emailSendId = await insertEmailSendRecord(supabase, failRecord);
+
+        if (unsubscribeToken && emailSendId) {
+          await supabase
+            .from("email_unsubscribe_tokens")
+            .update({ email_send_id: emailSendId })
+            .eq("token", unsubscribeToken);
         }
 
         return { email: recipient.email, status: "failed", error: errorMsg };
       }
     }
 
-    // Process recipients in parallel batches
     const results: { email: string; status: string; error?: string }[] = [];
     const batches = chunk(recipients, BATCH_SIZE);
 
