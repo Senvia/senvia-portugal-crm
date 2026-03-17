@@ -29,6 +29,9 @@ interface Organization {
   logo_url?: string | null;
   invoicexpress_account_name?: string | null;
   invoicexpress_api_key?: string | null;
+  whatsapp_instance?: string | null;
+  whatsapp_api_key?: string | null;
+  whatsapp_base_url?: string | null;
   integrations_enabled?: any;
   tax_config?: any;
   sales_settings?: any;

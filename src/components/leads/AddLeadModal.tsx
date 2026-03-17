@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { toast } from "@/hooks/use-toast";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -120,6 +120,21 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
   const isTelecom = organization?.niche === 'telecom';
   const { modules } = useModules();
   const showEnergy = isTelecom && modules.energy;
+  const hasActiveWhatsappAutomation = useMemo(() => {
+    const integrationsEnabled = organization?.integrations_enabled as Record<string, boolean> | null | undefined;
+
+    return (
+      integrationsEnabled?.whatsapp !== false &&
+      Boolean(organization?.whatsapp_base_url?.trim()) &&
+      Boolean(organization?.whatsapp_instance?.trim()) &&
+      Boolean(organization?.whatsapp_api_key?.trim())
+    );
+  }, [
+    organization?.integrations_enabled,
+    organization?.whatsapp_base_url,
+    organization?.whatsapp_instance,
+    organization?.whatsapp_api_key,
+  ]);
 
   const form = useForm<AddLeadFormData>({
     resolver: zodResolver(schema),
@@ -140,6 +155,12 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
       consumo_anual: "",
     },
   });
+
+  useEffect(() => {
+    if (!hasActiveWhatsappAutomation) {
+      form.setValue('automation_enabled', false);
+    }
+  }, [form, hasActiveWhatsappAutomation]);
 
   const companyNifValue = useWatch({ control: form.control, name: 'company_nif' }) || '';
   const nifValidation = useNifValidation({
@@ -206,7 +227,7 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
       value: showEnergy ? undefined : (data.value ? Number(data.value) : undefined),
       notes: data.notes,
       gdpr_consent: data.gdpr_consent,
-      automation_enabled: data.automation_enabled,
+      automation_enabled: hasActiveWhatsappAutomation && data.automation_enabled,
       assigned_to: data.assigned_to && data.assigned_to !== 'unassigned' ? data.assigned_to : undefined,
       tipologia: showEnergy ? data.tipologia as LeadTipologia : undefined,
       consumo_anual: showEnergy && data.consumo_anual ? Number(data.consumo_anual) : undefined,
@@ -220,7 +241,22 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
 
     setMatchedClient(null);
     setPendingFiles([]);
-    form.reset();
+    form.reset({
+      company_nif: "",
+      company_name: "",
+      name: "",
+      email: "",
+      phone: "",
+      source: "Entrada Manual",
+      temperature: "cold",
+      value: "",
+      notes: "",
+      gdpr_consent: false as unknown as true as unknown as true,
+      automation_enabled: hasActiveWhatsappAutomation,
+      assigned_to: "",
+      tipologia: undefined,
+      consumo_anual: "",
+    });
     onOpenChange(false);
   };
 
@@ -703,26 +739,28 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
                           )}
                         />
 
-                        <FormField
-                          control={form.control}
-                          name="automation_enabled"
-                          render={({ field }) => (
-                            <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border border-primary/20 bg-primary/5 p-3">
-                              <FormControl>
-                                <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-                              </FormControl>
-                              <div className="space-y-1 leading-none">
-                                <FormLabel className="flex items-center gap-2">
-                                  <Zap className="h-4 w-4 text-primary" />
-                                  Activar automação
-                                </FormLabel>
-                                <p className="text-xs text-muted-foreground">
-                                  Enviar mensagem automática de WhatsApp e notificar equipa.
-                                </p>
-                              </div>
-                            </FormItem>
-                          )}
-                        />
+                        {hasActiveWhatsappAutomation && (
+                          <FormField
+                            control={form.control}
+                            name="automation_enabled"
+                            render={({ field }) => (
+                              <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border border-primary/20 bg-primary/5 p-3">
+                                <FormControl>
+                                  <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                                </FormControl>
+                                <div className="space-y-1 leading-none">
+                                  <FormLabel className="flex items-center gap-2">
+                                    <Zap className="h-4 w-4 text-primary" />
+                                    Activar automação
+                                  </FormLabel>
+                                  <p className="text-xs text-muted-foreground">
+                                    Enviar mensagem automática de WhatsApp e notificar equipa.
+                                  </p>
+                                </div>
+                              </FormItem>
+                            )}
+                          />
+                        )}
                       </CardContent>
                     </Card>
 
