@@ -120,6 +120,27 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
   const isTelecom = organization?.niche === 'telecom';
   const { modules } = useModules();
   const showEnergy = isTelecom && modules.energy;
+  const hasActiveWhatsappAutomation = useMemo(() => {
+    const integrationsEnabled = organization?.integrations_enabled as Record<string, boolean> | null | undefined;
+
+    return (
+      integrationsEnabled?.whatsapp !== false &&
+      Boolean(organization?.whatsapp_base_url?.trim()) &&
+      Boolean(organization?.whatsapp_instance?.trim()) &&
+      Boolean(organization?.whatsapp_api_key?.trim())
+    );
+  }, [
+    organization?.integrations_enabled,
+    organization?.whatsapp_base_url,
+    organization?.whatsapp_instance,
+    organization?.whatsapp_api_key,
+  ]);
+
+  useEffect(() => {
+    if (!hasActiveWhatsappAutomation) {
+      form.setValue('automation_enabled', false);
+    }
+  }, [form, hasActiveWhatsappAutomation]);
 
   const form = useForm<AddLeadFormData>({
     resolver: zodResolver(schema),
