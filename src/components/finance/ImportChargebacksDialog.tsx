@@ -53,7 +53,7 @@ function detectAmountColumn(headers: string[]) {
   return scored[0]?.header;
 }
 
-export function ImportChargebacksDialog({ open, onOpenChange }: ImportChargebacksDialogProps) {
+export const ImportChargebacksDialog = forwardRef<HTMLDivElement, ImportChargebacksDialogProps>(function ImportChargebacksDialog({ open, onOpenChange }, ref) {
   const importChargebacks = useImportCommissionChargebacks();
   const [fileName, setFileName] = useState("");
   const [headers, setHeaders] = useState<string[]>([]);
