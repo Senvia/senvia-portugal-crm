@@ -152,7 +152,6 @@ export function useActivationObjectives(referenceDate?: Date) {
     return obj?.target_quantity || 0;
   }, [objectives, currentMonthStart, currentYearStart]);
 
-  // Sum activations: MWh for energia, kWp for servicos
   // Sum activations: MWh for energia, kWp for servicos (or count when countMode='count')
   const sumActivations = useCallback((
     userId: string | null,
@@ -162,9 +161,13 @@ export function useActivationObjectives(referenceDate?: Date) {
   ): number => {
     const source = periodType === "monthly" ? monthlyActivations : annualActivations;
     const filtered = source.filter((s: any) => {
+      const proposal = s.proposal_id ? proposalMetadataById[s.proposal_id] : null;
+      const resolvedProposalType = proposal?.proposal_type ?? s.proposal_type ?? null;
+      const negotiationType = proposal?.negotiation_type ?? null;
+
       const matchType = proposalType === "energia"
-        ? s.proposal_type === "energia" || (!s.proposal_type && true)
-        : s.proposal_type === "servicos";
+        ? resolvedProposalType === "energia" && ["angariacao", "angariacao_indexado"].includes(negotiationType)
+        : resolvedProposalType === "servicos";
       const matchUser = userId ? s.created_by === userId : true;
       return matchType && matchUser;
     });
@@ -179,14 +182,14 @@ export function useActivationObjectives(referenceDate?: Date) {
         const consumo = s.proposal_id ? (cpesByProposal[s.proposal_id] || 0) : 0;
         return total + consumo / 1000;
       }, 0);
-    } else {
-      // Sum kWp from proposals.servicos_details
-      return filtered.reduce((total: number, s: any) => {
-        const kwp = s.proposal_id ? (kwpByProposal[s.proposal_id] || 0) : 0;
-        return total + kwp;
-      }, 0);
     }
-  }, [monthlyActivations, annualActivations, cpesByProposal, kwpByProposal]);
+
+    // Sum kWp from proposals.servicos_details
+    return filtered.reduce((total: number, s: any) => {
+      const kwp = s.proposal_id ? (kwpByProposal[s.proposal_id] || 0) : 0;
+      return total + kwp;
+    }, 0);
+  }, [monthlyActivations, annualActivations, proposalMetadataById, cpesByProposal, kwpByProposal]);
 
   // Upsert objective
   const saveObjective = useMutation({
