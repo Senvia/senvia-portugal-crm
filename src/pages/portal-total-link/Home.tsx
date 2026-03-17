@@ -142,6 +142,19 @@ export default function PortalTotalLinkHomePage() {
               <CardContent className="space-y-5 p-5">
                 {isTeamView ? (
                   <div className="space-y-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                        Vista detalhada por equipa
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => handleReturnToGlobal(metric.title)}
+                        className="inline-flex items-center justify-center rounded-full border border-border/70 bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        Voltar ao Global
+                      </button>
+                    </div>
+
                     <div className="rounded-2xl border border-border/60 bg-muted/20 px-2 py-4">
                       <MiniBarChart data={teamBreakdown} height={248} mode="grouped" />
                     </div>
@@ -167,19 +180,6 @@ export default function PortalTotalLinkHomePage() {
                           ))}
                         </TableBody>
                       </Table>
-                    </div>
-
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                        Vista detalhada por equipa
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => handleReturnToGlobal(metric.title)}
-                        className="inline-flex items-center justify-center rounded-full border border-border/70 bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      >
-                        Voltar ao Global
-                      </button>
                     </div>
                   </div>
                 ) : (
