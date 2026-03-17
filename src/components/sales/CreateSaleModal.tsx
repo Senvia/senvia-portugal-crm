@@ -98,6 +98,11 @@ interface PrefillSaleClient {
   name: string;
   code?: string | null;
   email?: string | null;
+  nif?: string | null;
+  address_line1?: string | null;
+  city?: string | null;
+  postal_code?: string | null;
+  country?: string | null;
 }
 
 interface CreateSaleModalProps {

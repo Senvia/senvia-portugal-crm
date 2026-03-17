@@ -828,10 +828,12 @@ export default function Leads() {
             setIsCreateSaleModalOpen(open);
             if (!open) {
               setPrefillSaleClientId(null);
+              setPrefillSaleClient(null);
               setPendingWonData(null);
             }
           }}
           prefillClientId={prefillSaleClientId}
+          prefillClient={prefillSaleClient}
           onSaleCreated={() => {
             if (pendingWonData) {
               updateStatus.mutate({ leadId: pendingWonData.leadId, status: pendingWonData.status });
