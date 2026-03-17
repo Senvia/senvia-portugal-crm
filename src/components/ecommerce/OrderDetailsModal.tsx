@@ -52,7 +52,7 @@ export function OrderDetailsModal({ order, open, onOpenChange }: OrderDetailsMod
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[700px]">
+      <DialogContent className="max-h-[90vh] overflow-y-auto max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             Pedido {order.order_number}

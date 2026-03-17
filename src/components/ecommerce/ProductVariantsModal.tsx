@@ -159,7 +159,7 @@ export function ProductVariantsModal({ product, open, onOpenChange }: ProductVar
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[700px]">
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>Variantes - {product.name}</DialogTitle>
         </DialogHeader>
