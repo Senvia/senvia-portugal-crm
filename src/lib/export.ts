@@ -87,6 +87,142 @@ export function mapProspectsForExport(
   }));
 }
 
+interface Perfect2GetherProposalSnapshot {
+  id: string;
+  code?: string | null;
+  accepted_at?: string | null;
+  proposal_date?: string | null;
+  proposal_type?: string | null;
+  negotiation_type?: string | null;
+  kwp?: number | null;
+  margem?: number | null;
+  dbl?: number | null;
+  anos_contrato?: number | null;
+  comissao?: number | null;
+  total_value?: number | null;
+}
+
+interface Perfect2GetherProposalCpeSnapshot {
+  proposal_id: string;
+  serial_number?: string | null;
+  consumo_anual?: number | null;
+  duracao_contrato?: number | null;
+  dbl?: number | null;
+  margem?: number | null;
+  comissao?: number | null;
+  contrato_inicio?: string | null;
+  contrato_fim?: string | null;
+}
+
+interface Perfect2GetherPaymentSnapshot {
+  sale_id: string;
+  amount: number;
+  status: string;
+}
+
+interface Perfect2GetherSalesExportDeps {
+  proposalsById: Map<string, Perfect2GetherProposalSnapshot>;
+  cpesByProposalId: Map<string, Perfect2GetherProposalCpeSnapshot[]>;
+  paymentsBySaleId: Map<string, Perfect2GetherPaymentSnapshot[]>;
+  consultantsById: Map<string, string>;
+  leadSourcesById: Map<string, string>;
+}
+
+function formatExportDay(dateString: string | null | undefined): string {
+  if (!dateString) return '';
+  try {
+    return formatDate(new Date(dateString), 'dd/MM/yyyy', { locale: pt });
+  } catch {
+    return '';
+  }
+}
+
+function formatExportMonth(dateString: string | null | undefined): string {
+  if (!dateString) return '';
+  try {
+    const value = formatDate(new Date(dateString), 'MMMM yyyy', { locale: pt });
+    return value.charAt(0).toUpperCase() + value.slice(1);
+  } catch {
+    return '';
+  }
+}
+
+function formatExportQuarter(dateString: string | null | undefined): string {
+  if (!dateString) return '';
+  try {
+    const quarter = Math.ceil((new Date(dateString).getMonth() + 1) / 3);
+    return `${quarter}º Trimestre`;
+  } catch {
+    return '';
+  }
+}
+
+function valueOrEmpty(value: unknown) {
+  return value ?? '';
+}
+
+export function mapPerfect2GetherSalesForExport(
+  sales: SaleWithDetails[],
+  deps: Perfect2GetherSalesExportDeps
+) {
+  return sales.flatMap((sale) => {
+    const proposalId = sale.proposal_id || sale.proposal?.id || null;
+    const proposal = proposalId ? deps.proposalsById.get(proposalId) : undefined;
+    const cpes = proposalId ? deps.cpesByProposalId.get(proposalId) || [] : [];
+    const rows = cpes.length > 0 ? cpes : [undefined];
+    const consultantId = sale.lead?.assigned_to || sale.created_by || '';
+    const consultantName = consultantId ? deps.consultantsById.get(consultantId) || '—' : '—';
+    const leadSource = sale.lead_id ? deps.leadSourcesById.get(sale.lead_id) || '' : '';
+    const commissionValue = cpes.reduce((sum, cpe) => sum + Number(cpe.comissao || 0), 0)
+      || Number(sale.comissao || proposal?.comissao || 0);
+    const paidAmount = (deps.paymentsBySaleId.get(sale.id) || [])
+      .filter((payment) => payment.status === 'paid')
+      .reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+    const paymentMethodLabel = sale.payment_method
+      ? PAYMENT_METHOD_LABELS[sale.payment_method] || sale.payment_method
+      : '';
+    const typeLabel = proposal?.proposal_type
+      ? PROPOSAL_TYPE_LABELS[proposal.proposal_type as keyof typeof PROPOSAL_TYPE_LABELS] || proposal.proposal_type
+      : sale.proposal_type || '';
+    const negotiationLabel = proposal?.negotiation_type
+      ? NEGOTIATION_TYPE_LABELS[proposal.negotiation_type as keyof typeof NEGOTIATION_TYPE_LABELS] || proposal.negotiation_type
+      : sale.negotiation_type || '';
+
+    return rows.map((cpe) => ({
+      'Mês': formatExportMonth(sale.activation_date),
+      'Trimestre': formatExportQuarter(sale.activation_date),
+      'Consultor': consultantName,
+      'nome cliente': sale.client?.name || sale.lead?.name || '',
+      'NIPC': sale.client?.nif || '',
+      'Produção Total': '',
+      'Valor da proposta': valueOrEmpty(sale.total_value || proposal?.total_value),
+      'Modalidade Pagamento': paymentMethodLabel,
+      'Data de Adjudicação': formatExportDay(sale.activation_date),
+      'KWP': valueOrEmpty(sale.kwp ?? proposal?.kwp),
+      'Margem Comercial': valueOrEmpty(sale.margem ?? proposal?.margem ?? cpe?.margem),
+      'Canal de Angariação': leadSource,
+      'COMISSÃO': valueOrEmpty(commissionValue),
+      'A RECEBER': valueOrEmpty(Math.max(0, commissionValue)),
+      'Tipo de registro de oportunidade * Tipo': [typeLabel, negotiationLabel].filter(Boolean).join(' · '),
+      'Linha de Contrato: Local de Cons': cpe?.serial_number || '',
+      'Consumo anual': valueOrEmpty(cpe?.consumo_anual ?? sale.consumo_anual),
+      'Duração contrato (anos)': valueOrEmpty(cpe?.duracao_contrato ?? sale.anos_contrato ?? proposal?.anos_contrato),
+      'Consumo contratado': valueOrEmpty(cpe?.consumo_anual ?? sale.consumo_anual),
+      'Data de Início': formatExportDay(cpe?.contrato_inicio ?? sale.activation_date),
+      'Data Fim de C': formatExportDay(cpe?.contrato_fim),
+      'Data de Aceitação da Proposta': formatExportDay(proposal?.accepted_at),
+      'Número de Proposta': sale.edp_proposal_number || proposal?.code || '',
+      'Margem Unitária': valueOrEmpty(cpe?.margem ?? sale.margem ?? proposal?.margem),
+      'TIR/WACC': valueOrEmpty(cpe?.dbl ?? sale.dbl ?? proposal?.dbl),
+      'Margem Final': valueOrEmpty(sale.margem ?? proposal?.margem ?? cpe?.margem),
+      'Margem Target': '',
+      'Tarifa Final': '',
+      'Tarifa Target': '',
+      'Valor Recebido': valueOrEmpty(paidAmount),
+    }));
+  });
+}
+
 // Helper to download file
 function downloadFile(content: string | ArrayBuffer, filename: string, type: string) {
   const blob = new Blob([content], { type: `${type};charset=utf-8;` });
