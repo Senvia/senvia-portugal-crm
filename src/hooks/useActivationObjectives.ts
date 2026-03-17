@@ -18,6 +18,15 @@ export interface ActivationObjective {
 export type ActivationCountMode = "value" | "count";
 
 const ENERGY_ACTIVATION_NEGOTIATION_TYPES = ["angariacao", "angariacao_indexado"] as const;
+const EXCLUDED_SERVICE_PRODUCT_NAMES = new Set(["cobertura", "coberturas"]);
+
+function normalizeServiceProductName(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+}
 
 export function useActivationObjectives(referenceDate?: Date) {
   const { organization } = useAuth();
@@ -139,9 +148,17 @@ export function useActivationObjectives(referenceDate?: Date) {
     const details = p.servicos_details;
     if (details && typeof details === "object") {
       let totalKwp = 0;
-      for (const productKey of Object.keys(details)) {
-        totalKwp += Number(details[productKey]?.kwp) || 0;
+
+      for (const [productKey, rawProductDetail] of Object.entries(details as Record<string, any>)) {
+        const productDetail = rawProductDetail as { name?: string; kwp?: number | string | null };
+        const productName = typeof productDetail.name === "string" ? productDetail.name : productKey;
+        const normalizedProductName = normalizeServiceProductName(productName);
+
+        if (EXCLUDED_SERVICE_PRODUCT_NAMES.has(normalizedProductName)) continue;
+
+        totalKwp += Number(productDetail.kwp) || 0;
       }
+
       acc[p.id] = totalKwp;
     }
     return acc;
