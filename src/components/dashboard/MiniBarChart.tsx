@@ -1,4 +1,19 @@
-import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, XAxis, YAxis } from "recharts";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  XAxis,
+  YAxis,
+} from "recharts";
+import type { ChartConfig } from "@/components/ui/chart";
+import {
+  ChartContainer,
+  ChartLegend,
+  ChartLegendContent,
+  ChartTooltip,
+  ChartTooltipContent,
+} from "@/components/ui/chart";
 
 type SingleBarDatum = { name: string; value: number };
 type GroupedBarDatum = {
@@ -16,6 +31,10 @@ interface MiniBarChartProps {
   height?: number;
   showLabels?: boolean;
   mode?: "single" | "grouped";
+  variant?: "default" | "portal";
+  showYAxis?: boolean;
+  showGrid?: boolean;
+  showLegend?: boolean;
 }
 
 const metricColors: Record<string, string> = {
@@ -24,8 +43,14 @@ const metricColors: Record<string, string> = {
   pendentes: "hsl(var(--warning))",
 };
 
-const euroAxisFormatter = new Intl.NumberFormat("pt-PT", {
-  minimumFractionDigits: 2,
+const metricLabels: Record<string, string> = {
+  objetivo: "Objetivo",
+  ativos: "Ativos",
+  pendentes: "Pendentes",
+};
+
+const numberFormatter = new Intl.NumberFormat("pt-PT", {
+  minimumFractionDigits: 0,
   maximumFractionDigits: 2,
 });
 
@@ -40,22 +65,41 @@ function getRoundedChartMax(data: ChartDatum[], mode: "single" | "grouped") {
         ? Math.max(
             (item as GroupedBarDatum).objetivo,
             (item as GroupedBarDatum).ativos,
-            (item as GroupedBarDatum).pendentes
+            (item as GroupedBarDatum).pendentes,
           )
-        : (item as SingleBarDatum).value
+        : (item as SingleBarDatum).value,
     ),
-    0
+    0,
   );
 
-  if (highestValue <= 0) return 500;
+  if (highestValue <= 0) return 4;
+  if (highestValue <= 10) return Math.ceil(highestValue / 2) * 2;
 
-  const roughStep = highestValue / 4;
+  const magnitude = 10 ** Math.floor(Math.log10(highestValue));
+  const normalized = highestValue / magnitude;
 
-  if (roughStep <= 100) return Math.ceil(highestValue / 100) * 100;
-  if (roughStep <= 250) return Math.ceil(highestValue / 250) * 250;
-  if (roughStep <= 500) return Math.ceil(highestValue / 500) * 500;
+  let stepFactor = 1;
 
-  return Math.ceil(highestValue / 1000) * 1000;
+  if (normalized <= 1.5) stepFactor = 0.2;
+  else if (normalized <= 3) stepFactor = 0.25;
+  else if (normalized <= 6) stepFactor = 0.5;
+
+  const step = magnitude * stepFactor;
+
+  return Math.ceil(highestValue / step) * step;
+}
+
+function formatGroupedLabel(label: string) {
+  if (label.length <= 14) return label;
+
+  const parts = label.split(" ").filter(Boolean);
+  if (parts.length >= 2) {
+    const first = parts[0];
+    const lastInitial = parts[parts.length - 1]?.[0];
+    return `${first} ${lastInitial}.`;
+  }
+
+  return `${label.slice(0, 12)}…`;
 }
 
 export function MiniBarChart({
@@ -64,6 +108,10 @@ export function MiniBarChart({
   height = 60,
   showLabels = false,
   mode = "single",
+  variant = "default",
+  showYAxis = false,
+  showGrid = false,
+  showLegend = false,
 }: MiniBarChartProps) {
   if (!data || data.length === 0) {
     return (
@@ -74,28 +122,68 @@ export function MiniBarChart({
   }
 
   const isGrouped = mode === "grouped";
+  const isPortalVariant = variant === "portal";
   const yAxisMax = getRoundedChartMax(data as ChartDatum[], mode);
-  const bottomMargin = isGrouped ? 72 : showLabels ? 20 : 0;
+  const shouldShowYAxis = showYAxis || isPortalVariant;
+  const shouldShowGrid = showGrid || isPortalVariant || isGrouped;
+  const shouldShowLegend = showLegend && isGrouped;
+  const bottomMargin = isGrouped ? (isPortalVariant ? 94 : 72) : showLabels ? 28 : 8;
+  const chartConfig: ChartConfig = isGrouped
+    ? {
+        objetivo: { label: "Objetivo", color: metricColors.objetivo },
+        ativos: { label: "Ativos", color: metricColors.ativos },
+        pendentes: { label: "Pendentes", color: metricColors.pendentes },
+      }
+    : {
+        value: { label: "Valor", color },
+      };
 
   return (
-    <ResponsiveContainer width="100%" height={height}>
+    <ChartContainer config={chartConfig} className="w-full aspect-auto" style={{ height }}>
       <BarChart
         data={data}
-        margin={{ top: 8, right: 8, left: 12, bottom: bottomMargin }}
-        barGap={isGrouped ? 4 : 0}
-        barCategoryGap={isGrouped ? "28%" : "40%"}
+        margin={{ top: 8, right: isPortalVariant ? 8 : 4, left: shouldShowYAxis ? 4 : 0, bottom: bottomMargin }}
+        barGap={isGrouped ? (isPortalVariant ? 8 : 4) : 0}
+        barCategoryGap={isGrouped ? (isPortalVariant ? "34%" : "28%") : isPortalVariant ? "46%" : "40%"}
       >
-        <YAxis
-          axisLine={false}
-          tickLine={false}
-          width={62}
-          domain={[0, yAxisMax]}
-          tickCount={5}
-          tickFormatter={(value: number) => euroAxisFormatter.format(value)}
-          tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+        {shouldShowGrid && (
+          <CartesianGrid vertical={false} stroke="hsl(var(--border))" strokeDasharray={isPortalVariant ? "2 6" : "3 3"} />
+        )}
+
+        <ChartTooltip
+          cursor={{ fill: "hsl(var(--muted))", fillOpacity: 0.18 }}
+          content={
+            <ChartTooltipContent
+              hideLabel
+              formatter={(value, name, item) => {
+                const label = isGrouped
+                  ? metricLabels[String(name).toLowerCase()] ?? String(name)
+                  : String(item.payload?.name ?? name ?? "Valor");
+
+                return (
+                  <div className="flex min-w-[10rem] items-center justify-between gap-6">
+                    <span className="text-muted-foreground">{label}</span>
+                    <span className="font-mono font-medium tabular-nums text-foreground">
+                      {numberFormatter.format(Number(value))}
+                    </span>
+                  </div>
+                );
+              }}
+            />
+          }
         />
 
-        {isGrouped && <CartesianGrid vertical={false} stroke="hsl(var(--border))" strokeDasharray="3 3" />}
+        {shouldShowYAxis && (
+          <YAxis
+            axisLine={false}
+            tickLine={false}
+            width={isPortalVariant ? 48 : 42}
+            domain={[0, yAxisMax]}
+            tickCount={5}
+            tickFormatter={(value: number) => numberFormatter.format(value)}
+            tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+          />
+        )}
 
         {(showLabels || isGrouped) && (
           <XAxis
@@ -103,28 +191,31 @@ export function MiniBarChart({
             axisLine={false}
             tickLine={false}
             interval={0}
-            height={isGrouped ? 64 : undefined}
-            angle={isGrouped ? -35 : 0}
+            height={isGrouped ? (isPortalVariant ? 78 : 64) : 24}
+            angle={isGrouped ? -38 : 0}
             textAnchor={isGrouped ? "end" : "middle"}
+            tickMargin={isGrouped ? 10 : 8}
+            tickFormatter={isGrouped && isPortalVariant ? formatGroupedLabel : undefined}
             tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
           />
         )}
 
+        {shouldShowLegend && <ChartLegend verticalAlign="top" content={<ChartLegendContent />} />}
+
         {isGrouped ? (
           <>
-            <Bar dataKey="objetivo" name="Objetivo" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} maxBarSize={18} />
-            <Bar dataKey="ativos" name="Ativos" fill="hsl(var(--success))" radius={[4, 4, 0, 0]} maxBarSize={18} />
-            <Bar dataKey="pendentes" name="Pendentes" fill="hsl(var(--warning))" radius={[4, 4, 0, 0]} maxBarSize={18} />
+            <Bar dataKey="objetivo" name="Objetivo" fill={metricColors.objetivo} radius={[999, 999, 0, 0]} maxBarSize={12} />
+            <Bar dataKey="ativos" name="Ativos" fill={metricColors.ativos} radius={[999, 999, 0, 0]} maxBarSize={12} />
+            <Bar dataKey="pendentes" name="Pendentes" fill={metricColors.pendentes} radius={[999, 999, 0, 0]} maxBarSize={12} />
           </>
         ) : (
-          <Bar dataKey="value" radius={[4, 4, 0, 0]} maxBarSize={56}>
+          <Bar dataKey="value" radius={[999, 999, 0, 0]} maxBarSize={isPortalVariant ? 28 : 56}>
             {(data as SingleBarDatum[]).map((entry) => (
               <Cell key={entry.name} fill={getMetricColor(entry.name, color)} />
             ))}
           </Bar>
         )}
       </BarChart>
-    </ResponsiveContainer>
+    </ChartContainer>
   );
 }
-
