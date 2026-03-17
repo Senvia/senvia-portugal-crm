@@ -121,7 +121,7 @@ export const ImportStep1Upload = forwardRef<HTMLDivElement, Props>(function Impo
   const previewRows = rows.slice(0, 10);
 
   return (
-    <div className="space-y-4">
+    <div ref={ref} className="space-y-4">
       <button onClick={downloadSample} className="flex items-center gap-1.5 text-sm text-primary hover:underline">
         <Download className="h-3.5 w-3.5" />
         Baixe um arquivo de exemplo (.csv)
