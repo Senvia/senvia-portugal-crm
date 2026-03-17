@@ -238,11 +238,11 @@ export function CampaignDetailsModal({ campaign, open, onOpenChange }: CampaignD
   if (!campaign) return null;
 
   const metrics: CampaignMetric[] = [
-    { label: 'Destinatários', value: campaign.total_recipients, icon: Mail, color: 'text-foreground', filterKey: 'all' },
-    { label: 'Enviados', value: delivered, icon: CheckCircle2, color: 'text-green-500', filterKey: 'delivered' },
-    { label: 'Aberturas', value: opened, pct: openPct, icon: Eye, color: 'text-blue-500', filterKey: 'opened' },
-    { label: 'Cliques', value: clicked, pct: clickPct, icon: MousePointer, color: 'text-purple-500', filterKey: 'clicked' },
-    { label: 'Erros', value: failed, icon: AlertCircle, color: 'text-destructive', filterKey: 'failed' },
+    { label: 'Destinatários', value: campaign.total_recipients, icon: Mail, iconStyle: { color: 'hsl(var(--foreground))' }, filterKey: 'all' },
+    { label: 'Enviados', value: delivered, icon: CheckCircle2, iconStyle: { color: 'hsl(var(--primary))' }, filterKey: 'delivered' },
+    { label: 'Aberturas', value: opened, pct: openPct, icon: Eye, iconStyle: { color: 'hsl(var(--accent-foreground))' }, filterKey: 'opened' },
+    { label: 'Cliques', value: clicked, pct: clickPct, icon: MousePointer, iconStyle: { color: 'hsl(var(--primary))' }, filterKey: 'clicked' },
+    { label: 'Erros', value: failed, icon: AlertCircle, iconStyle: { color: 'hsl(var(--destructive))' }, filterKey: 'failed' },
   ];
 
   const previewHtml = campaign.html_content || campaign.template?.html_content || '';

@@ -18,8 +18,8 @@ const PREVIEW_DOCUMENT_STYLES = `
   body {
     margin: 0;
     padding: 24px;
-    background: #f5f5f4;
-    color: #1c1917;
+    background: hsl(30 14% 96%);
+    color: hsl(20 14% 12%);
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   }
 
