@@ -64,11 +64,20 @@ import {
   Target,
   UserCircle,
   Zap,
-  ArrowLeft
+  ArrowLeft,
+  Copy
 } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { cn } from "@/lib/utils";
+import { toast } from "@/hooks/use-toast";
 import { SendLeadEmailModal } from "./SendLeadEmailModal";
+
+const TECHNICAL_TRACKING_KEYS = ['fbclid', 'gclid', 'fbc', 'fbp'] as const;
+
+const shortenTrackingValue = (value: string, visibleChars = 10) => {
+  if (value.length <= visibleChars * 2 + 3) return value;
+  return `${value.slice(0, visibleChars)}...${value.slice(-visibleChars)}`;
+};
 
 interface LeadDetailsModalProps {
   lead: Lead | null;
@@ -136,7 +145,7 @@ export function LeadDetailsModal({
   const customDataEntries = useMemo(() => {
     if (!lead?.custom_data || typeof lead.custom_data !== 'object') return [];
     
-    const entries: { label: string; value: string; isUtm: boolean }[] = [];
+    const entries: { label: string; value: string; isUtm: boolean; key: string }[] = [];
     const utmKeys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'fbclid', 'gclid', 'fbc', 'fbp', 'ref'];
     const campaignLabels: Record<string, string> = {
       fbclid: 'Facebook Click ID',
@@ -175,11 +184,20 @@ export function LeadDetailsModal({
         displayValue = value.join(', ');
       }
       
-      entries.push({ label, value: displayValue, isUtm });
+      entries.push({ label, value: displayValue, isUtm, key });
     });
     
     return entries;
   }, [lead?.custom_data, customFields]);
+
+  const copyTrackingValue = async (value: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      toast({ title: 'Copiado', description: 'Código copiado para a área de transferência.' });
+    } catch {
+      toast({ title: 'Erro ao copiar', description: 'Não foi possível copiar o código.' });
+    }
+  };
 
   const formResponses = customDataEntries.filter(e => !e.isUtm);
   const utmData = customDataEntries.filter(e => e.isUtm);
@@ -500,12 +518,37 @@ export function LeadDetailsModal({
                     </CardHeader>
                     <CardContent>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        {utmData.map((entry, index) => (
-                          <div key={index} className="rounded-lg bg-muted/50 p-2">
-                            <p className="text-xs text-muted-foreground">{entry.label}</p>
-                            <p className="text-sm text-foreground">{entry.value}</p>
-                          </div>
-                        ))}
+                        {utmData.map((entry, index) => {
+                          const isTechnicalTracking = TECHNICAL_TRACKING_KEYS.includes(entry.key as typeof TECHNICAL_TRACKING_KEYS[number]);
+                          const displayValue = isTechnicalTracking ? shortenTrackingValue(entry.value) : entry.value;
+
+                          return (
+                            <div key={index} className="min-w-0 rounded-lg bg-muted/50 p-2">
+                              <p className="text-xs text-muted-foreground">{entry.label}</p>
+                              <div className="mt-1 flex items-start gap-2 min-w-0">
+                                <p
+                                  className="min-w-0 flex-1 overflow-hidden text-sm text-foreground break-words"
+                                  title={entry.value}
+                                >
+                                  {displayValue}
+                                </p>
+                                {isTechnicalTracking && (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    className="shrink-0"
+                                    onClick={() => copyTrackingValue(entry.value)}
+                                    aria-label={`Copiar ${entry.label}`}
+                                    title={`Copiar ${entry.label}`}
+                                  >
+                                    <Copy className="h-4 w-4" />
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </CardContent>
                   </Card>
