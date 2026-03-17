@@ -234,8 +234,51 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
   };
 
   // Check if has energy or service data
+  const proposalCpesHaveEnergyValues = proposalCpes.some((cpe) =>
+    cpe.consumo_anual != null ||
+    cpe.margem != null ||
+    cpe.dbl != null ||
+    cpe.comissao != null ||
+    cpe.duracao_contrato != null ||
+    cpe.contrato_inicio != null ||
+    cpe.contrato_fim != null
+  );
+
+  const displayConsumoAnual = sale.consumo_anual ?? (
+    proposalCpes.some((cpe) => cpe.consumo_anual != null)
+      ? proposalCpes.reduce((sum, cpe) => sum + (Number(cpe.consumo_anual) || 0), 0)
+      : null
+  );
+  const displayMargem = sale.margem ?? (
+    proposalCpes.some((cpe) => cpe.margem != null)
+      ? proposalCpes.reduce((sum, cpe) => sum + (Number(cpe.margem) || 0), 0)
+      : null
+  );
+  const displayComissao = sale.comissao ?? (
+    proposalCpes.some((cpe) => cpe.comissao != null)
+      ? proposalCpes.reduce((sum, cpe) => sum + (Number(cpe.comissao) || 0), 0)
+      : null
+  );
+  const displayDbl = sale.dbl ?? proposalCpes.find((cpe) => cpe.dbl != null)?.dbl ?? null;
+  const displayAnosContrato = sale.anos_contrato ?? proposalCpes.find((cpe) => cpe.duracao_contrato != null)?.duracao_contrato ?? null;
+  const displayContratoInicio = proposalCpes
+    .map((cpe) => cpe.contrato_inicio)
+    .filter((value): value is string => Boolean(value))
+    .sort()[0] ?? null;
+  const displayContratoFim = proposalCpes
+    .map((cpe) => cpe.contrato_fim)
+    .filter((value): value is string => Boolean(value))
+    .sort()
+    .at(-1) ?? null;
+
   const hasEnergyData = sale.proposal_type === 'energia' && (
-    sale.consumo_anual || sale.margem || sale.dbl || sale.anos_contrato || sale.comissao || sale.negotiation_type
+    sale.negotiation_type ||
+    displayConsumoAnual != null ||
+    displayMargem != null ||
+    displayDbl != null ||
+    displayAnosContrato != null ||
+    displayComissao != null ||
+    proposalCpesHaveEnergyValues
   );
   const saleServicosDetails = (sale as any).servicos_details as Record<string, { price?: number; commission_pct?: number; comissao?: number; name?: string }> | null;
   const hasServiceData = (sale.proposal_type === 'servicos' || (!sale.proposal_type && sale.servicos_produtos && sale.servicos_produtos.length > 0)) && (
@@ -424,37 +467,57 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                         </CardTitle>
                       </CardHeader>
                       <CardContent className="p-4 pt-0">
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           {sale.negotiation_type && (
-                            <div className="col-span-2">
+                            <div className="sm:col-span-2">
                               <p className="text-xs text-muted-foreground">Tipo de Negociação</p>
                               <p className="text-sm font-medium">
                                 {NEGOTIATION_TYPE_LABELS[sale.negotiation_type as keyof typeof NEGOTIATION_TYPE_LABELS] || sale.negotiation_type}
                               </p>
                             </div>
                           )}
-                          {sale.consumo_anual && (
+                          {displayConsumoAnual != null && (
                             <div>
                               <p className="text-xs text-muted-foreground">Consumo Anual</p>
-                              <p className="text-sm font-medium">{sale.consumo_anual.toLocaleString('pt-PT')} kWh</p>
+                              <p className="text-sm font-medium">{displayConsumoAnual.toLocaleString('pt-PT')} kWh</p>
                             </div>
                           )}
-                          {sale.anos_contrato && (
+                          {displayAnosContrato != null && (
                             <div>
                               <p className="text-xs text-muted-foreground">Contrato</p>
-                              <p className="text-sm font-medium">{sale.anos_contrato} {sale.anos_contrato === 1 ? 'ano' : 'anos'}</p>
+                              <p className="text-sm font-medium">{displayAnosContrato} {displayAnosContrato === 1 ? 'ano' : 'anos'}</p>
                             </div>
                           )}
-                          {sale.dbl != null && (
+                          {displayDbl != null && (
                             <div>
                               <p className="text-xs text-muted-foreground">DBL</p>
-                              <p className="text-sm font-medium">{sale.dbl.toLocaleString('pt-PT', { minimumFractionDigits: 2 })}</p>
+                              <p className="text-sm font-medium">{displayDbl.toLocaleString('pt-PT', { minimumFractionDigits: 2 })}</p>
                             </div>
                           )}
-                          {sale.comissao && (
-                            <div className="col-span-2">
+                          {displayMargem != null && (
+                            <div>
+                              <p className="text-xs text-muted-foreground">Margem</p>
+                              <p className="text-sm font-medium">{formatCurrency(displayMargem)}</p>
+                            </div>
+                          )}
+                          {displayComissao != null && (
+                            <div>
                               <p className="text-xs text-muted-foreground">Comissão</p>
-                              <p className="text-sm font-medium text-green-500">{formatCurrency(sale.comissao)}</p>
+                              <p className="text-sm font-medium text-green-500">{formatCurrency(displayComissao)}</p>
+                            </div>
+                          )}
+                          {(displayContratoInicio || displayContratoFim) && (
+                            <div className="sm:col-span-2">
+                              <p className="text-xs text-muted-foreground">Período do Contrato</p>
+                              <p className="text-sm font-medium">
+                                {displayContratoInicio
+                                  ? format(new Date(displayContratoInicio), "dd/MM/yyyy", { locale: pt })
+                                  : '—'}
+                                {' → '}
+                                {displayContratoFim
+                                  ? format(new Date(displayContratoFim), "dd/MM/yyyy", { locale: pt })
+                                  : '—'}
+                              </p>
                             </div>
                           )}
                         </div>
@@ -554,7 +617,7 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                           proposalCpes.map((cpe) => (
                             <div
                               key={cpe.id}
-                              className="p-3 rounded-lg border bg-muted/30 space-y-2"
+                              className="p-3 rounded-lg border bg-muted/30 space-y-3"
                             >
                               <div className="flex items-center gap-2 flex-wrap">
                                 <Badge variant="outline" className="text-xs">{cpe.equipment_type}</Badge>
@@ -571,22 +634,68 @@ export function SaleDetailsModal({ sale, open, onOpenChange, onEdit }: SaleDetai
                                   <p className="text-sm font-mono">{cpe.serial_number}</p>
                                 </div>
                               )}
-                              {(cpe.fidelizacao_start || cpe.fidelizacao_end) && (
-                                <div>
-                                  <p className="text-xs text-muted-foreground">Fidelização</p>
-                                  <p className="text-sm">
-                                    {cpe.fidelizacao_start 
-                                      ? format(new Date(cpe.fidelizacao_start), "dd/MM/yyyy", { locale: pt })
-                                      : '—'
-                                    }
-                                    {' → '}
-                                    {cpe.fidelizacao_end 
-                                      ? format(new Date(cpe.fidelizacao_end), "dd/MM/yyyy", { locale: pt })
-                                      : '—'
-                                    }
-                                  </p>
-                                </div>
-                              )}
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                {cpe.consumo_anual != null && (
+                                  <div>
+                                    <p className="text-xs text-muted-foreground">Consumo Anual</p>
+                                    <p className="text-sm font-medium">{Number(cpe.consumo_anual).toLocaleString('pt-PT')} kWh</p>
+                                  </div>
+                                )}
+                                {cpe.duracao_contrato != null && (
+                                  <div>
+                                    <p className="text-xs text-muted-foreground">Duração</p>
+                                    <p className="text-sm font-medium">{cpe.duracao_contrato} {cpe.duracao_contrato === 1 ? 'ano' : 'anos'}</p>
+                                  </div>
+                                )}
+                                {cpe.dbl != null && (
+                                  <div>
+                                    <p className="text-xs text-muted-foreground">DBL</p>
+                                    <p className="text-sm font-medium">{Number(cpe.dbl).toLocaleString('pt-PT', { minimumFractionDigits: 2 })}</p>
+                                  </div>
+                                )}
+                                {cpe.margem != null && (
+                                  <div>
+                                    <p className="text-xs text-muted-foreground">Margem</p>
+                                    <p className="text-sm font-medium">{formatCurrency(Number(cpe.margem))}</p>
+                                  </div>
+                                )}
+                                {cpe.comissao != null && (
+                                  <div>
+                                    <p className="text-xs text-muted-foreground">Comissão</p>
+                                    <p className="text-sm font-medium text-green-500">{formatCurrency(Number(cpe.comissao))}</p>
+                                  </div>
+                                )}
+                                {(cpe.contrato_inicio || cpe.contrato_fim) && (
+                                  <div>
+                                    <p className="text-xs text-muted-foreground">Contrato</p>
+                                    <p className="text-sm">
+                                      {cpe.contrato_inicio
+                                        ? format(new Date(cpe.contrato_inicio), "dd/MM/yyyy", { locale: pt })
+                                        : '—'}
+                                      {' → '}
+                                      {cpe.contrato_fim
+                                        ? format(new Date(cpe.contrato_fim), "dd/MM/yyyy", { locale: pt })
+                                        : '—'}
+                                    </p>
+                                  </div>
+                                )}
+                                {(cpe.fidelizacao_start || cpe.fidelizacao_end) && (
+                                  <div className="sm:col-span-2">
+                                    <p className="text-xs text-muted-foreground">Fidelização</p>
+                                    <p className="text-sm">
+                                      {cpe.fidelizacao_start 
+                                        ? format(new Date(cpe.fidelizacao_start), "dd/MM/yyyy", { locale: pt })
+                                        : '—'
+                                      }
+                                      {' → '}
+                                      {cpe.fidelizacao_end 
+                                        ? format(new Date(cpe.fidelizacao_end), "dd/MM/yyyy", { locale: pt })
+                                        : '—'
+                                      }
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           ))
                         ) : (
