@@ -159,9 +159,27 @@ export default function PortalTotalLinkHomePage() {
                       <MiniBarChart data={teamBreakdown} height={248} mode="grouped" />
                     </div>
 
-                    <div className="overflow-hidden rounded-2xl border border-border/60 bg-background">
+                    <div className="mx-auto w-full max-w-5xl overflow-hidden rounded-2xl border border-border/60 bg-background">
                       <Table>
-...
+                        <TableHeader>
+                          <TableRow className="hover:bg-transparent">
+                            <TableHead>Equipa</TableHead>
+                            <TableHead className="text-right">Objetivo</TableHead>
+                            <TableHead className="text-right">Ativos</TableHead>
+                            <TableHead className="text-right">Pendentes</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {teamBreakdown.map((member) => (
+                            <TableRow key={member.name}>
+                              <TableCell className="min-w-[180px] font-medium text-foreground">{member.name}</TableCell>
+                              <TableCell className="text-right text-foreground">{formatCurrency(member.objetivo)}</TableCell>
+                              <TableCell className="text-right text-foreground">{formatCurrency(member.ativos)}</TableCell>
+                              <TableCell className="text-right text-foreground">{formatCurrency(member.pendentes)}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
                     </div>
                   </div>
                 ) : (
