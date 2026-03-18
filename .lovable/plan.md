@@ -1,23 +1,20 @@
 
 
-## Problema identificado
+## Atualizar activation_date das vendas de teste para Março 2026
 
-As 8 vendas de teste foram criadas **sem `activation_date`** (todas com `NULL`). O hook `useLiveCommissions` filtra vendas por `activation_date` (linhas 96-97), logo vendas sem essa data são completamente ignoradas na análise de comissões.
+### Problema
+As 8 vendas de teste (códigos 0021-0028) têm `activation_date` entre Janeiro e Março de **2025**, mas o dashboard está em Março **2026**. Por isso não aparecem.
 
-## Solução
+### Solução
+Atualizar o `activation_date` e `sale_date` de todas as 8 vendas para datas aleatórias em Março 2026 (entre 2026-03-01 e 2026-03-18).
 
-**Migração SQL** para atualizar as 8 vendas de teste, preenchendo o `activation_date` com a mesma data do `sale_date` de cada uma.
-
+**SQL (via insert tool):**
 ```sql
-UPDATE sales 
-SET activation_date = sale_date 
-WHERE organization_id = '96a3950e-31be-4c6d-abed-b82968c0d7e9'
-  AND activation_date IS NULL
-  AND status = 'delivered';
+UPDATE sales SET activation_date = '2026-03-03', sale_date = '2026-03-03' WHERE id = '1807fcda-947c-4795-9db9-3d9ae7ede7fb';
+UPDATE sales SET activation_date = '2026-03-05', sale_date = '2026-03-05' WHERE id = '5a9a7422-c7eb-492f-aaf8-755c3571e6c2';
+-- ... (para os 8 IDs: 0021 a 0028)
 ```
 
-Isto fará com que as vendas apareçam na análise de comissões quando o mês correspondente estiver selecionado.
-
-### Nota
-As vendas têm `sale_date` variando entre Janeiro e Março 2025 — certifique-se de que o filtro de mês no dashboard corresponde a esses períodos para visualizar os dados.
+### Ficheiros alterados
+Nenhum — apenas atualização de dados existentes.
 
