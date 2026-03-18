@@ -15,6 +15,7 @@ export function PortalTotalLinkLayout({ children }: { children: ReactNode }) {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [isReclamacaoDialogOpen, setIsReclamacaoDialogOpen] = useState(false);
+  const [isContratoDialogOpen, setIsContratoDialogOpen] = useState(false);
 
   const currentSection =
     portalTotalLinkSections.find(
