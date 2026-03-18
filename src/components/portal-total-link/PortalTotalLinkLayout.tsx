@@ -83,6 +83,7 @@ export function PortalTotalLinkLayout({ children }: { children: ReactNode }) {
                 onClick={
                   currentSection.key === "reclamacoes" ? () => setIsReclamacaoDialogOpen(true)
                   : currentSection.key === "contratos" ? () => setIsContratoDialogOpen(true)
+                  : currentSection.key === "ids" ? () => setIsRevisaoDialogOpen(true)
                   : undefined
                 }
               >
