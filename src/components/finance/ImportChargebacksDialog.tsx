@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Loader2, FileSearch } from "lucide-react";
 import { toast } from "sonner";
 import { ImportStep1Upload } from "@/components/marketing/import/ImportStep1Upload";
@@ -53,16 +53,17 @@ function detectAmountColumn(headers: string[]) {
   return scored[0]?.header;
 }
 
-export const ImportChargebacksDialog = forwardRef<HTMLDivElement, ImportChargebacksDialogProps>(function ImportChargebacksDialog({ open, onOpenChange }, ref) {
+export function ImportChargebacksDialog({ open, onOpenChange }: ImportChargebacksDialogProps) {
   const importChargebacks = useImportCommissionChargebacks();
   const [fileName, setFileName] = useState("");
   const [headers, setHeaders] = useState<string[]>([]);
   const [rows, setRows] = useState<Record<string, string>[]>([]);
   const [selectedCpeColumn, setSelectedCpeColumn] = useState("");
+  const [selectedAmountColumn, setSelectedAmountColumn] = useState("");
   const [importSummary, setImportSummary] = useState<ImportChargebackSummary | null>(null);
 
-  const detectedAmountColumn = useMemo(() => detectAmountColumn(headers), [headers]);
   const suggestedCpeColumn = useMemo(() => detectCpeColumn(headers), [headers]);
+  const suggestedAmountColumn = useMemo(() => detectAmountColumn(headers), [headers]);
 
   useEffect(() => {
     if (!open) {
@@ -70,6 +71,7 @@ export const ImportChargebacksDialog = forwardRef<HTMLDivElement, ImportChargeba
       setHeaders([]);
       setRows([]);
       setSelectedCpeColumn("");
+      setSelectedAmountColumn("");
       setImportSummary(null);
       return;
     }
@@ -77,26 +79,24 @@ export const ImportChargebacksDialog = forwardRef<HTMLDivElement, ImportChargeba
     if (!selectedCpeColumn && suggestedCpeColumn) {
       setSelectedCpeColumn(suggestedCpeColumn);
     }
-  }, [open, selectedCpeColumn, suggestedCpeColumn]);
+    if (!selectedAmountColumn && suggestedAmountColumn) {
+      setSelectedAmountColumn(suggestedAmountColumn);
+    }
+  }, [open, selectedCpeColumn, suggestedCpeColumn, selectedAmountColumn, suggestedAmountColumn]);
 
   const preparedRows = useMemo(() => {
-    if (!selectedCpeColumn || !detectedAmountColumn) return [];
+    if (!selectedCpeColumn || !selectedAmountColumn) return [];
 
-    return rows.map((row) => {
-      const normalizedRow = Object.fromEntries(
-        headers.map((header) => [header, String(row[header] ?? "")])
-      ) as Record<string, string>;
-
-      return {
-        ...normalizedRow,
-        cpe: String(row[selectedCpeColumn] ?? ""),
-        chargeback_amount: String(row[detectedAmountColumn] ?? "0"),
-      };
-    });
-  }, [detectedAmountColumn, headers, rows, selectedCpeColumn]);
+    return rows
+      .map((row) => ({
+        cpe: String(row[selectedCpeColumn] ?? "").trim(),
+        chargeback_amount: String(row[selectedAmountColumn] ?? "0").trim(),
+      }))
+      .filter((row) => row.cpe.length > 0);
+  }, [selectedAmountColumn, rows, selectedCpeColumn]);
 
   const handleImport = async () => {
-    if (!fileName || preparedRows.length === 0 || !selectedCpeColumn || !detectedAmountColumn) return;
+    if (!fileName || preparedRows.length === 0 || !selectedCpeColumn || !selectedAmountColumn) return;
 
     try {
       const summary = await importChargebacks.mutateAsync({
@@ -107,14 +107,26 @@ export const ImportChargebacksDialog = forwardRef<HTMLDivElement, ImportChargeba
 
       setImportSummary(summary);
       toast.success("Chargebacks importados com sucesso.");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Erro ao importar chargebacks.");
+    } catch (error: unknown) {
+      console.error("Chargeback import error:", error);
+      let msg = "Erro ao importar chargebacks.";
+      if (error && typeof error === "object") {
+        const e = error as Record<string, unknown>;
+        if (typeof e.message === "string" && e.message.length > 0) {
+          msg = e.message;
+        } else if (typeof e.details === "string" && e.details.length > 0) {
+          msg = e.details;
+        }
+      } else if (typeof error === "string") {
+        msg = error;
+      }
+      toast.error(msg);
     }
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent ref={ref} variant="fullScreen" className="flex h-full flex-col overflow-hidden p-0">
+      <DialogContent variant="fullScreen" className="flex h-full flex-col overflow-hidden p-0">
         <DialogHeader className="shrink-0 border-b px-4 py-4 pr-14 sm:px-6">
           <DialogTitle>Importar chargebacks</DialogTitle>
           <DialogDescription>
@@ -163,6 +175,7 @@ export const ImportChargebacksDialog = forwardRef<HTMLDivElement, ImportChargeba
                   setHeaders(nextHeaders);
                   setRows(nextRows);
                   setSelectedCpeColumn(detectCpeColumn(nextHeaders) || "");
+                  setSelectedAmountColumn(detectAmountColumn(nextHeaders) || "");
                   setImportSummary(null);
                 }}
                 onClearFile={() => {
@@ -170,6 +183,7 @@ export const ImportChargebacksDialog = forwardRef<HTMLDivElement, ImportChargeba
                   setHeaders([]);
                   setRows([]);
                   setSelectedCpeColumn("");
+                  setSelectedAmountColumn("");
                   setImportSummary(null);
                 }}
               />
@@ -178,7 +192,7 @@ export const ImportChargebacksDialog = forwardRef<HTMLDivElement, ImportChargeba
             <section className="space-y-4 rounded-xl border bg-card p-4 sm:p-5">
               <div>
                 <h3 className="text-sm font-semibold text-foreground">2. Mapeamento</h3>
-                <p className="text-sm text-muted-foreground">Só precisa de indicar a coluna do CPE; o valor é detetado automaticamente pelo layout esperado.</p>
+                <p className="text-sm text-muted-foreground">Indique a coluna do CPE e a coluna do valor de chargeback.</p>
               </div>
 
               <div className="grid gap-4 lg:grid-cols-2">
@@ -199,16 +213,25 @@ export const ImportChargebacksDialog = forwardRef<HTMLDivElement, ImportChargeba
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Coluna valor chargeback</Label>
-                  <div className="flex min-h-10 items-center rounded-md border bg-muted/40 px-3 text-sm text-foreground">
-                    {detectedAmountColumn || "Não detetada automaticamente"}
-                  </div>
+                  <Label htmlFor="chargeback-amount-column">Coluna valor chargeback</Label>
+                  <Select value={selectedAmountColumn} onValueChange={setSelectedAmountColumn}>
+                    <SelectTrigger id="chargeback-amount-column">
+                      <SelectValue placeholder="Selecionar coluna" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {headers.map((header) => (
+                        <SelectItem key={header} value={header}>
+                          {header}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 
-              {!detectedAmountColumn ? (
+              {!selectedAmountColumn && headers.length > 0 ? (
                 <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
-                  Não encontrei a coluna do valor de chargeback. O ficheiro precisa de uma coluna identificável como “chargeback”, “valor”, “montante” ou “amount”.
+                  Selecione a coluna que contém o valor do chargeback.
                 </div>
               ) : null}
 
@@ -218,7 +241,7 @@ export const ImportChargebacksDialog = forwardRef<HTMLDivElement, ImportChargeba
                   <div className="space-y-1 text-sm">
                     <p className="font-medium text-foreground">Resumo antes de importar</p>
                     <p className="text-muted-foreground">Linhas lidas: {rows.length}</p>
-                    <p className="text-muted-foreground">Chargebacks estimados no ficheiro: {preparedRows.length}</p>
+                    <p className="text-muted-foreground">Linhas válidas (com CPE): {preparedRows.length}</p>
                   </div>
                 </div>
               </div>
@@ -233,7 +256,7 @@ export const ImportChargebacksDialog = forwardRef<HTMLDivElement, ImportChargeba
             </Button>
             <Button
               onClick={handleImport}
-              disabled={!fileName || preparedRows.length === 0 || !selectedCpeColumn || !detectedAmountColumn || importChargebacks.isPending}
+              disabled={!fileName || preparedRows.length === 0 || !selectedCpeColumn || !selectedAmountColumn || importChargebacks.isPending}
             >
               {importChargebacks.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               Importar chargebacks
@@ -243,4 +266,4 @@ export const ImportChargebacksDialog = forwardRef<HTMLDivElement, ImportChargeba
       </DialogContent>
     </Dialog>
   );
-});
+}
