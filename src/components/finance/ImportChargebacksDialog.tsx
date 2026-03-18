@@ -210,6 +210,8 @@ export function ImportChargebacksDialog({ open, onOpenChange }: ImportChargeback
                   setRows(nextRows);
                   setSelectedCpeColumn(detectCpeColumn(nextHeaders) || "");
                   setSelectedAmountColumn(detectAmountColumn(nextHeaders) || "");
+                  setSelectedTypeColumn(detectTypeColumn(nextHeaders) || "");
+                  setTypeFilterValue("CB");
                   setImportSummary(null);
                 }}
                 onClearFile={() => {
@@ -218,6 +220,8 @@ export function ImportChargebacksDialog({ open, onOpenChange }: ImportChargeback
                   setRows([]);
                   setSelectedCpeColumn("");
                   setSelectedAmountColumn("");
+                  setSelectedTypeColumn("");
+                  setTypeFilterValue("CB");
                   setImportSummary(null);
                 }}
               />
