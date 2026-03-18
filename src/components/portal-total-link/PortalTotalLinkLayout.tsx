@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { PortalTotalLinkFilters } from "./PortalTotalLinkFilters";
 import { PortalTotalLinkReclamacaoAddDialog } from "./PortalTotalLinkReclamacaoAddDialog";
 import { PortalTotalLinkContratoAddDialog } from "./PortalTotalLinkContratoAddDialog";
+import { PortalTotalLinkRevisaoDialog } from "./PortalTotalLinkRevisaoDialog";
 import {
   portalTotalLinkHomeCycleOptions,
   portalTotalLinkHomeYearOptions,
