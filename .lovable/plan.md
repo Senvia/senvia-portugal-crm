@@ -1,24 +1,23 @@
+## Adaptar "Serviços" para telecom sem módulo energy
 
+### Estado: ✅ Implementado
 
-## Reclamações: Dialog "Adicionar" com pesquisa por NIF no PHC
+### Alterações Realizadas
 
-Ao clicar no botão "Adicionar" na página de Reclamações, abre um Dialog para o colaborador introduzir o NIF do cliente. O sistema consulta o PHC CS e apresenta os dados do cliente encontrado.
+**1. `src/hooks/useActivationObjectives.ts`**
+- `sumActivations` agora aceita parâmetro opcional `countMode: 'value' | 'count'`
+- Quando `countMode === 'count'`, retorna `filtered.length` (número de vendas delivered)
+- Default: `'value'` (comportamento atual preservado)
 
-### Alterações
+**2. `src/components/dashboard/ActivationsPanel.tsx`**
+- Blocos de Serviços usam `countMode = 'count'` quando `modules.energy = false`
+- Unidade exibida: `"kWp"` → `"contratos"` quando energy desativado
+- Blocos de Energia não afetados
 
-**1. Novo componente `PortalTotalLinkReclamacaoAddDialog.tsx`**
-- Dialog com campo de input para NIF
-- Mensagem descritiva: "Indique o NIF do cliente e verifique se o mesmo já existe ou se será necessário criar."
-- Botão de pesquisa que (futuramente) chama o PHC CS para buscar dados do cliente
-- Área de resultado que mostra os dados do cliente encontrado (Nome, NIF, morada, etc.) ou mensagem "Nenhum cliente encontrado"
-- Por agora, a consulta ao PHC fica preparada mas sem integração real (placeholder/mock)
+### Resultado
+| Org | Energy module | Serviços unit | Contagem |
+|-----|--------------|---------------|----------|
+| Perfect2Gether | ✅ on | kWp | soma kWp |
+| Escolha Inteligente | ❌ off | contratos | count vendas delivered |
 
-**2. Atualizar `PortalTotalLinkLayout.tsx`**
-- O botão "Adicionar" da secção `reclamacoes` (linha 74-78) atualmente não faz nada
-- Ligar o `onClick` do botão ao state que abre o Dialog
-- Renderizar o novo Dialog condicionalmente quando a secção ativa for `reclamacoes`
-
-**Ficheiros a criar/editar:**
-- `src/components/portal-total-link/PortalTotalLinkReclamacaoAddDialog.tsx` (novo)
-- `src/components/portal-total-link/PortalTotalLinkLayout.tsx` (editar)
-
+**Impacto**: Zero alteração para orgs com energy ativo.

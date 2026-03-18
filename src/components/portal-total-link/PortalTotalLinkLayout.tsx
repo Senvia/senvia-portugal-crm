@@ -1,9 +1,10 @@
-import { type ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { NavLink, useLocation, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { PortalTotalLinkFilters } from "./PortalTotalLinkFilters";
+import { PortalTotalLinkReclamacaoAddDialog } from "./PortalTotalLinkReclamacaoAddDialog";
 import {
   portalTotalLinkHomeCycleOptions,
   portalTotalLinkHomeYearOptions,
@@ -13,6 +14,7 @@ import {
 export function PortalTotalLinkLayout({ children }: { children: ReactNode }) {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
+  const [isReclamacaoDialogOpen, setIsReclamacaoDialogOpen] = useState(false);
 
   const currentSection =
     portalTotalLinkSections.find(
@@ -71,7 +73,11 @@ export function PortalTotalLinkLayout({ children }: { children: ReactNode }) {
                 </Select>
               </div>
             ) : currentSection.action ? (
-              <Button type="button" className="w-full sm:w-auto">
+              <Button
+                type="button"
+                className="w-full sm:w-auto"
+                onClick={currentSection.key === "reclamacoes" ? () => setIsReclamacaoDialogOpen(true) : undefined}
+              >
                 {ActionIcon ? <ActionIcon className="h-4 w-4" /> : null}
                 {currentSection.action.label}
               </Button>
@@ -104,6 +110,11 @@ export function PortalTotalLinkLayout({ children }: { children: ReactNode }) {
       </section>
 
       {children}
+
+      <PortalTotalLinkReclamacaoAddDialog
+        open={isReclamacaoDialogOpen}
+        onOpenChange={setIsReclamacaoDialogOpen}
+      />
     </div>
   );
 }
