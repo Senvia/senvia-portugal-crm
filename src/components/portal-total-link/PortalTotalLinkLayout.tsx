@@ -73,7 +73,11 @@ export function PortalTotalLinkLayout({ children }: { children: ReactNode }) {
                 </Select>
               </div>
             ) : currentSection.action ? (
-              <Button type="button" className="w-full sm:w-auto">
+              <Button
+                type="button"
+                className="w-full sm:w-auto"
+                onClick={currentSection.key === "reclamacoes" ? () => setIsReclamacaoDialogOpen(true) : undefined}
+              >
                 {ActionIcon ? <ActionIcon className="h-4 w-4" /> : null}
                 {currentSection.action.label}
               </Button>
