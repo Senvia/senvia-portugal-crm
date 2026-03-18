@@ -1,22 +1,23 @@
+## Adaptar "Serviços" para telecom sem módulo energy
 
+### Estado: ✅ Implementado
 
-## Problema
+### Alterações Realizadas
 
-A função `getRoundedChartMax` calcula o teto do eixo Y com base no valor mais alto dos dados. Com o valor máximo de 766,26€, o cálculo atual resulta em ~900 (766,26 × 1,12 = 858 → arredonda para 900). O utilizador espera que o eixo vá até **1.000€** — um número redondo mais natural.
+**1. `src/hooks/useActivationObjectives.ts`**
+- `sumActivations` agora aceita parâmetro opcional `countMode: 'value' | 'count'`
+- Quando `countMode === 'count'`, retorna `filtered.length` (número de vendas delivered)
+- Default: `'value'` (comportamento atual preservado)
 
-## Solução
+**2. `src/components/dashboard/ActivationsPanel.tsx`**
+- Blocos de Serviços usam `countMode = 'count'` quando `modules.energy = false`
+- Unidade exibida: `"kWp"` → `"contratos"` quando energy desativado
+- Blocos de Energia não afetados
 
-Ajustar a lógica de `getRoundedChartMax` em `MiniBarChart.tsx` para arredondar de forma mais agressiva para números "bonitos" (100, 250, 500, 1000, 2000, 5000, etc.):
+### Resultado
+| Org | Energy module | Serviços unit | Contagem |
+|-----|--------------|---------------|----------|
+| Perfect2Gether | ✅ on | kWp | soma kWp |
+| Escolha Inteligente | ❌ off | contratos | count vendas delivered |
 
-- Aumentar o headroom de 12% para ~30% (`highestValue * 1.3`) para valores maiores
-- Ajustar os `stepFactor` para produzir saltos mais redondos:
-  - Valores até 1000 → arredondar para o próximo múltiplo de 100 ou 250
-  - Valores até 5000 → múltiplos de 500
-  - Valores maiores → múltiplos de 1000
-
-Com 766,26 × 1,3 = 996 → arredondado para **1.000** — exatamente o que se espera.
-
-## Arquivo
-
-- `src/components/dashboard/MiniBarChart.tsx` — apenas a função `getRoundedChartMax` (linhas 61-91)
-
+**Impacto**: Zero alteração para orgs com energy ativo.
