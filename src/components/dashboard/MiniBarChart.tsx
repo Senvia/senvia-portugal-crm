@@ -177,7 +177,7 @@ export function MiniBarChart({
                   <div className="flex min-w-[10rem] items-center justify-between gap-6">
                     <span className="text-muted-foreground">{label}</span>
                     <span className="font-mono font-medium tabular-nums text-foreground">
-                      {numberFormatter.format(Number(value))}
+                      {formatAsCurrency ? currencyFormatter.format(Number(value)) : numberFormatter.format(Number(value))}
                     </span>
                   </div>
                 );
