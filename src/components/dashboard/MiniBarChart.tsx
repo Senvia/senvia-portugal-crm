@@ -73,10 +73,11 @@ function getRoundedChartMax(data: ChartDatum[], mode: "single" | "grouped") {
   );
 
   if (highestValue <= 0) return 4;
-  if (highestValue <= 10) return Math.ceil(highestValue / 2) * 2;
+  if (highestValue <= 10) return Math.ceil((highestValue * 1.15) / 2) * 2;
 
-  const magnitude = 10 ** Math.floor(Math.log10(highestValue));
-  const normalized = highestValue / magnitude;
+  const withHeadroom = highestValue * 1.12;
+  const magnitude = 10 ** Math.floor(Math.log10(withHeadroom));
+  const normalized = withHeadroom / magnitude;
 
   let stepFactor = 1;
 
@@ -86,7 +87,7 @@ function getRoundedChartMax(data: ChartDatum[], mode: "single" | "grouped") {
 
   const step = magnitude * stepFactor;
 
-  return Math.ceil(highestValue / step) * step;
+  return Math.ceil(withHeadroom / step) * step;
 }
 
 function formatGroupedLabel(label: string) {
