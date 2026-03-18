@@ -1,27 +1,23 @@
+## Adaptar "Serviços" para telecom sem módulo energy
 
+### Estado: ✅ Implementado
 
-## Mover botão de ação para baixo dos seletores Ciclo/Ano
+### Alterações Realizadas
 
-### Alteração em `PortalTotalLinkLayout.tsx`
+**1. `src/hooks/useActivationObjectives.ts`**
+- `sumActivations` agora aceita parâmetro opcional `countMode: 'value' | 'count'`
+- Quando `countMode === 'count'`, retorna `filtered.length` (número de vendas delivered)
+- Default: `'value'` (comportamento atual preservado)
 
-Mover o botão de ação (Adicionar/Revisão) do bloco de filtros para dentro do header card, logo abaixo dos seletores Ciclo/Ano, alinhado à direita.
+**2. `src/components/dashboard/ActivationsPanel.tsx`**
+- Blocos de Serviços usam `countMode = 'count'` quando `modules.energy = false`
+- Unidade exibida: `"kWp"` → `"contratos"` quando energy desativado
+- Blocos de Energia não afetados
 
-**Estrutura resultante:**
-```text
-┌─────────────────────────────────────────────────┐
-│ Portal Total Link            [Ciclo ▾] · [Ano ▾]│
-│ Descrição                        [+ Adicionar]  │
-│ ┌─ Home ─ Contratos ─ IDs ─ Pendentes ─ ... ──┐│
-└─────────────────────────────────────────────────┘
-┌─ Filtros de pesquisa ──────────────────────────┐
-│ ...                                             │
-└─────────────────────────────────────────────────┘
-```
+### Resultado
+| Org | Energy module | Serviços unit | Contagem |
+|-----|--------------|---------------|----------|
+| Perfect2Gether | ✅ on | kWp | soma kWp |
+| Escolha Inteligente | ❌ off | contratos | count vendas delivered |
 
-**Concretamente:**
-- Remover o botão do bloco `{!isHomeSection && ...}` (linhas 107-121)
-- Adicionar o botão dentro do div dos seletores (linha 51-77), como um elemento extra abaixo dos selects, visível apenas quando `currentSection.action` existe
-- O bloco de filtros fica sozinho sem o botão ao lado
-
-**Ficheiro:** `PortalTotalLinkLayout.tsx` (editar)
-
+**Impacto**: Zero alteração para orgs com energy ativo.
