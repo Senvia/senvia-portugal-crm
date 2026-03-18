@@ -124,6 +124,7 @@ export function MiniBarChart({
   showYAxis = false,
   showGrid = false,
   showLegend = false,
+  formatAsCurrency = false,
 }: MiniBarChartProps) {
   if (!data || data.length === 0) {
     return (
