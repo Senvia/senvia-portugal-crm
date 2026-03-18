@@ -99,6 +99,7 @@ export function PortalMetricCard({
                 showYAxis
                 showGrid
                 showLegend
+                formatAsCurrency
               />
             </div>
 
