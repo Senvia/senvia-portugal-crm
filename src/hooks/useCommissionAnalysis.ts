@@ -187,6 +187,7 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
         chargebackCount: 0,
         differentialAmount: 0,
         differentialCount: 0,
+        cpes: [],
       };
 
       existing.chargebackAmount += Number(item.chargeback_amount || 0);
