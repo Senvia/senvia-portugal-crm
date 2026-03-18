@@ -35,6 +35,7 @@ interface MiniBarChartProps {
   showYAxis?: boolean;
   showGrid?: boolean;
   showLegend?: boolean;
+  formatAsCurrency?: boolean;
 }
 
 const metricColors: Record<string, string> = {
