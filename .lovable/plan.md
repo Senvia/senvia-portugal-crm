@@ -1,36 +1,29 @@
 
 
-## Criar vendas de teste com os 8 CPEs não associados
+## Corrigir dados de teste: mover da Senvia para a Perfect2Gether
 
-### Contexto
-Os 8 CPEs importados não foram encontrados porque não existem propostas/vendas com esses CPEs no sistema. Vou criar dados de teste completos para que o matching funcione na próxima importação.
+### O erro
+Os 8 conjuntos de dados de teste (propostas + proposal_cpes + vendas) foram criados na organização **Senvia** (`06fe9e1d...`) em vez da **Perfect2Gether** (`96a3950e...`). Os comerciais atribuídos (João Monteiro e Thais Lorraine) também não pertencem à Perfect2Gether.
 
-### Dados a criar (via SQL insert)
+### Solução
 
-Para cada CPE, criar a cadeia completa: **Proposta → proposal_cpe → Venda**
+**1. Apagar os dados errados da Senvia** (SQL migration)
+- Apagar as 8 vendas criadas por engano
+- Apagar os 8 proposal_cpes associados
+- Apagar as 8 propostas associadas
 
-| CPE | Valor CB | Comercial atribuído |
-|-----|----------|-------------------|
-| PT0002000100723735BE | 10,36€ | João Monteiro |
-| PT0002000102974369TZ | 38,12€ | Thais Lorraine |
-| PT0002000104382618WL | 5,62€ | João Monteiro |
-| PT0002000104989706QE | -71,34€ | Thais Lorraine |
-| PT0002000111166209NJ | 165,81€ | João Monteiro |
-| PT1601000000461219MK | 147,56€ | Thais Lorraine |
-| PT1605000000001772QM | 1021,91€ | João Monteiro |
-| PT1605000008089920GL | 243,70€ | Thais Lorraine |
+IDs das propostas a apagar:
+`59fc962d`, `bac0ee48`, `1de764a4`, `985b2611`, `b18aba4c`, `cd3a3653`, `e286e13f`, `4c498d0a`
 
-### Passos técnicos
-
-1. **Criar 8 propostas** (tipo `energia`, status `accepted`) — 4 por comercial, usando clientes existentes aleatoriamente
-2. **Criar 8 proposal_cpes** com `serial_number` = CPE correspondente, `comercializador` = 'EDP Comercial', `equipment_type` = 'Energia'
-3. **Criar 8 vendas** ligadas às propostas, com `created_by` = user_id do comercial, status `delivered`, `proposal_type` = 'energia'
-
-### Organização
-- Org ID: `06fe9e1d-9670-45b0-8717-c5a6e90be380`
-- João Monteiro: `450648a5-0546-46e6-b333-27f29942a481`
-- Thais Lorraine: `67da1542-4444-4f19-a539-d6229c7ca8b8`
+**2. Criar dados novos na Perfect2Gether** (SQL migration)
+- Org: `96a3950e-31be-4c6d-abed-b82968c0d7e9`
+- Comerciais da Perfect2Gether (5 membros disponíveis):
+  - Admin: `5a03aa42-8282-406e-827f-bedd87615e25`
+  - Salesperson: `44a688ac`, `76300665`, `f96eca52`, `f54baad9`
+- Usar leads existentes da Perfect2Gether (8 leads disponíveis)
+- Distribuir os 8 CPEs aleatoriamente entre os 4 salespersons
+- Criar: 8 propostas (`energia`, `accepted`) → 8 proposal_cpes (com os serial_numbers corretos) → 8 vendas (`delivered`)
 
 ### Ficheiros alterados
-- Nenhum — apenas inserção de dados via SQL
+Nenhum — apenas migração SQL (apagar dados errados + inserir dados corretos na org certa)
 
