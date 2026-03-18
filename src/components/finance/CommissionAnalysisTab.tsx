@@ -214,6 +214,37 @@ export function CommissionAnalysisTab() {
         </Card>
       )}
 
+      {!isLoading && data.unmatchedItems.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <AlertTriangle className="h-4 w-4 text-destructive" />
+              Chargebacks não associados
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table className="min-w-[500px]">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="min-w-[200px]">CPE</TableHead>
+                  <TableHead className="text-right">Valor €</TableHead>
+                  <TableHead className="min-w-[200px]">Motivo</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.unmatchedItems.map((item, index) => (
+                  <TableRow key={index}>
+                    <TableCell className="font-mono text-xs text-foreground">{item.cpe || "—"}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatCurrency(item.chargebackAmount)}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{item.unmatchedReason || "—"}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+
       <ImportChargebacksDialog open={importOpen} onOpenChange={setImportOpen} />
     </div>
   );
