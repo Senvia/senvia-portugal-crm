@@ -1,18 +1,23 @@
+## Adaptar "Serviços" para telecom sem módulo energy
 
+### Estado: ✅ Implementado
 
-## Reclamações: Substituir empty state por tabela de resultados
+### Alterações Realizadas
 
-Mesmo padrão aplicado na página de Contratos.
+**1. `src/hooks/useActivationObjectives.ts`**
+- `sumActivations` agora aceita parâmetro opcional `countMode: 'value' | 'count'`
+- Quando `countMode === 'count'`, retorna `filtered.length` (número de vendas delivered)
+- Default: `'value'` (comportamento atual preservado)
 
-### Alterações
+**2. `src/components/dashboard/ActivationsPanel.tsx`**
+- Blocos de Serviços usam `countMode = 'count'` quando `modules.energy = false`
+- Unidade exibida: `"kWp"` → `"contratos"` quando energy desativado
+- Blocos de Energia não afetados
 
-**1. Novo componente `src/components/portal-total-link/PortalTotalLinkReclamacoesResults.tsx`**
-- Usa `usePortalTotalLinkFilters` para verificar filtros ativos
-- **Sem filtros**: placeholder discreto ("Utilize os filtros acima para pesquisar reclamações")
-- **Com filtros**: tabela com colunas **Data**, **NIF do cliente**, **Nome do cliente**, **Estado**
-- Estado atual sem dados: mensagem "Sem resultados / A pesquisa será ligada ao PHC CS numa fase posterior"
+### Resultado
+| Org | Energy module | Serviços unit | Contagem |
+|-----|--------------|---------------|----------|
+| Perfect2Gether | ✅ on | kWp | soma kWp |
+| Escolha Inteligente | ❌ off | contratos | count vendas delivered |
 
-**2. Atualizar `src/pages/portal-total-link/Reclamacoes.tsx`**
-- Remover `PortalTotalLinkEmptyState`
-- Renderizar o novo `PortalTotalLinkReclamacoesResults`
-
+**Impacto**: Zero alteração para orgs com energy ativo.
