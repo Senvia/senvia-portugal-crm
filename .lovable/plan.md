@@ -1,23 +1,17 @@
-## Adaptar "Serviços" para telecom sem módulo energy
 
-### Estado: ✅ Implementado
 
-### Alterações Realizadas
+## Problema
 
-**1. `src/hooks/useActivationObjectives.ts`**
-- `sumActivations` agora aceita parâmetro opcional `countMode: 'value' | 'count'`
-- Quando `countMode === 'count'`, retorna `filtered.length` (número de vendas delivered)
-- Default: `'value'` (comportamento atual preservado)
+Os 8 itens "não associados" que aparecem são da **importação anterior**, feita antes de adicionarmos o filtro CB. Nessa importação, **todas** as linhas do ficheiro foram tratadas como chargebacks (incluindo pagamentos normais). Esses dados antigos ainda estão na base de dados.
 
-**2. `src/components/dashboard/ActivationsPanel.tsx`**
-- Blocos de Serviços usam `countMode = 'count'` quando `modules.energy = false`
-- Unidade exibida: `"kWp"` → `"contratos"` quando energy desativado
-- Blocos de Energia não afetados
+### Solução
 
-### Resultado
-| Org | Energy module | Serviços unit | Contagem |
-|-----|--------------|---------------|----------|
-| Perfect2Gether | ✅ on | kWp | soma kWp |
-| Escolha Inteligente | ❌ off | contratos | count vendas delivered |
+**1. Limpar dados da importação anterior (migração SQL)**
+- Apagar os registos da tabela `commission_chargeback_items` e `commission_chargeback_imports` que foram importados incorretamente (a importação anterior que incluiu linhas não-CB)
 
-**Impacto**: Zero alteração para orgs com energy ativo.
+**2. Reimportar o ficheiro**
+- Depois de limpar, o utilizador pode reimportar o ficheiro com o filtro CB ativo, e apenas as linhas corretas serão processadas
+
+### Ficheiros a alterar
+- Migração SQL para limpar os dados antigos
+
