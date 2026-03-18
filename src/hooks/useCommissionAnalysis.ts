@@ -40,6 +40,7 @@ export interface CommissionAnalysisCommercial {
   chargebackCount: number;
   differentialAmount: number;
   differentialCount: number;
+  cpes: CpeDetail[];
 }
 
 export interface CommissionAnalysisSummary {
