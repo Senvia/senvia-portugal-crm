@@ -177,11 +177,7 @@ export function PortalTotalLinkFilters() {
               </div>
             </div>
 
-            <div className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-sm text-muted-foreground">
-                A pesquisa por cliente e vendedor está preparada para ignorar acentos quando a listagem real for ligada.
-              </p>
-
+            <div className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-end">
               <div className="flex flex-col gap-2 sm:flex-row">
                 <Button type="button" variant="outline" onClick={resetFilters} className="w-full sm:w-auto">
                   <RotateCcw className="h-4 w-4" />
