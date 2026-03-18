@@ -3,7 +3,6 @@ import { useSearchParams } from "react-router-dom";
 import { PortalMetricCard } from "@/components/portal-total-link/PortalMetricCard";
 import {
   portalHomeMetrics,
-  teamBreakdown,
   type MetricView,
 } from "@/components/portal-total-link/portalMetricData";
 
@@ -36,7 +35,7 @@ export default function PortalTotalLinkHomePage() {
             currentView={metricViews[metric.title] ?? "global"}
             globalLabel={globalLabel}
             teamLabel={teamLabel}
-            teamBreakdown={teamBreakdown}
+            teamBreakdown={metric.teamBreakdown}
             onOpenTeamView={() => setMetricViews((current) => ({ ...current, [metric.title]: "team" }))}
             onReturnToGlobal={() => setMetricViews((current) => ({ ...current, [metric.title]: "global" }))}
           />
