@@ -164,11 +164,11 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
       byUser.set(commercial.userId, {
         userId: commercial.userId,
         name: commercial.name,
-        commissionAmount: commercial.totalFinal,
+        commissionAmount: commercial.totalIndicativa,
         commissionBaseCount: commercial.cpes.length,
         chargebackAmount: 0,
         chargebackCount: 0,
-        differentialAmount: commercial.totalFinal,
+        differentialAmount: commercial.totalIndicativa,
         differentialCount: commercial.cpes.length,
       });
     }
