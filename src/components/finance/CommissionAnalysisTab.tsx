@@ -131,9 +131,9 @@ export function CommissionAnalysisTab() {
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {isLoading ? (
-          Array.from({ length: 3 }).map((_, index) => <Skeleton key={index} className="h-28 w-full rounded-xl" />)
+          Array.from({ length: 4 }).map((_, index) => <Skeleton key={index} className="h-28 w-full rounded-xl" />)
         ) : (
           <>
             <SummaryMetric
@@ -153,6 +153,12 @@ export function CommissionAnalysisTab() {
               value={formatCurrency(data.summary.totalDifferentialAmount)}
               description={`${data.summary.totalDifferentialCount} líquido(s)`}
               icon={TrendingUp}
+            />
+            <SummaryMetric
+              title="Não associados"
+              value={formatCurrency(data.summary.unmatchedAmount)}
+              description={`${data.summary.unmatchedCount} chargeback(s) sem match`}
+              icon={AlertTriangle}
             />
           </>
         )}
