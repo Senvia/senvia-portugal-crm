@@ -128,6 +128,10 @@ export function PortalTotalLinkLayout({ children }: { children: ReactNode }) {
         open={isContratoDialogOpen}
         onOpenChange={setIsContratoDialogOpen}
       />
+      <PortalTotalLinkRevisaoDialog
+        open={isRevisaoDialogOpen}
+        onOpenChange={setIsRevisaoDialogOpen}
+      />
     </div>
   );
 }
