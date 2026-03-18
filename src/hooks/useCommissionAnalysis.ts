@@ -171,6 +171,7 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
         chargebackCount: 0,
         differentialAmount: commercial.totalIndicativa,
         differentialCount: commercial.cpes.length,
+        cpes: commercial.cpes,
       });
     }
 
