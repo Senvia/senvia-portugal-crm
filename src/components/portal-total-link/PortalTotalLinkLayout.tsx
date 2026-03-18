@@ -110,6 +110,11 @@ export function PortalTotalLinkLayout({ children }: { children: ReactNode }) {
       </section>
 
       {children}
+
+      <PortalTotalLinkReclamacaoAddDialog
+        open={isReclamacaoDialogOpen}
+        onOpenChange={setIsReclamacaoDialogOpen}
+      />
     </div>
   );
 }
