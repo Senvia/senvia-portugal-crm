@@ -193,7 +193,7 @@ export function MiniBarChart({
             width={isPortalVariant ? 48 : 42}
             domain={[0, yAxisMax]}
             tickCount={5}
-            tickFormatter={(value: number) => numberFormatter.format(value)}
+            tickFormatter={(value: number) => formatAsCurrency ? currencyFormatter.format(value) : numberFormatter.format(value)}
             tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
           />
         )}
