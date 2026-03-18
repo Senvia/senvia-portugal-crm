@@ -89,6 +89,8 @@ export function ImportChargebacksDialog({ open, onOpenChange }: ImportChargeback
       setRows([]);
       setSelectedCpeColumn("");
       setSelectedAmountColumn("");
+      setSelectedTypeColumn("");
+      setTypeFilterValue("CB");
       setImportSummary(null);
       return;
     }
@@ -99,7 +101,10 @@ export function ImportChargebacksDialog({ open, onOpenChange }: ImportChargeback
     if (!selectedAmountColumn && suggestedAmountColumn) {
       setSelectedAmountColumn(suggestedAmountColumn);
     }
-  }, [open, selectedCpeColumn, suggestedCpeColumn, selectedAmountColumn, suggestedAmountColumn]);
+    if (!selectedTypeColumn && suggestedTypeColumn) {
+      setSelectedTypeColumn(suggestedTypeColumn);
+    }
+  }, [open, selectedCpeColumn, suggestedCpeColumn, selectedAmountColumn, suggestedAmountColumn, selectedTypeColumn, suggestedTypeColumn]);
 
   const preparedRows = useMemo(() => {
     if (!selectedCpeColumn || !selectedAmountColumn) return [];
