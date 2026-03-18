@@ -74,10 +74,13 @@ export function ImportChargebacksDialog({ open, onOpenChange }: ImportChargeback
   const [rows, setRows] = useState<Record<string, string>[]>([]);
   const [selectedCpeColumn, setSelectedCpeColumn] = useState("");
   const [selectedAmountColumn, setSelectedAmountColumn] = useState("");
+  const [selectedTypeColumn, setSelectedTypeColumn] = useState("");
+  const [typeFilterValue, setTypeFilterValue] = useState("CB");
   const [importSummary, setImportSummary] = useState<ImportChargebackSummary | null>(null);
 
   const suggestedCpeColumn = useMemo(() => detectCpeColumn(headers), [headers]);
   const suggestedAmountColumn = useMemo(() => detectAmountColumn(headers), [headers]);
+  const suggestedTypeColumn = useMemo(() => detectTypeColumn(headers), [headers]);
 
   useEffect(() => {
     if (!open) {
