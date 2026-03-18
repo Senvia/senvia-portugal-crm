@@ -48,49 +48,33 @@ export function PortalTotalLinkLayout({ children }: { children: ReactNode }) {
               ) : null}
             </div>
 
-            {isHomeSection ? (
-              <div className="flex items-center gap-2">
-                <Select value={selectedCycle} onValueChange={(value) => updateHomeParam("homeCycle", value)}>
-                  <SelectTrigger className="h-9 w-[120px] text-sm">
-                    <SelectValue placeholder="Ciclo" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {portalTotalLinkHomeCycleOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <span className="text-muted-foreground/50">·</span>
-                <Select value={selectedYear} onValueChange={(value) => updateHomeParam("homeYear", value)}>
-                  <SelectTrigger className="h-9 w-[90px] text-sm">
-                    <SelectValue placeholder="Ano" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {portalTotalLinkHomeYearOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            ) : currentSection.action ? (
-              <Button
-                type="button"
-                className="w-full sm:w-auto"
-                onClick={
-                  currentSection.key === "reclamacoes" ? () => setIsReclamacaoDialogOpen(true)
-                  : currentSection.key === "contratos" ? () => setIsContratoDialogOpen(true)
-                  : currentSection.key === "ids" ? () => setIsRevisaoDialogOpen(true)
-                  : undefined
-                }
-              >
-                {ActionIcon ? <ActionIcon className="h-4 w-4" /> : null}
-                {currentSection.action.label}
-              </Button>
-            ) : null}
+            <div className="flex items-center gap-2">
+              <Select value={selectedCycle} onValueChange={(value) => updateHomeParam("homeCycle", value)}>
+                <SelectTrigger className="h-9 w-[120px] text-sm">
+                  <SelectValue placeholder="Ciclo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {portalTotalLinkHomeCycleOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <span className="text-muted-foreground/50">·</span>
+              <Select value={selectedYear} onValueChange={(value) => updateHomeParam("homeYear", value)}>
+                <SelectTrigger className="h-9 w-[90px] text-sm">
+                  <SelectValue placeholder="Ano" />
+                </SelectTrigger>
+                <SelectContent>
+                  {portalTotalLinkHomeYearOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <div className="mt-5 overflow-x-auto">
@@ -115,7 +99,28 @@ export function PortalTotalLinkLayout({ children }: { children: ReactNode }) {
           </div>
         </div>
 
-        {isHomeSection ? null : <PortalTotalLinkFilters />}
+        {!isHomeSection && (
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex-1">
+              <PortalTotalLinkFilters />
+            </div>
+            {currentSection.action ? (
+              <Button
+                type="button"
+                className="w-full shrink-0 sm:w-auto"
+                onClick={
+                  currentSection.key === "reclamacoes" ? () => setIsReclamacaoDialogOpen(true)
+                  : currentSection.key === "contratos" ? () => setIsContratoDialogOpen(true)
+                  : currentSection.key === "ids" ? () => setIsRevisaoDialogOpen(true)
+                  : undefined
+                }
+              >
+                {ActionIcon ? <ActionIcon className="h-4 w-4" /> : null}
+                {currentSection.action.label}
+              </Button>
+            ) : null}
+          </div>
+        )}
       </section>
 
       {children}
