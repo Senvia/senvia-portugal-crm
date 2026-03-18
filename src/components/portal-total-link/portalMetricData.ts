@@ -10,6 +10,7 @@ export type TeamMetric = {
 export type PortalMetric = {
   title: string;
   color: string;
+  teamBreakdown: TeamMetric[];
   summary: {
     objetivo: number;
     ativos: number;
@@ -17,7 +18,23 @@ export type PortalMetric = {
   };
 };
 
-export const teamBreakdown: TeamMetric[] = [
+function buildMetric(
+  title: string,
+  color: string,
+  teamBreakdown: TeamMetric[],
+): PortalMetric {
+  const summary = teamBreakdown.reduce(
+    (acc, m) => ({
+      objetivo: acc.objetivo + m.objetivo,
+      ativos: acc.ativos + m.ativos,
+      pendentes: acc.pendentes + m.pendentes,
+    }),
+    { objetivo: 0, ativos: 0, pendentes: 0 },
+  );
+  return { title, color, teamBreakdown, summary };
+}
+
+const defaultTeam: TeamMetric[] = [
   { name: "André Coelho", objetivo: 0, ativos: 0, pendentes: 0 },
   { name: "Carla Caralinda", objetivo: 0, ativos: 67.49, pendentes: 637.48 },
   { name: "Carla Pereira", objetivo: 0, ativos: 0, pendentes: 0 },
@@ -35,49 +52,9 @@ export const teamBreakdown: TeamMetric[] = [
 ];
 
 export const portalHomeMetrics: PortalMetric[] = [
-  {
-    title: "Angariados",
-    color: "hsl(var(--primary))",
-    summary: {
-      objetivo: 90,
-      ativos: 74,
-      pendentes: 16,
-    },
-  },
-  {
-    title: "Adicionados",
-    color: "hsl(var(--secondary-foreground))",
-    summary: {
-      objetivo: 44,
-      ativos: 39,
-      pendentes: 5,
-    },
-  },
-  {
-    title: "Fidelizados",
-    color: "hsl(var(--accent-foreground))",
-    summary: {
-      objetivo: 28,
-      ativos: 24,
-      pendentes: 4,
-    },
-  },
-  {
-    title: "Residêncial",
-    color: "hsl(var(--muted-foreground))",
-    summary: {
-      objetivo: 48,
-      ativos: 41,
-      pendentes: 7,
-    },
-  },
-  {
-    title: "Novos NIFs",
-    color: "hsl(var(--foreground))",
-    summary: {
-      objetivo: 26,
-      ativos: 21,
-      pendentes: 5,
-    },
-  },
+  buildMetric("Angariados", "hsl(var(--primary))", defaultTeam),
+  buildMetric("Adicionados", "hsl(var(--secondary-foreground))", defaultTeam),
+  buildMetric("Fidelizados", "hsl(var(--accent-foreground))", defaultTeam),
+  buildMetric("Residêncial", "hsl(var(--muted-foreground))", defaultTeam),
+  buildMetric("Novos NIFs", "hsl(var(--foreground))", defaultTeam),
 ];
