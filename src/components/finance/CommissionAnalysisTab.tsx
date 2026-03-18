@@ -176,7 +176,7 @@ export function CommissionAnalysisTab() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="min-w-[220px]">Comercial</TableHead>
-                  <TableHead className="text-right">Comissão €</TableHead>
+                  <TableHead className="text-right">Valor a receber €</TableHead>
                   <TableHead className="text-right">Base</TableHead>
                   <TableHead className="text-right">Chargeback €</TableHead>
                   <TableHead className="text-right">Chargebacks qtd</TableHead>
