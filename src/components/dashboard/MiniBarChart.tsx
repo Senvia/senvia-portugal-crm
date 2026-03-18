@@ -55,6 +55,13 @@ const numberFormatter = new Intl.NumberFormat("pt-PT", {
   maximumFractionDigits: 2,
 });
 
+const currencyFormatter = new Intl.NumberFormat("pt-PT", {
+  style: "currency",
+  currency: "EUR",
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+});
+
 function getMetricColor(name: string, fallback: string) {
   return metricColors[name.trim().toLowerCase()] ?? fallback;
 }
