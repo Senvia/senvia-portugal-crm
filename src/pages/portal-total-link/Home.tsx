@@ -3,7 +3,6 @@ import { useSearchParams } from "react-router-dom";
 import { PortalMetricCard } from "@/components/portal-total-link/PortalMetricCard";
 import {
   portalHomeMetrics,
-  teamBreakdown,
   type MetricView,
 } from "@/components/portal-total-link/portalMetricData";
 
