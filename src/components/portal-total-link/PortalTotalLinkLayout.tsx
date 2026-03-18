@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { PortalTotalLinkFilters } from "./PortalTotalLinkFilters";
 import { PortalTotalLinkReclamacaoAddDialog } from "./PortalTotalLinkReclamacaoAddDialog";
 import { PortalTotalLinkContratoAddDialog } from "./PortalTotalLinkContratoAddDialog";
+import { PortalTotalLinkRevisaoDialog } from "./PortalTotalLinkRevisaoDialog";
 import {
   portalTotalLinkHomeCycleOptions,
   portalTotalLinkHomeYearOptions,
@@ -17,6 +18,7 @@ export function PortalTotalLinkLayout({ children }: { children: ReactNode }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [isReclamacaoDialogOpen, setIsReclamacaoDialogOpen] = useState(false);
   const [isContratoDialogOpen, setIsContratoDialogOpen] = useState(false);
+  const [isRevisaoDialogOpen, setIsRevisaoDialogOpen] = useState(false);
 
   const currentSection =
     portalTotalLinkSections.find(
@@ -81,6 +83,7 @@ export function PortalTotalLinkLayout({ children }: { children: ReactNode }) {
                 onClick={
                   currentSection.key === "reclamacoes" ? () => setIsReclamacaoDialogOpen(true)
                   : currentSection.key === "contratos" ? () => setIsContratoDialogOpen(true)
+                  : currentSection.key === "ids" ? () => setIsRevisaoDialogOpen(true)
                   : undefined
                 }
               >
@@ -124,6 +127,10 @@ export function PortalTotalLinkLayout({ children }: { children: ReactNode }) {
       <PortalTotalLinkContratoAddDialog
         open={isContratoDialogOpen}
         onOpenChange={setIsContratoDialogOpen}
+      />
+      <PortalTotalLinkRevisaoDialog
+        open={isRevisaoDialogOpen}
+        onOpenChange={setIsRevisaoDialogOpen}
       />
     </div>
   );
