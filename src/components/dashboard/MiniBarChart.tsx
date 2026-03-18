@@ -75,19 +75,22 @@ function getRoundedChartMax(data: ChartDatum[], mode: "single" | "grouped") {
   if (highestValue <= 0) return 4;
   if (highestValue <= 10) return Math.ceil((highestValue * 1.15) / 2) * 2;
 
-  const withHeadroom = highestValue * 1.12;
-  const magnitude = 10 ** Math.floor(Math.log10(withHeadroom));
-  const normalized = withHeadroom / magnitude;
+  // Pick a "nice" step based on the value range
+  const niceSteps = [5, 10, 20, 25, 50, 100, 250, 500, 1000, 2000, 2500, 5000, 10000, 25000, 50000, 100000];
+  const withHeadroom = highestValue * 1.3;
 
-  let stepFactor = 1;
+  // Find the smallest nice step that produces 4-8 ticks
+  let bestStep = niceSteps[niceSteps.length - 1];
+  for (const step of niceSteps) {
+    const candidate = Math.ceil(withHeadroom / step) * step;
+    const ticks = candidate / step;
+    if (ticks >= 3 && ticks <= 8) {
+      bestStep = step;
+      break;
+    }
+  }
 
-  if (normalized <= 1.5) stepFactor = 0.2;
-  else if (normalized <= 3) stepFactor = 0.25;
-  else if (normalized <= 6) stepFactor = 0.5;
-
-  const step = magnitude * stepFactor;
-
-  return Math.ceil(withHeadroom / step) * step;
+  return Math.ceil(withHeadroom / bestStep) * bestStep;
 }
 
 function formatGroupedLabel(label: string) {
