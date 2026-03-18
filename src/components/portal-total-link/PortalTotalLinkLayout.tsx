@@ -117,26 +117,7 @@ export function PortalTotalLinkLayout({ children }: { children: ReactNode }) {
         </div>
 
         {!isHomeSection && (
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div className="flex-1">
-              <PortalTotalLinkFilters />
-            </div>
-            {currentSection.action ? (
-              <Button
-                type="button"
-                className="w-full shrink-0 sm:w-auto"
-                onClick={
-                  currentSection.key === "reclamacoes" ? () => setIsReclamacaoDialogOpen(true)
-                  : currentSection.key === "contratos" ? () => setIsContratoDialogOpen(true)
-                  : currentSection.key === "ids" ? () => setIsRevisaoDialogOpen(true)
-                  : undefined
-                }
-              >
-                {ActionIcon ? <ActionIcon className="h-4 w-4" /> : null}
-                {currentSection.action.label}
-              </Button>
-            ) : null}
-          </div>
+          <PortalTotalLinkFilters />
         )}
       </section>
 
