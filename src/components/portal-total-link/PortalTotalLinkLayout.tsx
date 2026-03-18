@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { cn } from "@/lib/utils";
 import { PortalTotalLinkFilters } from "./PortalTotalLinkFilters";
 import { PortalTotalLinkReclamacaoAddDialog } from "./PortalTotalLinkReclamacaoAddDialog";
+import { PortalTotalLinkContratoAddDialog } from "./PortalTotalLinkContratoAddDialog";
 import {
   portalTotalLinkHomeCycleOptions,
   portalTotalLinkHomeYearOptions,
@@ -15,6 +16,7 @@ export function PortalTotalLinkLayout({ children }: { children: ReactNode }) {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [isReclamacaoDialogOpen, setIsReclamacaoDialogOpen] = useState(false);
+  const [isContratoDialogOpen, setIsContratoDialogOpen] = useState(false);
 
   const currentSection =
     portalTotalLinkSections.find(
@@ -76,7 +78,11 @@ export function PortalTotalLinkLayout({ children }: { children: ReactNode }) {
               <Button
                 type="button"
                 className="w-full sm:w-auto"
-                onClick={currentSection.key === "reclamacoes" ? () => setIsReclamacaoDialogOpen(true) : undefined}
+                onClick={
+                  currentSection.key === "reclamacoes" ? () => setIsReclamacaoDialogOpen(true)
+                  : currentSection.key === "contratos" ? () => setIsContratoDialogOpen(true)
+                  : undefined
+                }
               >
                 {ActionIcon ? <ActionIcon className="h-4 w-4" /> : null}
                 {currentSection.action.label}
@@ -114,6 +120,10 @@ export function PortalTotalLinkLayout({ children }: { children: ReactNode }) {
       <PortalTotalLinkReclamacaoAddDialog
         open={isReclamacaoDialogOpen}
         onOpenChange={setIsReclamacaoDialogOpen}
+      />
+      <PortalTotalLinkContratoAddDialog
+        open={isContratoDialogOpen}
+        onOpenChange={setIsContratoDialogOpen}
       />
     </div>
   );
