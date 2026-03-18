@@ -106,16 +106,25 @@ export function ImportChargebacksDialog({ open, onOpenChange }: ImportChargeback
     }
   }, [open, selectedCpeColumn, suggestedCpeColumn, selectedAmountColumn, suggestedAmountColumn, selectedTypeColumn, suggestedTypeColumn]);
 
+  const filteredRows = useMemo(() => {
+    if (!selectedTypeColumn || !typeFilterValue.trim()) return rows;
+    const normalizedFilter = typeFilterValue.trim().toLowerCase();
+    return rows.filter((row) => {
+      const cellValue = String(row[selectedTypeColumn] ?? "").trim().toLowerCase();
+      return cellValue === normalizedFilter;
+    });
+  }, [rows, selectedTypeColumn, typeFilterValue]);
+
   const preparedRows = useMemo(() => {
     if (!selectedCpeColumn || !selectedAmountColumn) return [];
 
-    return rows
+    return filteredRows
       .map((row) => ({
         cpe: String(row[selectedCpeColumn] ?? "").trim(),
         chargeback_amount: String(row[selectedAmountColumn] ?? "0").trim(),
       }))
       .filter((row) => row.cpe.length > 0);
-  }, [selectedAmountColumn, rows, selectedCpeColumn]);
+  }, [selectedAmountColumn, filteredRows, selectedCpeColumn]);
 
   const handleImport = async () => {
     if (!fileName || preparedRows.length === 0 || !selectedCpeColumn || !selectedAmountColumn) return;
