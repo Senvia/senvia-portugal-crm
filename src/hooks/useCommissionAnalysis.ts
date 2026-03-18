@@ -71,7 +71,6 @@ export interface ImportChargebackSummary {
 }
 
 export interface ImportChargebackRow {
-  [key: string]: string;
   cpe: string;
   chargeback_amount: string;
 }
