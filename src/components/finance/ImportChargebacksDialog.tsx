@@ -53,6 +53,20 @@ function detectAmountColumn(headers: string[]) {
   return scored[0]?.header;
 }
 
+function detectTypeColumn(headers: string[]) {
+  return headers.find((header) => {
+    const normalized = normalizeHeader(header);
+    return (
+      normalized === "tipo" ||
+      normalized === "type" ||
+      normalized.includes("natureza") ||
+      normalized.includes("movimento") ||
+      normalized.includes("cod") ||
+      normalized.includes("code")
+    );
+  });
+}
+
 export function ImportChargebacksDialog({ open, onOpenChange }: ImportChargebacksDialogProps) {
   const importChargebacks = useImportCommissionChargebacks();
   const [fileName, setFileName] = useState("");
