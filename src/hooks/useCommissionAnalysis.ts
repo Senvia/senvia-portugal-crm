@@ -55,9 +55,16 @@ export interface CommissionAnalysisSummary {
   lastImportAt: string | null;
 }
 
+export interface UnmatchedChargebackItem {
+  cpe: string;
+  chargebackAmount: number;
+  unmatchedReason: string | null;
+}
+
 export interface CommissionAnalysisData {
   commercials: CommissionAnalysisCommercial[];
   imports: ChargebackImportRecord[];
+  unmatchedItems: UnmatchedChargebackItem[];
   summary: CommissionAnalysisSummary;
 }
 
