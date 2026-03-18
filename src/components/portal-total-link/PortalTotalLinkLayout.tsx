@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { cn } from "@/lib/utils";
 import { PortalTotalLinkFilters } from "./PortalTotalLinkFilters";
 import { PortalTotalLinkReclamacaoAddDialog } from "./PortalTotalLinkReclamacaoAddDialog";
+import { PortalTotalLinkContratoAddDialog } from "./PortalTotalLinkContratoAddDialog";
 import {
   portalTotalLinkHomeCycleOptions,
   portalTotalLinkHomeYearOptions,
