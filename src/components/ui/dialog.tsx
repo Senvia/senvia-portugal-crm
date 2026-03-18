@@ -13,7 +13,7 @@ const DialogOverlay = React.forwardRef<React.ElementRef<typeof DialogPrimitive.O
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 const dialogContentVariants = {
   default: "pointer-events-auto fixed left-1/2 -translate-x-1/2 z-50 grid w-full max-w-lg max-w-[calc(100vw-2rem)] h-auto overflow-y-auto gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 sm:rounded-lg top-[calc(3.5rem+env(safe-area-inset-top,0px)+1rem)] bottom-auto max-h-[calc(100vh-3.5rem-env(safe-area-inset-top,0px)-2rem)] sm:top-[50%] sm:-translate-y-[50%] sm:max-h-[calc(100vh-2rem)]",
-  fullScreen: "pointer-events-auto fixed z-50 w-full max-w-none bg-background duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 inset-x-0 bottom-0 top-[calc(3.5rem+env(safe-area-inset-top,0px))] h-[calc(100vh-3.5rem-env(safe-area-inset-top,0px))] pb-safe md:top-0 md:h-full md:left-64 md:w-[calc(100%-16rem)]",
+  fullScreen: "pointer-events-auto fixed z-50 w-full max-w-none bg-background p-4 md:p-6 duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 inset-x-0 bottom-0 top-[calc(3.5rem+env(safe-area-inset-top,0px))] h-[calc(100vh-3.5rem-env(safe-area-inset-top,0px))] pb-safe md:top-0 md:h-full md:left-64 md:w-[calc(100%-16rem)]",
 };
 
 interface DialogContentProps extends React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> {

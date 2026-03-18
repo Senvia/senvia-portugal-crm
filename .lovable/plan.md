@@ -1,18 +1,23 @@
+## Adaptar "Serviços" para telecom sem módulo energy
 
+### Estado: ✅ Implementado
 
-## Corrigir padding no modal "Adicionar Reclamação" e prevenir recorrência
+### Alterações Realizadas
 
-### Problema
-A variante `fullScreen` do `DialogContent` não inclui padding (ao contrário da variante `default` que tem `p-6`). O conteúdo do dialog fica colado às bordas.
+**1. `src/hooks/useActivationObjectives.ts`**
+- `sumActivations` agora aceita parâmetro opcional `countMode: 'value' | 'count'`
+- Quando `countMode === 'count'`, retorna `filtered.length` (número de vendas delivered)
+- Default: `'value'` (comportamento atual preservado)
 
-### Solução
+**2. `src/components/dashboard/ActivationsPanel.tsx`**
+- Blocos de Serviços usam `countMode = 'count'` quando `modules.energy = false`
+- Unidade exibida: `"kWp"` → `"contratos"` quando energy desativado
+- Blocos de Energia não afetados
 
-**1. Corrigir `dialog.tsx`** — Adicionar padding base à variante `fullScreen`
-- Adicionar `p-4 md:p-6` à classe da variante `fullScreen` em `dialogContentVariants`, garantindo que **todos os futuros modais fullScreen** já têm padding por defeito.
+### Resultado
+| Org | Energy module | Serviços unit | Contagem |
+|-----|--------------|---------------|----------|
+| Perfect2Gether | ✅ on | kWp | soma kWp |
+| Escolha Inteligente | ❌ off | contratos | count vendas delivered |
 
-**2. Sem alteração necessária em `PortalTotalLinkReclamacaoAddDialog.tsx`** — o padding passa a vir do próprio variant.
-
-### Alteração concreta
-
-No ficheiro `src/components/ui/dialog.tsx`, na string `fullScreen` do objeto `dialogContentVariants`, adicionar `p-4 md:p-6` às classes.
-
+**Impacto**: Zero alteração para orgs com energy ativo.
