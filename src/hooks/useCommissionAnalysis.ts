@@ -85,6 +85,7 @@ export interface ImportChargebackRow {
 const EMPTY_ANALYSIS: CommissionAnalysisData = {
   commercials: [],
   imports: [],
+  unmatchedItems: [],
   summary: {
     totalCommissionAmount: 0,
     totalCommissionBaseCount: 0,
