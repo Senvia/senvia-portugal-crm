@@ -211,9 +211,16 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
     const unmatchedCount = unmatchedItems.length;
     const unmatchedAmount = unmatchedItems.reduce((sum, item) => sum + Number(item.chargeback_amount || 0), 0);
 
+    const unmatchedItemsList: UnmatchedChargebackItem[] = unmatchedItems.map((item) => ({
+      cpe: item.cpe,
+      chargebackAmount: Number(item.chargeback_amount || 0),
+      unmatchedReason: item.unmatched_reason,
+    }));
+
     return {
       commercials,
       imports,
+      unmatchedItems: unmatchedItemsList,
       summary: {
         totalCommissionAmount,
         totalCommissionBaseCount,
