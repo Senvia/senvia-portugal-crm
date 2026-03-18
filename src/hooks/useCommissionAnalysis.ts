@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { useLiveCommissions } from "@/hooks/useLiveCommissions";
+import { useLiveCommissions, type CpeDetail } from "@/hooks/useLiveCommissions";
 import { useTeamMembers } from "@/hooks/useTeam";
 
 interface ChargebackImportRecord {
