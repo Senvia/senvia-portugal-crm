@@ -1,18 +1,23 @@
+## Adaptar "Serviços" para telecom sem módulo energy
 
+### Estado: ✅ Implementado
 
-## Pendentes: Substituir empty state por tabela de resultados
+### Alterações Realizadas
 
-Mesmo padrão das Reclamações.
+**1. `src/hooks/useActivationObjectives.ts`**
+- `sumActivations` agora aceita parâmetro opcional `countMode: 'value' | 'count'`
+- Quando `countMode === 'count'`, retorna `filtered.length` (número de vendas delivered)
+- Default: `'value'` (comportamento atual preservado)
 
-### Alterações
+**2. `src/components/dashboard/ActivationsPanel.tsx`**
+- Blocos de Serviços usam `countMode = 'count'` quando `modules.energy = false`
+- Unidade exibida: `"kWp"` → `"contratos"` quando energy desativado
+- Blocos de Energia não afetados
 
-**1. Novo componente `src/components/portal-total-link/PortalTotalLinkPendentesResults.tsx`**
-- Cópia do padrão de `PortalTotalLinkReclamacoesResults`
-- Sem filtros: placeholder "Utilize os filtros acima para pesquisar pendentes"
-- Com filtros: tabela com colunas **Cliente**, **Vendedor**, **Estado BO**, **Última atualização**
-- Sem dados: mensagem "Sem resultados / A pesquisa será ligada ao PHC CS numa fase posterior"
+### Resultado
+| Org | Energy module | Serviços unit | Contagem |
+|-----|--------------|---------------|----------|
+| Perfect2Gether | ✅ on | kWp | soma kWp |
+| Escolha Inteligente | ❌ off | contratos | count vendas delivered |
 
-**2. Atualizar `src/pages/portal-total-link/Pendentes.tsx`**
-- Remover `PortalTotalLinkEmptyState`
-- Renderizar `PortalTotalLinkPendentesResults`
-
+**Impacto**: Zero alteração para orgs com energy ativo.
