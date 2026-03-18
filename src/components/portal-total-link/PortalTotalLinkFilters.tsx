@@ -27,9 +27,8 @@ export function PortalTotalLinkFilters() {
             <div className="flex items-center justify-between">
               <div className="space-y-1">
                 <CardTitle className="text-base">Filtros de pesquisa</CardTitle>
-                <CardDescription>
-                  Período, cliente, contrato, vendedor, ciclo, ano, estado comercial e estado BO.
-                </CardDescription>
+                <CardDescription />
+
               </div>
 
               <div className="flex items-center gap-2">
