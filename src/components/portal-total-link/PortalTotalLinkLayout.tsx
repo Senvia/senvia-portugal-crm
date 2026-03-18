@@ -48,32 +48,49 @@ export function PortalTotalLinkLayout({ children }: { children: ReactNode }) {
               ) : null}
             </div>
 
-            <div className="flex items-center gap-2">
-              <Select value={selectedCycle} onValueChange={(value) => updateHomeParam("homeCycle", value)}>
-                <SelectTrigger className="h-9 w-[120px] text-sm">
-                  <SelectValue placeholder="Ciclo" />
-                </SelectTrigger>
-                <SelectContent>
-                  {portalTotalLinkHomeCycleOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <span className="text-muted-foreground/50">·</span>
-              <Select value={selectedYear} onValueChange={(value) => updateHomeParam("homeYear", value)}>
-                <SelectTrigger className="h-9 w-[90px] text-sm">
-                  <SelectValue placeholder="Ano" />
-                </SelectTrigger>
-                <SelectContent>
-                  {portalTotalLinkHomeYearOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="flex flex-col items-end gap-2">
+              <div className="flex items-center gap-2">
+                <Select value={selectedCycle} onValueChange={(value) => updateHomeParam("homeCycle", value)}>
+                  <SelectTrigger className="h-9 w-[120px] text-sm">
+                    <SelectValue placeholder="Ciclo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {portalTotalLinkHomeCycleOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <span className="text-muted-foreground/50">·</span>
+                <Select value={selectedYear} onValueChange={(value) => updateHomeParam("homeYear", value)}>
+                  <SelectTrigger className="h-9 w-[90px] text-sm">
+                    <SelectValue placeholder="Ano" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {portalTotalLinkHomeYearOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {currentSection.action ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={
+                    currentSection.key === "reclamacoes" ? () => setIsReclamacaoDialogOpen(true)
+                    : currentSection.key === "contratos" ? () => setIsContratoDialogOpen(true)
+                    : currentSection.key === "ids" ? () => setIsRevisaoDialogOpen(true)
+                    : undefined
+                  }
+                >
+                  {ActionIcon ? <ActionIcon className="h-4 w-4" /> : null}
+                  {currentSection.action.label}
+                </Button>
+              ) : null}
             </div>
           </div>
 
