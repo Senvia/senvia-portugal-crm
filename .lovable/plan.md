@@ -1,23 +1,22 @@
-## Adaptar "Serviços" para telecom sem módulo energy
 
-### Estado: ✅ Implementado
 
-### Alterações Realizadas
+## Contratos: Pesquisa → Resultados (sem empty state)
 
-**1. `src/hooks/useActivationObjectives.ts`**
-- `sumActivations` agora aceita parâmetro opcional `countMode: 'value' | 'count'`
-- Quando `countMode === 'count'`, retorna `filtered.length` (número de vendas delivered)
-- Default: `'value'` (comportamento atual preservado)
+O fluxo passa a ser: o colaborador abre os filtros, pesquisa, e os resultados do contrato aparecem abaixo dos filtros. A área de empty state atual é removida.
 
-**2. `src/components/dashboard/ActivationsPanel.tsx`**
-- Blocos de Serviços usam `countMode = 'count'` quando `modules.energy = false`
-- Unidade exibida: `"kWp"` → `"contratos"` quando energy desativado
-- Blocos de Energia não afetados
+### Alterações
 
-### Resultado
-| Org | Energy module | Serviços unit | Contagem |
-|-----|--------------|---------------|----------|
-| Perfect2Gether | ✅ on | kWp | soma kWp |
-| Escolha Inteligente | ❌ off | contratos | count vendas delivered |
+**1. `src/pages/portal-total-link/Contratos.tsx`**
+- Remover o `PortalTotalLinkEmptyState` completamente
+- Substituir por um componente que mostra:
+  - **Estado inicial** (sem pesquisa): mensagem discreta a convidar o colaborador a usar os filtros acima para pesquisar contratos (ícone Search + texto curto)
+  - **Estado de resultados**: uma tabela/card com os dados do contrato retornados (preparada para receber dados do PHC CS futuramente)
+- Usar o contexto `usePortalTotalLinkFilters` para saber se há filtros ativos e decidir o que mostrar
 
-**Impacto**: Zero alteração para orgs com energy ativo.
+**2. Estrutura do componente de resultados** (novo: `PortalTotalLinkContratosResults.tsx`)
+- Se `activeFilterCount === 0`: mostra placeholder discreto ("Utilize os filtros acima para pesquisar contratos")
+- Se há filtros ativos mas sem dados (fase atual): mostra estado "Nenhum resultado encontrado" ou "A pesquisa será ligada ao PHC CS"
+- Preparar a estrutura da tabela de resultados com colunas: Cliente, Contrato, Ciclo, Estado Comercial, Estado BO
+
+A integração real com o PHC CS será feita numa fase posterior — por agora fica a estrutura visual pronta para receber os dados.
+
