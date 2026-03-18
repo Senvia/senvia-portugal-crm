@@ -35,6 +35,7 @@ interface MiniBarChartProps {
   showYAxis?: boolean;
   showGrid?: boolean;
   showLegend?: boolean;
+  formatAsCurrency?: boolean;
 }
 
 const metricColors: Record<string, string> = {
@@ -50,6 +51,13 @@ const metricLabels: Record<string, string> = {
 };
 
 const numberFormatter = new Intl.NumberFormat("pt-PT", {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+});
+
+const currencyFormatter = new Intl.NumberFormat("pt-PT", {
+  style: "currency",
+  currency: "EUR",
   minimumFractionDigits: 0,
   maximumFractionDigits: 2,
 });
@@ -116,6 +124,7 @@ export function MiniBarChart({
   showYAxis = false,
   showGrid = false,
   showLegend = false,
+  formatAsCurrency = false,
 }: MiniBarChartProps) {
   if (!data || data.length === 0) {
     return (
@@ -168,7 +177,7 @@ export function MiniBarChart({
                   <div className="flex min-w-[10rem] items-center justify-between gap-6">
                     <span className="text-muted-foreground">{label}</span>
                     <span className="font-mono font-medium tabular-nums text-foreground">
-                      {numberFormatter.format(Number(value))}
+                      {formatAsCurrency ? currencyFormatter.format(Number(value)) : numberFormatter.format(Number(value))}
                     </span>
                   </div>
                 );
@@ -184,7 +193,7 @@ export function MiniBarChart({
             width={isPortalVariant ? 48 : 42}
             domain={[0, yAxisMax]}
             tickCount={5}
-            tickFormatter={(value: number) => numberFormatter.format(value)}
+            tickFormatter={(value: number) => formatAsCurrency ? currencyFormatter.format(value) : numberFormatter.format(value)}
             tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
           />
         )}

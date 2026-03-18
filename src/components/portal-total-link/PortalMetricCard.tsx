@@ -99,6 +99,7 @@ export function PortalMetricCard({
                 showYAxis
                 showGrid
                 showLegend
+                formatAsCurrency
               />
             </div>
 
@@ -157,6 +158,7 @@ export function PortalMetricCard({
                   variant="portal"
                   showYAxis
                   showGrid
+                  formatAsCurrency
                 />
               </div>
             </button>
