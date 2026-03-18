@@ -1,16 +1,17 @@
 import { useMemo, useState } from "react";
 import { format, startOfMonth, subMonths } from "date-fns";
 import { pt } from "date-fns/locale";
-import { AlertTriangle, FileSearch, FileUp, Search, TrendingDown, TrendingUp, Wallet } from "lucide-react";
+import { AlertTriangle, ChevronDown, FileSearch, FileUp, Search, TrendingDown, TrendingUp, Wallet } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { TeamMemberFilter } from "@/components/dashboard/TeamMemberFilter";
 import { ImportChargebacksDialog } from "@/components/finance/ImportChargebacksDialog";
-import { useCommissionAnalysis } from "@/hooks/useCommissionAnalysis";
+import { useCommissionAnalysis, type CommissionAnalysisCommercial } from "@/hooks/useCommissionAnalysis";
 import { useTeamFilter } from "@/hooks/useTeamFilter";
 import { formatCurrency } from "@/lib/format";
 import { normalizeString } from "@/lib/utils";
@@ -172,34 +173,70 @@ export function CommissionAnalysisTab() {
             <CardTitle className="text-base">Comerciais</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <Table className="min-w-[860px]">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="min-w-[220px]">Comercial</TableHead>
-                  <TableHead className="text-right">Valor a receber €</TableHead>
-                  <TableHead className="text-right">Base</TableHead>
-                  <TableHead className="text-right">Chargeback €</TableHead>
-                  <TableHead className="text-right">Chargebacks qtd</TableHead>
-                  <TableHead className="text-right">Diferencial €</TableHead>
-                  <TableHead className="text-right">Diferencial qtd</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredCommercials.map((commercial) => (
-                  <TableRow key={commercial.userId}>
-                    <TableCell className="font-medium text-foreground">{commercial.name}</TableCell>
-                    <TableCell className="text-right tabular-nums">{formatCurrency(commercial.commissionAmount)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{commercial.commissionBaseCount}</TableCell>
-                    <TableCell className="text-right tabular-nums">{formatCurrency(commercial.chargebackAmount)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{commercial.chargebackCount}</TableCell>
-                    <TableCell className="text-right tabular-nums font-medium text-foreground">
-                      {formatCurrency(commercial.differentialAmount)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">{commercial.differentialCount}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            {/* Header row */}
+            <div className="hidden min-w-[860px] sm:grid grid-cols-[1fr_repeat(6,minmax(0,auto))] gap-2 px-4 py-2 border-b text-xs font-medium text-muted-foreground">
+              <span>Comercial</span>
+              <span className="text-right">Valor a receber €</span>
+              <span className="text-right">Base</span>
+              <span className="text-right">Chargeback €</span>
+              <span className="text-right">Chargebacks qtd</span>
+              <span className="text-right">Diferencial €</span>
+              <span className="text-right">Diferencial qtd</span>
+            </div>
+            <Accordion type="multiple" className="min-w-[860px]">
+              {filteredCommercials.map((commercial) => (
+                <AccordionItem key={commercial.userId} value={commercial.userId} className="border-b last:border-b-0">
+                  <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/50 [&>svg]:hidden">
+                    <div className="grid w-full grid-cols-[1fr_repeat(6,minmax(0,auto))] gap-2 items-center text-sm">
+                      <span className="flex items-center gap-2 font-medium text-foreground text-left">
+                        <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 [[data-state=open]_&]:rotate-180" />
+                        {commercial.name}
+                      </span>
+                      <span className="text-right tabular-nums">{formatCurrency(commercial.commissionAmount)}</span>
+                      <span className="text-right tabular-nums">{commercial.commissionBaseCount}</span>
+                      <span className="text-right tabular-nums">{formatCurrency(commercial.chargebackAmount)}</span>
+                      <span className="text-right tabular-nums">{commercial.chargebackCount}</span>
+                      <span className="text-right tabular-nums font-medium text-foreground">{formatCurrency(commercial.differentialAmount)}</span>
+                      <span className="text-right tabular-nums">{commercial.differentialCount}</span>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent className="px-4 pb-3 pt-0">
+                    {commercial.cpes.length > 0 ? (
+                      <div className="rounded-md border bg-muted/30 overflow-hidden">
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="text-xs">
+                              <TableHead className="h-8">Venda</TableHead>
+                              <TableHead className="h-8">CPE</TableHead>
+                              <TableHead className="h-8 text-right">Consumo (kWh)</TableHead>
+                              <TableHead className="h-8 text-right">Margem</TableHead>
+                              <TableHead className="h-8 text-right">Valor a receber €</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {commercial.cpes.map((cpe) => (
+                              <TableRow key={cpe.proposal_cpe_id} className="text-xs">
+                                <TableCell className="py-1.5 font-mono">{cpe.sale_code || "—"}</TableCell>
+                                <TableCell className="py-1.5 font-mono">{cpe.serial_number || "—"}</TableCell>
+                                <TableCell className="py-1.5 text-right tabular-nums">
+                                  {cpe.consumo_anual.toLocaleString("pt-PT")}
+                                </TableCell>
+                                <TableCell className="py-1.5 text-right tabular-nums">{cpe.margem.toFixed(4)}</TableCell>
+                                <TableCell className="py-1.5 text-right tabular-nums font-medium">
+                                  {formatCurrency(cpe.comissao_indicativa)}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground py-2">Sem CPEs associados a este comercial.</p>
+                    )}
+                  </AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
           </CardContent>
         </Card>
       ) : (

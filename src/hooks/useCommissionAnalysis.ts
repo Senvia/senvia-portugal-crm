@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { useLiveCommissions } from "@/hooks/useLiveCommissions";
+import { useLiveCommissions, type CpeDetail } from "@/hooks/useLiveCommissions";
 import { useTeamMembers } from "@/hooks/useTeam";
 
 interface ChargebackImportRecord {
@@ -40,6 +40,7 @@ export interface CommissionAnalysisCommercial {
   chargebackCount: number;
   differentialAmount: number;
   differentialCount: number;
+  cpes: CpeDetail[];
 }
 
 export interface CommissionAnalysisSummary {
@@ -170,6 +171,7 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
         chargebackCount: 0,
         differentialAmount: commercial.totalIndicativa,
         differentialCount: commercial.cpes.length,
+        cpes: commercial.cpes,
       });
     }
 
@@ -185,6 +187,7 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
         chargebackCount: 0,
         differentialAmount: 0,
         differentialCount: 0,
+        cpes: [],
       };
 
       existing.chargebackAmount += Number(item.chargeback_amount || 0);
