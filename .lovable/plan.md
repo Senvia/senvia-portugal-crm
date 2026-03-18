@@ -1,19 +1,23 @@
+## Adaptar "Serviços" para telecom sem módulo energy
 
+### Estado: ✅ Implementado
 
-## Redesign dos Seletores Ciclo/Ano
+### Alterações Realizadas
 
-Tornar os seletores compactos e inline, em vez de blocos empilhados com labels grandes.
+**1. `src/hooks/useActivationObjectives.ts`**
+- `sumActivations` agora aceita parâmetro opcional `countMode: 'value' | 'count'`
+- Quando `countMode === 'count'`, retorna `filtered.length` (número de vendas delivered)
+- Default: `'value'` (comportamento atual preservado)
 
-### Alterações em `PortalTotalLinkLayout.tsx` (linhas 45-78)
+**2. `src/components/dashboard/ActivationsPanel.tsx`**
+- Blocos de Serviços usam `countMode = 'count'` quando `modules.energy = false`
+- Unidade exibida: `"kWp"` → `"contratos"` quando energy desativado
+- Blocos de Energia não afetados
 
-Substituir o bloco grid atual por uma linha horizontal compacta:
+### Resultado
+| Org | Energy module | Serviços unit | Contagem |
+|-----|--------------|---------------|----------|
+| Perfect2Gether | ✅ on | kWp | soma kWp |
+| Escolha Inteligente | ❌ off | contratos | count vendas delivered |
 
-- Remover as labels separadas (`<span>Ciclo</span>`, `<span>Ano</span>`)
-- Usar `flex items-center gap-2` em vez de `grid` com `space-y-2`
-- Reduzir altura dos SelectTrigger de `h-11` para `h-9`
-- Remover `min-w` fixos, usar larguras mais justas (`w-[120px]` e `w-[90px]`)
-- Adicionar um separador visual discreto (um `·` ou `|` em `text-muted-foreground`) entre os dois selects
-- O texto do placeholder já inclui "Ciclo X" e "2025", tornando as labels redundantes
-
-**Resultado**: dois selects pequenos lado a lado no canto superior direito, discretos e elegantes, sem labels volumosas.
-
+**Impacto**: Zero alteração para orgs com energy ativo.
