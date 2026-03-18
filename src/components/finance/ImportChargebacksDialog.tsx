@@ -230,7 +230,7 @@ export function ImportChargebacksDialog({ open, onOpenChange }: ImportChargeback
             <section className="space-y-4 rounded-xl border bg-card p-4 sm:p-5">
               <div>
                 <h3 className="text-sm font-semibold text-foreground">2. Mapeamento</h3>
-                <p className="text-sm text-muted-foreground">Indique a coluna do CPE e a coluna do valor de chargeback.</p>
+                <p className="text-sm text-muted-foreground">Indique a coluna do CPE, do valor e do tipo de movimento.</p>
               </div>
 
               <div className="grid gap-4 lg:grid-cols-2">
@@ -265,6 +265,33 @@ export function ImportChargebacksDialog({ open, onOpenChange }: ImportChargeback
                     </SelectContent>
                   </Select>
                 </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="chargeback-type-column">Coluna tipo/código</Label>
+                  <Select value={selectedTypeColumn} onValueChange={setSelectedTypeColumn}>
+                    <SelectTrigger id="chargeback-type-column">
+                      <SelectValue placeholder="Selecionar coluna (opcional)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {headers.map((header) => (
+                        <SelectItem key={header} value={header}>
+                          {header}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="chargeback-type-value">Valor que identifica CB</Label>
+                  <Input
+                    id="chargeback-type-value"
+                    value={typeFilterValue}
+                    onChange={(e) => setTypeFilterValue(e.target.value)}
+                    placeholder="Ex: CB"
+                    disabled={!selectedTypeColumn}
+                  />
+                </div>
               </div>
 
               {!selectedAmountColumn && headers.length > 0 ? (
@@ -279,6 +306,12 @@ export function ImportChargebacksDialog({ open, onOpenChange }: ImportChargeback
                   <div className="space-y-1 text-sm">
                     <p className="font-medium text-foreground">Resumo antes de importar</p>
                     <p className="text-muted-foreground">Linhas lidas: {rows.length}</p>
+                    {selectedTypeColumn ? (
+                      <p className="text-muted-foreground flex items-center gap-1.5">
+                        <Filter className="h-3 w-3" />
+                        Linhas filtradas ({typeFilterValue || "—"}): {filteredRows.length}
+                      </p>
+                    ) : null}
                     <p className="text-muted-foreground">Linhas válidas (com CPE): {preparedRows.length}</p>
                   </div>
                 </div>
