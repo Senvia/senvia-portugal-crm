@@ -1,23 +1,16 @@
-## Adaptar "Serviços" para telecom sem módulo energy
 
-### Estado: ✅ Implementado
 
-### Alterações Realizadas
+## Filtros em Collapsible/Accordion
 
-**1. `src/hooks/useActivationObjectives.ts`**
-- `sumActivations` agora aceita parâmetro opcional `countMode: 'value' | 'count'`
-- Quando `countMode === 'count'`, retorna `filtered.length` (número de vendas delivered)
-- Default: `'value'` (comportamento atual preservado)
+Envolver o conteúdo dos filtros (`CardContent`) num `Collapsible` que começa fechado. O header do Card torna-se o trigger clicável com um ícone ChevronDown que roda ao abrir.
 
-**2. `src/components/dashboard/ActivationsPanel.tsx`**
-- Blocos de Serviços usam `countMode = 'count'` quando `modules.energy = false`
-- Unidade exibida: `"kWp"` → `"contratos"` quando energy desativado
-- Blocos de Energia não afetados
+### Alterações em `PortalTotalLinkFilters.tsx`
 
-### Resultado
-| Org | Energy module | Serviços unit | Contagem |
-|-----|--------------|---------------|----------|
-| Perfect2Gether | ✅ on | kWp | soma kWp |
-| Escolha Inteligente | ❌ off | contratos | count vendas delivered |
+1. Importar `Collapsible`, `CollapsibleTrigger`, `CollapsibleContent` de `@/components/ui/collapsible`
+2. Importar `ChevronDown` do lucide-react
+3. Adicionar estado `const [open, setOpen] = useState(false)`
+4. Envolver o `Card` inteiro num `<Collapsible open={open} onOpenChange={setOpen}>`
+5. O `CardHeader` passa a ser um `CollapsibleTrigger` clicável com `cursor-pointer` e um `ChevronDown` que roda 180deg quando aberto (`transition-transform`, `rotate-180` quando `open`)
+6. O `CardContent` fica dentro de `<CollapsibleContent>` -- só visível quando expandido
+7. O badge de filtros ativos continua sempre visível no header como indicador
 
-**Impacto**: Zero alteração para orgs com energy ativo.
