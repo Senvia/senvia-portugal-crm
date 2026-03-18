@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { format, startOfMonth, subMonths } from "date-fns";
 import { pt } from "date-fns/locale";
-import { FileSearch, FileUp, Search, TrendingDown, TrendingUp, Wallet } from "lucide-react";
+import { AlertTriangle, FileSearch, FileUp, Search, TrendingDown, TrendingUp, Wallet } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -131,9 +131,9 @@ export function CommissionAnalysisTab() {
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {isLoading ? (
-          Array.from({ length: 3 }).map((_, index) => <Skeleton key={index} className="h-28 w-full rounded-xl" />)
+          Array.from({ length: 4 }).map((_, index) => <Skeleton key={index} className="h-28 w-full rounded-xl" />)
         ) : (
           <>
             <SummaryMetric
@@ -153,6 +153,12 @@ export function CommissionAnalysisTab() {
               value={formatCurrency(data.summary.totalDifferentialAmount)}
               description={`${data.summary.totalDifferentialCount} líquido(s)`}
               icon={TrendingUp}
+            />
+            <SummaryMetric
+              title="Não associados"
+              value={formatCurrency(data.summary.unmatchedAmount)}
+              description={`${data.summary.unmatchedCount} chargeback(s) sem match`}
+              icon={AlertTriangle}
             />
           </>
         )}
@@ -204,6 +210,37 @@ export function CommissionAnalysisTab() {
             <p className="max-w-md text-sm text-muted-foreground">
               Ainda não existem chargebacks associados para os filtros atuais, ou nenhum comercial corresponde à pesquisa.
             </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {!isLoading && data.unmatchedItems.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <AlertTriangle className="h-4 w-4 text-destructive" />
+              Chargebacks não associados
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table className="min-w-[500px]">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="min-w-[200px]">CPE</TableHead>
+                  <TableHead className="text-right">Valor €</TableHead>
+                  <TableHead className="min-w-[200px]">Motivo</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.unmatchedItems.map((item, index) => (
+                  <TableRow key={index}>
+                    <TableCell className="font-mono text-xs text-foreground">{item.cpe || "—"}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatCurrency(item.chargebackAmount)}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{item.unmatchedReason || "—"}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
       )}
