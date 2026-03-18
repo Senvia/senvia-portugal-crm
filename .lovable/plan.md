@@ -1,31 +1,23 @@
+## Adaptar "Serviços" para telecom sem módulo energy
 
+### Estado: ✅ Implementado
 
-## Ciclo/Ano global + botões de ação reposicionados
+### Alterações Realizadas
 
-### Problema
-Os seletores de Ciclo e Ano só aparecem na tab Home. Os botões de ação (Adicionar, Revisão, Pesquisar) ocupam o mesmo espaço condicional. O utilizador quer Ciclo/Ano visíveis em **todas** as tabs.
+**1. `src/hooks/useActivationObjectives.ts`**
+- `sumActivations` agora aceita parâmetro opcional `countMode: 'value' | 'count'`
+- Quando `countMode === 'count'`, retorna `filtered.length` (número de vendas delivered)
+- Default: `'value'` (comportamento atual preservado)
 
-### Alterações em `PortalTotalLinkLayout.tsx`
+**2. `src/components/dashboard/ActivationsPanel.tsx`**
+- Blocos de Serviços usam `countMode = 'count'` quando `modules.energy = false`
+- Unidade exibida: `"kWp"` → `"contratos"` quando energy desativado
+- Blocos de Energia não afetados
 
-**Nova estrutura do header:**
-- Linha do título: título à esquerda, **seletores Ciclo + Ano sempre visíveis** à direita (sem condição `isHomeSection`)
-- Remover a condicional `isHomeSection ? ... : currentSection.action ? ...`
-- O botão de ação da secção (quando existe) move-se para uma **linha separada entre os filtros e o conteúdo** — renderizado logo após o `<PortalTotalLinkFilters />`, alinhado à direita
+### Resultado
+| Org | Energy module | Serviços unit | Contagem |
+|-----|--------------|---------------|----------|
+| Perfect2Gether | ✅ on | kWp | soma kWp |
+| Escolha Inteligente | ❌ off | contratos | count vendas delivered |
 
-**Layout resultante:**
-```text
-┌──────────────────────────────────────────────┐
-│ Portal Total Link          [Ciclo ▾] · [Ano ▾] │
-│ Descrição da secção atual                      │
-│ ┌─ Home ─ Contratos ─ IDs ─ Pendentes ─ ... ─┐│
-└──────────────────────────────────────────────┘
-┌─ Filtros de pesquisa ─────────── [+ Adicionar]─┐
-│ ...                                             │
-└─────────────────────────────────────────────────┘
-```
-
-- Na Home (sem filtros), o botão não existe, portanto nada extra aparece
-- Nas outras tabs, o botão de ação fica à direita, na mesma linha do cabeçalho dos filtros ou imediatamente acima do card de filtros
-
-**Ficheiro:** `src/components/portal-total-link/PortalTotalLinkLayout.tsx` (editar)
-
+**Impacto**: Zero alteração para orgs com energy ativo.
