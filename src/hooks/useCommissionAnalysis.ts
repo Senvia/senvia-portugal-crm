@@ -350,7 +350,7 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
         lastImportAt: imports[0]?.created_at || null,
       },
     } satisfies CommissionAnalysisData;
-  }, [chargebackData.data?.imports, chargebackData.data?.items, effectiveUserIds, liveCommissions.data, members]);
+  }, [chargebackData.data?.imports, chargebackData.data?.items, effectiveUserIds, liveCommissions.data, members, selectedMonth]);
 
   return {
     data,
