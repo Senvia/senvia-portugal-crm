@@ -373,7 +373,7 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
     for (const item of filteredItems) {
       if (!item.matched_user_id) continue;
 
-      const fileData = userFileData.get(item.matched_user_id) || [];
+      const fileEntries = userFileData.get(item.matched_user_id) || [];
       const existing = byUser.get(item.matched_user_id) || {
         userId: item.matched_user_id,
         name: memberNameMap.get(item.matched_user_id) || "Comercial",
@@ -384,8 +384,8 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
         differentialAmount: 0,
         differentialCount: 0,
         cpes: [],
-        fileData,
-        comparisonData: buildComparison(fileData, []),
+        fileData: fileEntries.map((e) => e.parsed),
+        comparisonData: buildComparison(fileEntries, []),
       };
 
       existing.chargebackAmount += Number(item.chargeback_amount || 0);
