@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { format, startOfMonth, subMonths } from "date-fns";
 import { pt } from "date-fns/locale";
 import { ChevronDown, FileSearch, FileUp, RefreshCw, Search } from "lucide-react";
