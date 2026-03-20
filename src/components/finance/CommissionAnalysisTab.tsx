@@ -180,11 +180,36 @@ export function CommissionAnalysisTab() {
       for (const row of commercial.comparisonData) {
         if (row.hasAnyDiscrepancy && row.matchedProposalCpeId) {
           const parseNum = (s: string) => parseFloat(s.replace(/[^\d.,]/g, "").replace(",", ".")) || 0;
+          // Calculate duration from dates if possible
+          const fileDuracaoRaw = parseNum(row.file.duracaoContrato);
+          let duracao = fileDuracaoRaw;
+          if (row.file.dataInicio && row.file.dataFim) {
+            const parseDateVal = (raw: string): Date | null => {
+              const trimmed = raw.trim();
+              const [dd, mm, yyyy] = trimmed.split("/");
+              if (dd && mm && yyyy) return new Date(Number(yyyy), Number(mm) - 1, Number(dd));
+              return null;
+            };
+            const s = parseDateVal(row.file.dataInicio);
+            const e = parseDateVal(row.file.dataFim);
+            if (s && e && !isNaN(s.getTime()) && !isNaN(e.getTime())) {
+              duracao = (e.getTime() - s.getTime()) / (365 * 86400000);
+            }
+          }
+          // Format dates for DB (yyyy-MM-dd)
+          const formatDateForDb = (raw: string): string | null => {
+            const trimmed = raw.trim();
+            const parts = trimmed.split("/");
+            if (parts.length === 3) return `${parts[2]}-${parts[1]}-${parts[0]}`;
+            return null;
+          };
           items.push({
             proposalCpeId: row.matchedProposalCpeId,
             dbl: parseNum(row.file.dbl),
             consumoAnual: parseNum(row.file.consumoAnual),
-            duracaoContrato: parseNum(row.file.duracaoContrato),
+            duracaoContrato: duracao,
+            contratoInicio: row.file.dataInicio ? formatDateForDb(row.file.dataInicio) : null,
+            contratoFim: row.file.dataFim ? formatDateForDb(row.file.dataFim) : null,
           });
         }
       }
