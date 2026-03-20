@@ -1,37 +1,42 @@
 
 
-## Problema: Ritmo não mostra OPs na Perfect2Gether
+## Alterar fluxo Lead → Won APENAS para Perfect2Gether
 
-### Diagnóstico
+### Comportamento atual (todas as orgs)
+Quando um lead é movido para "Ganho":
+1. Se já é cliente → abre modal "Criar Venda"
+2. Se não é cliente → cria cliente automaticamente → abre modal "Criar Venda"
 
-Encontrei **duas causas**:
+### Novo comportamento (APENAS Perfect2Gether)
+1. Se **não é cliente** → cria cliente → navega para a página de Clientes com o drawer da ficha do cliente aberto (em vez de abrir venda)
+2. Se **já é cliente** → abre modal "Criar Proposta" (em vez de criar venda)
 
-1. **Cliente sem NIF**: A única proposta de Março (código 0027, cliente "Manuel") tem `nif = null`. O código do Ritmo exige NIF para contar uma OP — se não tem NIF, ignora a proposta (`if (!nif) continue`).
+O lead é marcado como "won" em ambos os casos.
 
-2. **Propostas antigas fora do filtro**: As outras propostas com status "sent"/"negotiating" são de Janeiro e Fevereiro, por isso não aparecem no mês de Março.
+### Alterações técnicas
 
-Ou seja, o Ritmo está tecnicamente correto — simplesmente não há propostas válidas (com NIF) no mês atual.
+**Ficheiro: `src/pages/Leads.tsx`**
 
-### Solução proposta
+1. Importar `isPerfect2GetherOrg` de `@/lib/perfect2gether`
+2. Adicionar state para abrir `CreateProposalModal` com cliente pré-selecionado: `prefillProposalClientId`
+3. No bloco `isWonStage` (linhas ~296-347), adicionar condição para Perfect2Gether:
 
-O problema de fundo é que a lógica de deduplificação por NIF falha quando os clientes não têm NIF preenchido. A correção:
+   **Se já é cliente:**
+   - Em vez de abrir `CreateSaleModal`, abrir `CreateProposalModal` com `preselectedClientId`
+   - Marcar lead como won imediatamente
 
-**`src/components/dashboard/MetricsPanel.tsx`** — No cálculo dos `ritmoRows`, usar `client_id` como fallback quando o NIF é `null`:
+   **Se não é cliente:**
+   - Criar cliente (como já faz)
+   - No `onSuccess`, em vez de abrir sale modal, navegar para `/clients` com state `{ openClientId: newClient.id }`
+   - Marcar lead como won imediatamente
 
-```
-// Antes:
-if (!nif) continue;
+4. Adicionar `CreateProposalModal` no JSX (já está importado) com os novos states
 
-// Depois:
-const dedupeKey = nif || p.client_id;
-if (!dedupeKey) continue;
-```
+**Ficheiro: `src/pages/Clients.tsx`** (pequena alteração)
 
-Isto garante que propostas de clientes sem NIF ainda são contadas como OPs distintas (deduplificadas pelo ID do cliente em vez do NIF).
+5. Ler `location.state?.openClientId` para auto-abrir o drawer do cliente recém-criado quando navegado a partir do fluxo de leads
 
-### Ficheiros alterados
-- `src/components/dashboard/MetricsPanel.tsx` — fallback de `client_id` quando NIF é null
-
-### Nota
-O cliente "Manuel" (código 0012) deveria ter o NIF preenchido para garantir deduplificação correta entre propostas de diferentes clientes. O fix acima é um safety net.
+### Resultado
+- Perfect2Gether: Lead won → cliente criado → fica na ficha do cliente OU se já existe → cria proposta
+- Todas as outras orgs: comportamento atual mantido (Lead won → cria venda)
 
