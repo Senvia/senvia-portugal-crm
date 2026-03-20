@@ -1,23 +1,18 @@
 
 
-## Remover o passo de mapeamento manual do import de chargebacks
+## Corrigir botão "Importar" na página de Análise de Comissões
 
-### Problema
-O passo "2. Mapeamento" pede ao utilizador para escolher manualmente as colunas CPE, valor e tipo — mas as colunas do ficheiro EDP já são conhecidas e auto-detectadas. É desnecessário.
-
-### Solução
-Remover toda a secção "2. Mapeamento" do dialog. As colunas são detectadas automaticamente via `detectCpeColumn`, `detectAmountColumn` e `detectTypeColumn` (que já existem e funcionam). O filtro de tipo ("CB") também já é aplicado por defeito.
-
-O fluxo passa a ser:
-1. Carregar ficheiro → auto-detecção das colunas
-2. Resumo + botão "Importar"
+### Problemas
+1. O botão na página principal já diz "Importar ficheiro" — está OK
+2. Dentro do dialog, o botão de submit diz "Importar chargebacks" — deve ser apenas **"Importar"**
+3. O título do dialog diz "Importar chargebacks" — deve ser apenas **"Importar"**
+4. O botão pode estar inacessível (tapado ou deslocado no layout)
 
 ### Alterações
 
 **Ficheiro: `src/components/finance/ImportChargebacksDialog.tsx`**
 
-- Remover toda a `<section>` do passo "2. Mapeamento" (linhas 235-324) — os 3 selects de coluna e o input de filtro
-- Manter a auto-detecção nos `useEffect` e `useMemo` (já funciona em background)
-- Mover o bloco "Resumo antes de importar" para dentro da secção do ficheiro (após upload)
-- Se a auto-detecção falhar (coluna CPE ou valor não encontrada), mostrar um alerta inline em vez de selects manuais
+1. Linha 168: `DialogTitle` de "Importar chargebacks" → **"Importar"**
+2. Linha 286: Texto do botão de "Importar chargebacks" → **"Importar"**
+3. Verificar se o footer com o botão está visível — o layout usa `flex h-full flex-col` com `flex-1 overflow-y-auto` para o conteúdo e `shrink-0` para o footer, o que deve funcionar. Vou confirmar se não há overflow a esconder o botão.
 
