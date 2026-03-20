@@ -97,7 +97,7 @@ export function useLiveCommissions(selectedMonth: string, effectiveUserIds?: str
         .from('sales')
         .select('id, code, lead_id, client_id, activation_date, status, proposal_id')
         .eq('organization_id', organizationId)
-        .eq('status', 'delivered')
+        .in('status', ['delivered', 'fulfilled'])
         .gte('activation_date', monthStart)
         .lte('activation_date', monthEnd);
 
@@ -160,6 +160,12 @@ export function useLiveCommissions(selectedMonth: string, effectiveUserIds?: str
 
       if (!cpes?.length) return emptyResult;
 
+      // Count CPEs per proposal to avoid duplicating kWp
+      const cpesPerProposal = new Map<string, number>();
+      for (const cpe of cpes) {
+        cpesPerProposal.set(cpe.proposal_id, (cpesPerProposal.get(cpe.proposal_id) || 0) + 1);
+      }
+
       // Group by commercial
       const byCommercial = new Map<string, CommercialEntry>();
       let totalGlobalKwh = 0;
@@ -189,7 +195,8 @@ export function useLiveCommissions(selectedMonth: string, effectiveUserIds?: str
 
         const entry = byCommercial.get(assignedTo)!;
         const consumo = cpe.consumo_anual || 0;
-        const cpeServicosKwp = proposalKwpMap.get(cpe.proposal_id) || 0;
+        const proposalCpeCount = cpesPerProposal.get(cpe.proposal_id) || 1;
+        const cpeServicosKwp = (proposalKwpMap.get(cpe.proposal_id) || 0) / proposalCpeCount;
         const negType = proposalNegotiationMap.get(cpe.proposal_id) || '';
         const countsForVolume = negType !== 'sem_volume' && negType !== 'renovacao';
         if (countsForVolume) {

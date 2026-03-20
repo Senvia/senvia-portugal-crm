@@ -55,15 +55,13 @@ export function useSalesCommissions() {
 
       if (membersError) throw membersError;
 
-      // Fetch profiles for names
-      const { data: profiles, error: profilesError } = await supabase
-        .from("profiles")
-        .select("id, full_name")
-        .eq("organization_id", orgId);
+      // Fetch profiles for names via organization_members user_ids
+      const memberUserIds = (members || []).map(m => m.user_id);
+      const { data: profiles } = memberUserIds.length > 0
+        ? await supabase.from("profiles").select("id, full_name").in("id", memberUserIds)
+        : { data: [] };
 
-      if (profilesError) throw profilesError;
-
-      const profileMap = new Map(profiles?.map(p => [p.id, p.full_name]) || []);
+      const profileMap = new Map((profiles || []).map(p => [p.id, p.full_name]));
       const memberRateMap = new Map(members?.map(m => [m.user_id, Number(m.commission_rate || 0)]) || []);
 
       // Group sales by created_by
