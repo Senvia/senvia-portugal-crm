@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTeamFilter } from '@/hooks/useTeamFilter';
 import { toast } from 'sonner';
+import { isPerfect2GetherOrg } from '@/lib/perfect2gether';
 import type { CrmClient, ClientStatus } from '@/types/clients';
 
 export function useClients() {
