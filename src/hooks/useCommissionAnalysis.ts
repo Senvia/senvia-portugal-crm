@@ -211,17 +211,23 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
   const data = useMemo<CommissionAnalysisData>(() => {
     const liveData = liveCommissions.data;
     const imports = chargebackData.data?.imports || [];
-    const items = chargebackData.data?.items || [];
+    const allItems = chargebackData.data?.items || [];
 
-    if (!liveData && imports.length === 0 && items.length === 0) {
+    if (!liveData && imports.length === 0 && allItems.length === 0) {
       return EMPTY_ANALYSIS;
     }
+
+    // Use only the latest import
+    const activeImportId = imports[0]?.id ?? null;
+    const itemsFromActiveImport = activeImportId
+      ? allItems.filter((item) => item.import_id === activeImportId)
+      : [];
 
     const memberNameMap = new Map(
       members.map((member) => [member.user_id, member.full_name || member.email || "Comercial"])
     );
 
-    const filteredItems = items.filter((item) => {
+    const filteredItems = itemsFromActiveImport.filter((item) => {
       if (!effectiveUserIds || effectiveUserIds.length === 0) return true;
       if (!item.matched_user_id) return false;
       return effectiveUserIds.includes(item.matched_user_id);
@@ -292,7 +298,7 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
     const totalChargebackCount = commercials.reduce((sum, item) => sum + item.chargebackCount, 0);
     const unmatchedItems = effectiveUserIds && effectiveUserIds.length > 0
       ? []
-      : items.filter((item) => !item.matched);
+      : itemsFromActiveImport.filter((item) => !item.matched);
     const unmatchedCount = unmatchedItems.length;
     const unmatchedAmount = unmatchedItems.reduce((sum, item) => sum + Number(item.chargeback_amount || 0), 0);
 

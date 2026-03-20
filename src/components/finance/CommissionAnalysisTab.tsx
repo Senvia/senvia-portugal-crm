@@ -147,6 +147,17 @@ export function CommissionAnalysisTab() {
         </div>
       </div>
 
+      {data.imports.length > 0 && (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 rounded-md px-3 py-2">
+          <FileUp className="h-3.5 w-3.5" />
+          <span>
+            Import ativo: <strong className="text-foreground">{data.imports[0]?.file_name}</strong>
+            {" — "}
+            {format(new Date(data.imports[0]?.created_at), "dd/MM/yyyy HH:mm")}
+          </span>
+        </div>
+      )}
+
       {isLoading ? (
         <CommissionAnalysisTableSkeleton />
       ) : filteredCommercials.length > 0 ? (
