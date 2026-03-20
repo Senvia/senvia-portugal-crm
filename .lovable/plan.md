@@ -1,29 +1,33 @@
 
+## Correção para o “continua como Nuno Dias” após reimport
 
-## Reatribuir venda 020 à Ana Calado + corrigir matching do ficheiro
+### Diagnóstico confirmado
+- O reimport **funcionou**: no import mais recente, o CPE `PT1601000000461219MK` está associado à **Ana Calado**.
+- O problema é de exibição: a aba “Análise de Comissões” está a ler **todos os imports históricos** da organização, incluindo o import anterior onde esse CPE estava com **Nuno Dias**.
+- Resultado: a UI mistura versões antigas + novas e parece que “não atualizou”.
 
-### 1) Reatribuir venda 020 (PRIMAVERA) para Ana Calado
+## O que vou implementar
 
-A venda 020 está atribuída ao Nuno Dias (`5a03aa42-...`). Será reatribuída à Ana Calado (`f96eca52-5546-45d5-839b-bb2a255f9549`).
+1. **Usar apenas o último import como fonte da análise**
+   - No `useCommissionAnalysis`, manter `imports` ordenados por `created_at desc`.
+   - Definir `activeImportId = imports[0]?.id`.
+   - Filtrar `items` para `item.import_id === activeImportId` antes de montar comerciais, resumo e não associados.
 
-Atualizar em cascata (conforme política existente):
-- `sales.created_by` → Ana Calado
-- `crm_clients.assigned_to` do cliente PRIMAVERA → Ana Calado
-- `leads.assigned_to` da lead associada (se houver) → Ana Calado
-- `proposals.created_by` das propostas do cliente → Ana Calado
-- `calendar_events.user_id` dos eventos do cliente → Ana Calado
+2. **Recalcular toda a análise com base no import ativo**
+   - `commercials`, `summary`, `unmatchedItems` passam a usar apenas os itens do último import.
+   - Isso garante que o CPE aparece com o comercial da versão mais recente (Ana), sem “sombra” do import antigo.
 
-Executado via tool de insert/update (não é migration, é dados).
+3. **Mostrar claramente qual import está a ser exibido**
+   - Na `CommissionAnalysisTab`, exibir uma linha informativa: nome do ficheiro + data/hora do import ativo.
+   - Evita dúvida sobre “qual import está no ecrã”.
 
-### 2) Investigar e corrigir matching do ficheiro importado
+4. **(Opcional, para próximo passo) histórico selecionável**
+   - Se quiser manter comparação histórica, adiciono um seletor “Import atual” no topo.
+   - Padrão continua no último import.
 
-Das 8 linhas importadas, 7 deram "CPE não encontrado". Preciso verificar:
-- Se os CPEs do ficheiro existem na tabela `cpes` do sistema
-- Se a normalização está correcta (a função `normalize_chargeback_cpe` remove tudo exceto A-Z0-9)
-- Se o problema é que os CPEs não estão registados como equipamento dos clientes
+## Arquivos a alterar
+- `src/hooks/useCommissionAnalysis.ts` (filtro por `activeImportId`)
+- `src/components/finance/CommissionAnalysisTab.tsx` (indicador do import ativo)
 
-Vou cruzar os CPEs importados com os CPEs existentes no sistema para identificar a causa exacta.
-
-### Ficheiros alterados
-Nenhum ficheiro de código — apenas dados no banco.
-
+## Critério de aceite
+- Após reimportar, o CPE `PT1601000000461219MK` aparece apenas com o comercial do último import (Ana), e deixa de aparecer como Nuno na análise atual.
