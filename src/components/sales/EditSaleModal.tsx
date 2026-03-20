@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -181,16 +181,22 @@ export function EditSaleModal({
     }
   }, [open, sale]);
 
+  // Keep stable refs for commission calculation to avoid re-triggering init
+  const calcCommissionRef = useRef(calculateEnergyCommission);
+  const hasEnergyConfigRef = useRef(hasEnergyConfig);
+  calcCommissionRef.current = calculateEnergyCommission;
+  hasEnergyConfigRef.current = hasEnergyConfig;
+
   // Initialize editable CPEs from proposalCpes with recalculated commissions
   useEffect(() => {
     if (open && proposalCpes.length > 0) {
       setEditableCpes(proposalCpes.map(cpe => {
         // Recalculate commission using current tier rules
         let comissao = cpe.comissao;
-        if (hasEnergyConfig && cpe.margem && cpe.consumo_anual) {
+        if (hasEnergyConfigRef.current && cpe.margem && cpe.consumo_anual) {
           const margem = Number(cpe.margem);
           if (margem > 0) {
-            const calc = calculateEnergyCommission(margem, getVolumeTier(Number(cpe.consumo_anual) || 0));
+            const calc = calcCommissionRef.current(margem, getVolumeTier(Number(cpe.consumo_anual) || 0));
             if (calc !== null) comissao = calc;
           }
         }
@@ -215,7 +221,7 @@ export function EditSaleModal({
     } else if (open) {
       setEditableCpes([]);
     }
-  }, [open, proposalCpes, hasEnergyConfig, calculateEnergyCommission]);
+  }, [open, proposalCpes]);
 
   // Initialize items when existingItems load
   useEffect(() => {
