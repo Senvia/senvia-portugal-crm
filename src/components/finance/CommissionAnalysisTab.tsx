@@ -288,6 +288,21 @@ export function CommissionAnalysisTab() {
       )}
 
       <ImportChargebacksDialog open={importOpen} onOpenChange={setImportOpen} />
+
+      <AlertDialog open={syncConfirmOpen} onOpenChange={setSyncConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Sincronizar dados do ficheiro</AlertDialogTitle>
+            <AlertDialogDescription>
+              Isto vai atualizar <strong>{syncItems.length} CPE(s)</strong> no sistema com os valores do ficheiro importado (DBL, Consumo anual e Duração). As comissões serão recalculadas automaticamente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleSync}>Sincronizar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
