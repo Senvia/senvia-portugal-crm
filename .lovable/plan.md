@@ -1,39 +1,23 @@
 
 
-## Usar o volume GLOBAL do mês para determinar o tier de comissões (não por comercial)
+## Correção: datas em formato serial do Excel quebram o filtro mensal
 
-### Problema atual
-Hoje, cada comercial tem o seu próprio tier calculado com base no volume individual dele (linha 218 do `useLiveCommissions.ts`):
-```ts
-entry.tier = getVolumeTier(entry.totalConsumoKwh); // tier individual
-```
-Depois, a comissão de cada CPE usa esse tier individual (linha 227):
-```ts
-calculateEnergyCommissionPure(cpe.margem, energyConfig, entry.tier)
-```
-
-### O que deve acontecer
-O tier deve ser determinado pelo **total global de todas as vendas do mês**, não por comercial. Se o total do mês = 700 MWh → tier = 'high' → **todas** as comissões de **todos** os comerciais usam a tabela 'high'.
+### Problema
+Os valores de data no `raw_row` (ex: `"Linha de Contrato: Data de inicio": 45802`) são **números seriais do Excel**, não strings formatadas como `dd/MM/yyyy`. O filtro mensal (linhas 231-248 do `useCommissionAnalysis.ts`) tenta fazer parse de strings de data e falha em todos os items → resultado: lista vazia → "Sem dados para mostrar".
 
 ### Solução
 
-**Ficheiro: `src/hooks/useLiveCommissions.ts`** (linhas 215-228)
+**Ficheiro: `src/hooks/useCommissionAnalysis.ts`**
 
-1. Calcular `globalTier` primeiro (já é feito na linha 213)
-2. No loop de recálculo (linha 216-238), substituir `entry.tier` pelo `globalTier`:
-   - Linha 218: `entry.tier = globalTier` (em vez de `getVolumeTier(entry.totalConsumoKwh)`)
-   - Linha 227: `calculateEnergyCommissionPure(cpe.margem, energyConfig, globalTier)` (em vez de `entry.tier`)
-3. Manter `entry.totalConsumoKwh/Mwh` para informação, mas o tier usado no cálculo passa a ser o global
+Na função de filtragem por mês (linhas 231-248), adicionar suporte para **Excel serial numbers**:
 
-**Ficheiro: `src/components/sales/EditSaleModal.tsx`** (recálculo inline nos onChange)
+1. Detectar quando o valor de `dataInicio` é um número (ou string numérica pura como `"45802"`)
+2. Converter serial do Excel para data JS: `new Date(Date.UTC(1899, 11, 30) + serial * 86400000)`
+3. Manter os parsers existentes para formatos `dd/MM/yyyy`, `yyyy-MM-dd`, `dd-MM-yyyy` como fallback
+4. Aplicar a mesma lógica de comparação ano+mês
 
-- Nos onChange de consumo/margem, o recálculo usa `getVolumeTier` do consumo individual. Isto é aceitável no contexto de edição de uma venda isolada (não temos o volume global no modal). Nenhuma alteração necessária aqui — o valor final será recalculado pelo `useLiveCommissions` ao gravar.
-
-### Resultado
-- Todas as comissões do mês escalam juntas com o volume total
-- Ao atingir 301 MWh global → todas passam para 'mid'
-- Ao atingir 601 MWh global → todas passam para 'high'
+Também aplicar a mesma conversão no `parseRawRow()` para exibir as datas formatadas na tabela (em vez de mostrar `45802` ao utilizador).
 
 ### Ficheiros alterados
-- `src/hooks/useLiveCommissions.ts` — 2 linhas alteradas
+- `src/hooks/useCommissionAnalysis.ts` — adicionar conversão de Excel serial dates no filtro e no display
 
