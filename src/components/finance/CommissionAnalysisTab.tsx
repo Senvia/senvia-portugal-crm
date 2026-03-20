@@ -218,6 +218,11 @@ export function CommissionAnalysisTab() {
                           {commercial.fileData.length} linha(s)
                         </span>
                       )}
+                      {commercial.comparisonData.some((r) => r.hasAnyDiscrepancy) && (
+                        <span className="inline-flex items-center rounded-full bg-destructive/10 px-1.5 py-0.5 text-[10px] font-medium text-destructive">
+                          {commercial.comparisonData.filter((r) => r.hasAnyDiscrepancy).length} discrepância(s)
+                        </span>
+                      )}
                     </div>
                   </AccordionTrigger>
                   <AccordionContent className="px-4 pb-3 pt-0">
