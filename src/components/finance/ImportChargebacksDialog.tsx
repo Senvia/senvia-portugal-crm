@@ -143,14 +143,14 @@ export function ImportChargebacksDialog({ open, onOpenChange }: ImportChargeback
     if (!fileName || preparedRows.length === 0 || !selectedCpeColumn || !selectedAmountColumn) return;
 
     try {
-      const summary = await importChargebacks.mutateAsync({
+      await importChargebacks.mutateAsync({
         fileName,
         cpeColumnName: selectedCpeColumn,
         rows: preparedRows,
       });
 
-      setImportSummary(summary);
-      toast.success("Chargebacks importados com sucesso.");
+      toast.success("Ficheiro importado com sucesso.");
+      onOpenChange(false);
     } catch (error: unknown) {
       console.error("Chargeback import error:", error);
       let msg = "Erro ao importar chargebacks.";
