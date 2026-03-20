@@ -188,13 +188,14 @@ export function MetricsPanel() {
     return filteredMembers.map((m) => {
       const userProposals = proposalsRaw.filter((p: any) => p.created_by === m.user_id);
       
-      const energiaNifs = new Set<string>();
-      const solarNifs = new Set<string>();
+      const energiaKeys = new Set<string>();
+      const solarKeys = new Set<string>();
       for (const p of userProposals) {
         const nif = p.client_id ? clientNifMap.get(p.client_id) : null;
-        if (!nif) continue;
-        if (p.proposal_type === "energia") energiaNifs.add(nif);
-        if (p.proposal_type === "servicos" && Number(p.kwp || 0) > 0) solarNifs.add(nif);
+        const dedupeKey = nif || p.client_id;
+        if (!dedupeKey) continue;
+        if (p.proposal_type === "energia") energiaKeys.add(dedupeKey);
+        if (p.proposal_type === "servicos" && Number(p.kwp || 0) > 0) solarKeys.add(dedupeKey);
       }
       const opEnergia = energiaNifs.size;
       const opSolar = solarNifs.size;
