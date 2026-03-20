@@ -27,6 +27,7 @@ import { format, isWithinInterval, startOfDay, endOfDay, parseISO } from "date-f
 
 export default function Clients() {
   const { profile, organization } = useAuth();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = usePersistedState("clients-search-v1", "");
   const [showCreateModal, setShowCreateModal] = useState(false);
