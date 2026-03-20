@@ -275,7 +275,7 @@ export function EditSaleModal({
   }, [open, sale?.proposal_type, servicosProdutos, kwp, modeloServico, manualTotalValue, calculateCommission]);
 
   // Check if sale can be fully edited
-  const canFullEdit = sale?.status !== 'delivered' && sale?.status !== 'cancelled' && sale?.status !== 'fulfilled';
+  const canFullEdit = isAdmin || (sale?.status !== 'delivered' && sale?.status !== 'cancelled' && sale?.status !== 'fulfilled');
 
   // Client options
   const clientOptions: ComboboxOption[] = useMemo(() => {
