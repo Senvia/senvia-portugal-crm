@@ -1,4 +1,5 @@
 import { Lead, STATUS_LABELS, LeadStatus, LeadTemperature, LeadTipologia, TEMPERATURE_LABELS, TEMPERATURE_STYLES, TIPOLOGIA_LABELS, TIPOLOGIA_STYLES, FormSettings, CustomField, ROLE_LABELS } from "@/types";
+import { isPerfect2GetherOrg } from "@/lib/perfect2gether";
 import { LeadAttachments } from "@/components/leads/LeadAttachments";
 import { usePipelineStages } from "@/hooks/usePipelineStages";
 import { formatDate, formatDateTime, getWhatsAppUrl } from "@/lib/format";
