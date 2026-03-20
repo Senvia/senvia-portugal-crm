@@ -152,6 +152,7 @@ export function ImportChargebacksDialog({ open, onOpenChange }: ImportChargeback
         fileName,
         cpeColumnName: selectedCpeColumn,
         rows: preparedRows,
+        referenceMonth: `${referenceMonth}-01`,
       });
 
       toast.success("Ficheiro importado com sucesso.");
