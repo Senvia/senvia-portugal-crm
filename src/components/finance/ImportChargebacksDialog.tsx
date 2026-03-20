@@ -4,7 +4,6 @@ import { toast } from "sonner";
 import { ImportStep1Upload } from "@/components/marketing/import/ImportStep1Upload";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -12,8 +11,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useImportCommissionChargebacks, type ImportChargebackSummary } from "@/hooks/useCommissionAnalysis";
 import { formatCurrency } from "@/lib/format";
 
