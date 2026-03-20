@@ -287,19 +287,29 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
       ? allItems.filter((item) => item.import_id === activeImportId)
       : [];
 
-    // Filter imported items by selectedMonth using "Data de inicio" from raw_row
+    // Filter imported items by reference_month of the active import
     const selectedMonthStart = new Date(selectedMonth);
     const selectedYear = selectedMonthStart.getFullYear();
     const selectedMonthNum = selectedMonthStart.getMonth(); // 0-indexed
 
-    const itemsFromActiveImport = itemsFromActiveImportRaw.filter((item) => {
-      const parsed = parseRawRow(item.raw_row as Record<string, unknown> | null);
-      if (!parsed) return false;
-      if (!parsed.dataInicio) return true;
-      const d = parseDateValue(parsed.dataInicio);
-      if (!d || isNaN(d.getTime())) return true;
-      return d.getFullYear() === selectedYear && d.getMonth() === selectedMonthNum;
-    });
+    const activeImportRefMonth = imports[0]?.reference_month ?? null;
+    let itemsFromActiveImport: ChargebackItemRecord[];
+    if (activeImportRefMonth) {
+      // Compare reference_month (YYYY-MM-DD) with selected month
+      const refDate = new Date(activeImportRefMonth + "T00:00:00");
+      const refMatches = refDate.getFullYear() === selectedYear && refDate.getMonth() === selectedMonthNum;
+      itemsFromActiveImport = refMatches ? itemsFromActiveImportRaw : [];
+    } else {
+      // Fallback for old imports without reference_month: use dataInicio
+      itemsFromActiveImport = itemsFromActiveImportRaw.filter((item) => {
+        const parsed = parseRawRow(item.raw_row as Record<string, unknown> | null);
+        if (!parsed) return false;
+        if (!parsed.dataInicio) return true;
+        const d = parseDateValue(parsed.dataInicio);
+        if (!d || isNaN(d.getTime())) return true;
+        return d.getFullYear() === selectedYear && d.getMonth() === selectedMonthNum;
+      });
+    }
 
     const memberNameMap = new Map(
       members.map((member) => [member.user_id, member.full_name || member.email || "Comercial"])
