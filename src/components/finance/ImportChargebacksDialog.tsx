@@ -230,80 +230,26 @@ export function ImportChargebacksDialog({ open, onOpenChange }: ImportChargeback
               />
             </section>
 
-            <section className="space-y-4 rounded-xl border bg-card p-4 sm:p-5">
-              <div>
-                <h3 className="text-sm font-semibold text-foreground">2. Mapeamento</h3>
-                <p className="text-sm text-muted-foreground">Indique a coluna do CPE, do valor e do tipo de movimento.</p>
-              </div>
+            {headers.length > 0 && !selectedCpeColumn && (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  Não foi possível detectar a coluna CPE automaticamente. Verifique se o ficheiro contém a coluna "Linha de Contrato: Local de Consumo" ou "CPE".
+                </AlertDescription>
+              </Alert>
+            )}
 
-              <div className="grid gap-4 lg:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="chargeback-cpe-column">Coluna CPE</Label>
-                  <Select value={selectedCpeColumn} onValueChange={setSelectedCpeColumn}>
-                    <SelectTrigger id="chargeback-cpe-column">
-                      <SelectValue placeholder="Selecionar coluna" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {headers.map((header) => (
-                        <SelectItem key={header} value={header}>
-                          {header}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+            {headers.length > 0 && !selectedAmountColumn && (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  Não foi possível detectar a coluna de valor automaticamente. Verifique se o ficheiro contém uma coluna com "chargeback", "valor" ou "montante".
+                </AlertDescription>
+              </Alert>
+            )}
 
-                <div className="space-y-2">
-                  <Label htmlFor="chargeback-amount-column">Coluna valor chargeback</Label>
-                  <Select value={selectedAmountColumn} onValueChange={setSelectedAmountColumn}>
-                    <SelectTrigger id="chargeback-amount-column">
-                      <SelectValue placeholder="Selecionar coluna" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {headers.map((header) => (
-                        <SelectItem key={header} value={header}>
-                          {header}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="chargeback-type-column">Coluna tipo/código</Label>
-                  <Select value={selectedTypeColumn} onValueChange={setSelectedTypeColumn}>
-                    <SelectTrigger id="chargeback-type-column">
-                      <SelectValue placeholder="Selecionar coluna (opcional)" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {headers.map((header) => (
-                        <SelectItem key={header} value={header}>
-                          {header}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="chargeback-type-value">Valor que identifica CB</Label>
-                  <Input
-                    id="chargeback-type-value"
-                    value={typeFilterValue}
-                    onChange={(e) => setTypeFilterValue(e.target.value)}
-                    placeholder="Ex: CB"
-                    disabled={!selectedTypeColumn}
-                  />
-                </div>
-              </div>
-
-              {!selectedAmountColumn && headers.length > 0 ? (
-                <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
-                  Selecione a coluna que contém o valor do chargeback.
-                </div>
-              ) : null}
-
-              <div className="rounded-lg border bg-muted/30 p-4">
+            {headers.length > 0 && selectedCpeColumn && selectedAmountColumn && (
+              <section className="space-y-3 rounded-xl border bg-card p-4 sm:p-5">
                 <div className="flex items-start gap-3">
                   <FileSearch className="mt-0.5 h-4 w-4 text-muted-foreground" />
                   <div className="space-y-1 text-sm">
@@ -316,10 +262,14 @@ export function ImportChargebacksDialog({ open, onOpenChange }: ImportChargeback
                       </p>
                     ) : null}
                     <p className="text-muted-foreground">Linhas válidas (com CPE): {preparedRows.length}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      CPE: <span className="font-medium text-foreground">{selectedCpeColumn}</span> · Valor: <span className="font-medium text-foreground">{selectedAmountColumn}</span>
+                      {selectedTypeColumn ? <> · Tipo: <span className="font-medium text-foreground">{selectedTypeColumn}</span></> : null}
+                    </p>
                   </div>
                 </div>
-              </div>
-            </section>
+              </section>
+            )}
           </div>
         </div>
 
