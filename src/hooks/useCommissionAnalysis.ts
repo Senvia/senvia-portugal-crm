@@ -244,33 +244,50 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
   const organizationId = organization?.id;
 
   const chargebackData = useQuery<ChargebackDataset>({
-    queryKey: ["commission-chargeback-data", organizationId],
+    queryKey: ["commission-chargeback-data", organizationId, selectedMonth],
     queryFn: async () => {
       if (!organizationId) {
         return { imports: [], items: [] } satisfies ChargebackDataset;
       }
 
-      const [importsResult, itemsResult] = await Promise.all([
-        (supabase as any)
-          .from("commission_chargeback_imports")
-          .select("id, created_at, file_name, total_rows, matched_rows, unmatched_rows, chargeback_count, total_chargeback_amount, reference_month")
-          .eq("organization_id", organizationId)
-          .order("created_at", { ascending: false })
-          .range(0, 199),
-        (supabase as any)
+      // Fetch imports for this org
+      const importsResult = await (supabase as any)
+        .from("commission_chargeback_imports")
+        .select("id, created_at, file_name, total_rows, matched_rows, unmatched_rows, chargeback_count, total_chargeback_amount, reference_month")
+        .eq("organization_id", organizationId)
+        .order("created_at", { ascending: false });
+
+      if (importsResult.error) throw importsResult.error;
+      const imports = (importsResult.data || []) as ChargebackImportRecord[];
+
+      // Find the import matching the selected month by reference_month
+      const selectedDate = new Date(selectedMonth);
+      const selectedYear = selectedDate.getFullYear();
+      const selectedMonthNum = selectedDate.getMonth();
+
+      const matchingImport = imports.find((imp) => {
+        if (!imp.reference_month) return false;
+        const refDate = new Date(imp.reference_month + "T00:00:00");
+        return refDate.getFullYear() === selectedYear && refDate.getMonth() === selectedMonthNum;
+      }) || imports[0] || null; // Fallback to latest if no month match
+
+      let items: ChargebackItemRecord[] = [];
+      if (matchingImport) {
+        // Fetch items only for the active import — no range limit needed
+        const itemsResult = await (supabase as any)
           .from("commission_chargeback_items")
           .select("id, import_id, matched_user_id, chargeback_amount, matched, cpe, unmatched_reason, raw_row, matched_proposal_cpe_id")
           .eq("organization_id", organizationId)
-          .order("created_at", { ascending: false })
-          .range(0, 4999),
-      ]);
+          .eq("import_id", matchingImport.id)
+          .order("created_at", { ascending: false });
 
-      if (importsResult.error) throw importsResult.error;
-      if (itemsResult.error) throw itemsResult.error;
+        if (itemsResult.error) throw itemsResult.error;
+        items = (itemsResult.data || []) as ChargebackItemRecord[];
+      }
 
       return {
-        imports: (importsResult.data || []) as ChargebackImportRecord[],
-        items: (itemsResult.data || []) as ChargebackItemRecord[],
+        imports,
+        items,
       } satisfies ChargebackDataset;
     },
     enabled: !!organizationId,
@@ -285,14 +302,23 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
       return EMPTY_ANALYSIS;
     }
 
-    // Use only the latest import
-    const activeImportId = imports[0]?.id ?? null;
+    // Find import matching selected month (already done in query, but resolve activeImportId)
+    const selectedMonthStart = new Date(selectedMonth);
+    const selectedYear = selectedMonthStart.getFullYear();
+    const selectedMonthNum = selectedMonthStart.getMonth();
+
+    const matchingImport = imports.find((imp) => {
+      if (!imp.reference_month) return false;
+      const refDate = new Date(imp.reference_month + "T00:00:00");
+      return refDate.getFullYear() === selectedYear && refDate.getMonth() === selectedMonthNum;
+    }) || imports[0] || null;
+
+    const activeImportId = matchingImport?.id ?? null;
     const itemsFromActiveImportRaw = activeImportId
       ? allItems.filter((item) => item.import_id === activeImportId)
       : [];
 
     // Filter imported items by reference_month of the active import
-    const selectedMonthStart = new Date(selectedMonth);
     const selectedYear = selectedMonthStart.getFullYear();
     const selectedMonthNum = selectedMonthStart.getMonth(); // 0-indexed
 
