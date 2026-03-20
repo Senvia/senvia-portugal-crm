@@ -139,7 +139,7 @@ export function CommissionAnalysisTab() {
   const [importOpen, setImportOpen] = useState(false);
   const [syncConfirmOpen, setSyncConfirmOpen] = useState(false);
   const { effectiveUserIds, canFilterByTeam } = useTeamFilter();
-  const { data, isLoading } = useCommissionAnalysis(selectedMonth, effectiveUserIds);
+  const { data, isLoading, refetch } = useCommissionAnalysis(selectedMonth, effectiveUserIds);
   const syncMutation = useSyncFileToSystem();
 
   const filteredCommercials = useMemo(() => {
@@ -172,6 +172,7 @@ export function CommissionAnalysisTab() {
     setSyncConfirmOpen(false);
     try {
       await syncMutation.mutateAsync(syncItems);
+      await refetch();
       toast({ title: "Sincronização concluída", description: `${syncItems.length} CPE(s) atualizados com os dados do ficheiro.` });
     } catch (err: any) {
       toast({ title: "Erro na sincronização", description: err.message || "Não foi possível atualizar os CPEs.", variant: "destructive" });
