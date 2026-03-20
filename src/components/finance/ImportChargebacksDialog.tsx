@@ -60,6 +60,13 @@ function detectAmountColumn(headers: string[]) {
 }
 
 function detectTypeColumn(headers: string[]) {
+  // Prioritize "tipo de comissão/comissao" over generic "tipo"
+  const comissaoCol = headers.find((header) => {
+    const normalized = normalizeHeader(header);
+    return normalized.includes("comissao") && normalized.includes("tipo");
+  });
+  if (comissaoCol) return comissaoCol;
+
   return headers.find((header) => {
     const normalized = normalizeHeader(header);
     return (
@@ -81,7 +88,7 @@ export function ImportChargebacksDialog({ open, onOpenChange }: ImportChargeback
   const [selectedCpeColumn, setSelectedCpeColumn] = useState("");
   const [selectedAmountColumn, setSelectedAmountColumn] = useState("");
   const [selectedTypeColumn, setSelectedTypeColumn] = useState("");
-  const [typeFilterValue, setTypeFilterValue] = useState("CB");
+  const [typeFilterValue, setTypeFilterValue] = useState("");
   const [importSummary, setImportSummary] = useState<ImportChargebackSummary | null>(null);
 
   const suggestedCpeColumn = useMemo(() => detectCpeColumn(headers), [headers]);
@@ -96,7 +103,7 @@ export function ImportChargebacksDialog({ open, onOpenChange }: ImportChargeback
       setSelectedCpeColumn("");
       setSelectedAmountColumn("");
       setSelectedTypeColumn("");
-      setTypeFilterValue("CB");
+      setTypeFilterValue("");
       setImportSummary(null);
       return;
     }
@@ -214,7 +221,7 @@ export function ImportChargebacksDialog({ open, onOpenChange }: ImportChargeback
                   setSelectedCpeColumn(detectCpeColumn(nextHeaders) || "");
                   setSelectedAmountColumn(detectAmountColumn(nextHeaders) || "");
                   setSelectedTypeColumn(detectTypeColumn(nextHeaders) || "");
-                  setTypeFilterValue("CB");
+                  setTypeFilterValue("");
                   setImportSummary(null);
                 }}
                 onClearFile={() => {
@@ -224,7 +231,7 @@ export function ImportChargebacksDialog({ open, onOpenChange }: ImportChargeback
                   setSelectedCpeColumn("");
                   setSelectedAmountColumn("");
                   setSelectedTypeColumn("");
-                  setTypeFilterValue("CB");
+                  setTypeFilterValue("");
                   setImportSummary(null);
                 }}
               />
