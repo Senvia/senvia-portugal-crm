@@ -244,7 +244,7 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
           .range(0, 199),
         (supabase as any)
           .from("commission_chargeback_items")
-          .select("id, import_id, matched_user_id, chargeback_amount, matched, cpe, unmatched_reason, raw_row")
+          .select("id, import_id, matched_user_id, chargeback_amount, matched, cpe, unmatched_reason, raw_row, matched_proposal_cpe_id")
           .eq("organization_id", organizationId)
           .order("created_at", { ascending: false })
           .range(0, 4999),
