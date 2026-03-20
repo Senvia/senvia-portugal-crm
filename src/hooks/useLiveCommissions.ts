@@ -109,11 +109,12 @@ export function useLiveCommissions(selectedMonth: string, effectiveUserIds?: str
       const { data: clients } = clientIds.length > 0
         ? await supabase
             .from('crm_clients')
-            .select('id, assigned_to')
+            .select('id, assigned_to, name, company')
             .in('id', clientIds)
         : { data: [] };
 
       const clientMap = new Map((clients || []).map(c => [c.id, c.assigned_to]));
+      const clientNameMap = new Map((clients || []).map(c => [c.id, c.name || c.company || null]));
 
       // Get proposals with negotiation_type filter
       const proposalIds = [...new Set(sales.map(s => s.proposal_id).filter(Boolean))] as string[];
