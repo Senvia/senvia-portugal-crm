@@ -1,30 +1,34 @@
 
 
-## Atualizar a tela em tempo real após sincronização
+## Corrigir: Sincronização usa ID de CPE obsoleto — update não aplica
 
-### Problema
-Após clicar em "Sincronizar", o toast aparece confirmando a atualização, mas a tabela de comparação não atualiza automaticamente. A causa é que o `onSuccess` do `useSyncFileToSystem` invalida as queries em background, mas pode haver um timing issue onde o componente não re-renderiza com os dados atualizados.
+### Problema raiz
+Verifiquei directamente na base de dados: **o DBL continua 50.017** — a atualização não aconteceu.
+
+O `matched_proposal_cpe_id` guardado na tabela `commission_chargeback_items` aponta para `f7564406-...`, que **já não existe** na tabela `proposal_cpes`. O CPE real é `f1c6f110-...`.
+
+Na linha 347 do `useCommissionAnalysis.ts`:
+```ts
+matchedProposalCpeId: matchedProposalCpeId ?? (match ? match.proposal_cpe_id : null)
+```
+O operador `??` só usa o fallback se o valor for `null`/`undefined`. Como `matchedProposalCpeId` é `f7564406-...` (não é null, só está obsoleto), o fallback com o ID correto do sistema **nunca é usado**.
+
+O update executa contra um ID que não existe → 0 linhas afetadas → sem erro → toast diz "sucesso" falsamente.
 
 ### Solução
 
-**Ficheiro: `src/components/finance/CommissionAnalysisTab.tsx`**
+**Ficheiro: `src/hooks/useCommissionAnalysis.ts`**
 
-No `handleSync`, após o `mutateAsync` resolver com sucesso, chamar explicitamente o `refetch` do `useCommissionAnalysis` (que já está disponível no retorno do hook). Isto garante que os dados são buscados novamente e a UI atualiza imediatamente.
-
-1. Desestruturar `refetch` do `useCommissionAnalysis` (linha 142):
+1. **Linha 347** — Priorizar o ID do sistema (live match) sobre o ID do import:
    ```ts
-   const { data, isLoading, refetch } = useCommissionAnalysis(selectedMonth, effectiveUserIds);
+   matchedProposalCpeId: (match ? match.proposal_cpe_id : null) || matchedProposalCpeId,
    ```
+   Isto garante que se o sistema encontrou o CPE por `serial_number`, usa o ID real e atual.
 
-2. No `handleSync` (linha 174), após o `mutateAsync`, aguardar o `refetch`:
-   ```ts
-   await syncMutation.mutateAsync(syncItems);
-   await refetch();
-   toast({ ... });
-   ```
+2. **No `useSyncFileToSystem`** — Adicionar validação: verificar se o update afetou pelo menos 1 linha. Se não afetou, lançar erro informativo.
 
-Isto força o refetch completo de ambas as queries (live commissions + chargeback data) antes de mostrar o toast, garantindo que a UI já está atualizada quando o utilizador vê a confirmação.
+3. **Adicionar log** de quantos updates realmente afetaram linhas para debugging futuro.
 
 ### Ficheiros alterados
-- `src/components/finance/CommissionAnalysisTab.tsx` — 2 linhas (desestruturar `refetch` + chamar após sync)
+- `src/hooks/useCommissionAnalysis.ts` — priorizar ID do sistema + validação no sync
 
