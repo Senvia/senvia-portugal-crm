@@ -215,7 +215,7 @@ export function useLiveCommissions(selectedMonth: string, effectiveUserIds?: str
       // Recalculate commissions per commercial using their own tier
       for (const entry of byCommercial.values()) {
         entry.totalConsumoMwh = entry.totalConsumoKwh / 1000;
-        entry.tier = getVolumeTier(entry.totalConsumoKwh);
+        entry.tier = globalTier;
         entry.name = getMemberName(entry.userId);
 
         let totalFinal = 0;
