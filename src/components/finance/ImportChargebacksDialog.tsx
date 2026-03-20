@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, FileSearch, AlertTriangle, CalendarDays } from "lucide-react";
+import { Loader2, AlertTriangle, CalendarDays } from "lucide-react";
 import { toast } from "sonner";
 import { ImportStep1Upload } from "@/components/marketing/import/ImportStep1Upload";
 import { Button } from "@/components/ui/button";
