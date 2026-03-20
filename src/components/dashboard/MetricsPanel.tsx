@@ -197,8 +197,8 @@ export function MetricsPanel() {
         if (p.proposal_type === "energia") energiaKeys.add(dedupeKey);
         if (p.proposal_type === "servicos" && Number(p.kwp || 0) > 0) solarKeys.add(dedupeKey);
       }
-      const opEnergia = energiaNifs.size;
-      const opSolar = solarNifs.size;
+      const opEnergia = energiaKeys.size;
+      const opSolar = solarKeys.size;
 
       const userSales = salesAggregated.filter((s: any) => s.created_by === m.user_id);
       let energia = 0, solar = 0, comissao = 0;
