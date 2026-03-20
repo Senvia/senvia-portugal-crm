@@ -88,6 +88,11 @@ export interface CommissionAnalysisSummary {
   unmatchedCount: number;
   unmatchedAmount: number;
   lastImportAt: string | null;
+  cbFileCount: number;
+  cbFileTotal: number;
+  comFileCount: number;
+  comFileTotal: number;
+  cbFileDiscrepancies: number;
 }
 
 export interface UnmatchedChargebackItem {
