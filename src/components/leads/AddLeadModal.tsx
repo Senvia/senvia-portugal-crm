@@ -245,6 +245,7 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
 
     setMatchedClient(null);
     setPendingFiles([]);
+    setCpeValue("");
     form.reset({
       company_nif: "",
       company_name: "",
