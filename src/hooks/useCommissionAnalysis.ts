@@ -147,6 +147,8 @@ const EMPTY_ANALYSIS: CommissionAnalysisData = {
     comFileCount: 0,
     comFileTotal: 0,
     cbFileDiscrepancies: 0,
+    cbFileItems: [],
+    comFileItems: [],
   },
 };
 
