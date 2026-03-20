@@ -346,7 +346,7 @@ export function CommissionAnalysisTab() {
           </CardHeader>
           <CardContent className="p-0">
             {/* Header row */}
-            <div className="hidden min-w-[860px] sm:grid grid-cols-[1fr_repeat(6,minmax(0,auto))] gap-2 px-4 py-2 border-b text-xs font-medium text-muted-foreground">
+            <div className="hidden min-w-[860px] sm:grid grid-cols-[1fr_110px_60px_110px_90px_110px_90px] gap-2 px-4 py-2 border-b text-xs font-medium text-muted-foreground">
               <span>Comercial</span>
               <span className="text-right">Valor a receber €</span>
               <span className="text-right">Base</span>
@@ -358,8 +358,8 @@ export function CommissionAnalysisTab() {
             <Accordion type="multiple" className="min-w-[860px]">
               {filteredCommercials.map((commercial) => (
                 <AccordionItem key={commercial.userId} value={commercial.userId} className="border-b last:border-b-0">
-                  <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/50 [&>svg]:hidden">
-                    <div className="grid w-full grid-cols-[1fr_repeat(6,minmax(0,auto))] gap-2 items-center text-sm">
+                  <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/50 [&>svg]:hidden justify-start">
+                    <div className="grid w-full grid-cols-[1fr_110px_60px_110px_90px_110px_90px] gap-2 items-center text-sm">
                       <span className="flex items-center gap-2 font-medium text-foreground text-left">
                         <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 [[data-state=open]_&]:rotate-180" />
                         {commercial.name}
