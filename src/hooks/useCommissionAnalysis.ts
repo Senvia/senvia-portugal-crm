@@ -527,17 +527,23 @@ export function useImportCommissionChargebacks() {
       fileName: string;
       cpeColumnName: string;
       rows: ImportChargebackRow[];
+      referenceMonth?: string;
     }): Promise<ImportChargebackSummary> => {
       if (!organization?.id) {
         throw new Error("Organização não encontrada");
       }
 
-      const { data, error } = await (supabase as any).rpc("import_commission_chargebacks", {
+      const rpcParams: Record<string, unknown> = {
         p_organization_id: organization.id,
         p_file_name: params.fileName,
         p_cpe_column_name: params.cpeColumnName,
         p_rows: params.rows,
-      });
+      };
+      if (params.referenceMonth) {
+        rpcParams.p_reference_month = params.referenceMonth;
+      }
+
+      const { data, error } = await (supabase as any).rpc("import_commission_chargebacks", rpcParams);
 
       if (error) throw error;
 
