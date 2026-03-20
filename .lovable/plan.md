@@ -1,23 +1,44 @@
 
 
-## Corrigir: campos Consumo/DBL resetam ao editar
+## Corrigir: comissão dos CPEs não recalcula ao editar Consumo/DBL/Margem
 
 ### Problema
-O `useEffect` na linha 185 do `EditSaleModal.tsx` tem `calculateEnergyCommission` como dependência. Esta função muda de referência a cada render, o que faz o `useEffect` disparar novamente sempre que o utilizador altera qualquer campo. Isto **reseta o `editableCpes` de volta aos dados originais** do `proposalCpes`, apagando o que o utilizador acabou de digitar.
+A comissão de cada CPE de energia só é calculada **uma vez** — na inicialização (useEffect linha 191). Quando o utilizador altera Consumo, DBL ou Margem nos campos editáveis, nada recalcula a comissão. Os onChange (linhas 877-889) apenas atualizam o valor individual sem disparar recálculo.
 
 ### Solução
 
 **Ficheiro: `src/components/sales/EditSaleModal.tsx`**
 
-1. Remover `calculateEnergyCommission` e `hasEnergyConfig` das dependências do `useEffect` (linha 218).
-2. Usar um `useRef` para guardar a referência estável de `calculateEnergyCommission` e usá-la dentro do effect sem a declarar como dependência.
-3. Alternativa mais simples: mover o recálculo da comissão para fora do `useEffect` de inicialização — fazer o cálculo inline na inicialização usando um `useCallback` com referência estável, ou simplesmente remover a dependência e usar um ref.
+1. Adicionar um novo `useEffect` que recalcula a comissão de cada CPE de energia sempre que `editableCpes` mudar:
+   - Só dispara para `proposal_type === 'energia'` e quando `hasEnergyConfig` é true
+   - Para cada CPE com `margem > 0`, recalcula a comissão usando `calcCommissionRef.current(margem, getVolumeTier(consumo_anual))`
+   - Usa uma flag/ref para evitar loop infinito (o effect altera `editableCpes` que dispara o effect novamente):
+     - Comparar comissão calculada com a existente — só atualizar se diferente
+     - Ou usar um ref `skipRecalc` que se liga ao set e desliga após o recálculo
 
-A abordagem concreta:
-- Criar `const calcRef = useRef(calculateEnergyCommission)` e manter atualizado com `calcRef.current = calculateEnergyCommission` a cada render.
-- No `useEffect`, usar `calcRef.current` em vez de `calculateEnergyCommission` directamente.
-- Dependências passam a ser apenas `[open, proposalCpes]` — estáveis.
+2. Abordagem concreta (sem loop infinito):
+   - Mover o recálculo para dentro dos próprios `onChange` handlers dos campos `consumo_anual`, `margem` e `dbl`
+   - Quando o utilizador altera um desses campos, recalcular `comissao` inline no mesmo update de estado
+   - Isto é mais simples e não cria dependências circulares
+
+3. Nos onChange de `consumo_anual` e `margem` (linhas 877 e 885):
+   ```ts
+   onChange={e => {
+     const u = [...editableCpes];
+     const newMargem = /* valor atualizado */;
+     const newConsumo = /* valor atualizado */;
+     let newComissao = u[idx].comissao;
+     if (hasEnergyConfigRef.current && newMargem > 0) {
+       const calc = calcCommissionRef.current(newMargem, getVolumeTier(newConsumo || 0));
+       if (calc !== null) newComissao = calc;
+     }
+     u[idx] = { ...u[idx], campo: valor, comissao: newComissao };
+     setEditableCpes(u);
+   }}
+   ```
+
+4. O campo Comissão (€) continua editável manualmente (para override), mas recalcula automaticamente quando Consumo ou Margem mudam.
 
 ### Ficheiros alterados
-- `src/components/sales/EditSaleModal.tsx`
+- `src/components/sales/EditSaleModal.tsx` — onChange handlers dos campos consumo_anual e margem nos CPEs
 
