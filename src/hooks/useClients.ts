@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTeamFilter } from '@/hooks/useTeamFilter';
 import { toast } from 'sonner';
+import { isPerfect2GetherOrg } from '@/lib/perfect2gether';
 import type { CrmClient, ClientStatus } from '@/types/clients';
 
 export function useClients() {
@@ -186,10 +187,10 @@ export function useConvertLeadToClient() {
     }) => {
       if (!organizationId) throw new Error('No organization');
 
-      // First, fetch the lead to get the assigned_to value
+      // First, fetch the lead to get the assigned_to and custom_data values
       const { data: lead } = await supabase
         .from('leads')
-        .select('assigned_to')
+        .select('assigned_to, custom_data')
         .eq('id', leadData.lead_id)
         .single();
 
@@ -213,6 +214,21 @@ export function useConvertLeadToClient() {
         .single();
 
       if (error) throw error;
+
+      // Auto-create CPE for P2G if lead has CPE data
+      const customData = lead?.custom_data as Record<string, unknown> | null;
+      const cpeValue = customData?.cpe as string | undefined;
+      if (cpeValue && isPerfect2GetherOrg(organizationId)) {
+        await supabase.from('cpes').insert({
+          client_id: data.id,
+          organization_id: organizationId,
+          equipment_type: 'Energia',
+          serial_number: cpeValue,
+          comercializador: '',
+          status: 'active',
+        });
+      }
+
       return data;
     },
     onSuccess: () => {

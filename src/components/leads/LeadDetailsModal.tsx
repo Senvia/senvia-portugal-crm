@@ -1,4 +1,5 @@
 import { Lead, STATUS_LABELS, LeadStatus, LeadTemperature, LeadTipologia, TEMPERATURE_LABELS, TEMPERATURE_STYLES, TIPOLOGIA_LABELS, TIPOLOGIA_STYLES, FormSettings, CustomField, ROLE_LABELS } from "@/types";
+import { isPerfect2GetherOrg } from "@/lib/perfect2gether";
 import { LeadAttachments } from "@/components/leads/LeadAttachments";
 import { usePipelineStages } from "@/hooks/usePipelineStages";
 import { formatDate, formatDateTime, getWhatsAppUrl } from "@/lib/format";
@@ -131,6 +132,9 @@ export function LeadDetailsModal({
   const [isEditingName, setIsEditingName] = useState(false);
   const [isEditingEmail, setIsEditingEmail] = useState(false);
   const [isEditingPhone, setIsEditingPhone] = useState(false);
+  const [editCpe, setEditCpe] = useState<string>("");
+  const [isEditingCpe, setIsEditingCpe] = useState(false);
+  const isP2G = isPerfect2GetherOrg(organization?.id);
   
   // Check if telecom template
   const isTelecom = organization?.niche === 'telecom';
@@ -223,8 +227,9 @@ export function LeadDetailsModal({
       if (!isEditingName) setEditName(lead.name || "");
       if (!isEditingEmail) setEditEmail(lead.email || "");
       if (!isEditingPhone) setEditPhone(lead.phone || "");
+      if (!isEditingCpe) setEditCpe((lead.custom_data as Record<string, unknown>)?.cpe as string || "");
     }
-  }, [lead, isEditingValue, isEditingConsumo, isEditingNotes, isEditingName, isEditingEmail, isEditingPhone, editValue, editConsumo]);
+  }, [lead, isEditingValue, isEditingConsumo, isEditingNotes, isEditingName, isEditingEmail, isEditingPhone, isEditingCpe, editValue, editConsumo]);
 
   if (!lead) return null;
 
@@ -453,6 +458,36 @@ export function LeadDetailsModal({
                     )}
                   </CardContent>
                 </Card>
+
+                {/* CPE/CUI Card - P2G only */}
+                {isP2G && (
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                        <Zap className="h-4 w-4" />
+                        CPE / CUI
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <Input
+                        type="text"
+                        placeholder="PT00..."
+                        value={editCpe}
+                        onChange={(e) => setEditCpe(e.target.value)}
+                        onFocus={() => setIsEditingCpe(true)}
+                        onBlur={() => {
+                          const currentCpe = (lead.custom_data as Record<string, unknown>)?.cpe as string || "";
+                          if (editCpe !== currentCpe) {
+                            onUpdate?.(lead.id, {
+                              custom_data: { ...(lead.custom_data as Record<string, unknown> || {}), cpe: editCpe || null },
+                            } as Partial<Lead>);
+                          }
+                          setTimeout(() => setIsEditingCpe(false), 600);
+                        }}
+                      />
+                    </CardContent>
+                  </Card>
+                )}
 
                 {/* Notes Card */}
                 <Card>
