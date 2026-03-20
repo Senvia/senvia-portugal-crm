@@ -75,6 +75,7 @@ export interface UnmatchedChargebackItem {
   cpe: string;
   chargebackAmount: number;
   unmatchedReason: string | null;
+  fileData: FileDataRow | null;
 }
 
 export interface CommissionAnalysisData {
