@@ -188,10 +188,18 @@ export function CommissionAnalysisTab() {
           </p>
         </div>
 
-        <Button onClick={() => setImportOpen(true)} className="w-full sm:w-auto">
-          <FileUp className="h-4 w-4" />
-          Importar ficheiro
-        </Button>
+        <div className="flex gap-2 w-full sm:w-auto">
+          {syncItems.length > 0 && (
+            <Button variant="outline" onClick={() => setSyncConfirmOpen(true)} disabled={syncMutation.isPending} className="w-full sm:w-auto">
+              <RefreshCw className={`h-4 w-4 ${syncMutation.isPending ? "animate-spin" : ""}`} />
+              Sincronizar ({syncItems.length})
+            </Button>
+          )}
+          <Button onClick={() => setImportOpen(true)} className="w-full sm:w-auto">
+            <FileUp className="h-4 w-4" />
+            Importar ficheiro
+          </Button>
+        </div>
       </div>
 
       <div className="flex flex-col gap-3 xl:flex-row">
