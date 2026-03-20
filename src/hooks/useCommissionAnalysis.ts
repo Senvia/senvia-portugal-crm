@@ -97,6 +97,7 @@ export interface ImportChargebackSummary {
 export interface ImportChargebackRow {
   cpe: string;
   chargeback_amount: string;
+  [key: string]: string;
 }
 
 const EMPTY_ANALYSIS: CommissionAnalysisData = {
