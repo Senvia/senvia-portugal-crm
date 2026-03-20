@@ -40,6 +40,9 @@ export interface CpeDetail {
   servicos: string[];
   servicos_kwp: number;
   proposal_type: string;
+  client_name: string | null;
+  contrato_inicio: string | null;
+  contrato_fim: string | null;
 }
 
 export interface CommercialEntry {
@@ -106,11 +109,12 @@ export function useLiveCommissions(selectedMonth: string, effectiveUserIds?: str
       const { data: clients } = clientIds.length > 0
         ? await supabase
             .from('crm_clients')
-            .select('id, assigned_to')
+            .select('id, assigned_to, name, company')
             .in('id', clientIds)
         : { data: [] };
 
       const clientMap = new Map((clients || []).map(c => [c.id, c.assigned_to]));
+      const clientNameMap = new Map((clients || []).map(c => [c.id, c.name || c.company || null]));
 
       // Get proposals with negotiation_type filter
       const proposalIds = [...new Set(sales.map(s => s.proposal_id).filter(Boolean))] as string[];
@@ -151,7 +155,7 @@ export function useLiveCommissions(selectedMonth: string, effectiveUserIds?: str
 
       const { data: cpes } = await supabase
         .from('proposal_cpes')
-        .select('id, proposal_id, consumo_anual, dbl, duracao_contrato, margem, comissao, serial_number')
+        .select('id, proposal_id, consumo_anual, dbl, duracao_contrato, margem, comissao, serial_number, contrato_inicio, contrato_fim')
         .in('proposal_id', validProposalIds);
 
       if (!cpes?.length) return emptyResult;
@@ -209,6 +213,9 @@ export function useLiveCommissions(selectedMonth: string, effectiveUserIds?: str
           servicos: proposalServicosMap.get(cpe.proposal_id) || [],
           servicos_kwp: cpeServicosKwp,
           proposal_type: proposalTypeMap.get(cpe.proposal_id) || '',
+          client_name: sale.client_id ? (clientNameMap.get(sale.client_id) ?? null) : null,
+          contrato_inicio: (cpe as any).contrato_inicio || null,
+          contrato_fim: (cpe as any).contrato_fim || null,
         });
       }
 

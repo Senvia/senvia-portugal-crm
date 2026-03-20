@@ -50,6 +50,10 @@ export interface ComparisonRow {
   systemConsumoAnual: number | null;
   systemDbl: number | null;
   systemDuracao: number | null;
+  systemClientName: string | null;
+  systemCpe: string | null;
+  systemDataInicio: string | null;
+  systemDataFim: string | null;
   hasConsumoDiscrepancy: boolean;
   hasDblDiscrepancy: boolean;
   hasDuracaoDiscrepancy: boolean;
@@ -332,6 +336,10 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
           systemConsumoAnual: systemConsumo,
           systemDbl: systemDbl,
           systemDuracao: systemDuracao,
+          systemClientName: match ? (match.client_name ?? null) : null,
+          systemCpe: match ? (match.serial_number ?? null) : null,
+          systemDataInicio: match ? (match.contrato_inicio ?? null) : null,
+          systemDataFim: match ? (match.contrato_fim ?? null) : null,
           hasConsumoDiscrepancy,
           hasDblDiscrepancy,
           hasDuracaoDiscrepancy,
