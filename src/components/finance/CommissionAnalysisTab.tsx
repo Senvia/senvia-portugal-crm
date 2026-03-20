@@ -76,56 +76,80 @@ function ComparisonDataTable({ comparisonData }: { comparisonData: ComparisonRow
           </TableRow>
         </TableHeader>
         <TableBody>
-          {comparisonData.map((row, idx) => (
-            <>
-              {/* File row */}
-              <TableRow key={`file-${idx}`} className="text-xs border-b-0">
-                <TableCell className="py-1.5">
-                  <span className="inline-flex items-center rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
-                    Ficheiro
-                  </span>
-                </TableCell>
-                <TableCell className="py-1.5">{row.file.tipoComissao || "—"}</TableCell>
-                <TableCell className="py-1.5 truncate max-w-[160px]">{row.file.nomeEmpresa || "—"}</TableCell>
-                <TableCell className="py-1.5">{row.file.tipo || "—"}</TableCell>
-                <TableCell className="py-1.5 font-mono">{row.file.cpe || "—"}</TableCell>
-                <TableCell className={`py-1.5 tabular-nums ${row.hasDblDiscrepancy ? discrepancyCell : ""}`}>
-                  {row.file.dbl || "—"}
-                </TableCell>
-                <TableCell className={`py-1.5 text-right tabular-nums ${row.hasConsumoDiscrepancy ? discrepancyCell : ""}`}>
-                  {row.file.consumoAnual || "—"}
-                </TableCell>
-                <TableCell className={`py-1.5 text-right tabular-nums ${row.hasDuracaoDiscrepancy ? discrepancyCell : ""}`}>
-                  {row.file.duracaoContrato || "—"}
-                </TableCell>
-                <TableCell className="py-1.5">{row.file.dataInicio || "—"}</TableCell>
-                <TableCell className="py-1.5">{row.file.dataFim || "—"}</TableCell>
-              </TableRow>
-              {/* System row */}
-              <TableRow key={`sys-${idx}`} className="text-xs bg-muted/50 border-b">
-                <TableCell className="py-1.5">
-                  <span className="inline-flex items-center rounded-full bg-secondary px-1.5 py-0.5 text-[10px] font-medium text-secondary-foreground">
-                    Sistema
-                  </span>
-                </TableCell>
-                <TableCell className="py-1.5 text-muted-foreground">—</TableCell>
-                <TableCell className="py-1.5 text-muted-foreground truncate max-w-[160px]">{row.systemClientName || "—"}</TableCell>
-                <TableCell className="py-1.5 text-muted-foreground">{row.systemNegotiationType ? NEGOTIATION_TYPE_LABELS[row.systemNegotiationType as NegotiationType] ?? row.systemNegotiationType : "—"}</TableCell>
-                <TableCell className="py-1.5 font-mono text-muted-foreground">{row.systemCpe || "—"}</TableCell>
-                <TableCell className={`py-1.5 tabular-nums ${row.hasDblDiscrepancy ? discrepancyCell : "text-muted-foreground"}`}>
-                  {row.systemDbl !== null ? row.systemDbl : "—"}
-                </TableCell>
-                <TableCell className={`py-1.5 text-right tabular-nums ${row.hasConsumoDiscrepancy ? discrepancyCell : "text-muted-foreground"}`}>
-                  {row.systemConsumoAnual !== null ? row.systemConsumoAnual : "—"}
-                </TableCell>
-                <TableCell className={`py-1.5 text-right tabular-nums ${row.hasDuracaoDiscrepancy ? discrepancyCell : "text-muted-foreground"}`}>
-                  {row.systemDuracao !== null ? row.systemDuracao : "—"}
-                </TableCell>
-                <TableCell className="py-1.5 text-muted-foreground">{row.systemDataInicio || "—"}</TableCell>
-                <TableCell className="py-1.5 text-muted-foreground">{row.systemDataFim || "—"}</TableCell>
-              </TableRow>
-            </>
-          ))}
+          {comparisonData.map((row, idx) => {
+            // If no discrepancy, show single merged row with badge
+            if (!row.hasAnyDiscrepancy) {
+              return (
+                <TableRow key={`merged-${idx}`} className="text-xs border-b">
+                  <TableCell className="py-1.5">
+                    <span className="inline-flex items-center rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600">
+                      Atualizado
+                    </span>
+                  </TableCell>
+                  <TableCell className="py-1.5">{row.file.tipoComissao || "—"}</TableCell>
+                  <TableCell className="py-1.5 truncate max-w-[160px]">{row.systemClientName || row.file.nomeEmpresa || "—"}</TableCell>
+                  <TableCell className="py-1.5">{row.systemNegotiationType ? NEGOTIATION_TYPE_LABELS[row.systemNegotiationType as NegotiationType] ?? row.systemNegotiationType : row.file.tipo || "—"}</TableCell>
+                  <TableCell className="py-1.5 font-mono">{row.systemCpe || row.file.cpe || "—"}</TableCell>
+                  <TableCell className="py-1.5 tabular-nums">{row.file.dbl || "—"}</TableCell>
+                  <TableCell className="py-1.5 text-right tabular-nums">{row.file.consumoAnual || "—"}</TableCell>
+                  <TableCell className="py-1.5 text-right tabular-nums">{row.file.duracaoContrato || "—"}</TableCell>
+                  <TableCell className="py-1.5">{row.file.dataInicio || "—"}</TableCell>
+                  <TableCell className="py-1.5">{row.file.dataFim || "—"}</TableCell>
+                </TableRow>
+              );
+            }
+
+            return (
+              <React.Fragment key={`pair-${idx}`}>
+                {/* File row */}
+                <TableRow className="text-xs border-b-0">
+                  <TableCell className="py-1.5">
+                    <span className="inline-flex items-center rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                      Ficheiro
+                    </span>
+                  </TableCell>
+                  <TableCell className="py-1.5">{row.file.tipoComissao || "—"}</TableCell>
+                  <TableCell className="py-1.5 truncate max-w-[160px]">{row.file.nomeEmpresa || "—"}</TableCell>
+                  <TableCell className="py-1.5">{row.file.tipo || "—"}</TableCell>
+                  <TableCell className="py-1.5 font-mono">{row.file.cpe || "—"}</TableCell>
+                  <TableCell className={`py-1.5 tabular-nums ${row.hasDblDiscrepancy ? discrepancyCell : ""}`}>
+                    {row.file.dbl || "—"}
+                  </TableCell>
+                  <TableCell className={`py-1.5 text-right tabular-nums ${row.hasConsumoDiscrepancy ? discrepancyCell : ""}`}>
+                    {row.file.consumoAnual || "—"}
+                  </TableCell>
+                  <TableCell className={`py-1.5 text-right tabular-nums ${row.hasDuracaoDiscrepancy ? discrepancyCell : ""}`}>
+                    {row.file.duracaoContrato || "—"}
+                  </TableCell>
+                  <TableCell className="py-1.5">{row.file.dataInicio || "—"}</TableCell>
+                  <TableCell className="py-1.5">{row.file.dataFim || "—"}</TableCell>
+                </TableRow>
+                {/* System row */}
+                <TableRow className="text-xs bg-muted/50 border-b">
+                  <TableCell className="py-1.5">
+                    <span className="inline-flex items-center rounded-full bg-secondary px-1.5 py-0.5 text-[10px] font-medium text-secondary-foreground">
+                      Sistema
+                    </span>
+                  </TableCell>
+                  <TableCell className="py-1.5 text-muted-foreground">—</TableCell>
+                  <TableCell className="py-1.5 text-muted-foreground truncate max-w-[160px]">{row.systemClientName || "—"}</TableCell>
+                  <TableCell className="py-1.5 text-muted-foreground">{row.systemNegotiationType ? NEGOTIATION_TYPE_LABELS[row.systemNegotiationType as NegotiationType] ?? row.systemNegotiationType : "—"}</TableCell>
+                  <TableCell className="py-1.5 font-mono text-muted-foreground">{row.systemCpe || "—"}</TableCell>
+                  <TableCell className={`py-1.5 tabular-nums ${row.hasDblDiscrepancy ? discrepancyCell : "text-muted-foreground"}`}>
+                    {row.systemDbl !== null ? row.systemDbl : "—"}
+                  </TableCell>
+                  <TableCell className={`py-1.5 text-right tabular-nums ${row.hasConsumoDiscrepancy ? discrepancyCell : "text-muted-foreground"}`}>
+                    {row.systemConsumoAnual !== null ? row.systemConsumoAnual : "—"}
+                  </TableCell>
+                  <TableCell className={`py-1.5 text-right tabular-nums ${row.hasDuracaoDiscrepancy ? discrepancyCell : "text-muted-foreground"}`}>
+                    {row.systemDuracao !== null ? Number(row.systemDuracao).toFixed(2) : "—"}
+                  </TableCell>
+                  <TableCell className="py-1.5 text-muted-foreground">{row.systemDataInicio || "—"}</TableCell>
+                  <TableCell className="py-1.5 text-muted-foreground">{row.systemDataFim || "—"}</TableCell>
+                </TableRow>
+              </React.Fragment>
+            );
+          })}
         </TableBody>
       </Table>
     </div>
