@@ -221,7 +221,7 @@ export function ImportChargebacksDialog({ open, onOpenChange }: ImportChargeback
                   setSelectedCpeColumn(detectCpeColumn(nextHeaders) || "");
                   setSelectedAmountColumn(detectAmountColumn(nextHeaders) || "");
                   setSelectedTypeColumn(detectTypeColumn(nextHeaders) || "");
-                  setTypeFilterValue("CB");
+                  setTypeFilterValue("");
                   setImportSummary(null);
                 }}
                 onClearFile={() => {
