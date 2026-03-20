@@ -298,7 +298,7 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
     const totalChargebackCount = commercials.reduce((sum, item) => sum + item.chargebackCount, 0);
     const unmatchedItems = effectiveUserIds && effectiveUserIds.length > 0
       ? []
-      : items.filter((item) => !item.matched);
+      : itemsFromActiveImport.filter((item) => !item.matched);
     const unmatchedCount = unmatchedItems.length;
     const unmatchedAmount = unmatchedItems.reduce((sum, item) => sum + Number(item.chargeback_amount || 0), 0);
 
