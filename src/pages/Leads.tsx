@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { isPerfect2GetherOrg } from "@/lib/perfect2gether";
 import { useNavigate } from "react-router-dom";
 import { usePersistedState } from "@/hooks/usePersistedState";
 import { usePermissions } from "@/hooks/usePermissions";
