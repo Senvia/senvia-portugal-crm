@@ -227,6 +227,7 @@ export function LeadDetailsModal({
       if (!isEditingName) setEditName(lead.name || "");
       if (!isEditingEmail) setEditEmail(lead.email || "");
       if (!isEditingPhone) setEditPhone(lead.phone || "");
+      if (!isEditingCpe) setEditCpe((lead.custom_data as Record<string, unknown>)?.cpe as string || "");
     }
   }, [lead, isEditingValue, isEditingConsumo, isEditingNotes, isEditingName, isEditingEmail, isEditingPhone, editValue, editConsumo]);
 
