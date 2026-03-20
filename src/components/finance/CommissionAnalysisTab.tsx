@@ -164,6 +164,7 @@ export function CommissionAnalysisTab() {
   const [searchTerm, setSearchTerm] = useState("");
   const [importOpen, setImportOpen] = useState(false);
   const [syncConfirmOpen, setSyncConfirmOpen] = useState(false);
+  const [detailModal, setDetailModal] = useState<'cb' | 'com' | null>(null);
   const { effectiveUserIds, canFilterByTeam } = useTeamFilter();
   const { data, isLoading, refetch } = useCommissionAnalysis(selectedMonth, effectiveUserIds);
   const syncMutation = useSyncFileToSystem();
