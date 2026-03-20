@@ -313,6 +313,7 @@ export function CommissionAnalysisTab() {
                 <p className="text-sm font-medium text-destructive tabular-nums">
                   {cbSummary.cbTotal.toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}
                 </p>
+                <p className="text-xs text-muted-foreground">Ref. coluna "Valor a Receber"</p>
               </div>
             </CardContent>
           </Card>
