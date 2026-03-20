@@ -1,42 +1,78 @@
 
+## Correção real da Análise de Comissões (CPE + Cliente, sem colunas de valor)
 
-## Corrigir: enviar linha completa do ficheiro na importação
+### Diagnóstico (o que está errado hoje)
+1. **Dados importados ainda estão incompletos no banco**: o último import salvo tem `raw_row` só com `cpe` e `chargeback_amount`, então as colunas do ficheiro aparecem vazias.
+2. **Matching atual ainda é só por CPE** (não valida cliente), tanto no SQL de import quanto no render da tabela.
+3. **Tabela detalhada mostra colunas que você não quer** (valor/comissão), fugindo do que pediu.
+4. **Import antigo precisa ser descartado** para refletir o novo formato completo.
 
-### Problema raiz
-O `preparedRows` no `ImportChargebacksDialog.tsx` (linha 134-138) só envia `{ cpe, chargeback_amount }`. O SQL guarda isto como `raw_row`. Mas o `parseRawRow()` procura "Tipo de Comissão", "Nome da Empresa", "Linha de Contrato: Local de Consumo", etc. — que nunca existem no `raw_row` porque nunca foram enviados. Por isso a tabela na Análise de Comissões aparece com "—" em todas as colunas do ficheiro.
+---
 
-### Alterações
+### Plano de implementação
 
-**Ficheiro: `src/components/finance/ImportChargebacksDialog.tsx`**
+#### 1) Ajustar o matching no backend para **CPE + cliente (aproximado)** e só venda concluída
+**Arquivo:** nova migration SQL (update da função `import_commission_chargebacks`)
 
-Alterar o `preparedRows` (linhas 131-140) para incluir **todos os campos da linha original** do ficheiro, com `cpe` e `chargeback_amount` como campos obrigatórios:
+- Atualizar a função para:
+  - continuar lendo `cpe` da coluna `Linha de Contrato: Local de Consumo`;
+  - extrair `Nome da Empresa` do `raw_row`;
+  - buscar apenas registros com **venda concluída/entregue** (não proposta solta);
+  - aplicar match por:
+    - `normalized_cpe` igual
+    - + nome do cliente com **match aproximado** (normalizado sem acento/caixa/pontuação, com score de similaridade simples).
+- Se CPE bater e cliente não bater suficientemente:
+  - marcar como não associado com motivo tipo `"Cliente não confere"`.
+- Isso garante que o vínculo não seja falso-positivo só por CPE.
 
-```ts
-const preparedRows = filteredRows
-  .map((row) => ({
-    ...row,
-    cpe: String(row[selectedCpeColumn] ?? "").trim(),
-    chargeback_amount: String(row[selectedAmountColumn] ?? "0").trim(),
-  }))
-  .filter((row) => row.cpe.length > 0);
-```
+#### 2) Garantir persistência da linha completa no import
+**Arquivo:** `src/components/finance/ImportChargebacksDialog.tsx`
 
-**Ficheiro: `src/hooks/useCommissionAnalysis.ts`**
+- Confirmar payload com linha completa (`...row`) + `cpe` + `chargeback_amount` (já começou, mas vamos validar ponta a ponta).
+- Adicionar validação defensiva antes do envio: se a linha tiver só 2 chaves, bloquear import com erro claro (evita regressão silenciosa).
 
-Alterar o tipo `ImportChargebackRow` (linhas 97-100) para aceitar campos extra:
+#### 3) Reestruturar a tabela da Análise de Comissões para mostrar **somente** as colunas pedidas
+**Arquivo:** `src/components/finance/CommissionAnalysisTab.tsx`
 
-```ts
-export interface ImportChargebackRow {
-  cpe: string;
-  chargeback_amount: string;
-  [key: string]: string;
-}
-```
+- Remover da sub-tabela colunas de valor/comissão.
+- Exibir no detalhe apenas:
+  - Tipo de Comissão
+  - Nome da Empresa
+  - Tipo
+  - Linha de Contrato: Local de Consumo (CPE)
+  - DBL
+  - Linha de Contrato: Consumo anual
+  - Duração contrato (anos)
+  - Linha de Contrato: Data de inicio
+  - Linha de Contrato: Data Fim de Contrato
+- Manter a visão “sistema vs ficheiro” baseada no matching, sem expor valores monetários na grade detalhada.
 
-### Resultado
-Com a row completa enviada, o SQL guarda-a em `raw_row` com todas as colunas EDP. O `parseRawRow()` já existente encontra "Tipo de Comissão", "Nome da Empresa", "Tipo", "CPE", "Consumo anual", "Duração contrato", "Data de início", "Data Fim", "DBL" — e a tabela na **Análise de Comissões** mostra os dados correctamente.
+#### 4) Normalizar leitura das colunas do ficheiro para evitar “—”
+**Arquivo:** `src/hooks/useCommissionAnalysis.ts`
 
-### Ficheiros alterados
-- `src/components/finance/ImportChargebacksDialog.tsx` — spread da row completa no preparedRows
-- `src/hooks/useCommissionAnalysis.ts` — index signature no tipo ImportChargebackRow
+- Fortalecer `parseRawRow()` para leitura tolerante de variações de header (acentos, maiúsculas, espaços extras).
+- Isso evita que uma pequena variação do Excel quebre a exibição dos campos.
 
+#### 5) Limpar dados antigos e reimportar
+- Apagar imports/items antigos dessa org (dados incompletos).
+- Reimportar o ficheiro para popular `raw_row` completo.
+- Sem isso, a tela continuará “igual” mesmo com código corrigido.
+
+---
+
+### Validação (obrigatória)
+1. Importar o ficheiro novamente.
+2. Conferir que `raw_row` no banco contém várias chaves (não só `cpe` e `chargeback_amount`).
+3. Na Análise de Comissões:
+   - conferir que as linhas aparecem com as 9 colunas pedidas;
+   - conferir que match exige CPE + cliente aproximado;
+   - conferir que casos de cliente divergente vão para não associados com motivo.
+4. Confirmar que não há colunas de valor na tabela detalhada.
+
+---
+
+### Arquivos que serão alterados
+- `supabase/migrations/<nova>_update_import_commission_chargebacks.sql`
+- `src/components/finance/ImportChargebacksDialog.tsx`
+- `src/hooks/useCommissionAnalysis.ts`
+- `src/components/finance/CommissionAnalysisTab.tsx`
