@@ -142,6 +142,7 @@ export default function Clients() {
     }
   }, [location.state, clients]);
 
+  const handleAssignSuccess = () => {
     setSelectedIds([]);
     setShowAssignModal(false);
   };
