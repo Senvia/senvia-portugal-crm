@@ -155,7 +155,7 @@ export function useLiveCommissions(selectedMonth: string, effectiveUserIds?: str
 
       const { data: cpes } = await supabase
         .from('proposal_cpes')
-        .select('id, proposal_id, consumo_anual, dbl, duracao_contrato, margem, comissao, serial_number')
+        .select('id, proposal_id, consumo_anual, dbl, duracao_contrato, margem, comissao, serial_number, contrato_inicio, contrato_fim')
         .in('proposal_id', validProposalIds);
 
       if (!cpes?.length) return emptyResult;
