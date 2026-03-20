@@ -231,7 +231,7 @@ export function ImportChargebacksDialog({ open, onOpenChange }: ImportChargeback
                   setSelectedCpeColumn("");
                   setSelectedAmountColumn("");
                   setSelectedTypeColumn("");
-                  setTypeFilterValue("CB");
+                  setTypeFilterValue("");
                   setImportSummary(null);
                 }}
               />
