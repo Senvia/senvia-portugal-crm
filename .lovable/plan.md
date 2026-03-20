@@ -1,23 +1,42 @@
 
 
-## Correção: datas em formato serial do Excel quebram o filtro mensal
+## Mostrar dados do ficheiro vs dados do sistema lado a lado (com discrepâncias)
 
-### Problema
-Os valores de data no `raw_row` (ex: `"Linha de Contrato: Data de inicio": 45802`) são **números seriais do Excel**, não strings formatadas como `dd/MM/yyyy`. O filtro mensal (linhas 231-248 do `useCommissionAnalysis.ts`) tenta fazer parse de strings de data e falha em todos os items → resultado: lista vazia → "Sem dados para mostrar".
+### O que muda
 
-### Solução
+Hoje a tabela mostra apenas os dados do ficheiro importado. Vamos adicionar, para cada linha do ficheiro que fez match com um CPE do sistema, os valores correspondentes do sistema — permitindo comparar e identificar discrepâncias.
 
-**Ficheiro: `src/hooks/useCommissionAnalysis.ts`**
+### Implementação
 
-Na função de filtragem por mês (linhas 231-248), adicionar suporte para **Excel serial numbers**:
+#### 1) Buscar campos em falta do sistema (`src/hooks/useLiveCommissions.ts`)
 
-1. Detectar quando o valor de `dataInicio` é um número (ou string numérica pura como `"45802"`)
-2. Converter serial do Excel para data JS: `new Date(Date.UTC(1899, 11, 30) + serial * 86400000)`
-3. Manter os parsers existentes para formatos `dd/MM/yyyy`, `yyyy-MM-dd`, `dd-MM-yyyy` como fallback
-4. Aplicar a mesma lógica de comparação ano+mês
+O `select` dos `proposal_cpes` (linha 152) só traz `consumo_anual, margem, comissao, serial_number`. Adicionar `dbl` e `duracao_contrato` para ter os dados necessários à comparação.
 
-Também aplicar a mesma conversão no `parseRawRow()` para exibir as datas formatadas na tabela (em vez de mostrar `45802` ao utilizador).
+Atualizar a interface `CpeDetail` para incluir `dbl` e `duracao_contrato`.
+
+#### 2) Cruzar ficheiro com sistema no hook (`src/hooks/useCommissionAnalysis.ts`)
+
+Criar uma nova interface `ComparisonRow` com:
+- Dados do ficheiro (`FileDataRow`)
+- Dados do sistema (CPE match): `consumoAnualSistema`, `dblSistema`, `duracaoSistema`
+- Flags de discrepância: `hasConsumoDiscrepancy`, `hasDblDiscrepancy`, `hasDuracaoDiscrepancy`
+
+Para cada `FileDataRow` de um comercial, fazer match pelo CPE (`serial_number`) com os `cpes` do sistema desse comercial. Comparar valores numéricos e marcar discrepâncias.
+
+Adicionar `comparisonData: ComparisonRow[]` ao `CommissionAnalysisCommercial`.
+
+#### 3) Redesenhar a tabela na UI (`src/components/finance/CommissionAnalysisTab.tsx`)
+
+Substituir `FileDataTable` por uma tabela comparativa com duas linhas por CPE:
+- **Linha 1 (Ficheiro)**: valores do ficheiro — label "Ficheiro" à esquerda
+- **Linha 2 (Sistema)**: valores do sistema — label "Sistema" à esquerda
+
+Células com discrepância destacadas com fundo vermelho/laranja claro para identificação rápida.
+
+Colunas comparáveis: **DBL**, **Consumo anual**, **Duração (anos)**. As restantes (Tipo Comissão, Empresa, Tipo, CPE, Data Início, Data Fim) mostram apenas o valor do ficheiro.
 
 ### Ficheiros alterados
-- `src/hooks/useCommissionAnalysis.ts` — adicionar conversão de Excel serial dates no filtro e no display
+- `src/hooks/useLiveCommissions.ts` — adicionar `dbl`, `duracao_contrato` ao select e à interface
+- `src/hooks/useCommissionAnalysis.ts` — criar `ComparisonRow`, cruzar ficheiro com sistema
+- `src/components/finance/CommissionAnalysisTab.tsx` — tabela comparativa com destaque de discrepâncias
 
