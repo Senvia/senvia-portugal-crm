@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { format, startOfMonth, subMonths } from "date-fns";
 import { pt } from "date-fns/locale";
-import { ChevronDown, FileSearch, FileUp, RefreshCw, Search } from "lucide-react";
+import { AlertTriangle, ChevronDown, FileSearch, FileUp, RefreshCw, Search, TrendingDown, TrendingUp } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
