@@ -139,6 +139,11 @@ const EMPTY_ANALYSIS: CommissionAnalysisData = {
     unmatchedCount: 0,
     unmatchedAmount: 0,
     lastImportAt: null,
+    cbFileCount: 0,
+    cbFileTotal: 0,
+    comFileCount: 0,
+    comFileTotal: 0,
+    cbFileDiscrepancies: 0,
   },
 };
 
