@@ -240,6 +240,7 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
         differentialAmount: 0,
         differentialCount: 0,
         cpes: [],
+        fileData: userFileData.get(item.matched_user_id) || [],
       };
 
       existing.chargebackAmount += Number(item.chargeback_amount || 0);
