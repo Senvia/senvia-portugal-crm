@@ -143,14 +143,14 @@ export function ImportChargebacksDialog({ open, onOpenChange }: ImportChargeback
     if (!fileName || preparedRows.length === 0 || !selectedCpeColumn || !selectedAmountColumn) return;
 
     try {
-      const summary = await importChargebacks.mutateAsync({
+      await importChargebacks.mutateAsync({
         fileName,
         cpeColumnName: selectedCpeColumn,
         rows: preparedRows,
       });
 
-      setImportSummary(summary);
-      toast.success("Chargebacks importados com sucesso.");
+      toast.success("Ficheiro importado com sucesso.");
+      onOpenChange(false);
     } catch (error: unknown) {
       console.error("Chargeback import error:", error);
       let msg = "Erro ao importar chargebacks.";
@@ -180,29 +180,6 @@ export function ImportChargebacksDialog({ open, onOpenChange }: ImportChargeback
 
         <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-6">
           <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
-            {importSummary ? (
-              <div className="rounded-xl border border-primary/20 bg-primary/10 p-4">
-                <p className="text-sm font-medium text-foreground">Importação concluída</p>
-                <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                  <div>
-                    <p className="text-xs text-muted-foreground">Chargebacks no ficheiro</p>
-                    <p className="text-lg font-semibold text-foreground">{importSummary.chargeback_count}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Associados</p>
-                    <p className="text-lg font-semibold text-foreground">{importSummary.matched_rows}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Sem match</p>
-                    <p className="text-lg font-semibold text-foreground">{importSummary.unmatched_rows}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Valor total</p>
-                    <p className="text-lg font-semibold text-foreground">{formatCurrency(importSummary.total_chargeback_amount || 0)}</p>
-                  </div>
-                </div>
-              </div>
-            ) : null}
 
             <section className="space-y-4 rounded-xl border bg-card p-4 sm:p-5">
               <div>
