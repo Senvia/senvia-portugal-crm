@@ -32,6 +32,19 @@ interface ChargebackDataset {
   items: ChargebackItemRecord[];
 }
 
+export interface FileDataRow {
+  tipoComissao: string;
+  nomeEmpresa: string;
+  tipo: string;
+  cpe: string;
+  consumoAnual: string;
+  duracaoContrato: string;
+  dataInicio: string;
+  dataFim: string;
+  dbl: string;
+  valorReceber: string;
+}
+
 export interface CommissionAnalysisCommercial {
   userId: string;
   name: string;
@@ -42,6 +55,7 @@ export interface CommissionAnalysisCommercial {
   differentialAmount: number;
   differentialCount: number;
   cpes: CpeDetail[];
+  fileData: FileDataRow[];
 }
 
 export interface CommissionAnalysisSummary {
