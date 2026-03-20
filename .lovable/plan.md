@@ -1,33 +1,32 @@
 
-## Correção para o “continua como Nuno Dias” após reimport
 
-### Diagnóstico confirmado
-- O reimport **funcionou**: no import mais recente, o CPE `PT1601000000461219MK` está associado à **Ana Calado**.
-- O problema é de exibição: a aba “Análise de Comissões” está a ler **todos os imports históricos** da organização, incluindo o import anterior onde esse CPE estava com **Nuno Dias**.
-- Resultado: a UI mistura versões antigas + novas e parece que “não atualizou”.
+## Problema: dados do ficheiro importado aparecem em todos os meses
 
-## O que vou implementar
+### Diagnóstico
 
-1. **Usar apenas o último import como fonte da análise**
-   - No `useCommissionAnalysis`, manter `imports` ordenados por `created_at desc`.
-   - Definir `activeImportId = imports[0]?.id`.
-   - Filtrar `items` para `item.import_id === activeImportId` antes de montar comerciais, resumo e não associados.
+- A venda **0022** tem `activation_date = 2026-01-14` (janeiro).
+- O `useLiveCommissions` filtra vendas do sistema por `activation_date` dentro do mês selecionado — correcto.
+- Os `commission_chargeback_items` (dados do ficheiro importado) são carregados **sem qualquer filtro de mês** — aparecem sempre, independentemente do mês selecionado.
+- Resultado: ao trocar de mês no filtro, os dados do ficheiro continuam a aparecer porque não estão vinculados ao período.
 
-2. **Recalcular toda a análise com base no import ativo**
-   - `commercials`, `summary`, `unmatchedItems` passam a usar apenas os itens do último import.
-   - Isso garante que o CPE aparece com o comercial da versão mais recente (Ana), sem “sombra” do import antigo.
+### Solução
 
-3. **Mostrar claramente qual import está a ser exibido**
-   - Na `CommissionAnalysisTab`, exibir uma linha informativa: nome do ficheiro + data/hora do import ativo.
-   - Evita dúvida sobre “qual import está no ecrã”.
+**Ficheiro: `src/hooks/useCommissionAnalysis.ts`**
 
-4. **(Opcional, para próximo passo) histórico selecionável**
-   - Se quiser manter comparação histórica, adiciono um seletor “Import atual” no topo.
-   - Padrão continua no último import.
+1. Na linha 250-263, onde se itera `liveData?.commercials`, o `useLiveCommissions` já filtra por mês. Mas os items do ficheiro (linhas 265-287) e a construção de `userFileData` (linhas 239-248) usam items sem filtro mensal.
 
-## Arquivos a alterar
-- `src/hooks/useCommissionAnalysis.ts` (filtro por `activeImportId`)
-- `src/components/finance/CommissionAnalysisTab.tsx` (indicador do import ativo)
+2. O ficheiro importado contém a coluna **"Linha de Contrato: Data de inicio"** no `raw_row`. Usar esta data para filtrar os items pelo mês selecionado:
+   - No `useMemo`, após obter `itemsFromActiveImport`, filtrar adicionalmente os items cuja data de início (extraída do `raw_row`) caia no mês seleccionado (`selectedMonth`).
+   - Se a data de início não existir no `raw_row`, o item **não aparece** (ou opcionalmente aparece sempre — a definir).
 
-## Critério de aceite
-- Após reimportar, o CPE `PT1601000000461219MK` aparece apenas com o comercial do último import (Ana), e deixa de aparecer como Nuno na análise atual.
+3. Passar `selectedMonth` como dependência do `useMemo` (já é indirectamente via `liveCommissions`, mas tornar explícito).
+
+### Alternativa mais simples
+
+Se o ficheiro importado não deve ser filtrado por mês (é um ficheiro global), então a Análise de Comissões deve ignorar o filtro de mês para os dados do ficheiro e apenas mostrar os dados do ficheiro independentemente do mês. Nesse caso, remover a dependência do `useLiveCommissions` (que traz dados do sistema filtrados por mês) e usar apenas os dados do ficheiro.
+
+**Recomendação**: Filtrar os items do ficheiro pela coluna "Data de inicio" para que apenas apareçam no mês correspondente.
+
+### Ficheiros alterados
+- `src/hooks/useCommissionAnalysis.ts` — adicionar filtro mensal aos items do ficheiro baseado na data de início do `raw_row`
+
