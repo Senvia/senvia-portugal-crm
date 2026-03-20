@@ -344,7 +344,7 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
           systemDataInicio: match ? (match.contrato_inicio ?? null) : null,
           systemDataFim: match ? (match.contrato_fim ?? null) : null,
           systemNegotiationType: match ? (match.negotiation_type ?? null) : null,
-          matchedProposalCpeId: matchedProposalCpeId ?? (match ? match.proposal_cpe_id : null),
+          matchedProposalCpeId: (match ? match.proposal_cpe_id : null) || matchedProposalCpeId,
           hasConsumoDiscrepancy,
           hasDblDiscrepancy,
           hasDuracaoDiscrepancy,
