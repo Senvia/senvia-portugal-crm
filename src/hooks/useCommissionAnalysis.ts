@@ -14,6 +14,7 @@ interface ChargebackImportRecord {
   unmatched_rows: number;
   chargeback_count: number;
   total_chargeback_amount: number;
+  reference_month: string | null;
 }
 
 interface ChargebackItemRecord {
