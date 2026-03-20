@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { format, startOfMonth, subMonths } from "date-fns";
 import { pt } from "date-fns/locale";
-import { ChevronDown, FileSearch, FileUp, Search } from "lucide-react";
+import { ChevronDown, FileSearch, FileUp, RefreshCw, Search } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,12 +9,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { TeamMemberFilter } from "@/components/dashboard/TeamMemberFilter";
 import { ImportChargebacksDialog } from "@/components/finance/ImportChargebacksDialog";
-import { useCommissionAnalysis, type CommissionAnalysisCommercial, type FileDataRow, type ComparisonRow } from "@/hooks/useCommissionAnalysis";
+import { useCommissionAnalysis, useSyncFileToSystem, type CommissionAnalysisCommercial, type FileDataRow, type ComparisonRow, type SyncFileToSystemItem } from "@/hooks/useCommissionAnalysis";
 import { useTeamFilter } from "@/hooks/useTeamFilter";
 import { normalizeString } from "@/lib/utils";
 import { NEGOTIATION_TYPE_LABELS, type NegotiationType } from "@/types/proposals";
+import { toast } from "@/hooks/use-toast";
 
 function generateMonthOptions() {
   const options: { value: string; label: string }[] = [];
