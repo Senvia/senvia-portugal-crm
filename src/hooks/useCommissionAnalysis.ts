@@ -502,9 +502,10 @@ export function useSyncFileToSystem() {
     mutationFn: async (items: SyncFileToSystemItem[]) => {
       if (!items.length) return;
 
-      // Update each proposal_cpe with file values
-      const updates = items.map((item) =>
-        (supabase as any)
+      let updatedCount = 0;
+
+      for (const item of items) {
+        const { data, error } = await (supabase as any)
           .from("proposal_cpes")
           .update({
             dbl: item.dbl,
@@ -512,11 +513,18 @@ export function useSyncFileToSystem() {
             duracao_contrato: item.duracaoContrato,
           })
           .eq("id", item.proposalCpeId)
-      );
+          .select("id");
 
-      const results = await Promise.all(updates);
-      const firstError = results.find((r: any) => r.error);
-      if (firstError?.error) throw firstError.error;
+        if (error) throw error;
+        if (data && data.length > 0) updatedCount++;
+        else console.warn(`[Sync] CPE ${item.proposalCpeId} — 0 rows affected`);
+      }
+
+      if (updatedCount === 0) {
+        throw new Error(`Nenhum CPE foi atualizado. Os IDs podem estar obsoletos.`);
+      }
+
+      console.log(`[Sync] ${updatedCount}/${items.length} CPEs atualizados com sucesso`);
     },
     onSuccess: async () => {
       await Promise.all([
