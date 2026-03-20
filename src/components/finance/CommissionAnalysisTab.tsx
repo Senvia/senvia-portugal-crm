@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { format, startOfMonth, subMonths } from "date-fns";
 import { pt } from "date-fns/locale";
-import { ChevronDown, FileSearch, FileUp, RefreshCw, Search } from "lucide-react";
+import { AlertTriangle, ChevronDown, FileSearch, FileUp, RefreshCw, Search, TrendingDown, TrendingUp } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -217,6 +217,27 @@ export function CommissionAnalysisTab() {
     return items;
   }, [data.commercials]);
 
+  const cbSummary = useMemo(() => {
+    const parseNum = (s: string) => parseFloat(s.replace(/[^\d.,]/g, "").replace(",", ".")) || 0;
+    let cbCount = 0, cbTotal = 0, cbDiscrepancies = 0;
+    let comCount = 0, comTotal = 0;
+    for (const commercial of data.commercials) {
+      for (const row of commercial.comparisonData) {
+        const isCb = normalizeString(row.file.tipoComissao).includes("cb");
+        const val = parseNum(row.file.valorReceber);
+        if (isCb) {
+          cbCount++;
+          cbTotal += val;
+          if (row.hasAnyDiscrepancy) cbDiscrepancies++;
+        } else {
+          comCount++;
+          comTotal += val;
+        }
+      }
+    }
+    return { cbCount, cbTotal, cbDiscrepancies, comCount, comTotal };
+  }, [data.commercials]);
+
   const handleSync = async () => {
     setSyncConfirmOpen(false);
     try {
@@ -287,6 +308,57 @@ export function CommissionAnalysisTab() {
             {" — "}
             {format(new Date(data.imports[0]?.created_at), "dd/MM/yyyy HH:mm")}
           </span>
+        </div>
+      )}
+
+      {!isLoading && data.imports.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <Card>
+            <CardContent className="p-4 flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-destructive/10">
+                <TrendingDown className="h-5 w-5 text-destructive" />
+              </div>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">Chargebacks (CB)</p>
+                <p className="text-xl font-bold tracking-tight text-foreground tabular-nums">
+                  {cbSummary.cbCount} <span className="text-sm font-normal text-muted-foreground">CPE(s)</span>
+                </p>
+                <p className="text-sm font-medium text-destructive tabular-nums">
+                  {cbSummary.cbTotal.toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                <TrendingUp className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">Comissões</p>
+                <p className="text-xl font-bold tracking-tight text-foreground tabular-nums">
+                  {cbSummary.comCount} <span className="text-sm font-normal text-muted-foreground">CPE(s)</span>
+                </p>
+                <p className="text-sm font-medium text-primary tabular-nums">
+                  {cbSummary.comTotal.toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-destructive/10">
+                <AlertTriangle className="h-5 w-5 text-destructive" />
+              </div>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">Discrepâncias CB</p>
+                <p className="text-xl font-bold tracking-tight text-foreground tabular-nums">
+                  {cbSummary.cbDiscrepancies}
+                </p>
+                <p className="text-xs text-muted-foreground">CPE(s) com diferenças</p>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       )}
 
