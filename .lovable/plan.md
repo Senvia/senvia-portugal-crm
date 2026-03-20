@@ -1,44 +1,39 @@
 
 
-## Corrigir: comissão dos CPEs não recalcula ao editar Consumo/DBL/Margem
+## Usar o volume GLOBAL do mês para determinar o tier de comissões (não por comercial)
 
-### Problema
-A comissão de cada CPE de energia só é calculada **uma vez** — na inicialização (useEffect linha 191). Quando o utilizador altera Consumo, DBL ou Margem nos campos editáveis, nada recalcula a comissão. Os onChange (linhas 877-889) apenas atualizam o valor individual sem disparar recálculo.
+### Problema atual
+Hoje, cada comercial tem o seu próprio tier calculado com base no volume individual dele (linha 218 do `useLiveCommissions.ts`):
+```ts
+entry.tier = getVolumeTier(entry.totalConsumoKwh); // tier individual
+```
+Depois, a comissão de cada CPE usa esse tier individual (linha 227):
+```ts
+calculateEnergyCommissionPure(cpe.margem, energyConfig, entry.tier)
+```
+
+### O que deve acontecer
+O tier deve ser determinado pelo **total global de todas as vendas do mês**, não por comercial. Se o total do mês = 700 MWh → tier = 'high' → **todas** as comissões de **todos** os comerciais usam a tabela 'high'.
 
 ### Solução
 
-**Ficheiro: `src/components/sales/EditSaleModal.tsx`**
+**Ficheiro: `src/hooks/useLiveCommissions.ts`** (linhas 215-228)
 
-1. Adicionar um novo `useEffect` que recalcula a comissão de cada CPE de energia sempre que `editableCpes` mudar:
-   - Só dispara para `proposal_type === 'energia'` e quando `hasEnergyConfig` é true
-   - Para cada CPE com `margem > 0`, recalcula a comissão usando `calcCommissionRef.current(margem, getVolumeTier(consumo_anual))`
-   - Usa uma flag/ref para evitar loop infinito (o effect altera `editableCpes` que dispara o effect novamente):
-     - Comparar comissão calculada com a existente — só atualizar se diferente
-     - Ou usar um ref `skipRecalc` que se liga ao set e desliga após o recálculo
+1. Calcular `globalTier` primeiro (já é feito na linha 213)
+2. No loop de recálculo (linha 216-238), substituir `entry.tier` pelo `globalTier`:
+   - Linha 218: `entry.tier = globalTier` (em vez de `getVolumeTier(entry.totalConsumoKwh)`)
+   - Linha 227: `calculateEnergyCommissionPure(cpe.margem, energyConfig, globalTier)` (em vez de `entry.tier`)
+3. Manter `entry.totalConsumoKwh/Mwh` para informação, mas o tier usado no cálculo passa a ser o global
 
-2. Abordagem concreta (sem loop infinito):
-   - Mover o recálculo para dentro dos próprios `onChange` handlers dos campos `consumo_anual`, `margem` e `dbl`
-   - Quando o utilizador altera um desses campos, recalcular `comissao` inline no mesmo update de estado
-   - Isto é mais simples e não cria dependências circulares
+**Ficheiro: `src/components/sales/EditSaleModal.tsx`** (recálculo inline nos onChange)
 
-3. Nos onChange de `consumo_anual` e `margem` (linhas 877 e 885):
-   ```ts
-   onChange={e => {
-     const u = [...editableCpes];
-     const newMargem = /* valor atualizado */;
-     const newConsumo = /* valor atualizado */;
-     let newComissao = u[idx].comissao;
-     if (hasEnergyConfigRef.current && newMargem > 0) {
-       const calc = calcCommissionRef.current(newMargem, getVolumeTier(newConsumo || 0));
-       if (calc !== null) newComissao = calc;
-     }
-     u[idx] = { ...u[idx], campo: valor, comissao: newComissao };
-     setEditableCpes(u);
-   }}
-   ```
+- Nos onChange de consumo/margem, o recálculo usa `getVolumeTier` do consumo individual. Isto é aceitável no contexto de edição de uma venda isolada (não temos o volume global no modal). Nenhuma alteração necessária aqui — o valor final será recalculado pelo `useLiveCommissions` ao gravar.
 
-4. O campo Comissão (€) continua editável manualmente (para override), mas recalcula automaticamente quando Consumo ou Margem mudam.
+### Resultado
+- Todas as comissões do mês escalam juntas com o volume total
+- Ao atingir 301 MWh global → todas passam para 'mid'
+- Ao atingir 601 MWh global → todas passam para 'high'
 
 ### Ficheiros alterados
-- `src/components/sales/EditSaleModal.tsx` — onChange handlers dos campos consumo_anual e margem nos CPEs
+- `src/hooks/useLiveCommissions.ts` — 2 linhas alteradas
 
