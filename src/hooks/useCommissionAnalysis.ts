@@ -486,3 +486,43 @@ export function useImportCommissionChargebacks() {
     },
   });
 }
+
+export interface SyncFileToSystemItem {
+  proposalCpeId: string;
+  dbl: number;
+  consumoAnual: number;
+  duracaoContrato: number;
+}
+
+export function useSyncFileToSystem() {
+  const queryClient = useQueryClient();
+  const { organization } = useAuth();
+
+  return useMutation({
+    mutationFn: async (items: SyncFileToSystemItem[]) => {
+      if (!items.length) return;
+
+      // Update each proposal_cpe with file values
+      const updates = items.map((item) =>
+        (supabase as any)
+          .from("proposal_cpes")
+          .update({
+            dbl: item.dbl,
+            consumo_anual: item.consumoAnual,
+            duracao_contrato: item.duracaoContrato,
+          })
+          .eq("id", item.proposalCpeId)
+      );
+
+      const results = await Promise.all(updates);
+      const firstError = results.find((r: any) => r.error);
+      if (firstError?.error) throw firstError.error;
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["commissions-live"] }),
+        queryClient.invalidateQueries({ queryKey: ["commission-chargeback-data", organization?.id] }),
+      ]);
+    },
+  });
+}
