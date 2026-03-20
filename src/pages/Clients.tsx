@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+
 import { useSearchParams, useLocation } from "react-router-dom";
 import { usePersistedState } from "@/hooks/usePersistedState";
 import { useAuth } from "@/contexts/AuthContext";
@@ -21,6 +22,7 @@ import type { CrmClient } from "@/types/clients";
 import { formatCurrency } from "@/lib/format";
 import { mapClientsForExport, exportToCsv, exportToExcel } from "@/lib/export";
 import { useClientProposalTypes } from "@/hooks/useClientProposalTypes";
+import { CreateProposalModal } from "@/components/proposals/CreateProposalModal";
 import { toast } from "sonner";
 import { useModules } from "@/hooks/useModules";
 import { format, isWithinInterval, startOfDay, endOfDay, parseISO } from "date-fns";
@@ -38,6 +40,8 @@ export default function Clients() {
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showAssignModal, setShowAssignModal] = useState(false);
+  const [showCreateProposal, setShowCreateProposal] = useState(false);
+  const [proposalClientId, setProposalClientId] = useState<string | null>(null);
 
   const { data: clients, isLoading } = useClients();
   const { stats } = useClientStats();
@@ -344,6 +348,16 @@ export default function Clients() {
         open={showDetailsDrawer}
         onOpenChange={setShowDetailsDrawer}
         onEdit={handleEdit}
+        onNewProposal={(client) => {
+          setProposalClientId(client.id);
+          setShowCreateProposal(true);
+        }}
+      />
+
+      <CreateProposalModal
+        open={showCreateProposal}
+        onOpenChange={setShowCreateProposal}
+        preselectedClientId={proposalClientId ?? undefined}
       />
 
       <AssignTeamMemberModal
