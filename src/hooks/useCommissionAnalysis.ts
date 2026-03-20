@@ -301,14 +301,14 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
 
     const byUser = new Map<string, CommissionAnalysisCommercial>();
 
-    // Build file data map: matched_user_id -> FileDataRow[]
-    const userFileData = new Map<string, FileDataRow[]>();
+    // Build file data map: matched_user_id -> { parsed, matchedProposalCpeId }[]
+    const userFileData = new Map<string, { parsed: FileDataRow; matchedProposalCpeId: string | null }[]>();
     for (const item of filteredItems) {
       if (!item.matched_user_id) continue;
       const parsed = parseRawRow(item.raw_row);
       if (parsed) {
         const arr = userFileData.get(item.matched_user_id) || [];
-        arr.push(parsed);
+        arr.push({ parsed, matchedProposalCpeId: item.matched_proposal_cpe_id ?? null });
         userFileData.set(item.matched_user_id, arr);
       }
     }
