@@ -271,6 +271,7 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
       cpe: item.cpe,
       chargebackAmount: Number(item.chargeback_amount || 0),
       unmatchedReason: item.unmatched_reason,
+      fileData: parseRawRow(item.raw_row),
     }));
 
     return {
