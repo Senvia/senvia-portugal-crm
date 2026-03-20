@@ -129,7 +129,19 @@ export default function Clients() {
     }
   }, [searchParams, clients]);
 
-  const handleAssignSuccess = () => {
+  // Auto-open client drawer from location state (e.g. from Lead → Won flow)
+  useEffect(() => {
+    const openClientId = (location.state as any)?.openClientId;
+    if (openClientId && clients && clients.length > 0) {
+      const client = clients.find(c => c.id === openClientId);
+      if (client) {
+        handleView(client);
+      }
+      // Clear state to prevent re-opening on re-render
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state, clients]);
+
     setSelectedIds([]);
     setShowAssignModal(false);
   };
