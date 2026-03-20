@@ -132,6 +132,9 @@ export function LeadDetailsModal({
   const [isEditingName, setIsEditingName] = useState(false);
   const [isEditingEmail, setIsEditingEmail] = useState(false);
   const [isEditingPhone, setIsEditingPhone] = useState(false);
+  const [editCpe, setEditCpe] = useState<string>("");
+  const [isEditingCpe, setIsEditingCpe] = useState(false);
+  const isP2G = isPerfect2GetherOrg(organization?.id);
   
   // Check if telecom template
   const isTelecom = organization?.niche === 'telecom';
