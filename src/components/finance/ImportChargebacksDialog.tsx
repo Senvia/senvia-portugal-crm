@@ -133,6 +133,7 @@ export function ImportChargebacksDialog({ open, onOpenChange }: ImportChargeback
 
     return filteredRows
       .map((row) => ({
+        ...row,
         cpe: String(row[selectedCpeColumn] ?? "").trim(),
         chargeback_amount: String(row[selectedAmountColumn] ?? "0").trim(),
       }))
