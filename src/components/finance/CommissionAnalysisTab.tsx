@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { format, startOfMonth, subMonths } from "date-fns";
 import { pt } from "date-fns/locale";
-import { ChevronDown, FileSearch, FileUp, Search } from "lucide-react";
+import { ChevronDown, FileSearch, FileUp, RefreshCw, Search } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,12 +9,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { TeamMemberFilter } from "@/components/dashboard/TeamMemberFilter";
 import { ImportChargebacksDialog } from "@/components/finance/ImportChargebacksDialog";
-import { useCommissionAnalysis, type CommissionAnalysisCommercial, type FileDataRow, type ComparisonRow } from "@/hooks/useCommissionAnalysis";
+import { useCommissionAnalysis, useSyncFileToSystem, type CommissionAnalysisCommercial, type FileDataRow, type ComparisonRow, type SyncFileToSystemItem } from "@/hooks/useCommissionAnalysis";
 import { useTeamFilter } from "@/hooks/useTeamFilter";
 import { normalizeString } from "@/lib/utils";
 import { NEGOTIATION_TYPE_LABELS, type NegotiationType } from "@/types/proposals";
+import { toast } from "@/hooks/use-toast";
 
 function generateMonthOptions() {
   const options: { value: string; label: string }[] = [];
@@ -135,8 +137,10 @@ export function CommissionAnalysisTab() {
   const [selectedMonth, setSelectedMonth] = useState(monthOptions[0]?.value ?? format(startOfMonth(new Date()), "yyyy-MM-dd"));
   const [searchTerm, setSearchTerm] = useState("");
   const [importOpen, setImportOpen] = useState(false);
+  const [syncConfirmOpen, setSyncConfirmOpen] = useState(false);
   const { effectiveUserIds, canFilterByTeam } = useTeamFilter();
   const { data, isLoading } = useCommissionAnalysis(selectedMonth, effectiveUserIds);
+  const syncMutation = useSyncFileToSystem();
 
   const filteredCommercials = useMemo(() => {
     const normalizedSearch = normalizeString(searchTerm);
@@ -144,6 +148,35 @@ export function CommissionAnalysisTab() {
 
     return data.commercials.filter((item) => normalizeString(item.name).includes(normalizedSearch));
   }, [data.commercials, searchTerm]);
+
+  // Collect all discrepant rows that can be synced
+  const syncItems = useMemo<SyncFileToSystemItem[]>(() => {
+    const items: SyncFileToSystemItem[] = [];
+    for (const commercial of data.commercials) {
+      for (const row of commercial.comparisonData) {
+        if (row.hasAnyDiscrepancy && row.matchedProposalCpeId) {
+          const parseNum = (s: string) => parseFloat(s.replace(/[^\d.,]/g, "").replace(",", ".")) || 0;
+          items.push({
+            proposalCpeId: row.matchedProposalCpeId,
+            dbl: parseNum(row.file.dbl),
+            consumoAnual: parseNum(row.file.consumoAnual),
+            duracaoContrato: parseNum(row.file.duracaoContrato),
+          });
+        }
+      }
+    }
+    return items;
+  }, [data.commercials]);
+
+  const handleSync = async () => {
+    setSyncConfirmOpen(false);
+    try {
+      await syncMutation.mutateAsync(syncItems);
+      toast({ title: "Sincronização concluída", description: `${syncItems.length} CPE(s) atualizados com os dados do ficheiro.` });
+    } catch (err: any) {
+      toast({ title: "Erro na sincronização", description: err.message || "Não foi possível atualizar os CPEs.", variant: "destructive" });
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -155,10 +188,18 @@ export function CommissionAnalysisTab() {
           </p>
         </div>
 
-        <Button onClick={() => setImportOpen(true)} className="w-full sm:w-auto">
-          <FileUp className="h-4 w-4" />
-          Importar ficheiro
-        </Button>
+        <div className="flex gap-2 w-full sm:w-auto">
+          {syncItems.length > 0 && (
+            <Button variant="outline" onClick={() => setSyncConfirmOpen(true)} disabled={syncMutation.isPending} className="w-full sm:w-auto">
+              <RefreshCw className={`h-4 w-4 ${syncMutation.isPending ? "animate-spin" : ""}`} />
+              Sincronizar ({syncItems.length})
+            </Button>
+          )}
+          <Button onClick={() => setImportOpen(true)} className="w-full sm:w-auto">
+            <FileUp className="h-4 w-4" />
+            Importar ficheiro
+          </Button>
+        </div>
       </div>
 
       <div className="flex flex-col gap-3 xl:flex-row">
@@ -247,6 +288,21 @@ export function CommissionAnalysisTab() {
       )}
 
       <ImportChargebacksDialog open={importOpen} onOpenChange={setImportOpen} />
+
+      <AlertDialog open={syncConfirmOpen} onOpenChange={setSyncConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Sincronizar dados do ficheiro</AlertDialogTitle>
+            <AlertDialogDescription>
+              Isto vai atualizar <strong>{syncItems.length} CPE(s)</strong> no sistema com os valores do ficheiro importado (DBL, Consumo anual e Duração). As comissões serão recalculadas automaticamente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleSync}>Sincronizar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

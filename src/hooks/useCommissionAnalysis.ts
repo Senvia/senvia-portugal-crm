@@ -25,6 +25,7 @@ interface ChargebackItemRecord {
   cpe: string;
   unmatched_reason: string | null;
   raw_row: Record<string, unknown> | null;
+  matched_proposal_cpe_id: string | null;
 }
 
 interface ChargebackDataset {
@@ -55,6 +56,7 @@ export interface ComparisonRow {
   systemDataInicio: string | null;
   systemDataFim: string | null;
   systemNegotiationType: string | null;
+  matchedProposalCpeId: string | null;
   hasConsumoDiscrepancy: boolean;
   hasDblDiscrepancy: boolean;
   hasDuracaoDiscrepancy: boolean;
@@ -242,7 +244,7 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
           .range(0, 199),
         (supabase as any)
           .from("commission_chargeback_items")
-          .select("id, import_id, matched_user_id, chargeback_amount, matched, cpe, unmatched_reason, raw_row")
+          .select("id, import_id, matched_user_id, chargeback_amount, matched, cpe, unmatched_reason, raw_row, matched_proposal_cpe_id")
           .eq("organization_id", organizationId)
           .order("created_at", { ascending: false })
           .range(0, 4999),
@@ -299,14 +301,14 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
 
     const byUser = new Map<string, CommissionAnalysisCommercial>();
 
-    // Build file data map: matched_user_id -> FileDataRow[]
-    const userFileData = new Map<string, FileDataRow[]>();
+    // Build file data map: matched_user_id -> { parsed, matchedProposalCpeId }[]
+    const userFileData = new Map<string, { parsed: FileDataRow; matchedProposalCpeId: string | null }[]>();
     for (const item of filteredItems) {
       if (!item.matched_user_id) continue;
       const parsed = parseRawRow(item.raw_row);
       if (parsed) {
         const arr = userFileData.get(item.matched_user_id) || [];
-        arr.push(parsed);
+        arr.push({ parsed, matchedProposalCpeId: item.matched_proposal_cpe_id ?? null });
         userFileData.set(item.matched_user_id, arr);
       }
     }
@@ -315,8 +317,8 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
     const normCpe = (s: string) => s.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
 
     // Build comparison data for a commercial
-    const buildComparison = (fileRows: FileDataRow[], cpes: CpeDetail[]): ComparisonRow[] => {
-      return fileRows.map((file) => {
+    const buildComparison = (fileEntries: { parsed: FileDataRow; matchedProposalCpeId: string | null }[], cpes: CpeDetail[]): ComparisonRow[] => {
+      return fileEntries.map(({ parsed: file, matchedProposalCpeId }) => {
         const fileCpeNorm = normCpe(file.cpe);
         const match = fileCpeNorm ? cpes.find((c) => c.serial_number && normCpe(c.serial_number) === fileCpeNorm) : undefined;
 
@@ -342,6 +344,7 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
           systemDataInicio: match ? (match.contrato_inicio ?? null) : null,
           systemDataFim: match ? (match.contrato_fim ?? null) : null,
           systemNegotiationType: match ? (match.negotiation_type ?? null) : null,
+          matchedProposalCpeId: matchedProposalCpeId ?? (match ? match.proposal_cpe_id : null),
           hasConsumoDiscrepancy,
           hasDblDiscrepancy,
           hasDuracaoDiscrepancy,
@@ -351,7 +354,7 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
     };
 
     for (const commercial of liveData?.commercials || []) {
-      const fileData = userFileData.get(commercial.userId) || [];
+      const fileEntries = userFileData.get(commercial.userId) || [];
       byUser.set(commercial.userId, {
         userId: commercial.userId,
         name: commercial.name,
@@ -362,15 +365,15 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
         differentialAmount: commercial.totalIndicativa,
         differentialCount: commercial.cpes.length,
         cpes: commercial.cpes,
-        fileData,
-        comparisonData: buildComparison(fileData, commercial.cpes),
+        fileData: fileEntries.map((e) => e.parsed),
+        comparisonData: buildComparison(fileEntries, commercial.cpes),
       });
     }
 
     for (const item of filteredItems) {
       if (!item.matched_user_id) continue;
 
-      const fileData = userFileData.get(item.matched_user_id) || [];
+      const fileEntries = userFileData.get(item.matched_user_id) || [];
       const existing = byUser.get(item.matched_user_id) || {
         userId: item.matched_user_id,
         name: memberNameMap.get(item.matched_user_id) || "Comercial",
@@ -381,8 +384,8 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
         differentialAmount: 0,
         differentialCount: 0,
         cpes: [],
-        fileData,
-        comparisonData: buildComparison(fileData, []),
+        fileData: fileEntries.map((e) => e.parsed),
+        comparisonData: buildComparison(fileEntries, []),
       };
 
       existing.chargebackAmount += Number(item.chargeback_amount || 0);
@@ -479,6 +482,46 @@ export function useImportCommissionChargebacks() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["commission-chargeback-data", organization?.id] }),
         queryClient.invalidateQueries({ queryKey: ["commissions-live"] }),
+      ]);
+    },
+  });
+}
+
+export interface SyncFileToSystemItem {
+  proposalCpeId: string;
+  dbl: number;
+  consumoAnual: number;
+  duracaoContrato: number;
+}
+
+export function useSyncFileToSystem() {
+  const queryClient = useQueryClient();
+  const { organization } = useAuth();
+
+  return useMutation({
+    mutationFn: async (items: SyncFileToSystemItem[]) => {
+      if (!items.length) return;
+
+      // Update each proposal_cpe with file values
+      const updates = items.map((item) =>
+        (supabase as any)
+          .from("proposal_cpes")
+          .update({
+            dbl: item.dbl,
+            consumo_anual: item.consumoAnual,
+            duracao_contrato: item.duracaoContrato,
+          })
+          .eq("id", item.proposalCpeId)
+      );
+
+      const results = await Promise.all(updates);
+      const firstError = results.find((r: any) => r.error);
+      if (firstError?.error) throw firstError.error;
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["commissions-live"] }),
+        queryClient.invalidateQueries({ queryKey: ["commission-chargeback-data", organization?.id] }),
       ]);
     },
   });
