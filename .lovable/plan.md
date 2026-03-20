@@ -1,32 +1,29 @@
 
 
-## Corrigir: página de Análise de Comissões mostra dados do sistema sem ficheiro importado
+## Reatribuir venda 020 à Ana Calado + corrigir matching do ficheiro
 
-### Problema
-1. As tabelas `commission_chargeback_items` e `commission_chargeback_imports` estão **vazias** (dados foram apagados anteriormente).
-2. O "Nuno" que aparece vem do `useLiveCommissions` — vendas entregues no mês selecionado — não do ficheiro.
-3. A página mistura dados do sistema (vendas entregues) com dados do ficheiro, mostrando comerciais mesmo sem ficheiro importado.
+### 1) Reatribuir venda 020 (PRIMAVERA) para Ana Calado
 
-### Solução
+A venda 020 está atribuída ao Nuno Dias (`5a03aa42-...`). Será reatribuída à Ana Calado (`f96eca52-5546-45d5-839b-bb2a255f9549`).
 
-**Ficheiro: `src/hooks/useCommissionAnalysis.ts`**
+Atualizar em cascata (conforme política existente):
+- `sales.created_by` → Ana Calado
+- `crm_clients.assigned_to` do cliente PRIMAVERA → Ana Calado
+- `leads.assigned_to` da lead associada (se houver) → Ana Calado
+- `proposals.created_by` das propostas do cliente → Ana Calado
+- `calendar_events.user_id` dos eventos do cliente → Ana Calado
 
-- Alterar a lógica de construção da lista de comerciais:
-  - **Só mostrar comerciais que tenham `fileData.length > 0`** (dados do ficheiro importado)
-  - Remover comerciais que vêm apenas do `useLiveCommissions` sem dados de ficheiro associados
-  - Isto garante que a página fica vazia (com mensagem "Sem dados") até o utilizador importar o ficheiro
+Executado via tool de insert/update (não é migration, é dados).
 
-**Ficheiro: `src/components/finance/CommissionAnalysisTab.tsx`**
+### 2) Investigar e corrigir matching do ficheiro importado
 
-- Ajustar a mensagem do estado vazio para orientar o utilizador a importar o ficheiro:
-  - "Importe um ficheiro para ver a análise de comissões."
+Das 8 linhas importadas, 7 deram "CPE não encontrado". Preciso verificar:
+- Se os CPEs do ficheiro existem na tabela `cpes` do sistema
+- Se a normalização está correcta (a função `normalize_chargeback_cpe` remove tudo exceto A-Z0-9)
+- Se o problema é que os CPEs não estão registados como equipamento dos clientes
 
-### Resultado
-- Sem ficheiro importado → página mostra "Sem dados, importe um ficheiro"
-- Com ficheiro importado → página mostra os comerciais com os dados do ficheiro (9 colunas)
-- O utilizador precisa de **reimportar o ficheiro** para ver dados
+Vou cruzar os CPEs importados com os CPEs existentes no sistema para identificar a causa exacta.
 
 ### Ficheiros alterados
-- `src/hooks/useCommissionAnalysis.ts`
-- `src/components/finance/CommissionAnalysisTab.tsx`
+Nenhum ficheiro de código — apenas dados no banco.
 
