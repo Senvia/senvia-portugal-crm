@@ -213,6 +213,9 @@ export function useLiveCommissions(selectedMonth: string, effectiveUserIds?: str
           servicos: proposalServicosMap.get(cpe.proposal_id) || [],
           servicos_kwp: cpeServicosKwp,
           proposal_type: proposalTypeMap.get(cpe.proposal_id) || '',
+          client_name: sale.client_id ? (clientNameMap.get(sale.client_id) ?? null) : null,
+          contrato_inicio: (cpe as any).contrato_inicio || null,
+          contrato_fim: (cpe as any).contrato_fim || null,
         });
       }
 
