@@ -265,18 +265,7 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
     const itemsFromActiveImport = itemsFromActiveImportRaw.filter((item) => {
       const parsed = parseRawRow(item.raw_row as Record<string, unknown> | null);
       if (!parsed || !parsed.dataInicio) return false;
-      // Try to parse date in formats: dd/MM/yyyy, yyyy-MM-dd, dd-MM-yyyy
-      const raw = parsed.dataInicio.trim();
-      let d: Date | null = null;
-      if (/^\d{2}\/\d{2}\/\d{4}$/.test(raw)) {
-        const [dd, mm, yyyy] = raw.split("/");
-        d = new Date(Number(yyyy), Number(mm) - 1, Number(dd));
-      } else if (/^\d{4}-\d{2}-\d{2}/.test(raw)) {
-        d = new Date(raw);
-      } else if (/^\d{2}-\d{2}-\d{4}$/.test(raw)) {
-        const [dd, mm, yyyy] = raw.split("-");
-        d = new Date(Number(yyyy), Number(mm) - 1, Number(dd));
-      }
+      const d = parseDateValue(parsed.dataInicio);
       if (!d || isNaN(d.getTime())) return false;
       return d.getFullYear() === selectedYear && d.getMonth() === selectedMonthNum;
     });
