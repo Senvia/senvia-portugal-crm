@@ -14,6 +14,7 @@ import { ImportChargebacksDialog } from "@/components/finance/ImportChargebacksD
 import { useCommissionAnalysis, type CommissionAnalysisCommercial, type FileDataRow, type ComparisonRow } from "@/hooks/useCommissionAnalysis";
 import { useTeamFilter } from "@/hooks/useTeamFilter";
 import { normalizeString } from "@/lib/utils";
+import { NEGOTIATION_TYPE_LABELS, type NegotiationType } from "@/types/proposals";
 
 function generateMonthOptions() {
   const options: { value: string; label: string }[] = [];
