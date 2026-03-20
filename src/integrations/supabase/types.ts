@@ -3651,6 +3651,188 @@ export type Database = {
           },
         ]
       }
+      rh_absence_periods: {
+        Row: {
+          absence_id: string
+          business_days: number
+          created_at: string
+          end_date: string
+          end_time: string | null
+          id: string
+          period_type: string
+          start_date: string
+          start_time: string | null
+          status: string
+        }
+        Insert: {
+          absence_id: string
+          business_days?: number
+          created_at?: string
+          end_date: string
+          end_time?: string | null
+          id?: string
+          period_type?: string
+          start_date: string
+          start_time?: string | null
+          status?: string
+        }
+        Update: {
+          absence_id?: string
+          business_days?: number
+          created_at?: string
+          end_date?: string
+          end_time?: string | null
+          id?: string
+          period_type?: string
+          start_date?: string
+          start_time?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rh_absence_periods_absence_id_fkey"
+            columns: ["absence_id"]
+            isOneToOne: false
+            referencedRelation: "rh_absences"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rh_absences: {
+        Row: {
+          absence_type: string
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string
+          end_date: string
+          id: string
+          notes: string | null
+          organization_id: string
+          rejection_reason: string | null
+          start_date: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          absence_type?: string
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          end_date: string
+          id?: string
+          notes?: string | null
+          organization_id: string
+          rejection_reason?: string | null
+          start_date: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          absence_type?: string
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          end_date?: string
+          id?: string
+          notes?: string | null
+          organization_id?: string
+          rejection_reason?: string | null
+          start_date?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rh_absences_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rh_holidays: {
+        Row: {
+          created_at: string
+          date: string
+          id: string
+          is_national: boolean
+          name: string
+          organization_id: string
+          year: number
+        }
+        Insert: {
+          created_at?: string
+          date: string
+          id?: string
+          is_national?: boolean
+          name: string
+          organization_id: string
+          year: number
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          id?: string
+          is_national?: boolean
+          name?: string
+          organization_id?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rh_holidays_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rh_vacation_balances: {
+        Row: {
+          created_at: string
+          id: string
+          organization_id: string
+          total_days: number
+          updated_at: string
+          used_days: number
+          user_id: string
+          year: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          organization_id: string
+          total_days?: number
+          updated_at?: string
+          used_days?: number
+          user_id: string
+          year: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          organization_id?: string
+          total_days?: number
+          updated_at?: string
+          used_days?: number
+          user_id?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rh_vacation_balances_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sale_activation_history: {
         Row: {
           activation_date: string
@@ -4782,6 +4964,18 @@ export type Database = {
     }
     Enums: {
       app_role: "super_admin" | "admin" | "viewer" | "salesperson"
+      rh_absence_status:
+        | "pending"
+        | "approved"
+        | "partially_approved"
+        | "rejected"
+      rh_absence_type:
+        | "vacation"
+        | "sick_leave"
+        | "appointment"
+        | "personal_leave"
+        | "training"
+        | "other"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -4910,6 +5104,20 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["super_admin", "admin", "viewer", "salesperson"],
+      rh_absence_status: [
+        "pending",
+        "approved",
+        "partially_approved",
+        "rejected",
+      ],
+      rh_absence_type: [
+        "vacation",
+        "sick_leave",
+        "appointment",
+        "personal_leave",
+        "training",
+        "other",
+      ],
     },
   },
 } as const

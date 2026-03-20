@@ -1,6 +1,6 @@
-import { ClipboardCheck, Plus, Search, type LucideIcon } from "lucide-react";
+import { ClipboardCheck, Plus, Search, Users, type LucideIcon } from "lucide-react";
 
-export type PortalTotalLinkSectionKey = "home" | "contratos" | "ids" | "pendentes" | "reclamacoes";
+export type PortalTotalLinkSectionKey = "home" | "contratos" | "ids" | "pendentes" | "reclamacoes" | "rh";
 
 export interface PortalTotalLinkSectionAction {
   label: string;
@@ -66,6 +66,17 @@ export const portalTotalLinkSections: PortalTotalLinkSection[] = [
     action: {
       label: "Adicionar",
       icon: Plus,
+    },
+  },
+  {
+    key: "rh",
+    label: "RH",
+    path: "/portal-total-link/rh",
+    title: "Recursos Humanos",
+    description: "Gestão de férias, ausências e presenças da equipa.",
+    action: {
+      label: "Marcar",
+      icon: Users,
     },
   },
 ];
