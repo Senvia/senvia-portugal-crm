@@ -306,7 +306,42 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
       }
     }
 
+    // Helper to normalize CPE for matching
+    const normCpe = (s: string) => s.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+
+    // Build comparison data for a commercial
+    const buildComparison = (fileRows: FileDataRow[], cpes: CpeDetail[]): ComparisonRow[] => {
+      return fileRows.map((file) => {
+        const fileCpeNorm = normCpe(file.cpe);
+        const match = fileCpeNorm ? cpes.find((c) => c.serial_number && normCpe(c.serial_number) === fileCpeNorm) : undefined;
+
+        const fileConsumo = parseFloat(file.consumoAnual.replace(/[^\d.,]/g, "").replace(",", ".")) || 0;
+        const fileDbl = parseFloat(file.dbl.replace(/[^\d.,]/g, "").replace(",", ".")) || 0;
+        const fileDuracao = parseFloat(file.duracaoContrato.replace(/[^\d.,]/g, "").replace(",", ".")) || 0;
+
+        const systemConsumo = match ? match.consumo_anual : null;
+        const systemDbl = match ? match.dbl : null;
+        const systemDuracao = match ? match.duracao_contrato : null;
+
+        const hasConsumoDiscrepancy = systemConsumo !== null && Math.abs(systemConsumo - fileConsumo) > 0.01;
+        const hasDblDiscrepancy = systemDbl !== null && Math.abs(systemDbl - fileDbl) > 0.01;
+        const hasDuracaoDiscrepancy = systemDuracao !== null && Math.abs(systemDuracao - fileDuracao) > 0.01;
+
+        return {
+          file,
+          systemConsumoAnual: systemConsumo,
+          systemDbl: systemDbl,
+          systemDuracao: systemDuracao,
+          hasConsumoDiscrepancy,
+          hasDblDiscrepancy,
+          hasDuracaoDiscrepancy,
+          hasAnyDiscrepancy: hasConsumoDiscrepancy || hasDblDiscrepancy || hasDuracaoDiscrepancy,
+        };
+      });
+    };
+
     for (const commercial of liveData?.commercials || []) {
+      const fileData = userFileData.get(commercial.userId) || [];
       byUser.set(commercial.userId, {
         userId: commercial.userId,
         name: commercial.name,
@@ -317,13 +352,15 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
         differentialAmount: commercial.totalIndicativa,
         differentialCount: commercial.cpes.length,
         cpes: commercial.cpes,
-        fileData: userFileData.get(commercial.userId) || [],
+        fileData,
+        comparisonData: buildComparison(fileData, commercial.cpes),
       });
     }
 
     for (const item of filteredItems) {
       if (!item.matched_user_id) continue;
 
+      const fileData = userFileData.get(item.matched_user_id) || [];
       const existing = byUser.get(item.matched_user_id) || {
         userId: item.matched_user_id,
         name: memberNameMap.get(item.matched_user_id) || "Comercial",
@@ -334,7 +371,8 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
         differentialAmount: 0,
         differentialCount: 0,
         cpes: [],
-        fileData: userFileData.get(item.matched_user_id) || [],
+        fileData,
+        comparisonData: buildComparison(fileData, []),
       };
 
       existing.chargebackAmount += Number(item.chargeback_amount || 0);
