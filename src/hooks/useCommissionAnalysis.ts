@@ -54,6 +54,7 @@ export interface ComparisonRow {
   systemCpe: string | null;
   systemDataInicio: string | null;
   systemDataFim: string | null;
+  systemNegotiationType: string | null;
   hasConsumoDiscrepancy: boolean;
   hasDblDiscrepancy: boolean;
   hasDuracaoDiscrepancy: boolean;
