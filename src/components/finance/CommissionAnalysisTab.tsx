@@ -137,8 +137,10 @@ export function CommissionAnalysisTab() {
   const [selectedMonth, setSelectedMonth] = useState(monthOptions[0]?.value ?? format(startOfMonth(new Date()), "yyyy-MM-dd"));
   const [searchTerm, setSearchTerm] = useState("");
   const [importOpen, setImportOpen] = useState(false);
+  const [syncConfirmOpen, setSyncConfirmOpen] = useState(false);
   const { effectiveUserIds, canFilterByTeam } = useTeamFilter();
   const { data, isLoading } = useCommissionAnalysis(selectedMonth, effectiveUserIds);
+  const syncMutation = useSyncFileToSystem();
 
   const filteredCommercials = useMemo(() => {
     const normalizedSearch = normalizeString(searchTerm);
@@ -146,6 +148,35 @@ export function CommissionAnalysisTab() {
 
     return data.commercials.filter((item) => normalizeString(item.name).includes(normalizedSearch));
   }, [data.commercials, searchTerm]);
+
+  // Collect all discrepant rows that can be synced
+  const syncItems = useMemo<SyncFileToSystemItem[]>(() => {
+    const items: SyncFileToSystemItem[] = [];
+    for (const commercial of data.commercials) {
+      for (const row of commercial.comparisonData) {
+        if (row.hasAnyDiscrepancy && row.matchedProposalCpeId) {
+          const parseNum = (s: string) => parseFloat(s.replace(/[^\d.,]/g, "").replace(",", ".")) || 0;
+          items.push({
+            proposalCpeId: row.matchedProposalCpeId,
+            dbl: parseNum(row.file.dbl),
+            consumoAnual: parseNum(row.file.consumoAnual),
+            duracaoContrato: parseNum(row.file.duracaoContrato),
+          });
+        }
+      }
+    }
+    return items;
+  }, [data.commercials]);
+
+  const handleSync = async () => {
+    setSyncConfirmOpen(false);
+    try {
+      await syncMutation.mutateAsync(syncItems);
+      toast({ title: "Sincronização concluída", description: `${syncItems.length} CPE(s) atualizados com os dados do ficheiro.` });
+    } catch (err: any) {
+      toast({ title: "Erro na sincronização", description: err.message || "Não foi possível atualizar os CPEs.", variant: "destructive" });
+    }
+  };
 
   return (
     <div className="space-y-6">
