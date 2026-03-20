@@ -1,24 +1,89 @@
 
 
-## Adicionar campo CPE no modal de criação de Lead (P2G)
+## Módulo RH dentro do Portal Total Link
 
-### Problema
-O campo CPE/CUI só existe no modal de **detalhes** da lead (edição), mas não no modal de **criação**. Para a P2G, o utilizador precisa de poder introduzir o CPE logo ao criar a lead.
+### Contexto
+Trazer o módulo de férias/ausências do projeto "Realize Solutions Hub" para este CRM, adaptado para funcionar **dentro do Portal Total Link** como uma nova secção "RH". A diferença principal: não há dois acessos separados (colaborador vs admin). Todos os membros P2G veem a mesma interface — colaboradores marcam férias/ausências, admins também marcam e conseguem aprovar/rejeitar.
 
-### Alterações
+### Estrutura da Base de Dados
 
-#### 1) `src/hooks/useLeads.ts` — aceitar `custom_data` no `useCreateLead`
-- Adicionar `custom_data?: Record<string, unknown>` ao tipo do `mutationFn`
-- O spread `...leadData` já o passa para o insert, só falta no tipo
+Criar 4 tabelas novas (via migration):
 
-#### 2) `src/components/leads/AddLeadModal.tsx` — campo CPE para P2G
-- Importar `isPerfect2GetherOrg` de `@/lib/perfect2gether`
-- Adicionar estado `cpeValue` (string)
-- Na secção "Empresa" (Card), após os campos NIF e Nome da Empresa, adicionar um campo de texto "CPE/CUI" com placeholder "PT00..." — visível apenas quando `isPerfect2GetherOrg(organization?.id)`
-- No `onSubmit`, passar `custom_data: { cpe: cpeValue }` quando o valor existir
-- Reset do `cpeValue` no reset do form
+1. **`rh_absences`** — pedidos de ausência
+   - `id`, `organization_id`, `user_id` (quem marca), `absence_type` (enum: vacation, sick_leave, appointment, personal_leave, training, other), `status` (pending/approved/partially_approved/rejected), `start_date`, `end_date`, `notes`, `approved_by`, `approved_at`, `rejection_reason`, `created_at`, `updated_at`
 
-### Ficheiros alterados
-- `src/hooks/useLeads.ts` — tipo do `useCreateLead`
-- `src/components/leads/AddLeadModal.tsx` — campo CPE no card Empresa (P2G only)
+2. **`rh_absence_periods`** — períodos dentro de um pedido
+   - `id`, `absence_id` (FK), `start_date`, `end_date`, `business_days`, `status`, `period_type` (full_day/partial), `start_time`, `end_time`
+
+3. **`rh_vacation_balances`** — saldo de férias por user/ano
+   - `id`, `organization_id`, `user_id`, `year`, `total_days`, `used_days`, `created_at`, `updated_at`
+
+4. **`rh_holidays`** — feriados nacionais/custom
+   - `id`, `organization_id`, `date`, `name`, `year`, `is_national`, `created_at`
+
+RLS: acesso restrito a membros da organização via `is_org_member()`. Todos veem os seus pedidos; admins veem todos os pedidos da org.
+
+### Estrutura de Ficheiros
+
+```text
+src/
+├── lib/
+│   └── rh-utils.ts              # absence types, vacation utils (portado)
+├── hooks/
+│   ├── useRhAbsences.ts         # CRUD ausências + aprovações
+│   └── useRhHolidays.ts         # feriados
+├── pages/portal-total-link/
+│   └── Rh.tsx                   # página principal do módulo RH
+├── components/portal-total-link/rh/
+│   ├── RhAbsenceRequestForm.tsx # form para marcar ausência (dialog)
+│   ├── RhAbsenceCard.tsx        # card de cada pedido
+│   ├── RhAbsenceApprovalDialog.tsx # dialog de aprovação (admin)
+│   ├── RhVacationBalance.tsx    # card com saldo de férias
+│   └── RhAdminPanel.tsx         # painel admin: ver todos os pedidos + gerir saldos
+```
+
+### UI — Página RH
+
+A página terá **duas vistas** na mesma interface:
+
+1. **Vista pessoal** (todos os users):
+   - Card de saldo de férias do utilizador
+   - Botão "+ Marcar Ausência" → abre dialog com tipo de ausência, selector de períodos (MultiPeriodSelector portado), notas
+   - Lista dos seus pedidos com status (pendente/aprovado/rejeitado)
+
+2. **Vista admin** (users com role admin):
+   - Secção adicional "Pedidos da Equipa" com todos os pedidos pendentes
+   - Ações: Aprovar, Rejeitar em cada card
+   - Gestão de saldos de férias dos membros
+
+A detecção admin usa `usePermissions().isAdmin`.
+
+### Integração no Portal Total Link
+
+1. **`portalTotalLinkConfig.ts`** — adicionar secção "RH" com key `rh`, path `/portal-total-link/rh`
+2. **`App.tsx`** — adicionar rota `<Route path="rh" element={<Rh />} />` dentro do Portal Total Link
+3. **`PortalTotalLinkLayout.tsx`** — o tipo `PortalTotalLinkSectionKey` será actualizado automaticamente pelo config
+
+### Ficheiros alterados/criados
+
+| Ficheiro | Acção |
+|----------|-------|
+| `src/components/portal-total-link/portalTotalLinkConfig.ts` | Adicionar secção RH |
+| `src/App.tsx` | Adicionar rota RH |
+| `src/lib/rh-utils.ts` | Criar — tipos de ausência + utils de dias úteis |
+| `src/hooks/useRhAbsences.ts` | Criar — hook CRUD ausências |
+| `src/hooks/useRhHolidays.ts` | Criar — hook feriados |
+| `src/pages/portal-total-link/Rh.tsx` | Criar — página principal |
+| `src/components/portal-total-link/rh/RhAbsenceRequestForm.tsx` | Criar — form de marcação |
+| `src/components/portal-total-link/rh/RhAbsenceCard.tsx` | Criar — card de pedido |
+| `src/components/portal-total-link/rh/RhAbsenceApprovalDialog.tsx` | Criar — aprovação admin |
+| `src/components/portal-total-link/rh/RhVacationBalance.tsx` | Criar — saldo férias |
+| `src/components/portal-total-link/rh/RhAdminPanel.tsx` | Criar — painel admin |
+| Migration SQL | Criar 4 tabelas + RLS + seed feriados PT 2025-2026 |
+
+### Notas importantes
+- Não haverá tabela `employees` separada — usa directamente `auth.users` / `organization_members` + `profiles`
+- O `user_id` nos pedidos referencia o próprio utilizador autenticado
+- Feriados nacionais PT serão inseridos via seed na migration
+- A lógica de dias úteis (excluir fins-de-semana e feriados) é portada do Realize
 
