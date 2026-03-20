@@ -521,13 +521,17 @@ export function useSyncFileToSystem() {
       let updatedCount = 0;
 
       for (const item of items) {
+        const updatePayload: Record<string, unknown> = {
+          dbl: item.dbl,
+          consumo_anual: item.consumoAnual,
+          duracao_contrato: item.duracaoContrato,
+        };
+        if (item.contratoInicio) updatePayload.contrato_inicio = item.contratoInicio;
+        if (item.contratoFim) updatePayload.contrato_fim = item.contratoFim;
+
         const { data, error } = await (supabase as any)
           .from("proposal_cpes")
-          .update({
-            dbl: item.dbl,
-            consumo_anual: item.consumoAnual,
-            duracao_contrato: Math.round(item.duracaoContrato),
-          })
+          .update(updatePayload)
           .eq("id", item.proposalCpeId)
           .select("id");
 
