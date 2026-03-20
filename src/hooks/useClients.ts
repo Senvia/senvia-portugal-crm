@@ -214,6 +214,21 @@ export function useConvertLeadToClient() {
         .single();
 
       if (error) throw error;
+
+      // Auto-create CPE for P2G if lead has CPE data
+      const customData = lead?.custom_data as Record<string, unknown> | null;
+      const cpeValue = customData?.cpe as string | undefined;
+      if (cpeValue && isPerfect2GetherOrg(organizationId)) {
+        await supabase.from('cpes').insert({
+          client_id: data.id,
+          organization_id: organizationId,
+          equipment_type: 'Energia',
+          serial_number: cpeValue,
+          comercializador: '',
+          status: 'active',
+        });
+      }
+
       return data;
     },
     onSuccess: () => {
