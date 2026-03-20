@@ -127,10 +127,42 @@ function normalizeKey(s: string) {
     .trim();
 }
 
+function excelSerialToDate(serial: number): Date {
+  const epoch = new Date(Date.UTC(1899, 11, 30));
+  return new Date(epoch.getTime() + serial * 86400000);
+}
+
+function parseDateValue(raw: string): Date | null {
+  const trimmed = raw.trim();
+  const asNum = Number(trimmed);
+  if (!isNaN(asNum) && asNum > 1 && asNum < 100000) {
+    return excelSerialToDate(asNum);
+  }
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(trimmed)) {
+    const [dd, mm, yyyy] = trimmed.split("/");
+    return new Date(Number(yyyy), Number(mm) - 1, Number(dd));
+  }
+  if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
+    return new Date(trimmed);
+  }
+  if (/^\d{2}-\d{2}-\d{4}$/.test(trimmed)) {
+    const [dd, mm, yyyy] = trimmed.split("-");
+    return new Date(Number(yyyy), Number(mm) - 1, Number(dd));
+  }
+  return null;
+}
+
+function formatDateForDisplay(raw: string): string {
+  const d = parseDateValue(raw);
+  if (!d || isNaN(d.getTime())) return raw;
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  return `${dd}/${mm}/${d.getFullYear()}`;
+}
+
 function parseRawRow(raw: Record<string, unknown> | null): FileDataRow | null {
   if (!raw) return null;
 
-  // Build a normalized-key lookup so accent/case/space variations all work
   const normalizedMap = new Map<string, string>();
   for (const key of Object.keys(raw)) {
     const nk = normalizeKey(key);
@@ -147,13 +179,15 @@ function parseRawRow(raw: Record<string, unknown> | null): FileDataRow | null {
       const np = normalizeKey(p);
       const exact = normalizedMap.get(np);
       if (exact) return exact;
-      // Partial match
       for (const [nk, v] of normalizedMap) {
         if (nk.includes(np) || np.includes(nk)) return v;
       }
     }
     return "";
   };
+
+  const rawDataInicio = get(["Linha de Contrato: Data de inicio", "Data de inicio"]);
+  const rawDataFim = get(["Linha de Contrato: Data Fim de Contrato", "Data Fim"]);
 
   return {
     tipoComissao: get(["Tipo de Comissão", "Tipo de comissao"]),
@@ -162,8 +196,8 @@ function parseRawRow(raw: Record<string, unknown> | null): FileDataRow | null {
     cpe: get(["Linha de Contrato: Local de Consumo", "Local de Consumo", "CPE"]),
     consumoAnual: get(["Linha de Contrato: Consumo anual", "Consumo anual"]),
     duracaoContrato: get(["Duração contrato (anos)", "Duracao contrato"]),
-    dataInicio: get(["Linha de Contrato: Data de inicio", "Data de inicio"]),
-    dataFim: get(["Linha de Contrato: Data Fim de Contrato", "Data Fim"]),
+    dataInicio: rawDataInicio ? formatDateForDisplay(rawDataInicio) : "",
+    dataFim: rawDataFim ? formatDateForDisplay(rawDataFim) : "",
     dbl: get(["DBL"]),
     valorReceber: get(["Valor a receber", "Comissao Total"]),
   };
