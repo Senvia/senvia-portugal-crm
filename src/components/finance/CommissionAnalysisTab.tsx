@@ -10,6 +10,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { TeamMemberFilter } from "@/components/dashboard/TeamMemberFilter";
 import { ImportChargebacksDialog } from "@/components/finance/ImportChargebacksDialog";
 import { useCommissionAnalysis, useSyncFileToSystem, type CommissionAnalysisCommercial, type FileDataRow, type ComparisonRow, type SyncFileToSystemItem } from "@/hooks/useCommissionAnalysis";
@@ -162,6 +164,7 @@ export function CommissionAnalysisTab() {
   const [searchTerm, setSearchTerm] = useState("");
   const [importOpen, setImportOpen] = useState(false);
   const [syncConfirmOpen, setSyncConfirmOpen] = useState(false);
+  const [detailModal, setDetailModal] = useState<'cb' | 'com' | null>(null);
   const { effectiveUserIds, canFilterByTeam } = useTeamFilter();
   const { data, isLoading, refetch } = useCommissionAnalysis(selectedMonth, effectiveUserIds);
   const syncMutation = useSyncFileToSystem();
@@ -300,7 +303,7 @@ export function CommissionAnalysisTab() {
 
       {!isLoading && data.imports.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <Card>
+          <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setDetailModal('cb')}>
             <CardContent className="p-4 flex items-start gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-destructive/10">
                 <TrendingDown className="h-5 w-5 text-destructive" />
@@ -317,7 +320,7 @@ export function CommissionAnalysisTab() {
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setDetailModal('com')}>
             <CardContent className="p-4 flex items-start gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
                 <TrendingUp className="h-5 w-5 text-primary" />
@@ -413,6 +416,41 @@ export function CommissionAnalysisTab() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={detailModal !== null} onOpenChange={(open) => !open && setDetailModal(null)}>
+        <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>{detailModal === 'cb' ? 'Chargebacks (CB)' : 'Comissões'}</DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="flex-1 -mx-6 px-6">
+            <Table>
+              <TableHeader>
+                <TableRow className="text-xs">
+                  <TableHead className="h-8">CPE</TableHead>
+                  <TableHead className="h-8">Nome da Empresa</TableHead>
+                  <TableHead className="h-8">Tipo Comissão</TableHead>
+                  <TableHead className="h-8 text-right">Valor a Receber</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(detailModal === 'cb' ? data.summary.cbFileItems : data.summary.comFileItems).map((item, idx) => (
+                  <TableRow key={idx} className="text-xs">
+                    <TableCell className="font-mono">{item.cpe || "—"}</TableCell>
+                    <TableCell>{item.nomeEmpresa || "—"}</TableCell>
+                    <TableCell>{item.tipoComissao || "—"}</TableCell>
+                    <TableCell className="text-right tabular-nums">{item.valorReceber || "—"}</TableCell>
+                  </TableRow>
+                ))}
+                {(detailModal === 'cb' ? data.summary.cbFileItems : data.summary.comFileItems).length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center text-muted-foreground py-6">Sem registos</TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
