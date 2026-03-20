@@ -874,7 +874,18 @@ export function EditSaleModal({
                               </div>
                               <div className="space-y-1">
                                 <Label className="text-xs text-muted-foreground">Consumo (kWh)</Label>
-                                <Input type="number" value={cpe.consumo_anual ?? ""} onChange={e => { const u = [...editableCpes]; u[idx] = { ...u[idx], consumo_anual: e.target.value ? parseFloat(e.target.value) : null }; setEditableCpes(u); }} className="h-8 text-sm" step="0.01" />
+                                <Input type="number" value={cpe.consumo_anual ?? ""} onChange={e => {
+                                  const u = [...editableCpes];
+                                  const newConsumo = e.target.value ? parseFloat(e.target.value) : null;
+                                  const currentMargem = u[idx].margem ?? 0;
+                                  let newComissao = u[idx].comissao;
+                                  if (hasEnergyConfigRef.current && currentMargem > 0) {
+                                    const calc = calcCommissionRef.current(currentMargem, getVolumeTier(newConsumo || 0));
+                                    if (calc !== null) newComissao = parseFloat(calc.toFixed(2));
+                                  }
+                                  u[idx] = { ...u[idx], consumo_anual: newConsumo, comissao: newComissao };
+                                  setEditableCpes(u);
+                                }} className="h-8 text-sm" step="0.01" />
                               </div>
                               <div className="space-y-1">
                                 <Label className="text-xs text-muted-foreground">DBL</Label>
