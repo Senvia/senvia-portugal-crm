@@ -1,39 +1,28 @@
 
 
-## Corrigir: linhas CB do ficheiro não aparecem porque o filtro de mês exclui-as
+## Corrigir card CB — somar TODAS as linhas CB do ficheiro (matched + unmatched)
 
 ### Problema
-Linha 284-290 do `useCommissionAnalysis.ts`:
-```ts
-const itemsFromActiveImport = itemsFromActiveImportRaw.filter((item) => {
-  const parsed = parseRawRow(item.raw_row);
-  if (!parsed || !parsed.dataInicio) return false;  // ← CB lines sem data são excluídas
-  ...
-});
-```
-Linhas CB no ficheiro provavelmente não têm "Data de inicio" preenchida → `parsed.dataInicio` é vazio → `return false` → são descartadas antes de chegar à tabela e aos cards.
+O `cbSummary` na UI calcula CB iterando `data.commercials`, que só contém linhas **matched** a um comercial. Linhas CB sem `matched_user_id` nunca entram em `commercials` → não aparecem no card.
+
+A coluna **"Tipo de Comissão"** do ficheiro é que indica se é CB. Precisamos somar a partir de **todas** as linhas do import ativo, não só das matched.
 
 ### Solução
 
-**Ficheiro: `src/hooks/useCommissionAnalysis.ts`** (linhas 284-290)
+**Ficheiro: `src/hooks/useCommissionAnalysis.ts`**
 
-Alterar o filtro para **incluir linhas sem data de início** (em vez de excluí-las). Lógica:
-- Se a linha tem `dataInicio` válida → filtrar pelo mês selecionado (comportamento atual)
-- Se a linha **não tem** `dataInicio` → incluir sempre (não descartar)
+Calcular o resumo CB directamente de `itemsFromActiveImport` (todas as linhas, matched + unmatched):
+- Iterar todos os items do import ativo
+- Fazer `parseRawRow` de cada um
+- Verificar se `tipoComissao` contém "CB"
+- Somar `valorReceber` (coluna "Comissão Total") dessas linhas
+- Expor no `summary`: `cbFileCount`, `cbFileTotal`
 
-```ts
-const itemsFromActiveImport = itemsFromActiveImportRaw.filter((item) => {
-  const parsed = parseRawRow(item.raw_row);
-  if (!parsed) return false;
-  if (!parsed.dataInicio) return true; // ← incluir linhas sem data (ex: CB)
-  const d = parseDateValue(parsed.dataInicio);
-  if (!d || isNaN(d.getTime())) return true; // data inválida → incluir também
-  return d.getFullYear() === selectedYear && d.getMonth() === selectedMonthNum;
-});
-```
+**Ficheiro: `src/components/finance/CommissionAnalysisTab.tsx`**
 
-Isto garante que as linhas CB aparecem na tabela e são contabilizadas nos cards de resumo.
+Substituir o `cbSummary` local (que itera `data.commercials`) pelos novos campos `data.summary.cbFileCount` e `data.summary.cbFileTotal` vindos do hook.
 
 ### Ficheiros alterados
-- `src/hooks/useCommissionAnalysis.ts` — 2 linhas no filtro (284-290)
+- `src/hooks/useCommissionAnalysis.ts` — calcular CB de todas as linhas do import e expor no summary
+- `src/components/finance/CommissionAnalysisTab.tsx` — usar os novos campos do summary nos cards
 
