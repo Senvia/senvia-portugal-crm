@@ -283,9 +283,10 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
 
     const itemsFromActiveImport = itemsFromActiveImportRaw.filter((item) => {
       const parsed = parseRawRow(item.raw_row as Record<string, unknown> | null);
-      if (!parsed || !parsed.dataInicio) return false;
+      if (!parsed) return false;
+      if (!parsed.dataInicio) return true;
       const d = parseDateValue(parsed.dataInicio);
-      if (!d || isNaN(d.getTime())) return false;
+      if (!d || isNaN(d.getTime())) return true;
       return d.getFullYear() === selectedYear && d.getMonth() === selectedMonthNum;
     });
 
