@@ -354,7 +354,7 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
     };
 
     for (const commercial of liveData?.commercials || []) {
-      const fileData = userFileData.get(commercial.userId) || [];
+      const fileEntries = userFileData.get(commercial.userId) || [];
       byUser.set(commercial.userId, {
         userId: commercial.userId,
         name: commercial.name,
@@ -365,8 +365,8 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
         differentialAmount: commercial.totalIndicativa,
         differentialCount: commercial.cpes.length,
         cpes: commercial.cpes,
-        fileData,
-        comparisonData: buildComparison(fileData, commercial.cpes),
+        fileData: fileEntries.map((e) => e.parsed),
+        comparisonData: buildComparison(fileEntries, commercial.cpes),
       });
     }
 
