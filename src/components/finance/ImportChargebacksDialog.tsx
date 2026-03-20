@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, FileSearch, Filter, AlertTriangle, CalendarDays } from "lucide-react";
+import { Loader2, FileSearch, AlertTriangle, CalendarDays } from "lucide-react";
 import { toast } from "sonner";
 import { ImportStep1Upload } from "@/components/marketing/import/ImportStep1Upload";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useImportCommissionChargebacks, type ImportChargebackSummary } from "@/hooks/useCommissionAnalysis";
-import { formatCurrency } from "@/lib/format";
 
 interface ImportChargebacksDialogProps {
   open: boolean;
@@ -29,7 +28,6 @@ function normalizeHeader(value: string) {
 }
 
 function detectCpeColumn(headers: string[]) {
-  // Prioritize EDP-specific column name
   const edpCol = headers.find((header) => {
     const normalized = normalizeHeader(header);
     return normalized.includes("local de consumo") || normalized.includes("local consumo");
@@ -60,27 +58,6 @@ function detectAmountColumn(headers: string[]) {
   return scored[0]?.header;
 }
 
-function detectTypeColumn(headers: string[]) {
-  // Prioritize "tipo de comissão/comissao" over generic "tipo"
-  const comissaoCol = headers.find((header) => {
-    const normalized = normalizeHeader(header);
-    return normalized.includes("comissao") && normalized.includes("tipo");
-  });
-  if (comissaoCol) return comissaoCol;
-
-  return headers.find((header) => {
-    const normalized = normalizeHeader(header);
-    return (
-      normalized === "tipo" ||
-      normalized === "type" ||
-      normalized.includes("natureza") ||
-      normalized.includes("movimento") ||
-      normalized.includes("cod") ||
-      normalized.includes("code")
-    );
-  });
-}
-
 export function ImportChargebacksDialog({ open, onOpenChange }: ImportChargebacksDialogProps) {
   const importChargebacks = useImportCommissionChargebacks();
   const [fileName, setFileName] = useState("");
@@ -88,8 +65,6 @@ export function ImportChargebacksDialog({ open, onOpenChange }: ImportChargeback
   const [rows, setRows] = useState<Record<string, string>[]>([]);
   const [selectedCpeColumn, setSelectedCpeColumn] = useState("");
   const [selectedAmountColumn, setSelectedAmountColumn] = useState("");
-  const [selectedTypeColumn, setSelectedTypeColumn] = useState("");
-  const [typeFilterValue, setTypeFilterValue] = useState("");
   const [importSummary, setImportSummary] = useState<ImportChargebackSummary | null>(null);
   const [referenceMonth, setReferenceMonth] = useState(() => {
     const now = new Date();
@@ -98,7 +73,6 @@ export function ImportChargebacksDialog({ open, onOpenChange }: ImportChargeback
 
   const suggestedCpeColumn = useMemo(() => detectCpeColumn(headers), [headers]);
   const suggestedAmountColumn = useMemo(() => detectAmountColumn(headers), [headers]);
-  const suggestedTypeColumn = useMemo(() => detectTypeColumn(headers), [headers]);
 
   useEffect(() => {
     if (!open) {
@@ -107,8 +81,6 @@ export function ImportChargebacksDialog({ open, onOpenChange }: ImportChargeback
       setRows([]);
       setSelectedCpeColumn("");
       setSelectedAmountColumn("");
-      setSelectedTypeColumn("");
-      setTypeFilterValue("");
       setImportSummary(null);
       return;
     }
@@ -119,31 +91,19 @@ export function ImportChargebacksDialog({ open, onOpenChange }: ImportChargeback
     if (!selectedAmountColumn && suggestedAmountColumn) {
       setSelectedAmountColumn(suggestedAmountColumn);
     }
-    if (!selectedTypeColumn && suggestedTypeColumn) {
-      setSelectedTypeColumn(suggestedTypeColumn);
-    }
-  }, [open, selectedCpeColumn, suggestedCpeColumn, selectedAmountColumn, suggestedAmountColumn, selectedTypeColumn, suggestedTypeColumn]);
-
-  const filteredRows = useMemo(() => {
-    if (!selectedTypeColumn || !typeFilterValue.trim()) return rows;
-    const normalizedFilter = typeFilterValue.trim().toLowerCase();
-    return rows.filter((row) => {
-      const cellValue = String(row[selectedTypeColumn] ?? "").trim().toLowerCase();
-      return cellValue === normalizedFilter;
-    });
-  }, [rows, selectedTypeColumn, typeFilterValue]);
+  }, [open, selectedCpeColumn, suggestedCpeColumn, selectedAmountColumn, suggestedAmountColumn]);
 
   const preparedRows = useMemo(() => {
     if (!selectedCpeColumn || !selectedAmountColumn) return [];
 
-    return filteredRows
+    return rows
       .map((row) => ({
         ...row,
         cpe: String(row[selectedCpeColumn] ?? "").trim(),
         chargeback_amount: String(row[selectedAmountColumn] ?? "0").trim(),
       }))
       .filter((row) => row.cpe.length > 0);
-  }, [selectedAmountColumn, filteredRows, selectedCpeColumn]);
+  }, [selectedAmountColumn, rows, selectedCpeColumn]);
 
   const handleImport = async () => {
     if (!fileName || preparedRows.length === 0 || !selectedCpeColumn) return;
@@ -204,8 +164,6 @@ export function ImportChargebacksDialog({ open, onOpenChange }: ImportChargeback
                   setRows(nextRows);
                   setSelectedCpeColumn(detectCpeColumn(nextHeaders) || "");
                   setSelectedAmountColumn(detectAmountColumn(nextHeaders) || "");
-                  setSelectedTypeColumn(detectTypeColumn(nextHeaders) || "");
-                  setTypeFilterValue("");
                   setImportSummary(null);
                 }}
                 onClearFile={() => {
@@ -214,8 +172,6 @@ export function ImportChargebacksDialog({ open, onOpenChange }: ImportChargeback
                   setRows([]);
                   setSelectedCpeColumn("");
                   setSelectedAmountColumn("");
-                  setSelectedTypeColumn("");
-                  setTypeFilterValue("");
                   setImportSummary(null);
                 }}
               />
@@ -267,16 +223,9 @@ export function ImportChargebacksDialog({ open, onOpenChange }: ImportChargeback
                     <div className="space-y-1 text-sm">
                       <p className="font-medium text-foreground">Resumo antes de importar</p>
                       <p className="text-muted-foreground">Linhas lidas: {rows.length}</p>
-                      {selectedTypeColumn ? (
-                        <p className="text-muted-foreground flex items-center gap-1.5">
-                          <Filter className="h-3 w-3" />
-                          Linhas filtradas ({typeFilterValue || "—"}): {filteredRows.length}
-                        </p>
-                      ) : null}
                       <p className="text-muted-foreground">Linhas válidas (com CPE): {preparedRows.length}</p>
                       <p className="text-xs text-muted-foreground mt-1">
                         CPE: <span className="font-medium text-foreground">{selectedCpeColumn}</span> · Valor: <span className="font-medium text-foreground">{selectedAmountColumn}</span>
-                        {selectedTypeColumn ? <> · Tipo: <span className="font-medium text-foreground">{selectedTypeColumn}</span></> : null}
                       </p>
                     </div>
                   </div>
