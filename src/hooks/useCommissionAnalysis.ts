@@ -45,6 +45,17 @@ export interface FileDataRow {
   valorReceber: string;
 }
 
+export interface ComparisonRow {
+  file: FileDataRow;
+  systemConsumoAnual: number | null;
+  systemDbl: number | null;
+  systemDuracao: number | null;
+  hasConsumoDiscrepancy: boolean;
+  hasDblDiscrepancy: boolean;
+  hasDuracaoDiscrepancy: boolean;
+  hasAnyDiscrepancy: boolean;
+}
+
 export interface CommissionAnalysisCommercial {
   userId: string;
   name: string;
@@ -56,6 +67,7 @@ export interface CommissionAnalysisCommercial {
   differentialCount: number;
   cpes: CpeDetail[];
   fileData: FileDataRow[];
+  comparisonData: ComparisonRow[];
 }
 
 export interface CommissionAnalysisSummary {
