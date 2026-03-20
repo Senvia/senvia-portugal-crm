@@ -512,6 +512,8 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
         comFileCount,
         comFileTotal,
         cbFileDiscrepancies,
+        cbFileItems,
+        comFileItems,
       },
     } satisfies CommissionAnalysisData;
   }, [chargebackData.data?.imports, chargebackData.data?.items, effectiveUserIds, liveCommissions.data, members, selectedMonth]);
