@@ -46,16 +46,22 @@ export function useSalesCommissions() {
 
       if (salesError) throw salesError;
 
-      // Fetch members with commission rates and names
+      // Fetch members with commission rates
       const { data: members, error: membersError } = await supabase
         .from("organization_members")
-        .select("user_id, commission_rate, full_name")
+        .select("user_id, commission_rate")
         .eq("organization_id", orgId)
         .eq("is_active", true);
 
       if (membersError) throw membersError;
 
-      const profileMap = new Map(members?.map(m => [m.user_id, m.full_name]) || []);
+      // Fetch profiles for names via organization_members user_ids
+      const memberUserIds = (members || []).map(m => m.user_id);
+      const { data: profiles } = memberUserIds.length > 0
+        ? await supabase.from("profiles").select("id, full_name").in("id", memberUserIds)
+        : { data: [] };
+
+      const profileMap = new Map((profiles || []).map(p => [p.id, p.full_name]));
       const memberRateMap = new Map(members?.map(m => [m.user_id, Number(m.commission_rate || 0)]) || []);
 
       // Group sales by created_by
