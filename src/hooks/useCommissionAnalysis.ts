@@ -316,6 +316,15 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
     // Helper to normalize CPE for matching
     const normCpe = (s: string) => s.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
 
+    // Helper: calculate canonical duration from dates
+    const calcDurationFromDates = (startStr: string, endStr: string): number | null => {
+      const s = parseDateValue(startStr);
+      const e = parseDateValue(endStr);
+      if (!s || !e || isNaN(s.getTime()) || isNaN(e.getTime())) return null;
+      const diffMs = e.getTime() - s.getTime();
+      return diffMs / (365 * 86400000);
+    };
+
     // Build comparison data for a commercial
     const buildComparison = (fileEntries: { parsed: FileDataRow; matchedProposalCpeId: string | null }[], cpes: CpeDetail[]): ComparisonRow[] => {
       return fileEntries.map(({ parsed: file, matchedProposalCpeId }) => {
@@ -324,7 +333,11 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
 
         const fileConsumo = parseFloat(file.consumoAnual.replace(/[^\d.,]/g, "").replace(",", ".")) || 0;
         const fileDbl = parseFloat(file.dbl.replace(/[^\d.,]/g, "").replace(",", ".")) || 0;
-        const fileDuracao = parseFloat(file.duracaoContrato.replace(/[^\d.,]/g, "").replace(",", ".")) || 0;
+        
+        // Canonical duration: prefer calculation from dates, fallback to raw field
+        const fileDuracaoFromDates = file.dataInicio && file.dataFim ? calcDurationFromDates(file.dataInicio, file.dataFim) : null;
+        const fileDuracaoRaw = parseFloat(file.duracaoContrato.replace(/[^\d.,]/g, "").replace(",", ".")) || 0;
+        const fileDuracao = fileDuracaoFromDates ?? fileDuracaoRaw;
 
         const systemConsumo = match ? match.consumo_anual : null;
         const systemDbl = match ? match.dbl : null;
@@ -332,7 +345,8 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
 
         const hasConsumoDiscrepancy = systemConsumo !== null && Math.abs(systemConsumo - fileConsumo) > 0.01;
         const hasDblDiscrepancy = systemDbl !== null && Math.abs(systemDbl - fileDbl) > 0.01;
-        const hasDuracaoDiscrepancy = systemDuracao !== null && Math.abs(systemDuracao - fileDuracao) > 0.01;
+        // Compare with tolerance for duration (dates can produce fractional values)
+        const hasDuracaoDiscrepancy = systemDuracao !== null && Math.abs(systemDuracao - fileDuracao) > 0.02;
 
         return {
           file,
