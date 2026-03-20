@@ -10,6 +10,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { TeamMemberFilter } from "@/components/dashboard/TeamMemberFilter";
 import { ImportChargebacksDialog } from "@/components/finance/ImportChargebacksDialog";
 import { useCommissionAnalysis, useSyncFileToSystem, type CommissionAnalysisCommercial, type FileDataRow, type ComparisonRow, type SyncFileToSystemItem } from "@/hooks/useCommissionAnalysis";
