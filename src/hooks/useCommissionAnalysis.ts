@@ -117,6 +117,29 @@ const EMPTY_ANALYSIS: CommissionAnalysisData = {
   },
 };
 
+function parseRawRow(raw: Record<string, unknown> | null): FileDataRow | null {
+  if (!raw) return null;
+  const get = (keys: string[]) => {
+    for (const k of keys) {
+      const val = raw[k];
+      if (val != null && String(val).trim()) return String(val).trim();
+    }
+    return "";
+  };
+  return {
+    tipoComissao: get(["Tipo de comissão", "Tipo de Comissão", "Tipo de comissao"]),
+    nomeEmpresa: get(["Nome da Empresa", "Nome da empresa"]),
+    tipo: get(["Tipo"]),
+    cpe: get(["Linha de Contrato: Local de Consumo", "CPE", "cpe"]),
+    consumoAnual: get(["Linha de Contrato: Consumo anual", "Consumo anual"]),
+    duracaoContrato: get(["Duração contrato (anos)", "Duracao contrato (anos)"]),
+    dataInicio: get(["Linha de Contrato: Data de inicio", "Linha de Contrato: Data de Inicio", "Data de inicio"]),
+    dataFim: get(["Linha de Contrato: Data Fim de Contrato", "Data Fim de Contrato"]),
+    dbl: get(["DBL"]),
+    valorReceber: get(["Valor a receber", "Comissão Total"]),
+  };
+}
+
 export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: string[] | null) {
   const { organization } = useAuth();
   const { data: members = [] } = useTeamMembers();
