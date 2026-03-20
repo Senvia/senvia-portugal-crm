@@ -482,8 +482,8 @@ export default function Leads() {
   };
 
   const handleProposalCreated = () => {
-    if (pendingLead) {
-      // Find the proposal stage key
+    if (pendingLead && !prefillProposalClientId) {
+      // Normal proposal stage flow (not Perfect2Gether won flow)
       const proposalStage = stages.find(s => isProposalStage(s.key));
       if (proposalStage) {
         updateStatus.mutate({ leadId: pendingLead.id, status: proposalStage.key });
@@ -491,6 +491,7 @@ export default function Leads() {
     }
     setPendingLead(null);
     setNewlyCreatedClientId(null);
+    setPrefillProposalClientId(null);
     setIsChainedFlow(false);
     setIsCreateProposalModalOpen(false);
   };

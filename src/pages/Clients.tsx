@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useLocation } from "react-router-dom";
 import { usePersistedState } from "@/hooks/usePersistedState";
 import { useAuth } from "@/contexts/AuthContext";
 import { SEO } from "@/components/SEO";
