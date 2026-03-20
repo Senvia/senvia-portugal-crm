@@ -506,6 +506,8 @@ export interface SyncFileToSystemItem {
   dbl: number;
   consumoAnual: number;
   duracaoContrato: number;
+  contratoInicio: string | null;
+  contratoFim: string | null;
 }
 
 export function useSyncFileToSystem() {
