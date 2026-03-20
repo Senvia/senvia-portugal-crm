@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { TeamMemberFilter } from "@/components/dashboard/TeamMemberFilter";
 import { ImportChargebacksDialog } from "@/components/finance/ImportChargebacksDialog";
-import { useCommissionAnalysis, type CommissionAnalysisCommercial, type FileDataRow } from "@/hooks/useCommissionAnalysis";
+import { useCommissionAnalysis, type CommissionAnalysisCommercial, type FileDataRow, type ComparisonRow } from "@/hooks/useCommissionAnalysis";
 import { useTeamFilter } from "@/hooks/useTeamFilter";
 import { normalizeString } from "@/lib/utils";
 
@@ -48,16 +48,19 @@ function CommissionAnalysisTableSkeleton() {
   );
 }
 
-function FileDataTable({ fileData }: { fileData: FileDataRow[] }) {
-  if (fileData.length === 0) {
+function ComparisonDataTable({ comparisonData }: { comparisonData: ComparisonRow[] }) {
+  if (comparisonData.length === 0) {
     return <p className="text-xs text-muted-foreground py-2">Sem dados do ficheiro para este comercial.</p>;
   }
+
+  const discrepancyCell = "bg-destructive/10 text-destructive font-medium";
 
   return (
     <div className="rounded-md border bg-muted/30 overflow-auto">
       <Table>
         <TableHeader>
           <TableRow className="text-xs">
+            <TableHead className="h-8 min-w-[60px]">Fonte</TableHead>
             <TableHead className="h-8 min-w-[100px]">Tipo Comissão</TableHead>
             <TableHead className="h-8 min-w-[140px]">Nome da Empresa</TableHead>
             <TableHead className="h-8 min-w-[60px]">Tipo</TableHead>
@@ -70,18 +73,55 @@ function FileDataTable({ fileData }: { fileData: FileDataRow[] }) {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {fileData.map((row, idx) => (
-            <TableRow key={idx} className="text-xs">
-              <TableCell className="py-1.5">{row.tipoComissao || "—"}</TableCell>
-              <TableCell className="py-1.5 truncate max-w-[160px]">{row.nomeEmpresa || "—"}</TableCell>
-              <TableCell className="py-1.5">{row.tipo || "—"}</TableCell>
-              <TableCell className="py-1.5 font-mono">{row.cpe || "—"}</TableCell>
-              <TableCell className="py-1.5 tabular-nums">{row.dbl || "—"}</TableCell>
-              <TableCell className="py-1.5 text-right tabular-nums">{row.consumoAnual || "—"}</TableCell>
-              <TableCell className="py-1.5 text-right tabular-nums">{row.duracaoContrato || "—"}</TableCell>
-              <TableCell className="py-1.5">{row.dataInicio || "—"}</TableCell>
-              <TableCell className="py-1.5">{row.dataFim || "—"}</TableCell>
-            </TableRow>
+          {comparisonData.map((row, idx) => (
+            <>
+              {/* File row */}
+              <TableRow key={`file-${idx}`} className="text-xs border-b-0">
+                <TableCell className="py-1.5">
+                  <span className="inline-flex items-center rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                    Ficheiro
+                  </span>
+                </TableCell>
+                <TableCell className="py-1.5">{row.file.tipoComissao || "—"}</TableCell>
+                <TableCell className="py-1.5 truncate max-w-[160px]">{row.file.nomeEmpresa || "—"}</TableCell>
+                <TableCell className="py-1.5">{row.file.tipo || "—"}</TableCell>
+                <TableCell className="py-1.5 font-mono">{row.file.cpe || "—"}</TableCell>
+                <TableCell className={`py-1.5 tabular-nums ${row.hasDblDiscrepancy ? discrepancyCell : ""}`}>
+                  {row.file.dbl || "—"}
+                </TableCell>
+                <TableCell className={`py-1.5 text-right tabular-nums ${row.hasConsumoDiscrepancy ? discrepancyCell : ""}`}>
+                  {row.file.consumoAnual || "—"}
+                </TableCell>
+                <TableCell className={`py-1.5 text-right tabular-nums ${row.hasDuracaoDiscrepancy ? discrepancyCell : ""}`}>
+                  {row.file.duracaoContrato || "—"}
+                </TableCell>
+                <TableCell className="py-1.5">{row.file.dataInicio || "—"}</TableCell>
+                <TableCell className="py-1.5">{row.file.dataFim || "—"}</TableCell>
+              </TableRow>
+              {/* System row */}
+              <TableRow key={`sys-${idx}`} className="text-xs bg-muted/50 border-b">
+                <TableCell className="py-1.5">
+                  <span className="inline-flex items-center rounded-full bg-secondary px-1.5 py-0.5 text-[10px] font-medium text-secondary-foreground">
+                    Sistema
+                  </span>
+                </TableCell>
+                <TableCell className="py-1.5 text-muted-foreground">—</TableCell>
+                <TableCell className="py-1.5 text-muted-foreground">—</TableCell>
+                <TableCell className="py-1.5 text-muted-foreground">—</TableCell>
+                <TableCell className="py-1.5 text-muted-foreground">—</TableCell>
+                <TableCell className={`py-1.5 tabular-nums ${row.hasDblDiscrepancy ? discrepancyCell : "text-muted-foreground"}`}>
+                  {row.systemDbl !== null ? row.systemDbl : "—"}
+                </TableCell>
+                <TableCell className={`py-1.5 text-right tabular-nums ${row.hasConsumoDiscrepancy ? discrepancyCell : "text-muted-foreground"}`}>
+                  {row.systemConsumoAnual !== null ? row.systemConsumoAnual : "—"}
+                </TableCell>
+                <TableCell className={`py-1.5 text-right tabular-nums ${row.hasDuracaoDiscrepancy ? discrepancyCell : "text-muted-foreground"}`}>
+                  {row.systemDuracao !== null ? row.systemDuracao : "—"}
+                </TableCell>
+                <TableCell className="py-1.5 text-muted-foreground">—</TableCell>
+                <TableCell className="py-1.5 text-muted-foreground">—</TableCell>
+              </TableRow>
+            </>
           ))}
         </TableBody>
       </Table>
@@ -178,10 +218,15 @@ export function CommissionAnalysisTab() {
                           {commercial.fileData.length} linha(s)
                         </span>
                       )}
+                      {commercial.comparisonData.some((r) => r.hasAnyDiscrepancy) && (
+                        <span className="inline-flex items-center rounded-full bg-destructive/10 px-1.5 py-0.5 text-[10px] font-medium text-destructive">
+                          {commercial.comparisonData.filter((r) => r.hasAnyDiscrepancy).length} discrepância(s)
+                        </span>
+                      )}
                     </div>
                   </AccordionTrigger>
                   <AccordionContent className="px-4 pb-3 pt-0">
-                    <FileDataTable fileData={commercial.fileData} />
+                    <ComparisonDataTable comparisonData={commercial.comparisonData} />
                   </AccordionContent>
                 </AccordionItem>
               ))}

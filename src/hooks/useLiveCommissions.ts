@@ -31,6 +31,8 @@ export interface CpeDetail {
   proposal_cpe_id: string;
   serial_number: string | null;
   consumo_anual: number;
+  dbl: number;
+  duracao_contrato: number;
   margem: number;
   comissao_indicativa: number;
   comissao_final: number;
@@ -149,7 +151,7 @@ export function useLiveCommissions(selectedMonth: string, effectiveUserIds?: str
 
       const { data: cpes } = await supabase
         .from('proposal_cpes')
-        .select('id, proposal_id, consumo_anual, margem, comissao, serial_number')
+        .select('id, proposal_id, consumo_anual, dbl, duracao_contrato, margem, comissao, serial_number')
         .in('proposal_id', validProposalIds);
 
       if (!cpes?.length) return emptyResult;
@@ -198,6 +200,8 @@ export function useLiveCommissions(selectedMonth: string, effectiveUserIds?: str
           proposal_cpe_id: cpe.id,
           serial_number: cpe.serial_number,
           consumo_anual: consumo,
+          dbl: cpe.dbl || 0,
+          duracao_contrato: cpe.duracao_contrato || 0,
           margem: cpe.margem || 0,
           comissao_indicativa: cpe.comissao || 0,
           comissao_final: 0,
