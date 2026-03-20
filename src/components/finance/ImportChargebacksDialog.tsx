@@ -90,6 +90,10 @@ export function ImportChargebacksDialog({ open, onOpenChange }: ImportChargeback
   const [selectedTypeColumn, setSelectedTypeColumn] = useState("");
   const [typeFilterValue, setTypeFilterValue] = useState("");
   const [importSummary, setImportSummary] = useState<ImportChargebackSummary | null>(null);
+  const [referenceMonth, setReferenceMonth] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  });
 
   const suggestedCpeColumn = useMemo(() => detectCpeColumn(headers), [headers]);
   const suggestedAmountColumn = useMemo(() => detectAmountColumn(headers), [headers]);
