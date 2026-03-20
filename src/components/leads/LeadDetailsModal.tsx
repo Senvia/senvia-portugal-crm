@@ -459,6 +459,36 @@ export function LeadDetailsModal({
                   </CardContent>
                 </Card>
 
+                {/* CPE/CUI Card - P2G only */}
+                {isP2G && (
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                        <Zap className="h-4 w-4" />
+                        CPE / CUI
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <Input
+                        type="text"
+                        placeholder="PT00..."
+                        value={editCpe}
+                        onChange={(e) => setEditCpe(e.target.value)}
+                        onFocus={() => setIsEditingCpe(true)}
+                        onBlur={() => {
+                          const currentCpe = (lead.custom_data as Record<string, unknown>)?.cpe as string || "";
+                          if (editCpe !== currentCpe) {
+                            onUpdate?.(lead.id, {
+                              custom_data: { ...(lead.custom_data as Record<string, unknown> || {}), cpe: editCpe || null },
+                            } as Partial<Lead>);
+                          }
+                          setTimeout(() => setIsEditingCpe(false), 600);
+                        }}
+                      />
+                    </CardContent>
+                  </Card>
+                )}
+
                 {/* Notes Card */}
                 <Card>
                   <CardHeader className="pb-3">
