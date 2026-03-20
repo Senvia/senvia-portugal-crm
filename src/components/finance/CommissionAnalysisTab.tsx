@@ -303,7 +303,7 @@ export function CommissionAnalysisTab() {
 
       {!isLoading && data.imports.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <Card>
+          <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setDetailModal('cb')}>
             <CardContent className="p-4 flex items-start gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-destructive/10">
                 <TrendingDown className="h-5 w-5 text-destructive" />
