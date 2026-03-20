@@ -139,7 +139,7 @@ export function CommissionAnalysisTab() {
   const [importOpen, setImportOpen] = useState(false);
   const [syncConfirmOpen, setSyncConfirmOpen] = useState(false);
   const { effectiveUserIds, canFilterByTeam } = useTeamFilter();
-  const { data, isLoading } = useCommissionAnalysis(selectedMonth, effectiveUserIds);
+  const { data, isLoading, refetch } = useCommissionAnalysis(selectedMonth, effectiveUserIds);
   const syncMutation = useSyncFileToSystem();
 
   const filteredCommercials = useMemo(() => {
