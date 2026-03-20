@@ -68,6 +68,17 @@ export const portalTotalLinkSections: PortalTotalLinkSection[] = [
       icon: Plus,
     },
   },
+  {
+    key: "rh",
+    label: "RH",
+    path: "/portal-total-link/rh",
+    title: "Recursos Humanos",
+    description: "Gestão de férias, ausências e presenças da equipa.",
+    action: {
+      label: "Marcar",
+      icon: Users,
+    },
+  },
 ];
 
 export const portalTotalLinkCycleOptions = [
