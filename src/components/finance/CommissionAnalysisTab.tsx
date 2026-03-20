@@ -416,6 +416,41 @@ export function CommissionAnalysisTab() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={detailModal !== null} onOpenChange={(open) => !open && setDetailModal(null)}>
+        <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>{detailModal === 'cb' ? 'Chargebacks (CB)' : 'Comissões'}</DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="flex-1 -mx-6 px-6">
+            <Table>
+              <TableHeader>
+                <TableRow className="text-xs">
+                  <TableHead className="h-8">CPE</TableHead>
+                  <TableHead className="h-8">Nome da Empresa</TableHead>
+                  <TableHead className="h-8">Tipo Comissão</TableHead>
+                  <TableHead className="h-8 text-right">Valor a Receber</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(detailModal === 'cb' ? data.summary.cbFileItems : data.summary.comFileItems).map((item, idx) => (
+                  <TableRow key={idx} className="text-xs">
+                    <TableCell className="font-mono">{item.cpe || "—"}</TableCell>
+                    <TableCell>{item.nomeEmpresa || "—"}</TableCell>
+                    <TableCell>{item.tipoComissao || "—"}</TableCell>
+                    <TableCell className="text-right tabular-nums">{item.valorReceber || "—"}</TableCell>
+                  </TableRow>
+                ))}
+                {(detailModal === 'cb' ? data.summary.cbFileItems : data.summary.comFileItems).length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center text-muted-foreground py-6">Sem registos</TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
