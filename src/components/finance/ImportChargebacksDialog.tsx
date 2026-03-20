@@ -60,6 +60,13 @@ function detectAmountColumn(headers: string[]) {
 }
 
 function detectTypeColumn(headers: string[]) {
+  // Prioritize "tipo de comissão/comissao" over generic "tipo"
+  const comissaoCol = headers.find((header) => {
+    const normalized = normalizeHeader(header);
+    return normalized.includes("comissao") && normalized.includes("tipo");
+  });
+  if (comissaoCol) return comissaoCol;
+
   return headers.find((header) => {
     const normalized = normalizeHeader(header);
     return (
