@@ -183,7 +183,7 @@ export function CommissionAnalysisTab() {
             <FileSearch className="h-10 w-10 text-muted-foreground" />
             <h3 className="text-lg font-semibold text-foreground">Sem dados para mostrar</h3>
             <p className="max-w-md text-sm text-muted-foreground">
-              Ainda não existem dados para os filtros atuais, ou nenhum comercial corresponde à pesquisa.
+              Importe um ficheiro para ver a análise de comissões.
             </p>
           </CardContent>
         </Card>
