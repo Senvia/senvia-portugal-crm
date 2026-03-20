@@ -31,6 +31,8 @@ export interface CpeDetail {
   proposal_cpe_id: string;
   serial_number: string | null;
   consumo_anual: number;
+  dbl: number;
+  duracao_contrato: number;
   margem: number;
   comissao_indicativa: number;
   comissao_final: number;
