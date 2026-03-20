@@ -1,19 +1,14 @@
 
 
-## Remover filtro por "Tipo" da importação
+## Remover secção "Resumo antes de importar"
 
 ### O que fazer
 
-Remover toda a lógica relacionada à coluna "Tipo" e ao filtro `typeFilterValue` do dialog de importação, simplificando o fluxo.
+**Ficheiro: `src/components/finance/ImportChargebacksDialog.tsx`**
 
-### Alterações em `src/components/finance/ImportChargebacksDialog.tsx`
+Remover a secção "Resumo antes de importar" (linhas 220-232) que mostra linhas lidas, linhas válidas e colunas detectadas. Também remover o import `FileSearch` que deixa de ser usado.
 
-1. **Remover** a função `detectTypeColumn` (linhas 63-82)
-2. **Remover estados**: `selectedTypeColumn`, `typeFilterValue`, `suggestedTypeColumn`
-3. **Remover** referências no `useEffect` (linha 122-124) e nos callbacks `onFileLoaded`/`onClearFile`
-4. **Simplificar `filteredRows`** — já não é necessário, `preparedRows` usa `rows` directamente
-5. **Remover do resumo** a linha "Linhas filtradas" e a menção a "Tipo" no rodapé
-6. **Limpar imports** não utilizados (`Filter`)
-
-O `preparedRows` passa a trabalhar directamente com `rows` em vez de `filteredRows`.
+### Alterações
+1. **Remover linhas 220-232** — a `<section>` com ícone `FileSearch` e o resumo
+2. **Remover `FileSearch`** do import de `lucide-react` (linha 2)
 
