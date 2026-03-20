@@ -317,8 +317,8 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
     const normCpe = (s: string) => s.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
 
     // Build comparison data for a commercial
-    const buildComparison = (fileRows: FileDataRow[], cpes: CpeDetail[]): ComparisonRow[] => {
-      return fileRows.map((file) => {
+    const buildComparison = (fileEntries: { parsed: FileDataRow; matchedProposalCpeId: string | null }[], cpes: CpeDetail[]): ComparisonRow[] => {
+      return fileEntries.map(({ parsed: file, matchedProposalCpeId }) => {
         const fileCpeNorm = normCpe(file.cpe);
         const match = fileCpeNorm ? cpes.find((c) => c.serial_number && normCpe(c.serial_number) === fileCpeNorm) : undefined;
 
@@ -344,6 +344,7 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
           systemDataInicio: match ? (match.contrato_inicio ?? null) : null,
           systemDataFim: match ? (match.contrato_fim ?? null) : null,
           systemNegotiationType: match ? (match.negotiation_type ?? null) : null,
+          matchedProposalCpeId: matchedProposalCpeId ?? (match ? match.id : null),
           hasConsumoDiscrepancy,
           hasDblDiscrepancy,
           hasDuracaoDiscrepancy,
