@@ -40,6 +40,9 @@ export interface CpeDetail {
   servicos: string[];
   servicos_kwp: number;
   proposal_type: string;
+  client_name: string | null;
+  contrato_inicio: string | null;
+  contrato_fim: string | null;
 }
 
 export interface CommercialEntry {
