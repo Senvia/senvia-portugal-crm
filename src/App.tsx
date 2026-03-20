@@ -23,6 +23,7 @@ const PortalTotalLinkContratos = lazy(() => import("./pages/portal-total-link/Co
 const PortalTotalLinkIds = lazy(() => import("./pages/portal-total-link/Ids"));
 const PortalTotalLinkPendentes = lazy(() => import("./pages/portal-total-link/Pendentes"));
 const PortalTotalLinkReclamacoes = lazy(() => import("./pages/portal-total-link/Reclamacoes"));
+const PortalTotalLinkRh = lazy(() => import("./pages/portal-total-link/Rh"));
 const Clients = lazy(() => import("./pages/Clients"));
 const Calendar = lazy(() => import("./pages/Calendar"));
 const Settings = lazy(() => import("./pages/Settings"));
