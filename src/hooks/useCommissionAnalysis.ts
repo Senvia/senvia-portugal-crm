@@ -94,6 +94,8 @@ export interface CommissionAnalysisSummary {
   comFileCount: number;
   comFileTotal: number;
   cbFileDiscrepancies: number;
+  cbFileItems: FileDataRow[];
+  comFileItems: FileDataRow[];
 }
 
 export interface UnmatchedChargebackItem {
