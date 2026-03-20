@@ -200,6 +200,18 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
 
     const byUser = new Map<string, CommissionAnalysisCommercial>();
 
+    // Build file data map: matched_user_id -> FileDataRow[]
+    const userFileData = new Map<string, FileDataRow[]>();
+    for (const item of filteredItems) {
+      if (!item.matched_user_id) continue;
+      const parsed = parseRawRow(item.raw_row);
+      if (parsed) {
+        const arr = userFileData.get(item.matched_user_id) || [];
+        arr.push(parsed);
+        userFileData.set(item.matched_user_id, arr);
+      }
+    }
+
     for (const commercial of liveData?.commercials || []) {
       byUser.set(commercial.userId, {
         userId: commercial.userId,
@@ -211,6 +223,7 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
         differentialAmount: commercial.totalIndicativa,
         differentialCount: commercial.cpes.length,
         cpes: commercial.cpes,
+        fileData: userFileData.get(commercial.userId) || [],
       });
     }
 
