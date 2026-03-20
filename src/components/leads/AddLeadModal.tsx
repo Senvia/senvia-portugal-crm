@@ -234,6 +234,7 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
       assigned_to: data.assigned_to && data.assigned_to !== 'unassigned' ? data.assigned_to : undefined,
       tipologia: showEnergy ? data.tipologia as LeadTipologia : undefined,
       consumo_anual: showEnergy && data.consumo_anual ? Number(data.consumo_anual) : undefined,
+      custom_data: cpeValue.trim() ? { cpe: cpeValue.trim() } : undefined,
     });
 
     if (pendingFiles.length > 0 && lead?.id) {
