@@ -249,7 +249,7 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
       const [importsResult, itemsResult] = await Promise.all([
         (supabase as any)
           .from("commission_chargeback_imports")
-          .select("id, created_at, file_name, total_rows, matched_rows, unmatched_rows, chargeback_count, total_chargeback_amount")
+          .select("id, created_at, file_name, total_rows, matched_rows, unmatched_rows, chargeback_count, total_chargeback_amount, reference_month")
           .eq("organization_id", organizationId)
           .order("created_at", { ascending: false })
           .range(0, 199),
