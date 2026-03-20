@@ -88,6 +88,11 @@ export interface CommissionAnalysisSummary {
   unmatchedCount: number;
   unmatchedAmount: number;
   lastImportAt: string | null;
+  cbFileCount: number;
+  cbFileTotal: number;
+  comFileCount: number;
+  comFileTotal: number;
+  cbFileDiscrepancies: number;
 }
 
 export interface UnmatchedChargebackItem {
@@ -134,6 +139,11 @@ const EMPTY_ANALYSIS: CommissionAnalysisData = {
     unmatchedCount: 0,
     unmatchedAmount: 0,
     lastImportAt: null,
+    cbFileCount: 0,
+    cbFileTotal: 0,
+    comFileCount: 0,
+    comFileTotal: 0,
+    cbFileDiscrepancies: 0,
   },
 };
 
@@ -427,6 +437,35 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
     const unmatchedCount = unmatchedItems.length;
     const unmatchedAmount = unmatchedItems.reduce((sum, item) => sum + Number(item.chargeback_amount || 0), 0);
 
+    // Calculate CB summary from ALL items in active import (matched + unmatched)
+    const parseNumVal = (s: string) => {
+      const cleaned = s.replace(/[^\d.,-]/g, "").replace(",", ".");
+      return parseFloat(cleaned) || 0;
+    };
+    const normStr = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+    let cbFileCount = 0, cbFileTotal = 0, cbFileDiscrepancies = 0;
+    let comFileCount = 0, comFileTotal = 0;
+    for (const item of itemsFromActiveImport) {
+      const parsed = parseRawRow(item.raw_row as Record<string, unknown> | null);
+      if (!parsed) continue;
+      const isCb = normStr(parsed.tipoComissao).includes("cb");
+      const val = parseNumVal(parsed.valorReceber);
+      if (isCb) {
+        cbFileCount++;
+        cbFileTotal += val;
+      } else {
+        comFileCount++;
+        comFileTotal += val;
+      }
+    }
+    // Count CB discrepancies from commercials (only matched ones have comparison data)
+    for (const commercial of commercials) {
+      for (const row of commercial.comparisonData) {
+        const isCb = normStr(row.file.tipoComissao).includes("cb");
+        if (isCb && row.hasAnyDiscrepancy) cbFileDiscrepancies++;
+      }
+    }
+
     const unmatchedItemsList: UnmatchedChargebackItem[] = unmatchedItems.map((item) => ({
       cpe: item.cpe,
       chargebackAmount: Number(item.chargeback_amount || 0),
@@ -449,6 +488,11 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
         unmatchedCount,
         unmatchedAmount,
         lastImportAt: imports[0]?.created_at || null,
+        cbFileCount,
+        cbFileTotal,
+        comFileCount,
+        comFileTotal,
+        cbFileDiscrepancies,
       },
     } satisfies CommissionAnalysisData;
   }, [chargebackData.data?.imports, chargebackData.data?.items, effectiveUserIds, liveCommissions.data, members, selectedMonth]);
