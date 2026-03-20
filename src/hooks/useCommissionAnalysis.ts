@@ -118,26 +118,54 @@ const EMPTY_ANALYSIS: CommissionAnalysisData = {
   },
 };
 
+function normalizeKey(s: string) {
+  return s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function parseRawRow(raw: Record<string, unknown> | null): FileDataRow | null {
   if (!raw) return null;
-  const get = (keys: string[]) => {
-    for (const k of keys) {
-      const val = raw[k];
-      if (val != null && String(val).trim()) return String(val).trim();
+
+  // Build a normalized-key lookup so accent/case/space variations all work
+  const normalizedMap = new Map<string, string>();
+  for (const key of Object.keys(raw)) {
+    const nk = normalizeKey(key);
+    if (!normalizedMap.has(nk)) {
+      const val = raw[key];
+      if (val != null && String(val).trim()) {
+        normalizedMap.set(nk, String(val).trim());
+      }
+    }
+  }
+
+  const get = (patterns: string[]) => {
+    for (const p of patterns) {
+      const np = normalizeKey(p);
+      const exact = normalizedMap.get(np);
+      if (exact) return exact;
+      // Partial match
+      for (const [nk, v] of normalizedMap) {
+        if (nk.includes(np) || np.includes(nk)) return v;
+      }
     }
     return "";
   };
+
   return {
-    tipoComissao: get(["Tipo de comissão", "Tipo de Comissão", "Tipo de comissao"]),
-    nomeEmpresa: get(["Nome da Empresa", "Nome da empresa"]),
+    tipoComissao: get(["Tipo de Comissão", "Tipo de comissao"]),
+    nomeEmpresa: get(["Nome da Empresa"]),
     tipo: get(["Tipo"]),
-    cpe: get(["Linha de Contrato: Local de Consumo", "CPE", "cpe"]),
+    cpe: get(["Linha de Contrato: Local de Consumo", "Local de Consumo", "CPE"]),
     consumoAnual: get(["Linha de Contrato: Consumo anual", "Consumo anual"]),
-    duracaoContrato: get(["Duração contrato (anos)", "Duracao contrato (anos)"]),
-    dataInicio: get(["Linha de Contrato: Data de inicio", "Linha de Contrato: Data de Inicio", "Data de inicio"]),
-    dataFim: get(["Linha de Contrato: Data Fim de Contrato", "Data Fim de Contrato"]),
+    duracaoContrato: get(["Duração contrato (anos)", "Duracao contrato"]),
+    dataInicio: get(["Linha de Contrato: Data de inicio", "Data de inicio"]),
+    dataFim: get(["Linha de Contrato: Data Fim de Contrato", "Data Fim"]),
     dbl: get(["DBL"]),
-    valorReceber: get(["Valor a receber", "Comissão Total"]),
+    valorReceber: get(["Valor a receber", "Comissao Total"]),
   };
 }
 
