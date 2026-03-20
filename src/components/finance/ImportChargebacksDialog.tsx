@@ -165,9 +165,9 @@ export function ImportChargebacksDialog({ open, onOpenChange }: ImportChargeback
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent variant="fullScreen" className="flex h-full flex-col overflow-hidden p-0">
         <DialogHeader className="shrink-0 border-b px-4 py-4 pr-14 sm:px-6">
-          <DialogTitle>Importar chargebacks</DialogTitle>
+          <DialogTitle>Importar</DialogTitle>
           <DialogDescription>
-            Carregue o ficheiro, escolha a coluna CPE e o sistema associa os chargebacks aos comerciais.
+            Carregue o ficheiro e o sistema associa automaticamente aos comerciais.
           </DialogDescription>
         </DialogHeader>
 
