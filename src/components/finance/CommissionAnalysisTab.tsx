@@ -14,6 +14,7 @@ import { ImportChargebacksDialog } from "@/components/finance/ImportChargebacksD
 import { useCommissionAnalysis, type CommissionAnalysisCommercial, type FileDataRow, type ComparisonRow } from "@/hooks/useCommissionAnalysis";
 import { useTeamFilter } from "@/hooks/useTeamFilter";
 import { normalizeString } from "@/lib/utils";
+import { NEGOTIATION_TYPE_LABELS, type NegotiationType } from "@/types/proposals";
 
 function generateMonthOptions() {
   const options: { value: string; label: string }[] = [];
@@ -105,7 +106,7 @@ function ComparisonDataTable({ comparisonData }: { comparisonData: ComparisonRow
                     Sistema
                   </span>
                 </TableCell>
-                <TableCell className="py-1.5 text-muted-foreground">—</TableCell>
+                <TableCell className="py-1.5 text-muted-foreground">{row.systemNegotiationType ? NEGOTIATION_TYPE_LABELS[row.systemNegotiationType as NegotiationType] ?? row.systemNegotiationType : "—"}</TableCell>
                 <TableCell className="py-1.5 text-muted-foreground truncate max-w-[160px]">{row.systemClientName || "—"}</TableCell>
                 <TableCell className="py-1.5 text-muted-foreground">—</TableCell>
                 <TableCell className="py-1.5 font-mono text-muted-foreground">{row.systemCpe || "—"}</TableCell>
