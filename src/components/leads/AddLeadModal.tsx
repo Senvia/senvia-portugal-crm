@@ -116,6 +116,7 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
   const [matchedClient, setMatchedClient] = useState<{ id: string; name: string; email: string | null; phone: string | null; notes: string | null; company: string | null } | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [cpeValue, setCpeValue] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isTelecom = organization?.niche === 'telecom';
