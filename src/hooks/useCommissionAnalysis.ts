@@ -445,7 +445,7 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
     const normStr = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
     let cbFileCount = 0, cbFileTotal = 0, cbFileDiscrepancies = 0;
     let comFileCount = 0, comFileTotal = 0;
-    for (const item of itemsFromActiveImportRaw) {
+    for (const item of itemsFromActiveImport) {
       const parsed = parseRawRow(item.raw_row as Record<string, unknown> | null);
       if (!parsed) continue;
       const isCb = normStr(parsed.tipoComissao).includes("cb");
