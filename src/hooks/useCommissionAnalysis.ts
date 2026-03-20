@@ -50,6 +50,10 @@ export interface ComparisonRow {
   systemConsumoAnual: number | null;
   systemDbl: number | null;
   systemDuracao: number | null;
+  systemClientName: string | null;
+  systemCpe: string | null;
+  systemDataInicio: string | null;
+  systemDataFim: string | null;
   hasConsumoDiscrepancy: boolean;
   hasDblDiscrepancy: boolean;
   hasDuracaoDiscrepancy: boolean;
