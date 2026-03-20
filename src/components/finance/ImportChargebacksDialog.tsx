@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, FileSearch, AlertTriangle, CalendarDays } from "lucide-react";
+import { Loader2, AlertTriangle, CalendarDays } from "lucide-react";
 import { toast } from "sonner";
 import { ImportStep1Upload } from "@/components/marketing/import/ImportStep1Upload";
 import { Button } from "@/components/ui/button";
@@ -217,19 +217,6 @@ export function ImportChargebacksDialog({ open, onOpenChange }: ImportChargeback
                   </div>
                 </section>
 
-                <section className="space-y-3 rounded-xl border bg-card p-4 sm:p-5">
-                  <div className="flex items-start gap-3">
-                    <FileSearch className="mt-0.5 h-4 w-4 text-muted-foreground" />
-                    <div className="space-y-1 text-sm">
-                      <p className="font-medium text-foreground">Resumo antes de importar</p>
-                      <p className="text-muted-foreground">Linhas lidas: {rows.length}</p>
-                      <p className="text-muted-foreground">Linhas válidas (com CPE): {preparedRows.length}</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        CPE: <span className="font-medium text-foreground">{selectedCpeColumn}</span> · Valor: <span className="font-medium text-foreground">{selectedAmountColumn}</span>
-                      </p>
-                    </div>
-                  </div>
-                </section>
               </>
             )}
           </div>
