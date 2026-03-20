@@ -156,6 +156,7 @@ export function useCreateLead() {
       consumo_anual?: number;
       company_nif?: string;
       company_name?: string;
+      custom_data?: Record<string, unknown>;
     }) => {
       if (!organization?.id) throw new Error('Sem organização');
 
@@ -197,10 +198,12 @@ export function useCreateLead() {
         }
       }
       
+      const { custom_data, ...rest } = leadData;
       const { data, error } = await supabase
         .from('leads')
         .insert({
-          ...leadData,
+          ...rest,
+          custom_data: custom_data as Json | undefined,
           assigned_to: assignedTo,
           organization_id: organization.id,
           status: 'new',

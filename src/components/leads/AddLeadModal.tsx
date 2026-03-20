@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useMemo } from "react";
+import { isPerfect2GetherOrg } from "@/lib/perfect2gether";
 import { toast } from "@/hooks/use-toast";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -115,9 +116,11 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
   const [matchedClient, setMatchedClient] = useState<{ id: string; name: string; email: string | null; phone: string | null; notes: string | null; company: string | null } | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [cpeValue, setCpeValue] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isTelecom = organization?.niche === 'telecom';
+  const isP2G = isPerfect2GetherOrg(organization?.id);
   const { modules } = useModules();
   const showEnergy = isTelecom && modules.energy;
   const hasActiveWhatsappAutomation = useMemo(() => {
@@ -231,6 +234,7 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
       assigned_to: data.assigned_to && data.assigned_to !== 'unassigned' ? data.assigned_to : undefined,
       tipologia: showEnergy ? data.tipologia as LeadTipologia : undefined,
       consumo_anual: showEnergy && data.consumo_anual ? Number(data.consumo_anual) : undefined,
+      custom_data: cpeValue.trim() ? { cpe: cpeValue.trim() } : undefined,
     });
 
     if (pendingFiles.length > 0 && lead?.id) {
@@ -241,6 +245,7 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
 
     setMatchedClient(null);
     setPendingFiles([]);
+    setCpeValue("");
     form.reset({
       company_nif: "",
       company_name: "",
@@ -379,6 +384,18 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
                             />
                           )}
                         </div>
+                        {isP2G && (
+                          <div className="mt-4">
+                            <label className="text-sm font-medium leading-none">CPE/CUI</label>
+                            <Input
+                              className="mt-2"
+                              placeholder="PT00..."
+                              value={cpeValue}
+                              onChange={(e) => setCpeValue(e.target.value)}
+                              disabled={nifValidation.isDuplicate}
+                            />
+                          </div>
+                        )}
                       </CardContent>
                     </Card>
                   )}
