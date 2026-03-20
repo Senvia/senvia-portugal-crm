@@ -21,14 +21,14 @@ import { NEGOTIATION_TYPE_LABELS, type NegotiationType } from "@/types/proposals
 import { toast } from "@/hooks/use-toast";
 
 function generateMonthOptions() {
-  const options: { value: string; label: string }[] = [];
+  const options: {value: string;label: string;}[] = [];
   const now = new Date();
 
   for (let i = 0; i < 12; i += 1) {
     const date = startOfMonth(subMonths(now, i));
     options.push({
       value: format(date, "yyyy-MM-dd"),
-      label: format(date, "MMMM yyyy", { locale: pt }),
+      label: format(date, "MMMM yyyy", { locale: pt })
     });
   }
 
@@ -40,20 +40,20 @@ function CommissionAnalysisTableSkeleton() {
     <Card>
       <CardContent className="p-0">
         <div className="space-y-3 p-4">
-          {Array.from({ length: 6 }).map((_, index) => (
-            <div key={index} className="grid grid-cols-9 gap-3">
-              {Array.from({ length: 9 }).map((__, cellIndex) => (
-                <Skeleton key={cellIndex} className="h-10 w-full" />
-              ))}
+          {Array.from({ length: 6 }).map((_, index) =>
+          <div key={index} className="grid grid-cols-9 gap-3">
+              {Array.from({ length: 9 }).map((__, cellIndex) =>
+            <Skeleton key={cellIndex} className="h-10 w-full" />
+            )}
             </div>
-          ))}
+          )}
         </div>
       </CardContent>
-    </Card>
-  );
+    </Card>);
+
 }
 
-function ComparisonDataTable({ comparisonData }: { comparisonData: ComparisonRow[] }) {
+function ComparisonDataTable({ comparisonData }: {comparisonData: ComparisonRow[];}) {
   if (comparisonData.length === 0) {
     return <p className="text-xs text-muted-foreground py-2">Sem dados do ficheiro para este comercial.</p>;
   }
@@ -97,8 +97,8 @@ function ComparisonDataTable({ comparisonData }: { comparisonData: ComparisonRow
                   <TableCell className="py-1.5 text-right tabular-nums">{row.file.duracaoContrato || "—"}</TableCell>
                   <TableCell className="py-1.5">{row.file.dataInicio || "—"}</TableCell>
                   <TableCell className="py-1.5">{row.file.dataFim || "—"}</TableCell>
-                </TableRow>
-              );
+                </TableRow>);
+
             }
 
             return (
@@ -149,13 +149,13 @@ function ComparisonDataTable({ comparisonData }: { comparisonData: ComparisonRow
                   <TableCell className="py-1.5 text-muted-foreground">{row.systemDataInicio || "—"}</TableCell>
                   <TableCell className="py-1.5 text-muted-foreground">{row.systemDataFim || "—"}</TableCell>
                 </TableRow>
-              </React.Fragment>
-            );
+              </React.Fragment>);
+
           })}
         </TableBody>
       </Table>
-    </div>
-  );
+    </div>);
+
 }
 
 export function CommissionAnalysisTab() {
@@ -212,7 +212,7 @@ export function CommissionAnalysisTab() {
             consumoAnual: parseNum(row.file.consumoAnual),
             duracaoContrato: duracao,
             contratoInicio: row.file.dataInicio ? formatDateForDb(row.file.dataInicio) : null,
-            contratoFim: row.file.dataFim ? formatDateForDb(row.file.dataFim) : null,
+            contratoFim: row.file.dataFim ? formatDateForDb(row.file.dataFim) : null
           });
         }
       }
@@ -225,7 +225,7 @@ export function CommissionAnalysisTab() {
     cbTotal: data.summary.cbFileTotal,
     cbDiscrepancies: data.summary.cbFileDiscrepancies,
     comCount: data.summary.comFileCount,
-    comTotal: data.summary.comFileTotal,
+    comTotal: data.summary.comFileTotal
   }), [data.summary]);
 
   const handleSync = async () => {
@@ -250,12 +250,12 @@ export function CommissionAnalysisTab() {
         </div>
 
         <div className="flex gap-2 w-full sm:w-auto">
-          {syncItems.length > 0 && (
-            <Button variant="outline" onClick={() => setSyncConfirmOpen(true)} disabled={syncMutation.isPending} className="w-full sm:w-auto">
+          {syncItems.length > 0 &&
+          <Button variant="outline" onClick={() => setSyncConfirmOpen(true)} disabled={syncMutation.isPending} className="w-full sm:w-auto">
               <RefreshCw className={`h-4 w-4 ${syncMutation.isPending ? "animate-spin" : ""}`} />
               Sincronizar ({syncItems.length})
             </Button>
-          )}
+          }
           <Button onClick={() => setImportOpen(true)} className="w-full sm:w-auto">
             <FileUp className="h-4 w-4" />
             Importar ficheiro
@@ -269,11 +269,11 @@ export function CommissionAnalysisTab() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {monthOptions.map((option) => (
-              <SelectItem key={option.value} value={option.value}>
+            {monthOptions.map((option) =>
+            <SelectItem key={option.value} value={option.value}>
                 {option.label}
               </SelectItem>
-            ))}
+            )}
           </SelectContent>
         </Select>
 
@@ -285,13 +285,13 @@ export function CommissionAnalysisTab() {
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
             placeholder="Pesquisar comercial"
-            className="pl-9"
-          />
+            className="pl-9" />
+          
         </div>
       </div>
 
-      {data.imports.length > 0 && (
-        <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 rounded-md px-3 py-2">
+      {data.imports.length > 0 &&
+      <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 rounded-md px-3 py-2">
           <FileUp className="h-3.5 w-3.5" />
           <span>
             Import ativo: <strong className="text-foreground">{data.imports[0]?.file_name}</strong>
@@ -299,10 +299,10 @@ export function CommissionAnalysisTab() {
             {format(new Date(data.imports[0]?.created_at), "dd/MM/yyyy HH:mm")}
           </span>
         </div>
-      )}
+      }
 
-      {!isLoading && data.imports.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      {!isLoading && data.imports.length > 0 &&
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setDetailModal('cb')}>
             <CardContent className="p-4 flex items-start gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-destructive/10">
@@ -342,7 +342,7 @@ export function CommissionAnalysisTab() {
                 <AlertTriangle className="h-5 w-5 text-destructive" />
               </div>
               <div>
-                <p className="text-xs font-medium text-muted-foreground">Discrepâncias CB</p>
+                <p className="text-xs font-medium text-muted-foreground">Discrepâncias</p>
                 <p className="text-xl font-bold tracking-tight text-foreground tabular-nums">
                   {cbSummary.cbDiscrepancies}
                 </p>
@@ -351,45 +351,45 @@ export function CommissionAnalysisTab() {
             </CardContent>
           </Card>
         </div>
-      )}
+      }
 
-      {isLoading ? (
-        <CommissionAnalysisTableSkeleton />
-      ) : filteredCommercials.length > 0 ? (
-        <Card>
+      {isLoading ?
+      <CommissionAnalysisTableSkeleton /> :
+      filteredCommercials.length > 0 ?
+      <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Comerciais</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             <Accordion type="multiple">
-              {filteredCommercials.map((commercial) => (
-                <AccordionItem key={commercial.userId} value={commercial.userId} className="border-b last:border-b-0">
+              {filteredCommercials.map((commercial) =>
+            <AccordionItem key={commercial.userId} value={commercial.userId} className="border-b last:border-b-0">
                   <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/50 [&>svg]:hidden justify-start">
                     <div className="flex w-full items-center gap-2 text-sm">
                       <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 [[data-state=open]_&]:rotate-180" />
                       <span className="font-medium text-foreground text-left">{commercial.name}</span>
-                      {commercial.fileData.length > 0 && (
-                        <span className="inline-flex items-center rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                      {commercial.fileData.length > 0 &&
+                  <span className="inline-flex items-center rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
                           {commercial.fileData.length} linha(s)
                         </span>
-                      )}
-                      {commercial.comparisonData.some((r) => r.hasAnyDiscrepancy) && (
-                        <span className="inline-flex items-center rounded-full bg-destructive/10 px-1.5 py-0.5 text-[10px] font-medium text-destructive">
+                  }
+                      {commercial.comparisonData.some((r) => r.hasAnyDiscrepancy) &&
+                  <span className="inline-flex items-center rounded-full bg-destructive/10 px-1.5 py-0.5 text-[10px] font-medium text-destructive">
                           {commercial.comparisonData.filter((r) => r.hasAnyDiscrepancy).length} discrepância(s)
                         </span>
-                      )}
+                  }
                     </div>
                   </AccordionTrigger>
                   <AccordionContent className="px-4 pb-3 pt-0">
                     <ComparisonDataTable comparisonData={commercial.comparisonData} />
                   </AccordionContent>
                 </AccordionItem>
-              ))}
+            )}
             </Accordion>
           </CardContent>
-        </Card>
-      ) : (
-        <Card>
+        </Card> :
+
+      <Card>
           <CardContent className="flex flex-col items-center justify-center gap-2 py-14 text-center">
             <FileSearch className="h-10 w-10 text-muted-foreground" />
             <h3 className="text-lg font-semibold text-foreground">Sem dados para mostrar</h3>
@@ -398,7 +398,7 @@ export function CommissionAnalysisTab() {
             </p>
           </CardContent>
         </Card>
-      )}
+      }
 
       <ImportChargebacksDialog open={importOpen} onOpenChange={setImportOpen} />
 
@@ -433,24 +433,24 @@ export function CommissionAnalysisTab() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {(detailModal === 'cb' ? data.summary.cbFileItems : data.summary.comFileItems).map((item, idx) => (
-                  <TableRow key={idx} className="text-xs">
+                {(detailModal === 'cb' ? data.summary.cbFileItems : data.summary.comFileItems).map((item, idx) =>
+                <TableRow key={idx} className="text-xs">
                     <TableCell className="font-mono">{item.cpe || "—"}</TableCell>
                     <TableCell>{item.nomeEmpresa || "—"}</TableCell>
                     <TableCell>{item.tipoComissao || "—"}</TableCell>
                     <TableCell className="text-right tabular-nums">{item.valorReceber || "—"}</TableCell>
                   </TableRow>
-                ))}
-                {(detailModal === 'cb' ? data.summary.cbFileItems : data.summary.comFileItems).length === 0 && (
-                  <TableRow>
+                )}
+                {(detailModal === 'cb' ? data.summary.cbFileItems : data.summary.comFileItems).length === 0 &&
+                <TableRow>
                     <TableCell colSpan={4} className="text-center text-muted-foreground py-6">Sem registos</TableCell>
                   </TableRow>
-                )}
+                }
               </TableBody>
             </Table>
           </ScrollArea>
         </DialogContent>
       </Dialog>
-    </div>
-  );
+    </div>);
+
 }
