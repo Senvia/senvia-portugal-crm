@@ -55,7 +55,10 @@ export function MobileBottomNav() {
   });
 
   const perfect2GetherItems: NavItem[] = hasPerfect2GetherModuleAccess
-    ? [{ to: "/portal-total-link", icon: Building2, label: "Portal" }]
+    ? [
+        { to: "/prospects", icon: Search, label: "Prospects" },
+        { to: "/portal-total-link", icon: Building2, label: "Portal" },
+      ]
     : [];
 
   const allItems = isSuperAdmin 
