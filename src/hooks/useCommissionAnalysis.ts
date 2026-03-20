@@ -25,6 +25,7 @@ interface ChargebackItemRecord {
   cpe: string;
   unmatched_reason: string | null;
   raw_row: Record<string, unknown> | null;
+  matched_proposal_cpe_id: string | null;
 }
 
 interface ChargebackDataset {
