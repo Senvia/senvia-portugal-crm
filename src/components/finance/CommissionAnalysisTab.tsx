@@ -217,6 +217,27 @@ export function CommissionAnalysisTab() {
     return items;
   }, [data.commercials]);
 
+  const cbSummary = useMemo(() => {
+    const parseNum = (s: string) => parseFloat(s.replace(/[^\d.,]/g, "").replace(",", ".")) || 0;
+    let cbCount = 0, cbTotal = 0, cbDiscrepancies = 0;
+    let comCount = 0, comTotal = 0;
+    for (const commercial of data.commercials) {
+      for (const row of commercial.comparisonData) {
+        const isCb = normalizeString(row.file.tipoComissao).includes("cb");
+        const val = parseNum(row.file.valorReceber);
+        if (isCb) {
+          cbCount++;
+          cbTotal += val;
+          if (row.hasAnyDiscrepancy) cbDiscrepancies++;
+        } else {
+          comCount++;
+          comTotal += val;
+        }
+      }
+    }
+    return { cbCount, cbTotal, cbDiscrepancies, comCount, comTotal };
+  }, [data.commercials]);
+
   const handleSync = async () => {
     setSyncConfirmOpen(false);
     try {
