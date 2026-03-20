@@ -160,6 +160,12 @@ export function useLiveCommissions(selectedMonth: string, effectiveUserIds?: str
 
       if (!cpes?.length) return emptyResult;
 
+      // Count CPEs per proposal to avoid duplicating kWp
+      const cpesPerProposal = new Map<string, number>();
+      for (const cpe of cpes) {
+        cpesPerProposal.set(cpe.proposal_id, (cpesPerProposal.get(cpe.proposal_id) || 0) + 1);
+      }
+
       // Group by commercial
       const byCommercial = new Map<string, CommercialEntry>();
       let totalGlobalKwh = 0;
