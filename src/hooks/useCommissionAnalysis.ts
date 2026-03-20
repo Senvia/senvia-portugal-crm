@@ -24,11 +24,25 @@ interface ChargebackItemRecord {
   matched: boolean;
   cpe: string;
   unmatched_reason: string | null;
+  raw_row: Record<string, unknown> | null;
 }
 
 interface ChargebackDataset {
   imports: ChargebackImportRecord[];
   items: ChargebackItemRecord[];
+}
+
+export interface FileDataRow {
+  tipoComissao: string;
+  nomeEmpresa: string;
+  tipo: string;
+  cpe: string;
+  consumoAnual: string;
+  duracaoContrato: string;
+  dataInicio: string;
+  dataFim: string;
+  dbl: string;
+  valorReceber: string;
 }
 
 export interface CommissionAnalysisCommercial {
@@ -41,6 +55,7 @@ export interface CommissionAnalysisCommercial {
   differentialAmount: number;
   differentialCount: number;
   cpes: CpeDetail[];
+  fileData: FileDataRow[];
 }
 
 export interface CommissionAnalysisSummary {
@@ -60,6 +75,7 @@ export interface UnmatchedChargebackItem {
   cpe: string;
   chargebackAmount: number;
   unmatchedReason: string | null;
+  fileData: FileDataRow | null;
 }
 
 export interface CommissionAnalysisData {
@@ -101,6 +117,29 @@ const EMPTY_ANALYSIS: CommissionAnalysisData = {
   },
 };
 
+function parseRawRow(raw: Record<string, unknown> | null): FileDataRow | null {
+  if (!raw) return null;
+  const get = (keys: string[]) => {
+    for (const k of keys) {
+      const val = raw[k];
+      if (val != null && String(val).trim()) return String(val).trim();
+    }
+    return "";
+  };
+  return {
+    tipoComissao: get(["Tipo de comissão", "Tipo de Comissão", "Tipo de comissao"]),
+    nomeEmpresa: get(["Nome da Empresa", "Nome da empresa"]),
+    tipo: get(["Tipo"]),
+    cpe: get(["Linha de Contrato: Local de Consumo", "CPE", "cpe"]),
+    consumoAnual: get(["Linha de Contrato: Consumo anual", "Consumo anual"]),
+    duracaoContrato: get(["Duração contrato (anos)", "Duracao contrato (anos)"]),
+    dataInicio: get(["Linha de Contrato: Data de inicio", "Linha de Contrato: Data de Inicio", "Data de inicio"]),
+    dataFim: get(["Linha de Contrato: Data Fim de Contrato", "Data Fim de Contrato"]),
+    dbl: get(["DBL"]),
+    valorReceber: get(["Valor a receber", "Comissão Total"]),
+  };
+}
+
 export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: string[] | null) {
   const { organization } = useAuth();
   const { data: members = [] } = useTeamMembers();
@@ -123,7 +162,7 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
           .range(0, 199),
         (supabase as any)
           .from("commission_chargeback_items")
-          .select("id, import_id, matched_user_id, chargeback_amount, matched, cpe, unmatched_reason")
+          .select("id, import_id, matched_user_id, chargeback_amount, matched, cpe, unmatched_reason, raw_row")
           .eq("organization_id", organizationId)
           .order("created_at", { ascending: false })
           .range(0, 4999),
@@ -161,6 +200,18 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
 
     const byUser = new Map<string, CommissionAnalysisCommercial>();
 
+    // Build file data map: matched_user_id -> FileDataRow[]
+    const userFileData = new Map<string, FileDataRow[]>();
+    for (const item of filteredItems) {
+      if (!item.matched_user_id) continue;
+      const parsed = parseRawRow(item.raw_row);
+      if (parsed) {
+        const arr = userFileData.get(item.matched_user_id) || [];
+        arr.push(parsed);
+        userFileData.set(item.matched_user_id, arr);
+      }
+    }
+
     for (const commercial of liveData?.commercials || []) {
       byUser.set(commercial.userId, {
         userId: commercial.userId,
@@ -172,6 +223,7 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
         differentialAmount: commercial.totalIndicativa,
         differentialCount: commercial.cpes.length,
         cpes: commercial.cpes,
+        fileData: userFileData.get(commercial.userId) || [],
       });
     }
 
@@ -188,6 +240,7 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
         differentialAmount: 0,
         differentialCount: 0,
         cpes: [],
+        fileData: userFileData.get(item.matched_user_id) || [],
       };
 
       existing.chargebackAmount += Number(item.chargeback_amount || 0);
@@ -218,6 +271,7 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
       cpe: item.cpe,
       chargebackAmount: Number(item.chargeback_amount || 0),
       unmatchedReason: item.unmatched_reason,
+      fileData: parseRawRow(item.raw_row),
     }));
 
     return {

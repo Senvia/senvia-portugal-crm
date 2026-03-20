@@ -30,6 +30,13 @@ function normalizeHeader(value: string) {
 }
 
 function detectCpeColumn(headers: string[]) {
+  // Prioritize EDP-specific column name
+  const edpCol = headers.find((header) => {
+    const normalized = normalizeHeader(header);
+    return normalized.includes("local de consumo") || normalized.includes("local consumo");
+  });
+  if (edpCol) return edpCol;
+
   return headers.find((header) => {
     const normalized = normalizeHeader(header);
     return normalized === "cpe" || normalized.includes("cpe") || normalized.includes("cui");
