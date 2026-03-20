@@ -1,15 +1,23 @@
 
 
-## Adicionar nota "Valor a Receber" no card Chargebacks (CB)
+## Filtrar cards CB pelo mês selecionado
 
-### O que fazer
+### Problema
+Na correção anterior, mudámos o cálculo dos cards para usar `itemsFromActiveImportRaw` (sem filtro de mês) para resolver o problema do zero. Mas agora **todos os meses mostram os mesmos valores**, porque estamos a somar o ficheiro inteiro.
 
-**Ficheiro: `src/components/finance/CommissionAnalysisTab.tsx`** — Linha 315, após o valor em €, adicionar:
+### Solução
 
-```html
-<p className="text-xs text-muted-foreground">Ref. coluna "Valor a Receber"</p>
+**Ficheiro: `src/hooks/useCommissionAnalysis.ts`** — Linha 448
+
+Trocar `itemsFromActiveImportRaw` por `itemsFromActiveImport` (que já está filtrado pelo mês selecionado). As linhas CB sem data já passam no filtro (linha 297: `if (!parsed.dataInicio) return true`), portanto continuam a ser incluídas.
+
+```ts
+// Antes:
+for (const item of itemsFromActiveImportRaw) {
+
+// Depois:
+for (const item of itemsFromActiveImport) {
 ```
 
-### Resultado
-O card Chargebacks (CB) passa a ter uma nota descritiva abaixo do valor indicando a origem dos dados.
+Uma única linha a alterar.
 
