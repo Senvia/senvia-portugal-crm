@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
-import { LayoutDashboard, Users, Settings, Shield, Calendar, FileText, ShoppingBag, Store, UserCheck, Mail, Wallet, Lock, Building2 } from "lucide-react";
+import { LayoutDashboard, Users, Settings, Shield, Calendar, FileText, ShoppingBag, Store, UserCheck, Mail, Wallet, Lock, Building2, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useModules, EnabledModules } from "@/hooks/useModules";
@@ -55,7 +55,10 @@ export function MobileBottomNav() {
   });
 
   const perfect2GetherItems: NavItem[] = hasPerfect2GetherModuleAccess
-    ? [{ to: "/portal-total-link", icon: Building2, label: "Portal" }]
+    ? [
+        { to: "/prospects", icon: Search, label: "Prospects" },
+        { to: "/portal-total-link", icon: Building2, label: "Portal" },
+      ]
     : [];
 
   const allItems = isSuperAdmin 
