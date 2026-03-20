@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, FileSearch, Filter, AlertTriangle } from "lucide-react";
+import { Loader2, FileSearch, Filter, AlertTriangle, CalendarDays } from "lucide-react";
 import { toast } from "sonner";
 import { ImportStep1Upload } from "@/components/marketing/import/ImportStep1Upload";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -90,6 +91,10 @@ export function ImportChargebacksDialog({ open, onOpenChange }: ImportChargeback
   const [selectedTypeColumn, setSelectedTypeColumn] = useState("");
   const [typeFilterValue, setTypeFilterValue] = useState("");
   const [importSummary, setImportSummary] = useState<ImportChargebackSummary | null>(null);
+  const [referenceMonth, setReferenceMonth] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  });
 
   const suggestedCpeColumn = useMemo(() => detectCpeColumn(headers), [headers]);
   const suggestedAmountColumn = useMemo(() => detectAmountColumn(headers), [headers]);
@@ -148,6 +153,7 @@ export function ImportChargebacksDialog({ open, onOpenChange }: ImportChargeback
         fileName,
         cpeColumnName: selectedCpeColumn,
         rows: preparedRows,
+        referenceMonth: `${referenceMonth}-01`,
       });
 
       toast.success("Ficheiro importado com sucesso.");
@@ -234,26 +240,48 @@ export function ImportChargebacksDialog({ open, onOpenChange }: ImportChargeback
             )}
 
             {headers.length > 0 && selectedCpeColumn && selectedAmountColumn && (
-              <section className="space-y-3 rounded-xl border bg-card p-4 sm:p-5">
-                <div className="flex items-start gap-3">
-                  <FileSearch className="mt-0.5 h-4 w-4 text-muted-foreground" />
-                  <div className="space-y-1 text-sm">
-                    <p className="font-medium text-foreground">Resumo antes de importar</p>
-                    <p className="text-muted-foreground">Linhas lidas: {rows.length}</p>
-                    {selectedTypeColumn ? (
-                      <p className="text-muted-foreground flex items-center gap-1.5">
-                        <Filter className="h-3 w-3" />
-                        Linhas filtradas ({typeFilterValue || "—"}): {filteredRows.length}
-                      </p>
-                    ) : null}
-                    <p className="text-muted-foreground">Linhas válidas (com CPE): {preparedRows.length}</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      CPE: <span className="font-medium text-foreground">{selectedCpeColumn}</span> · Valor: <span className="font-medium text-foreground">{selectedAmountColumn}</span>
-                      {selectedTypeColumn ? <> · Tipo: <span className="font-medium text-foreground">{selectedTypeColumn}</span></> : null}
-                    </p>
+              <>
+                <section className="space-y-4 rounded-xl border bg-card p-4 sm:p-5">
+                  <div>
+                    <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                      <CalendarDays className="h-4 w-4" />
+                      2. Mês de referência
+                    </h3>
+                    <p className="text-sm text-muted-foreground">A que mês se refere este ficheiro?</p>
                   </div>
-                </div>
-              </section>
+                  <div className="flex items-center gap-3">
+                    <Label htmlFor="ref-month" className="text-sm whitespace-nowrap">Mês</Label>
+                    <input
+                      id="ref-month"
+                      type="month"
+                      value={referenceMonth}
+                      onChange={(e) => setReferenceMonth(e.target.value)}
+                      className="flex h-10 w-full max-w-[200px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                    />
+                  </div>
+                </section>
+
+                <section className="space-y-3 rounded-xl border bg-card p-4 sm:p-5">
+                  <div className="flex items-start gap-3">
+                    <FileSearch className="mt-0.5 h-4 w-4 text-muted-foreground" />
+                    <div className="space-y-1 text-sm">
+                      <p className="font-medium text-foreground">Resumo antes de importar</p>
+                      <p className="text-muted-foreground">Linhas lidas: {rows.length}</p>
+                      {selectedTypeColumn ? (
+                        <p className="text-muted-foreground flex items-center gap-1.5">
+                          <Filter className="h-3 w-3" />
+                          Linhas filtradas ({typeFilterValue || "—"}): {filteredRows.length}
+                        </p>
+                      ) : null}
+                      <p className="text-muted-foreground">Linhas válidas (com CPE): {preparedRows.length}</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        CPE: <span className="font-medium text-foreground">{selectedCpeColumn}</span> · Valor: <span className="font-medium text-foreground">{selectedAmountColumn}</span>
+                        {selectedTypeColumn ? <> · Tipo: <span className="font-medium text-foreground">{selectedTypeColumn}</span></> : null}
+                      </p>
+                    </div>
+                  </div>
+                </section>
+              </>
             )}
           </div>
         </div>

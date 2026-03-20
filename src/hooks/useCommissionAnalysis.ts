@@ -14,6 +14,7 @@ interface ChargebackImportRecord {
   unmatched_rows: number;
   chargeback_count: number;
   total_chargeback_amount: number;
+  reference_month: string | null;
 }
 
 interface ChargebackItemRecord {
@@ -248,7 +249,7 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
       const [importsResult, itemsResult] = await Promise.all([
         (supabase as any)
           .from("commission_chargeback_imports")
-          .select("id, created_at, file_name, total_rows, matched_rows, unmatched_rows, chargeback_count, total_chargeback_amount")
+          .select("id, created_at, file_name, total_rows, matched_rows, unmatched_rows, chargeback_count, total_chargeback_amount, reference_month")
           .eq("organization_id", organizationId)
           .order("created_at", { ascending: false })
           .range(0, 199),
@@ -286,19 +287,29 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
       ? allItems.filter((item) => item.import_id === activeImportId)
       : [];
 
-    // Filter imported items by selectedMonth using "Data de inicio" from raw_row
+    // Filter imported items by reference_month of the active import
     const selectedMonthStart = new Date(selectedMonth);
     const selectedYear = selectedMonthStart.getFullYear();
     const selectedMonthNum = selectedMonthStart.getMonth(); // 0-indexed
 
-    const itemsFromActiveImport = itemsFromActiveImportRaw.filter((item) => {
-      const parsed = parseRawRow(item.raw_row as Record<string, unknown> | null);
-      if (!parsed) return false;
-      if (!parsed.dataInicio) return true;
-      const d = parseDateValue(parsed.dataInicio);
-      if (!d || isNaN(d.getTime())) return true;
-      return d.getFullYear() === selectedYear && d.getMonth() === selectedMonthNum;
-    });
+    const activeImportRefMonth = imports[0]?.reference_month ?? null;
+    let itemsFromActiveImport: ChargebackItemRecord[];
+    if (activeImportRefMonth) {
+      // Compare reference_month (YYYY-MM-DD) with selected month
+      const refDate = new Date(activeImportRefMonth + "T00:00:00");
+      const refMatches = refDate.getFullYear() === selectedYear && refDate.getMonth() === selectedMonthNum;
+      itemsFromActiveImport = refMatches ? itemsFromActiveImportRaw : [];
+    } else {
+      // Fallback for old imports without reference_month: use dataInicio
+      itemsFromActiveImport = itemsFromActiveImportRaw.filter((item) => {
+        const parsed = parseRawRow(item.raw_row as Record<string, unknown> | null);
+        if (!parsed) return false;
+        if (!parsed.dataInicio) return true;
+        const d = parseDateValue(parsed.dataInicio);
+        if (!d || isNaN(d.getTime())) return true;
+        return d.getFullYear() === selectedYear && d.getMonth() === selectedMonthNum;
+      });
+    }
 
     const memberNameMap = new Map(
       members.map((member) => [member.user_id, member.full_name || member.email || "Comercial"])
@@ -516,17 +527,23 @@ export function useImportCommissionChargebacks() {
       fileName: string;
       cpeColumnName: string;
       rows: ImportChargebackRow[];
+      referenceMonth?: string;
     }): Promise<ImportChargebackSummary> => {
       if (!organization?.id) {
         throw new Error("Organização não encontrada");
       }
 
-      const { data, error } = await (supabase as any).rpc("import_commission_chargebacks", {
+      const rpcParams: Record<string, unknown> = {
         p_organization_id: organization.id,
         p_file_name: params.fileName,
         p_cpe_column_name: params.cpeColumnName,
         p_rows: params.rows,
-      });
+      };
+      if (params.referenceMonth) {
+        rpcParams.p_reference_month = params.referenceMonth;
+      }
+
+      const { data, error } = await (supabase as any).rpc("import_commission_chargebacks", rpcParams);
 
       if (error) throw error;
 
