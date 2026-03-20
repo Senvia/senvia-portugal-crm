@@ -115,7 +115,6 @@ function ComparisonSubTable({ commercial }: { commercial: CommissionAnalysisComm
   const hasFileData = commercial.fileData.length > 0;
 
   if (!hasFileData) {
-    // Show system data only
     if (commercial.cpes.length === 0) {
       return <p className="text-xs text-muted-foreground py-2">Sem CPEs associados a este comercial.</p>;
     }
@@ -124,25 +123,15 @@ function ComparisonSubTable({ commercial }: { commercial: CommissionAnalysisComm
         <Table>
           <TableHeader>
             <TableRow className="text-xs">
-              <TableHead className="h-8">Venda</TableHead>
               <TableHead className="h-8">CPE</TableHead>
-              <TableHead className="h-8 text-right">Consumo (kWh)</TableHead>
-              <TableHead className="h-8 text-right">Margem</TableHead>
-              <TableHead className="h-8 text-right">Valor a receber €</TableHead>
+              <TableHead className="h-8">Consumo (kWh)</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {commercial.cpes.map((cpe) => (
               <TableRow key={cpe.proposal_cpe_id} className="text-xs">
-                <TableCell className="py-1.5 font-mono">{cpe.sale_code || "—"}</TableCell>
                 <TableCell className="py-1.5 font-mono">{cpe.serial_number || "—"}</TableCell>
-                <TableCell className="py-1.5 text-right tabular-nums">
-                  {cpe.consumo_anual.toLocaleString("pt-PT")}
-                </TableCell>
-                <TableCell className="py-1.5 text-right tabular-nums">{cpe.margem.toFixed(4)}</TableCell>
-                <TableCell className="py-1.5 text-right tabular-nums font-medium">
-                  {formatCurrency(cpe.comissao_indicativa)}
-                </TableCell>
+                <TableCell className="py-1.5 tabular-nums">{cpe.consumo_anual.toLocaleString("pt-PT")}</TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -151,7 +140,6 @@ function ComparisonSubTable({ commercial }: { commercial: CommissionAnalysisComm
     );
   }
 
-  // Has file data — show comparative view
   const { matched, unmatchedFile } = matchFileToSystem(commercial);
 
   return (
@@ -160,19 +148,15 @@ function ComparisonSubTable({ commercial }: { commercial: CommissionAnalysisComm
         <Table>
           <TableHeader>
             <TableRow className="text-xs">
-              <TableHead className="h-8 min-w-[90px]">Tipo Comissão</TableHead>
-              <TableHead className="h-8 min-w-[140px]">Empresa (ficheiro)</TableHead>
-              <TableHead className="h-8 min-w-[80px]">Tipo</TableHead>
+              <TableHead className="h-8 min-w-[100px]">Tipo Comissão</TableHead>
+              <TableHead className="h-8 min-w-[140px]">Nome da Empresa</TableHead>
+              <TableHead className="h-8 min-w-[60px]">Tipo</TableHead>
               <TableHead className="h-8 min-w-[180px]">CPE</TableHead>
-              <TableHead className="h-8 text-right min-w-[100px]">Consumo (fich.)</TableHead>
-              <TableHead className="h-8 text-right min-w-[100px]">Consumo (sist.)</TableHead>
+              <TableHead className="h-8 min-w-[60px]">DBL</TableHead>
+              <TableHead className="h-8 text-right min-w-[100px]">Consumo anual</TableHead>
               <TableHead className="h-8 text-right min-w-[60px]">Duração</TableHead>
-              <TableHead className="h-8 min-w-[90px]">Início</TableHead>
-              <TableHead className="h-8 min-w-[90px]">Fim</TableHead>
-              <TableHead className="h-8 text-right min-w-[60px]">DBL (fich.)</TableHead>
-              <TableHead className="h-8 text-right min-w-[80px]">Margem (sist.)</TableHead>
-              <TableHead className="h-8 text-right min-w-[100px]">Valor receber (fich.)</TableHead>
-              <TableHead className="h-8 text-right min-w-[100px]">Comissão (sist.)</TableHead>
+              <TableHead className="h-8 min-w-[90px]">Data Início</TableHead>
+              <TableHead className="h-8 min-w-[90px]">Data Fim</TableHead>
               <TableHead className="h-8 min-w-[60px]">Match</TableHead>
             </TableRow>
           </TableHeader>
@@ -188,27 +172,11 @@ function ComparisonSubTable({ commercial }: { commercial: CommissionAnalysisComm
                   <TableCell className="py-1.5 font-mono">
                     {row.file?.cpe || row.system?.serial_number || "—"}
                   </TableCell>
+                  <TableCell className="py-1.5 tabular-nums">{row.file?.dbl || "—"}</TableCell>
                   <TableCell className="py-1.5 text-right tabular-nums">{row.file?.consumoAnual || "—"}</TableCell>
-                  <TableCell className={cn(
-                    "py-1.5 text-right tabular-nums",
-                    hasFile && hasSystem && row.file?.consumoAnual && String(row.system.consumo_anual) !== row.file.consumoAnual && "text-amber-500 font-medium"
-                  )}>
-                    {hasSystem ? row.system.consumo_anual.toLocaleString("pt-PT") : "—"}
-                  </TableCell>
                   <TableCell className="py-1.5 text-right tabular-nums">{row.file?.duracaoContrato || "—"}</TableCell>
                   <TableCell className="py-1.5">{row.file?.dataInicio || "—"}</TableCell>
                   <TableCell className="py-1.5">{row.file?.dataFim || "—"}</TableCell>
-                  <TableCell className="py-1.5 text-right tabular-nums">{row.file?.dbl || "—"}</TableCell>
-                  <TableCell className={cn(
-                    "py-1.5 text-right tabular-nums",
-                    hasFile && hasSystem && row.file?.dbl && String(row.system.margem) !== row.file.dbl && "text-amber-500 font-medium"
-                  )}>
-                    {hasSystem ? row.system.margem.toFixed(3) : "—"}
-                  </TableCell>
-                  <TableCell className="py-1.5 text-right tabular-nums">{row.file?.valorReceber || "—"}</TableCell>
-                  <TableCell className="py-1.5 text-right tabular-nums font-medium">
-                    {hasSystem ? formatCurrency(row.system.comissao_indicativa) : "—"}
-                  </TableCell>
                   <TableCell className="py-1.5">
                     {hasFile && hasSystem ? (
                       <span className="inline-flex items-center rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-600">✓</span>
@@ -225,15 +193,11 @@ function ComparisonSubTable({ commercial }: { commercial: CommissionAnalysisComm
                 <TableCell className="py-1.5 truncate max-w-[160px]">{file.nomeEmpresa || "—"}</TableCell>
                 <TableCell className="py-1.5">{file.tipo || "—"}</TableCell>
                 <TableCell className="py-1.5 font-mono">{file.cpe || "—"}</TableCell>
+                <TableCell className="py-1.5 tabular-nums">{file.dbl || "—"}</TableCell>
                 <TableCell className="py-1.5 text-right tabular-nums">{file.consumoAnual || "—"}</TableCell>
-                <TableCell className="py-1.5 text-right tabular-nums text-muted-foreground">—</TableCell>
                 <TableCell className="py-1.5 text-right tabular-nums">{file.duracaoContrato || "—"}</TableCell>
                 <TableCell className="py-1.5">{file.dataInicio || "—"}</TableCell>
                 <TableCell className="py-1.5">{file.dataFim || "—"}</TableCell>
-                <TableCell className="py-1.5 text-right tabular-nums">{file.dbl || "—"}</TableCell>
-                <TableCell className="py-1.5 text-right tabular-nums text-muted-foreground">—</TableCell>
-                <TableCell className="py-1.5 text-right tabular-nums">{file.valorReceber || "—"}</TableCell>
-                <TableCell className="py-1.5 text-right tabular-nums text-muted-foreground">—</TableCell>
                 <TableCell className="py-1.5">
                   <span className="inline-flex items-center rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-600">Só fich.</span>
                 </TableCell>
