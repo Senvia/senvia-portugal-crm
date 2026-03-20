@@ -156,6 +156,7 @@ export function useCreateLead() {
       consumo_anual?: number;
       company_nif?: string;
       company_name?: string;
+      custom_data?: Record<string, unknown>;
     }) => {
       if (!organization?.id) throw new Error('Sem organização');
 
