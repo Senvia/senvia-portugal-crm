@@ -40,6 +40,8 @@ export default function Clients() {
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showAssignModal, setShowAssignModal] = useState(false);
+  const [showCreateProposal, setShowCreateProposal] = useState(false);
+  const [proposalClientId, setProposalClientId] = useState<string | null>(null);
 
   const { data: clients, isLoading } = useClients();
   const { stats } = useClientStats();
