@@ -1,23 +1,25 @@
 
 
-## Adicionar botão "+ Nova Proposta" no drawer do Cliente
+## Adicionar "Prospects" na barra de navegação inferior (mobile)
 
-### O que fazer
+### Problema
+O separador Prospects só aparece no menu lateral (`MobileMenu.tsx`) mas falta na barra de navegação inferior (`MobileBottomNav.tsx`), que é a navegação principal no mobile.
 
-O `ClientDetailsDrawer` já tem suporte para `onNewProposal` mas o `Clients.tsx` não passa esse callback. Basta:
+### Solução
 
-**Ficheiro: `src/pages/Clients.tsx`**
+**Ficheiro: `src/components/layout/MobileBottomNav.tsx`**
 
-1. Importar `CreateProposalModal` e adicionar estados `showCreateProposal` e `proposalClientId`
-2. Passar `onNewProposal` ao `ClientDetailsDrawer`:
+1. Importar `Search` de `lucide-react`
+2. Na secção `perfect2GetherItems` (linha ~60), adicionar o item Prospects antes do Portal:
    ```ts
-   onNewProposal={(client) => {
-     setProposalClientId(client.id);
-     setShowCreateProposal(true);
-   }}
+   const perfect2GetherItems: NavItem[] = hasPerfect2GetherModuleAccess
+     ? [
+         { to: "/prospects", icon: Search, label: "Prospects" },
+         { to: "/portal-total-link", icon: Building2, label: "Portal" },
+       ]
+     : [];
    ```
-3. Renderizar `<CreateProposalModal>` com `preselectedClientId={proposalClientId}`
 
 ### Ficheiros alterados
-- `src/pages/Clients.tsx` — estado + callback + modal de criação de proposta
+- `src/components/layout/MobileBottomNav.tsx` — adicionar item Prospects para P2G
 
