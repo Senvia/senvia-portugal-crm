@@ -311,6 +311,57 @@ export function CommissionAnalysisTab() {
         </div>
       )}
 
+      {!isLoading && data.imports.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <Card>
+            <CardContent className="p-4 flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-destructive/10">
+                <TrendingDown className="h-5 w-5 text-destructive" />
+              </div>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">Chargebacks (CB)</p>
+                <p className="text-xl font-bold tracking-tight text-foreground tabular-nums">
+                  {cbSummary.cbCount} <span className="text-sm font-normal text-muted-foreground">CPE(s)</span>
+                </p>
+                <p className="text-sm font-medium text-destructive tabular-nums">
+                  {cbSummary.cbTotal.toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                <TrendingUp className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">Comissões</p>
+                <p className="text-xl font-bold tracking-tight text-foreground tabular-nums">
+                  {cbSummary.comCount} <span className="text-sm font-normal text-muted-foreground">CPE(s)</span>
+                </p>
+                <p className="text-sm font-medium text-primary tabular-nums">
+                  {cbSummary.comTotal.toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-destructive/10">
+                <AlertTriangle className="h-5 w-5 text-destructive" />
+              </div>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">Discrepâncias CB</p>
+                <p className="text-xl font-bold tracking-tight text-foreground tabular-nums">
+                  {cbSummary.cbDiscrepancies}
+                </p>
+                <p className="text-xs text-muted-foreground">CPE(s) com diferenças</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {isLoading ? (
         <CommissionAnalysisTableSkeleton />
       ) : filteredCommercials.length > 0 ? (
