@@ -68,6 +68,7 @@ export function useConvertProspectToLead() {
             email: contact.email || '',
             phone: contact.phone || '',
             company_name: contact.company || undefined,
+            company_nif: (contact as any).nif || undefined,
             source: 'prospect',
             organization_id: organization.id,
             assigned_to: finalAssignedTo || undefined,

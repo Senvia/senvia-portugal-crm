@@ -195,7 +195,8 @@ export function useLiveCommissions(selectedMonth: string, effectiveUserIds?: str
 
         const entry = byCommercial.get(assignedTo)!;
         const consumo = cpe.consumo_anual || 0;
-        const cpeServicosKwp = proposalKwpMap.get(cpe.proposal_id) || 0;
+        const proposalCpeCount = cpesPerProposal.get(cpe.proposal_id) || 1;
+        const cpeServicosKwp = (proposalKwpMap.get(cpe.proposal_id) || 0) / proposalCpeCount;
         const negType = proposalNegotiationMap.get(cpe.proposal_id) || '';
         const countsForVolume = negType !== 'sem_volume' && negType !== 'renovacao';
         if (countsForVolume) {

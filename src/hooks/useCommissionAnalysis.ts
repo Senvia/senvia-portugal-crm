@@ -319,10 +319,7 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
       : [];
 
     // Filter imported items by reference_month of the active import
-    const selectedYear = selectedMonthStart.getFullYear();
-    const selectedMonthNum = selectedMonthStart.getMonth(); // 0-indexed
-
-    const activeImportRefMonth = imports[0]?.reference_month ?? null;
+    const activeImportRefMonth = matchingImport?.reference_month ?? null;
     let itemsFromActiveImport: ChargebackItemRecord[];
     if (activeImportRefMonth) {
       // Compare reference_month (YYYY-MM-DD) with selected month
