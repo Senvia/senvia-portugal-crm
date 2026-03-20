@@ -187,10 +187,10 @@ export function useConvertLeadToClient() {
     }) => {
       if (!organizationId) throw new Error('No organization');
 
-      // First, fetch the lead to get the assigned_to value
+      // First, fetch the lead to get the assigned_to and custom_data values
       const { data: lead } = await supabase
         .from('leads')
-        .select('assigned_to')
+        .select('assigned_to, custom_data')
         .eq('id', leadData.lead_id)
         .single();
 
