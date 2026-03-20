@@ -1,42 +1,46 @@
 
 
-## Mostrar dados do ficheiro vs dados do sistema lado a lado (com discrepâncias)
+## Exibir dados completos do sistema na linha "Sistema" da tabela comparativa
 
-### O que muda
+### Problema
+A linha "Sistema" mostra "—" para Nome da Empresa, CPE, Data Início e Data Fim. Esses dados existem no sistema mas não estão a ser passados para a tabela.
 
-Hoje a tabela mostra apenas os dados do ficheiro importado. Vamos adicionar, para cada linha do ficheiro que fez match com um CPE do sistema, os valores correspondentes do sistema — permitindo comparar e identificar discrepâncias.
+### Solução
 
-### Implementação
+#### 1) Enriquecer `CpeDetail` (`src/hooks/useLiveCommissions.ts`)
 
-#### 1) Buscar campos em falta do sistema (`src/hooks/useLiveCommissions.ts`)
+Adicionar campos ao interface e ao query:
+- `client_name: string | null` — nome do cliente (de `crm_clients.name` ou `crm_clients.company`)
+- `contrato_inicio: string | null` — de `proposal_cpes.contrato_inicio`
+- `contrato_fim: string | null` — de `proposal_cpes.contrato_fim`
 
-O `select` dos `proposal_cpes` (linha 152) só traz `consumo_anual, margem, comissao, serial_number`. Adicionar `dbl` e `duracao_contrato` para ter os dados necessários à comparação.
+No select dos `proposal_cpes` (linha 153), adicionar `contrato_inicio, contrato_fim`.
 
-Atualizar a interface `CpeDetail` para incluir `dbl` e `duracao_contrato`.
+No select dos `crm_clients` (linha 109), adicionar `name, company`.
 
-#### 2) Cruzar ficheiro com sistema no hook (`src/hooks/useCommissionAnalysis.ts`)
+Construir `clientNameMap` e passar para cada `CpeDetail` ao fazer push (linha 197).
 
-Criar uma nova interface `ComparisonRow` com:
-- Dados do ficheiro (`FileDataRow`)
-- Dados do sistema (CPE match): `consumoAnualSistema`, `dblSistema`, `duracaoSistema`
-- Flags de discrepância: `hasConsumoDiscrepancy`, `hasDblDiscrepancy`, `hasDuracaoDiscrepancy`
+#### 2) Enriquecer `ComparisonRow` (`src/hooks/useCommissionAnalysis.ts`)
 
-Para cada `FileDataRow` de um comercial, fazer match pelo CPE (`serial_number`) com os `cpes` do sistema desse comercial. Comparar valores numéricos e marcar discrepâncias.
+Adicionar ao `ComparisonRow`:
+- `systemClientName: string | null`
+- `systemCpe: string | null`
+- `systemDataInicio: string | null`
+- `systemDataFim: string | null`
 
-Adicionar `comparisonData: ComparisonRow[]` ao `CommissionAnalysisCommercial`.
+No `buildComparison`, preencher esses campos a partir do `CpeDetail` matched.
 
-#### 3) Redesenhar a tabela na UI (`src/components/finance/CommissionAnalysisTab.tsx`)
+#### 3) Exibir na UI (`src/components/finance/CommissionAnalysisTab.tsx`)
 
-Substituir `FileDataTable` por uma tabela comparativa com duas linhas por CPE:
-- **Linha 1 (Ficheiro)**: valores do ficheiro — label "Ficheiro" à esquerda
-- **Linha 2 (Sistema)**: valores do sistema — label "Sistema" à esquerda
-
-Células com discrepância destacadas com fundo vermelho/laranja claro para identificação rápida.
-
-Colunas comparáveis: **DBL**, **Consumo anual**, **Duração (anos)**. As restantes (Tipo Comissão, Empresa, Tipo, CPE, Data Início, Data Fim) mostram apenas o valor do ficheiro.
+Na linha "Sistema" (linhas 108-122), substituir os "—" pelos dados reais:
+- Nome da Empresa → `row.systemClientName`
+- CPE → `row.systemCpe`
+- Data Início → `row.systemDataInicio`
+- Data Fim → `row.systemDataFim`
+- Tipo Comissão e Tipo mantêm "—" (não existem no sistema)
 
 ### Ficheiros alterados
-- `src/hooks/useLiveCommissions.ts` — adicionar `dbl`, `duracao_contrato` ao select e à interface
-- `src/hooks/useCommissionAnalysis.ts` — criar `ComparisonRow`, cruzar ficheiro com sistema
-- `src/components/finance/CommissionAnalysisTab.tsx` — tabela comparativa com destaque de discrepâncias
+- `src/hooks/useLiveCommissions.ts` — adicionar `client_name`, `contrato_inicio`, `contrato_fim` ao `CpeDetail`
+- `src/hooks/useCommissionAnalysis.ts` — adicionar campos do sistema ao `ComparisonRow`
+- `src/components/finance/CommissionAnalysisTab.tsx` — exibir dados do sistema na linha "Sistema"
 
