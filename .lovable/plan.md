@@ -1,32 +1,24 @@
 
 
-## Apagar dados de chargebacks da Perfect2Gether e verificar implementação
+## Corrigir alinhamento de colunas na Análise de Comissões
 
-### Dados a apagar
+### Problema
+O `AccordionTrigger` (componente base) é um `flex` container que adiciona automaticamente um `<ChevronDown>` SVG após o conteúdo. Mesmo com `[&>svg]:hidden`, o layout flex do trigger não corresponde ao layout da header row estática, causando desalinhamento entre cabeçalhos e valores.
 
-Na org Perfect2Gether existem:
-- **2 imports** (`commission_chargeback_imports`): `79362920-...` e `3436e079-...`
-- **2 items** (`commission_chargeback_items`): `1039cb53-...` e `33eb965e-...`
+### Solução
 
-Ambos são duplicados do mesmo CPE (`PT0002000104989706QE`) com `raw_row` incompleto (só tem `cpe` e `chargeback_amount`, sem os dados completos do ficheiro EDP).
+**Ficheiro: `src/components/finance/CommissionAnalysisTab.tsx`**
 
-### Execução
-1. DELETE dos 2 `commission_chargeback_items` (apagar primeiro por FK)
-2. DELETE dos 2 `commission_chargeback_imports`
+1. **Usar larguras fixas nas colunas** em vez de `minmax(0,auto)` — tanto no header como no trigger, para garantir alinhamento pixel-perfect:
 
-### Verificação do que foi implementado
+```
+grid-cols-[1fr_110px_60px_110px_90px_110px_90px]
+```
 
-Tudo o que foi pedido já está no código:
+2. **Garantir que o grid do trigger ocupa `w-full`** e que o SVG escondido do AccordionTrigger não afeta o layout — adicionar `[&>svg]:absolute [&>svg]:hidden` ou simplesmente manter o `[&>svg]:hidden` existente (já está) e garantir que o trigger tem `justify-start` em vez de `justify-between`.
 
-- **Matching por CPE + Cliente** — `matchFileToSystem()` no `CommissionAnalysisTab.tsx` normaliza CPEs e faz match
-- **Colunas do ficheiro exibidas** — Tipo de Comissão, Nome da Empresa, Tipo, CPE, Consumo anual, Duração, Data Início, Data Fim, DBL, Valor a receber
-- **Colunas do sistema lado a lado** — Consumo (sistema), Margem (sistema), Comissão (sistema)
-- **Highlight de discrepâncias** — valores diferentes entre ficheiro e sistema aparecem em amarelo
-- **Accordion por comercial** — cada comercial expande para mostrar CPEs
-- **Auto-detecção da coluna CPE** — `ImportChargebacksDialog` prioriza "Linha de Contrato: Local de Consumo"
-- **`raw_row` parsed** — `useCommissionAnalysis.ts` tem `parseRawRow()` que extrai todas as colunas EDP relevantes
-- **Secções separadas** — CPEs matched, CPEs só no sistema, CPEs só no ficheiro
+3. **Alternativa mais limpa**: sobrescrever o `className` do AccordionTrigger para remover o `justify-between` padrão e usar apenas o grid interno para posicionamento.
 
 ### Ficheiros alterados
-Nenhum — apenas DELETE de dados via SQL.
+- `src/components/finance/CommissionAnalysisTab.tsx` — colunas com largura fixa no header e no trigger grid
 
