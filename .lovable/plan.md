@@ -1,36 +1,30 @@
 
 
-## Botão "Sincronizar com Ficheiro" — atualizar vendas com dados do ficheiro importado
+## Atualizar a tela em tempo real após sincronização
 
-### O que faz
-Um botão que, para todas as linhas com discrepâncias no ficheiro importado, atualiza os CPEs do sistema (`proposal_cpes`) com os valores do ficheiro (DBL, Consumo anual, Duração). Após a atualização, as comissões são automaticamente recalculadas.
+### Problema
+Após clicar em "Sincronizar", o toast aparece confirmando a atualização, mas a tabela de comparação não atualiza automaticamente. A causa é que o `onSuccess` do `useSyncFileToSystem` invalida as queries em background, mas pode haver um timing issue onde o componente não re-renderiza com os dados atualizados.
 
-### Implementação
+### Solução
 
-#### 1) Buscar `matched_proposal_cpe_id` nos items (`src/hooks/useCommissionAnalysis.ts`)
+**Ficheiro: `src/components/finance/CommissionAnalysisTab.tsx`**
 
-- Adicionar `matched_proposal_cpe_id` ao select dos `commission_chargeback_items` (linha 245)
-- Adicionar ao `ChargebackItemRecord` interface
-- Passar o `matched_proposal_cpe_id` para o `ComparisonRow` para que a UI saiba qual CPE atualizar
+No `handleSync`, após o `mutateAsync` resolver com sucesso, chamar explicitamente o `refetch` do `useCommissionAnalysis` (que já está disponível no retorno do hook). Isto garante que os dados são buscados novamente e a UI atualiza imediatamente.
 
-#### 2) Enriquecer `ComparisonRow` com ID do CPE
+1. Desestruturar `refetch` do `useCommissionAnalysis` (linha 142):
+   ```ts
+   const { data, isLoading, refetch } = useCommissionAnalysis(selectedMonth, effectiveUserIds);
+   ```
 
-- Adicionar `matchedProposalCpeId: string | null` ao `ComparisonRow`
-- Preencher no `buildComparison` usando o item correspondente
+2. No `handleSync` (linha 174), após o `mutateAsync`, aguardar o `refetch`:
+   ```ts
+   await syncMutation.mutateAsync(syncItems);
+   await refetch();
+   toast({ ... });
+   ```
 
-#### 3) Criar mutation de sincronização (`src/hooks/useCommissionAnalysis.ts`)
-
-- Nova mutation `useSyncFileToSystem` que recebe um array de `{ proposalCpeId, dbl, consumoAnual, duracaoContrato }` e faz update em batch no `proposal_cpes`
-- Após sucesso, invalida `commissions-live` e `commission-chargeback-data`
-
-#### 4) Botão na UI (`src/components/finance/CommissionAnalysisTab.tsx`)
-
-- Botão "Sincronizar dados do ficheiro" ao lado do indicador de import ativo
-- Só aparece se existirem discrepâncias
-- Dialog de confirmação: "Isto vai atualizar X CPEs no sistema com os valores do ficheiro. Continuar?"
-- Após confirmação, executa a mutation e mostra toast de sucesso/erro
+Isto força o refetch completo de ambas as queries (live commissions + chargeback data) antes de mostrar o toast, garantindo que a UI já está atualizada quando o utilizador vê a confirmação.
 
 ### Ficheiros alterados
-- `src/hooks/useCommissionAnalysis.ts` — buscar `matched_proposal_cpe_id`, nova mutation, enriquecer `ComparisonRow`
-- `src/components/finance/CommissionAnalysisTab.tsx` — botão + dialog de confirmação
+- `src/components/finance/CommissionAnalysisTab.tsx` — 2 linhas (desestruturar `refetch` + chamar após sync)
 
