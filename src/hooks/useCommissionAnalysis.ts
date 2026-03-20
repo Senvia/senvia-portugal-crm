@@ -24,6 +24,7 @@ interface ChargebackItemRecord {
   matched: boolean;
   cpe: string;
   unmatched_reason: string | null;
+  raw_row: Record<string, unknown> | null;
 }
 
 interface ChargebackDataset {
