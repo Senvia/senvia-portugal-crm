@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useLocation } from "react-router-dom";
 import { usePersistedState } from "@/hooks/usePersistedState";
 import { useAuth } from "@/contexts/AuthContext";
 import { SEO } from "@/components/SEO";
@@ -27,6 +27,7 @@ import { format, isWithinInterval, startOfDay, endOfDay, parseISO } from "date-f
 
 export default function Clients() {
   const { profile, organization } = useAuth();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = usePersistedState("clients-search-v1", "");
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -127,6 +128,19 @@ export default function Clients() {
       setSearchParams({}, { replace: true });
     }
   }, [searchParams, clients]);
+
+  // Auto-open client drawer from location state (e.g. from Lead → Won flow)
+  useEffect(() => {
+    const openClientId = (location.state as any)?.openClientId;
+    if (openClientId && clients && clients.length > 0) {
+      const client = clients.find(c => c.id === openClientId);
+      if (client) {
+        handleView(client);
+      }
+      // Clear state to prevent re-opening on re-render
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state, clients]);
 
   const handleAssignSuccess = () => {
     setSelectedIds([]);

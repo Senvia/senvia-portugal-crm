@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { isPerfect2GetherOrg } from "@/lib/perfect2gether";
 import { useNavigate } from "react-router-dom";
 import { usePersistedState } from "@/hooks/usePersistedState";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -84,6 +85,7 @@ export default function Leads() {
   const [isChainedFlow, setIsChainedFlow] = useState(false);
   const [isCreateSaleModalOpen, setIsCreateSaleModalOpen] = useState(false);
   const [prefillSaleClientId, setPrefillSaleClientId] = useState<string | null>(null);
+  const [prefillProposalClientId, setPrefillProposalClientId] = useState<string | null>(null);
   const [prefillSaleClient, setPrefillSaleClient] = useState<{
     id: string;
     name: string;
@@ -295,8 +297,47 @@ export default function Leads() {
 
     // Intercept drops on won stages -> auto-create client + open sale modal
     if (isWonStage(newStatus) && lead) {
+      const isPerfect2Gether = isPerfect2GetherOrg(organization?.id);
       setPendingWonData({ leadId, status: newStatus });
       const existingClient = clients.find(c => c.lead_id === leadId || (lead.company_nif && c.company_nif === lead.company_nif));
+
+      if (isPerfect2Gether) {
+        // Perfect2Gether custom flow
+        if (existingClient) {
+          // Already a client → mark won immediately + open proposal modal
+          updateStatus.mutate({ leadId, status: newStatus });
+          setPendingWonData(null);
+          toast.success('Lead ganha! Cliente já existente — criar proposta.');
+          setPrefillProposalClientId(existingClient.id);
+          setNewlyCreatedClientId(existingClient.id);
+          setIsCreateProposalModalOpen(true);
+        } else {
+          // Not a client → create client → navigate to client page
+          convertLeadToClient.mutate({
+            lead_id: leadId,
+            name: (lead.name && lead.name !== lead.company_name)
+              ? lead.name
+              : (lead.company_name || lead.name || 'Sem nome'),
+            email: lead.email,
+            phone: lead.phone,
+            company: lead.company_name || undefined,
+            company_nif: lead.company_nif || undefined,
+            notes: lead.notes || undefined,
+          }, {
+            onSuccess: (newClient) => {
+              updateStatus.mutate({ leadId, status: newStatus });
+              setPendingWonData(null);
+              toast.success('Lead ganha! Novo cliente criado.');
+              if (newClient?.id) {
+                navigate('/clients', { state: { openClientId: newClient.id } });
+              }
+            },
+          });
+        }
+        return;
+      }
+
+      // Default flow for all other orgs
       if (existingClient) {
         toast.success('Lead ganha! Cliente já existente.');
         setPrefillSaleClientId(existingClient.id);
@@ -441,8 +482,8 @@ export default function Leads() {
   };
 
   const handleProposalCreated = () => {
-    if (pendingLead) {
-      // Find the proposal stage key
+    if (pendingLead && !prefillProposalClientId) {
+      // Normal proposal stage flow (not Perfect2Gether won flow)
       const proposalStage = stages.find(s => isProposalStage(s.key));
       if (proposalStage) {
         updateStatus.mutate({ leadId: pendingLead.id, status: proposalStage.key });
@@ -450,6 +491,7 @@ export default function Leads() {
     }
     setPendingLead(null);
     setNewlyCreatedClientId(null);
+    setPrefillProposalClientId(null);
     setIsChainedFlow(false);
     setIsCreateProposalModalOpen(false);
   };
