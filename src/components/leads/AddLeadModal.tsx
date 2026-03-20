@@ -120,6 +120,7 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isTelecom = organization?.niche === 'telecom';
+  const isP2G = isPerfect2GetherOrg(organization?.id);
   const { modules } = useModules();
   const showEnergy = isTelecom && modules.energy;
   const hasActiveWhatsappAutomation = useMemo(() => {
