@@ -1,22 +1,19 @@
 
 
-## Mostrar "Tipo Comissão" (negotiation_type) na linha do Sistema
+## Mover "Angariação" da coluna "Tipo Comissão" para a coluna "Tipo"
 
 ### Problema
-A linha "Sistema" mostra "—" para "Tipo Comissão" e "Tipo". O `negotiation_type` já existe no `CpeDetail` mas não é passado ao `ComparisonRow`.
+Na linha 109, o `systemNegotiationType` está a ser exibido na coluna "Tipo Comissão". Na linha 111, a coluna "Tipo" mostra "—". O utilizador quer o inverso: o negotiation_type deve aparecer na coluna **"Tipo"**, não em "Tipo Comissão".
 
 ### Solução
 
-#### 1) `src/hooks/useCommissionAnalysis.ts`
-- Adicionar `systemNegotiationType: string | null` ao `ComparisonRow`
-- No `buildComparison`, preencher com `match.negotiation_type`
+**Ficheiro: `src/components/finance/CommissionAnalysisTab.tsx`**
 
-#### 2) `src/components/finance/CommissionAnalysisTab.tsx`
-- Importar `NEGOTIATION_TYPE_LABELS` de `@/types/proposals` (ou definir inline)
-- Linha 108: substituir "—" por `NEGOTIATION_TYPE_LABELS[row.systemNegotiationType]` (ex: "Angariação")
-- Linha 110 ("Tipo"): continua "—" pois não existe equivalente no sistema
+- Linha 109 (coluna "Tipo Comissão"): mudar para `"—"` 
+- Linha 111 (coluna "Tipo"): mudar para exibir `NEGOTIATION_TYPE_LABELS[row.systemNegotiationType]`
 
-### Ficheiros alterados
-- `src/hooks/useCommissionAnalysis.ts` — 1 campo novo no `ComparisonRow` + 1 linha no `buildComparison`
-- `src/components/finance/CommissionAnalysisTab.tsx` — exibir negotiation_type na linha Sistema
+Basicamente trocar o conteúdo dessas duas células.
+
+### Ficheiro alterado
+- `src/components/finance/CommissionAnalysisTab.tsx` — 2 linhas (109 e 111)
 
