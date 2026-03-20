@@ -445,6 +445,7 @@ export type Database = {
           imported_by: string
           matched_rows: number
           organization_id: string
+          reference_month: string | null
           total_chargeback_amount: number
           total_rows: number
           unmatched_rows: number
@@ -458,6 +459,7 @@ export type Database = {
           imported_by: string
           matched_rows?: number
           organization_id: string
+          reference_month?: string | null
           total_chargeback_amount?: number
           total_rows?: number
           unmatched_rows?: number
@@ -471,6 +473,7 @@ export type Database = {
           imported_by?: string
           matched_rows?: number
           organization_id?: string
+          reference_month?: string | null
           total_chargeback_amount?: number
           total_rows?: number
           unmatched_rows?: number
@@ -4468,22 +4471,40 @@ export type Database = {
         Returns: boolean
       }
       immutable_unaccent: { Args: { "": string }; Returns: string }
-      import_commission_chargebacks: {
-        Args: {
-          p_cpe_column_name: string
-          p_file_name: string
-          p_organization_id: string
-          p_rows: Json
-        }
-        Returns: {
-          chargeback_count: number
-          import_id: string
-          matched_rows: number
-          total_chargeback_amount: number
-          total_rows: number
-          unmatched_rows: number
-        }[]
-      }
+      import_commission_chargebacks:
+        | {
+            Args: {
+              p_cpe_column_name: string
+              p_file_name: string
+              p_organization_id: string
+              p_rows: Json
+            }
+            Returns: {
+              chargeback_count: number
+              import_id: string
+              matched_rows: number
+              total_chargeback_amount: number
+              total_rows: number
+              unmatched_rows: number
+            }[]
+          }
+        | {
+            Args: {
+              p_cpe_column_name: string
+              p_file_name: string
+              p_organization_id: string
+              p_reference_month?: string
+              p_rows: Json
+            }
+            Returns: {
+              chargeback_count: number
+              import_id: string
+              matched_rows: number
+              total_chargeback_amount: number
+              total_rows: number
+              unmatched_rows: number
+            }[]
+          }
       is_org_admin: {
         Args: { _org_id: string; _user_id: string }
         Returns: boolean
