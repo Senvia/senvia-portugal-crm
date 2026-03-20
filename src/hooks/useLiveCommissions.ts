@@ -200,6 +200,8 @@ export function useLiveCommissions(selectedMonth: string, effectiveUserIds?: str
           proposal_cpe_id: cpe.id,
           serial_number: cpe.serial_number,
           consumo_anual: consumo,
+          dbl: cpe.dbl || 0,
+          duracao_contrato: cpe.duracao_contrato || 0,
           margem: cpe.margem || 0,
           comissao_indicativa: cpe.comissao || 0,
           comissao_final: 0,
