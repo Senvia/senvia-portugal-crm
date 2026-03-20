@@ -297,8 +297,47 @@ export default function Leads() {
 
     // Intercept drops on won stages -> auto-create client + open sale modal
     if (isWonStage(newStatus) && lead) {
+      const isPerfect2Gether = isPerfect2GetherOrg(organization?.id);
       setPendingWonData({ leadId, status: newStatus });
       const existingClient = clients.find(c => c.lead_id === leadId || (lead.company_nif && c.company_nif === lead.company_nif));
+
+      if (isPerfect2Gether) {
+        // Perfect2Gether custom flow
+        if (existingClient) {
+          // Already a client → mark won immediately + open proposal modal
+          updateStatus.mutate({ leadId, status: newStatus });
+          setPendingWonData(null);
+          toast.success('Lead ganha! Cliente já existente — criar proposta.');
+          setPrefillProposalClientId(existingClient.id);
+          setNewlyCreatedClientId(existingClient.id);
+          setIsCreateProposalModalOpen(true);
+        } else {
+          // Not a client → create client → navigate to client page
+          convertLeadToClient.mutate({
+            lead_id: leadId,
+            name: (lead.name && lead.name !== lead.company_name)
+              ? lead.name
+              : (lead.company_name || lead.name || 'Sem nome'),
+            email: lead.email,
+            phone: lead.phone,
+            company: lead.company_name || undefined,
+            company_nif: lead.company_nif || undefined,
+            notes: lead.notes || undefined,
+          }, {
+            onSuccess: (newClient) => {
+              updateStatus.mutate({ leadId, status: newStatus });
+              setPendingWonData(null);
+              toast.success('Lead ganha! Novo cliente criado.');
+              if (newClient?.id) {
+                navigate('/clients', { state: { openClientId: newClient.id } });
+              }
+            },
+          });
+        }
+        return;
+      }
+
+      // Default flow for all other orgs
       if (existingClient) {
         toast.success('Lead ganha! Cliente já existente.');
         setPrefillSaleClientId(existingClient.id);
