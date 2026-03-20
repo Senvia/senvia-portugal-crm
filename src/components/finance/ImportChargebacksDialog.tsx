@@ -141,7 +141,7 @@ export function ImportChargebacksDialog({ open, onOpenChange }: ImportChargeback
   }, [selectedAmountColumn, filteredRows, selectedCpeColumn]);
 
   const handleImport = async () => {
-    if (!fileName || preparedRows.length === 0 || !selectedCpeColumn || !selectedAmountColumn) return;
+    if (!fileName || preparedRows.length === 0 || !selectedCpeColumn) return;
 
     try {
       await importChargebacks.mutateAsync({
