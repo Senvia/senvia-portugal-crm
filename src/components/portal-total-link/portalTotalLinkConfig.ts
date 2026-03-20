@@ -1,6 +1,6 @@
-import { ClipboardCheck, Plus, Search, type LucideIcon } from "lucide-react";
+import { ClipboardCheck, Plus, Search, Users, type LucideIcon } from "lucide-react";
 
-export type PortalTotalLinkSectionKey = "home" | "contratos" | "ids" | "pendentes" | "reclamacoes";
+export type PortalTotalLinkSectionKey = "home" | "contratos" | "ids" | "pendentes" | "reclamacoes" | "rh";
 
 export interface PortalTotalLinkSectionAction {
   label: string;
