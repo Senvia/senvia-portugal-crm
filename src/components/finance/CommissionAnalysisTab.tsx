@@ -346,7 +346,7 @@ export function CommissionAnalysisTab() {
           </CardHeader>
           <CardContent className="p-0">
             {/* Header row */}
-            <div className="hidden min-w-[860px] sm:grid grid-cols-[1fr_repeat(6,minmax(0,auto))] gap-2 px-4 py-2 border-b text-xs font-medium text-muted-foreground">
+            <div className="hidden min-w-[860px] sm:grid grid-cols-[1fr_110px_60px_110px_90px_110px_90px] gap-2 px-4 py-2 border-b text-xs font-medium text-muted-foreground">
               <span>Comercial</span>
               <span className="text-right">Valor a receber €</span>
               <span className="text-right">Base</span>
