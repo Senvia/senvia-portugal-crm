@@ -1,27 +1,23 @@
 
 
-## Permitir super admin editar vendas concluídas
+## Corrigir: campos Consumo/DBL resetam ao editar
 
 ### Problema
-A linha 278 do `EditSaleModal.tsx` define:
-```ts
-const canFullEdit = sale?.status !== 'delivered' && sale?.status !== 'cancelled' && sale?.status !== 'fulfilled';
-```
-Isto bloqueia a edição de cliente, produtos e resumo para **todos os utilizadores**, incluindo super admins. Campos ficam desativados e secções inteiras ficam escondidas.
-
-A variável `isDeliveredLocked` (linha 114) já considera `isAdmin`, mas `canFullEdit` não.
+O `useEffect` na linha 185 do `EditSaleModal.tsx` tem `calculateEnergyCommission` como dependência. Esta função muda de referência a cada render, o que faz o `useEffect` disparar novamente sempre que o utilizador altera qualquer campo. Isto **reseta o `editableCpes` de volta aos dados originais** do `proposalCpes`, apagando o que o utilizador acabou de digitar.
 
 ### Solução
 
 **Ficheiro: `src/components/sales/EditSaleModal.tsx`**
 
-1. Importar `isSuperAdmin` do `usePermissions()`
-2. Alterar `canFullEdit` (linha 278) para permitir super admins e admins:
-   ```ts
-   const canFullEdit = isAdmin || (sale?.status !== 'delivered' && sale?.status !== 'cancelled' && sale?.status !== 'fulfilled');
-   ```
-   Isto garante que admins/super admins podem editar todos os campos mesmo em vendas concluídas/entregues/canceladas.
+1. Remover `calculateEnergyCommission` e `hasEnergyConfig` das dependências do `useEffect` (linha 218).
+2. Usar um `useRef` para guardar a referência estável de `calculateEnergyCommission` e usá-la dentro do effect sem a declarar como dependência.
+3. Alternativa mais simples: mover o recálculo da comissão para fora do `useEffect` de inicialização — fazer o cálculo inline na inicialização usando um `useCallback` com referência estável, ou simplesmente remover a dependência e usar um ref.
+
+A abordagem concreta:
+- Criar `const calcRef = useRef(calculateEnergyCommission)` e manter atualizado com `calcRef.current = calculateEnergyCommission` a cada render.
+- No `useEffect`, usar `calcRef.current` em vez de `calculateEnergyCommission` directamente.
+- Dependências passam a ser apenas `[open, proposalCpes]` — estáveis.
 
 ### Ficheiros alterados
-- `src/components/sales/EditSaleModal.tsx` — 1 linha alterada (linha 278)
+- `src/components/sales/EditSaleModal.tsx`
 
