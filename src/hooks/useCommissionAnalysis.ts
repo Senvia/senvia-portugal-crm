@@ -280,7 +280,7 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
       byUser.set(item.matched_user_id, existing);
     }
 
-    const commercials = Array.from(byUser.values()).sort((a, b) => {
+    const commercials = Array.from(byUser.values()).filter((c) => c.fileData.length > 0).sort((a, b) => {
       if (b.chargebackAmount !== a.chargebackAmount) return b.chargebackAmount - a.chargebackAmount;
       if (b.commissionAmount !== a.commissionAmount) return b.commissionAmount - a.commissionAmount;
       return a.name.localeCompare(b.name, "pt-PT");
