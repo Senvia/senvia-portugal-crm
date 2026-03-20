@@ -85,6 +85,7 @@ export default function Leads() {
   const [isChainedFlow, setIsChainedFlow] = useState(false);
   const [isCreateSaleModalOpen, setIsCreateSaleModalOpen] = useState(false);
   const [prefillSaleClientId, setPrefillSaleClientId] = useState<string | null>(null);
+  const [prefillProposalClientId, setPrefillProposalClientId] = useState<string | null>(null);
   const [prefillSaleClient, setPrefillSaleClient] = useState<{
     id: string;
     name: string;
