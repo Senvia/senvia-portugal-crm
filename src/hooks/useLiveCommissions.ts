@@ -97,7 +97,7 @@ export function useLiveCommissions(selectedMonth: string, effectiveUserIds?: str
         .from('sales')
         .select('id, code, lead_id, client_id, activation_date, status, proposal_id')
         .eq('organization_id', organizationId)
-        .eq('status', 'delivered')
+        .in('status', ['delivered', 'fulfilled'])
         .gte('activation_date', monthStart)
         .lte('activation_date', monthEnd);
 
