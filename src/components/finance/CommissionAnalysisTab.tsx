@@ -106,9 +106,9 @@ function ComparisonDataTable({ comparisonData }: { comparisonData: ComparisonRow
                   </span>
                 </TableCell>
                 <TableCell className="py-1.5 text-muted-foreground">—</TableCell>
+                <TableCell className="py-1.5 text-muted-foreground truncate max-w-[160px]">{row.systemClientName || "—"}</TableCell>
                 <TableCell className="py-1.5 text-muted-foreground">—</TableCell>
-                <TableCell className="py-1.5 text-muted-foreground">—</TableCell>
-                <TableCell className="py-1.5 text-muted-foreground">—</TableCell>
+                <TableCell className="py-1.5 font-mono text-muted-foreground">{row.systemCpe || "—"}</TableCell>
                 <TableCell className={`py-1.5 tabular-nums ${row.hasDblDiscrepancy ? discrepancyCell : "text-muted-foreground"}`}>
                   {row.systemDbl !== null ? row.systemDbl : "—"}
                 </TableCell>
@@ -118,8 +118,8 @@ function ComparisonDataTable({ comparisonData }: { comparisonData: ComparisonRow
                 <TableCell className={`py-1.5 text-right tabular-nums ${row.hasDuracaoDiscrepancy ? discrepancyCell : "text-muted-foreground"}`}>
                   {row.systemDuracao !== null ? row.systemDuracao : "—"}
                 </TableCell>
-                <TableCell className="py-1.5 text-muted-foreground">—</TableCell>
-                <TableCell className="py-1.5 text-muted-foreground">—</TableCell>
+                <TableCell className="py-1.5 text-muted-foreground">{row.systemDataInicio || "—"}</TableCell>
+                <TableCell className="py-1.5 text-muted-foreground">{row.systemDataFim || "—"}</TableCell>
               </TableRow>
             </>
           ))}
