@@ -221,7 +221,7 @@ export function CommissionAnalysisTab() {
                     </div>
                   </AccordionTrigger>
                   <AccordionContent className="px-4 pb-3 pt-0">
-                    <FileDataTable fileData={commercial.fileData} />
+                    <ComparisonDataTable comparisonData={commercial.comparisonData} />
                   </AccordionContent>
                 </AccordionItem>
               ))}
