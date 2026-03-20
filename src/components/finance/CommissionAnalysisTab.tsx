@@ -106,9 +106,9 @@ function ComparisonDataTable({ comparisonData }: { comparisonData: ComparisonRow
                     Sistema
                   </span>
                 </TableCell>
-                <TableCell className="py-1.5 text-muted-foreground">{row.systemNegotiationType ? NEGOTIATION_TYPE_LABELS[row.systemNegotiationType as NegotiationType] ?? row.systemNegotiationType : "—"}</TableCell>
-                <TableCell className="py-1.5 text-muted-foreground truncate max-w-[160px]">{row.systemClientName || "—"}</TableCell>
                 <TableCell className="py-1.5 text-muted-foreground">—</TableCell>
+                <TableCell className="py-1.5 text-muted-foreground truncate max-w-[160px]">{row.systemClientName || "—"}</TableCell>
+                <TableCell className="py-1.5 text-muted-foreground">{row.systemNegotiationType ? NEGOTIATION_TYPE_LABELS[row.systemNegotiationType as NegotiationType] ?? row.systemNegotiationType : "—"}</TableCell>
                 <TableCell className="py-1.5 font-mono text-muted-foreground">{row.systemCpe || "—"}</TableCell>
                 <TableCell className={`py-1.5 tabular-nums ${row.hasDblDiscrepancy ? discrepancyCell : "text-muted-foreground"}`}>
                   {row.systemDbl !== null ? row.systemDbl : "—"}
