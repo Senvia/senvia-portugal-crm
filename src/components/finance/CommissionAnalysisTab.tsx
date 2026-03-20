@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { format, startOfMonth, subMonths } from "date-fns";
 import { pt } from "date-fns/locale";
 import { ChevronDown, FileSearch, FileUp, RefreshCw, Search } from "lucide-react";
@@ -76,56 +76,80 @@ function ComparisonDataTable({ comparisonData }: { comparisonData: ComparisonRow
           </TableRow>
         </TableHeader>
         <TableBody>
-          {comparisonData.map((row, idx) => (
-            <>
-              {/* File row */}
-              <TableRow key={`file-${idx}`} className="text-xs border-b-0">
-                <TableCell className="py-1.5">
-                  <span className="inline-flex items-center rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
-                    Ficheiro
-                  </span>
-                </TableCell>
-                <TableCell className="py-1.5">{row.file.tipoComissao || "—"}</TableCell>
-                <TableCell className="py-1.5 truncate max-w-[160px]">{row.file.nomeEmpresa || "—"}</TableCell>
-                <TableCell className="py-1.5">{row.file.tipo || "—"}</TableCell>
-                <TableCell className="py-1.5 font-mono">{row.file.cpe || "—"}</TableCell>
-                <TableCell className={`py-1.5 tabular-nums ${row.hasDblDiscrepancy ? discrepancyCell : ""}`}>
-                  {row.file.dbl || "—"}
-                </TableCell>
-                <TableCell className={`py-1.5 text-right tabular-nums ${row.hasConsumoDiscrepancy ? discrepancyCell : ""}`}>
-                  {row.file.consumoAnual || "—"}
-                </TableCell>
-                <TableCell className={`py-1.5 text-right tabular-nums ${row.hasDuracaoDiscrepancy ? discrepancyCell : ""}`}>
-                  {row.file.duracaoContrato || "—"}
-                </TableCell>
-                <TableCell className="py-1.5">{row.file.dataInicio || "—"}</TableCell>
-                <TableCell className="py-1.5">{row.file.dataFim || "—"}</TableCell>
-              </TableRow>
-              {/* System row */}
-              <TableRow key={`sys-${idx}`} className="text-xs bg-muted/50 border-b">
-                <TableCell className="py-1.5">
-                  <span className="inline-flex items-center rounded-full bg-secondary px-1.5 py-0.5 text-[10px] font-medium text-secondary-foreground">
-                    Sistema
-                  </span>
-                </TableCell>
-                <TableCell className="py-1.5 text-muted-foreground">—</TableCell>
-                <TableCell className="py-1.5 text-muted-foreground truncate max-w-[160px]">{row.systemClientName || "—"}</TableCell>
-                <TableCell className="py-1.5 text-muted-foreground">{row.systemNegotiationType ? NEGOTIATION_TYPE_LABELS[row.systemNegotiationType as NegotiationType] ?? row.systemNegotiationType : "—"}</TableCell>
-                <TableCell className="py-1.5 font-mono text-muted-foreground">{row.systemCpe || "—"}</TableCell>
-                <TableCell className={`py-1.5 tabular-nums ${row.hasDblDiscrepancy ? discrepancyCell : "text-muted-foreground"}`}>
-                  {row.systemDbl !== null ? row.systemDbl : "—"}
-                </TableCell>
-                <TableCell className={`py-1.5 text-right tabular-nums ${row.hasConsumoDiscrepancy ? discrepancyCell : "text-muted-foreground"}`}>
-                  {row.systemConsumoAnual !== null ? row.systemConsumoAnual : "—"}
-                </TableCell>
-                <TableCell className={`py-1.5 text-right tabular-nums ${row.hasDuracaoDiscrepancy ? discrepancyCell : "text-muted-foreground"}`}>
-                  {row.systemDuracao !== null ? row.systemDuracao : "—"}
-                </TableCell>
-                <TableCell className="py-1.5 text-muted-foreground">{row.systemDataInicio || "—"}</TableCell>
-                <TableCell className="py-1.5 text-muted-foreground">{row.systemDataFim || "—"}</TableCell>
-              </TableRow>
-            </>
-          ))}
+          {comparisonData.map((row, idx) => {
+            // If no discrepancy, show single merged row with badge
+            if (!row.hasAnyDiscrepancy) {
+              return (
+                <TableRow key={`merged-${idx}`} className="text-xs border-b">
+                  <TableCell className="py-1.5">
+                    <span className="inline-flex items-center rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600">
+                      Atualizado
+                    </span>
+                  </TableCell>
+                  <TableCell className="py-1.5">{row.file.tipoComissao || "—"}</TableCell>
+                  <TableCell className="py-1.5 truncate max-w-[160px]">{row.systemClientName || row.file.nomeEmpresa || "—"}</TableCell>
+                  <TableCell className="py-1.5">{row.systemNegotiationType ? NEGOTIATION_TYPE_LABELS[row.systemNegotiationType as NegotiationType] ?? row.systemNegotiationType : row.file.tipo || "—"}</TableCell>
+                  <TableCell className="py-1.5 font-mono">{row.systemCpe || row.file.cpe || "—"}</TableCell>
+                  <TableCell className="py-1.5 tabular-nums">{row.file.dbl || "—"}</TableCell>
+                  <TableCell className="py-1.5 text-right tabular-nums">{row.file.consumoAnual || "—"}</TableCell>
+                  <TableCell className="py-1.5 text-right tabular-nums">{row.file.duracaoContrato || "—"}</TableCell>
+                  <TableCell className="py-1.5">{row.file.dataInicio || "—"}</TableCell>
+                  <TableCell className="py-1.5">{row.file.dataFim || "—"}</TableCell>
+                </TableRow>
+              );
+            }
+
+            return (
+              <React.Fragment key={`pair-${idx}`}>
+                {/* File row */}
+                <TableRow className="text-xs border-b-0">
+                  <TableCell className="py-1.5">
+                    <span className="inline-flex items-center rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                      Ficheiro
+                    </span>
+                  </TableCell>
+                  <TableCell className="py-1.5">{row.file.tipoComissao || "—"}</TableCell>
+                  <TableCell className="py-1.5 truncate max-w-[160px]">{row.file.nomeEmpresa || "—"}</TableCell>
+                  <TableCell className="py-1.5">{row.file.tipo || "—"}</TableCell>
+                  <TableCell className="py-1.5 font-mono">{row.file.cpe || "—"}</TableCell>
+                  <TableCell className={`py-1.5 tabular-nums ${row.hasDblDiscrepancy ? discrepancyCell : ""}`}>
+                    {row.file.dbl || "—"}
+                  </TableCell>
+                  <TableCell className={`py-1.5 text-right tabular-nums ${row.hasConsumoDiscrepancy ? discrepancyCell : ""}`}>
+                    {row.file.consumoAnual || "—"}
+                  </TableCell>
+                  <TableCell className={`py-1.5 text-right tabular-nums ${row.hasDuracaoDiscrepancy ? discrepancyCell : ""}`}>
+                    {row.file.duracaoContrato || "—"}
+                  </TableCell>
+                  <TableCell className="py-1.5">{row.file.dataInicio || "—"}</TableCell>
+                  <TableCell className="py-1.5">{row.file.dataFim || "—"}</TableCell>
+                </TableRow>
+                {/* System row */}
+                <TableRow className="text-xs bg-muted/50 border-b">
+                  <TableCell className="py-1.5">
+                    <span className="inline-flex items-center rounded-full bg-secondary px-1.5 py-0.5 text-[10px] font-medium text-secondary-foreground">
+                      Sistema
+                    </span>
+                  </TableCell>
+                  <TableCell className="py-1.5 text-muted-foreground">—</TableCell>
+                  <TableCell className="py-1.5 text-muted-foreground truncate max-w-[160px]">{row.systemClientName || "—"}</TableCell>
+                  <TableCell className="py-1.5 text-muted-foreground">{row.systemNegotiationType ? NEGOTIATION_TYPE_LABELS[row.systemNegotiationType as NegotiationType] ?? row.systemNegotiationType : "—"}</TableCell>
+                  <TableCell className="py-1.5 font-mono text-muted-foreground">{row.systemCpe || "—"}</TableCell>
+                  <TableCell className={`py-1.5 tabular-nums ${row.hasDblDiscrepancy ? discrepancyCell : "text-muted-foreground"}`}>
+                    {row.systemDbl !== null ? row.systemDbl : "—"}
+                  </TableCell>
+                  <TableCell className={`py-1.5 text-right tabular-nums ${row.hasConsumoDiscrepancy ? discrepancyCell : "text-muted-foreground"}`}>
+                    {row.systemConsumoAnual !== null ? row.systemConsumoAnual : "—"}
+                  </TableCell>
+                  <TableCell className={`py-1.5 text-right tabular-nums ${row.hasDuracaoDiscrepancy ? discrepancyCell : "text-muted-foreground"}`}>
+                    {row.systemDuracao !== null ? Number(row.systemDuracao).toFixed(2) : "—"}
+                  </TableCell>
+                  <TableCell className="py-1.5 text-muted-foreground">{row.systemDataInicio || "—"}</TableCell>
+                  <TableCell className="py-1.5 text-muted-foreground">{row.systemDataFim || "—"}</TableCell>
+                </TableRow>
+              </React.Fragment>
+            );
+          })}
         </TableBody>
       </Table>
     </div>
@@ -156,11 +180,36 @@ export function CommissionAnalysisTab() {
       for (const row of commercial.comparisonData) {
         if (row.hasAnyDiscrepancy && row.matchedProposalCpeId) {
           const parseNum = (s: string) => parseFloat(s.replace(/[^\d.,]/g, "").replace(",", ".")) || 0;
+          // Calculate duration from dates if possible
+          const fileDuracaoRaw = parseNum(row.file.duracaoContrato);
+          let duracao = fileDuracaoRaw;
+          if (row.file.dataInicio && row.file.dataFim) {
+            const parseDateVal = (raw: string): Date | null => {
+              const trimmed = raw.trim();
+              const [dd, mm, yyyy] = trimmed.split("/");
+              if (dd && mm && yyyy) return new Date(Number(yyyy), Number(mm) - 1, Number(dd));
+              return null;
+            };
+            const s = parseDateVal(row.file.dataInicio);
+            const e = parseDateVal(row.file.dataFim);
+            if (s && e && !isNaN(s.getTime()) && !isNaN(e.getTime())) {
+              duracao = (e.getTime() - s.getTime()) / (365 * 86400000);
+            }
+          }
+          // Format dates for DB (yyyy-MM-dd)
+          const formatDateForDb = (raw: string): string | null => {
+            const trimmed = raw.trim();
+            const parts = trimmed.split("/");
+            if (parts.length === 3) return `${parts[2]}-${parts[1]}-${parts[0]}`;
+            return null;
+          };
           items.push({
             proposalCpeId: row.matchedProposalCpeId,
             dbl: parseNum(row.file.dbl),
             consumoAnual: parseNum(row.file.consumoAnual),
-            duracaoContrato: parseNum(row.file.duracaoContrato),
+            duracaoContrato: duracao,
+            contratoInicio: row.file.dataInicio ? formatDateForDb(row.file.dataInicio) : null,
+            contratoFim: row.file.dataFim ? formatDateForDb(row.file.dataFim) : null,
           });
         }
       }
