@@ -382,6 +382,18 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
                             />
                           )}
                         </div>
+                        {isP2G && (
+                          <div className="mt-4">
+                            <label className="text-sm font-medium leading-none">CPE/CUI</label>
+                            <Input
+                              className="mt-2"
+                              placeholder="PT00..."
+                              value={cpeValue}
+                              onChange={(e) => setCpeValue(e.target.value)}
+                              disabled={nifValidation.isDuplicate}
+                            />
+                          </div>
+                        )}
                       </CardContent>
                     </Card>
                   )}
