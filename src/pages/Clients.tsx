@@ -22,6 +22,7 @@ import type { CrmClient } from "@/types/clients";
 import { formatCurrency } from "@/lib/format";
 import { mapClientsForExport, exportToCsv, exportToExcel } from "@/lib/export";
 import { useClientProposalTypes } from "@/hooks/useClientProposalTypes";
+import { CreateProposalModal } from "@/components/proposals/CreateProposalModal";
 import { toast } from "sonner";
 import { useModules } from "@/hooks/useModules";
 import { format, isWithinInterval, startOfDay, endOfDay, parseISO } from "date-fns";
