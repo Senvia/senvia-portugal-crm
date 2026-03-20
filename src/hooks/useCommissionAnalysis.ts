@@ -219,9 +219,33 @@ export function useCommissionAnalysis(selectedMonth: string, effectiveUserIds?: 
 
     // Use only the latest import
     const activeImportId = imports[0]?.id ?? null;
-    const itemsFromActiveImport = activeImportId
+    const itemsFromActiveImportRaw = activeImportId
       ? allItems.filter((item) => item.import_id === activeImportId)
       : [];
+
+    // Filter imported items by selectedMonth using "Data de inicio" from raw_row
+    const selectedMonthStart = new Date(selectedMonth);
+    const selectedYear = selectedMonthStart.getFullYear();
+    const selectedMonthNum = selectedMonthStart.getMonth(); // 0-indexed
+
+    const itemsFromActiveImport = itemsFromActiveImportRaw.filter((item) => {
+      const parsed = parseRawRow(item.raw_row as Record<string, unknown> | null);
+      if (!parsed || !parsed.dataInicio) return false;
+      // Try to parse date in formats: dd/MM/yyyy, yyyy-MM-dd, dd-MM-yyyy
+      const raw = parsed.dataInicio.trim();
+      let d: Date | null = null;
+      if (/^\d{2}\/\d{2}\/\d{4}$/.test(raw)) {
+        const [dd, mm, yyyy] = raw.split("/");
+        d = new Date(Number(yyyy), Number(mm) - 1, Number(dd));
+      } else if (/^\d{4}-\d{2}-\d{2}/.test(raw)) {
+        d = new Date(raw);
+      } else if (/^\d{2}-\d{2}-\d{4}$/.test(raw)) {
+        const [dd, mm, yyyy] = raw.split("-");
+        d = new Date(Number(yyyy), Number(mm) - 1, Number(dd));
+      }
+      if (!d || isNaN(d.getTime())) return false;
+      return d.getFullYear() === selectedYear && d.getMonth() === selectedMonthNum;
+    });
 
     const memberNameMap = new Map(
       members.map((member) => [member.user_id, member.full_name || member.email || "Comercial"])
