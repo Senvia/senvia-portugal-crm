@@ -265,7 +265,7 @@ export function ImportChargebacksDialog({ open, onOpenChange }: ImportChargeback
             </Button>
             <Button
               onClick={handleImport}
-              disabled={!fileName || preparedRows.length === 0 || !selectedCpeColumn || !selectedAmountColumn || importChargebacks.isPending}
+              disabled={!fileName || preparedRows.length === 0 || !selectedCpeColumn || importChargebacks.isPending}
             >
               {importChargebacks.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               Importar

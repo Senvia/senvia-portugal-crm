@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { format, startOfMonth, subMonths } from "date-fns";
 import { pt } from "date-fns/locale";
-import { AlertTriangle, ChevronDown, FileSearch, FileUp, Search, TrendingDown, TrendingUp, Wallet } from "lucide-react";
+import { ChevronDown, FileSearch, FileUp, Search } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,9 +13,7 @@ import { TeamMemberFilter } from "@/components/dashboard/TeamMemberFilter";
 import { ImportChargebacksDialog } from "@/components/finance/ImportChargebacksDialog";
 import { useCommissionAnalysis, type CommissionAnalysisCommercial, type FileDataRow } from "@/hooks/useCommissionAnalysis";
 import { useTeamFilter } from "@/hooks/useTeamFilter";
-import { formatCurrency } from "@/lib/format";
 import { normalizeString } from "@/lib/utils";
-import { cn } from "@/lib/utils";
 
 function generateMonthOptions() {
   const options: { value: string; label: string }[] = [];
@@ -32,39 +30,14 @@ function generateMonthOptions() {
   return options;
 }
 
-function SummaryMetric({
-  title,
-  value,
-  description,
-  icon: Icon,
-}: {
-  title: string;
-  value: string;
-  description: string;
-  icon: typeof Wallet;
-}) {
-  return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
-        <Icon className="h-4 w-4 text-muted-foreground" />
-      </CardHeader>
-      <CardContent>
-        <div className="text-xl font-semibold text-foreground sm:text-2xl">{value}</div>
-        <p className="text-xs text-muted-foreground">{description}</p>
-      </CardContent>
-    </Card>
-  );
-}
-
 function CommissionAnalysisTableSkeleton() {
   return (
     <Card>
       <CardContent className="p-0">
         <div className="space-y-3 p-4">
           {Array.from({ length: 6 }).map((_, index) => (
-            <div key={index} className="grid grid-cols-7 gap-3">
-              {Array.from({ length: 7 }).map((__, cellIndex) => (
+            <div key={index} className="grid grid-cols-9 gap-3">
+              {Array.from({ length: 9 }).map((__, cellIndex) => (
                 <Skeleton key={cellIndex} className="h-10 w-full" />
               ))}
             </div>
@@ -75,137 +48,43 @@ function CommissionAnalysisTableSkeleton() {
   );
 }
 
-/** Match file rows to system CPEs by normalized CPE serial_number */
-function matchFileToSystem(commercial: CommissionAnalysisCommercial) {
-  const normalizeCpe = (s: string) => s.replace(/[^A-Z0-9]/gi, "").toUpperCase();
-
-  const systemCpes = commercial.cpes.map((cpe) => ({
-    ...cpe,
-    normalizedSerial: normalizeCpe(cpe.serial_number || ""),
-  }));
-
-  const matched: { system: typeof systemCpes[number]; file: FileDataRow | null }[] = [];
-  const unmatchedFile: FileDataRow[] = [];
-  const usedSystemIndexes = new Set<number>();
-
-  for (const fileRow of commercial.fileData) {
-    const fileCpeNorm = normalizeCpe(fileRow.cpe);
-    const idx = systemCpes.findIndex(
-      (s, i) => !usedSystemIndexes.has(i) && s.normalizedSerial === fileCpeNorm
-    );
-    if (idx >= 0) {
-      usedSystemIndexes.add(idx);
-      matched.push({ system: systemCpes[idx], file: fileRow });
-    } else {
-      unmatchedFile.push(fileRow);
-    }
+function FileDataTable({ fileData }: { fileData: FileDataRow[] }) {
+  if (fileData.length === 0) {
+    return <p className="text-xs text-muted-foreground py-2">Sem dados do ficheiro para este comercial.</p>;
   }
-
-  // System CPEs without file match
-  systemCpes.forEach((s, i) => {
-    if (!usedSystemIndexes.has(i)) {
-      matched.push({ system: s, file: null });
-    }
-  });
-
-  return { matched, unmatchedFile };
-}
-
-function ComparisonSubTable({ commercial }: { commercial: CommissionAnalysisCommercial }) {
-  const hasFileData = commercial.fileData.length > 0;
-
-  if (!hasFileData) {
-    if (commercial.cpes.length === 0) {
-      return <p className="text-xs text-muted-foreground py-2">Sem CPEs associados a este comercial.</p>;
-    }
-    return (
-      <div className="rounded-md border bg-muted/30 overflow-auto">
-        <Table>
-          <TableHeader>
-            <TableRow className="text-xs">
-              <TableHead className="h-8">CPE</TableHead>
-              <TableHead className="h-8">Consumo (kWh)</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {commercial.cpes.map((cpe) => (
-              <TableRow key={cpe.proposal_cpe_id} className="text-xs">
-                <TableCell className="py-1.5 font-mono">{cpe.serial_number || "—"}</TableCell>
-                <TableCell className="py-1.5 tabular-nums">{cpe.consumo_anual.toLocaleString("pt-PT")}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-    );
-  }
-
-  const { matched, unmatchedFile } = matchFileToSystem(commercial);
 
   return (
-    <div className="space-y-3">
-      <div className="rounded-md border bg-muted/30 overflow-auto">
-        <Table>
-          <TableHeader>
-            <TableRow className="text-xs">
-              <TableHead className="h-8 min-w-[100px]">Tipo Comissão</TableHead>
-              <TableHead className="h-8 min-w-[140px]">Nome da Empresa</TableHead>
-              <TableHead className="h-8 min-w-[60px]">Tipo</TableHead>
-              <TableHead className="h-8 min-w-[180px]">CPE</TableHead>
-              <TableHead className="h-8 min-w-[60px]">DBL</TableHead>
-              <TableHead className="h-8 text-right min-w-[100px]">Consumo anual</TableHead>
-              <TableHead className="h-8 text-right min-w-[60px]">Duração</TableHead>
-              <TableHead className="h-8 min-w-[90px]">Data Início</TableHead>
-              <TableHead className="h-8 min-w-[90px]">Data Fim</TableHead>
-              <TableHead className="h-8 min-w-[60px]">Match</TableHead>
+    <div className="rounded-md border bg-muted/30 overflow-auto">
+      <Table>
+        <TableHeader>
+          <TableRow className="text-xs">
+            <TableHead className="h-8 min-w-[100px]">Tipo Comissão</TableHead>
+            <TableHead className="h-8 min-w-[140px]">Nome da Empresa</TableHead>
+            <TableHead className="h-8 min-w-[60px]">Tipo</TableHead>
+            <TableHead className="h-8 min-w-[180px]">CPE</TableHead>
+            <TableHead className="h-8 min-w-[60px]">DBL</TableHead>
+            <TableHead className="h-8 text-right min-w-[100px]">Consumo anual</TableHead>
+            <TableHead className="h-8 text-right min-w-[80px]">Duração (anos)</TableHead>
+            <TableHead className="h-8 min-w-[90px]">Data Início</TableHead>
+            <TableHead className="h-8 min-w-[90px]">Data Fim</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {fileData.map((row, idx) => (
+            <TableRow key={idx} className="text-xs">
+              <TableCell className="py-1.5">{row.tipoComissao || "—"}</TableCell>
+              <TableCell className="py-1.5 truncate max-w-[160px]">{row.nomeEmpresa || "—"}</TableCell>
+              <TableCell className="py-1.5">{row.tipo || "—"}</TableCell>
+              <TableCell className="py-1.5 font-mono">{row.cpe || "—"}</TableCell>
+              <TableCell className="py-1.5 tabular-nums">{row.dbl || "—"}</TableCell>
+              <TableCell className="py-1.5 text-right tabular-nums">{row.consumoAnual || "—"}</TableCell>
+              <TableCell className="py-1.5 text-right tabular-nums">{row.duracaoContrato || "—"}</TableCell>
+              <TableCell className="py-1.5">{row.dataInicio || "—"}</TableCell>
+              <TableCell className="py-1.5">{row.dataFim || "—"}</TableCell>
             </TableRow>
-          </TableHeader>
-          <TableBody>
-            {matched.map((row, idx) => {
-              const hasFile = !!row.file;
-              const hasSystem = !!row.system;
-              return (
-                <TableRow key={idx} className="text-xs">
-                  <TableCell className="py-1.5">{row.file?.tipoComissao || "—"}</TableCell>
-                  <TableCell className="py-1.5 truncate max-w-[160px]">{row.file?.nomeEmpresa || "—"}</TableCell>
-                  <TableCell className="py-1.5">{row.file?.tipo || "—"}</TableCell>
-                  <TableCell className="py-1.5 font-mono">
-                    {row.file?.cpe || row.system?.serial_number || "—"}
-                  </TableCell>
-                  <TableCell className="py-1.5 tabular-nums">{row.file?.dbl || "—"}</TableCell>
-                  <TableCell className="py-1.5 text-right tabular-nums">{row.file?.consumoAnual || "—"}</TableCell>
-                  <TableCell className="py-1.5 text-right tabular-nums">{row.file?.duracaoContrato || "—"}</TableCell>
-                  <TableCell className="py-1.5">{row.file?.dataInicio || "—"}</TableCell>
-                  <TableCell className="py-1.5">{row.file?.dataFim || "—"}</TableCell>
-                  <TableCell className="py-1.5">
-                    {hasFile && hasSystem ? (
-                      <span className="inline-flex items-center rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-600">✓</span>
-                    ) : hasSystem ? (
-                      <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">Só sist.</span>
-                    ) : null}
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-            {unmatchedFile.map((file, idx) => (
-              <TableRow key={`unmatched-${idx}`} className="text-xs bg-amber-500/5">
-                <TableCell className="py-1.5">{file.tipoComissao || "—"}</TableCell>
-                <TableCell className="py-1.5 truncate max-w-[160px]">{file.nomeEmpresa || "—"}</TableCell>
-                <TableCell className="py-1.5">{file.tipo || "—"}</TableCell>
-                <TableCell className="py-1.5 font-mono">{file.cpe || "—"}</TableCell>
-                <TableCell className="py-1.5 tabular-nums">{file.dbl || "—"}</TableCell>
-                <TableCell className="py-1.5 text-right tabular-nums">{file.consumoAnual || "—"}</TableCell>
-                <TableCell className="py-1.5 text-right tabular-nums">{file.duracaoContrato || "—"}</TableCell>
-                <TableCell className="py-1.5">{file.dataInicio || "—"}</TableCell>
-                <TableCell className="py-1.5">{file.dataFim || "—"}</TableCell>
-                <TableCell className="py-1.5">
-                  <span className="inline-flex items-center rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-600">Só fich.</span>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
+          ))}
+        </TableBody>
+      </Table>
     </div>
   );
 }
@@ -268,39 +147,6 @@ export function CommissionAnalysisTab() {
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {isLoading ? (
-          Array.from({ length: 4 }).map((_, index) => <Skeleton key={index} className="h-28 w-full rounded-xl" />)
-        ) : (
-          <>
-            <SummaryMetric
-              title="Comissões"
-              value={formatCurrency(data.summary.totalCommissionAmount)}
-              description={`${data.summary.totalCommissionBaseCount} registos base`}
-              icon={Wallet}
-            />
-            <SummaryMetric
-              title="Chargebacks"
-              value={formatCurrency(data.summary.totalChargebackAmount)}
-              description={`${data.summary.totalChargebackCount} chargeback(s)`}
-              icon={TrendingDown}
-            />
-            <SummaryMetric
-              title="Diferencial"
-              value={formatCurrency(data.summary.totalDifferentialAmount)}
-              description={`${data.summary.totalDifferentialCount} líquido(s)`}
-              icon={TrendingUp}
-            />
-            <SummaryMetric
-              title="Não associados"
-              value={formatCurrency(data.summary.unmatchedAmount)}
-              description={`${data.summary.unmatchedCount} chargeback(s) sem match`}
-              icon={AlertTriangle}
-            />
-          </>
-        )}
-      </div>
-
       {isLoading ? (
         <CommissionAnalysisTableSkeleton />
       ) : filteredCommercials.length > 0 ? (
@@ -309,40 +155,22 @@ export function CommissionAnalysisTab() {
             <CardTitle className="text-base">Comerciais</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            {/* Header row */}
-            <div className="hidden min-w-[860px] sm:grid grid-cols-[1fr_110px_60px_110px_90px_110px_90px] gap-2 px-4 py-2 border-b text-xs font-medium text-muted-foreground">
-              <span>Comercial</span>
-              <span className="text-right">Valor a receber €</span>
-              <span className="text-right">Base</span>
-              <span className="text-right">Chargeback €</span>
-              <span className="text-right">Chargebacks qtd</span>
-              <span className="text-right">Diferencial €</span>
-              <span className="text-right">Diferencial qtd</span>
-            </div>
-            <Accordion type="multiple" className="min-w-[860px]">
+            <Accordion type="multiple">
               {filteredCommercials.map((commercial) => (
                 <AccordionItem key={commercial.userId} value={commercial.userId} className="border-b last:border-b-0">
                   <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/50 [&>svg]:hidden justify-start">
-                    <div className="grid w-full grid-cols-[1fr_110px_60px_110px_90px_110px_90px] gap-2 items-center text-sm">
-                      <span className="flex items-center gap-2 font-medium text-foreground text-left">
-                        <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 [[data-state=open]_&]:rotate-180" />
-                        {commercial.name}
-                        {commercial.fileData.length > 0 && (
-                          <span className="inline-flex items-center rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
-                            {commercial.fileData.length} fich.
-                          </span>
-                        )}
-                      </span>
-                      <span className="text-right tabular-nums">{formatCurrency(commercial.commissionAmount)}</span>
-                      <span className="text-right tabular-nums">{commercial.commissionBaseCount}</span>
-                      <span className="text-right tabular-nums">{formatCurrency(commercial.chargebackAmount)}</span>
-                      <span className="text-right tabular-nums">{commercial.chargebackCount}</span>
-                      <span className="text-right tabular-nums font-medium text-foreground">{formatCurrency(commercial.differentialAmount)}</span>
-                      <span className="text-right tabular-nums">{commercial.differentialCount}</span>
+                    <div className="flex w-full items-center gap-2 text-sm">
+                      <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 [[data-state=open]_&]:rotate-180" />
+                      <span className="font-medium text-foreground text-left">{commercial.name}</span>
+                      {commercial.fileData.length > 0 && (
+                        <span className="inline-flex items-center rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                          {commercial.fileData.length} linha(s)
+                        </span>
+                      )}
                     </div>
                   </AccordionTrigger>
                   <AccordionContent className="px-4 pb-3 pt-0">
-                    <ComparisonSubTable commercial={commercial} />
+                    <FileDataTable fileData={commercial.fileData} />
                   </AccordionContent>
                 </AccordionItem>
               ))}
@@ -357,39 +185,6 @@ export function CommissionAnalysisTab() {
             <p className="max-w-md text-sm text-muted-foreground">
               Ainda não existem dados para os filtros atuais, ou nenhum comercial corresponde à pesquisa.
             </p>
-          </CardContent>
-        </Card>
-      )}
-
-      {!isLoading && data.unmatchedItems.length > 0 && (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <AlertTriangle className="h-4 w-4 text-destructive" />
-              Chargebacks não associados
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <Table className="min-w-[500px]">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="min-w-[200px]">CPE</TableHead>
-                  <TableHead>Empresa (ficheiro)</TableHead>
-                  <TableHead className="text-right">Valor €</TableHead>
-                  <TableHead className="min-w-[200px]">Motivo</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.unmatchedItems.map((item, index) => (
-                  <TableRow key={index}>
-                    <TableCell className="font-mono text-xs text-foreground">{item.cpe || "—"}</TableCell>
-                    <TableCell className="text-sm">{item.fileData?.nomeEmpresa || "—"}</TableCell>
-                    <TableCell className="text-right tabular-nums">{formatCurrency(item.chargebackAmount)}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{item.unmatchedReason || "—"}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
           </CardContent>
         </Card>
       )}
