@@ -348,6 +348,16 @@ export default function Clients() {
         open={showDetailsDrawer}
         onOpenChange={setShowDetailsDrawer}
         onEdit={handleEdit}
+        onNewProposal={(client) => {
+          setProposalClientId(client.id);
+          setShowCreateProposal(true);
+        }}
+      />
+
+      <CreateProposalModal
+        open={showCreateProposal}
+        onOpenChange={setShowCreateProposal}
+        preselectedClientId={proposalClientId ?? undefined}
       />
 
       <AssignTeamMemberModal
