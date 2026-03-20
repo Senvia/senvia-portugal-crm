@@ -1,30 +1,39 @@
 
 
-## Adicionar cards de resumo CB na Análise de Comissões
+## Corrigir: linhas CB do ficheiro não aparecem porque o filtro de mês exclui-as
 
-### O que será feito
+### Problema
+Linha 284-290 do `useCommissionAnalysis.ts`:
+```ts
+const itemsFromActiveImport = itemsFromActiveImportRaw.filter((item) => {
+  const parsed = parseRawRow(item.raw_row);
+  if (!parsed || !parsed.dataInicio) return false;  // ← CB lines sem data são excluídas
+  ...
+});
+```
+Linhas CB no ficheiro provavelmente não têm "Data de inicio" preenchida → `parsed.dataInicio` é vazio → `return false` → são descartadas antes de chegar à tabela e aos cards.
 
-Adicionar uma secção de cards no topo da página (após os filtros, antes da tabela) que mostra um resumo dos CPEs com tipo de comissão "CB" do ficheiro importado:
+### Solução
 
-1. **Card "Total CB"** — quantidade de linhas do ficheiro com `tipoComissao` contendo "CB" e soma total do campo `valorReceber` (coluna "Comissão Total" do ficheiro)
-2. **Card "Total Comissão"** — quantidade e soma das linhas que NÃO são CB (para contraste)
-3. **Card "Discrepâncias CB"** — quantos dos CBs têm discrepâncias com o sistema
+**Ficheiro: `src/hooks/useCommissionAnalysis.ts`** (linhas 284-290)
 
-### Implementação
+Alterar o filtro para **incluir linhas sem data de início** (em vez de excluí-las). Lógica:
+- Se a linha tem `dataInicio` válida → filtrar pelo mês selecionado (comportamento atual)
+- Se a linha **não tem** `dataInicio` → incluir sempre (não descartar)
 
-**Ficheiro: `src/components/finance/CommissionAnalysisTab.tsx`**
+```ts
+const itemsFromActiveImport = itemsFromActiveImportRaw.filter((item) => {
+  const parsed = parseRawRow(item.raw_row);
+  if (!parsed) return false;
+  if (!parsed.dataInicio) return true; // ← incluir linhas sem data (ex: CB)
+  const d = parseDateValue(parsed.dataInicio);
+  if (!d || isNaN(d.getTime())) return true; // data inválida → incluir também
+  return d.getFullYear() === selectedYear && d.getMonth() === selectedMonthNum;
+});
+```
 
-1. Criar um `useMemo` que percorre todos os `comparisonData` de todos os `commercials` e:
-   - Filtra linhas onde `row.file.tipoComissao` contém "CB" (case-insensitive)
-   - Soma o `valorReceber` dessas linhas (parse numérico)
-   - Conta quantas linhas CB existem
-   - Conta quantas têm discrepância
-
-2. Renderizar 2-3 cards usando o componente `MetricCard` existente (ou cards simples com `Card`) entre os filtros e a tabela:
-   - **CB**: `{count} CPE(s)` + valor total formatado em €
-   - **Comissões normais**: idem para não-CB
-   - **Discrepâncias CB**: count de CBs com `hasAnyDiscrepancy`
+Isto garante que as linhas CB aparecem na tabela e são contabilizadas nos cards de resumo.
 
 ### Ficheiros alterados
-- `src/components/finance/CommissionAnalysisTab.tsx` — adicionar `useMemo` de agregação + cards no layout
+- `src/hooks/useCommissionAnalysis.ts` — 2 linhas no filtro (284-290)
 
