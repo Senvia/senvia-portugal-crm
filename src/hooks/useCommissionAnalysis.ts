@@ -510,7 +510,7 @@ export function useSyncFileToSystem() {
           .update({
             dbl: item.dbl,
             consumo_anual: item.consumoAnual,
-            duracao_contrato: item.duracaoContrato,
+            duracao_contrato: Math.round(item.duracaoContrato),
           })
           .eq("id", item.proposalCpeId)
           .select("id");
