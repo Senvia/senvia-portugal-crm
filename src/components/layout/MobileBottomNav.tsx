@@ -25,6 +25,7 @@ const allNavItems: NavItem[] = [
   { to: "/financeiro", icon: Wallet, label: "Finanças", moduleKey: 'finance' },
   { to: "/calendar", icon: Calendar, label: "Agenda", moduleKey: 'calendar' },
   { to: "/marketing", icon: Mail, label: "Marketing", moduleKey: 'marketing' },
+  { to: "/prospects", icon: Search, label: "Prospects", moduleKey: 'prospects' },
   { to: "/ecommerce", icon: Store, label: "Loja", moduleKey: 'ecommerce' },
   { to: "/settings", icon: Settings, label: "Definições" },
 ];
@@ -56,7 +57,6 @@ export function MobileBottomNav() {
 
   const perfect2GetherItems: NavItem[] = hasPerfect2GetherModuleAccess
     ? [
-        { to: "/prospects", icon: Search, label: "Prospects" },
         { to: "/portal-total-link", icon: Building2, label: "Portal" },
       ]
     : [];

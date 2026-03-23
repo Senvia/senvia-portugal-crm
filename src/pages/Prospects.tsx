@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProspects, useProspectSalespeople } from "@/hooks/useProspects";
-import { hasPerfect2GetherAccess } from "@/lib/perfect2gether";
+import { useModules } from "@/hooks/useModules";
 import { mapProspectsForExport, exportToCsv, exportToExcel } from "@/lib/export";
 import { getProspectCom, getProspectSegment } from "@/lib/prospects/segment";
 import { normalizeString } from "@/lib/utils";
@@ -28,7 +28,8 @@ const isProspectEligibleForDistribution = (prospect: { assigned_to: string | nul
   !prospect.assigned_to && !prospect.converted_to_lead;
 
 export default function Prospects() {
-  const { organization, organizations, isSuperAdmin } = useAuth();
+  const { organization } = useAuth();
+  const { modules } = useModules();
   const { data: prospects = [], isLoading } = useProspects();
   const { data: salespeople = [], isLoading: salespeopleLoading } = useProspectSalespeople();
   const [searchQuery, setSearchQuery] = useState("");
@@ -37,12 +38,6 @@ export default function Prospects() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isDistributeOpen, setIsDistributeOpen] = useState(false);
-
-  const isPerfect2Gether = hasPerfect2GetherAccess({
-    organizationId: organization?.id,
-    memberships: organizations,
-    isSuperAdmin,
-  });
   const salespersonMap = useMemo(
     () => new Map(salespeople.map((salesperson) => [salesperson.user_id, salesperson.full_name])),
     [salespeople]
@@ -141,12 +136,12 @@ export default function Prospects() {
     toast.success(`${filteredProspects.length} prospects exportados para Excel`);
   };
 
-  if (!isPerfect2Gether) {
+  if (!modules.prospects) {
     return (
       <div className="space-y-6 p-4 pb-24 md:p-6 md:pb-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Prospects</h1>
-          <p className="text-muted-foreground">Este módulo está disponível apenas para membros com acesso ativo à Perfect2Gether.</p>
+          <p className="text-muted-foreground">Ative o módulo Prospects nas Definições → Módulos para utilizar esta funcionalidade.</p>
         </div>
       </div>
     );

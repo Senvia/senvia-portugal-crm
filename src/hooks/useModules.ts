@@ -13,6 +13,7 @@ export interface EnabledModules {
   marketing: boolean;
   finance: boolean;
   energy: boolean;
+  prospects: boolean;
 }
 
 export const DEFAULT_MODULES: EnabledModules = {
@@ -24,6 +25,7 @@ export const DEFAULT_MODULES: EnabledModules = {
   marketing: false,
   finance: true,
   energy: true,
+  prospects: false,
 };
 
 export function useModules() {

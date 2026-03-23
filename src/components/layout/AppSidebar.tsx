@@ -28,6 +28,7 @@ const allNavItems: NavItem[] = [
   { to: "/financeiro", icon: Wallet, label: "Financeiro", moduleKey: 'finance' },
   { to: "/calendar", icon: Calendar, label: "Agenda", moduleKey: 'calendar' },
   { to: "/marketing", icon: Mail, label: "Marketing", moduleKey: 'marketing' },
+  { to: "/prospects", icon: Search, label: "Prospects", moduleKey: 'prospects' },
   { to: "/ecommerce", icon: Store, label: "E-commerce", moduleKey: 'ecommerce' },
   { to: "/settings", icon: Settings, label: "Definições" },
 ];
@@ -131,33 +132,18 @@ export function AppSidebar({
             })}
 
             {hasPerfect2GetherModuleAccess && (
-              <>
-                <NavLink
-                  to="/prospects"
-                  className={cn(
-                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
-                    location.pathname.startsWith("/prospects")
-                      ? "bg-sidebar-accent text-sidebar-foreground"
-                      : "text-sidebar-muted hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-                  )}
-                >
-                  <Search className="h-5 w-5" />
-                  Prospects
-                </NavLink>
-
-                <NavLink
-                  to="/portal-total-link"
-                  className={cn(
-                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
-                    location.pathname.startsWith("/portal-total-link")
-                      ? "bg-sidebar-accent text-sidebar-foreground"
-                      : "text-sidebar-muted hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-                  )}
-                >
-                  <Building2 className="h-5 w-5" />
-                  Portal Total Link
-                </NavLink>
-              </>
+              <NavLink
+                to="/portal-total-link"
+                className={cn(
+                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
+                  location.pathname.startsWith("/portal-total-link")
+                    ? "bg-sidebar-accent text-sidebar-foreground"
+                    : "text-sidebar-muted hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                )}
+              >
+                <Building2 className="h-5 w-5" />
+                Portal Total Link
+              </NavLink>
             )}
             
             {isSuperAdmin && (
