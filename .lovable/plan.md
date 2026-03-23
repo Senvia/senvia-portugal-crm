@@ -1,27 +1,24 @@
 
 
-## Adicionar botão "+ Adicionar Saldo" no dialog de Gerir Saldos
+## Mostrar saldos de férias da equipa no painel admin da página RH
 
 ### Problema
-O dialog "Gerir Saldos" só mostra membros que já têm saldo configurado. Não existe forma de adicionar saldos para novos membros da equipa.
+O card de saldo de férias só mostra o saldo do utilizador logado. O admin adicionou saldos para Nuno e Thiago mas não vê nada porque não tem saldo configurado para si próprio. Os saldos existem na BD e estão correctos — o problema é apenas de visibilidade na UI.
 
 ### Solução
 
 **Ficheiro: `src/components/portal-total-link/rh/RhAdminPanel.tsx`**
 
-1. Adicionar botão "+ Adicionar Membro" no dialog de saldos
-2. Ao clicar, abrir um sub-dialog que:
-   - Busca todos os membros da organização via `organization_members` + `profiles`
-   - Filtra os que **já têm** saldo configurado (para não duplicar)
-   - Mostra um select/lista dos membros disponíveis
-   - Input para definir os dias totais (default: 22)
-   - Ao guardar, usa o `useUpdateVacationBalance` (que já faz upsert)
+Adicionar uma secção "Saldos da Equipa" visível directamente no painel admin (fora do dialog), mostrando uma tabela/lista resumida com:
+- Nome do membro
+- Dias totais / utilizados / disponíveis
+- Botão "Gerir Saldos" para abrir o dialog de edição
 
-**Ficheiro: `src/hooks/useRhAbsences.ts`**
+Isto dá ao admin visibilidade imediata dos saldos sem ter de abrir o dialog.
 
-3. Adicionar hook `useOrgMembers()` que retorna os membros da organização (id, full_name) para popular o select de "adicionar membro"
+**Ficheiro: `src/pages/portal-total-link/Rh.tsx`**
+
+Opcionalmente, também adicionar saldo próprio do admin — se o admin quiser marcar férias, também precisa de ter saldo configurado. Podemos mostrar uma mensagem mais clara: "Configure o seu próprio saldo em 'Gerir Saldos'" quando o admin não tem saldo.
 
 ### Ficheiros alterados
-- `src/hooks/useRhAbsences.ts` — novo hook `useOrgMembers`
-- `src/components/portal-total-link/rh/RhAdminPanel.tsx` — botão + dialog para adicionar saldo a novo membro
-
+- `src/components/portal-total-link/rh/RhAdminPanel.tsx` — secção de saldos visível directamente no painel
