@@ -66,13 +66,17 @@ export function DistributeProspectsDialog({
   const handleDistribute = async () => {
     if (isDisabled) return;
 
-    await distributeProspects.mutateAsync({
-      prospectIds: selectedIds,
-      quantity: parsedQuantity,
-      salespersonIds: mode === "selected" ? selectedSalespersonIds : undefined,
-    });
-    onDistributed?.();
-    onOpenChange(false);
+    try {
+      await distributeProspects.mutateAsync({
+        prospectIds: selectedIds,
+        quantity: parsedQuantity,
+        salespersonIds: mode === "selected" ? selectedSalespersonIds : undefined,
+      });
+      onDistributed?.();
+      onOpenChange(false);
+    } catch {
+      // Error is handled by the mutation's onError callback
+    }
   };
 
   return (

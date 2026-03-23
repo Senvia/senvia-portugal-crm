@@ -204,6 +204,8 @@ Deno.serve(async (req) => {
         twitter: item.twitterUrl || null,
         youtube: item.youtubeUrl || null,
         tiktok: item.tiktokUrl || null,
+        additional_emails: item.emails && item.emails.length > 1 ? item.emails.slice(1) : null,
+        additional_phones: item.phones && item.phones.length > 1 ? item.phones.slice(1) : null,
         source_search: searchStrings.join(", "),
         source_location: location,
       };

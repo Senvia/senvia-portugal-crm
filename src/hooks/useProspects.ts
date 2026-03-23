@@ -50,7 +50,8 @@ export function useProspects() {
         .from("prospects")
         .select("*")
         .eq("organization_id", organization.id)
-        .order("imported_at", { ascending: false });
+        .order("imported_at", { ascending: false })
+        .limit(5000);
 
       if (error) throw new Error(mapProspectsError(error));
       return (data || []) as Prospect[];
