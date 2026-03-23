@@ -351,10 +351,12 @@ export function useDistributeProspects() {
         throw new Error("A quantidade a distribuir não pode ser superior aos prospects selecionados.");
       }
 
+      // Slice IDs client-side — the SQL overload with p_prospect_ids has no p_quantity param
+      const idsToSend = prospectIds.slice(0, quantity);
+
       const { data, error } = await (supabase as any).rpc("distribute_prospects_round_robin", {
         p_organization_id: organization.id,
-        p_prospect_ids: prospectIds,
-        p_quantity: quantity,
+        p_prospect_ids: idsToSend,
         p_salesperson_ids: salespersonIds?.length ? salespersonIds : null,
       });
 
