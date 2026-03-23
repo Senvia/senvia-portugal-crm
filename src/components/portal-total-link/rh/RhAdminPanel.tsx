@@ -138,6 +138,7 @@ export default function RhAdminPanel() {
                     ⚠️ {absence.user_name || "Este colaborador"} não tem saldo de férias configurado. Será criado automaticamente com 22 dias ao aprovar.
                   </div>
                 )}
+                <RhAdminOverlapCheck absence={absence} organizationId={organization?.id} />
                 <RhAbsenceCard
                   absence={absence}
                   showUser
