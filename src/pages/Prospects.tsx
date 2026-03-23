@@ -28,7 +28,8 @@ const isProspectEligibleForDistribution = (prospect: { assigned_to: string | nul
   !prospect.assigned_to && !prospect.converted_to_lead;
 
 export default function Prospects() {
-  const { organization, organizations, isSuperAdmin } = useAuth();
+  const { organization } = useAuth();
+  const { modules } = useModules();
   const { data: prospects = [], isLoading } = useProspects();
   const { data: salespeople = [], isLoading: salespeopleLoading } = useProspectSalespeople();
   const [searchQuery, setSearchQuery] = useState("");
@@ -37,12 +38,6 @@ export default function Prospects() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isDistributeOpen, setIsDistributeOpen] = useState(false);
-
-  const isPerfect2Gether = hasPerfect2GetherAccess({
-    organizationId: organization?.id,
-    memberships: organizations,
-    isSuperAdmin,
-  });
   const salespersonMap = useMemo(
     () => new Map(salespeople.map((salesperson) => [salesperson.user_id, salesperson.full_name])),
     [salespeople]
