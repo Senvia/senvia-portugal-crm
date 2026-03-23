@@ -14,32 +14,14 @@ import {
 import { toast } from "sonner";
 import type { DistributeProspectsPayload, Prospect, ProspectImportResult, ProspectSalesperson } from "@/types/prospects";
 
-const getProspectsAccessMessage = ({
-  organizationId,
-  isSuperAdmin,
-}: {
-  organizationId?: string | null;
-  isSuperAdmin?: boolean;
-}) => {
-  if (isSuperAdmin && !isPerfect2GetherOrg(organizationId)) {
-    return "Os Prospects estão disponíveis apenas na organização Perfect2Gether.";
-  }
-
-  return PROSPECTS_ACCESS_ERROR;
-};
-
 export function useProspects() {
-  const { organization, organizations, isSuperAdmin } = useAuth();
-  const hasAccess = hasPerfect2GetherAccess({
-    organizationId: organization?.id,
-    memberships: organizations,
-    isSuperAdmin,
-  });
+  const { organization } = useAuth();
+  const { modules } = useModules();
 
   return useQuery({
     queryKey: ["prospects", organization?.id],
     queryFn: async () => {
-      if (!organization?.id || !hasAccess) return [] as Prospect[];
+      if (!organization?.id) return [] as Prospect[];
 
       const client = supabase as any;
       const { data, error } = await client
@@ -51,22 +33,18 @@ export function useProspects() {
       if (error) throw new Error(mapProspectsError(error));
       return (data || []) as Prospect[];
     },
-    enabled: !!organization?.id && hasAccess,
+    enabled: !!organization?.id && modules.prospects,
   });
 }
 
 export function useProspectSalespeople() {
-  const { organization, organizations, isSuperAdmin } = useAuth();
-  const hasAccess = hasPerfect2GetherAccess({
-    organizationId: organization?.id,
-    memberships: organizations,
-    isSuperAdmin,
-  });
+  const { organization } = useAuth();
+  const { modules } = useModules();
 
   return useQuery({
     queryKey: ["prospect-salespeople", organization?.id],
     queryFn: async () => {
-      if (!organization?.id || !hasAccess) return [] as ProspectSalesperson[];
+      if (!organization?.id) return [] as ProspectSalesperson[];
 
       const { data, error } = await (supabase as any).rpc("get_org_salespeople", {
         p_org_id: organization.id,
@@ -75,7 +53,7 @@ export function useProspectSalespeople() {
       if (error) throw new Error(mapProspectsError(error));
       return (data || []) as ProspectSalesperson[];
     },
-    enabled: !!organization?.id && hasAccess,
+    enabled: !!organization?.id && modules.prospects,
   });
 }
 
