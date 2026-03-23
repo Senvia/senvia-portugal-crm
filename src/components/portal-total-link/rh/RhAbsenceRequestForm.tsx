@@ -3,8 +3,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertTriangle } from "lucide-react";
+import { format } from "date-fns";
+import { pt } from "date-fns/locale";
 import { absenceTypeLabels, type DatePeriod, type RhHoliday } from "@/lib/rh-utils";
-import { useCreateAbsence, useMyVacationBalance } from "@/hooks/useRhAbsences";
+import { useCreateAbsence, useMyVacationBalance, useTeamOverlappingAbsences } from "@/hooks/useRhAbsences";
+import { useAuth } from "@/contexts/AuthContext";
 import RhMultiPeriodSelector from "./RhMultiPeriodSelector";
 
 interface Props {
@@ -18,8 +23,10 @@ export default function RhAbsenceRequestForm({ open, onOpenChange, holidays }: P
   const [periods, setPeriods] = useState<DatePeriod[]>([]);
   const [notes, setNotes] = useState("");
 
+  const { user, organization } = useAuth();
   const createAbsence = useCreateAbsence();
   const { data: balance } = useMyVacationBalance();
+  const { data: overlaps = [] } = useTeamOverlappingAbsences(user?.id, periods, organization?.id);
 
   const maxVacationDays = balance ? balance.total_days - balance.used_days : undefined;
 
@@ -72,6 +79,35 @@ export default function RhAbsenceRequestForm({ open, onOpenChange, holidays }: P
             maxDays={absenceType === "vacation" ? maxVacationDays : undefined}
             absenceType={absenceType}
           />
+
+          {/* Team overlap warnings */}
+          {overlaps.length > 0 && (
+            <Alert className="border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950/30">
+              <AlertTriangle className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+              <AlertDescription className="text-orange-800 dark:text-orange-300">
+                <p className="font-medium text-sm mb-1">Colegas de equipa com ausências sobrepostas:</p>
+                <ul className="space-y-0.5 text-xs">
+                  {overlaps.map((o, i) => (
+                    <li key={i}>
+                      <span className="font-semibold">{o.userName}</span>
+                      {" — "}
+                      {absenceTypeLabels[o.absenceType] || o.absenceType}
+                      {" ("}
+                      {o.status === "approved" ? "aprovado" : "pendente"}
+                      {") "}
+                      {o.periods.map((p, j) => (
+                        <span key={j}>
+                          {format(new Date(p.startDate), "dd MMM", { locale: pt })}
+                          {p.startDate !== p.endDate && ` - ${format(new Date(p.endDate), "dd MMM", { locale: pt })}`}
+                          {j < o.periods.length - 1 ? ", " : ""}
+                        </span>
+                      ))}
+                    </li>
+                  ))}
+                </ul>
+              </AlertDescription>
+            </Alert>
+          )}
 
           <div>
             <label className="block text-sm font-medium mb-1.5">Notas</label>
