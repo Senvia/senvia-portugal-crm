@@ -393,7 +393,10 @@ export default function Prospects() {
         </Card>
       </div>
 
-      <ImportProspectsDialog open={isImportOpen} onOpenChange={setIsImportOpen} />
+      {isP2G && <ImportProspectsDialog open={isImportOpen} onOpenChange={setIsImportOpen} />}
+      {!isP2G && organization?.id && (
+        <GenerateProspectsDialog open={isGenerateOpen} onOpenChange={setIsGenerateOpen} organizationId={organization.id} />
+      )}
       <DistributeProspectsDialog
         open={isDistributeOpen}
         onOpenChange={setIsDistributeOpen}
