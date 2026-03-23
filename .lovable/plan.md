@@ -1,52 +1,37 @@
 
+Diagnóstico confirmado: o erro continua porque o Apify rejeita o idioma enviado como `pt`.  
+A função está a devolver 502 com a mensagem de validação do Apify (“`input.language` must be one of ... `pt-PT`, `pt-BR`, ...”).  
+Ou seja: o problema não é timeout agora; é valor de idioma inválido no payload.
 
-## Corrigir erro na Edge Function "generate-prospects"
+## Plano de correção
 
-### Problema
-A edge function `generate-prospects` faz polling síncrono do Apify por até 5 minutos (`MAX_POLL_MS = 5 * 60 * 1000`), mas as edge functions do Supabase têm um timeout máximo de ~150 segundos. O run do Apify demora mais que isso, causando timeout e o erro "non-2xx status code".
+1) Corrigir idioma no modal (UI)
+- Ficheiro: `src/components/prospects/GenerateProspectsDialog.tsx`
+- Alterar valor default de `language` de `pt` para `pt-PT`.
+- Atualizar opções do select para códigos válidos do Apify:
+  - `pt-PT` (Português Portugal)
+  - `pt-BR` (Português Brasil)
+  - `en`, `es`, `fr` (e manter os restantes que quiseres expor depois).
 
-Possível problema adicional: o `getUser()` pode estar a falhar por questões de token — mas o timeout é a causa mais provável.
+2) Tornar a edge function resiliente a valores antigos
+- Ficheiro: `supabase/functions/generate-prospects/index.ts`
+- Trocar default backend para `language = "pt-PT"`.
+- Adicionar normalização antes de chamar Apify:
+  - `pt -> pt-PT`
+  - (opcional) `br -> pt-BR`
+- Se vier idioma inválido, devolver `400` com erro claro em PT (em vez de deixar ir ao Apify e voltar 502).
 
-### Solução
+3) Melhorar mensagem de erro no frontend
+- Ficheiro: `src/hooks/useProspects.ts`
+- No `useGenerateProspects`, quando `invoke` der non-2xx, tentar ler `startError.context` (JSON/body) para mostrar o erro real no toast.
+- Assim deixa de aparecer só “Edge Function returned a non-2xx status code”.
 
-Reestruturar para um modelo **assíncrono em 2 passos**:
+4) Validação final (sem mexer no fluxo P2G)
+- Testar geração com defaults (sem alterar idioma manualmente): deve criar `jobId` e entrar em polling.
+- Confirmar conclusão via `check-prospect-job`.
+- Confirmar que P2G continua sem alterações no fluxo deles (Importar continua igual).
 
-1. **Passo 1 — Iniciar run** (`generate-prospects`): Envia o pedido ao Apify, guarda o `runId` numa tabela `prospect_generation_jobs` e retorna imediatamente ao cliente.
-
-2. **Passo 2 — Verificar resultado** (`check-prospect-job`): Nova edge function que o frontend chama via polling (a cada 10s) para verificar se o run do Apify terminou. Quando terminar, processa os resultados e insere na tabela `prospects`.
-
-### Alterações
-
-**1) Migration — criar tabela `prospect_generation_jobs`**
-- `id`, `organization_id`, `user_id`, `apify_run_id`, `status` (pending/running/completed/failed), `search_params` (jsonb), `result` (jsonb), `error`, `created_at`, `completed_at`
-- RLS: membros da org podem ler os seus jobs
-
-**2) `supabase/functions/generate-prospects/index.ts`** — simplificar
-- Remover todo o polling e processamento de dataset
-- Apenas: validar auth → chamar Apify para iniciar run → guardar job na tabela → retornar `{ jobId }`
-- Execução em <5 segundos, sem timeout
-
-**3) `supabase/functions/check-prospect-job/index.ts`** — nova edge function
-- Recebe `jobId`
-- Verifica status do run no Apify
-- Se ainda está a correr: retorna `{ status: 'running' }`
-- Se terminou: busca dataset, processa items, insere/atualiza prospects, marca job como completed, retorna resultado final
-
-**4) `src/hooks/useProspects.ts`** — alterar `useGenerateProspects`
-- Passo 1: `supabase.functions.invoke('generate-prospects')` → recebe `jobId`
-- Passo 2: polling com `setInterval` (10s) chamando `check-prospect-job` até ter resultado
-- Mostrar estado de progresso no toast/UI
-
-**5) `src/components/prospects/GenerateProspectsDialog.tsx`** — UX de progresso
-- Após submeter, mostrar estado "A pesquisar no Google Maps..." com spinner
-- Atualizar quando job concluir ou falhar
-
-### Ficheiros alterados/criados
-| Ficheiro | Acção |
-|----------|-------|
-| Migration SQL | Criar tabela `prospect_generation_jobs` |
-| `supabase/functions/generate-prospects/index.ts` | Simplificar (só iniciar run) |
-| `supabase/functions/check-prospect-job/index.ts` | Nova (verificar + processar) |
-| `src/hooks/useProspects.ts` | Polling assíncrono |
-| `src/components/prospects/GenerateProspectsDialog.tsx` | UX de progresso |
-
+## Ficheiros a alterar
+- `src/components/prospects/GenerateProspectsDialog.tsx`
+- `supabase/functions/generate-prospects/index.ts`
+- `src/hooks/useProspects.ts`
