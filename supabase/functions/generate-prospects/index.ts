@@ -47,13 +47,22 @@ Deno.serve(async (req) => {
       });
     }
 
-    const body = await req.json();
+    let body: Record<string, unknown>;
+    try {
+      body = await req.json();
+    } catch {
+      return new Response(
+        JSON.stringify({ error: "Pedido inválido. Envie os parâmetros em JSON." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const {
       organizationId,
       searchStrings = [],
       location = "",
       maxResults = 50,
-      language = "pt",
+      language = "pt-PT",
       skipClosed = true,
       searchMatching = "all",
       placeMinimumStars = "",
@@ -68,6 +77,31 @@ Deno.serve(async (req) => {
       maximumLeadsEnrichmentRecords = 0,
       startUrls = [],
     } = body;
+
+    const normalizedLanguage = (() => {
+      const raw = String(language || "pt-PT").trim();
+      const alias: Record<string, string> = {
+        pt: "pt-PT",
+        "pt-pt": "pt-PT",
+        "pt_pt": "pt-PT",
+        br: "pt-BR",
+        "pt-br": "pt-BR",
+        "pt_br": "pt-BR",
+      };
+
+      return alias[raw.toLowerCase()] ?? raw;
+    })();
+
+    const allowedLanguages = new Set(["pt-PT", "pt-BR", "en", "es", "fr"]);
+    if (!allowedLanguages.has(normalizedLanguage)) {
+      return new Response(
+        JSON.stringify({
+          error:
+            "Idioma inválido. Use um dos seguintes: pt-PT, pt-BR, en, es, fr.",
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     if (!organizationId) {
       return new Response(JSON.stringify({ error: "organizationId is required" }), {
@@ -88,7 +122,7 @@ Deno.serve(async (req) => {
       searchStringsArray: searchStrings,
       locationQuery: location,
       maxCrawledPlacesPerSearch: maxResults,
-      language,
+      language: normalizedLanguage,
       searchMatching,
       placeMinimumStars,
       website,

@@ -37,7 +37,7 @@ export function GenerateProspectsDialog({ open, onOpenChange, organizationId }: 
   const [searchStrings, setSearchStrings] = useState("");
   const [location, setLocation] = useState("");
   const [maxResults, setMaxResults] = useState(50);
-  const [language, setLanguage] = useState("pt");
+  const [language, setLanguage] = useState("pt-PT");
 
   // Search filters
   const [searchMatching, setSearchMatching] = useState("all");
@@ -191,7 +191,8 @@ export function GenerateProspectsDialog({ open, onOpenChange, organizationId }: 
               <Select value={language} onValueChange={setLanguage}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="pt">Português</SelectItem>
+                    <SelectItem value="pt-PT">Português (Portugal)</SelectItem>
+                    <SelectItem value="pt-BR">Português (Brasil)</SelectItem>
                   <SelectItem value="en">English</SelectItem>
                   <SelectItem value="es">Español</SelectItem>
                   <SelectItem value="fr">Français</SelectItem>

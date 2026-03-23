@@ -13,6 +13,29 @@ import {
 import { toast } from "sonner";
 import type { DistributeProspectsPayload, Prospect, ProspectImportResult, ProspectSalesperson } from "@/types/prospects";
 
+const getFunctionInvokeErrorMessage = (error: unknown, fallback: string) => {
+  const maybeError = error as { message?: string; context?: unknown };
+  const context = maybeError?.context;
+
+  if (typeof context === "string" && context.trim()) {
+    try {
+      const parsed = JSON.parse(context) as { error?: string; message?: string };
+      if (typeof parsed?.error === "string" && parsed.error.trim()) return parsed.error;
+      if (typeof parsed?.message === "string" && parsed.message.trim()) return parsed.message;
+    } catch {
+      return context;
+    }
+  }
+
+  if (context && typeof context === "object") {
+    const parsed = context as { error?: string; message?: string };
+    if (typeof parsed?.error === "string" && parsed.error.trim()) return parsed.error;
+    if (typeof parsed?.message === "string" && parsed.message.trim()) return parsed.message;
+  }
+
+  return maybeError?.message || fallback;
+};
+
 export function useProspects() {
   const { organization } = useAuth();
   const { modules } = useModules();
@@ -249,8 +272,12 @@ export function useGenerateProspects() {
         body: bodyParams,
       });
 
-      if (startError) throw new Error(startError.message || "Erro ao iniciar geração");
-      if (startData?.error) throw new Error(startData.error);
+      if (startError) {
+        throw new Error(getFunctionInvokeErrorMessage(startError, "Erro ao iniciar geração"));
+      }
+      if (startData?.error) {
+        throw new Error(typeof startData.error === "string" ? startData.error : "Erro ao iniciar geração");
+      }
 
       const jobId = startData?.jobId;
       if (!jobId) throw new Error("Sem ID de job retornado");
@@ -272,8 +299,12 @@ export function useGenerateProspects() {
           body: { jobId },
         });
 
-        if (checkError) throw new Error(checkError.message || "Erro ao verificar job");
-        if (checkData?.error) throw new Error(checkData.error);
+        if (checkError) {
+          throw new Error(getFunctionInvokeErrorMessage(checkError, "Erro ao verificar job"));
+        }
+        if (checkData?.error) {
+          throw new Error(typeof checkData.error === "string" ? checkData.error : "Erro ao verificar job");
+        }
 
         if (checkData?.status === "running") {
           onProgress?.("running");
