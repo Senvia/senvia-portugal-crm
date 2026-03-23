@@ -67,9 +67,7 @@ export function useConvertProspectToLead() {
         if ((contact as any).segment) prospectCustomData.segment = (contact as any).segment;
         if ((contact as any).metadata) prospectCustomData.metadata = (contact as any).metadata;
 
-        const { error: leadError } = await supabase
-          .from('leads')
-          .insert({
+        const insertData: any = {
             name: contact.name,
             email: contact.email || '',
             phone: contact.phone || '',
@@ -81,8 +79,14 @@ export function useConvertProspectToLead() {
             assigned_to: finalAssignedTo || undefined,
             gdpr_consent: true,
             status: 'new',
-            ...(Object.keys(prospectCustomData).length > 0 ? { custom_data: prospectCustomData } : {}),
-          });
+          };
+        if (Object.keys(prospectCustomData).length > 0) {
+          insertData.custom_data = prospectCustomData;
+        }
+
+        const { error: leadError } = await supabase
+          .from('leads')
+          .insert(insertData);
 
         if (leadError) {
           console.error('Error converting contact:', leadError);
