@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, Mail, Send, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { isPlaceholderEmail } from "@/lib/leadUtils";
 
 interface SendLeadEmailModalProps {
   lead: Lead;
@@ -62,7 +63,7 @@ export function SendLeadEmailModal({ lead, open, onOpenChange }: SendLeadEmailMo
           </DialogTitle>
         </DialogHeader>
 
-        {!lead.email ? (
+        {!lead.email || isPlaceholderEmail(lead.email) ? (
           <p className="text-sm text-muted-foreground py-4">
             Este lead não tem email registado.
           </p>

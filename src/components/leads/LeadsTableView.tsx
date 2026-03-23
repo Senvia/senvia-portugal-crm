@@ -35,6 +35,7 @@ import {
 
 import { Lead, LeadTemperature, LeadTipologia, TEMPERATURE_STYLES, TIPOLOGIA_LABELS, TIPOLOGIA_STYLES } from '@/types';
 import { formatCurrency, formatPhoneForWhatsApp } from '@/lib/format';
+import { isPlaceholderEmail } from '@/lib/leadUtils';
 import { cn } from '@/lib/utils';
 import { usePipelineStages, PipelineStage } from '@/hooks/usePipelineStages';
 import { useLeadProposalValues } from '@/hooks/useLeadProposalValues';
@@ -298,7 +299,7 @@ export function LeadsTableView({
                     </TableCell>
                     <TableCell className="hidden md:table-cell">
                       <span className="text-muted-foreground truncate max-w-[180px] block">
-                        {lead.email}
+                        {isPlaceholderEmail(lead.email) ? '—' : lead.email}
                       </span>
                     </TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>

@@ -78,6 +78,7 @@ import { useState, useEffect, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { SendLeadEmailModal } from "./SendLeadEmailModal";
+import { isPlaceholderEmail, displayEmail } from "@/lib/leadUtils";
 
 const TECHNICAL_TRACKING_KEYS = ['fbclid', 'gclid', 'fbc', 'fbp'] as const;
 const HIDDEN_CUSTOM_DATA_KEYS = ['metadata', 'prospect_id', 'source_file_name', 'prospect_source', 'cpe'] as const;
@@ -259,7 +260,7 @@ export function LeadDetailsModal({
       }
       if (!isEditingNotes) setEditNotes(lead.notes || "");
       if (!isEditingName) setEditName(lead.name || "");
-      if (!isEditingEmail) setEditEmail(lead.email || "");
+      if (!isEditingEmail) setEditEmail(displayEmail(lead.email));
       if (!isEditingPhone) setEditPhone(lead.phone || "");
       if (!isEditingCpe) setEditCpe((lead.custom_data as Record<string, unknown>)?.cpe as string || "");
     }
@@ -802,7 +803,7 @@ export function LeadDetailsModal({
                       <Button
                         variant="outline"
                         className="w-full"
-                        disabled={!lead.email}
+                        disabled={!lead.email || isPlaceholderEmail(lead.email)}
                         onClick={() => setShowEmailModal(true)}
                       >
                         <Mail className="h-4 w-4" />
