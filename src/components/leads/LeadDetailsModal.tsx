@@ -66,7 +66,13 @@ import {
   UserCircle,
   Zap,
   ArrowLeft,
-  Copy
+  Copy,
+  MapPin,
+  Facebook,
+  Instagram,
+  Twitter,
+  Youtube,
+  Globe
 } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { cn } from "@/lib/utils";
@@ -74,6 +80,15 @@ import { toast } from "@/hooks/use-toast";
 import { SendLeadEmailModal } from "./SendLeadEmailModal";
 
 const TECHNICAL_TRACKING_KEYS = ['fbclid', 'gclid', 'fbc', 'fbp'] as const;
+const HIDDEN_CUSTOM_DATA_KEYS = ['metadata', 'prospect_id', 'source_file_name', 'prospect_source', 'cpe'] as const;
+
+const socialMediaIcons = [
+  { key: "facebook", icon: Facebook, label: "Facebook" },
+  { key: "instagram", icon: Instagram, label: "Instagram" },
+  { key: "twitter", icon: Twitter, label: "X/Twitter" },
+  { key: "youtube", icon: Youtube, label: "YouTube" },
+  { key: "tiktok", icon: Globe, label: "TikTok" },
+] as const;
 
 const shortenTrackingValue = (value: string, visibleChars = 10) => {
   if (value.length <= visibleChars * 2 + 3) return value;
@@ -161,7 +176,8 @@ export function LeadDetailsModal({
     
     Object.entries(lead.custom_data).forEach(([key, value]) => {
       if (value === null || value === undefined || value === '') return;
-      
+      if (HIDDEN_CUSTOM_DATA_KEYS.includes(key as any)) return;
+      if (typeof value === 'object' && !Array.isArray(value)) return;
       const isUtm = utmKeys.includes(key);
       
       let label = key;
@@ -205,6 +221,24 @@ export function LeadDetailsModal({
 
   const formResponses = customDataEntries.filter(e => !e.isUtm);
   const utmData = customDataEntries.filter(e => e.isUtm);
+
+  // Extract prospect metadata (Google Maps URL, social media, etc.)
+  const prospectMetadata = useMemo(() => {
+    const cd = lead?.custom_data as Record<string, unknown> | null;
+    const meta = cd?.metadata as Record<string, unknown> | null;
+    if (!meta) return null;
+    return {
+      googleMapsUrl: (meta.google_maps_url as string) || null,
+      address: (meta.address as string) || null,
+      rating: (meta.rating as number) || null,
+      website: (meta.website as string) || null,
+      facebook: (meta.facebook as string) || null,
+      instagram: (meta.instagram as string) || null,
+      twitter: (meta.twitter as string) || null,
+      youtube: (meta.youtube as string) || null,
+      tiktok: (meta.tiktok as string) || null,
+    };
+  }, [lead?.custom_data]);
 
   // Sync state when lead changes
   useEffect(() => {
@@ -678,6 +712,70 @@ export function LeadDetailsModal({
                       </div>
                     </CardContent>
                   </Card>
+
+                  {/* Google Maps & Social Media - Prospect data */}
+                  {prospectMetadata && (prospectMetadata.googleMapsUrl || socialMediaIcons.some(s => prospectMetadata[s.key as keyof typeof prospectMetadata])) && (
+                    <Card>
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                          <MapPin className="h-4 w-4" />
+                          Dados do Prospect
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        {prospectMetadata.googleMapsUrl && (
+                          <a
+                            href={prospectMetadata.googleMapsUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 text-sm text-primary hover:underline"
+                          >
+                            <MapPin className="h-4 w-4" />
+                            Ver no Google Maps
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        )}
+                        {prospectMetadata.address && (
+                          <p className="text-sm text-muted-foreground">{prospectMetadata.address}</p>
+                        )}
+                        {prospectMetadata.rating && (
+                          <p className="text-sm text-muted-foreground">⭐ {prospectMetadata.rating} estrelas</p>
+                        )}
+                        {prospectMetadata.website && (
+                          <a
+                            href={prospectMetadata.website}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 text-sm text-primary hover:underline"
+                          >
+                            <Globe className="h-4 w-4" />
+                            Website
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        )}
+                        {socialMediaIcons.some(s => prospectMetadata[s.key as keyof typeof prospectMetadata]) && (
+                          <div className="flex items-center gap-2 pt-1">
+                            {socialMediaIcons.map(({ key, icon: Icon, label }) => {
+                              const url = prospectMetadata[key as keyof typeof prospectMetadata] as string | null;
+                              if (!url) return null;
+                              return (
+                                <a
+                                  key={key}
+                                  href={url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  title={label}
+                                  className="text-muted-foreground transition-colors hover:text-primary"
+                                >
+                                  <Icon className="h-5 w-5" />
+                                </a>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  )}
 
                   {/* GDPR */}
                   <div className="flex items-center gap-2 rounded-lg bg-muted/50 p-3">
