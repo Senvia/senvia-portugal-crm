@@ -8,22 +8,6 @@ const corsHeaders = {
 
 const APIFY_BASE = "https://api.apify.com/v2";
 const ACTOR_ID = "2Mdma1N6Fd0y3QEjR";
-const MAX_POLL_MS = 5 * 60 * 1000;
-const POLL_INTERVAL_MS = 5000;
-
-interface ApifyItem {
-  title?: string;
-  phone?: string;
-  website?: string;
-  address?: string;
-  categoryName?: string;
-  totalScore?: number;
-  url?: string;
-  city?: string;
-  postalCode?: string;
-  reviewsCount?: number;
-  [key: string]: unknown;
-}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -39,7 +23,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Auth
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -100,7 +83,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Start Apify actor run
+    // Build Apify actor input
     const actorInput: Record<string, unknown> = {
       searchStringsArray: searchStrings,
       locationQuery: location,
@@ -124,6 +107,7 @@ Deno.serve(async (req) => {
       actorInput.startUrls = startUrls.map((url: string) => ({ url }));
     }
 
+    // Start Apify actor run (don't wait for completion)
     const runRes = await fetch(`${APIFY_BASE}/acts/${ACTOR_ID}/runs?token=${APIFY_API_TOKEN}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -147,126 +131,33 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Poll for completion
-    const startTime = Date.now();
-    let status = "RUNNING";
-
-    while (status === "RUNNING" || status === "READY") {
-      if (Date.now() - startTime > MAX_POLL_MS) {
-        return new Response(
-          JSON.stringify({ error: "Apify run timed out after 5 minutes" }),
-          { status: 504, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-
-      await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
-
-      const statusRes = await fetch(
-        `${APIFY_BASE}/actor-runs/${runId}?token=${APIFY_API_TOKEN}`
-      );
-      const statusData = await statusRes.json();
-      status = statusData?.data?.status || "FAILED";
-    }
-
-    if (status !== "SUCCEEDED") {
-      return new Response(
-        JSON.stringify({ error: `Apify run ended with status: ${status}` }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Fetch dataset items
-    const datasetRes = await fetch(
-      `${APIFY_BASE}/actor-runs/${runId}/dataset/items?token=${APIFY_API_TOKEN}&format=json`
-    );
-    const items: ApifyItem[] = await datasetRes.json();
-
-    if (!Array.isArray(items) || items.length === 0) {
-      return new Response(
-        JSON.stringify({ inserted: 0, updated: 0, skipped: 0, total: 0 }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Use service role for inserts
+    // Save job to database using service role
     const serviceSupabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Get existing prospects for dedup
-    const { data: existing } = await serviceSupabase
-      .from("prospects")
-      .select("id, company_name, phone")
-      .eq("organization_id", organizationId);
-
-    const existingMap = new Map<string, string>();
-    for (const row of existing || []) {
-      const key = `${(row.company_name || "").toLowerCase().trim()}::${(row.phone || "").trim()}`;
-      existingMap.set(key, row.id);
-    }
-
-    let inserted = 0;
-    let updated = 0;
-    let skipped = 0;
-
-    for (const item of items) {
-      const companyName = (item.title || "").trim();
-      if (!companyName) {
-        skipped++;
-        continue;
-      }
-
-      const phone = (item.phone || "").trim();
-      const dedupKey = `${companyName.toLowerCase()}::${phone}`;
-
-      const email = item.website && item.website.includes("@") ? item.website : null;
-      const metadata: Record<string, unknown> = {
-        address: item.address || null,
-        city: item.city || null,
-        postal_code: item.postalCode || null,
-        rating: item.totalScore || null,
-        reviews_count: item.reviewsCount || null,
-        google_maps_url: item.url || null,
-        website: item.website && !item.website.includes("@") ? item.website : null,
-        source_search: searchStrings.join(", "),
-        source_location: location,
-      };
-
-      const payload = {
+    const { data: job, error: jobError } = await serviceSupabase
+      .from("prospect_generation_jobs")
+      .insert({
         organization_id: organizationId,
-        company_name: companyName,
-        phone: phone || null,
-        email,
-        segment: item.categoryName || null,
-        source: "apify_google_maps",
-        source_file_name: `Google Maps: ${searchStrings.join(", ")} - ${location}`,
-        imported_by: userData.user.id,
-        imported_at: new Date().toISOString(),
-        metadata,
-        status: "new",
-      };
+        user_id: userData.user.id,
+        apify_run_id: runId,
+        status: "running",
+        search_params: body,
+      })
+      .select("id")
+      .single();
 
-      const existingId = existingMap.get(dedupKey);
-
-      if (existingId) {
-        const { error } = await serviceSupabase
-          .from("prospects")
-          .update(payload)
-          .eq("id", existingId);
-        if (!error) updated++;
-        else skipped++;
-      } else {
-        const { error } = await serviceSupabase.from("prospects").insert(payload);
-        if (!error) {
-          inserted++;
-          existingMap.set(dedupKey, "new");
-        } else skipped++;
-      }
+    if (jobError) {
+      return new Response(
+        JSON.stringify({ error: `Failed to save job: ${jobError.message}` }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     return new Response(
-      JSON.stringify({ inserted, updated, skipped, total: items.length }),
+      JSON.stringify({ jobId: job.id, apifyRunId: runId }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {

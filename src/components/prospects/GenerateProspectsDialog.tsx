@@ -74,6 +74,7 @@ export function GenerateProspectsDialog({ open, onOpenChange, organizationId }: 
   const [openUrls, setOpenUrls] = useState(false);
 
   const generateMutation = useGenerateProspects();
+  const [progressStatus, setProgressStatus] = useState<string | null>(null);
 
   const handleGenerate = () => {
     const strings = searchStrings.split("\n").map((s) => s.trim()).filter(Boolean);
@@ -81,6 +82,8 @@ export function GenerateProspectsDialog({ open, onOpenChange, organizationId }: 
 
     if (!strings.length && !urls.length) return;
     if (strings.length && !location.trim()) return;
+
+    setProgressStatus("starting");
 
     generateMutation.mutate(
       {
@@ -108,18 +111,29 @@ export function GenerateProspectsDialog({ open, onOpenChange, organizationId }: 
         },
         maximumLeadsEnrichmentRecords,
         startUrls: urls,
+        onProgress: setProgressStatus,
       },
       {
         onSuccess: () => {
+          setProgressStatus(null);
           onOpenChange(false);
           setSearchStrings("");
           setLocation("");
           setMaxResults(50);
           setStartUrls("");
         },
+        onError: () => {
+          setProgressStatus(null);
+        },
       }
     );
   };
+
+  const progressMessage = progressStatus === "starting"
+    ? "A iniciar pesquisa..."
+    : progressStatus === "running"
+    ? "A pesquisar no Google Maps... Isto pode demorar alguns minutos."
+    : null;
 
   const hasSearchTerms = searchStrings.trim().length > 0;
   const hasUrls = startUrls.trim().length > 0;
@@ -303,6 +317,13 @@ export function GenerateProspectsDialog({ open, onOpenChange, organizationId }: 
           </CollapsibleSection>
         </div>
 
+        {progressMessage && (
+          <div className="flex items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3">
+            <Loader2 className="h-5 w-5 animate-spin text-primary shrink-0" />
+            <p className="text-sm text-primary font-medium">{progressMessage}</p>
+          </div>
+        )}
+
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={generateMutation.isPending}>
             Cancelar
@@ -311,7 +332,7 @@ export function GenerateProspectsDialog({ open, onOpenChange, organizationId }: 
             {generateMutation.isPending ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                A gerar...
+                A pesquisar...
               </>
             ) : (
               <>

@@ -239,18 +239,59 @@ export function useGenerateProspects() {
       };
       maximumLeadsEnrichmentRecords?: number;
       startUrls?: string[];
+      onProgress?: (status: string) => void;
     }) => {
-      const { data, error } = await supabase.functions.invoke("generate-prospects", {
-        body: params,
+      const { onProgress, ...bodyParams } = params;
+
+      // Step 1: Start the Apify run
+      onProgress?.("starting");
+      const { data: startData, error: startError } = await supabase.functions.invoke("generate-prospects", {
+        body: bodyParams,
       });
 
-      if (error) throw new Error(error.message || "Erro ao gerar prospects");
-      if (data?.error) throw new Error(data.error);
-      return data as { inserted: number; updated: number; skipped: number; total: number };
+      if (startError) throw new Error(startError.message || "Erro ao iniciar geração");
+      if (startData?.error) throw new Error(startData.error);
+
+      const jobId = startData?.jobId;
+      if (!jobId) throw new Error("Sem ID de job retornado");
+
+      // Step 2: Poll for completion
+      onProgress?.("running");
+      const maxPollTime = 10 * 60 * 1000; // 10 minutes
+      const pollInterval = 8000; // 8 seconds
+      const startTime = Date.now();
+
+      while (true) {
+        if (Date.now() - startTime > maxPollTime) {
+          throw new Error("A geração excedeu o tempo máximo de 10 minutos");
+        }
+
+        await new Promise((r) => setTimeout(r, pollInterval));
+
+        const { data: checkData, error: checkError } = await supabase.functions.invoke("check-prospect-job", {
+          body: { jobId },
+        });
+
+        if (checkError) throw new Error(checkError.message || "Erro ao verificar job");
+        if (checkData?.error) throw new Error(checkData.error);
+
+        if (checkData?.status === "running") {
+          onProgress?.("running");
+          continue;
+        }
+
+        if (checkData?.status === "failed") {
+          throw new Error(checkData?.error || "A geração falhou");
+        }
+
+        if (checkData?.status === "completed") {
+          return checkData.result as { inserted: number; updated: number; skipped: number; total: number };
+        }
+      }
     },
-    onSuccess: ({ inserted, updated, skipped, total }) => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["prospects"] });
-      toast.success(`${total} encontrados • ${inserted} novos • ${updated} atualizados${skipped ? ` • ${skipped} ignorados` : ""}`);
+      toast.success(`${result.total} encontrados • ${result.inserted} novos • ${result.updated} atualizados${result.skipped ? ` • ${result.skipped} ignorados` : ""}`);
     },
     onError: (error: Error) => {
       toast.error(error.message || "Erro ao gerar prospects");
