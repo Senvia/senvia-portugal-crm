@@ -187,9 +187,7 @@ export function GenerateProspectsDialog({ open, onOpenChange, organizationId }: 
           </div>
 
           {/* Search Filters */}
-          <Collapsible open={openFilters} onOpenChange={setOpenFilters}>
-            <SectionHeader open={openFilters}>Filtros de pesquisa e categorias</SectionHeader>
-            <CollapsibleContent className="space-y-3 pt-3 px-1">
+          <CollapsibleSection title="Filtros de pesquisa e categorias" open={openFilters} onOpenChange={setOpenFilters}>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Correspondência de nome</Label>
@@ -234,8 +232,7 @@ export function GenerateProspectsDialog({ open, onOpenChange, organizationId }: 
                 </div>
                 <Switch checked={skipClosed} onCheckedChange={setSkipClosed} />
               </div>
-            </CollapsibleContent>
-          </Collapsible>
+          </CollapsibleSection>
 
           {/* Additional Details */}
           <Collapsible open={openDetails} onOpenChange={setOpenDetails}>
