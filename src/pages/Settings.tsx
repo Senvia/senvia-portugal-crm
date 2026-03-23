@@ -52,8 +52,19 @@ export default function Settings() {
   const pushNotifications = usePushNotifications();
 
   // Unified navigation state (3 levels) for both mobile and desktop
+  const [searchParams, setSearchParams] = useSearchParams();
   const [activeGroup, setActiveGroup] = useState<SettingsSection | null>(null);
   const [activeSub, setActiveSub] = useState<SettingsSubSection | null>(null);
+
+  // Auto-navigate to billing tab if ?tab=billing is present
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab === 'billing') {
+      setActiveGroup('billing');
+      setActiveSub('billing');
+      setSearchParams({}, { replace: true });
+    }
+  }, []);
 
   
   const [isLoadingIntegrations, setIsLoadingIntegrations] = useState(true);
