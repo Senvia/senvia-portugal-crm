@@ -1,32 +1,32 @@
 
+## Correção imediata — saldo de férias do Thiago (P2G)
 
-## Unificar perfis do Thiago
+Já validei no backend e o problema está confirmado:
 
-### Situação actual
+- Pedido aprovado: `ccdb9dd3-a7de-4946-8ddc-834a1347dfd3`
+- Tipo: `vacation`
+- Dias aprovados no período: **6**
+- Saldo atual do Thiago Sousa (`504a57df...`) em 2026: `total_days = 22`, `used_days = 0` (incorreto)
 
-| Perfil | ID | Email | Orgs | Roles |
-|--------|----|-------|------|-------|
-| **Thiago Sousa** (MANTER) | `504a57df` | geral.senvia@gmail.com | Senvia Agency (admin) | super_admin, admin |
-| **Thiago** (REMOVER) | `44a688ac` | thiagogaldino21@gmail.com | P2G (salesperson) | salesperson |
+## O que vou aplicar
 
-### Dados a migrar de `44a688ac` → `504a57df`
+### 1) Reconciliar o saldo do Thiago agora (correção de dados)
+Executar atualização direta de dados (sem migration de schema) para alinhar `rh_vacation_balances.used_days` com a soma real dos períodos aprovados em `rh_absences/rh_absence_periods`.
 
-| Tabela | Registos | Acção |
-|--------|----------|-------|
-| `organization_members` | 1 (P2G, salesperson, profile_id=542847aa) | Inserir `504a57df` como membro P2G |
-| `crm_clients.assigned_to` | 1 cliente (ACUSTIKASSUNTO) | UPDATE → `504a57df` |
-| `activation_objectives.user_id` | 3 registos | UPDATE → `504a57df` |
-| `monthly_objectives.user_id` | 1 registo | UPDATE → `504a57df` |
-| `monthly_metrics.user_id` | 1 registo | UPDATE → `504a57df` |
-| `rh_vacation_balances.user_id` | 1 registo (22 dias, 2026) | UPDATE → `504a57df` |
+Resultado esperado para Thiago em 2026:
+- `used_days` de `0` → **`6`**
+- saldo disponível passa de `22` → **`16`**
 
-### Pós-migração — limpar perfil duplicado
+### 2) Reconciliar todos os saldos da P2G (evitar outros casos escondidos)
+Aplicar a mesma lógica para todos os utilizadores da organização P2G e ano corrente, para garantir que não existe mais nenhum saldo divergente (atualiza apenas quando houver diferença).
 
-1. Remover `44a688ac` de `organization_members` (P2G)
-2. Remover `44a688ac` de `user_roles` (salesperson)
-3. Banir o utilizador `44a688ac` via edge function (para não poder fazer login)
+### 3) Validação final
+Confirmar com queries:
+- `expected_used` (calculado a partir das férias aprovadas) = `used_days` (saldo)
+- Verificar especificamente o Thiago e devolver os valores finais.
 
-### Execução
-
-Tudo via operações de dados (insert tool) — sem alterações de código ou schema.
+## Detalhes técnicos
+- Não haverá alterações de UI nem de hooks neste passo.
+- É uma **correção de dados** (UPDATE/UPSERT), portanto será feita com operação de dados no backend.
+- A trigger de desconto já existe; este ajuste corrige a inconsistência histórica já gravada.
 
