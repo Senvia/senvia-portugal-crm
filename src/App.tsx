@@ -58,6 +58,7 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 const SystemAdminDashboard = lazy(() => import("./pages/system-admin/Dashboard"));
 const SystemAdminOrganizations = lazy(() => import("./pages/system-admin/Organizations"));
 const SystemAdminUsers = lazy(() => import("./pages/system-admin/Users"));
+const SystemAdminAnnouncements = lazy(() => import("./pages/system-admin/Announcements"));
 const FinanceInternalRequests = lazy(() => import("./pages/finance/InternalRequests"));
 
 const queryClient = new QueryClient();
@@ -139,6 +140,11 @@ const App = () => (
                 <Route path="/system-admin/users" element={
                   <SuperAdminRoute>
                     <SystemAdminUsers />
+                  </SuperAdminRoute>
+                } />
+                <Route path="/system-admin/announcements" element={
+                  <SuperAdminRoute>
+                    <SystemAdminAnnouncements />
                   </SuperAdminRoute>
                 } />
 
