@@ -1,43 +1,75 @@
 
 
-## Tornar o módulo Prospects disponível para todas as organizações
+## Gerar Prospects via Apify Google Maps (exceto P2G)
 
-### Situação actual
-O módulo Prospects está hardcoded para funcionar **apenas** na organização Perfect2Gether (P2G). A função `hasPerfect2GetherAccess()` verifica se o `organizationId === PERFECT2GETHER_ORG_ID`, bloqueando todas as outras orgs.
-
-### Solução
-Transformar Prospects num módulo normal, controlado pelo sistema de módulos existente (`enabled_modules`), tal como Vendas, Marketing, etc. Qualquer organização poderá ativar/desativar Prospects nas Definições → Módulos.
+### Contexto
+- P2G usa o fluxo actual (importação de ficheiros Excel/CSV com NIF, CPE, segmento energético) — **não será alterado**
+- Todas as outras organizações com plano Elite terão um botão **"Gerar Prospects"** que lança o scraper do Google Maps via Apify
+- O módulo Prospects deve ser bloqueado ao plano Elite via `MODULE_REQUIRED_PLAN`
 
 ### Alterações
 
-**1) `src/hooks/useModules.ts`** — adicionar `prospects` ao `EnabledModules`
-- Adicionar `prospects: false` ao `EnabledModules` interface e `DEFAULT_MODULES` (desativado por default)
+#### 1) Bloquear Prospects ao plano Elite
+**`src/hooks/useSubscription.ts`** — adicionar `prospects: 'Elite'` ao `MODULE_REQUIRED_PLAN`
 
-**2) `src/components/settings/ModulesTab.tsx`** — adicionar card "Prospects" à lista de módulos
-- Novo item: `{ key: 'prospects', label: 'Prospects', description: 'Importação e distribuição de prospects para a equipa comercial', icon: Search }`
+#### 2) Edge function `generate-prospects`
+**`supabase/functions/generate-prospects/index.ts`**
 
-**3) `src/components/layout/AppSidebar.tsx`** — mover Prospects para `allNavItems`
-- Adicionar `{ to: "/prospects", icon: Search, label: "Prospects", moduleKey: 'prospects' }` ao array `allNavItems`
-- Remover o bloco hardcoded `{hasPerfect2GetherModuleAccess && (<NavLink to="/prospects" .../>)}`
-- Manter o Portal Total Link hardcoded para P2G (esse continua exclusivo)
+- Recebe parâmetros de busca (searchStrings, location, maxResults, language, etc.)
+- Valida JWT + organização
+- Chama o Actor Apify `2Mdma1N6Fd0y3QEjR` (Google Maps Scraper) com a API key guardada como secret
+- Aguarda conclusão do run (polling com timeout de 5 min)
+- Busca os resultados do dataset
+- Mapeia cada item para a tabela `prospects` (company_name ← title, phone, email/website, metadata com address, rating, etc.)
+- Faz upsert na tabela `prospects` usando company_name + phone como chave de deduplicação
+- Retorna contagem de inseridos/atualizados
 
-**4) `src/components/layout/MobileMenu.tsx`** e **`MobileBottomNav.tsx`** — mesma lógica: adicionar Prospects como nav item com `moduleKey: 'prospects'` e remover o bloco P2G hardcoded para Prospects
+**Secret necessário**: `APIFY_API_TOKEN` — será pedido ao utilizador via `add_secret`
 
-**5) `src/pages/Prospects.tsx`** — remover a verificação `hasPerfect2GetherAccess` como guard de acesso (o sistema de módulos já controla visibilidade). Manter a verificação P2G apenas para features específicas de energia (segmentos, CPE columns) se existirem.
+#### 3) Dialog de configuração da busca
+**`src/components/prospects/GenerateProspectsDialog.tsx`**
 
-**6) `src/hooks/useProspects.ts`** — substituir `hasPerfect2GetherAccess` por verificação do módulo `prospects` estar activo. O acesso à data passa a ser controlado por `organization_id` do user logado (já funciona assim via RLS).
+Formulário com os parâmetros do scraper:
+- **Termos de pesquisa** (textarea, um por linha) — ex: "restaurante", "cabeleireiro"
+- **Localização** (input) — ex: "Lisboa, Portugal"
+- **Máximo de resultados** (input number, default: 50)
+- **Idioma** (select: pt, en, es — default: pt)
+- **Ignorar locais fechados** (switch, default: true)
+- Botão "Gerar" que chama a edge function e mostra progresso
 
-**7) P2G auto-activação** — criar uma migration para activar `prospects: true` no `enabled_modules` da organização P2G, para que não percam o acesso existente.
+#### 4) Página de Prospects — condicional P2G vs outros
+**`src/pages/Prospects.tsx`**
+
+- Importar `isPerfect2GetherOrg` 
+- Se **é P2G**: mostrar botão "Importar" (comportamento actual, sem alterações)
+- Se **não é P2G**: mostrar botão "Gerar Prospects" em vez de "Importar", que abre o `GenerateProspectsDialog`
+- A tabela, filtros, distribuição e exportação ficam iguais para ambos
+
+#### 5) Hook `useGenerateProspects`
+**`src/hooks/useProspects.ts`** — novo mutation hook
+
+- Chama `supabase.functions.invoke('generate-prospects', { body })` 
+- Invalida query de prospects no sucesso
+- Toast com resultado
 
 ### Ficheiros alterados
 | Ficheiro | Acção |
 |----------|-------|
-| `src/hooks/useModules.ts` | Adicionar `prospects` ao interface e defaults |
-| `src/components/settings/ModulesTab.tsx` | Adicionar card Prospects |
-| `src/components/layout/AppSidebar.tsx` | Mover Prospects para navItems normal |
-| `src/components/layout/MobileMenu.tsx` | Idem |
-| `src/components/layout/MobileBottomNav.tsx` | Idem |
-| `src/pages/Prospects.tsx` | Remover guard P2G |
-| `src/hooks/useProspects.ts` | Substituir guard P2G por módulo |
-| Migration SQL | Activar prospects para P2G |
+| `src/hooks/useSubscription.ts` | Adicionar `prospects: 'Elite'` |
+| `supabase/functions/generate-prospects/index.ts` | Nova edge function |
+| `src/components/prospects/GenerateProspectsDialog.tsx` | Novo dialog de configuração |
+| `src/pages/Prospects.tsx` | Condicional P2G vs "Gerar Prospects" |
+| `src/hooks/useProspects.ts` | Novo hook `useGenerateProspects` |
+| Secret `APIFY_API_TOKEN` | Pedido ao utilizador |
+
+### Mapeamento Apify → Prospects
+| Campo Apify | Campo Prospects |
+|-------------|----------------|
+| `title` | `company_name` |
+| `phone` | `phone` |
+| `website` | `email` (se contiver @) ou `metadata.website` |
+| `address` | `metadata.address` |
+| `categoryName` | `segment` |
+| `totalScore` | `metadata.rating` |
+| `url` | `metadata.google_maps_url` |
 
