@@ -101,30 +101,28 @@ Deno.serve(async (req) => {
     }
 
     // Start Apify actor run
-    const actorInput = {
+    const actorInput: Record<string, unknown> = {
       searchStringsArray: searchStrings,
       locationQuery: location,
       maxCrawledPlacesPerSearch: maxResults,
       language,
-      searchMatching: "all",
-      placeMinimumStars: "",
-      website: "allPlaces",
+      searchMatching,
+      placeMinimumStars,
+      website,
       skipClosedPlaces: skipClosed,
-      scrapePlaceDetailPage: false,
-      scrapeTableReservationProvider: false,
-      includeWebResults: false,
-      scrapeDirectories: false,
-      maxQuestions: 0,
-      scrapeContacts: false,
-      scrapeSocialMediaProfiles: {
-        facebooks: false,
-        instagrams: false,
-        youtubes: false,
-        tiktoks: false,
-        twitters: false,
-      },
-      maximumLeadsEnrichmentRecords: 0,
+      scrapePlaceDetailPage,
+      scrapeTableReservationProvider,
+      includeWebResults,
+      scrapeDirectories,
+      maxQuestions,
+      scrapeContacts,
+      scrapeSocialMediaProfiles,
+      maximumLeadsEnrichmentRecords,
     };
+
+    if (startUrls.length) {
+      actorInput.startUrls = startUrls.map((url: string) => ({ url }));
+    }
 
     const runRes = await fetch(`${APIFY_BASE}/acts/${ACTOR_ID}/runs?token=${APIFY_API_TOKEN}`, {
       method: "POST",
