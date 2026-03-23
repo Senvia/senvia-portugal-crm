@@ -25,6 +25,7 @@ const allNavItems: NavItem[] = [
   { to: "/financeiro", icon: Wallet, label: "Finanças", moduleKey: 'finance' },
   { to: "/calendar", icon: Calendar, label: "Agenda", moduleKey: 'calendar' },
   { to: "/marketing", icon: Mail, label: "Marketing", moduleKey: 'marketing' },
+  { to: "/prospects", icon: Search, label: "Prospects", moduleKey: 'prospects' },
   { to: "/ecommerce", icon: Store, label: "Loja", moduleKey: 'ecommerce' },
   { to: "/settings", icon: Settings, label: "Definições" },
 ];
