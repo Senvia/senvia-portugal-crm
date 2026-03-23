@@ -299,7 +299,7 @@ export function LeadsTableView({
                     </TableCell>
                     <TableCell className="hidden md:table-cell">
                       <span className="text-muted-foreground truncate max-w-[180px] block">
-                        {lead.email}
+                        {isPlaceholderEmail(lead.email) ? '—' : lead.email}
                       </span>
                     </TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>

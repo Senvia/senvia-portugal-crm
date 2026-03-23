@@ -290,7 +290,7 @@ export function LeadCard({
         <Button
           variant="outline"
           size="icon-sm"
-          disabled={!lead.email}
+          disabled={!lead.email || isPlaceholderEmail(lead.email)}
           onClick={(e) => {
             e.stopPropagation();
             setShowEmailModal(true);

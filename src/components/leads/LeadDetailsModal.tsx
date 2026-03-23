@@ -803,7 +803,7 @@ export function LeadDetailsModal({
                       <Button
                         variant="outline"
                         className="w-full"
-                        disabled={!lead.email}
+                        disabled={!lead.email || isPlaceholderEmail(lead.email)}
                         onClick={() => setShowEmailModal(true)}
                       >
                         <Mail className="h-4 w-4" />

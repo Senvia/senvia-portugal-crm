@@ -63,7 +63,7 @@ export function SendLeadEmailModal({ lead, open, onOpenChange }: SendLeadEmailMo
           </DialogTitle>
         </DialogHeader>
 
-        {!lead.email ? (
+        {!lead.email || isPlaceholderEmail(lead.email) ? (
           <p className="text-sm text-muted-foreground py-4">
             Este lead não tem email registado.
           </p>
