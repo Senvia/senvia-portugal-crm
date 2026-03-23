@@ -713,6 +713,70 @@ export function LeadDetailsModal({
                     </CardContent>
                   </Card>
 
+                  {/* Google Maps & Social Media - Prospect data */}
+                  {prospectMetadata && (prospectMetadata.googleMapsUrl || socialMediaIcons.some(s => prospectMetadata[s.key as keyof typeof prospectMetadata])) && (
+                    <Card>
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                          <MapPin className="h-4 w-4" />
+                          Dados do Prospect
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        {prospectMetadata.googleMapsUrl && (
+                          <a
+                            href={prospectMetadata.googleMapsUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 text-sm text-primary hover:underline"
+                          >
+                            <MapPin className="h-4 w-4" />
+                            Ver no Google Maps
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        )}
+                        {prospectMetadata.address && (
+                          <p className="text-sm text-muted-foreground">{prospectMetadata.address}</p>
+                        )}
+                        {prospectMetadata.rating && (
+                          <p className="text-sm text-muted-foreground">⭐ {prospectMetadata.rating} estrelas</p>
+                        )}
+                        {prospectMetadata.website && (
+                          <a
+                            href={prospectMetadata.website}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 text-sm text-primary hover:underline"
+                          >
+                            <Globe className="h-4 w-4" />
+                            Website
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        )}
+                        {socialMediaIcons.some(s => prospectMetadata[s.key as keyof typeof prospectMetadata]) && (
+                          <div className="flex items-center gap-2 pt-1">
+                            {socialMediaIcons.map(({ key, icon: Icon, label }) => {
+                              const url = prospectMetadata[key as keyof typeof prospectMetadata] as string | null;
+                              if (!url) return null;
+                              return (
+                                <a
+                                  key={key}
+                                  href={url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  title={label}
+                                  className="text-muted-foreground transition-colors hover:text-primary"
+                                >
+                                  <Icon className="h-5 w-5" />
+                                </a>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  )}
+
                   {/* GDPR */}
                   <div className="flex items-center gap-2 rounded-lg bg-muted/50 p-3">
                     <Shield className={lead.gdpr_consent ? "h-5 w-5 text-success" : "h-5 w-5 text-destructive"} />
