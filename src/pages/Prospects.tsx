@@ -29,6 +29,36 @@ const formatAssignedLabel = (name?: string | null) => name || "Não atribuído";
 const isProspectEligibleForDistribution = (prospect: { assigned_to: string | null; converted_to_lead: boolean }) =>
   !prospect.assigned_to && !prospect.converted_to_lead;
 
+const socialIcons = [
+  { key: "facebook", icon: Facebook, label: "Facebook" },
+  { key: "instagram", icon: Instagram, label: "Instagram" },
+  { key: "twitter", icon: Twitter, label: "X/Twitter" },
+  { key: "youtube", icon: Youtube, label: "YouTube" },
+  { key: "tiktok", icon: Globe, label: "TikTok" },
+] as const;
+
+const SocialMediaLinks = ({ metadata }: { metadata: Record<string, unknown> | null }) => {
+  if (!metadata) return <span className="text-muted-foreground">—</span>;
+  const links = socialIcons.filter(({ key }) => metadata[key]);
+  if (links.length === 0) return <span className="text-muted-foreground">—</span>;
+  return (
+    <div className="flex items-center gap-1.5">
+      {links.map(({ key, icon: Icon, label }) => (
+        <a
+          key={key}
+          href={metadata[key] as string}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={label}
+          className="text-muted-foreground transition-colors hover:text-primary"
+        >
+          <Icon className="h-4 w-4" />
+        </a>
+      ))}
+    </div>
+  );
+};
+
 export default function Prospects() {
   const { organization } = useAuth();
   const { modules } = useModules();
