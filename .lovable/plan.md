@@ -1,34 +1,36 @@
 
 
-## Mostrar redes sociais dos Prospects extraídos
+## Adicionar seleção de comerciais na distribuição de Prospects
 
-### Problema
-O Apify devolve campos como `facebookUrl`, `instagramUrl`, etc., mas o `check-prospect-job` não os guarda no `metadata` — só guarda `address`, `rating`, `website`, etc. Além disso, a UI (tabela e cards) não mostra esses campos.
+### Situação actual
+O dialog de distribuição mostra os comerciais elegíveis como badges estáticos. O backend (`distribute_prospects_round_robin`) já aceita `p_salesperson_ids` — se `null`, distribui por todos; se preenchido, distribui apenas pelos selecionados. Mas a UI não permite escolher.
+
+### Solução
+Adicionar dois modos de distribuição no dialog + checkboxes para selecionar comerciais específicos.
 
 ### Alterações
 
-**1) `supabase/functions/check-prospect-job/index.ts`** — guardar redes sociais no metadata
-- Expandir o `ApifyItem` interface com campos: `facebookUrl`, `instagramUrl`, `twitterUrl`, `youtubeUrl`, `tiktokUrl`
-- No bloco de construção do `metadata` (linha ~184), adicionar:
-  - `facebook: item.facebookUrl || null`
-  - `instagram: item.instagramUrl || null`
-  - `twitter: item.twitterUrl || null`
-  - `youtube: item.youtubeUrl || null`
-  - `tiktok: item.tiktokUrl || null`
+**Ficheiro: `src/components/prospects/DistributeProspectsDialog.tsx`**
 
-**2) `src/pages/Prospects.tsx`** — mostrar redes sociais na UI (apenas para não-P2G)
-- Na versão mobile (cards): adicionar linha "Redes sociais" com ícones/links clicáveis para cada rede presente no `metadata`
-- Na versão desktop (tabela): adicionar coluna "Redes Sociais" com ícones clicáveis (Facebook, Instagram, etc.) — cada ícone só aparece se o URL existir no metadata
-- Usar ícones do lucide-react (`Facebook`, `Instagram`, `Globe`) ou simples badges com texto
+1. **Modo de distribuição** — RadioGroup com duas opções:
+   - "Todos os comerciais (round-robin)" — comportamento actual, envia `salespersonIds: undefined`
+   - "Comerciais selecionados" — mostra checkboxes para escolher quais
 
-**3) Deploy** da edge function `check-prospect-job` atualizada
+2. **Lista de comerciais com checkboxes** — visível apenas no modo "selecionados":
+   - Cada comercial como checkbox com nome
+   - Estado `selectedSalespersonIds: string[]`
+   - Botões "Selecionar todos" / "Limpar" para conveniência
 
-### Nota
-Os prospects já importados **não** terão redes sociais porque o metadata foi guardado sem esses campos. Será necessário gerar novamente para obter os dados completos. Alternativa: podemos re-processar os jobs existentes, mas isso requer acesso ao dataset do Apify (que expira após algum tempo).
+3. **Validação** — no modo "selecionados", exigir pelo menos 1 comercial selecionado (desabilitar botão "Distribuir" caso contrário)
+
+4. **Passar `salespersonIds`** ao `mutateAsync`:
+   - Modo "todos": `salespersonIds: undefined`
+   - Modo "selecionados": `salespersonIds: selectedSalespersonIds`
 
 ### Ficheiros alterados
 | Ficheiro | Acção |
 |----------|-------|
-| `supabase/functions/check-prospect-job/index.ts` | Guardar redes sociais no metadata |
-| `src/pages/Prospects.tsx` | Mostrar coluna/linha de redes sociais |
+| `src/components/prospects/DistributeProspectsDialog.tsx` | Adicionar RadioGroup + checkboxes de comerciais |
+
+Nenhuma alteração de backend necessária — o RPC já suporta o parâmetro `p_salesperson_ids`.
 
