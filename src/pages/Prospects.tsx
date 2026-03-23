@@ -347,6 +347,12 @@ export default function Prospects() {
                         {isP2G && <p><span className="font-medium text-foreground">COM:</span> {getProspectCom(prospect) || "—"}</p>}
                         {isP2G && <p><span className="font-medium text-foreground">kWh/Ano:</span> {formatConsumption(prospect.annual_consumption_kwh)}</p>}
                         {!isP2G && <p><span className="font-medium text-foreground">Morada:</span> {(prospect.metadata as any)?.address || "—"}</p>}
+                        {!isP2G && (
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-foreground">Redes Sociais:</span>
+                            <SocialMediaLinks metadata={prospect.metadata as Record<string, unknown>} />
+                          </div>
+                        )}
                         <p><span className="font-medium text-foreground">Comercial:</span> {formatAssignedLabel(salespersonMap.get(prospect.assigned_to || ""))}</p>
                         <p><span className="font-medium text-foreground">Contacto:</span> {prospect.phone || prospect.email || "—"}</p>
                         {!isEligible ? (
