@@ -29,6 +29,9 @@ export default function RhAdminPanel() {
   const pendingAbsences = absences.filter(a => a.status === "pending");
   const currentYear = new Date().getFullYear();
 
+  // Build set of user_ids that have a balance configured
+  const usersWithBalance = new Set((balances as any[]).map(b => b.user_id));
+
   // Members that don't have a balance yet
   const existingUserIds = new Set((balances as any[]).map(b => b.user_id));
   const availableMembers = orgMembers.filter(m => !existingUserIds.has(m.user_id));
