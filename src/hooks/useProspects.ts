@@ -80,13 +80,8 @@ export function useProspectSalespeople() {
 }
 
 export function useImportProspects() {
-  const { organization, organizations, isSuperAdmin, user } = useAuth();
+  const { organization, user } = useAuth();
   const queryClient = useQueryClient();
-  const hasAccess = hasPerfect2GetherAccess({
-    organizationId: organization?.id,
-    memberships: organizations,
-    isSuperAdmin,
-  });
 
   return useMutation({
     mutationFn: async ({
@@ -97,9 +92,6 @@ export function useImportProspects() {
       rows: Record<string, unknown>[];
     }): Promise<ProspectImportResult> => {
       if (!organization?.id) throw new Error("Sem organização ativa.");
-      if (!hasAccess) {
-        throw new Error(getProspectsAccessMessage({ organizationId: organization.id, isSuperAdmin }));
-      }
 
       const client = supabase as any;
       const result = createEmptyImportResult();
