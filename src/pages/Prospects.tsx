@@ -384,6 +384,7 @@ export default function Prospects() {
                     {isP2G && <TableHead>COM</TableHead>}
                     <TableHead>Contacto</TableHead>
                     {isP2G && <TableHead>kWh/Ano</TableHead>}
+                    {!isP2G && <TableHead>Website</TableHead>}
                     {!isP2G && <TableHead>Morada</TableHead>}
                     {!isP2G && <TableHead>Redes Sociais</TableHead>}
                     <TableHead>Comercial</TableHead>
@@ -412,6 +413,20 @@ export default function Prospects() {
                         {isP2G && <TableCell>{getProspectCom(prospect) || "—"}</TableCell>}
                         <TableCell>{prospect.phone || prospect.email || "—"}</TableCell>
                         {isP2G && <TableCell>{formatConsumption(prospect.annual_consumption_kwh)}</TableCell>}
+                        {!isP2G && (
+                          <TableCell className="max-w-[180px] truncate">
+                            {(prospect.metadata as any)?.website ? (
+                              <a
+                                href={(prospect.metadata as any).website.startsWith("http") ? (prospect.metadata as any).website : `https://${(prospect.metadata as any).website}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-primary hover:underline"
+                              >
+                                {(prospect.metadata as any).website.replace(/^https?:\/\//, "").replace(/\/$/, "")}
+                              </a>
+                            ) : "—"}
+                          </TableCell>
+                        )}
                         {!isP2G && <TableCell className="max-w-[200px] truncate">{(prospect.metadata as any)?.address || "—"}</TableCell>}
                         {!isP2G && <TableCell><SocialMediaLinks metadata={prospect.metadata as Record<string, unknown>} /></TableCell>}
                         <TableCell>{formatAssignedLabel(salespersonMap.get(prospect.assigned_to || ""))}</TableCell>

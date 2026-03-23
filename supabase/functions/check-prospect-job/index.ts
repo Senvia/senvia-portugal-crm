@@ -11,7 +11,9 @@ const APIFY_BASE = "https://api.apify.com/v2";
 interface ApifyItem {
   title?: string;
   phone?: string;
+  phones?: string[];
   website?: string;
+  emails?: string[];
   address?: string;
   categoryName?: string;
   totalScore?: number;
@@ -182,10 +184,13 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      const phone = (item.phone || "").trim();
+      // Use first phone from scrapeContacts array, fallback to singular phone
+      const phone = (item.phones?.[0] || item.phone || "").trim();
       const dedupKey = `${companyName.toLowerCase()}::${phone}`;
 
-      const email = item.website && item.website.includes("@") ? item.website : null;
+      // Extract email: prefer emails array from scrapeContacts, fallback to website containing @
+      const email = item.emails?.[0]?.trim() ||
+        (item.website && item.website.includes("@") ? item.website : null);
       const metadata: Record<string, unknown> = {
         address: item.address || null,
         city: item.city || null,
@@ -199,6 +204,8 @@ Deno.serve(async (req) => {
         twitter: item.twitterUrl || null,
         youtube: item.youtubeUrl || null,
         tiktok: item.tiktokUrl || null,
+        additional_emails: item.emails && item.emails.length > 1 ? item.emails.slice(1) : null,
+        additional_phones: item.phones && item.phones.length > 1 ? item.phones.slice(1) : null,
         source_search: searchStrings.join(", "),
         source_location: location,
       };

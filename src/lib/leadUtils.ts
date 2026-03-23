@@ -1,9 +1,10 @@
 /**
  * Detects placeholder emails generated when prospects without email are distributed.
  * Format: prospect-UUID@placeholder.local
+ * Returns false for null/undefined/empty — those are simply "no email", not placeholders.
  */
 export function isPlaceholderEmail(email: string | null | undefined): boolean {
-  if (!email) return true;
+  if (!email) return false;
   return email.endsWith('@placeholder.local');
 }
 
