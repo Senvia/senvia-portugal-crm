@@ -1,82 +1,43 @@
 
 
-## Auditoria completa do módulo Prospects — Bugs e Melhorias
+## Criar Pop-up de Novidades (What's New) pós-login
 
-### Bug 1 (Crítico): Quantidade a distribuir é ignorada
-O hook `useDistributeProspects` envia `p_quantity` ao RPC `distribute_prospects_round_robin`, mas a sobrecarga SQL que aceita `p_prospect_ids uuid[]` **não tem parâmetro `p_quantity`** — ela processa **todos** os IDs passados. O resultado: se o utilizador seleciona 50 prospects e quer distribuir apenas 10, são distribuídos os 50.
+### Conceito
+Um modal/dialog que aparece automaticamente após o login mostrando novidades do sistema. Excluir utilizadores da organização P2G. O conteúdo das novidades será gerido via uma tabela no banco de dados para facilitar atualizações futuras.
 
-**Correção:** No `useDistributeProspects`, cortar o array client-side antes de enviar:
-```
-const idsToSend = prospectIds.slice(0, quantity);
-```
-E remover o parâmetro `p_quantity` do RPC call (não existe nessa sobrecarga).
+### Alterações
 
-**Ficheiro:** `src/hooks/useProspects.ts`
+**1) Migration — tabela `app_announcements`**
+- `id uuid`, `title text`, `content text` (suporta markdown/HTML), `version text` (ex: "v2.5"), `image_url text?`, `published_at timestamptz`, `is_active boolean default true`, `created_at`
+- RLS: SELECT para `authenticated`
 
----
+**2) `src/components/announcements/WhatsNewDialog.tsx`** (novo)
+- Dialog com título, conteúdo formatado, botão "Entendi"
+- Ao fechar, guarda `localStorage` key `senvia_last_seen_announcement_{userId}` = `announcement.id`
+- Só aparece se o announcement mais recente (`is_active = true`, ordenado por `published_at desc`) ainda não foi visto pelo user
 
-### Bug 2 (Médio): Emails do Apify não são extraídos correctamente
-No `check-prospect-job`, a extracção de email verifica `item.website.includes("@")`. O Apify devolve emails num campo separado (`emails` array) quando `scrapeContacts` está activo. Emails reais são perdidos.
+**3) `src/components/auth/ProtectedLayoutRoute.tsx`**
+- Importar `WhatsNewDialog` e `isPerfect2GetherOrg`
+- Renderizar `<WhatsNewDialog />` dentro do `<AppLayout>`, passando `organizationId`
+- O componente internamente verifica se é P2G e não se mostra
 
-**Correção:** Na edge function, extrair `item.emails?.[0]` como email principal. Guardar emails adicionais no metadata.
+**4) `src/hooks/useAnnouncements.ts`** (novo)
+- Query para buscar o announcement ativo mais recente
+- Lógica de verificação com localStorage para saber se já foi visto
 
-**Ficheiro:** `supabase/functions/check-prospect-job/index.ts`
+### Fluxo
+1. User faz login → `ProtectedLayoutRoute` renderiza
+2. `WhatsNewDialog` carrega announcement mais recente da tabela
+3. Se org é P2G → não mostra
+4. Se user já viu este announcement (localStorage) → não mostra
+5. Caso contrário → mostra modal com novidades
+6. User clica "Entendi" → marca como visto no localStorage
 
----
-
-### Bug 3 (Menor): `isPlaceholderEmail` retorna `true` para `null`/`undefined`
-A função `isPlaceholderEmail(null)` retorna `true`, o que faz com que leads legítimos sem email (campo vazio ou null) sejam tratados como "placeholder". Isto pode esconder o campo de email em leads criados manualmente sem email.
-
-**Correção:** Distinguir "sem email" de "email placeholder":
-- `null`/`""` → mostrar como vazio (não é placeholder)
-- `@placeholder.local` → é placeholder, mostrar "Sem email (prospect)"
-
-**Ficheiro:** `src/lib/leadUtils.ts`
-
----
-
-### Bug 4 (Menor): Prospects sem paginação — limite de 1000 rows
-O `useProspects` faz `select("*")` sem limite. Supabase retorna no máximo 1000 rows por query. Organizações com mais de 1000 prospects verão dados truncados sem aviso.
-
-**Correção:** Adicionar `.limit(5000)` ou implementar paginação. No mínimo, usar `range(0, 4999)` para alargar o limite.
-
-**Ficheiro:** `src/hooks/useProspects.ts`
-
----
-
-### Bug 5 (Menor): Dialog de distribuição não trata erros
-O `handleDistribute` faz `await mutateAsync()` sem `try/catch`. Se a mutação falhar, o erro propaga sem fechar o dialog — o utilizador fica preso com o loader.
-
-**Correção:** Adicionar `try/catch` no `handleDistribute`.
-
-**Ficheiro:** `src/components/prospects/DistributeProspectsDialog.tsx`
-
----
-
-### Melhoria 1: Website e rating do prospect não visíveis na tabela
-O Apify devolve `website` e `totalScore` (rating), guardados no metadata. Na tabela de prospects, estes campos não são mostrados — o utilizador não tem acesso rápido ao website da empresa.
-
-**Correção:** Adicionar coluna "Website" com link clicável na tabela (para não-P2G).
-
-**Ficheiro:** `src/pages/Prospects.tsx`
-
----
-
-### Melhoria 2: Telefones adicionais do scrapeContacts perdidos
-O Apify pode devolver `item.phones` (array) com múltiplos telefones via `scrapeContacts`. Apenas `item.phone` (singular) é guardado. Telefones adicionais são perdidos.
-
-**Correção:** Guardar `item.phones` no metadata no `check-prospect-job`.
-
-**Ficheiro:** `supabase/functions/check-prospect-job/index.ts`
-
----
-
-### Resumo dos ficheiros a alterar
-| Ficheiro | Tipo | Acção |
-|----------|------|-------|
-| `src/hooks/useProspects.ts` | Bug 1,4 | Cortar array por quantidade; alargar limite de query |
-| `supabase/functions/check-prospect-job/index.ts` | Bug 2, Melhoria 2 | Extrair emails/phones correctamente do Apify |
-| `src/lib/leadUtils.ts` | Bug 3 | Distinguir null de placeholder |
-| `src/components/prospects/DistributeProspectsDialog.tsx` | Bug 5 | Adicionar try/catch |
-| `src/pages/Prospects.tsx` | Melhoria 1 | Adicionar coluna website |
+### Ficheiros
+| Ficheiro | Acção |
+|----------|-------|
+| Migration SQL | Criar tabela `app_announcements` |
+| `src/hooks/useAnnouncements.ts` | Novo — fetch + lógica de visto |
+| `src/components/announcements/WhatsNewDialog.tsx` | Novo — UI do dialog |
+| `src/components/auth/ProtectedLayoutRoute.tsx` | Renderizar WhatsNewDialog |
 
