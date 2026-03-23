@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { Users, Settings2 } from "lucide-react";
+import { Users, Settings2, Plus } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { useOrgAbsences, useOrgVacationBalances, useUpdateVacationBalance, type RhAbsence } from "@/hooks/useRhAbsences";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useOrgAbsences, useOrgVacationBalances, useUpdateVacationBalance, useOrgMembers, type RhAbsence } from "@/hooks/useRhAbsences";
 import { useAuth } from "@/contexts/AuthContext";
 import RhAbsenceCard from "./RhAbsenceCard";
 import RhAbsenceApprovalDialog from "./RhAbsenceApprovalDialog";
@@ -13,15 +14,23 @@ export default function RhAdminPanel() {
   const { organization } = useAuth();
   const { data: absences = [] } = useOrgAbsences();
   const { data: balances = [] } = useOrgVacationBalances();
+  const { data: orgMembers = [] } = useOrgMembers();
   const updateBalance = useUpdateVacationBalance();
 
   const [approvalAbsence, setApprovalAbsence] = useState<RhAbsence | null>(null);
   const [approvalMode, setApprovalMode] = useState<"approve" | "reject">("approve");
   const [showBalanceDialog, setShowBalanceDialog] = useState(false);
   const [editBalance, setEditBalance] = useState<{ userId: string; userName: string; totalDays: number } | null>(null);
+  const [showAddMember, setShowAddMember] = useState(false);
+  const [newMemberUserId, setNewMemberUserId] = useState("");
+  const [newMemberDays, setNewMemberDays] = useState(22);
 
   const pendingAbsences = absences.filter(a => a.status === "pending");
   const currentYear = new Date().getFullYear();
+
+  // Members that don't have a balance yet
+  const existingUserIds = new Set((balances as any[]).map(b => b.user_id));
+  const availableMembers = orgMembers.filter(m => !existingUserIds.has(m.user_id));
 
   const handleSaveBalance = async () => {
     if (!editBalance || !organization?.id) return;
@@ -33,6 +42,19 @@ export default function RhAdminPanel() {
     });
     setEditBalance(null);
     setShowBalanceDialog(false);
+  };
+
+  const handleAddMember = async () => {
+    if (!newMemberUserId || !organization?.id) return;
+    await updateBalance.mutateAsync({
+      organizationId: organization.id,
+      userId: newMemberUserId,
+      year: currentYear,
+      totalDays: newMemberDays,
+    });
+    setNewMemberUserId("");
+    setNewMemberDays(22);
+    setShowAddMember(false);
   };
 
   return (
@@ -113,6 +135,51 @@ export default function RhAdminPanel() {
               ))
             )}
           </div>
+          {availableMembers.length > 0 && (
+            <Button variant="outline" className="w-full mt-2" onClick={() => setShowAddMember(true)}>
+              <Plus className="h-4 w-4 mr-2" /> Adicionar Membro
+            </Button>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Member Balance Dialog */}
+      <Dialog open={showAddMember} onOpenChange={setShowAddMember}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Adicionar Saldo de Férias</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-1.5">Membro</label>
+              <Select value={newMemberUserId} onValueChange={setNewMemberUserId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione um membro..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableMembers.map(m => (
+                    <SelectItem key={m.user_id} value={m.user_id}>{m.full_name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1.5">Dias totais de férias</label>
+              <Input
+                type="number"
+                value={newMemberDays}
+                onChange={(e) => setNewMemberDays(Number(e.target.value))}
+                min={0}
+                max={50}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAddMember(false)}>Cancelar</Button>
+            <Button onClick={handleAddMember} disabled={!newMemberUserId || updateBalance.isPending}>
+              {updateBalance.isPending ? "A guardar..." : "Adicionar"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

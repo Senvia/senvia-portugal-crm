@@ -375,3 +375,26 @@ export function useOrgVacationBalances() {
     enabled: !!organization?.id,
   });
 }
+
+// Get all org members (for adding vacation balances)
+export function useOrgMembers() {
+  const { organization } = useAuth();
+
+  return useQuery({
+    queryKey: ["rh-org-members", organization?.id],
+    queryFn: async () => {
+      if (!organization?.id) return [];
+      const { data, error } = await supabase
+        .from("organization_members")
+        .select("user_id, profiles!organization_members_user_id_fkey(id, full_name)")
+        .eq("organization_id", organization.id)
+        .eq("is_active", true);
+      if (error) throw error;
+      return (data || []).map((m: any) => ({
+        user_id: m.user_id,
+        full_name: m.profiles?.full_name || "Sem nome",
+      }));
+    },
+    enabled: !!organization?.id,
+  });
+}
