@@ -72,6 +72,18 @@ Deno.serve(async (req) => {
       maxResults = 50,
       language = "pt",
       skipClosed = true,
+      searchMatching = "all",
+      placeMinimumStars = "",
+      website = "allPlaces",
+      scrapePlaceDetailPage = false,
+      scrapeTableReservationProvider = false,
+      includeWebResults = false,
+      scrapeDirectories = false,
+      maxQuestions = 0,
+      scrapeContacts = false,
+      scrapeSocialMediaProfiles = { facebooks: false, instagrams: false, youtubes: false, tiktoks: false, twitters: false },
+      maximumLeadsEnrichmentRecords = 0,
+      startUrls = [],
     } = body;
 
     if (!organizationId) {
@@ -81,38 +93,36 @@ Deno.serve(async (req) => {
       });
     }
 
-    if (!searchStrings.length || !location) {
-      return new Response(JSON.stringify({ error: "searchStrings and location are required" }), {
+    if (!startUrls.length && (!searchStrings.length || !location)) {
+      return new Response(JSON.stringify({ error: "searchStrings+location or startUrls are required" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     // Start Apify actor run
-    const actorInput = {
+    const actorInput: Record<string, unknown> = {
       searchStringsArray: searchStrings,
       locationQuery: location,
       maxCrawledPlacesPerSearch: maxResults,
       language,
-      searchMatching: "all",
-      placeMinimumStars: "",
-      website: "allPlaces",
+      searchMatching,
+      placeMinimumStars,
+      website,
       skipClosedPlaces: skipClosed,
-      scrapePlaceDetailPage: false,
-      scrapeTableReservationProvider: false,
-      includeWebResults: false,
-      scrapeDirectories: false,
-      maxQuestions: 0,
-      scrapeContacts: false,
-      scrapeSocialMediaProfiles: {
-        facebooks: false,
-        instagrams: false,
-        youtubes: false,
-        tiktoks: false,
-        twitters: false,
-      },
-      maximumLeadsEnrichmentRecords: 0,
+      scrapePlaceDetailPage,
+      scrapeTableReservationProvider,
+      includeWebResults,
+      scrapeDirectories,
+      maxQuestions,
+      scrapeContacts,
+      scrapeSocialMediaProfiles,
+      maximumLeadsEnrichmentRecords,
     };
+
+    if (startUrls.length) {
+      actorInput.startUrls = startUrls.map((url: string) => ({ url }));
+    }
 
     const runRes = await fetch(`${APIFY_BASE}/acts/${ACTOR_ID}/runs?token=${APIFY_API_TOKEN}`, {
       method: "POST",

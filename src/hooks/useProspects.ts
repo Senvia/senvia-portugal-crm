@@ -221,6 +221,24 @@ export function useGenerateProspects() {
       maxResults: number;
       language: string;
       skipClosed: boolean;
+      searchMatching?: string;
+      placeMinimumStars?: string;
+      website?: string;
+      scrapePlaceDetailPage?: boolean;
+      scrapeTableReservationProvider?: boolean;
+      includeWebResults?: boolean;
+      scrapeDirectories?: boolean;
+      maxQuestions?: number;
+      scrapeContacts?: boolean;
+      scrapeSocialMediaProfiles?: {
+        facebooks: boolean;
+        instagrams: boolean;
+        youtubes: boolean;
+        tiktoks: boolean;
+        twitters: boolean;
+      };
+      maximumLeadsEnrichmentRecords?: number;
+      startUrls?: string[];
     }) => {
       const { data, error } = await supabase.functions.invoke("generate-prospects", {
         body: params,
