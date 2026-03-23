@@ -413,6 +413,7 @@ export default function Prospects() {
                         <TableCell>{prospect.phone || prospect.email || "—"}</TableCell>
                         {isP2G && <TableCell>{formatConsumption(prospect.annual_consumption_kwh)}</TableCell>}
                         {!isP2G && <TableCell className="max-w-[200px] truncate">{(prospect.metadata as any)?.address || "—"}</TableCell>}
+                        {!isP2G && <TableCell><SocialMediaLinks metadata={prospect.metadata as Record<string, unknown>} /></TableCell>}
                         <TableCell>{formatAssignedLabel(salespersonMap.get(prospect.assigned_to || ""))}</TableCell>
                         <TableCell>
                           <Badge variant={prospect.converted_to_lead ? "default" : "secondary"}>
