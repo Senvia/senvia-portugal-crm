@@ -317,6 +317,13 @@ export function GenerateProspectsDialog({ open, onOpenChange, organizationId }: 
           </CollapsibleSection>
         </div>
 
+        {progressMessage && (
+          <div className="flex items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3">
+            <Loader2 className="h-5 w-5 animate-spin text-primary shrink-0" />
+            <p className="text-sm text-primary font-medium">{progressMessage}</p>
+          </div>
+        )}
+
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={generateMutation.isPending}>
             Cancelar
@@ -325,7 +332,7 @@ export function GenerateProspectsDialog({ open, onOpenChange, organizationId }: 
             {generateMutation.isPending ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                A gerar...
+                A pesquisar...
               </>
             ) : (
               <>
