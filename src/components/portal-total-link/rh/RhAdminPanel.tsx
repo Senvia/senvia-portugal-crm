@@ -10,6 +10,7 @@ import { useOrgAbsences, useOrgVacationBalances, useUpdateVacationBalance, useOr
 import { useAuth } from "@/contexts/AuthContext";
 import RhAbsenceCard from "./RhAbsenceCard";
 import RhAbsenceApprovalDialog from "./RhAbsenceApprovalDialog";
+import RhAdminOverlapCheck from "./RhAdminOverlapCheck";
 
 export default function RhAdminPanel() {
   const { organization } = useAuth();
