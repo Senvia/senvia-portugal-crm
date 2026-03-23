@@ -222,6 +222,24 @@ export function LeadDetailsModal({
   const formResponses = customDataEntries.filter(e => !e.isUtm);
   const utmData = customDataEntries.filter(e => e.isUtm);
 
+  // Extract prospect metadata (Google Maps URL, social media, etc.)
+  const prospectMetadata = useMemo(() => {
+    const cd = lead?.custom_data as Record<string, unknown> | null;
+    const meta = cd?.metadata as Record<string, unknown> | null;
+    if (!meta) return null;
+    return {
+      googleMapsUrl: (meta.google_maps_url as string) || null,
+      address: (meta.address as string) || null,
+      rating: (meta.rating as number) || null,
+      website: (meta.website as string) || null,
+      facebook: (meta.facebook as string) || null,
+      instagram: (meta.instagram as string) || null,
+      twitter: (meta.twitter as string) || null,
+      youtube: (meta.youtube as string) || null,
+      tiktok: (meta.tiktok as string) || null,
+    };
+  }, [lead?.custom_data]);
+
   // Sync state when lead changes
   useEffect(() => {
     if (lead) {
