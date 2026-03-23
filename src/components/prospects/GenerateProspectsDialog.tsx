@@ -34,7 +34,7 @@ export function GenerateProspectsDialog({ open, onOpenChange, organizationId }: 
 
   // Search filters
   const [searchMatching, setSearchMatching] = useState("all");
-  const [placeMinimumStars, setPlaceMinimumStars] = useState("");
+  const [placeMinimumStars, setPlaceMinimumStars] = useState("none");
   const [website, setWebsite] = useState("allPlaces");
   const [skipClosed, setSkipClosed] = useState(true);
 
@@ -84,7 +84,7 @@ export function GenerateProspectsDialog({ open, onOpenChange, organizationId }: 
         language,
         skipClosed,
         searchMatching,
-        placeMinimumStars,
+        placeMinimumStars: placeMinimumStars === "none" ? "" : placeMinimumStars,
         website,
         scrapePlaceDetailPage,
         scrapeTableReservationProvider,
@@ -199,7 +199,7 @@ export function GenerateProspectsDialog({ open, onOpenChange, organizationId }: 
                   <Select value={placeMinimumStars} onValueChange={setPlaceMinimumStars}>
                     <SelectTrigger><SelectValue placeholder="Todas" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Todas</SelectItem>
+                      <SelectItem value="none">Todas</SelectItem>
                       <SelectItem value="1">⭐ 1+</SelectItem>
                       <SelectItem value="2">⭐ 2+</SelectItem>
                       <SelectItem value="3">⭐ 3+</SelectItem>
