@@ -176,7 +176,8 @@ export function LeadDetailsModal({
     
     Object.entries(lead.custom_data).forEach(([key, value]) => {
       if (value === null || value === undefined || value === '') return;
-      
+      if (HIDDEN_CUSTOM_DATA_KEYS.includes(key as any)) return;
+      if (typeof value === 'object' && !Array.isArray(value)) return;
       const isUtm = utmKeys.includes(key);
       
       let label = key;
