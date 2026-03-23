@@ -1,37 +1,34 @@
 
-Diagnóstico confirmado: o erro continua porque o Apify rejeita o idioma enviado como `pt`.  
-A função está a devolver 502 com a mensagem de validação do Apify (“`input.language` must be one of ... `pt-PT`, `pt-BR`, ...”).  
-Ou seja: o problema não é timeout agora; é valor de idioma inválido no payload.
 
-## Plano de correção
+## Mostrar redes sociais dos Prospects extraídos
 
-1) Corrigir idioma no modal (UI)
-- Ficheiro: `src/components/prospects/GenerateProspectsDialog.tsx`
-- Alterar valor default de `language` de `pt` para `pt-PT`.
-- Atualizar opções do select para códigos válidos do Apify:
-  - `pt-PT` (Português Portugal)
-  - `pt-BR` (Português Brasil)
-  - `en`, `es`, `fr` (e manter os restantes que quiseres expor depois).
+### Problema
+O Apify devolve campos como `facebookUrl`, `instagramUrl`, etc., mas o `check-prospect-job` não os guarda no `metadata` — só guarda `address`, `rating`, `website`, etc. Além disso, a UI (tabela e cards) não mostra esses campos.
 
-2) Tornar a edge function resiliente a valores antigos
-- Ficheiro: `supabase/functions/generate-prospects/index.ts`
-- Trocar default backend para `language = "pt-PT"`.
-- Adicionar normalização antes de chamar Apify:
-  - `pt -> pt-PT`
-  - (opcional) `br -> pt-BR`
-- Se vier idioma inválido, devolver `400` com erro claro em PT (em vez de deixar ir ao Apify e voltar 502).
+### Alterações
 
-3) Melhorar mensagem de erro no frontend
-- Ficheiro: `src/hooks/useProspects.ts`
-- No `useGenerateProspects`, quando `invoke` der non-2xx, tentar ler `startError.context` (JSON/body) para mostrar o erro real no toast.
-- Assim deixa de aparecer só “Edge Function returned a non-2xx status code”.
+**1) `supabase/functions/check-prospect-job/index.ts`** — guardar redes sociais no metadata
+- Expandir o `ApifyItem` interface com campos: `facebookUrl`, `instagramUrl`, `twitterUrl`, `youtubeUrl`, `tiktokUrl`
+- No bloco de construção do `metadata` (linha ~184), adicionar:
+  - `facebook: item.facebookUrl || null`
+  - `instagram: item.instagramUrl || null`
+  - `twitter: item.twitterUrl || null`
+  - `youtube: item.youtubeUrl || null`
+  - `tiktok: item.tiktokUrl || null`
 
-4) Validação final (sem mexer no fluxo P2G)
-- Testar geração com defaults (sem alterar idioma manualmente): deve criar `jobId` e entrar em polling.
-- Confirmar conclusão via `check-prospect-job`.
-- Confirmar que P2G continua sem alterações no fluxo deles (Importar continua igual).
+**2) `src/pages/Prospects.tsx`** — mostrar redes sociais na UI (apenas para não-P2G)
+- Na versão mobile (cards): adicionar linha "Redes sociais" com ícones/links clicáveis para cada rede presente no `metadata`
+- Na versão desktop (tabela): adicionar coluna "Redes Sociais" com ícones clicáveis (Facebook, Instagram, etc.) — cada ícone só aparece se o URL existir no metadata
+- Usar ícones do lucide-react (`Facebook`, `Instagram`, `Globe`) ou simples badges com texto
 
-## Ficheiros a alterar
-- `src/components/prospects/GenerateProspectsDialog.tsx`
-- `supabase/functions/generate-prospects/index.ts`
-- `src/hooks/useProspects.ts`
+**3) Deploy** da edge function `check-prospect-job` atualizada
+
+### Nota
+Os prospects já importados **não** terão redes sociais porque o metadata foi guardado sem esses campos. Será necessário gerar novamente para obter os dados completos. Alternativa: podemos re-processar os jobs existentes, mas isso requer acesso ao dataset do Apify (que expira após algum tempo).
+
+### Ficheiros alterados
+| Ficheiro | Acção |
+|----------|-------|
+| `supabase/functions/check-prospect-job/index.ts` | Guardar redes sociais no metadata |
+| `src/pages/Prospects.tsx` | Mostrar coluna/linha de redes sociais |
+
