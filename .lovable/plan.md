@@ -1,39 +1,32 @@
 
 
-## Saldo não descontado nas férias do Thiago
+## Unificar perfis do Thiago
 
-### Causa raiz
+### Situação actual
 
-Existem **dois perfis "Thiago"** no sistema:
-- `Thiago` (44a688ac) — tem saldo de férias configurado (22 dias)
-- `Thiago Sousa` (504a57df) — submeteu o pedido de férias, mas **não tem saldo configurado**
+| Perfil | ID | Email | Orgs | Roles |
+|--------|----|-------|------|-------|
+| **Thiago Sousa** (MANTER) | `504a57df` | geral.senvia@gmail.com | Senvia Agency (admin) | super_admin, admin |
+| **Thiago** (REMOVER) | `44a688ac` | thiagogaldino21@gmail.com | P2G (salesperson) | salesperson |
 
-O trigger `rh_update_vacation_balance` tentou descontar dias ao aprovar, mas não encontrou registo em `rh_vacation_balances` para o user `504a57df`, logo o UPDATE não afectou nenhuma linha.
+### Dados a migrar de `44a688ac` → `504a57df`
 
-### Correção imediata (dados)
+| Tabela | Registos | Acção |
+|--------|----------|-------|
+| `organization_members` | 1 (P2G, salesperson, profile_id=542847aa) | Inserir `504a57df` como membro P2G |
+| `crm_clients.assigned_to` | 1 cliente (ACUSTIKASSUNTO) | UPDATE → `504a57df` |
+| `activation_objectives.user_id` | 3 registos | UPDATE → `504a57df` |
+| `monthly_objectives.user_id` | 1 registo | UPDATE → `504a57df` |
+| `monthly_metrics.user_id` | 1 registo | UPDATE → `504a57df` |
+| `rh_vacation_balances.user_id` | 1 registo (22 dias, 2026) | UPDATE → `504a57df` |
 
-1. **Adicionar saldo de férias para "Thiago Sousa"** (504a57df) via o painel "Gerir Saldos" — este é o utilizador real que submeteu as férias
-2. Depois de adicionar o saldo, forçar o desconto manualmente (ou rejeitar e re-aprovar o pedido)
+### Pós-migração — limpar perfil duplicado
 
-### Correção estrutural (código)
+1. Remover `44a688ac` de `organization_members` (P2G)
+2. Remover `44a688ac` de `user_roles` (salesperson)
+3. Banir o utilizador `44a688ac` via edge function (para não poder fazer login)
 
-**Ficheiro: trigger `rh_update_vacation_balance`** — migration SQL
+### Execução
 
-Alterar o trigger para que, quando não existe saldo configurado para o utilizador, crie automaticamente um registo com `total_days = 22` (valor default) e desconte os dias. Isto evita que aprovações futuras falhem silenciosamente.
-
-```sql
--- Se não existe balance, criar com default 22 dias
-INSERT INTO rh_vacation_balances (organization_id, user_id, year, total_days, used_days)
-VALUES (NEW.organization_id, NEW.user_id, EXTRACT(YEAR FROM NEW.start_date)::int, 22, v_total_days)
-ON CONFLICT (organization_id, user_id, year)
-DO UPDATE SET used_days = rh_vacation_balances.used_days + v_total_days, updated_at = now();
-```
-
-**Ficheiro: `src/components/portal-total-link/rh/RhAdminPanel.tsx`**
-
-Adicionar um aviso visual no painel de aprovação quando o colaborador **não tem saldo configurado**, para que o admin saiba antes de aprovar.
-
-### Ficheiros alterados
-- Migration SQL — trigger `rh_update_vacation_balance` com auto-criação de saldo
-- `src/components/portal-total-link/rh/RhAdminPanel.tsx` — aviso quando o user não tem saldo
+Tudo via operações de dados (insert tool) — sem alterações de código ou schema.
 
