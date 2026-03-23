@@ -84,7 +84,7 @@ export function GenerateProspectsDialog({ open, onOpenChange, organizationId }: 
         language,
         skipClosed,
         searchMatching,
-        placeMinimumStars,
+        placeMinimumStars: placeMinimumStars === "none" ? "" : placeMinimumStars,
         website,
         scrapePlaceDetailPage,
         scrapeTableReservationProvider,
