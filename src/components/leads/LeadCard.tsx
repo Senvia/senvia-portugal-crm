@@ -18,6 +18,7 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { PipelineStage } from "@/hooks/usePipelineStages";
 import { SendLeadEmailModal } from "./SendLeadEmailModal";
+import { isPlaceholderEmail } from "@/lib/leadUtils";
 
 interface UpcomingEvent {
   id: string;
