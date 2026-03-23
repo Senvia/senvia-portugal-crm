@@ -189,10 +189,17 @@ export default function Prospects() {
         </div>
 
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
-          <Button variant="outline" onClick={() => setIsImportOpen(true)}>
-            <Upload className="mr-2 h-4 w-4" />
-            Importar
-          </Button>
+          {isP2G ? (
+            <Button variant="outline" onClick={() => setIsImportOpen(true)}>
+              <Upload className="mr-2 h-4 w-4" />
+              Importar
+            </Button>
+          ) : (
+            <Button variant="outline" onClick={() => setIsGenerateOpen(true)}>
+              <Sparkles className="mr-2 h-4 w-4" />
+              Gerar Prospects
+            </Button>
+          )}
           <Button variant="outline" onClick={handleExportCsv} disabled={filteredProspects.length === 0}>
             <Download className="mr-2 h-4 w-4" />
             CSV
