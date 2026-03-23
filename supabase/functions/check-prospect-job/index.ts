@@ -184,10 +184,13 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      const phone = (item.phone || "").trim();
+      // Use first phone from scrapeContacts array, fallback to singular phone
+      const phone = (item.phones?.[0] || item.phone || "").trim();
       const dedupKey = `${companyName.toLowerCase()}::${phone}`;
 
-      const email = item.website && item.website.includes("@") ? item.website : null;
+      // Extract email: prefer emails array from scrapeContacts, fallback to website containing @
+      const email = item.emails?.[0]?.trim() ||
+        (item.website && item.website.includes("@") ? item.website : null);
       const metadata: Record<string, unknown> = {
         address: item.address || null,
         city: item.city || null,
