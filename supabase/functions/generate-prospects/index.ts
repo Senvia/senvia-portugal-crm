@@ -93,8 +93,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    if (!searchStrings.length || !location) {
-      return new Response(JSON.stringify({ error: "searchStrings and location are required" }), {
+    if (!startUrls.length && (!searchStrings.length || !location)) {
+      return new Response(JSON.stringify({ error: "searchStrings+location or startUrls are required" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
