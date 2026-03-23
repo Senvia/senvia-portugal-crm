@@ -182,7 +182,7 @@ export function GenerateProspectsDialog({ open, onOpenChange, organizationId }: 
           {/* Search Filters */}
           <Collapsible open={openFilters} onOpenChange={setOpenFilters}>
             <SectionHeader open={openFilters}>Filtros de pesquisa e categorias</SectionHeader>
-            <CollapsibleContent className="space-y-4 pt-3 px-1">
+            <CollapsibleContent className="space-y-3 mt-2 rounded-lg border border-border/40 bg-muted/10 p-4">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Correspondência de nome</Label>
@@ -233,7 +233,7 @@ export function GenerateProspectsDialog({ open, onOpenChange, organizationId }: 
           {/* Additional Details */}
           <Collapsible open={openDetails} onOpenChange={setOpenDetails}>
             <SectionHeader open={openDetails}>Detalhes adicionais</SectionHeader>
-            <CollapsibleContent className="space-y-3 pt-3 px-1">
+            <CollapsibleContent className="space-y-3 mt-2 rounded-lg border border-border/40 bg-muted/10 p-4">
               {[
                 { label: "Extrair página de detalhes", desc: "Obtém informações mais completas de cada local", checked: scrapePlaceDetailPage, onChange: setScrapePlaceDetailPage },
                 { label: "Extrair dados de reserva", desc: "Mesa/reserva online (restaurantes)", checked: scrapeTableReservationProvider, onChange: setScrapeTableReservationProvider },
@@ -265,7 +265,7 @@ export function GenerateProspectsDialog({ open, onOpenChange, organizationId }: 
           {/* Contact Enrichment */}
           <Collapsible open={openContacts} onOpenChange={setOpenContacts}>
             <SectionHeader open={openContacts}>Enriquecimento de contactos</SectionHeader>
-            <CollapsibleContent className="space-y-3 pt-3 px-1">
+            <CollapsibleContent className="space-y-3 mt-2 rounded-lg border border-border/40 bg-muted/10 p-4">
               <div className="flex items-center justify-between rounded-lg border p-3">
                 <div>
                   <p className="text-sm font-medium">Extrair contactos do website</p>
@@ -294,7 +294,7 @@ export function GenerateProspectsDialog({ open, onOpenChange, organizationId }: 
           {/* Lead Enrichment */}
           <Collapsible open={openLeads} onOpenChange={setOpenLeads}>
             <SectionHeader open={openLeads}>Enriquecimento de leads</SectionHeader>
-            <CollapsibleContent className="space-y-3 pt-3 px-1">
+            <CollapsibleContent className="space-y-3 mt-2 rounded-lg border border-border/40 bg-muted/10 p-4">
               <div className="space-y-2">
                 <Label>Máximo de leads por local</Label>
                 <Input
@@ -312,7 +312,7 @@ export function GenerateProspectsDialog({ open, onOpenChange, organizationId }: 
           {/* Direct URLs */}
           <Collapsible open={openUrls} onOpenChange={setOpenUrls}>
             <SectionHeader open={openUrls}>URLs directas do Google Maps</SectionHeader>
-            <CollapsibleContent className="space-y-3 pt-3 px-1">
+            <CollapsibleContent className="space-y-3 mt-2 rounded-lg border border-border/40 bg-muted/10 p-4">
               <div className="space-y-2">
                 <Label>URLs do Google Maps</Label>
                 <Textarea
