@@ -77,6 +77,7 @@ export function ProtectedLayoutRoute() {
   return (
     <AppLayout userName={profile?.full_name} organizationName={organization?.name}>
       <Outlet />
+      <WhatsNewDialog organizationId={organization?.id} />
     </AppLayout>
   );
 }
