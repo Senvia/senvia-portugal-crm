@@ -60,6 +60,48 @@ export default function RhAdminPanel() {
 
   return (
     <div className="space-y-6">
+      {/* Team Balances Overview */}
+      <div>
+        <h3 className="text-lg font-semibold flex items-center gap-2 mb-4">
+          <CalendarDays className="h-5 w-5" />
+          Saldos da Equipa — {currentYear}
+        </h3>
+        {balances.length === 0 ? (
+          <Card>
+            <CardContent className="py-8 text-center text-muted-foreground">
+              Nenhum saldo configurado. Clique em "Gerir Saldos" para adicionar.
+            </CardContent>
+          </Card>
+        ) : (
+          <Card>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Membro</TableHead>
+                    <TableHead className="text-center">Total</TableHead>
+                    <TableHead className="text-center">Utilizados</TableHead>
+                    <TableHead className="text-center">Disponíveis</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(balances as any[]).map((b) => (
+                    <TableRow key={b.id}>
+                      <TableCell className="font-medium">{b.user_name}</TableCell>
+                      <TableCell className="text-center">{b.total_days}</TableCell>
+                      <TableCell className="text-center">{b.used_days}</TableCell>
+                      <TableCell className="text-center font-semibold text-primary">
+                        {b.total_days - b.used_days}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
       {/* Pending Requests */}
       <div>
         <div className="flex items-center justify-between mb-4">
