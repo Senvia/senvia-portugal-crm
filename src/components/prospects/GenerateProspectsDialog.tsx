@@ -16,12 +16,19 @@ interface GenerateProspectsDialogProps {
   organizationId: string;
 }
 
-function SectionHeader({ children, open }: { children: React.ReactNode; open: boolean }) {
+function CollapsibleSection({ title, open, onOpenChange, children }: { title: string; open: boolean; onOpenChange: (v: boolean) => void; children: React.ReactNode }) {
   return (
-    <CollapsibleTrigger className={`flex w-full items-center justify-between rounded-lg border p-4 text-sm font-medium transition-colors ${open ? "bg-primary/10 border-primary/40 text-primary" : "bg-muted/30 border-border/60 text-foreground hover:bg-muted/60"}`}>
-      <span>{children}</span>
-      <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${open ? "rotate-180 text-primary" : "text-muted-foreground"}`} />
-    </CollapsibleTrigger>
+    <Collapsible open={open} onOpenChange={onOpenChange}>
+      <div className={`rounded-lg border transition-colors ${open ? "border-primary/40 bg-primary/5" : "border-transparent"}`}>
+        <CollapsibleTrigger className={`flex w-full items-center justify-between rounded-lg p-4 text-sm font-medium transition-colors ${open ? "bg-primary/10 text-primary" : "bg-muted/30 border border-border/60 text-foreground hover:bg-muted/60"}`}>
+          <span>{title}</span>
+          <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${open ? "rotate-180 text-primary" : "text-muted-foreground"}`} />
+        </CollapsibleTrigger>
+        <CollapsibleContent className="space-y-3 p-4 pt-2">
+          {children}
+        </CollapsibleContent>
+      </div>
+    </Collapsible>
   );
 }
 
