@@ -142,6 +142,11 @@ const App = () => (
                     <SystemAdminUsers />
                   </SuperAdminRoute>
                 } />
+                <Route path="/system-admin/announcements" element={
+                  <SuperAdminRoute>
+                    <SystemAdminAnnouncements />
+                  </SuperAdminRoute>
+                } />
 
                 {/* Finance sub-routes */}
                 <Route element={<ProtectedLayoutRoute />}>

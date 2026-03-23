@@ -109,6 +109,12 @@ export default function SystemAdminDashboard() {
               Gerir Utilizadores
             </Link>
           </Button>
+          <Button variant="outline" size="sm" asChild>
+            <Link to="/system-admin/announcements">
+              <Sparkles className="h-4 w-4 mr-2" />
+              Gerir Novidades
+            </Link>
+          </Button>
           <Button variant="ghost" size="sm" asChild>
             <Link to="/dashboard">← Voltar ao Dashboard</Link>
           </Button>
