@@ -190,7 +190,7 @@ export function useConvertLeadToClient() {
       // First, fetch the lead to get the assigned_to and custom_data values
       const { data: lead } = await supabase
         .from('leads')
-        .select('assigned_to, custom_data')
+        .select('assigned_to, custom_data, company_name, company_nif')
         .eq('id', leadData.lead_id)
         .single();
 
@@ -202,13 +202,13 @@ export function useConvertLeadToClient() {
           name: leadData.name,
           email: leadData.email,
           phone: leadData.phone,
-          company: leadData.company,
+          company: leadData.company || lead?.company_name || undefined,
           nif: leadData.nif,
-          company_nif: leadData.company_nif,
+          company_nif: leadData.company_nif || lead?.company_nif || undefined,
           notes: leadData.notes,
           source: 'lead',
           status: 'active',
-          assigned_to: lead?.assigned_to || null, // Inherit from lead
+          assigned_to: lead?.assigned_to || null,
         })
         .select()
         .single();

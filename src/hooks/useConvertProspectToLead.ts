@@ -61,6 +61,12 @@ export function useConvertProspectToLead() {
           rrIndex = (safeIndex + 1) % members.length;
         }
 
+        // Build custom_data from prospect fields
+        const prospectCustomData: Record<string, unknown> = {};
+        if ((contact as any).cpe) prospectCustomData.cpe = (contact as any).cpe;
+        if ((contact as any).segment) prospectCustomData.segment = (contact as any).segment;
+        if ((contact as any).metadata) prospectCustomData.metadata = (contact as any).metadata;
+
         const { error: leadError } = await supabase
           .from('leads')
           .insert({
@@ -69,11 +75,13 @@ export function useConvertProspectToLead() {
             phone: contact.phone || '',
             company_name: contact.company || undefined,
             company_nif: (contact as any).nif || undefined,
+            consumo_anual: (contact as any).annual_consumption_kwh || undefined,
             source: 'prospect',
             organization_id: organization.id,
             assigned_to: finalAssignedTo || undefined,
             gdpr_consent: true,
             status: 'new',
+            ...(Object.keys(prospectCustomData).length > 0 ? { custom_data: prospectCustomData } : {}),
           });
 
         if (leadError) {
