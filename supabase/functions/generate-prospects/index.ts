@@ -72,6 +72,18 @@ Deno.serve(async (req) => {
       maxResults = 50,
       language = "pt",
       skipClosed = true,
+      searchMatching = "all",
+      placeMinimumStars = "",
+      website = "allPlaces",
+      scrapePlaceDetailPage = false,
+      scrapeTableReservationProvider = false,
+      includeWebResults = false,
+      scrapeDirectories = false,
+      maxQuestions = 0,
+      scrapeContacts = false,
+      scrapeSocialMediaProfiles = { facebooks: false, instagrams: false, youtubes: false, tiktoks: false, twitters: false },
+      maximumLeadsEnrichmentRecords = 0,
+      startUrls = [],
     } = body;
 
     if (!organizationId) {
