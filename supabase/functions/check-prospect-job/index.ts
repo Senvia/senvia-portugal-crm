@@ -19,6 +19,11 @@ interface ApifyItem {
   city?: string;
   postalCode?: string;
   reviewsCount?: number;
+  facebookUrl?: string;
+  instagramUrl?: string;
+  twitterUrl?: string;
+  youtubeUrl?: string;
+  tiktokUrl?: string;
   [key: string]: unknown;
 }
 
