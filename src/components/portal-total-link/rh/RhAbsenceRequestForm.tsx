@@ -4,7 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { absenceTypeLabels, type DatePeriod, type RhHoliday } from "@/lib/rh-utils";
-import { useCreateAbsence, useMyVacationBalance } from "@/hooks/useRhAbsences";
+import { useCreateAbsence, useMyVacationBalance, useTeamOverlappingAbsences } from "@/hooks/useRhAbsences";
+import { useAuth } from "@/contexts/AuthContext";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertTriangle } from "lucide-react";
+import { format } from "date-fns";
+import { pt } from "date-fns/locale";
+import { absenceTypeLabels as typeLabels } from "@/lib/rh-utils";
 import RhMultiPeriodSelector from "./RhMultiPeriodSelector";
 
 interface Props {

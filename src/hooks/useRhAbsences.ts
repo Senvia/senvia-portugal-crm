@@ -376,6 +376,96 @@ export function useOrgVacationBalances() {
   });
 }
 
+// Detect overlapping absences from team members
+export interface OverlappingAbsence {
+  userName: string;
+  userId: string;
+  absenceType: string;
+  status: string;
+  periods: { startDate: string; endDate: string }[];
+}
+
+export function useTeamOverlappingAbsences(
+  userId: string | undefined,
+  periods: DatePeriod[],
+  organizationId: string | undefined
+) {
+  return useQuery({
+    queryKey: ["rh-team-overlaps", userId, organizationId, periods.map(p => `${format(p.from, "yyyy-MM-dd")}_${format(p.to, "yyyy-MM-dd")}`).join(",")],
+    queryFn: async (): Promise<OverlappingAbsence[]> => {
+      if (!userId || !organizationId || periods.length === 0) return [];
+
+      // 1. Get user's team(s) via team_members
+      const { data: myTeams } = await supabase
+        .from("team_members")
+        .select("team_id")
+        .eq("user_id", userId);
+
+      if (!myTeams || myTeams.length === 0) return [];
+
+      const teamIds = myTeams.map(t => t.team_id);
+
+      // 2. Get all teammates (excluding self)
+      const { data: teammates } = await supabase
+        .from("team_members")
+        .select("user_id")
+        .in("team_id", teamIds)
+        .neq("user_id", userId);
+
+      if (!teammates || teammates.length === 0) return [];
+
+      const teammateIds = [...new Set(teammates.map(t => t.user_id))];
+
+      // 3. Get approved/pending absences from teammates
+      const { data: absences } = await supabase
+        .from("rh_absences")
+        .select("*, rh_absence_periods(*)")
+        .eq("organization_id", organizationId)
+        .in("user_id", teammateIds)
+        .in("status", ["approved", "pending"]);
+
+      if (!absences || absences.length === 0) return [];
+
+      // 4. Check overlap: startA <= endB AND endA >= startB
+      const overlapping: typeof absences = [];
+      for (const absence of absences) {
+        const absPeriods = absence.rh_absence_periods || [];
+        const hasOverlap = absPeriods.some((ap: any) =>
+          periods.some(p => {
+            const pStart = format(p.from, "yyyy-MM-dd");
+            const pEnd = format(p.to, "yyyy-MM-dd");
+            return ap.start_date <= pEnd && ap.end_date >= pStart;
+          })
+        );
+        if (hasOverlap) overlapping.push(absence);
+      }
+
+      if (overlapping.length === 0) return [];
+
+      // 5. Get profile names
+      const userIds = [...new Set(overlapping.map(a => a.user_id))];
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, full_name")
+        .in("id", userIds);
+
+      const profileMap = new Map(profiles?.map(p => [p.id, p.full_name || "Desconhecido"]) || []);
+
+      return overlapping.map(a => ({
+        userName: profileMap.get(a.user_id) || "Desconhecido",
+        userId: a.user_id,
+        absenceType: a.absence_type,
+        status: a.status,
+        periods: (a.rh_absence_periods || []).map((p: any) => ({
+          startDate: p.start_date,
+          endDate: p.end_date,
+        })),
+      }));
+    },
+    enabled: !!userId && !!organizationId && periods.length > 0,
+  });
+}
+
 // Get all org members (for adding vacation balances)
 export function useOrgMembers() {
   const { organization } = useAuth();
