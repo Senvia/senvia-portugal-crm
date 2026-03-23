@@ -1,34 +1,27 @@
 
 
-## Preencher campos automaticamente na cadeia Prospect → Lead → Cliente
+## Adicionar botão "+ Adicionar Saldo" no dialog de Gerir Saldos
 
-### Problema actual
+### Problema
+O dialog "Gerir Saldos" só mostra membros que já têm saldo configurado. Não existe forma de adicionar saldos para novos membros da equipa.
 
-A cadeia de dados **Prospect → Lead → Cliente** perde informação em duas passagens:
+### Solução
 
-1. **`useConvertProspectToLead`** (conversão via contactos de marketing) — não passa `custom_data` (CPE, segmento), `consumo_anual`, nem NIF
-2. **`useConvertLeadToClient`** — não copia `consumo_anual`, `company_nif` e `company_name` da lead para o cliente
+**Ficheiro: `src/components/portal-total-link/rh/RhAdminPanel.tsx`**
 
-A conversão via `distribute_prospects_round_robin` (distribuição em massa) já funciona correctamente na passagem prospect→lead, mas a passagem lead→cliente continua a perder campos.
+1. Adicionar botão "+ Adicionar Membro" no dialog de saldos
+2. Ao clicar, abrir um sub-dialog que:
+   - Busca todos os membros da organização via `organization_members` + `profiles`
+   - Filtra os que **já têm** saldo configurado (para não duplicar)
+   - Mostra um select/lista dos membros disponíveis
+   - Input para definir os dias totais (default: 22)
+   - Ao guardar, usa o `useUpdateVacationBalance` (que já faz upsert)
 
-### Alterações
+**Ficheiro: `src/hooks/useRhAbsences.ts`**
 
-#### 1) `src/hooks/useConvertProspectToLead.ts` — passar mais campos do prospect para a lead
-
-No insert da lead (linha 64-77), adicionar:
-- `consumo_anual` a partir de `(contact as any).annual_consumption_kwh`
-- `custom_data` com `cpe`, `segment` e `metadata` do prospect (se existirem)
-
-#### 2) `src/hooks/useClients.ts` — copiar campos da lead para o cliente
-
-No `useConvertLeadToClient` (linha 190-214):
-- Expandir o select da lead para incluir `company_name, company_nif, consumo_anual`
-- Ao inserir o cliente, preencher automaticamente:
-  - `company` ← `lead.company_name` (se não vier no `leadData`)
-  - `company_nif` ← `lead.company_nif` (se não vier no `leadData`)
-- O `consumo_anual` não tem coluna no `crm_clients`, mas o NIF e empresa sim
+3. Adicionar hook `useOrgMembers()` que retorna os membros da organização (id, full_name) para popular o select de "adicionar membro"
 
 ### Ficheiros alterados
-- `src/hooks/useConvertProspectToLead.ts`
-- `src/hooks/useClients.ts`
+- `src/hooks/useRhAbsences.ts` — novo hook `useOrgMembers`
+- `src/components/portal-total-link/rh/RhAdminPanel.tsx` — botão + dialog para adicionar saldo a novo membro
 
