@@ -80,6 +80,15 @@ import { toast } from "@/hooks/use-toast";
 import { SendLeadEmailModal } from "./SendLeadEmailModal";
 
 const TECHNICAL_TRACKING_KEYS = ['fbclid', 'gclid', 'fbc', 'fbp'] as const;
+const HIDDEN_CUSTOM_DATA_KEYS = ['metadata', 'prospect_id', 'source_file_name', 'prospect_source', 'cpe'] as const;
+
+const socialMediaIcons = [
+  { key: "facebook", icon: Facebook, label: "Facebook" },
+  { key: "instagram", icon: Instagram, label: "Instagram" },
+  { key: "twitter", icon: Twitter, label: "X/Twitter" },
+  { key: "youtube", icon: Youtube, label: "YouTube" },
+  { key: "tiktok", icon: Globe, label: "TikTok" },
+] as const;
 
 const shortenTrackingValue = (value: string, visibleChars = 10) => {
   if (value.length <= visibleChars * 2 + 3) return value;
