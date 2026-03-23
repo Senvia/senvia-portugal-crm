@@ -1,24 +1,39 @@
 
 
-## Mostrar saldos de férias da equipa no painel admin da página RH
+## Corrigir RLS do módulo RH para super_admins
 
 ### Problema
-O card de saldo de férias só mostra o saldo do utilizador logado. O admin adicionou saldos para Nuno e Thiago mas não vê nada porque não tem saldo configurado para si próprio. Os saldos existem na BD e estão correctos — o problema é apenas de visibilidade na UI.
+A policy de INSERT na tabela `rh_absences` exige `is_org_member(auth.uid(), organization_id)`, mas super_admins não têm registo na `organization_members` — logo o pedido é rejeitado.
 
-### Solução
+### Correção (migration SQL)
 
-**Ficheiro: `src/components/portal-total-link/rh/RhAdminPanel.tsx`**
+Atualizar 2 policies:
 
-Adicionar uma secção "Saldos da Equipa" visível directamente no painel admin (fora do dialog), mostrando uma tabela/lista resumida com:
-- Nome do membro
-- Dias totais / utilizados / disponíveis
-- Botão "Gerir Saldos" para abrir o dialog de edição
+1. **`rh_absences` INSERT** — adicionar `OR has_role(auth.uid(), 'super_admin')`:
+```sql
+DROP POLICY rh_absences_insert ON rh_absences;
+CREATE POLICY rh_absences_insert ON rh_absences FOR INSERT TO authenticated
+  WITH CHECK (user_id = auth.uid() AND (is_org_member(auth.uid(), organization_id) OR has_role(auth.uid(), 'super_admin')));
+```
 
-Isto dá ao admin visibilidade imediata dos saldos sem ter de abrir o dialog.
+2. **`rh_absences` SELECT** — também incluir super_admin para consistência:
+```sql
+DROP POLICY rh_absences_select ON rh_absences;
+CREATE POLICY rh_absences_select ON rh_absences FOR SELECT TO authenticated
+  USING (user_id = auth.uid() OR is_org_member(auth.uid(), organization_id) OR has_role(auth.uid(), 'super_admin'));
+```
 
-**Ficheiro: `src/pages/portal-total-link/Rh.tsx`**
-
-Opcionalmente, também adicionar saldo próprio do admin — se o admin quiser marcar férias, também precisa de ter saldo configurado. Podemos mostrar uma mensagem mais clara: "Configure o seu próprio saldo em 'Gerir Saldos'" quando o admin não tem saldo.
+3. **`rh_absences` DELETE** e **UPDATE** — já permitem operações do próprio user ou admin, mas adicionar super_admin ao UPDATE:
+```sql
+DROP POLICY rh_absences_update ON rh_absences;
+CREATE POLICY rh_absences_update ON rh_absences FOR UPDATE TO authenticated
+  USING (
+    (user_id = auth.uid() AND status = 'pending')
+    OR is_org_admin(auth.uid(), organization_id)
+    OR has_role(auth.uid(), 'super_admin')
+  );
+```
 
 ### Ficheiros alterados
-- `src/components/portal-total-link/rh/RhAdminPanel.tsx` — secção de saldos visível directamente no painel
+- Migration SQL — atualizar 3 RLS policies em `rh_absences`
+
