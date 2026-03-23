@@ -11,7 +11,9 @@ const APIFY_BASE = "https://api.apify.com/v2";
 interface ApifyItem {
   title?: string;
   phone?: string;
+  phones?: string[];
   website?: string;
+  emails?: string[];
   address?: string;
   categoryName?: string;
   totalScore?: number;
