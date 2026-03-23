@@ -12,9 +12,11 @@ import { useModules } from "@/hooks/useModules";
 import { mapProspectsForExport, exportToCsv, exportToExcel } from "@/lib/export";
 import { getProspectCom, getProspectSegment } from "@/lib/prospects/segment";
 import { normalizeString } from "@/lib/utils";
+import { isPerfect2GetherOrg } from "@/lib/perfect2gether";
 import { ImportProspectsDialog } from "@/components/prospects/ImportProspectsDialog";
 import { DistributeProspectsDialog } from "@/components/prospects/DistributeProspectsDialog";
-import { Download, Loader2, Search, Upload, Users } from "lucide-react";
+import { GenerateProspectsDialog } from "@/components/prospects/GenerateProspectsDialog";
+import { Download, Loader2, Search, Upload, Users, Sparkles } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 
