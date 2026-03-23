@@ -16,7 +16,7 @@ import { isPerfect2GetherOrg } from "@/lib/perfect2gether";
 import { ImportProspectsDialog } from "@/components/prospects/ImportProspectsDialog";
 import { DistributeProspectsDialog } from "@/components/prospects/DistributeProspectsDialog";
 import { GenerateProspectsDialog } from "@/components/prospects/GenerateProspectsDialog";
-import { Download, Loader2, Search, Upload, Users, Sparkles } from "lucide-react";
+import { Download, Loader2, Search, Upload, Users, Sparkles, Facebook, Instagram, Twitter, Youtube, Globe } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 
@@ -28,6 +28,36 @@ const formatConsumption = (value: number | null) => {
 const formatAssignedLabel = (name?: string | null) => name || "Não atribuído";
 const isProspectEligibleForDistribution = (prospect: { assigned_to: string | null; converted_to_lead: boolean }) =>
   !prospect.assigned_to && !prospect.converted_to_lead;
+
+const socialIcons = [
+  { key: "facebook", icon: Facebook, label: "Facebook" },
+  { key: "instagram", icon: Instagram, label: "Instagram" },
+  { key: "twitter", icon: Twitter, label: "X/Twitter" },
+  { key: "youtube", icon: Youtube, label: "YouTube" },
+  { key: "tiktok", icon: Globe, label: "TikTok" },
+] as const;
+
+const SocialMediaLinks = ({ metadata }: { metadata: Record<string, unknown> | null }) => {
+  if (!metadata) return <span className="text-muted-foreground">—</span>;
+  const links = socialIcons.filter(({ key }) => metadata[key]);
+  if (links.length === 0) return <span className="text-muted-foreground">—</span>;
+  return (
+    <div className="flex items-center gap-1.5">
+      {links.map(({ key, icon: Icon, label }) => (
+        <a
+          key={key}
+          href={metadata[key] as string}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={label}
+          className="text-muted-foreground transition-colors hover:text-primary"
+        >
+          <Icon className="h-4 w-4" />
+        </a>
+      ))}
+    </div>
+  );
+};
 
 export default function Prospects() {
   const { organization } = useAuth();
@@ -317,6 +347,12 @@ export default function Prospects() {
                         {isP2G && <p><span className="font-medium text-foreground">COM:</span> {getProspectCom(prospect) || "—"}</p>}
                         {isP2G && <p><span className="font-medium text-foreground">kWh/Ano:</span> {formatConsumption(prospect.annual_consumption_kwh)}</p>}
                         {!isP2G && <p><span className="font-medium text-foreground">Morada:</span> {(prospect.metadata as any)?.address || "—"}</p>}
+                        {!isP2G && (
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-foreground">Redes Sociais:</span>
+                            <SocialMediaLinks metadata={prospect.metadata as Record<string, unknown>} />
+                          </div>
+                        )}
                         <p><span className="font-medium text-foreground">Comercial:</span> {formatAssignedLabel(salespersonMap.get(prospect.assigned_to || ""))}</p>
                         <p><span className="font-medium text-foreground">Contacto:</span> {prospect.phone || prospect.email || "—"}</p>
                         {!isEligible ? (
@@ -349,6 +385,7 @@ export default function Prospects() {
                     <TableHead>Contacto</TableHead>
                     {isP2G && <TableHead>kWh/Ano</TableHead>}
                     {!isP2G && <TableHead>Morada</TableHead>}
+                    {!isP2G && <TableHead>Redes Sociais</TableHead>}
                     <TableHead>Comercial</TableHead>
                     <TableHead>Estado</TableHead>
                   </TableRow>
@@ -376,6 +413,7 @@ export default function Prospects() {
                         <TableCell>{prospect.phone || prospect.email || "—"}</TableCell>
                         {isP2G && <TableCell>{formatConsumption(prospect.annual_consumption_kwh)}</TableCell>}
                         {!isP2G && <TableCell className="max-w-[200px] truncate">{(prospect.metadata as any)?.address || "—"}</TableCell>}
+                        {!isP2G && <TableCell><SocialMediaLinks metadata={prospect.metadata as Record<string, unknown>} /></TableCell>}
                         <TableCell>{formatAssignedLabel(salespersonMap.get(prospect.assigned_to || ""))}</TableCell>
                         <TableCell>
                           <Badge variant={prospect.converted_to_lead ? "default" : "secondary"}>

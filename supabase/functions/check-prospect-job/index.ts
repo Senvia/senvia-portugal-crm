@@ -19,6 +19,11 @@ interface ApifyItem {
   city?: string;
   postalCode?: string;
   reviewsCount?: number;
+  facebookUrl?: string;
+  instagramUrl?: string;
+  twitterUrl?: string;
+  youtubeUrl?: string;
+  tiktokUrl?: string;
   [key: string]: unknown;
 }
 
@@ -189,6 +194,11 @@ Deno.serve(async (req) => {
         reviews_count: item.reviewsCount || null,
         google_maps_url: item.url || null,
         website: item.website && !item.website.includes("@") ? item.website : null,
+        facebook: item.facebookUrl || null,
+        instagram: item.instagramUrl || null,
+        twitter: item.twitterUrl || null,
+        youtube: item.youtubeUrl || null,
+        tiktok: item.tiktokUrl || null,
         source_search: searchStrings.join(", "),
         source_location: location,
       };
