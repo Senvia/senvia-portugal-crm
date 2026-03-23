@@ -78,6 +78,7 @@ import { useState, useEffect, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { SendLeadEmailModal } from "./SendLeadEmailModal";
+import { isPlaceholderEmail, displayEmail } from "@/lib/leadUtils";
 
 const TECHNICAL_TRACKING_KEYS = ['fbclid', 'gclid', 'fbc', 'fbp'] as const;
 const HIDDEN_CUSTOM_DATA_KEYS = ['metadata', 'prospect_id', 'source_file_name', 'prospect_source', 'cpe'] as const;
