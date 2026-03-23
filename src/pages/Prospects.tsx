@@ -16,7 +16,7 @@ import { isPerfect2GetherOrg } from "@/lib/perfect2gether";
 import { ImportProspectsDialog } from "@/components/prospects/ImportProspectsDialog";
 import { DistributeProspectsDialog } from "@/components/prospects/DistributeProspectsDialog";
 import { GenerateProspectsDialog } from "@/components/prospects/GenerateProspectsDialog";
-import { Download, Loader2, Search, Upload, Users, Sparkles } from "lucide-react";
+import { Download, Loader2, Search, Upload, Users, Sparkles, Facebook, Instagram, Twitter, Youtube, Globe } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 
