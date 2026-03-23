@@ -39,7 +39,9 @@ export default function Prospects() {
   const [comFilter, setComFilter] = useState("all");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isImportOpen, setIsImportOpen] = useState(false);
+  const [isGenerateOpen, setIsGenerateOpen] = useState(false);
   const [isDistributeOpen, setIsDistributeOpen] = useState(false);
+  const isP2G = isPerfect2GetherOrg(organization?.id);
   const salespersonMap = useMemo(
     () => new Map(salespeople.map((salesperson) => [salesperson.user_id, salesperson.full_name])),
     [salespeople]
