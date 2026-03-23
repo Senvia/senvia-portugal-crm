@@ -260,7 +260,7 @@ export function LeadDetailsModal({
       }
       if (!isEditingNotes) setEditNotes(lead.notes || "");
       if (!isEditingName) setEditName(lead.name || "");
-      if (!isEditingEmail) setEditEmail(lead.email || "");
+      if (!isEditingEmail) setEditEmail(displayEmail(lead.email));
       if (!isEditingPhone) setEditPhone(lead.phone || "");
       if (!isEditingCpe) setEditCpe((lead.custom_data as Record<string, unknown>)?.cpe as string || "");
     }
