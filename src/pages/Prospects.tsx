@@ -302,7 +302,7 @@ export default function Prospects() {
                           />
                           <div>
                             <p className="font-medium">{prospect.company_name}</p>
-                            <p className="text-sm text-muted-foreground">{prospect.nif || "Sem NIF"}</p>
+                            <p className="text-sm text-muted-foreground">{isP2G ? (prospect.nif || "Sem NIF") : (prospect.segment || "Sem categoria")}</p>
                           </div>
                         </div>
                         <Badge variant={prospect.converted_to_lead ? "default" : "secondary"}>
@@ -310,10 +310,11 @@ export default function Prospects() {
                         </Badge>
                       </div>
                       <div className="grid gap-2 text-sm text-muted-foreground">
-                        <p><span className="font-medium text-foreground">CPE:</span> {prospect.cpe || "—"}</p>
-                        <p><span className="font-medium text-foreground">Segmento:</span> {getProspectSegment(prospect) || "—"}</p>
-                        <p><span className="font-medium text-foreground">COM:</span> {getProspectCom(prospect) || "—"}</p>
-                        <p><span className="font-medium text-foreground">kWh/Ano:</span> {formatConsumption(prospect.annual_consumption_kwh)}</p>
+                        {isP2G && <p><span className="font-medium text-foreground">CPE:</span> {prospect.cpe || "—"}</p>}
+                        <p><span className="font-medium text-foreground">Segmento:</span> {isP2G ? (getProspectSegment(prospect) || "—") : (prospect.segment || "—")}</p>
+                        {isP2G && <p><span className="font-medium text-foreground">COM:</span> {getProspectCom(prospect) || "—"}</p>}
+                        {isP2G && <p><span className="font-medium text-foreground">kWh/Ano:</span> {formatConsumption(prospect.annual_consumption_kwh)}</p>}
+                        {!isP2G && <p><span className="font-medium text-foreground">Morada:</span> {(prospect.metadata as any)?.address || "—"}</p>}
                         <p><span className="font-medium text-foreground">Comercial:</span> {formatAssignedLabel(salespersonMap.get(prospect.assigned_to || ""))}</p>
                         <p><span className="font-medium text-foreground">Contacto:</span> {prospect.phone || prospect.email || "—"}</p>
                         {!isEligible ? (
