@@ -1,39 +1,39 @@
 
 
-## Corrigir RLS do módulo RH para super_admins
+## Saldo não descontado nas férias do Thiago
 
-### Problema
-A policy de INSERT na tabela `rh_absences` exige `is_org_member(auth.uid(), organization_id)`, mas super_admins não têm registo na `organization_members` — logo o pedido é rejeitado.
+### Causa raiz
 
-### Correção (migration SQL)
+Existem **dois perfis "Thiago"** no sistema:
+- `Thiago` (44a688ac) — tem saldo de férias configurado (22 dias)
+- `Thiago Sousa` (504a57df) — submeteu o pedido de férias, mas **não tem saldo configurado**
 
-Atualizar 2 policies:
+O trigger `rh_update_vacation_balance` tentou descontar dias ao aprovar, mas não encontrou registo em `rh_vacation_balances` para o user `504a57df`, logo o UPDATE não afectou nenhuma linha.
 
-1. **`rh_absences` INSERT** — adicionar `OR has_role(auth.uid(), 'super_admin')`:
+### Correção imediata (dados)
+
+1. **Adicionar saldo de férias para "Thiago Sousa"** (504a57df) via o painel "Gerir Saldos" — este é o utilizador real que submeteu as férias
+2. Depois de adicionar o saldo, forçar o desconto manualmente (ou rejeitar e re-aprovar o pedido)
+
+### Correção estrutural (código)
+
+**Ficheiro: trigger `rh_update_vacation_balance`** — migration SQL
+
+Alterar o trigger para que, quando não existe saldo configurado para o utilizador, crie automaticamente um registo com `total_days = 22` (valor default) e desconte os dias. Isto evita que aprovações futuras falhem silenciosamente.
+
 ```sql
-DROP POLICY rh_absences_insert ON rh_absences;
-CREATE POLICY rh_absences_insert ON rh_absences FOR INSERT TO authenticated
-  WITH CHECK (user_id = auth.uid() AND (is_org_member(auth.uid(), organization_id) OR has_role(auth.uid(), 'super_admin')));
+-- Se não existe balance, criar com default 22 dias
+INSERT INTO rh_vacation_balances (organization_id, user_id, year, total_days, used_days)
+VALUES (NEW.organization_id, NEW.user_id, EXTRACT(YEAR FROM NEW.start_date)::int, 22, v_total_days)
+ON CONFLICT (organization_id, user_id, year)
+DO UPDATE SET used_days = rh_vacation_balances.used_days + v_total_days, updated_at = now();
 ```
 
-2. **`rh_absences` SELECT** — também incluir super_admin para consistência:
-```sql
-DROP POLICY rh_absences_select ON rh_absences;
-CREATE POLICY rh_absences_select ON rh_absences FOR SELECT TO authenticated
-  USING (user_id = auth.uid() OR is_org_member(auth.uid(), organization_id) OR has_role(auth.uid(), 'super_admin'));
-```
+**Ficheiro: `src/components/portal-total-link/rh/RhAdminPanel.tsx`**
 
-3. **`rh_absences` DELETE** e **UPDATE** — já permitem operações do próprio user ou admin, mas adicionar super_admin ao UPDATE:
-```sql
-DROP POLICY rh_absences_update ON rh_absences;
-CREATE POLICY rh_absences_update ON rh_absences FOR UPDATE TO authenticated
-  USING (
-    (user_id = auth.uid() AND status = 'pending')
-    OR is_org_admin(auth.uid(), organization_id)
-    OR has_role(auth.uid(), 'super_admin')
-  );
-```
+Adicionar um aviso visual no painel de aprovação quando o colaborador **não tem saldo configurado**, para que o admin saiba antes de aprovar.
 
 ### Ficheiros alterados
-- Migration SQL — atualizar 3 RLS policies em `rh_absences`
+- Migration SQL — trigger `rh_update_vacation_balance` com auto-criação de saldo
+- `src/components/portal-total-link/rh/RhAdminPanel.tsx` — aviso quando o user não tem saldo
 
