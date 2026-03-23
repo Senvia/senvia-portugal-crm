@@ -61,6 +61,39 @@ export type Database = {
           },
         ]
       }
+      app_announcements: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          image_url: string | null
+          is_active: boolean
+          published_at: string
+          title: string
+          version: string | null
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          image_url?: string | null
+          is_active?: boolean
+          published_at?: string
+          title: string
+          version?: string | null
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          image_url?: string | null
+          is_active?: boolean
+          published_at?: string
+          title?: string
+          version?: string | null
+        }
+        Relationships: []
+      }
       automation_queue: {
         Row: {
           automation_id: string

@@ -10,6 +10,7 @@ import { usePipelineStages } from '@/hooks/usePipelineStages';
 import { usePermissions } from '@/hooks/usePermissions';
 import { OnboardingWizard } from '@/components/onboarding/OnboardingWizard';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { WhatsNewDialog } from '@/components/announcements/WhatsNewDialog';
 
 export function ProtectedLayoutRoute() {
   const { user, isLoading, needsOrgSelection, organizations, selectOrganization, mfaStatus, completeMfaChallenge, organization, profile } = useAuth();
@@ -76,6 +77,7 @@ export function ProtectedLayoutRoute() {
   return (
     <AppLayout userName={profile?.full_name} organizationName={organization?.name}>
       <Outlet />
+      <WhatsNewDialog organizationId={organization?.id} />
     </AppLayout>
   );
 }
