@@ -21,6 +21,7 @@ const MODULES: ModuleConfig[] = [
   { key: 'finance', label: 'Financeiro', description: 'Controlo de pagamentos, faturas e fluxo de caixa', icon: Wallet },
   { key: 'calendar', label: 'Agenda', description: 'Agendamento de eventos, reuniões e lembretes', icon: Calendar },
   { key: 'marketing', label: 'Marketing', description: 'Templates de email e campanhas de marketing', icon: Mail },
+  { key: 'prospects', label: 'Prospects', description: 'Importação e distribuição de prospects para a equipa comercial', icon: Search },
   { key: 'ecommerce', label: 'E-commerce', description: 'Loja online com catálogo, pedidos, stock e clientes', icon: Store },
 ];
 

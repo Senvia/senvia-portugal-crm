@@ -103,35 +103,19 @@ export function MobileMenu({ isOpen, onClose, userName = "Utilizador", organizat
           ))}
           
           {hasPerfect2GetherModuleAccess && (
-            <>
-              <NavLink
-                to="/prospects"
-                onClick={handleNavClick}
-                className={({ isActive }) => cn(
-                  "flex items-center gap-4 rounded-xl px-4 py-3.5 text-base font-medium transition-colors",
-                  isActive
-                    ? "bg-primary/10 text-primary"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                )}
-              >
-                <Search className="h-5 w-5" />
-                Prospects
-              </NavLink>
-
-              <NavLink
-                to="/portal-total-link"
-                onClick={handleNavClick}
-                className={({ isActive }) => cn(
-                  "flex items-center gap-4 rounded-xl px-4 py-3.5 text-base font-medium transition-colors",
-                  isActive
-                    ? "bg-primary/10 text-primary"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                )}
-              >
-                <Building2 className="h-5 w-5" />
-                Portal Total Link
-              </NavLink>
-            </>
+            <NavLink
+              to="/portal-total-link"
+              onClick={handleNavClick}
+              className={({ isActive }) => cn(
+                "flex items-center gap-4 rounded-xl px-4 py-3.5 text-base font-medium transition-colors",
+                isActive
+                  ? "bg-primary/10 text-primary"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              )}
+            >
+              <Building2 className="h-5 w-5" />
+              Portal Total Link
+            </NavLink>
           )}
 
           {isSuperAdmin && (

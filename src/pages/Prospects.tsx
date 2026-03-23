@@ -136,12 +136,12 @@ export default function Prospects() {
     toast.success(`${filteredProspects.length} prospects exportados para Excel`);
   };
 
-  if (!isPerfect2Gether) {
+  if (!modules.prospects) {
     return (
       <div className="space-y-6 p-4 pb-24 md:p-6 md:pb-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Prospects</h1>
-          <p className="text-muted-foreground">Este módulo está disponível apenas para membros com acesso ativo à Perfect2Gether.</p>
+          <p className="text-muted-foreground">Ative o módulo Prospects nas Definições → Módulos para utilizar esta funcionalidade.</p>
         </div>
       </div>
     );

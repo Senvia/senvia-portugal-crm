@@ -233,13 +233,8 @@ export function useImportProspects() {
 }
 
 export function useDistributeProspects() {
-  const { organization, organizations, isSuperAdmin } = useAuth();
+  const { organization } = useAuth();
   const queryClient = useQueryClient();
-  const hasAccess = hasPerfect2GetherAccess({
-    organizationId: organization?.id,
-    memberships: organizations,
-    isSuperAdmin,
-  });
 
   return useMutation({
     mutationFn: async ({
@@ -248,9 +243,6 @@ export function useDistributeProspects() {
       salespersonIds,
     }: DistributeProspectsPayload) => {
       if (!organization?.id) throw new Error("Sem organização ativa.");
-      if (!hasAccess) {
-        throw new Error(getProspectsAccessMessage({ organizationId: organization.id, isSuperAdmin }));
-      }
       if (prospectIds.length === 0) {
         throw new Error("Selecione pelo menos um prospect para distribuir.");
       }
