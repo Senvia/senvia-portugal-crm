@@ -29,6 +29,9 @@ export default function RhAdminPanel() {
   const pendingAbsences = absences.filter(a => a.status === "pending");
   const currentYear = new Date().getFullYear();
 
+  // Build set of user_ids that have a balance configured
+  const usersWithBalance = new Set((balances as any[]).map(b => b.user_id));
+
   // Members that don't have a balance yet
   const existingUserIds = new Set((balances as any[]).map(b => b.user_id));
   const availableMembers = orgMembers.filter(m => !existingUserIds.has(m.user_id));
@@ -128,14 +131,20 @@ export default function RhAdminPanel() {
         ) : (
           <div className="grid gap-4">
             {pendingAbsences.map(absence => (
-              <RhAbsenceCard
-                key={absence.id}
-                absence={absence}
-                showUser
-                isAdmin
-                onApprove={() => { setApprovalAbsence(absence); setApprovalMode("approve"); }}
-                onReject={() => { setApprovalAbsence(absence); setApprovalMode("reject"); }}
-              />
+              <div key={absence.id}>
+                {absence.absence_type === "vacation" && !usersWithBalance.has(absence.user_id) && (
+                  <div className="mb-1 px-3 py-1.5 text-xs rounded-md bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300">
+                    ⚠️ {absence.user_name || "Este colaborador"} não tem saldo de férias configurado. Será criado automaticamente com 22 dias ao aprovar.
+                  </div>
+                )}
+                <RhAbsenceCard
+                  absence={absence}
+                  showUser
+                  isAdmin
+                  onApprove={() => { setApprovalAbsence(absence); setApprovalMode("approve"); }}
+                  onReject={() => { setApprovalAbsence(absence); setApprovalMode("reject"); }}
+                />
+              </div>
             ))}
           </div>
         )}
