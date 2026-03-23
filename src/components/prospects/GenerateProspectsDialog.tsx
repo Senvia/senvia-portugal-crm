@@ -234,10 +234,7 @@ export function GenerateProspectsDialog({ open, onOpenChange, organizationId }: 
               </div>
           </CollapsibleSection>
 
-          {/* Additional Details */}
-          <Collapsible open={openDetails} onOpenChange={setOpenDetails}>
-            <SectionHeader open={openDetails}>Detalhes adicionais</SectionHeader>
-            <CollapsibleContent className="space-y-3 pt-3 px-1">
+          <CollapsibleSection title="Detalhes adicionais" open={openDetails} onOpenChange={setOpenDetails}>
               {[
                 { label: "Extrair página de detalhes", desc: "Obtém informações mais completas de cada local", checked: scrapePlaceDetailPage, onChange: setScrapePlaceDetailPage },
                 { label: "Extrair dados de reserva", desc: "Mesa/reserva online (restaurantes)", checked: scrapeTableReservationProvider, onChange: setScrapeTableReservationProvider },
@@ -254,22 +251,12 @@ export function GenerateProspectsDialog({ open, onOpenChange, organizationId }: 
               ))}
               <div className="space-y-2">
                 <Label>Perguntas a extrair por local</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  max={100}
-                  value={maxQuestions}
-                  onChange={(e) => setMaxQuestions(Number(e.target.value) || 0)}
-                />
+                <Input type="number" min={0} max={100} value={maxQuestions} onChange={(e) => setMaxQuestions(Number(e.target.value) || 0)} />
                 <p className="text-xs text-muted-foreground">0 = nenhuma pergunta</p>
               </div>
-            </CollapsibleContent>
-          </Collapsible>
+          </CollapsibleSection>
 
-          {/* Contact Enrichment */}
-          <Collapsible open={openContacts} onOpenChange={setOpenContacts}>
-            <SectionHeader open={openContacts}>Enriquecimento de contactos</SectionHeader>
-            <CollapsibleContent className="space-y-3 pt-3 px-1">
+          <CollapsibleSection title="Enriquecimento de contactos" open={openContacts} onOpenChange={setOpenContacts}>
               <div className="flex items-center justify-between rounded-lg border p-3">
                 <div>
                   <p className="text-sm font-medium">Extrair contactos do website</p>
@@ -292,31 +279,17 @@ export function GenerateProspectsDialog({ open, onOpenChange, organizationId }: 
                   </div>
                 ))}
               </div>
-            </CollapsibleContent>
-          </Collapsible>
+          </CollapsibleSection>
 
-          {/* Lead Enrichment */}
-          <Collapsible open={openLeads} onOpenChange={setOpenLeads}>
-            <SectionHeader open={openLeads}>Enriquecimento de leads</SectionHeader>
-            <CollapsibleContent className="space-y-3 pt-3 px-1">
+          <CollapsibleSection title="Enriquecimento de leads" open={openLeads} onOpenChange={setOpenLeads}>
               <div className="space-y-2">
                 <Label>Máximo de leads por local</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  max={500}
-                  value={maximumLeadsEnrichmentRecords}
-                  onChange={(e) => setMaximumLeadsEnrichmentRecords(Number(e.target.value) || 0)}
-                />
+                <Input type="number" min={0} max={500} value={maximumLeadsEnrichmentRecords} onChange={(e) => setMaximumLeadsEnrichmentRecords(Number(e.target.value) || 0)} />
                 <p className="text-xs text-muted-foreground">0 = desativado. Enriquece com dados adicionais de contacto.</p>
               </div>
-            </CollapsibleContent>
-          </Collapsible>
+          </CollapsibleSection>
 
-          {/* Direct URLs */}
-          <Collapsible open={openUrls} onOpenChange={setOpenUrls}>
-            <SectionHeader open={openUrls}>URLs directas do Google Maps</SectionHeader>
-            <CollapsibleContent className="space-y-3 pt-3 px-1">
+          <CollapsibleSection title="URLs directas do Google Maps" open={openUrls} onOpenChange={setOpenUrls}>
               <div className="space-y-2">
                 <Label>URLs do Google Maps</Label>
                 <Textarea
@@ -327,8 +300,7 @@ export function GenerateProspectsDialog({ open, onOpenChange, organizationId }: 
                 />
                 <p className="text-xs text-muted-foreground">Uma URL por linha. Alternativa aos termos de pesquisa — se preencher URLs, os termos são opcionais.</p>
               </div>
-            </CollapsibleContent>
-          </Collapsible>
+          </CollapsibleSection>
         </div>
 
         <DialogFooter>
