@@ -12,9 +12,11 @@ import { useModules } from "@/hooks/useModules";
 import { mapProspectsForExport, exportToCsv, exportToExcel } from "@/lib/export";
 import { getProspectCom, getProspectSegment } from "@/lib/prospects/segment";
 import { normalizeString } from "@/lib/utils";
+import { isPerfect2GetherOrg } from "@/lib/perfect2gether";
 import { ImportProspectsDialog } from "@/components/prospects/ImportProspectsDialog";
 import { DistributeProspectsDialog } from "@/components/prospects/DistributeProspectsDialog";
-import { Download, Loader2, Search, Upload, Users } from "lucide-react";
+import { GenerateProspectsDialog } from "@/components/prospects/GenerateProspectsDialog";
+import { Download, Loader2, Search, Upload, Users, Sparkles } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 
@@ -37,7 +39,9 @@ export default function Prospects() {
   const [comFilter, setComFilter] = useState("all");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isImportOpen, setIsImportOpen] = useState(false);
+  const [isGenerateOpen, setIsGenerateOpen] = useState(false);
   const [isDistributeOpen, setIsDistributeOpen] = useState(false);
+  const isP2G = isPerfect2GetherOrg(organization?.id);
   const salespersonMap = useMemo(
     () => new Map(salespeople.map((salesperson) => [salesperson.user_id, salesperson.full_name])),
     [salespeople]
@@ -185,10 +189,17 @@ export default function Prospects() {
         </div>
 
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
-          <Button variant="outline" onClick={() => setIsImportOpen(true)}>
-            <Upload className="mr-2 h-4 w-4" />
-            Importar
-          </Button>
+          {isP2G ? (
+            <Button variant="outline" onClick={() => setIsImportOpen(true)}>
+              <Upload className="mr-2 h-4 w-4" />
+              Importar
+            </Button>
+          ) : (
+            <Button variant="outline" onClick={() => setIsGenerateOpen(true)}>
+              <Sparkles className="mr-2 h-4 w-4" />
+              Gerar Prospects
+            </Button>
+          )}
           <Button variant="outline" onClick={handleExportCsv} disabled={filteredProspects.length === 0}>
             <Download className="mr-2 h-4 w-4" />
             CSV
@@ -228,6 +239,7 @@ export default function Prospects() {
                   </SelectContent>
                 </Select>
 
+                {isP2G && (
                 <Select value={comFilter} onValueChange={setComFilter}>
                   <SelectTrigger>
                     <SelectValue placeholder="Filtrar por COM" />
@@ -241,6 +253,7 @@ export default function Prospects() {
                     ))}
                   </SelectContent>
                 </Select>
+                )}
 
                 <Button
                   onClick={() => setIsDistributeOpen(true)}
@@ -291,7 +304,7 @@ export default function Prospects() {
                           />
                           <div>
                             <p className="font-medium">{prospect.company_name}</p>
-                            <p className="text-sm text-muted-foreground">{prospect.nif || "Sem NIF"}</p>
+                            <p className="text-sm text-muted-foreground">{isP2G ? (prospect.nif || "Sem NIF") : (prospect.segment || "Sem categoria")}</p>
                           </div>
                         </div>
                         <Badge variant={prospect.converted_to_lead ? "default" : "secondary"}>
@@ -299,10 +312,11 @@ export default function Prospects() {
                         </Badge>
                       </div>
                       <div className="grid gap-2 text-sm text-muted-foreground">
-                        <p><span className="font-medium text-foreground">CPE:</span> {prospect.cpe || "—"}</p>
-                        <p><span className="font-medium text-foreground">Segmento:</span> {getProspectSegment(prospect) || "—"}</p>
-                        <p><span className="font-medium text-foreground">COM:</span> {getProspectCom(prospect) || "—"}</p>
-                        <p><span className="font-medium text-foreground">kWh/Ano:</span> {formatConsumption(prospect.annual_consumption_kwh)}</p>
+                        {isP2G && <p><span className="font-medium text-foreground">CPE:</span> {prospect.cpe || "—"}</p>}
+                        <p><span className="font-medium text-foreground">Segmento:</span> {isP2G ? (getProspectSegment(prospect) || "—") : (prospect.segment || "—")}</p>
+                        {isP2G && <p><span className="font-medium text-foreground">COM:</span> {getProspectCom(prospect) || "—"}</p>}
+                        {isP2G && <p><span className="font-medium text-foreground">kWh/Ano:</span> {formatConsumption(prospect.annual_consumption_kwh)}</p>}
+                        {!isP2G && <p><span className="font-medium text-foreground">Morada:</span> {(prospect.metadata as any)?.address || "—"}</p>}
                         <p><span className="font-medium text-foreground">Comercial:</span> {formatAssignedLabel(salespersonMap.get(prospect.assigned_to || ""))}</p>
                         <p><span className="font-medium text-foreground">Contacto:</span> {prospect.phone || prospect.email || "—"}</p>
                         {!isEligible ? (
@@ -328,12 +342,13 @@ export default function Prospects() {
                       />
                     </TableHead>
                     <TableHead>Empresa</TableHead>
-                    <TableHead>NIF</TableHead>
-                    <TableHead>CPE</TableHead>
+                    {isP2G && <TableHead>NIF</TableHead>}
+                    {isP2G && <TableHead>CPE</TableHead>}
                     <TableHead>Segmento</TableHead>
-                    <TableHead>COM</TableHead>
+                    {isP2G && <TableHead>COM</TableHead>}
                     <TableHead>Contacto</TableHead>
-                    <TableHead>kWh/Ano</TableHead>
+                    {isP2G && <TableHead>kWh/Ano</TableHead>}
+                    {!isP2G && <TableHead>Morada</TableHead>}
                     <TableHead>Comercial</TableHead>
                     <TableHead>Estado</TableHead>
                   </TableRow>
@@ -354,12 +369,13 @@ export default function Prospects() {
                           />
                         </TableCell>
                         <TableCell className="font-medium">{prospect.company_name}</TableCell>
-                        <TableCell>{prospect.nif || "—"}</TableCell>
-                        <TableCell className="max-w-[240px] truncate">{prospect.cpe || "—"}</TableCell>
-                        <TableCell>{getProspectSegment(prospect) || "—"}</TableCell>
-                        <TableCell>{getProspectCom(prospect) || "—"}</TableCell>
+                        {isP2G && <TableCell>{prospect.nif || "—"}</TableCell>}
+                        {isP2G && <TableCell className="max-w-[240px] truncate">{prospect.cpe || "—"}</TableCell>}
+                        <TableCell>{isP2G ? (getProspectSegment(prospect) || "—") : (prospect.segment || "—")}</TableCell>
+                        {isP2G && <TableCell>{getProspectCom(prospect) || "—"}</TableCell>}
                         <TableCell>{prospect.phone || prospect.email || "—"}</TableCell>
-                        <TableCell>{formatConsumption(prospect.annual_consumption_kwh)}</TableCell>
+                        {isP2G && <TableCell>{formatConsumption(prospect.annual_consumption_kwh)}</TableCell>}
+                        {!isP2G && <TableCell className="max-w-[200px] truncate">{(prospect.metadata as any)?.address || "—"}</TableCell>}
                         <TableCell>{formatAssignedLabel(salespersonMap.get(prospect.assigned_to || ""))}</TableCell>
                         <TableCell>
                           <Badge variant={prospect.converted_to_lead ? "default" : "secondary"}>
@@ -382,7 +398,10 @@ export default function Prospects() {
         </Card>
       </div>
 
-      <ImportProspectsDialog open={isImportOpen} onOpenChange={setIsImportOpen} />
+      {isP2G && <ImportProspectsDialog open={isImportOpen} onOpenChange={setIsImportOpen} />}
+      {!isP2G && organization?.id && (
+        <GenerateProspectsDialog open={isGenerateOpen} onOpenChange={setIsGenerateOpen} organizationId={organization.id} />
+      )}
       <DistributeProspectsDialog
         open={isDistributeOpen}
         onOpenChange={setIsDistributeOpen}
