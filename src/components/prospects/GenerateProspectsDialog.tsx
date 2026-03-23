@@ -16,12 +16,19 @@ interface GenerateProspectsDialogProps {
   organizationId: string;
 }
 
-function SectionHeader({ children, open }: { children: React.ReactNode; open: boolean }) {
+function CollapsibleSection({ title, open, onOpenChange, children }: { title: string; open: boolean; onOpenChange: (v: boolean) => void; children: React.ReactNode }) {
   return (
-    <CollapsibleTrigger className={`flex w-full items-center justify-between rounded-lg border p-4 text-sm font-medium transition-colors ${open ? "bg-primary/10 border-primary/40 text-primary" : "bg-muted/30 border-border/60 text-foreground hover:bg-muted/60"}`}>
-      <span>{children}</span>
-      <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${open ? "rotate-180 text-primary" : "text-muted-foreground"}`} />
-    </CollapsibleTrigger>
+    <Collapsible open={open} onOpenChange={onOpenChange}>
+      <div className={`rounded-lg border transition-colors ${open ? "border-primary/40 bg-primary/5" : "border-transparent"}`}>
+        <CollapsibleTrigger className={`flex w-full items-center justify-between rounded-lg p-4 text-sm font-medium transition-colors ${open ? "bg-primary/10 text-primary" : "bg-muted/30 border border-border/60 text-foreground hover:bg-muted/60"}`}>
+          <span>{title}</span>
+          <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${open ? "rotate-180 text-primary" : "text-muted-foreground"}`} />
+        </CollapsibleTrigger>
+        <CollapsibleContent className="space-y-3 p-4 pt-2">
+          {children}
+        </CollapsibleContent>
+      </div>
+    </Collapsible>
   );
 }
 
@@ -180,9 +187,7 @@ export function GenerateProspectsDialog({ open, onOpenChange, organizationId }: 
           </div>
 
           {/* Search Filters */}
-          <Collapsible open={openFilters} onOpenChange={setOpenFilters}>
-            <SectionHeader open={openFilters}>Filtros de pesquisa e categorias</SectionHeader>
-            <CollapsibleContent className="space-y-3 mt-2 rounded-lg border border-border/40 bg-muted/10 p-4">
+          <CollapsibleSection title="Filtros de pesquisa e categorias" open={openFilters} onOpenChange={setOpenFilters}>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Correspondência de nome</Label>
@@ -227,13 +232,9 @@ export function GenerateProspectsDialog({ open, onOpenChange, organizationId }: 
                 </div>
                 <Switch checked={skipClosed} onCheckedChange={setSkipClosed} />
               </div>
-            </CollapsibleContent>
-          </Collapsible>
+          </CollapsibleSection>
 
-          {/* Additional Details */}
-          <Collapsible open={openDetails} onOpenChange={setOpenDetails}>
-            <SectionHeader open={openDetails}>Detalhes adicionais</SectionHeader>
-            <CollapsibleContent className="space-y-3 mt-2 rounded-lg border border-border/40 bg-muted/10 p-4">
+          <CollapsibleSection title="Detalhes adicionais" open={openDetails} onOpenChange={setOpenDetails}>
               {[
                 { label: "Extrair página de detalhes", desc: "Obtém informações mais completas de cada local", checked: scrapePlaceDetailPage, onChange: setScrapePlaceDetailPage },
                 { label: "Extrair dados de reserva", desc: "Mesa/reserva online (restaurantes)", checked: scrapeTableReservationProvider, onChange: setScrapeTableReservationProvider },
@@ -250,22 +251,12 @@ export function GenerateProspectsDialog({ open, onOpenChange, organizationId }: 
               ))}
               <div className="space-y-2">
                 <Label>Perguntas a extrair por local</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  max={100}
-                  value={maxQuestions}
-                  onChange={(e) => setMaxQuestions(Number(e.target.value) || 0)}
-                />
+                <Input type="number" min={0} max={100} value={maxQuestions} onChange={(e) => setMaxQuestions(Number(e.target.value) || 0)} />
                 <p className="text-xs text-muted-foreground">0 = nenhuma pergunta</p>
               </div>
-            </CollapsibleContent>
-          </Collapsible>
+          </CollapsibleSection>
 
-          {/* Contact Enrichment */}
-          <Collapsible open={openContacts} onOpenChange={setOpenContacts}>
-            <SectionHeader open={openContacts}>Enriquecimento de contactos</SectionHeader>
-            <CollapsibleContent className="space-y-3 mt-2 rounded-lg border border-border/40 bg-muted/10 p-4">
+          <CollapsibleSection title="Enriquecimento de contactos" open={openContacts} onOpenChange={setOpenContacts}>
               <div className="flex items-center justify-between rounded-lg border p-3">
                 <div>
                   <p className="text-sm font-medium">Extrair contactos do website</p>
@@ -288,31 +279,17 @@ export function GenerateProspectsDialog({ open, onOpenChange, organizationId }: 
                   </div>
                 ))}
               </div>
-            </CollapsibleContent>
-          </Collapsible>
+          </CollapsibleSection>
 
-          {/* Lead Enrichment */}
-          <Collapsible open={openLeads} onOpenChange={setOpenLeads}>
-            <SectionHeader open={openLeads}>Enriquecimento de leads</SectionHeader>
-            <CollapsibleContent className="space-y-3 mt-2 rounded-lg border border-border/40 bg-muted/10 p-4">
+          <CollapsibleSection title="Enriquecimento de leads" open={openLeads} onOpenChange={setOpenLeads}>
               <div className="space-y-2">
                 <Label>Máximo de leads por local</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  max={500}
-                  value={maximumLeadsEnrichmentRecords}
-                  onChange={(e) => setMaximumLeadsEnrichmentRecords(Number(e.target.value) || 0)}
-                />
+                <Input type="number" min={0} max={500} value={maximumLeadsEnrichmentRecords} onChange={(e) => setMaximumLeadsEnrichmentRecords(Number(e.target.value) || 0)} />
                 <p className="text-xs text-muted-foreground">0 = desativado. Enriquece com dados adicionais de contacto.</p>
               </div>
-            </CollapsibleContent>
-          </Collapsible>
+          </CollapsibleSection>
 
-          {/* Direct URLs */}
-          <Collapsible open={openUrls} onOpenChange={setOpenUrls}>
-            <SectionHeader open={openUrls}>URLs directas do Google Maps</SectionHeader>
-            <CollapsibleContent className="space-y-3 mt-2 rounded-lg border border-border/40 bg-muted/10 p-4">
+          <CollapsibleSection title="URLs directas do Google Maps" open={openUrls} onOpenChange={setOpenUrls}>
               <div className="space-y-2">
                 <Label>URLs do Google Maps</Label>
                 <Textarea
@@ -323,8 +300,7 @@ export function GenerateProspectsDialog({ open, onOpenChange, organizationId }: 
                 />
                 <p className="text-xs text-muted-foreground">Uma URL por linha. Alternativa aos termos de pesquisa — se preencher URLs, os termos são opcionais.</p>
               </div>
-            </CollapsibleContent>
-          </Collapsible>
+          </CollapsibleSection>
         </div>
 
         <DialogFooter>
