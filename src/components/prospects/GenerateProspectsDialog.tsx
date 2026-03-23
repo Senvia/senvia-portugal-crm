@@ -34,7 +34,7 @@ export function GenerateProspectsDialog({ open, onOpenChange, organizationId }: 
 
   // Search filters
   const [searchMatching, setSearchMatching] = useState("all");
-  const [placeMinimumStars, setPlaceMinimumStars] = useState("");
+  const [placeMinimumStars, setPlaceMinimumStars] = useState("none");
   const [website, setWebsite] = useState("allPlaces");
   const [skipClosed, setSkipClosed] = useState(true);
 
