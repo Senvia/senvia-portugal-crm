@@ -3447,6 +3447,53 @@ export type Database = {
           },
         ]
       }
+      prospect_generation_jobs: {
+        Row: {
+          apify_run_id: string | null
+          completed_at: string | null
+          created_at: string
+          error: string | null
+          id: string
+          organization_id: string
+          result: Json | null
+          search_params: Json | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          apify_run_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          organization_id: string
+          result?: Json | null
+          search_params?: Json | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          apify_run_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          organization_id?: string
+          result?: Json | null
+          search_params?: Json | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prospect_generation_jobs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       prospects: {
         Row: {
           annual_consumption_kwh: number | null
