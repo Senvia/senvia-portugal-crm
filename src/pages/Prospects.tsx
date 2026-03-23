@@ -239,6 +239,7 @@ export default function Prospects() {
                   </SelectContent>
                 </Select>
 
+                {isP2G && (
                 <Select value={comFilter} onValueChange={setComFilter}>
                   <SelectTrigger>
                     <SelectValue placeholder="Filtrar por COM" />
@@ -252,6 +253,7 @@ export default function Prospects() {
                     ))}
                   </SelectContent>
                 </Select>
+                )}
 
                 <Button
                   onClick={() => setIsDistributeOpen(true)}
