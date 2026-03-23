@@ -384,6 +384,7 @@ export default function Prospects() {
                     {isP2G && <TableHead>COM</TableHead>}
                     <TableHead>Contacto</TableHead>
                     {isP2G && <TableHead>kWh/Ano</TableHead>}
+                    {!isP2G && <TableHead>Website</TableHead>}
                     {!isP2G && <TableHead>Morada</TableHead>}
                     {!isP2G && <TableHead>Redes Sociais</TableHead>}
                     <TableHead>Comercial</TableHead>
