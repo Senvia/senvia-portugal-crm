@@ -340,12 +340,13 @@ export default function Prospects() {
                       />
                     </TableHead>
                     <TableHead>Empresa</TableHead>
-                    <TableHead>NIF</TableHead>
-                    <TableHead>CPE</TableHead>
+                    {isP2G && <TableHead>NIF</TableHead>}
+                    {isP2G && <TableHead>CPE</TableHead>}
                     <TableHead>Segmento</TableHead>
-                    <TableHead>COM</TableHead>
+                    {isP2G && <TableHead>COM</TableHead>}
                     <TableHead>Contacto</TableHead>
-                    <TableHead>kWh/Ano</TableHead>
+                    {isP2G && <TableHead>kWh/Ano</TableHead>}
+                    {!isP2G && <TableHead>Morada</TableHead>}
                     <TableHead>Comercial</TableHead>
                     <TableHead>Estado</TableHead>
                   </TableRow>
@@ -366,12 +367,13 @@ export default function Prospects() {
                           />
                         </TableCell>
                         <TableCell className="font-medium">{prospect.company_name}</TableCell>
-                        <TableCell>{prospect.nif || "—"}</TableCell>
-                        <TableCell className="max-w-[240px] truncate">{prospect.cpe || "—"}</TableCell>
-                        <TableCell>{getProspectSegment(prospect) || "—"}</TableCell>
-                        <TableCell>{getProspectCom(prospect) || "—"}</TableCell>
+                        {isP2G && <TableCell>{prospect.nif || "—"}</TableCell>}
+                        {isP2G && <TableCell className="max-w-[240px] truncate">{prospect.cpe || "—"}</TableCell>}
+                        <TableCell>{isP2G ? (getProspectSegment(prospect) || "—") : (prospect.segment || "—")}</TableCell>
+                        {isP2G && <TableCell>{getProspectCom(prospect) || "—"}</TableCell>}
                         <TableCell>{prospect.phone || prospect.email || "—"}</TableCell>
-                        <TableCell>{formatConsumption(prospect.annual_consumption_kwh)}</TableCell>
+                        {isP2G && <TableCell>{formatConsumption(prospect.annual_consumption_kwh)}</TableCell>}
+                        {!isP2G && <TableCell className="max-w-[200px] truncate">{(prospect.metadata as any)?.address || "—"}</TableCell>}
                         <TableCell>{formatAssignedLabel(salespersonMap.get(prospect.assigned_to || ""))}</TableCell>
                         <TableCell>
                           <Badge variant={prospect.converted_to_lead ? "default" : "secondary"}>
