@@ -1,4 +1,4 @@
-import { FileText, Calendar, ShoppingBag, Store, UserCheck, Mail, Wallet, Zap } from "lucide-react";
+import { FileText, Calendar, ShoppingBag, Store, UserCheck, Mail, Wallet, Zap, Search } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
