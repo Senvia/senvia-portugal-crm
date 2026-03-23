@@ -18,9 +18,9 @@ interface GenerateProspectsDialogProps {
 
 function SectionHeader({ children, open }: { children: React.ReactNode; open: boolean }) {
   return (
-    <CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg border p-4 text-sm font-medium hover:bg-muted/50 transition-colors">
-      {children}
-      <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
+    <CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg border border-border/60 bg-muted/30 p-4 text-sm font-medium hover:bg-muted/60 transition-colors">
+      <span className="text-foreground">{children}</span>
+      <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
     </CollapsibleTrigger>
   );
 }
