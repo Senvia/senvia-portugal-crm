@@ -40,6 +40,7 @@ const MODULE_REQUIRED_PLAN: Record<string, string> = {
   finance: 'Elite',
   marketing: 'Pro',
   ecommerce: 'Elite',
+  prospects: 'Elite',
 };
 
 function isOrgOnTrial(org: { trial_ends_at?: string; billing_exempt?: boolean } | null): boolean {

@@ -209,6 +209,37 @@ export function useImportProspects() {
   });
 }
 
+export function useGenerateProspects() {
+  const { organization } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (params: {
+      organizationId: string;
+      searchStrings: string[];
+      location: string;
+      maxResults: number;
+      language: string;
+      skipClosed: boolean;
+    }) => {
+      const { data, error } = await supabase.functions.invoke("generate-prospects", {
+        body: params,
+      });
+
+      if (error) throw new Error(error.message || "Erro ao gerar prospects");
+      if (data?.error) throw new Error(data.error);
+      return data as { inserted: number; updated: number; skipped: number; total: number };
+    },
+    onSuccess: ({ inserted, updated, skipped, total }) => {
+      queryClient.invalidateQueries({ queryKey: ["prospects"] });
+      toast.success(`${total} encontrados • ${inserted} novos • ${updated} atualizados${skipped ? ` • ${skipped} ignorados` : ""}`);
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Erro ao gerar prospects");
+    },
+  });
+}
+
 export function useDistributeProspects() {
   const { organization } = useAuth();
   const queryClient = useQueryClient();
