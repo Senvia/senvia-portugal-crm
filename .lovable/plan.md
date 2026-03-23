@@ -1,72 +1,52 @@
 
 
-## Adicionar todos os filtros Apify ao dialog "Gerar Prospects"
+## Corrigir erro na Edge Function "generate-prospects"
 
-### O que falta
-O dialog actual só tem 5 campos (termos, localização, máximo, idioma, ignorar fechados). As screenshots mostram muitos mais filtros do Apify que devem ser expostos, traduzidos em PT.
+### Problema
+A edge function `generate-prospects` faz polling síncrono do Apify por até 5 minutos (`MAX_POLL_MS = 5 * 60 * 1000`), mas as edge functions do Supabase têm um timeout máximo de ~150 segundos. O run do Apify demora mais que isso, causando timeout e o erro "non-2xx status code".
 
-### Filtros a adicionar (organizados em secções colapsáveis)
+Possível problema adicional: o `getUser()` pode estar a falhar por questões de token — mas o timeout é a causa mais provável.
 
-**Secção principal** (já existe, melhorar):
-- Termos de pesquisa (textarea) ✓
-- Localização ✓
-- Máximo de resultados ✓
-- Idioma ✓
+### Solução
 
-**Secção: Filtros de pesquisa e categorias** (colapsável):
-- Correspondência exacta de nome (select: "Todos os locais" / "Apenas correspondência exacta") → `searchMatching`
-- Avaliação mínima (select: Todas / 1-5 estrelas) → `placeMinimumStars`
-- Filtrar por website (select: Todos / Só com website / Só sem website) → `website`
-- Ignorar locais fechados (switch) ✓ → mover para aqui
+Reestruturar para um modelo **assíncrono em 2 passos**:
 
-**Secção: Detalhes adicionais** (colapsável):
-- Extrair página de detalhes (switch) → `scrapePlaceDetailPage`
-- Extrair dados de reserva (switch) → `scrapeTableReservationProvider`
-- Incluir resultados web (switch) → `includeWebResults`
-- Extrair dentro de centros comerciais (switch) → `scrapeDirectories`
-- Número de perguntas a extrair (input number) → `maxQuestions`
+1. **Passo 1 — Iniciar run** (`generate-prospects`): Envia o pedido ao Apify, guarda o `runId` numa tabela `prospect_generation_jobs` e retorna imediatamente ao cliente.
 
-**Secção: Enriquecimento de contactos** (colapsável):
-- Extrair contactos do website (switch) → `scrapeContacts`
-- Redes sociais — Facebook, Instagram, YouTube, TikTok, X/Twitter (switches individuais) → `scrapeSocialMediaProfiles`
+2. **Passo 2 — Verificar resultado** (`check-prospect-job`): Nova edge function que o frontend chama via polling (a cada 10s) para verificar se o run do Apify terminou. Quando terminar, processa os resultados e insere na tabela `prospects`.
 
-**Secção: Enriquecimento de leads** (colapsável):
-- Máximo de leads por local (input number) → `maximumLeadsEnrichmentRecords`
+### Alterações
 
-**Secção: URLs do Google Maps** (colapsável):
-- URLs directas (textarea, alternativa aos termos) → `startUrls`
-- Nota: não combinar com termos de pesquisa
+**1) Migration — criar tabela `prospect_generation_jobs`**
+- `id`, `organization_id`, `user_id`, `apify_run_id`, `status` (pending/running/completed/failed), `search_params` (jsonb), `result` (jsonb), `error`, `created_at`, `completed_at`
+- RLS: membros da org podem ler os seus jobs
 
-### Alterações por ficheiro
+**2) `supabase/functions/generate-prospects/index.ts`** — simplificar
+- Remover todo o polling e processamento de dataset
+- Apenas: validar auth → chamar Apify para iniciar run → guardar job na tabela → retornar `{ jobId }`
+- Execução em <5 segundos, sem timeout
 
-**`src/components/prospects/GenerateProspectsDialog.tsx`**
-- Adicionar state para cada novo campo
-- Organizar em secções colapsáveis com `Collapsible` do shadcn
-- Passar todos os parâmetros no `mutate()`
-- UI limpa com secções expandíveis tipo acordeão
+**3) `supabase/functions/check-prospect-job/index.ts`** — nova edge function
+- Recebe `jobId`
+- Verifica status do run no Apify
+- Se ainda está a correr: retorna `{ status: 'running' }`
+- Se terminou: busca dataset, processa items, insere/atualiza prospects, marca job como completed, retorna resultado final
 
-**`supabase/functions/generate-prospects/index.ts`**
-- Receber todos os novos campos do body request
-- Mapear directamente para o `actorInput` (os nomes já correspondem 1:1 ao Apify)
-- Adicionar `startUrls` (array de `{ url }`) quando fornecido
+**4) `src/hooks/useProspects.ts`** — alterar `useGenerateProspects`
+- Passo 1: `supabase.functions.invoke('generate-prospects')` → recebe `jobId`
+- Passo 2: polling com `setInterval` (10s) chamando `check-prospect-job` até ter resultado
+- Mostrar estado de progresso no toast/UI
 
-**`src/hooks/useProspects.ts`**
-- Expandir o tipo do `mutationFn` params para incluir todos os novos campos opcionais
+**5) `src/components/prospects/GenerateProspectsDialog.tsx`** — UX de progresso
+- Após submeter, mostrar estado "A pesquisar no Google Maps..." com spinner
+- Atualizar quando job concluir ou falhar
 
-### Mapeamento campo UI → Apify
-
-| Campo UI (PT) | Apify param |
-|---|---|
-| Correspondência exacta | `searchMatching` ("all" / "exact") |
-| Avaliação mínima | `placeMinimumStars` ("" / "1"-"5") |
-| Filtrar por website | `website` ("allPlaces" / "withWebsite" / "withoutWebsite") |
-| Extrair detalhes | `scrapePlaceDetailPage` |
-| Extrair reservas | `scrapeTableReservationProvider` |
-| Resultados web | `includeWebResults` |
-| Centros comerciais | `scrapeDirectories` |
-| Perguntas | `maxQuestions` |
-| Contactos website | `scrapeContacts` |
-| Facebook/Insta/etc | `scrapeSocialMediaProfiles.facebooks` etc |
-| Leads por local | `maximumLeadsEnrichmentRecords` |
-| URLs Google Maps | `startUrls` |
+### Ficheiros alterados/criados
+| Ficheiro | Acção |
+|----------|-------|
+| Migration SQL | Criar tabela `prospect_generation_jobs` |
+| `supabase/functions/generate-prospects/index.ts` | Simplificar (só iniciar run) |
+| `supabase/functions/check-prospect-job/index.ts` | Nova (verificar + processar) |
+| `src/hooks/useProspects.ts` | Polling assíncrono |
+| `src/components/prospects/GenerateProspectsDialog.tsx` | UX de progresso |
 
