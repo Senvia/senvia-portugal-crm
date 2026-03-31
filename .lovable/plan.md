@@ -1,37 +1,22 @@
 
 
-## Detetar e mostrar férias sobrepostas de colegas de equipa (P2G)
+## Corrigir checkout Stripe bloqueado no PWA
 
-### Conceito
-Quando um utilizador da P2G está a criar um pedido de ausência (férias), o sistema verifica automaticamente se algum colega da mesma equipa já tem férias aprovadas ou pendentes nos mesmos dias. Se existirem sobreposições, mostra um aviso com os nomes dos colegas e as datas em conflito.
+### Problema
+No modo PWA (app instalada), `window.open(url, '_blank')` é bloqueado silenciosamente. Quando o Daniel clica para selecionar um plano, nada acontece porque o sistema tenta abrir o Stripe Checkout numa nova aba — que o PWA não permite.
 
-Também no painel de admin (aprovação), ao visualizar um pedido pendente, mostrar aviso de sobreposições com membros da equipa do requerente.
+### Solução
+Alterar o `useStripeSubscription.ts` para detetar se a app está em modo standalone (PWA) e, nesse caso, usar `window.location.href` em vez de `window.open`. Isto redireciona na mesma janela, que funciona perfeitamente no PWA.
 
 ### Alterações
 
-**1) `src/hooks/useRhAbsences.ts`** — novo hook `useTeamOverlappingAbsences`
-- Recebe `userId`, `periods: DatePeriod[]`, `organizationId`
-- Busca a equipa do utilizador via `team_members` → `teams`
-- Busca ausências (approved/pending) dos colegas da mesma equipa cujas datas se sobreponham com os períodos selecionados
-- Retorna lista de `{ userName, periods[], absenceType }` com sobreposições
+**1) `src/hooks/useStripeSubscription.ts`**
+- Na função `createCheckout`: substituir `window.open(data.url, '_blank')` por lógica que deteta PWA e usa `window.location.href`
+- Na função `openCustomerPortal`: mesma alteração
+- Deteção de PWA: `window.matchMedia('(display-mode: standalone)').matches`
 
-**2) `src/components/portal-total-link/rh/RhAbsenceRequestForm.tsx`**
-- Importar e usar `useTeamOverlappingAbsences` passando os períodos selecionados
-- Mostrar aviso amarelo antes do botão "Submeter" quando existirem sobreposições:
-  - "⚠️ João Silva tem férias aprovadas de 15 Jul a 22 Jul"
-  - Não bloqueia a submissão — apenas alerta informativo
+**2) Nenhuma outra alteração necessária** — o hook é usado em todo o sistema de billing, portanto a correção propaga-se automaticamente.
 
-**3) `src/components/portal-total-link/rh/RhAbsenceCard.tsx`** ou **`RhAdminPanel.tsx`**
-- No painel de admin, ao mostrar pedidos pendentes, verificar sobreposições com a equipa do requerente
-- Mostrar aviso visual junto ao card do pedido pendente
-
-### Lógica de sobreposição
-Dois períodos sobrepõem-se se: `startA <= endB AND endA >= startB`
-
-### Ficheiros
-| Ficheiro | Acção |
-|----------|-------|
-| `src/hooks/useRhAbsences.ts` | Novo hook `useTeamOverlappingAbsences` |
-| `src/components/portal-total-link/rh/RhAbsenceRequestForm.tsx` | Mostrar aviso de sobreposições |
-| `src/components/portal-total-link/rh/RhAdminPanel.tsx` | Mostrar aviso de sobreposições nos pedidos pendentes |
+### Resultado
+O Daniel (e qualquer utilizador no PWA) ao clicar num plano será redirecionado para a página de pagamento Stripe na mesma janela, sem bloqueios. Após o pagamento, o Stripe redireciona de volta para a app normalmente.
 
