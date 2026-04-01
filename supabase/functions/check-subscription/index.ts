@@ -171,7 +171,6 @@ serve(async (req) => {
 
     const productId = subscription.items.data[0].price.product as string;
     const planId = PRODUCT_TO_PLAN[productId] || "starter";
-    const planId = PRODUCT_TO_PLAN[productId] || "starter";
     
     // Safely handle period end - try sub-level, then item-level
     const periodEnd = (subscription as any).current_period_end 
