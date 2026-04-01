@@ -88,10 +88,80 @@ serve(async (req) => {
     }
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
+    
+    // Try to find Stripe customer for the current user
     const customers = await stripe.customers.list({ email: user.email, limit: 1 });
 
-    if (customers.data.length === 0) {
-    logStep("No Stripe customer found, checking trial");
+    let subscription: any = null;
+    let customerId: string | null = null;
+
+    if (customers.data.length > 0) {
+      customerId = customers.data[0].id;
+      logStep("Customer found", { customerId });
+
+      let subscriptions = await stripe.subscriptions.list({
+        customer: customerId,
+        status: "active",
+        limit: 1,
+      });
+
+      if (subscriptions.data.length === 0) {
+        subscriptions = await stripe.subscriptions.list({
+          customer: customerId,
+          status: "trialing",
+          limit: 1,
+        });
+      }
+
+      if (subscriptions.data.length > 0) {
+        subscription = subscriptions.data[0];
+      }
+    }
+
+    // If no subscription found for this user, check if another org member has one
+    if (!subscription && orgId) {
+      logStep("No subscription for user, checking org members");
+      
+      const { data: orgMembers } = await supabaseClient
+        .from('organization_members')
+        .select('user_id')
+        .eq('organization_id', orgId)
+        .eq('is_active', true)
+        .neq('user_id', user.id);
+      
+      if (orgMembers && orgMembers.length > 0) {
+        for (const member of orgMembers) {
+          const { data: memberUser } = await supabaseClient.auth.admin.getUserById(member.user_id);
+          if (!memberUser?.user?.email) continue;
+          
+          const memberCustomers = await stripe.customers.list({ email: memberUser.user.email, limit: 1 });
+          if (memberCustomers.data.length === 0) continue;
+          
+          let memberSubs = await stripe.subscriptions.list({
+            customer: memberCustomers.data[0].id,
+            status: "active",
+            limit: 1,
+          });
+          
+          if (memberSubs.data.length === 0) {
+            memberSubs = await stripe.subscriptions.list({
+              customer: memberCustomers.data[0].id,
+              status: "trialing",
+              limit: 1,
+            });
+          }
+          
+          if (memberSubs.data.length > 0) {
+            subscription = memberSubs.data[0];
+            logStep("Found subscription via org member", { memberEmail: memberUser.user.email });
+            break;
+          }
+        }
+      }
+    }
+
+    if (!subscription) {
+      logStep("No subscription found for org, checking trial");
       const trialResp = buildTrialResponse(orgData);
       return new Response(JSON.stringify(trialResp), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -99,36 +169,8 @@ serve(async (req) => {
       });
     }
 
-    const customerId = customers.data[0].id;
-    logStep("Customer found", { customerId });
-
-    // Check active subscriptions
-    let subscriptions = await stripe.subscriptions.list({
-      customer: customerId,
-      status: "active",
-      limit: 1,
-    });
-
-    // Also check trialing subscriptions
-    if (subscriptions.data.length === 0) {
-      subscriptions = await stripe.subscriptions.list({
-        customer: customerId,
-        status: "trialing",
-        limit: 1,
-      });
-    }
-
-    if (subscriptions.data.length === 0) {
-    logStep("No active/trialing subscription, checking trial");
-      const trialResp2 = buildTrialResponse(orgData);
-      return new Response(JSON.stringify(trialResp2), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200,
-      });
-    }
-
-    const subscription = subscriptions.data[0];
     const productId = subscription.items.data[0].price.product as string;
+    const planId = PRODUCT_TO_PLAN[productId] || "starter";
     const planId = PRODUCT_TO_PLAN[productId] || "starter";
     
     // Safely handle period end - try sub-level, then item-level
