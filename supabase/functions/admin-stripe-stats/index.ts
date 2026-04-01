@@ -106,25 +106,38 @@ serve(async (req) => {
     }> = {};
 
     for (const sub of allSubs) {
-      const customer = sub.customer as string;
-      // Get customer email
-      const cust = await stripe.customers.retrieve(customer);
-      if ((cust as any).deleted) continue;
-      const email = ((cust as Stripe.Customer).email || "").toLowerCase();
-      if (!email) continue;
+      try {
+        const customer = sub.customer as string;
+        // Get customer email
+        const cust = await stripe.customers.retrieve(customer);
+        if ((cust as any).deleted) continue;
+        const email = ((cust as Stripe.Customer).email || "").toLowerCase();
+        if (!email) continue;
 
-      const item = sub.items.data[0];
-      const productId = item.price.product as string;
-      const planId = PRODUCT_TO_PLAN[productId] || "unknown";
-      const amount = (item.price.unit_amount || 0) / 100;
+        const item = sub.items.data[0];
+        if (!item?.price) continue;
+        const productId = item.price.product as string;
+        const planId = PRODUCT_TO_PLAN[productId] || "unknown";
+        const amount = (item.price.unit_amount || 0) / 100;
 
-      emailToSub[email] = {
-        plan: planId,
-        amount,
-        status: sub.status,
-        current_period_end: new Date(sub.current_period_end * 1000).toISOString(),
-        stripe_customer_id: customer,
-      };
+        // Safely handle period end - try multiple sources
+        let periodEndISO: string | null = null;
+        const periodEnd = (sub as any).current_period_end;
+        if (periodEnd && typeof periodEnd === "number" && periodEnd > 0) {
+          periodEndISO = new Date(periodEnd * 1000).toISOString();
+        }
+
+        emailToSub[email] = {
+          plan: planId,
+          amount,
+          status: sub.status,
+          current_period_end: periodEndISO || new Date().toISOString(),
+          stripe_customer_id: customer,
+        };
+      } catch (subError) {
+        console.error("[ADMIN-STRIPE-STATS] Error processing subscription:", (subError as Error).message);
+        continue;
+      }
     }
 
     // Build per-org stats

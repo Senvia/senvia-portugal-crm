@@ -130,7 +130,12 @@ serve(async (req) => {
     const subscription = subscriptions.data[0];
     const productId = subscription.items.data[0].price.product as string;
     const planId = PRODUCT_TO_PLAN[productId] || "starter";
-    const subscriptionEnd = new Date(subscription.current_period_end * 1000).toISOString();
+    
+    // Safely handle period end
+    const periodEnd = (subscription as any).current_period_end;
+    const subscriptionEnd = (periodEnd && typeof periodEnd === "number" && periodEnd > 0)
+      ? new Date(periodEnd * 1000).toISOString()
+      : null;
 
     logStep("Active subscription found", { productId, planId, subscriptionEnd });
 
