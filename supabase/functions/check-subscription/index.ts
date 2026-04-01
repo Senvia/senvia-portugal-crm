@@ -1,15 +1,10 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import Stripe from "https://esm.sh/stripe@18.5.0";
+import Stripe from "npm:stripe@18.5.0";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
-
-const logStep = (step: string, details?: any) => {
-  const d = details ? ` - ${JSON.stringify(details)}` : '';
-  console.log(`[CHECK-SUBSCRIPTION] ${step}${d}`);
 };
 
 const PRODUCT_TO_PLAN: Record<string, string> = {
@@ -23,15 +18,13 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const supabaseClient = createClient(
+  const supabase = createClient(
     Deno.env.get("SUPABASE_URL") ?? "",
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     { auth: { persistSession: false } }
   );
 
   try {
-    logStep("Function started");
-
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not set");
 
@@ -39,14 +32,13 @@ serve(async (req) => {
     if (!authHeader) throw new Error("No authorization header");
 
     const token = authHeader.replace("Bearer ", "");
-    const { data: userData, error: userError } = await supabaseClient.auth.getUser(token);
+    const { data: userData, error: userError } = await supabase.auth.getUser(token);
     if (userError) throw new Error(`Auth error: ${userError.message}`);
     const user = userData.user;
     if (!user?.email) throw new Error("User not authenticated");
-    logStep("User authenticated", { email: user.email });
 
     // Get user's organization
-    const { data: memberData } = await supabaseClient
+    const { data: memberData } = await supabase
       .from('organization_members')
       .select('organization_id')
       .eq('user_id', user.id)
@@ -56,10 +48,9 @@ serve(async (req) => {
 
     const orgId = memberData?.organization_id;
 
-    // Get org data including trial_ends_at and billing_exempt
     let orgData: any = null;
     if (orgId) {
-      const { data } = await supabaseClient
+      const { data } = await supabase
         .from('organizations')
         .select('billing_exempt, trial_ends_at, payment_failed_at')
         .eq('id', orgId)
@@ -67,202 +58,109 @@ serve(async (req) => {
       orgData = data;
     }
 
-    // Check billing exemption
+    // Billing exempt → elite
     if (orgData?.billing_exempt === true) {
-      logStep("Organization is billing exempt, returning elite", { orgId });
-      await supabaseClient
-        .from('organizations')
-        .update({ plan: 'elite' })
-        .eq('id', orgId);
-
-      return new Response(JSON.stringify({
-        subscribed: true,
-        plan_id: 'elite',
-        product_id: null,
-        subscription_end: null,
-        billing_exempt: true,
-      }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200,
-      });
+      if (orgId) await supabase.from('organizations').update({ plan: 'elite' }).eq('id', orgId);
+      return json({ subscribed: true, plan_id: 'elite', product_id: null, subscription_end: null, billing_exempt: true });
     }
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
-    
-    // Try to find Stripe customer for the current user
-    const customers = await stripe.customers.list({ email: user.email, limit: 1 });
 
-    let subscription: any = null;
-    let customerId: string | null = null;
-
-    if (customers.data.length > 0) {
-      customerId = customers.data[0].id;
-      logStep("Customer found", { customerId });
-
-      let subscriptions = await stripe.subscriptions.list({
-        customer: customerId,
-        status: "active",
-        limit: 1,
-      });
-
-      if (subscriptions.data.length === 0) {
-        subscriptions = await stripe.subscriptions.list({
-          customer: customerId,
-          status: "trialing",
-          limit: 1,
-        });
-      }
-
-      if (subscriptions.data.length > 0) {
-        subscription = subscriptions.data[0];
-      }
-    }
-
-    // If no subscription found for this user, check if another org member has one
-    if (!subscription && orgId) {
-      logStep("No subscription for user, checking org members");
-      
-      const { data: orgMembers } = await supabaseClient
-        .from('organization_members')
-        .select('user_id')
-        .eq('organization_id', orgId)
-        .eq('is_active', true)
-        .neq('user_id', user.id);
-      
-      if (orgMembers && orgMembers.length > 0) {
-        for (const member of orgMembers) {
-          const { data: memberUser } = await supabaseClient.auth.admin.getUserById(member.user_id);
-          if (!memberUser?.user?.email) continue;
-          
-          const memberCustomers = await stripe.customers.list({ email: memberUser.user.email, limit: 1 });
-          if (memberCustomers.data.length === 0) continue;
-          
-          let memberSubs = await stripe.subscriptions.list({
-            customer: memberCustomers.data[0].id,
-            status: "active",
-            limit: 1,
-          });
-          
-          if (memberSubs.data.length === 0) {
-            memberSubs = await stripe.subscriptions.list({
-              customer: memberCustomers.data[0].id,
-              status: "trialing",
-              limit: 1,
-            });
-          }
-          
-          if (memberSubs.data.length > 0) {
-            subscription = memberSubs.data[0];
-            logStep("Found subscription via org member", { memberEmail: memberUser.user.email });
-            break;
-          }
-        }
-      }
-    }
+    // Find subscription for user or org members
+    const subscription = await findSubscription(stripe, supabase, user, orgId);
 
     if (!subscription) {
-      logStep("No subscription found for org, checking trial");
-      const trialResp = buildTrialResponse(orgData);
-      return new Response(JSON.stringify(trialResp), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200,
-      });
+      return json(buildTrialResponse(orgData));
     }
 
     const productId = subscription.items.data[0].price.product as string;
     const planId = PRODUCT_TO_PLAN[productId] || "starter";
-    
-    // Safely handle period end - try sub-level, then item-level
-    const periodEnd = (subscription as any).current_period_end 
+
+    const periodEnd = (subscription as any).current_period_end
       ?? (subscription.items.data[0] as any).current_period_end;
     const subscriptionEnd = (periodEnd && typeof periodEnd === "number" && periodEnd > 0)
       ? new Date(periodEnd * 1000).toISOString()
       : null;
 
-    logStep("Active subscription found", { productId, planId, subscriptionEnd });
-
-    // Sync plan to organization
+    // Sync plan
     if (orgId) {
-      const { error: updateError } = await supabaseClient
-        .from('organizations')
-        .update({ plan: planId })
-        .eq('id', orgId);
-
-      if (updateError) {
-        logStep("Failed to update org plan", { error: updateError.message });
-      } else {
-        logStep("Org plan synced", { orgId, plan: planId });
-      }
+      await supabase.from('organizations').update({ plan: planId }).eq('id', orgId);
     }
 
-    const paymentOverdueData = getPaymentOverdueInfo(orgData);
-
-    return new Response(JSON.stringify({
+    return json({
       subscribed: true,
       plan_id: planId,
       product_id: productId,
       subscription_end: subscriptionEnd,
-      ...paymentOverdueData,
-    }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 200,
+      ...getPaymentOverdue(orgData),
     });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    logStep("ERROR", { message: msg });
-    return new Response(JSON.stringify({ error: msg }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 500,
-    });
+    return json({ error: msg }, 500);
   }
 });
 
-function getPaymentOverdueInfo(orgData: any) {
-  if (!orgData?.payment_failed_at) {
-    return { payment_failed_at: null, payment_overdue: false };
+function json(data: any, status = 200) {
+  return new Response(JSON.stringify(data), {
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    status,
+  });
+}
+
+async function findSubscription(stripe: any, supabase: any, user: any, orgId: string | null) {
+  // Check current user first
+  const sub = await findSubForEmail(stripe, user.email);
+  if (sub) return sub;
+
+  if (!orgId) return null;
+
+  // Check other org members
+  const { data: members } = await supabase
+    .from('organization_members')
+    .select('user_id')
+    .eq('organization_id', orgId)
+    .eq('is_active', true)
+    .neq('user_id', user.id);
+
+  if (!members?.length) return null;
+
+  for (const m of members) {
+    const { data: mu } = await supabase.auth.admin.getUserById(m.user_id);
+    if (!mu?.user?.email) continue;
+    const sub = await findSubForEmail(stripe, mu.user.email);
+    if (sub) return sub;
   }
-  const gracePeriodMs = 3 * 24 * 60 * 60 * 1000;
+  return null;
+}
+
+async function findSubForEmail(stripe: any, email: string) {
+  const customers = await stripe.customers.list({ email, limit: 1 });
+  if (!customers.data.length) return null;
+  const cid = customers.data[0].id;
+
+  let subs = await stripe.subscriptions.list({ customer: cid, status: "active", limit: 1 });
+  if (!subs.data.length) {
+    subs = await stripe.subscriptions.list({ customer: cid, status: "trialing", limit: 1 });
+  }
+  return subs.data[0] || null;
+}
+
+function getPaymentOverdue(orgData: any) {
+  if (!orgData?.payment_failed_at) return { payment_failed_at: null, payment_overdue: false };
   const failedAt = new Date(orgData.payment_failed_at);
-  const overdue = (Date.now() - failedAt.getTime()) > gracePeriodMs;
-  return {
-    payment_failed_at: orgData.payment_failed_at,
-    payment_overdue: overdue,
-  };
+  const overdue = (Date.now() - failedAt.getTime()) > 3 * 24 * 60 * 60 * 1000;
+  return { payment_failed_at: orgData.payment_failed_at, payment_overdue: overdue };
 }
 
 function buildTrialResponse(orgData: any) {
-  const paymentOverdueData = getPaymentOverdueInfo(orgData);
-
+  const po = getPaymentOverdue(orgData);
   if (!orgData?.trial_ends_at) {
-    return { subscribed: false, plan_id: null, subscription_end: null, on_trial: false, trial_expired: true, ...paymentOverdueData };
+    return { subscribed: false, plan_id: null, subscription_end: null, on_trial: false, trial_expired: true, ...po };
   }
-
-  const trialEnd = new Date(orgData.trial_ends_at);
-  const now = new Date();
-  const diffMs = trialEnd.getTime() - now.getTime();
-  const daysRemaining = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
-
+  const diffMs = new Date(orgData.trial_ends_at).getTime() - Date.now();
+  const daysRemaining = Math.max(0, Math.ceil(diffMs / 86400000));
   if (diffMs > 0) {
-    return {
-      subscribed: false,
-      plan_id: null,
-      subscription_end: null,
-      on_trial: true,
-      trial_ends_at: orgData.trial_ends_at,
-      days_remaining: daysRemaining,
-      trial_expired: false,
-      ...paymentOverdueData,
-    };
-  } else {
-    return {
-      subscribed: false,
-      plan_id: null,
-      subscription_end: null,
-      on_trial: false,
-      trial_ends_at: orgData.trial_ends_at,
-      days_remaining: 0,
-      trial_expired: true,
-      ...paymentOverdueData,
-    };
+    return { subscribed: false, plan_id: null, subscription_end: null, on_trial: true, trial_ends_at: orgData.trial_ends_at, days_remaining: daysRemaining, trial_expired: false, ...po };
   }
+  return { subscribed: false, plan_id: null, subscription_end: null, on_trial: false, trial_ends_at: orgData.trial_ends_at, days_remaining: 0, trial_expired: true, ...po };
 }
