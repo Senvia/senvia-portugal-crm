@@ -120,9 +120,10 @@ serve(async (req) => {
         const planId = PRODUCT_TO_PLAN[productId] || "unknown";
         const amount = (item.price.unit_amount || 0) / 100;
 
-        // Safely handle period end - try multiple sources
+        // Safely handle period end - try sub-level, then item-level
         let periodEndISO: string | null = null;
-        const periodEnd = (sub as any).current_period_end;
+        const periodEnd = (sub as any).current_period_end 
+          ?? (item as any).current_period_end;
         if (periodEnd && typeof periodEnd === "number" && periodEnd > 0) {
           periodEndISO = new Date(periodEnd * 1000).toISOString();
         }

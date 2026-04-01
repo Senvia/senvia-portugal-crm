@@ -131,8 +131,9 @@ serve(async (req) => {
     const productId = subscription.items.data[0].price.product as string;
     const planId = PRODUCT_TO_PLAN[productId] || "starter";
     
-    // Safely handle period end
-    const periodEnd = (subscription as any).current_period_end;
+    // Safely handle period end - try sub-level, then item-level
+    const periodEnd = (subscription as any).current_period_end 
+      ?? (subscription.items.data[0] as any).current_period_end;
     const subscriptionEnd = (periodEnd && typeof periodEnd === "number" && periodEnd > 0)
       ? new Date(periodEnd * 1000).toISOString()
       : null;
