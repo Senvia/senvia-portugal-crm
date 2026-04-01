@@ -66,7 +66,12 @@ export function useStripeSubscription() {
       const { data, error } = await supabase.functions.invoke('customer-portal');
       if (error) throw error;
       if (data?.url) {
-        window.open(data.url, '_blank');
+        const isPWA = window.matchMedia('(display-mode: standalone)').matches;
+        if (isPWA) {
+          window.location.href = data.url;
+        } else {
+          window.open(data.url, '_blank');
+        }
       }
     } catch (error) {
       console.error('Error opening customer portal:', error);
