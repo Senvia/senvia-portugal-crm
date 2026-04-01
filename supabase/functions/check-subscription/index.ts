@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import Stripe from "npm:stripe@18.5.0";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 
 const corsHeaders = {
@@ -12,6 +11,27 @@ const PRODUCT_TO_PLAN: Record<string, string> = {
   "prod_U0wGoA4odOBHOZ": "pro",
   "prod_U0wG6doz0zgZFV": "elite",
 };
+
+// Lightweight Stripe API calls without the heavy SDK
+async function stripeGet(path: string, key: string, params?: Record<string, string>) {
+  const url = new URL(`https://api.stripe.com/v1${path}`);
+  if (params) Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+  const res = await fetch(url.toString(), {
+    headers: { Authorization: `Bearer ${key}` },
+  });
+  return res.json();
+}
+
+async function findSubForEmail(email: string, key: string) {
+  const customers = await stripeGet("/customers", key, { email, limit: "1" });
+  if (!customers.data?.length) return null;
+  const cid = customers.data[0].id;
+  let subs = await stripeGet("/subscriptions", key, { customer: cid, status: "active", limit: "1" });
+  if (!subs.data?.length) {
+    subs = await stripeGet("/subscriptions", key, { customer: cid, status: "trialing", limit: "1" });
+  }
+  return subs.data?.[0] || null;
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -64,10 +84,27 @@ serve(async (req) => {
       return json({ subscribed: true, plan_id: 'elite', product_id: null, subscription_end: null, billing_exempt: true });
     }
 
-    const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
+    // Find subscription for user
+    let subscription = await findSubForEmail(user.email, stripeKey);
 
-    // Find subscription for user or org members
-    const subscription = await findSubscription(stripe, supabase, user, orgId);
+    // If none, check org members
+    if (!subscription && orgId) {
+      const { data: members } = await supabase
+        .from('organization_members')
+        .select('user_id')
+        .eq('organization_id', orgId)
+        .eq('is_active', true)
+        .neq('user_id', user.id);
+
+      if (members?.length) {
+        for (const m of members) {
+          const { data: mu } = await supabase.auth.admin.getUserById(m.user_id);
+          if (!mu?.user?.email) continue;
+          subscription = await findSubForEmail(mu.user.email, stripeKey);
+          if (subscription) break;
+        }
+      }
+    }
 
     if (!subscription) {
       return json(buildTrialResponse(orgData));
@@ -76,13 +113,11 @@ serve(async (req) => {
     const productId = subscription.items.data[0].price.product as string;
     const planId = PRODUCT_TO_PLAN[productId] || "starter";
 
-    const periodEnd = (subscription as any).current_period_end
-      ?? (subscription.items.data[0] as any).current_period_end;
+    const periodEnd = subscription.current_period_end ?? subscription.items.data[0]?.current_period_end;
     const subscriptionEnd = (periodEnd && typeof periodEnd === "number" && periodEnd > 0)
       ? new Date(periodEnd * 1000).toISOString()
       : null;
 
-    // Sync plan
     if (orgId) {
       await supabase.from('organizations').update({ plan: planId }).eq('id', orgId);
     }
@@ -107,44 +142,6 @@ function json(data: any, status = 200) {
   });
 }
 
-async function findSubscription(stripe: any, supabase: any, user: any, orgId: string | null) {
-  // Check current user first
-  const sub = await findSubForEmail(stripe, user.email);
-  if (sub) return sub;
-
-  if (!orgId) return null;
-
-  // Check other org members
-  const { data: members } = await supabase
-    .from('organization_members')
-    .select('user_id')
-    .eq('organization_id', orgId)
-    .eq('is_active', true)
-    .neq('user_id', user.id);
-
-  if (!members?.length) return null;
-
-  for (const m of members) {
-    const { data: mu } = await supabase.auth.admin.getUserById(m.user_id);
-    if (!mu?.user?.email) continue;
-    const sub = await findSubForEmail(stripe, mu.user.email);
-    if (sub) return sub;
-  }
-  return null;
-}
-
-async function findSubForEmail(stripe: any, email: string) {
-  const customers = await stripe.customers.list({ email, limit: 1 });
-  if (!customers.data.length) return null;
-  const cid = customers.data[0].id;
-
-  let subs = await stripe.subscriptions.list({ customer: cid, status: "active", limit: 1 });
-  if (!subs.data.length) {
-    subs = await stripe.subscriptions.list({ customer: cid, status: "trialing", limit: 1 });
-  }
-  return subs.data[0] || null;
-}
-
 function getPaymentOverdue(orgData: any) {
   if (!orgData?.payment_failed_at) return { payment_failed_at: null, payment_overdue: false };
   const failedAt = new Date(orgData.payment_failed_at);
@@ -158,9 +155,9 @@ function buildTrialResponse(orgData: any) {
     return { subscribed: false, plan_id: null, subscription_end: null, on_trial: false, trial_expired: true, ...po };
   }
   const diffMs = new Date(orgData.trial_ends_at).getTime() - Date.now();
-  const daysRemaining = Math.max(0, Math.ceil(diffMs / 86400000));
+  const days = Math.max(0, Math.ceil(diffMs / 86400000));
   if (diffMs > 0) {
-    return { subscribed: false, plan_id: null, subscription_end: null, on_trial: true, trial_ends_at: orgData.trial_ends_at, days_remaining: daysRemaining, trial_expired: false, ...po };
+    return { subscribed: false, plan_id: null, subscription_end: null, on_trial: true, trial_ends_at: orgData.trial_ends_at, days_remaining: days, trial_expired: false, ...po };
   }
   return { subscribed: false, plan_id: null, subscription_end: null, on_trial: false, trial_ends_at: orgData.trial_ends_at, days_remaining: 0, trial_expired: true, ...po };
 }
