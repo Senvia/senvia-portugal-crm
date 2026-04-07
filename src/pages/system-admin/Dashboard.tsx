@@ -17,6 +17,7 @@ interface OrgRow {
   trial_ends_at: string | null;
   billing_exempt: boolean | null;
   created_at: string | null;
+  contact_phone: string | null;
 }
 
 interface OrgWithMembers extends OrgRow {
@@ -38,7 +39,7 @@ export default function SystemAdminDashboard() {
     queryFn: async (): Promise<OrgWithMembers[]> => {
       const { data: orgs, error } = await supabase
         .from("organizations")
-        .select("id, name, slug, code, plan, trial_ends_at, billing_exempt, created_at")
+        .select("id, name, slug, code, plan, trial_ends_at, billing_exempt, created_at, contact_phone")
         .order("created_at", { ascending: false });
       if (error) throw error;
 
@@ -59,6 +60,42 @@ export default function SystemAdminDashboard() {
     },
   });
 
+  const { data: adminEmails = {} } = useQuery({
+    queryKey: ["super-admin-admin-emails"],
+    queryFn: async (): Promise<Record<string, string>> => {
+      const { data, error } = await supabase
+        .from("organization_members")
+        .select("organization_id, user_id, role, profiles!organization_members_user_id_fkey(email:id)")
+        .eq("role", "admin")
+        .eq("is_active", true);
+      if (error) throw error;
+
+      // Get profile emails via separate query
+      const adminUserIds = (data || []).map((m: any) => m.user_id);
+      if (adminUserIds.length === 0) return {};
+
+      const { data: profiles, error: pErr } = await supabase
+        .from("profiles")
+        .select("id, email")
+        .in("id", adminUserIds);
+      if (pErr) throw pErr;
+
+      const emailMap: Record<string, string> = {};
+      (profiles || []).forEach((p: any) => {
+        if (p.email) emailMap[p.id] = p.email;
+      });
+
+      const orgAdminMap: Record<string, string> = {};
+      (data || []).forEach((m: any) => {
+        if (!orgAdminMap[m.organization_id] && emailMap[m.user_id]) {
+          orgAdminMap[m.organization_id] = emailMap[m.user_id];
+        }
+      });
+      return orgAdminMap;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
   const { data: stripeStats, isLoading: stripeLoading } = useQuery({
     queryKey: ["super-admin-stripe-stats"],
     queryFn: async (): Promise<StripeStatsResponse> => {
@@ -66,7 +103,7 @@ export default function SystemAdminDashboard() {
       if (error) throw error;
       return data as StripeStatsResponse;
     },
-    staleTime: 5 * 60 * 1000, // Cache 5 min
+    staleTime: 5 * 60 * 1000,
     retry: 1,
   });
 
@@ -92,6 +129,7 @@ export default function SystemAdminDashboard() {
               currentOrgId={organization?.id}
               onAccessOrg={(id) => switchOrganization(id)}
               stripeData={stripeStats?.org_stats}
+              adminEmails={adminEmails}
             />
           </>
         )}
