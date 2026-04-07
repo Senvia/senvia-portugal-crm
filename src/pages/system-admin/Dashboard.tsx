@@ -129,6 +129,7 @@ export default function SystemAdminDashboard() {
               currentOrgId={organization?.id}
               onAccessOrg={(id) => switchOrganization(id)}
               stripeData={stripeStats?.org_stats}
+              adminEmails={adminEmails}
             />
           </>
         )}
