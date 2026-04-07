@@ -25,6 +25,7 @@ interface Organization {
   trial_ends_at: string | null;
   billing_exempt: boolean | null;
   created_at: string | null;
+  contact_phone: string | null;
   member_count: number;
 }
 
