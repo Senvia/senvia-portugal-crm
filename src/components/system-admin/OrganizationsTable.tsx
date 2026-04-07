@@ -160,6 +160,37 @@ export function OrganizationsTable({
                         </Badge>
                       </TableCell>
                       <TableCell>
+                        <div className="flex flex-col gap-0.5 max-w-[180px]">
+                          {adminEmails[org.id] && (
+                            <span className="text-[11px] text-muted-foreground truncate" title={adminEmails[org.id]}>
+                              {adminEmails[org.id]}
+                            </span>
+                          )}
+                          {org.contact_phone && (
+                            <span className="text-[11px] text-emerald-400 truncate" title={org.contact_phone}>
+                              📱 {org.contact_phone}
+                            </span>
+                          )}
+                          {!adminEmails[org.id] && !org.contact_phone && (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
+                        {(() => {
+                          const expDate = stripeInfo?.stripe_period_end 
+                            ? new Date(stripeInfo.stripe_period_end) 
+                            : trialEnd;
+                          if (!expDate) return "—";
+                          const isExpired = expDate < now;
+                          return (
+                            <span className={isExpired ? "text-destructive" : ""}>
+                              {format(expDate, "dd MMM yyyy", { locale: pt })}
+                            </span>
+                          );
+                        })()}
+                      </TableCell>
+                      <TableCell>
                         {stripeInfo?.has_stripe_subscription && stripeInfo.stripe_status === "active" ? (
                           <CheckCircle2 className="h-4 w-4 text-emerald-400" />
                         ) : (
@@ -182,13 +213,6 @@ export function OrganizationsTable({
                       </TableCell>
                       <TableCell className="hidden sm:table-cell">
                         {org.member_count}
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
-                        {trialEnd
-                          ? daysLeft !== null && daysLeft > 0
-                            ? `${daysLeft}d restantes`
-                            : "Expirado"
-                          : "—"}
                       </TableCell>
                       <TableCell className="hidden lg:table-cell text-xs text-muted-foreground">
                         {org.created_at
