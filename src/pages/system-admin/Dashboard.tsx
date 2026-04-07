@@ -65,7 +65,7 @@ export default function SystemAdminDashboard() {
     queryFn: async (): Promise<Record<string, string>> => {
       const { data, error } = await supabase
         .from("organization_members")
-        .select("organization_id, user_id, role, profiles!organization_members_user_id_fkey(email:id)")
+        .select("organization_id, user_id, role")
         .eq("role", "admin")
         .eq("is_active", true);
       if (error) throw error;
