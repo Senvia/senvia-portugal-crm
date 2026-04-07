@@ -27,6 +27,7 @@ const signupSchema = z.object({
     .min(2, 'O slug deve ter pelo menos 2 caracteres')
     .max(50, 'O slug deve ter no máximo 50 caracteres')
     .regex(/^[a-z0-9-]+$/, 'O slug só pode conter letras minúsculas, números e hífens'),
+  contactPhone: z.string().min(9, 'O WhatsApp deve ter pelo menos 9 caracteres'),
 }).refine((data) => data.password === data.confirmPassword, {
   message: 'As palavras-passe não coincidem',
   path: ['confirmPassword'],
