@@ -78,6 +78,7 @@ export function OrganizationsTable({
   currentOrgId,
   onAccessOrg,
   stripeData,
+  adminEmails = {},
 }: OrganizationsTableProps) {
   const [filter, setFilter] = useState<Filter>("all");
   const now = new Date();
