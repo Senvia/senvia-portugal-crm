@@ -241,6 +241,7 @@ export default function Login() {
       confirmPassword: signupConfirmPassword,
       organizationName,
       organizationSlug,
+      contactPhone,
     });
     
     if (!result.success) {
