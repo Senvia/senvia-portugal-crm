@@ -622,7 +622,22 @@ export default function Login() {
                         <p className="text-xs text-red-400">Este slug já está em uso</p>
                       )}
                     </div>
-                    
+
+                    <div className="space-y-2 mt-3">
+                      <Label htmlFor="org-phone" className="text-slate-300">WhatsApp da Empresa *</Label>
+                      <Input
+                        id="org-phone"
+                        type="tel"
+                        placeholder="+351 912 345 678"
+                        value={contactPhone}
+                        onChange={(e) => setContactPhone(e.target.value)}
+                        className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
+                        required
+                      />
+                      <p className="text-xs text-slate-500">
+                        Número de contacto principal da empresa
+                      </p>
+                    </div>
                     
                   </div>
 
