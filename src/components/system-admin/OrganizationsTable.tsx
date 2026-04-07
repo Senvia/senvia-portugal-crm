@@ -113,10 +113,11 @@ export function OrganizationsTable({
                 <TableHead>Organização</TableHead>
                 <TableHead>Plano</TableHead>
                 <TableHead>Estado</TableHead>
+                <TableHead>Contacto</TableHead>
+                <TableHead className="hidden md:table-cell">Expiração</TableHead>
                 <TableHead>Stripe Ativo</TableHead>
                 <TableHead className="hidden sm:table-cell">Stripe</TableHead>
                 <TableHead className="hidden sm:table-cell">Membros</TableHead>
-                <TableHead className="hidden md:table-cell">Trial</TableHead>
                 <TableHead className="hidden lg:table-cell">Criada em</TableHead>
                 <TableHead className="w-10"></TableHead>
               </TableRow>
