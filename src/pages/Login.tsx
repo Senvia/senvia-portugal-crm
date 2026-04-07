@@ -74,6 +74,7 @@ export default function Login() {
   const [organizationName, setOrganizationName] = useState('');
   const [organizationSlug, setOrganizationSlug] = useState('');
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
+  const [contactPhone, setContactPhone] = useState('');
   
   
   // Slug availability state
