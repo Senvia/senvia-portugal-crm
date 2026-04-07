@@ -322,7 +322,8 @@ export default function Login() {
       const { error: orgError } = await supabase.rpc('create_organization_for_current_user', {
         _name: organizationName,
         _slug: organizationSlug,
-      });
+        _contact_phone: contactPhone,
+      } as any);
 
       if (orgError) {
         // If org creation fails, we should handle it gracefully
