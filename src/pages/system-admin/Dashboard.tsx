@@ -17,6 +17,7 @@ interface OrgRow {
   trial_ends_at: string | null;
   billing_exempt: boolean | null;
   created_at: string | null;
+  contact_phone: string | null;
 }
 
 interface OrgWithMembers extends OrgRow {
