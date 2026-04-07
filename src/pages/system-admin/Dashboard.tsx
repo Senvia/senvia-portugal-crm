@@ -39,7 +39,7 @@ export default function SystemAdminDashboard() {
     queryFn: async (): Promise<OrgWithMembers[]> => {
       const { data: orgs, error } = await supabase
         .from("organizations")
-        .select("id, name, slug, code, plan, trial_ends_at, billing_exempt, created_at")
+        .select("id, name, slug, code, plan, trial_ends_at, billing_exempt, created_at, contact_phone")
         .order("created_at", { ascending: false });
       if (error) throw error;
 
