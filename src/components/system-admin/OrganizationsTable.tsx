@@ -45,6 +45,7 @@ interface OrganizationsTableProps {
   currentOrgId?: string;
   onAccessOrg: (orgId: string) => void;
   stripeData?: OrgStripeData[];
+  adminEmails?: Record<string, string>;
 }
 
 function getOrgStatus(org: Organization, stripeInfo?: OrgStripeData) {
