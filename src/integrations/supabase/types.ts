@@ -2777,6 +2777,7 @@ export type Database = {
           client_fields_settings: Json | null
           code: string | null
           commission_matrix: Json | null
+          contact_phone: string | null
           created_at: string | null
           enabled_modules: Json | null
           fidelization_alert_days: Json | null
@@ -2832,6 +2833,7 @@ export type Database = {
           client_fields_settings?: Json | null
           code?: string | null
           commission_matrix?: Json | null
+          contact_phone?: string | null
           created_at?: string | null
           enabled_modules?: Json | null
           fidelization_alert_days?: Json | null
@@ -2887,6 +2889,7 @@ export type Database = {
           client_fields_settings?: Json | null
           code?: string | null
           commission_matrix?: Json | null
+          contact_phone?: string | null
           created_at?: string | null
           enabled_modules?: Json | null
           fidelization_alert_days?: Json | null
@@ -4594,10 +4597,12 @@ export type Database = {
         Args: { _bank_account_id: string; _transaction_date: string }
         Returns: number
       }
-      create_organization_for_current_user: {
-        Args: { _name: string; _slug: string }
-        Returns: string
-      }
+      create_organization_for_current_user:
+        | { Args: { _name: string; _slug: string }; Returns: string }
+        | {
+            Args: { _contact_phone?: string; _name: string; _slug: string }
+            Returns: string
+          }
       distribute_prospects_round_robin:
         | {
             Args: {
