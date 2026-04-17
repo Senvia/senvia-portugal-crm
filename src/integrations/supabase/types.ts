@@ -2640,6 +2640,7 @@ export type Database = {
           is_active: boolean
           joined_at: string | null
           organization_id: string
+          paused_until: string | null
           profile_id: string | null
           role: Database["public"]["Enums"]["app_role"]
           user_id: string
@@ -2650,6 +2651,7 @@ export type Database = {
           is_active?: boolean
           joined_at?: string | null
           organization_id: string
+          paused_until?: string | null
           profile_id?: string | null
           role?: Database["public"]["Enums"]["app_role"]
           user_id: string
@@ -2660,6 +2662,7 @@ export type Database = {
           is_active?: boolean
           joined_at?: string | null
           organization_id?: string
+          paused_until?: string | null
           profile_id?: string | null
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
