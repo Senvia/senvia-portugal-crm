@@ -103,11 +103,13 @@ async function handleWebhookMode(req: Request, token: string): Promise<Response>
   const salesSettings = (org.sales_settings as any) || {};
   if (salesSettings.auto_assign_leads) {
     try {
+      const nowIso = new Date().toISOString();
       let membersQuery = supabase
         .from('organization_members')
         .select('user_id')
         .eq('organization_id', org.id)
-        .eq('is_active', true);
+        .eq('is_active', true)
+        .or(`paused_until.is.null,paused_until.lt.${nowIso}`);
       if (salesSettings.exclude_admins_from_assignment) {
         membersQuery = membersQuery.neq('role', 'admin');
       }
@@ -523,11 +525,13 @@ Deno.serve(async (req) => {
       const salesSettings = (org.sales_settings as any) || {};
       if (salesSettings.auto_assign_leads) {
         try {
+          const nowIso2 = new Date().toISOString();
           let membersQuery2 = supabase
             .from('organization_members')
             .select('user_id')
             .eq('organization_id', org.id)
-            .eq('is_active', true);
+            .eq('is_active', true)
+            .or(`paused_until.is.null,paused_until.lt.${nowIso2}`);
           if (salesSettings.exclude_admins_from_assignment) {
             membersQuery2 = membersQuery2.neq('role', 'admin');
           }
