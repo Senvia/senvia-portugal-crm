@@ -1,36 +1,35 @@
+## Plano: Exportar dados da base de dados Senvia OS
 
+### Contexto importante
+Eu (Lovable) tenho acesso de leitura/escrita à base de dados deste projeto através das ferramentas internas (Lovable Cloud / Supabase). **NÃO tenho acesso à password da base de dados nem ao painel web do Supabase para te entregar credenciais** — isso é gerido pela tua conta Lovable e por motivos de segurança não pode ser partilhado por mim.
 
-## Plano: Pausar Rafael Camilo do round-robin até 30/04/2026
+Tens, portanto, **duas vias possíveis**:
 
-### Contexto
-- Empresa: **Escolha Inteligente** (`8cc9ec75-...`)
-- Comercial: **Rafael Camilo** (`87a5e5fb-6bfb-4c3e-993a-a7c01a2a0fc5`)
-- O round-robin em `submit-lead` (modo webhook **e** modo formulário) seleciona todos os membros activos não-admin via `organization_members` ordenados por `joined_at`. Hoje não há campo para excluir temporariamente um comercial.
+---
 
-### O que será feito
+### Opção A — Eu faço o export aqui (recomendado, imediato)
+Eu corro queries SQL diretamente na base de dados e gero ficheiros descarregáveis (CSV / Excel / JSON / SQL dump parcial) com os dados que precisas. Entrego em `/mnt/documents/` para download imediato.
 
-**1. Migração SQL — adicionar campo de pausa por comercial**
-- Adicionar coluna `paused_until timestamptz` em `organization_members`.
-- Significado: enquanto `paused_until > now()`, o membro é ignorado pelo round-robin e por qualquer atribuição automática. Após essa data, volta a entrar normalmente sem qualquer intervenção manual.
-- Definir `paused_until = '2026-05-01 00:00:00+01'` (Lisboa) para o Rafael — assim recebe leads novamente a 1 de maio.
+**Preciso que me digas:**
+1. **Que dados queres exportar?** Algumas opções:
+   - Tudo (todas as tabelas — dump completo em SQL ou múltiplos CSVs num ZIP)
+   - Apenas tabelas de negócio (organizations, profiles, leads, clients, proposals, sales, cpes, etc.)
+   - Uma organização específica (ex.: só dados da Escolha Inteligente / Total Link / Perfect2Gether)
+   - Tabelas específicas que listares
+2. **Formato preferido:** CSV (1 ficheiro por tabela, dentro de ZIP), Excel (multi-sheet), JSON, ou SQL dump.
+3. **Incluir dados de auth?** (emails de utilizadores do `auth.users` — eu consigo extrair via JOIN com `profiles`/`organization_members`).
 
-**2. Atualizar `submit-lead/index.ts`**
-- Nas duas queries de round-robin (linhas ~106-114 e ~526-534), adicionar filtro:
-  ```
-  .or('paused_until.is.null,paused_until.lt.' + new Date().toISOString())
-  ```
-- Resultado: Rafael deixa de ser candidato a receber leads via webhook (Make/Zapier) e via formulários até 01/05/2026.
+---
 
-**3. Comportamento garantido**
-- Leads já atribuídos ao Rafael **não são tocados** (continuam dele).
-- Atribuição manual pelo admin continua a funcionar (a pausa só afeta automação).
-- Os outros 5 comerciais continuam a rodar normalmente em round-robin.
-- A 01/05 o Rafael volta automaticamente ao rodízio — zero intervenção.
+### Opção B — Acesso direto ao painel Supabase / password DB
+Para isto **não consigo ajudar diretamente** — tens de:
+1. Ir a **Lovable → topo direito → Cloud → Open Backend** (ou no menu Connectors → Lovable Cloud)
+2. Isso abre o painel Supabase associado a este projeto
+3. Lá podes ir a **Settings → Database** para obter a connection string / password, ou usar **Table Editor → Export** para CSV manual
 
-### Ficheiros alterados
-- Nova migração SQL: `ALTER TABLE organization_members ADD COLUMN paused_until timestamptz;` + `UPDATE` para o Rafael.
-- `supabase/functions/submit-lead/index.ts`: 2 pontos do round-robin filtram membros pausados.
+A password e o painel são propriedade da tua conta — eu não os posso ler nem partilhar.
 
-### Nota
-Esta é uma alteração mínima e cirúrgica. Não toco em nada da UI agora. Se quiseres depois, posso adicionar um botão "Pausar comercial até..." na página de Equipa para gerir isto sem migração.
+---
 
+### Recomendação
+**Vai pela Opção A.** É mais rápido, mais limpo, e eu posso filtrar/transformar os dados como precisares (ex.: "só leads do mês passado da Escolha Inteligente em Excel"). Diz-me só o âmbito e o formato e eu gero já.
