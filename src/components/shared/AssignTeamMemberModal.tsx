@@ -101,8 +101,8 @@ export function AssignTeamMemberModal({
                 </Label>
               </div>
 
-              {/* Team members */}
-              {teamMembers.map((member) => (
+              {/* Team members (exclude paused) */}
+              {teamMembers.filter((m) => !m.is_paused).map((member) => (
                 <div
                   key={member.user_id}
                   className="flex items-center space-x-3 rounded-lg border border-border p-3 hover:bg-muted/50 transition-colors"

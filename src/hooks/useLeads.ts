@@ -172,11 +172,13 @@ export function useCreateLead() {
 
         const salesSettings = (org?.sales_settings as any) || {};
         if (salesSettings.auto_assign_leads) {
+          const nowIso = new Date().toISOString();
           let membersQuery = supabase
             .from('organization_members')
             .select('user_id')
             .eq('organization_id', organization.id)
-            .eq('is_active', true);
+            .eq('is_active', true)
+            .or(`paused_until.is.null,paused_until.lt.${nowIso}`);
           if (salesSettings.exclude_admins_from_assignment) {
             membersQuery = membersQuery.neq('role', 'admin');
           }
