@@ -1,60 +1,52 @@
-## O que encontrei
-- O **Rafael recebeu 1 lead ontem**: `Filipe Pereira` em **2026-05-01 19:17 UTC**.
-- A causa principal é que a pausa dos 3 comerciais estava configurada com **`paused_until = 2026-04-30 23:00:00+00`**. Ou seja: **a pausa já tinha expirado** quando esse lead entrou no dia 1.
-- Além disso, encontrei uma fragilidade real no sistema: a pausa hoje só está protegida em alguns fluxos.
-  - O `submit-lead` já exclui pausados no round-robin.
-  - Mas o fluxo de **criação manual de lead** (`useCreateLead`) **não filtra `paused_until`**.
-  - E a UI de atribuição manual/bulk ainda mostra membros pausados como elegíveis.
-- Não encontrei formulário da organização com responsável fixo para o Rafael/Pedro/Bernardo, então o problema não veio daí.
+## Objectivo
 
-## Plano
-1. **Corrigir imediatamente os dados da organização Escolha Inteligente**
-   - Reaplicar a pausa para **Rafael Camilo, Pedro Rodrigues e Bernardo Marinho** com nova validade futura.
-   - Identificar todos os leads recentes atribuídos a qualquer um dos 3 após o período em que não deveriam receber.
-   - **Redistribuir esses leads** pelos próximos comerciais ativos elegíveis, respeitando a rotação atual e excluindo admins e pausados.
+Adicionar **1 segundo webhook de entrada** para a Escolha Inteligente, que entrega 100% dos leads ao **Daniel**. O webhook actual (round-robin entre a equipa) mantém-se exactamente como está.
 
-2. **Fechar a falha no fluxo automático e manual**
-   - Atualizar o fluxo de criação manual de leads (`useCreateLead`) para usar o mesmo filtro de elegibilidade do round-robin: ativo, não admin quando aplicável, e **não pausado**.
-   - Corrigir também o uso de `round_robin_index` para não voltar a apontar para comerciais pausados.
+## Como vai funcionar
 
-3. **Bloquear atribuição manual a comerciais pausados**
-   - Atualizar `get-team-members` para devolver `paused_until`.
-   - Atualizar os seletores de atribuição em:
-     - `AddLeadModal`
-     - `LeadDetailsModal`
-     - `AssignTeamMemberModal`
-   - Comportamento:
-     - comerciais pausados aparecem como **“Pausado”** ou deixam de aparecer como opção elegível;
-     - se alguém tentar gravar uma atribuição inválida, o sistema mostra erro e impede a operação.
+A organização passa a ter **2 URLs de webhook**:
 
-4. **Adicionar proteção no backend/database para garantir a regra**
-   - Criar uma proteção central para impedir que um lead seja gravado com `assigned_to` apontando para um membro pausado da mesma organização.
-   - Assim a regra deixa de depender só da UI e passa a valer mesmo se houver outro fluxo futuro, importação ou chamada indireta.
+1. **Webhook actual** (já em uso no Make/Zapier) → continua round-robin para a equipa.
+2. **Webhook novo "Daniel"** → todos os leads vão directos para o Daniel, sem round-robin.
 
-5. **Validar os cenários críticos**
-   - Lead via formulário/webhook.
-   - Lead criado manualmente sem responsável escolhido.
-   - Lead criado manualmente com responsável escolhido.
-   - Reatribuição individual e em massa.
-   - Confirmar no fim que **Rafael, Pedro e Bernardo deixam de receber novos leads**.
+Em **Definições → Integrações** aparece uma nova secção pequena chamada **"Webhook Dedicado (Daniel)"** com:
+- A URL única
+- Botão **Copiar**
+- Toggle **Activo/Inactivo**
 
-## Resultado esperado
-- Os 3 comerciais deixam de receber **qualquer novo lead** enquanto estiverem pausados.
-- Os leads que entraram indevidamente ficam **redistribuídos para os próximos comerciais válidos**.
-- A regra passa a ser consistente em todos os pontos do sistema, não só no round-robin do formulário.
+Cola-se a URL no novo cenário do Make/Zapier e está feito.
 
-## Detalhes técnicos
-- Arquivos a ajustar:
-  - `src/hooks/useLeads.ts`
-  - `src/hooks/useTeam.ts`
-  - `src/components/leads/AddLeadModal.tsx`
-  - `src/components/leads/LeadDetailsModal.tsx`
-  - `src/components/shared/AssignTeamMemberModal.tsx`
-  - `supabase/functions/submit-lead/index.ts`
-  - nova migration para proteção estrutural
-- Dados confirmados agora:
-  - Organização: **Escolha Inteligente**
-  - Rafael, Pedro e Bernardo estavam com pausa até **2026-04-30 23:00 UTC**
-  - Lead indevido confirmado: **Filipe Pereira** → **Rafael Camilo** em **2026-05-01**
+## Implementação técnica
 
-Quando aprovares, eu faço a correção e a redistribuição imediatamente.
+### 1. Base de dados
+Adicionar 2 colunas em `organizations`:
+- `webhook_token_dedicated` (text, único, gerado automaticamente)
+- `webhook_dedicated_user_id` (uuid, aponta para o user que recebe tudo)
+
+Não preciso de tabela nova — é uma extensão simples do que já existe.
+
+### 2. Edge function `submit-lead`
+Nova rota de validação no início:
+- Se o `token` da request bater com `webhook_token_dedicated` da organização → atribui directamente ao `webhook_dedicated_user_id`, **salta o round-robin**, respeita o resto do fluxo (deduplicação, custom_data, n8n, notificações, etc.).
+- Caso contrário → fluxo actual intacto.
+
+### 3. UI
+Em `IntegrationsContent.tsx`, adicionar um cartão pequeno por baixo do webhook actual:
+- Mostra a URL do webhook dedicado + botão copiar.
+- Selector do utilizador responsável (default: Daniel para a Escolha Inteligente).
+- Botão "Gerar novo token" caso queira invalidar.
+
+### 4. Setup imediato após deploy
+Eu próprio configuro na base de dados:
+- Gero o `webhook_token_dedicated` para a Escolha Inteligente.
+- Defino `webhook_dedicated_user_id` = Daniel.
+- Devolvo-te a URL pronta para colar no Make.
+
+## Ficheiros alterados
+- 1 migration (2 colunas em `organizations`)
+- `supabase/functions/submit-lead/index.ts` (handler dedicado, ~30 linhas)
+- `src/components/settings/IntegrationsContent.tsx` (novo cartão)
+- `src/hooks/useOrganization.ts` (expor os 2 novos campos)
+
+## Compatibilidade
+Zero impacto no webhook existente. Continua a funcionar exactamente como hoje.
