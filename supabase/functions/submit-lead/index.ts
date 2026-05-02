@@ -28,14 +28,31 @@ async function handleWebhookMode(req: Request, token: string): Promise<Response>
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-  // Validate token against organizations
-  const { data: org, error: orgError } = await supabase
+  // Try standard webhook token first
+  let { data: org } = await supabase
     .from('organizations')
-    .select('id, name, niche, webhook_url, whatsapp_instance, whatsapp_api_key, whatsapp_base_url, meta_pixels, sales_settings, brevo_api_key, brevo_sender_email, slug')
+    .select('id, name, niche, webhook_url, whatsapp_instance, whatsapp_api_key, whatsapp_base_url, meta_pixels, sales_settings, brevo_api_key, brevo_sender_email, slug, webhook_dedicated_user_id')
     .eq('webhook_token', token)
     .maybeSingle();
 
-  if (orgError || !org) {
+  let dedicatedUserId: string | null = null;
+
+  // If not found, try dedicated webhook token (forces assignment to specific user)
+  if (!org) {
+    const { data: dedicatedOrg } = await supabase
+      .from('organizations')
+      .select('id, name, niche, webhook_url, whatsapp_instance, whatsapp_api_key, whatsapp_base_url, meta_pixels, sales_settings, brevo_api_key, brevo_sender_email, slug, webhook_dedicated_user_id')
+      .eq('webhook_token_dedicated', token)
+      .maybeSingle();
+
+    if (dedicatedOrg) {
+      org = dedicatedOrg;
+      dedicatedUserId = dedicatedOrg.webhook_dedicated_user_id || null;
+      console.log('Dedicated webhook matched. Forced assignee:', dedicatedUserId);
+    }
+  }
+
+  if (!org) {
     console.error('Invalid webhook token');
     return new Response(
       JSON.stringify({ error: 'Token inválido' }),
@@ -43,7 +60,7 @@ async function handleWebhookMode(req: Request, token: string): Promise<Response>
     );
   }
 
-  console.log('Webhook mode: org found:', org.name);
+  console.log('Webhook mode: org found:', org.name, dedicatedUserId ? '(dedicated)' : '(standard)');
 
   const rawBody = await req.json();
   console.log('Webhook payload received:', JSON.stringify(rawBody).substring(0, 500));
