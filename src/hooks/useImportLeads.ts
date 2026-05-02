@@ -83,7 +83,7 @@ export function useImportLeads() {
 
       for (let i = 0; i < payloads.length; i += chunkSize) {
         const chunk = payloads.slice(i, i + chunkSize);
-        const { data, error } = await supabase.from("leads").insert(chunk).select("id");
+        const { data, error } = await supabase.from("leads").insert(chunk as any).select("id");
         if (error) {
           failed += chunk.length;
           if (!firstError) firstError = error.message;
