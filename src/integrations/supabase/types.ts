@@ -2820,7 +2820,9 @@ export type Database = {
           slug: string
           tax_config: Json | null
           trial_ends_at: string | null
+          webhook_dedicated_user_id: string | null
           webhook_token: string
+          webhook_token_dedicated: string | null
           webhook_url: string | null
           whatsapp_api_key: string | null
           whatsapp_base_url: string | null
@@ -2876,7 +2878,9 @@ export type Database = {
           slug: string
           tax_config?: Json | null
           trial_ends_at?: string | null
+          webhook_dedicated_user_id?: string | null
           webhook_token?: string
+          webhook_token_dedicated?: string | null
           webhook_url?: string | null
           whatsapp_api_key?: string | null
           whatsapp_base_url?: string | null
@@ -2932,7 +2936,9 @@ export type Database = {
           slug?: string
           tax_config?: Json | null
           trial_ends_at?: string | null
+          webhook_dedicated_user_id?: string | null
           webhook_token?: string
+          webhook_token_dedicated?: string | null
           webhook_url?: string | null
           whatsapp_api_key?: string | null
           whatsapp_base_url?: string | null
