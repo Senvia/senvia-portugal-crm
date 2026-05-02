@@ -28,14 +28,31 @@ async function handleWebhookMode(req: Request, token: string): Promise<Response>
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-  // Validate token against organizations
-  const { data: org, error: orgError } = await supabase
+  // Try standard webhook token first
+  let { data: org } = await supabase
     .from('organizations')
-    .select('id, name, niche, webhook_url, whatsapp_instance, whatsapp_api_key, whatsapp_base_url, meta_pixels, sales_settings, brevo_api_key, brevo_sender_email, slug')
+    .select('id, name, niche, webhook_url, whatsapp_instance, whatsapp_api_key, whatsapp_base_url, meta_pixels, sales_settings, brevo_api_key, brevo_sender_email, slug, webhook_dedicated_user_id')
     .eq('webhook_token', token)
     .maybeSingle();
 
-  if (orgError || !org) {
+  let dedicatedUserId: string | null = null;
+
+  // If not found, try dedicated webhook token (forces assignment to specific user)
+  if (!org) {
+    const { data: dedicatedOrg } = await supabase
+      .from('organizations')
+      .select('id, name, niche, webhook_url, whatsapp_instance, whatsapp_api_key, whatsapp_base_url, meta_pixels, sales_settings, brevo_api_key, brevo_sender_email, slug, webhook_dedicated_user_id')
+      .eq('webhook_token_dedicated', token)
+      .maybeSingle();
+
+    if (dedicatedOrg) {
+      org = dedicatedOrg;
+      dedicatedUserId = dedicatedOrg.webhook_dedicated_user_id || null;
+      console.log('Dedicated webhook matched. Forced assignee:', dedicatedUserId);
+    }
+  }
+
+  if (!org) {
     console.error('Invalid webhook token');
     return new Response(
       JSON.stringify({ error: 'Token inválido' }),
@@ -43,7 +60,7 @@ async function handleWebhookMode(req: Request, token: string): Promise<Response>
     );
   }
 
-  console.log('Webhook mode: org found:', org.name);
+  console.log('Webhook mode: org found:', org.name, dedicatedUserId ? '(dedicated)' : '(standard)');
 
   const rawBody = await req.json();
   console.log('Webhook payload received:', JSON.stringify(rawBody).substring(0, 500));
@@ -98,34 +115,39 @@ async function handleWebhookMode(req: Request, token: string): Promise<Response>
     }
   }
 
-  // Round-robin auto-assign
+  // Assignment: dedicated webhook forces a specific user, otherwise round-robin
   let autoAssignedTo: string | null = null;
-  const salesSettings = (org.sales_settings as any) || {};
-  if (salesSettings.auto_assign_leads) {
-    try {
-      const nowIso = new Date().toISOString();
-      let membersQuery = supabase
-        .from('organization_members')
-        .select('user_id')
-        .eq('organization_id', org.id)
-        .eq('is_active', true)
-        .or(`paused_until.is.null,paused_until.lt.${nowIso}`);
-      if (salesSettings.exclude_admins_from_assignment) {
-        membersQuery = membersQuery.neq('role', 'admin');
-      }
-      const { data: members } = await membersQuery.order('joined_at', { ascending: true });
+  if (dedicatedUserId) {
+    autoAssignedTo = dedicatedUserId;
+    console.log('Dedicated webhook: bypassing round-robin, assigning to', dedicatedUserId);
+  } else {
+    const salesSettings = (org.sales_settings as any) || {};
+    if (salesSettings.auto_assign_leads) {
+      try {
+        const nowIso = new Date().toISOString();
+        let membersQuery = supabase
+          .from('organization_members')
+          .select('user_id')
+          .eq('organization_id', org.id)
+          .eq('is_active', true)
+          .or(`paused_until.is.null,paused_until.lt.${nowIso}`);
+        if (salesSettings.exclude_admins_from_assignment) {
+          membersQuery = membersQuery.neq('role', 'admin');
+        }
+        const { data: members } = await membersQuery.order('joined_at', { ascending: true });
 
-      if (members && members.length > 0) {
-        const currentIndex = salesSettings.round_robin_index || 0;
-        const safeIndex = currentIndex % members.length;
-        autoAssignedTo = members[safeIndex].user_id;
-        const nextIndex = (safeIndex + 1) % members.length;
-        await supabase.from('organizations').update({
-          sales_settings: { ...salesSettings, round_robin_index: nextIndex },
-        }).eq('id', org.id);
+        if (members && members.length > 0) {
+          const currentIndex = salesSettings.round_robin_index || 0;
+          const safeIndex = currentIndex % members.length;
+          autoAssignedTo = members[safeIndex].user_id;
+          const nextIndex = (safeIndex + 1) % members.length;
+          await supabase.from('organizations').update({
+            sales_settings: { ...salesSettings, round_robin_index: nextIndex },
+          }).eq('id', org.id);
+        }
+      } catch (rrErr) {
+        console.error('Round-robin failed:', rrErr);
       }
-    } catch (rrErr) {
-      console.error('Round-robin failed:', rrErr);
     }
   }
 

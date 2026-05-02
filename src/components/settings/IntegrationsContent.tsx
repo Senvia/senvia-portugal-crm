@@ -355,37 +355,104 @@ function WebhooksManager() {
 function InboundWebhookSection() {
   const { organization } = useAuth();
   const [copied, setCopied] = useState(false);
+  const [copiedDedicated, setCopiedDedicated] = useState(false);
   const [webhookToken, setWebhookToken] = useState<string | null>(null);
+  const [dedicatedToken, setDedicatedToken] = useState<string | null>(null);
+  const [dedicatedUserId, setDedicatedUserId] = useState<string | null>(null);
+  const [members, setMembers] = useState<Array<{ user_id: string; full_name: string }>>([]);
   const [loading, setLoading] = useState(true);
+  const [savingUser, setSavingUser] = useState(false);
+  const [generatingToken, setGeneratingToken] = useState(false);
 
-  // Fetch webhook_token from organization
-  import('react').then(({ useEffect: _useEffect }) => {});
-  
-  // Using a proper pattern - fetch on mount
-  const fetchToken = async () => {
-    if (!organization?.id) return;
-    const { supabase } = await import('@/integrations/supabase/client');
-    const { data } = await supabase
-      .from('organizations')
-      .select('webhook_token')
-      .eq('id', organization.id)
-      .single();
-    setWebhookToken((data as any)?.webhook_token || null);
-    setLoading(false);
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      if (!organization?.id) return;
+      const { supabase } = await import('@/integrations/supabase/client');
+
+      // Org tokens
+      const { data: orgRow } = await supabase
+        .from('organizations')
+        .select('webhook_token, webhook_token_dedicated, webhook_dedicated_user_id')
+        .eq('id', organization.id)
+        .single();
+
+      // Members for assignee selector
+      const { data: memberRows } = await supabase.functions.invoke('get-team-members', {
+        body: { organization_id: organization.id }
+      });
+
+      if (cancelled) return;
+      setWebhookToken((orgRow as any)?.webhook_token || null);
+      setDedicatedToken((orgRow as any)?.webhook_token_dedicated || null);
+      setDedicatedUserId((orgRow as any)?.webhook_dedicated_user_id || null);
+      setMembers(((memberRows as any[]) || []).map(m => ({
+        user_id: m.user_id,
+        full_name: m.full_name,
+      })));
+      setLoading(false);
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [organization?.id]);
+
+  const baseFn = 'https://zppcobirzgpfcrnxznwe.supabase.co/functions/v1/submit-lead?mode=webhook&token=';
+  const webhookUrl = webhookToken ? `${baseFn}${webhookToken}` : '';
+  const dedicatedUrl = dedicatedToken ? `${baseFn}${dedicatedToken}` : '';
+
+  const handleCopy = (url: string, kind: 'main' | 'dedicated') => {
+    if (!url) return;
+    navigator.clipboard.writeText(url);
+    if (kind === 'main') {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } else {
+      setCopiedDedicated(true);
+      setTimeout(() => setCopiedDedicated(false), 2000);
+    }
   };
 
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  useState(() => { fetchToken(); });
+  const generateRandomToken = () => {
+    const arr = new Uint8Array(24);
+    crypto.getRandomValues(arr);
+    return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
+  };
 
-  const webhookUrl = webhookToken
-    ? `https://zppcobirzgpfcrnxznwe.supabase.co/functions/v1/submit-lead?mode=webhook&token=${webhookToken}`
-    : '';
+  const handleGenerateDedicated = async () => {
+    if (!organization?.id) return;
+    setGeneratingToken(true);
+    try {
+      const { supabase } = await import('@/integrations/supabase/client');
+      const newToken = generateRandomToken();
+      const { error } = await supabase
+        .from('organizations')
+        .update({ webhook_token_dedicated: newToken })
+        .eq('id', organization.id);
+      if (error) throw error;
+      setDedicatedToken(newToken);
+    } catch (err) {
+      console.error('Erro ao gerar token dedicado:', err);
+    } finally {
+      setGeneratingToken(false);
+    }
+  };
 
-  const handleCopy = () => {
-    if (!webhookUrl) return;
-    navigator.clipboard.writeText(webhookUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const handleSaveDedicatedUser = async (userId: string) => {
+    if (!organization?.id) return;
+    setSavingUser(true);
+    try {
+      const { supabase } = await import('@/integrations/supabase/client');
+      const { error } = await supabase
+        .from('organizations')
+        .update({ webhook_dedicated_user_id: userId || null })
+        .eq('id', organization.id);
+      if (error) throw error;
+      setDedicatedUserId(userId || null);
+    } catch (err) {
+      console.error('Erro ao guardar utilizador dedicado:', err);
+    } finally {
+      setSavingUser(false);
+    }
   };
 
   if (loading) {
@@ -398,71 +465,114 @@ function InboundWebhookSection() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="rounded-lg bg-primary/5 border border-primary/20 p-4">
         <h4 className="font-medium text-sm mb-1">🔗 Receber leads de fontes externas</h4>
         <p className="text-sm text-muted-foreground">
-          Use este URL para receber leads automaticamente do <strong>Zapier</strong>, <strong>Make (Integromat)</strong>, ou qualquer outra plataforma de automação. Ideal para integrar com <strong>Facebook Lead Ads</strong>, Google Forms, etc.
+          Use estes URLs para receber leads automaticamente do <strong>Zapier</strong>, <strong>Make (Integromat)</strong>, ou qualquer outra plataforma de automação. Ideal para integrar com <strong>Facebook Lead Ads</strong>, Google Forms, etc.
         </p>
       </div>
 
+      {/* === WEBHOOK GERAL (Round-Robin) === */}
       <div className="space-y-2">
-        <Label>URL do Webhook</Label>
+        <div className="flex items-center justify-between">
+          <Label>URL do Webhook Geral (Round-Robin)</Label>
+          <Badge variant="secondary" className="text-xs">Distribui pela equipa</Badge>
+        </div>
         <div className="flex items-center gap-2">
-          <Input
-            readOnly
-            value={webhookUrl}
-            className="text-xs font-mono bg-muted"
-          />
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleCopy}
-            className="shrink-0"
-          >
+          <Input readOnly value={webhookUrl} className="text-xs font-mono bg-muted" />
+          <Button type="button" variant="outline" size="sm" onClick={() => handleCopy(webhookUrl, 'main')} className="shrink-0">
             {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
             {copied ? 'Copiado' : 'Copiar'}
           </Button>
         </div>
-        <p className="text-xs text-muted-foreground">Cole este URL como destino do webhook no Zapier ou Make.</p>
+        <p className="text-xs text-muted-foreground">Os leads enviados para este URL são distribuídos automaticamente entre os comerciais activos (round-robin).</p>
+      </div>
+
+      {/* === WEBHOOK DEDICADO (1 utilizador fixo) === */}
+      <div className="rounded-lg border-2 border-dashed border-primary/30 p-4 space-y-4 bg-primary/5">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h4 className="font-semibold text-sm flex items-center gap-2">
+              🎯 Webhook Dedicado (entrega a 1 utilizador fixo)
+            </h4>
+            <p className="text-xs text-muted-foreground mt-1">
+              Endpoint adicional para campanhas específicas. Todos os leads vão directos para o utilizador escolhido, sem round-robin.
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Utilizador que recebe todos os leads</Label>
+          <select
+            className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
+            value={dedicatedUserId || ''}
+            disabled={savingUser}
+            onChange={(e) => handleSaveDedicatedUser(e.target.value)}
+          >
+            <option value="">— Seleccionar utilizador —</option>
+            {members.map((m) => (
+              <option key={m.user_id} value={m.user_id}>{m.full_name}</option>
+            ))}
+          </select>
+        </div>
+
+        {dedicatedToken ? (
+          <div className="space-y-2">
+            <Label>URL do Webhook Dedicado</Label>
+            <div className="flex items-center gap-2">
+              <Input readOnly value={dedicatedUrl} className="text-xs font-mono bg-muted" />
+              <Button type="button" variant="outline" size="sm" onClick={() => handleCopy(dedicatedUrl, 'dedicated')} className="shrink-0">
+                {copiedDedicated ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                {copiedDedicated ? 'Copiado' : 'Copiar'}
+              </Button>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs text-muted-foreground">Cole este URL num cenário separado do Make/Zapier.</p>
+              <Button type="button" variant="ghost" size="sm" onClick={handleGenerateDedicated} disabled={generatingToken} className="text-xs h-7">
+                {generatingToken && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+                Gerar novo token
+              </Button>
+            </div>
+            {!dedicatedUserId && (
+              <div className="rounded-md bg-amber-500/10 border border-amber-500/20 p-2">
+                <p className="text-xs text-amber-700 dark:text-amber-400">
+                  ⚠️ Selecciona um utilizador acima — sem isso, os leads ficam sem responsável.
+                </p>
+              </div>
+            )}
+          </div>
+        ) : (
+          <Button type="button" variant="default" size="sm" onClick={handleGenerateDedicated} disabled={generatingToken}>
+            {generatingToken && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+            <Plus className="h-3 w-3 mr-1" />
+            Activar Webhook Dedicado
+          </Button>
+        )}
       </div>
 
       <div className="rounded-lg border p-4 space-y-3">
-        <h4 className="font-medium text-sm">📋 Como configurar no Zapier</h4>
+        <h4 className="font-medium text-sm">📋 Como configurar no Zapier / Make</h4>
         <ol className="text-sm text-muted-foreground space-y-2 list-decimal list-inside">
-          <li>Crie um novo Zap com o trigger <strong>"Facebook Lead Ads → New Lead"</strong></li>
-          <li>Adicione a ação <strong>"Webhooks by Zapier → POST"</strong></li>
-          <li>Cole o URL acima no campo <strong>"URL"</strong></li>
-          <li>Em <strong>"Payload Type"</strong>, selecione <strong>"JSON"</strong></li>
+          <li>Crie um cenário/zap com o trigger desejado (Facebook Lead Ads, Google Forms, etc.)</li>
+          <li>Adicione uma acção HTTP <strong>POST</strong> com o URL acima</li>
+          <li>Body type: <strong>JSON</strong></li>
           <li>Mapeie os campos:
             <ul className="ml-4 mt-1 space-y-1 list-disc">
-              <li><code className="bg-muted px-1 rounded text-xs">name</code> → Nome completo do lead</li>
+              <li><code className="bg-muted px-1 rounded text-xs">name</code> → Nome completo</li>
               <li><code className="bg-muted px-1 rounded text-xs">email</code> → Email</li>
               <li><code className="bg-muted px-1 rounded text-xs">phone</code> → Telefone</li>
               <li><code className="bg-muted px-1 rounded text-xs">company</code> → Empresa (opcional)</li>
-              <li><code className="bg-muted px-1 rounded text-xs">source</code> → Fonte (opcional, ex: "Facebook Ads")</li>
+              <li><code className="bg-muted px-1 rounded text-xs">source</code> → Fonte (opcional)</li>
               <li><code className="bg-muted px-1 rounded text-xs">notes</code> → Notas (opcional)</li>
             </ul>
           </li>
-          <li>Ative o Zap e teste!</li>
-        </ol>
-      </div>
-
-      <div className="rounded-lg border p-4 space-y-3">
-        <h4 className="font-medium text-sm">📋 Como configurar no Make</h4>
-        <ol className="text-sm text-muted-foreground space-y-2 list-decimal list-inside">
-          <li>Crie um cenário com o módulo <strong>"Facebook Lead Ads → Watch Leads"</strong></li>
-          <li>Adicione o módulo <strong>"HTTP → Make a request"</strong></li>
-          <li>Método: <strong>POST</strong>, URL: cole o URL acima</li>
-          <li>Body type: <strong>JSON</strong></li>
-          <li>Mapeie os mesmos campos indicados acima</li>
         </ol>
       </div>
 
       <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-3">
         <p className="text-sm text-amber-600 dark:text-amber-400">
-          ⚠️ <strong>Importante:</strong> Não partilhe este URL publicamente. Ele contém um token de autenticação único da sua organização.
+          ⚠️ <strong>Importante:</strong> Não partilhe estes URLs publicamente. Cada token autentica a tua organização.
         </p>
       </div>
     </div>
