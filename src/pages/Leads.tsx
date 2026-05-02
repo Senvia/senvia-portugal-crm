@@ -8,6 +8,7 @@ import { ResponsiveKanban } from "@/components/leads/ResponsiveKanban";
 import { LeadsTableView } from "@/components/leads/LeadsTableView";
 import { LeadDetailsModal } from "@/components/leads/LeadDetailsModal";
 import { AddLeadModal } from "@/components/leads/AddLeadModal";
+import { ImportLeadsDialog } from "@/components/leads/ImportLeadsDialog";
 import { CreateEventModal } from "@/components/calendar/CreateEventModal";
 import { EventDetailsModal } from "@/components/calendar/EventDetailsModal";
 import { CreateProposalModal } from "@/components/proposals/CreateProposalModal";
