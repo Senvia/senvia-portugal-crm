@@ -115,34 +115,39 @@ async function handleWebhookMode(req: Request, token: string): Promise<Response>
     }
   }
 
-  // Round-robin auto-assign
+  // Assignment: dedicated webhook forces a specific user, otherwise round-robin
   let autoAssignedTo: string | null = null;
-  const salesSettings = (org.sales_settings as any) || {};
-  if (salesSettings.auto_assign_leads) {
-    try {
-      const nowIso = new Date().toISOString();
-      let membersQuery = supabase
-        .from('organization_members')
-        .select('user_id')
-        .eq('organization_id', org.id)
-        .eq('is_active', true)
-        .or(`paused_until.is.null,paused_until.lt.${nowIso}`);
-      if (salesSettings.exclude_admins_from_assignment) {
-        membersQuery = membersQuery.neq('role', 'admin');
-      }
-      const { data: members } = await membersQuery.order('joined_at', { ascending: true });
+  if (dedicatedUserId) {
+    autoAssignedTo = dedicatedUserId;
+    console.log('Dedicated webhook: bypassing round-robin, assigning to', dedicatedUserId);
+  } else {
+    const salesSettings = (org.sales_settings as any) || {};
+    if (salesSettings.auto_assign_leads) {
+      try {
+        const nowIso = new Date().toISOString();
+        let membersQuery = supabase
+          .from('organization_members')
+          .select('user_id')
+          .eq('organization_id', org.id)
+          .eq('is_active', true)
+          .or(`paused_until.is.null,paused_until.lt.${nowIso}`);
+        if (salesSettings.exclude_admins_from_assignment) {
+          membersQuery = membersQuery.neq('role', 'admin');
+        }
+        const { data: members } = await membersQuery.order('joined_at', { ascending: true });
 
-      if (members && members.length > 0) {
-        const currentIndex = salesSettings.round_robin_index || 0;
-        const safeIndex = currentIndex % members.length;
-        autoAssignedTo = members[safeIndex].user_id;
-        const nextIndex = (safeIndex + 1) % members.length;
-        await supabase.from('organizations').update({
-          sales_settings: { ...salesSettings, round_robin_index: nextIndex },
-        }).eq('id', org.id);
+        if (members && members.length > 0) {
+          const currentIndex = salesSettings.round_robin_index || 0;
+          const safeIndex = currentIndex % members.length;
+          autoAssignedTo = members[safeIndex].user_id;
+          const nextIndex = (safeIndex + 1) % members.length;
+          await supabase.from('organizations').update({
+            sales_settings: { ...salesSettings, round_robin_index: nextIndex },
+          }).eq('id', org.id);
+        }
+      } catch (rrErr) {
+        console.error('Round-robin failed:', rrErr);
       }
-    } catch (rrErr) {
-      console.error('Round-robin failed:', rrErr);
     }
   }
 
