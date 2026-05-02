@@ -115,7 +115,7 @@ Deno.serve(async (req) => {
     // Get all organization members
     const { data: members, error: membersError } = await adminClient
       .from('organization_members')
-      .select('user_id, role, is_active, profile_id')
+      .select('user_id, role, is_active, profile_id, paused_until')
       .eq('organization_id', organizationId)
       .eq('is_active', true)
 
@@ -183,6 +183,9 @@ Deno.serve(async (req) => {
           ? new Date(authUser.user.banned_until) > new Date()
           : false
 
+        const pausedUntil = member.paused_until ? new Date(member.paused_until) : null
+        const isPaused = pausedUntil ? pausedUntil > new Date() : false
+
         return {
           id: member.user_id,
           full_name: profileItem?.full_name || 'Unknown',
@@ -193,6 +196,8 @@ Deno.serve(async (req) => {
           user_id: member.user_id,
           role: userRole?.role || member.role || 'viewer',
           is_banned: isBanned,
+          paused_until: member.paused_until || null,
+          is_paused: isPaused,
           profile_id: member.profile_id || null,
           profile_name: orgProfile?.name || null,
         }

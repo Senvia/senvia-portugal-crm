@@ -21,6 +21,8 @@ export interface TeamMember {
   role: 'admin' | 'viewer' | 'salesperson' | 'super_admin';
   user_id: string;
   is_banned: boolean;
+  paused_until?: string | null;
+  is_paused?: boolean;
   profile_id?: string | null;
   profile_name?: string | null;
 }
