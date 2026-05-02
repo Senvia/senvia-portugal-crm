@@ -36,7 +36,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Users, Loader2, X, Plus, LayoutGrid, List, Zap, BarChart3 } from "lucide-react";
+import { Search, Users, Loader2, X, Plus, LayoutGrid, List, Zap, BarChart3, Upload } from "lucide-react";
 import { format, endOfDay, startOfDay } from "date-fns";
 import { normalizeString } from "@/lib/utils";
 import { mapLeadsForExport, exportToCsv, exportToExcel } from "@/lib/export";
@@ -67,6 +67,7 @@ export default function Leads() {
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isCreateEventModalOpen, setIsCreateEventModalOpen] = useState(false);
   const [isCreateProposalModalOpen, setIsCreateProposalModalOpen] = useState(false);
   const [isProposalDetailsModalOpen, setIsProposalDetailsModalOpen] = useState(false);
@@ -609,6 +610,10 @@ export default function Leads() {
                     </Button>
                   </div>
                   
+                  <Button variant="outline" onClick={() => setIsImportModalOpen(true)} className="shrink-0 h-9 lg:h-10">
+                    <Upload className="h-4 w-4 sm:mr-2" />
+                    <span className="hidden sm:inline">Importar</span>
+                  </Button>
                   <Button onClick={() => setIsAddModalOpen(true)} className="shrink-0 h-9 lg:h-10">
                     <Plus className="h-4 w-4 sm:mr-2" />
                     <span className="hidden sm:inline">Adicionar</span>
@@ -774,6 +779,7 @@ export default function Leads() {
 
         <LeadDetailsModal lead={selectedLead} open={isModalOpen} onOpenChange={setIsModalOpen} onStatusChange={handleStatusChange} onDelete={handleDelete} onUpdate={handleUpdate} />
         <AddLeadModal open={isAddModalOpen} onOpenChange={setIsAddModalOpen} />
+        <ImportLeadsDialog open={isImportModalOpen} onOpenChange={setIsImportModalOpen} />
         
         <EventDetailsModal
           open={isEventDetailsModalOpen}
