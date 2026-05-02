@@ -1,35 +1,60 @@
-## Plano: Exportar dados da base de dados Senvia OS
+## O que encontrei
+- O **Rafael recebeu 1 lead ontem**: `Filipe Pereira` em **2026-05-01 19:17 UTC**.
+- A causa principal é que a pausa dos 3 comerciais estava configurada com **`paused_until = 2026-04-30 23:00:00+00`**. Ou seja: **a pausa já tinha expirado** quando esse lead entrou no dia 1.
+- Além disso, encontrei uma fragilidade real no sistema: a pausa hoje só está protegida em alguns fluxos.
+  - O `submit-lead` já exclui pausados no round-robin.
+  - Mas o fluxo de **criação manual de lead** (`useCreateLead`) **não filtra `paused_until`**.
+  - E a UI de atribuição manual/bulk ainda mostra membros pausados como elegíveis.
+- Não encontrei formulário da organização com responsável fixo para o Rafael/Pedro/Bernardo, então o problema não veio daí.
 
-### Contexto importante
-Eu (Lovable) tenho acesso de leitura/escrita à base de dados deste projeto através das ferramentas internas (Lovable Cloud / Supabase). **NÃO tenho acesso à password da base de dados nem ao painel web do Supabase para te entregar credenciais** — isso é gerido pela tua conta Lovable e por motivos de segurança não pode ser partilhado por mim.
+## Plano
+1. **Corrigir imediatamente os dados da organização Escolha Inteligente**
+   - Reaplicar a pausa para **Rafael Camilo, Pedro Rodrigues e Bernardo Marinho** com nova validade futura.
+   - Identificar todos os leads recentes atribuídos a qualquer um dos 3 após o período em que não deveriam receber.
+   - **Redistribuir esses leads** pelos próximos comerciais ativos elegíveis, respeitando a rotação atual e excluindo admins e pausados.
 
-Tens, portanto, **duas vias possíveis**:
+2. **Fechar a falha no fluxo automático e manual**
+   - Atualizar o fluxo de criação manual de leads (`useCreateLead`) para usar o mesmo filtro de elegibilidade do round-robin: ativo, não admin quando aplicável, e **não pausado**.
+   - Corrigir também o uso de `round_robin_index` para não voltar a apontar para comerciais pausados.
 
----
+3. **Bloquear atribuição manual a comerciais pausados**
+   - Atualizar `get-team-members` para devolver `paused_until`.
+   - Atualizar os seletores de atribuição em:
+     - `AddLeadModal`
+     - `LeadDetailsModal`
+     - `AssignTeamMemberModal`
+   - Comportamento:
+     - comerciais pausados aparecem como **“Pausado”** ou deixam de aparecer como opção elegível;
+     - se alguém tentar gravar uma atribuição inválida, o sistema mostra erro e impede a operação.
 
-### Opção A — Eu faço o export aqui (recomendado, imediato)
-Eu corro queries SQL diretamente na base de dados e gero ficheiros descarregáveis (CSV / Excel / JSON / SQL dump parcial) com os dados que precisas. Entrego em `/mnt/documents/` para download imediato.
+4. **Adicionar proteção no backend/database para garantir a regra**
+   - Criar uma proteção central para impedir que um lead seja gravado com `assigned_to` apontando para um membro pausado da mesma organização.
+   - Assim a regra deixa de depender só da UI e passa a valer mesmo se houver outro fluxo futuro, importação ou chamada indireta.
 
-**Preciso que me digas:**
-1. **Que dados queres exportar?** Algumas opções:
-   - Tudo (todas as tabelas — dump completo em SQL ou múltiplos CSVs num ZIP)
-   - Apenas tabelas de negócio (organizations, profiles, leads, clients, proposals, sales, cpes, etc.)
-   - Uma organização específica (ex.: só dados da Escolha Inteligente / Total Link / Perfect2Gether)
-   - Tabelas específicas que listares
-2. **Formato preferido:** CSV (1 ficheiro por tabela, dentro de ZIP), Excel (multi-sheet), JSON, ou SQL dump.
-3. **Incluir dados de auth?** (emails de utilizadores do `auth.users` — eu consigo extrair via JOIN com `profiles`/`organization_members`).
+5. **Validar os cenários críticos**
+   - Lead via formulário/webhook.
+   - Lead criado manualmente sem responsável escolhido.
+   - Lead criado manualmente com responsável escolhido.
+   - Reatribuição individual e em massa.
+   - Confirmar no fim que **Rafael, Pedro e Bernardo deixam de receber novos leads**.
 
----
+## Resultado esperado
+- Os 3 comerciais deixam de receber **qualquer novo lead** enquanto estiverem pausados.
+- Os leads que entraram indevidamente ficam **redistribuídos para os próximos comerciais válidos**.
+- A regra passa a ser consistente em todos os pontos do sistema, não só no round-robin do formulário.
 
-### Opção B — Acesso direto ao painel Supabase / password DB
-Para isto **não consigo ajudar diretamente** — tens de:
-1. Ir a **Lovable → topo direito → Cloud → Open Backend** (ou no menu Connectors → Lovable Cloud)
-2. Isso abre o painel Supabase associado a este projeto
-3. Lá podes ir a **Settings → Database** para obter a connection string / password, ou usar **Table Editor → Export** para CSV manual
+## Detalhes técnicos
+- Arquivos a ajustar:
+  - `src/hooks/useLeads.ts`
+  - `src/hooks/useTeam.ts`
+  - `src/components/leads/AddLeadModal.tsx`
+  - `src/components/leads/LeadDetailsModal.tsx`
+  - `src/components/shared/AssignTeamMemberModal.tsx`
+  - `supabase/functions/submit-lead/index.ts`
+  - nova migration para proteção estrutural
+- Dados confirmados agora:
+  - Organização: **Escolha Inteligente**
+  - Rafael, Pedro e Bernardo estavam com pausa até **2026-04-30 23:00 UTC**
+  - Lead indevido confirmado: **Filipe Pereira** → **Rafael Camilo** em **2026-05-01**
 
-A password e o painel são propriedade da tua conta — eu não os posso ler nem partilhar.
-
----
-
-### Recomendação
-**Vai pela Opção A.** É mais rápido, mais limpo, e eu posso filtrar/transformar os dados como precisares (ex.: "só leads do mês passado da Escolha Inteligente em Excel"). Diz-me só o âmbito e o formato e eu gero já.
+Quando aprovares, eu faço a correção e a redistribuição imediatamente.
