@@ -1,52 +1,36 @@
-## Objectivo
+## Objetivo
 
-Adicionar **1 segundo webhook de entrada** para a Escolha Inteligente, que entrega 100% dos leads ao **Daniel**. O webhook actual (round-robin entre a equipa) mantém-se exactamente como está.
+Anular (void) a fatura aberta `in_1TRyKNLWnA81DzXTci2JNxMI` (€49) no Stripe, que ficou pendente da subscrição antiga já cancelada do cliente Escolha Inteligente. Sem isto, a fatura continua a constar como dívida no perfil Stripe do cliente e ele pode receber e-mails de cobrança do Stripe.
 
-## Como vai funcionar
+## Estado actual confirmado
 
-A organização passa a ter **2 URLs de webhook**:
+- Subscrição antiga `sub_1TH5za...` → **canceled** ✅
+- Subscrição nova `sub_1TS03U...` → **active**, paga ✅
+- `payment_failed_at` da org → **NULL** (limpo) ✅
+- Fatura `in_1TS035...` (nova sub) → **paid** ✅
+- Fatura `in_1TH5zK...` (sub antiga, primeira) → **paid** ✅
+- Fatura `in_1TRyKN...` (sub antiga, ciclo 2) → **open** ⚠️ ← problema único restante
 
-1. **Webhook actual** (já em uso no Make/Zapier) → continua round-robin para a equipa.
-2. **Webhook novo "Daniel"** → todos os leads vão directos para o Daniel, sem round-robin.
+## Plano (1 chamada à API Stripe)
 
-Em **Definições → Integrações** aparece uma nova secção pequena chamada **"Webhook Dedicado (Daniel)"** com:
-- A URL única
-- Botão **Copiar**
-- Toggle **Activo/Inactivo**
+Executar o endpoint nativo `POST /v1/invoices/{id}/void` para a fatura `in_1TRyKNLWnA81DzXTci2JNxMI` via uma edge function temporária (`void-stripe-invoice`) ou usando o `stripe_api_execute` com a operação correcta.
 
-Cola-se a URL no novo cenário do Make/Zapier e está feito.
+Passos:
+1. Criar edge function efémera `void-stripe-invoice` que recebe `invoice_id` e chama `POST /v1/invoices/{id}/void` com a `STRIPE_SECRET_KEY` já existente.
+2. Invocá-la para a fatura `in_1TRyKNLWnA81DzXTci2JNxMI`.
+3. Verificar via `list_invoices` que o status passou a `void`.
+4. Apagar a edge function (não é para uso recorrente).
 
-## Implementação técnica
+## Verificação final
 
-### 1. Base de dados
-Adicionar 2 colunas em `organizations`:
-- `webhook_token_dedicated` (text, único, gerado automaticamente)
-- `webhook_dedicated_user_id` (uuid, aponta para o user que recebe tudo)
+- Listar invoices do cliente → confirmar que `in_1TRyKN...` tem `status: void`.
+- Confirmar que `payment_failed_at` da org continua NULL.
+- Daniel: nenhum ecrã de pagamento em atraso, nenhuma cobrança nova, fatura órfã anulada.
 
-Não preciso de tabela nova — é uma extensão simples do que já existe.
+## Alternativa manual (se preferires)
 
-### 2. Edge function `submit-lead`
-Nova rota de validação no início:
-- Se o `token` da request bater com `webhook_token_dedicated` da organização → atribui directamente ao `webhook_dedicated_user_id`, **salta o round-robin**, respeita o resto do fluxo (deduplicação, custom_data, n8n, notificações, etc.).
-- Caso contrário → fluxo actual intacto.
+Tu podes fazer no painel Stripe em 10 segundos:
+- Abrir a fatura `in_1TRyKNLWnA81DzXTci2JNxMI`
+- Clicar em "More" → "Void invoice"
 
-### 3. UI
-Em `IntegrationsContent.tsx`, adicionar um cartão pequeno por baixo do webhook actual:
-- Mostra a URL do webhook dedicado + botão copiar.
-- Selector do utilizador responsável (default: Daniel para a Escolha Inteligente).
-- Botão "Gerar novo token" caso queira invalidar.
-
-### 4. Setup imediato após deploy
-Eu próprio configuro na base de dados:
-- Gero o `webhook_token_dedicated` para a Escolha Inteligente.
-- Defino `webhook_dedicated_user_id` = Daniel.
-- Devolvo-te a URL pronta para colar no Make.
-
-## Ficheiros alterados
-- 1 migration (2 colunas em `organizations`)
-- `supabase/functions/submit-lead/index.ts` (handler dedicado, ~30 linhas)
-- `src/components/settings/IntegrationsContent.tsx` (novo cartão)
-- `src/hooks/useOrganization.ts` (expor os 2 novos campos)
-
-## Compatibilidade
-Zero impacto no webhook existente. Continua a funcionar exactamente como hoje.
+Diz qual preferes que faça.
