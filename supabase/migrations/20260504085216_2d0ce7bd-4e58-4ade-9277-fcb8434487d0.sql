@@ -1,0 +1,1 @@
+UPDATE public.organizations SET payment_failed_at = NULL WHERE id = '8cc9ec75-162c-4333-bafd-55e467527286';
