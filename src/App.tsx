@@ -9,6 +9,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedLayoutRoute } from "@/components/auth/ProtectedLayoutRoute";
 import { SuperAdminRoute } from "@/components/auth/SuperAdminRoute";
 const PWAInstallButton = lazy(() => import("@/components/pwa/PWAInstallButton").then(m => ({ default: m.PWAInstallButton })));
+const PWAUpdateBanner = lazy(() => import("@/components/pwa/PWAUpdateBanner").then(m => ({ default: m.PWAUpdateBanner })));
 
 // Eager: Login is the entry point
 import Login from "./pages/Login";
@@ -72,6 +73,7 @@ const App = () => (
         <BrowserRouter>
           <AuthProvider>
             <Suspense fallback={null}><PWAInstallButton /></Suspense>
+            <Suspense fallback={null}><PWAUpdateBanner /></Suspense>
             <Suspense fallback={<div className="flex items-center justify-center h-screen bg-background"><div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" /></div>}>
               <Routes>
                 {/* Public Routes */}
