@@ -18,7 +18,7 @@ export default defineConfig(({ mode }) => ({
       srcDir: 'src',
       filename: 'sw.ts',
       registerType: "autoUpdate",
-      injectRegister: 'auto',
+      injectRegister: false,
       includeAssets: ["favicon.ico", "icon-192.png", "icon-512.png"],
       manifest: {
         name: "Senvia OS",
