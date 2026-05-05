@@ -4,7 +4,8 @@ import { precacheAndRoute } from 'workbox-precaching';
 declare let self: ServiceWorkerGlobalScope;
 
 // Service Worker Version (increment to force update)
-const SW_VERSION = '1.3.0';
+const SW_VERSION = '1.4.0';
+const CURRENT_CACHE_PREFIX = `senvia-os-${SW_VERSION}`;
 console.log(`[SW] Senvia OS Service Worker v${SW_VERSION} loaded`);
 
 // Precache assets from Vite build
@@ -16,10 +17,42 @@ self.addEventListener('install', (event) => {
   event.waitUntil(self.skipWaiting());
 });
 
-// Take control immediately
+// Take control immediately + nuke ALL old caches + reload open windows once
 self.addEventListener('activate', (event) => {
-  console.log('[SW] Activating...');
-  event.waitUntil(self.clients.claim());
+  console.log('[SW] Activating v' + SW_VERSION + '...');
+  event.waitUntil((async () => {
+    // 1. Delete every cache that doesn't belong to this version (frees stale shells)
+    const cacheNames = await caches.keys();
+    await Promise.all(
+      cacheNames
+        .filter((name) => !name.startsWith(CURRENT_CACHE_PREFIX))
+        .map((name) => {
+          console.log('[SW] Deleting stale cache:', name);
+          return caches.delete(name);
+        })
+    );
+
+    // 2. Take control of any open clients
+    await self.clients.claim();
+
+    // 3. Force a one-time reload of every open window so the fresh shell loads
+    const allClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    await Promise.all(
+      allClients.map((client) => {
+        try {
+          const url = new URL(client.url);
+          // Avoid infinite loops by tagging this reload
+          if (!url.searchParams.has('_swreload')) {
+            url.searchParams.set('_swreload', SW_VERSION);
+            return (client as WindowClient).navigate(url.toString());
+          }
+        } catch (e) {
+          console.warn('[SW] reload skipped for client', e);
+        }
+        return Promise.resolve();
+      })
+    );
+  })());
 });
 
 // Push notification handler with improved iOS support
