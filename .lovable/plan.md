@@ -1,54 +1,50 @@
-## Objetivo
-Fazer o botão **Importar** aparecer no ambiente live correto e eliminar a confusão entre o deploy oficial do projeto e o domínio `app.senvia.pt`.
+## Diagnóstico confirmado
+- O projeto está publicado e público.
+- O deploy oficial responde em: `https://senvia-portugal-crm.lovable.app`
+- O domínio customizado `https://app.senvia.pt` está configurado no projeto, mas neste momento devolve **Cloudflare Error 1000: DNS points to prohibited IP**.
+- Portanto, o problema **não é do código nem do botão Importar** neste momento.
+- Também **não é um problema de Vercel a compilar a app**. O bloqueio está antes disso: o domínio `app.senvia.pt` está com configuração DNS/proxy inválida.
 
-## O que foi confirmado
-- O botão **Importar** existe no código atual e está renderizado em `src/pages/Leads.tsx`.
-- O projeto está publicado publicamente.
-- O URL publicado oficial deste projeto é `senvia-portugal-crm.lovable.app`.
-- Este projeto **não tem domínio customizado configurado** no momento.
-- Ou seja: `app.senvia.pt` **não está ligado a este projeto** via publicação nativa.
-- Além disso, o projeto tem vários links hardcoded para `https://app.senvia.pt`, o que mascara o ambiente real e dificulta validar se o deploy live é o correto.
+## O que fazer agora
+### 1. Restabelecer acesso imediatamente
+- Usar temporariamente o URL publicado oficial `senvia-portugal-crm.lovable.app` para validar que a app está viva.
+- Isto isola o problema: a aplicação está funcional, o domínio customizado é que está quebrado.
 
-## Plano
-### 1. Parar de apontar “produção” cegamente para `app.senvia.pt`
-- Rever `src/lib/constants.ts`.
-- Remover a lógica que força preview/dev a usar `https://app.senvia.pt` como base.
-- Passar a resolver a base URL a partir do host atual, com fallback explícito apenas quando necessário.
-- Manter compatibilidade com formulários públicos, links e redirects.
+### 2. Corrigir o domínio `app.senvia.pt`
+- Abrir **Project Settings → Domains** deste projeto.
+- Rever a configuração de `app.senvia.pt`.
+- Se o domínio estiver atrás de **Cloudflare proxy**, refazer a ligação usando a opção avançada de **proxy mode / Cloudflare**.
+- Se não quiser usar proxy da Cloudflare, então o registo DNS do subdomínio deve ficar **DNS only** e seguir exatamente os registos mostrados pelo setup do domínio.
 
-### 2. Eliminar hardcodes de domínio espalhados no projeto
-- Atualizar referências fixas a `app.senvia.pt` e `senvia-portugal-crm.lovable.app` onde fizer sentido para usar uma origem centralizada.
-- Rever especialmente:
-  - `public/embed.js`
-  - `src/components/settings/*`
-  - `src/components/forms/PublicLeadForm.tsx`
-  - funções backend que geram links de email ou links públicos
-- Padronizar para que o sistema use sempre o domínio realmente ativo do projeto.
+### 3. Limpar conflito no DNS
+- Rever no Cloudflare os registos de `app.senvia.pt`.
+- Remover ou corrigir qualquer A/CNAME antigo ou conflituoso para esse subdomínio.
+- Garantir que o subdomínio usa apenas os valores esperados pelo setup atual do projeto.
+- Se houver proxy ativo com configuração errada, isso explica exatamente o erro 1000 e **não vai “desencravar sozinho” só com tempo**.
 
-### 3. Tornar o build live verificável na interface
-- Substituir a versão meramente estática por um identificador de build/deploy visível.
-- Exibir esse identificador em pontos fáceis de validar, como login/sidebar/menu mobile.
-- Assim fica imediato perceber se o utilizador está a abrir o deploy certo ou um host antigo/paralelo.
+### 4. Validar depois da correção
+- Confirmar que `app.senvia.pt` deixa de mostrar o erro 1000.
+- Confirmar que passa a abrir a mesma app do URL publicado oficial.
+- Só depois disso voltar a validar o botão **Importar** no host final.
 
-### 4. Validar o botão no host certo
-- Confirmar visualmente `/leads` autenticado no deploy oficial atualizado.
-- Verificar se o cabeçalho mostra **Importar** e **Adicionar** lado a lado no breakpoint atual.
-- Se ainda houver divergência, comparar o DOM/CSS do host oficial com o host `app.senvia.pt` para confirmar se o problema é de layout ou de deploy externo.
-
-### 5. Separar problema de código vs problema de publicação/domínio
-- Se o botão aparecer no deploy oficial e continuar ausente em `app.senvia.pt`, concluir formalmente que o problema não está mais no código deste projeto, mas sim no domínio externo que está a servir outra versão.
-- Nesse caso, alinhar a publicação para um único domínio correto e evitar continuar a depurar a app errada.
+### 5. Separar o tema Vercel do tema domínio
+- Se queres usar **Lovable + domínio customizado**, então o problema a resolver é DNS/domínio.
+- Se queres usar **GitHub → Vercel** como produção oficial, então `app.senvia.pt` deve apontar para a configuração do Vercel, e não para esta publicação atual.
+- Neste momento o estado observado mostra mistura de camadas, e por isso o domínio está inválido.
 
 ## Resultado esperado
-- O projeto deixa de depender de URLs hardcoded conflitantes.
-- O live correto passa a ser identificável sem ambiguidade.
-- O botão **Importar** aparece no deploy oficial atualizado.
-- Se `app.senvia.pt` continuar diferente, ficará provado que esse domínio está fora deste fluxo de publicação e precisa ser reconfigurado.
+- `app.senvia.pt` volta a abrir normalmente.
+- Fica provado se o problema era só domínio/DNS.
+- O botão **Importar** pode então ser validado no host correto.
+- Evita-se continuar a depurar código enquanto o domínio está quebrado na infraestrutura.
 
 ## Detalhes técnicos
-- Evidência principal: este projeto está publicado, mas **não possui domínio customizado configurado**, então `app.senvia.pt` não está ligado a esta publicação.
-- Evidência secundária: o botão já está presente no código atual em `src/pages/Leads.tsx`.
-- Evidência terciária: `APP_VERSION = '1.31.0'` é estático e, sozinho, não garante que dois hosts estejam a servir o mesmo build.
-- Há ainda referências mistas a `app.senvia.pt` e ao domínio publicado oficial em frontend e backend, o que precisa ser unificado.
+- **Cloudflare Error 1000** significa que o DNS do subdomínio está a apontar para um destino proibido/conflituoso para a Cloudflare.
+- Isto normalmente acontece quando:
+  - há proxy Cloudflare mal configurado,
+  - existe um A/CNAME antigo,
+  - ou o domínio foi ligado com um modo DNS diferente do que está ativo agora.
+- O facto de `senvia-portugal-crm.lovable.app` abrir normalmente prova que a app em si está operacional.
+- Por isso, esperar mais tempo provavelmente não resolve: precisa de **correção de configuração**.
 
-Aprova este plano e eu faço a correção.
+Se aprovares, no próximo passo eu guio-te no caminho exato mais rápido: **Cloudflare-first** ou **Vercel-first**, para resolver isto sem perder mais tempo.
