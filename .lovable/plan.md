@@ -1,49 +1,54 @@
-1. Confirmar a causa exacta no domínio que o utilizador está mesmo a usar
-- Validar o comportamento em `app.senvia.pt/leads` e comparar com o domínio publicado oficial `senvia-portugal-crm.lovable.app/leads`.
-- Partir do que já foi confirmado no código: o botão `Importar` existe em `src/pages/Leads.tsx` e não está escondido por permissões nessa view.
-- Partir também do que a captura mostra: o utilizador está a abrir `app.senvia.pt`, não o domínio publicado do projecto.
+## Objetivo
+Fazer o botão **Importar** aparecer no ambiente live correto e eliminar a confusão entre o deploy oficial do projeto e o domínio `app.senvia.pt`.
 
-2. Ajustar a estratégia de publish/domínio
-- Verificar se o fluxo actual está a publicar apenas para `senvia-portugal-crm.lovable.app` enquanto o utilizador continua a operar em `app.senvia.pt`.
-- Se `app.senvia.pt` estiver a servir uma shell/bundle antigo ou independente, alinhar a app para não apontar cegamente produção para esse domínio quando o bundle activo do projecto está noutro host.
-- Rever `src/lib/constants.ts`, porque hoje `PRODUCTION_URL` está hardcoded para `https://app.senvia.pt`, o que pode estar a mascarar a origem real da versão live e a confundir links/embeds.
+## O que foi confirmado
+- O botão **Importar** existe no código atual e está renderizado em `src/pages/Leads.tsx`.
+- O projeto está publicado publicamente.
+- O URL publicado oficial deste projeto é `senvia-portugal-crm.lovable.app`.
+- Este projeto **não tem domínio customizado configurado** no momento.
+- Ou seja: `app.senvia.pt` **não está ligado a este projeto** via publicação nativa.
+- Além disso, o projeto tem vários links hardcoded para `https://app.senvia.pt`, o que mascara o ambiente real e dificulta validar se o deploy live é o correto.
 
-3. Fortalecer a limpeza de sessões antigas/PWA no host real em uso
-- Manter o kill-switch actual, mas garantir cobertura total do host que os utilizadores realmente usam.
-- Validar se é preciso servir também um kill-switch compatível com caminhos/nome alternativos já usados anteriormente (`/service-worker.js` além de `/sw.js`, se aplicável).
-- Adicionar uma guarda explícita em `src/main.tsx` para desregistrar qualquer service worker antigo em preview/iframe e em cenários conhecidos de shell presa.
+## Plano
+### 1. Parar de apontar “produção” cegamente para `app.senvia.pt`
+- Rever `src/lib/constants.ts`.
+- Remover a lógica que força preview/dev a usar `https://app.senvia.pt` como base.
+- Passar a resolver a base URL a partir do host atual, com fallback explícito apenas quando necessário.
+- Manter compatibilidade com formulários públicos, links e redirects.
 
-4. Adicionar prova visual inequívoca da versão activa
-- Substituir a versão hardcoded actual (`APP_VERSION = '1.30.1'`) por um identificador de build gerado no build ou derivado do bundle activo.
-- Mostrar esse identificador no login/sidebar para que se veja imediatamente se `app.senvia.pt` e `senvia-portugal-crm.lovable.app` estão na mesma versão.
-- Opcionalmente expor também o host actual junto da versão em ambientes administrativos, para eliminar dúvida sobre “qual live” está aberto.
+### 2. Eliminar hardcodes de domínio espalhados no projeto
+- Atualizar referências fixas a `app.senvia.pt` e `senvia-portugal-crm.lovable.app` onde fizer sentido para usar uma origem centralizada.
+- Rever especialmente:
+  - `public/embed.js`
+  - `src/components/settings/*`
+  - `src/components/forms/PublicLeadForm.tsx`
+  - funções backend que geram links de email ou links públicos
+- Padronizar para que o sistema use sempre o domínio realmente ativo do projeto.
 
-5. Validar o botão no host certo e em sessão autenticada
-- Testar novamente a rota `/leads` autenticada no host que o utilizador usa (`app.senvia.pt`) e confirmar visualmente se o cabeçalho mostra `Importar` + `Adicionar`.
-- Se o host continuar sem o botão apesar do código correcto, isolar se o problema é:
-  - deploy diferente entre hosts,
-  - shell antiga persistida,
-  - ou um frontend separado nesse domínio.
+### 3. Tornar o build live verificável na interface
+- Substituir a versão meramente estática por um identificador de build/deploy visível.
+- Exibir esse identificador em pontos fáceis de validar, como login/sidebar/menu mobile.
+- Assim fica imediato perceber se o utilizador está a abrir o deploy certo ou um host antigo/paralelo.
 
-6. Entrega esperada após implementação
-- O domínio live usado pelo utilizador passa a servir a mesma versão nova do frontend.
-- O botão `Importar` aparece ao lado de `Adicionar` em Leads > Pipeline.
-- A app mostra um identificador de build real para confirmar a versão em produção.
-- O risco de ficar preso em bundle antigo por service worker reduz drasticamente.
+### 4. Validar o botão no host certo
+- Confirmar visualmente `/leads` autenticado no deploy oficial atualizado.
+- Verificar se o cabeçalho mostra **Importar** e **Adicionar** lado a lado no breakpoint atual.
+- Se ainda houver divergência, comparar o DOM/CSS do host oficial com o host `app.senvia.pt` para confirmar se o problema é de layout ou de deploy externo.
 
-Detalhes técnicos
-- Ficheiros mais prováveis para alteração:
-  - `src/lib/constants.ts`
-  - `src/main.tsx`
-  - `public/sw.js`
-  - possivelmente `public/service-worker.js`
-  - `src/components/layout/AppSidebar.tsx`
-  - `src/components/layout/MobileMenu.tsx`
-  - eventualmente `vite.config.ts` para injectar build id
-- Observações confirmadas nesta análise:
-  - `src/pages/Leads.tsx` renderiza sempre o botão `Importar` quando `activeTab === 'pipeline'`.
-  - A captura do utilizador mostra `app.senvia.pt/leads`, não o domínio publicado do projecto.
-  - O projecto publicado oficial continua a ser `https://senvia-portugal-crm.lovable.app`.
-  - `PRODUCTION_URL` está fixo para `https://app.senvia.pt`, o que merece correcção/alinhamento.
+### 5. Separar problema de código vs problema de publicação/domínio
+- Se o botão aparecer no deploy oficial e continuar ausente em `app.senvia.pt`, concluir formalmente que o problema não está mais no código deste projeto, mas sim no domínio externo que está a servir outra versão.
+- Nesse caso, alinhar a publicação para um único domínio correto e evitar continuar a depurar a app errada.
 
-Quando aprovares, eu implemento esta correcção focada no domínio live real que estás a usar, em vez de assumir que o problema está só no domínio publicado padrão.
+## Resultado esperado
+- O projeto deixa de depender de URLs hardcoded conflitantes.
+- O live correto passa a ser identificável sem ambiguidade.
+- O botão **Importar** aparece no deploy oficial atualizado.
+- Se `app.senvia.pt` continuar diferente, ficará provado que esse domínio está fora deste fluxo de publicação e precisa ser reconfigurado.
+
+## Detalhes técnicos
+- Evidência principal: este projeto está publicado, mas **não possui domínio customizado configurado**, então `app.senvia.pt` não está ligado a esta publicação.
+- Evidência secundária: o botão já está presente no código atual em `src/pages/Leads.tsx`.
+- Evidência terciária: `APP_VERSION = '1.31.0'` é estático e, sozinho, não garante que dois hosts estejam a servir o mesmo build.
+- Há ainda referências mistas a `app.senvia.pt` e ao domínio publicado oficial em frontend e backend, o que precisa ser unificado.
+
+Aprova este plano e eu faço a correção.
