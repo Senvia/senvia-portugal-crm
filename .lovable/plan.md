@@ -1,47 +1,49 @@
-## O que encontrei
-- No código, o botão **Importar** existe em `src/pages/Leads.tsx` e **não está protegido por permissão**.
-- No preview, entrando na organização **Escolha Inteligente**, o botão aparece normalmente.
-- No published live, o frontend já está a servir o bundle novo: a rede mostrou `PWAUpdateBanner` e o bundle JS publicado contém a string **"Importar"**.
-- Portanto, o problema mais provável **não é publish falhado** nem falta de código. O problema é um **shell antigo preso em cache por Service Worker/PWA** em alguns dispositivos/sessões live.
+1. Confirmar a causa exacta no domínio que o utilizador está mesmo a usar
+- Validar o comportamento em `app.senvia.pt/leads` e comparar com o domínio publicado oficial `senvia-portugal-crm.lovable.app/leads`.
+- Partir do que já foi confirmado no código: o botão `Importar` existe em `src/pages/Leads.tsx` e não está escondido por permissões nessa view.
+- Partir também do que a captura mostra: o utilizador está a abrir `app.senvia.pt`, não o domínio publicado do projecto.
 
-## Plano
-1. **Parar a origem do problema de cache**
-   - Remover a estratégia atual de PWA cache agressivo, ou reduzir para uma configuração segura.
-   - Como o objetivo principal é instalar o app e não offline complexo, migrar para uma abordagem mais segura para não continuar a servir bundles velhos.
+2. Ajustar a estratégia de publish/domínio
+- Verificar se o fluxo actual está a publicar apenas para `senvia-portugal-crm.lovable.app` enquanto o utilizador continua a operar em `app.senvia.pt`.
+- Se `app.senvia.pt` estiver a servir uma shell/bundle antigo ou independente, alinhar a app para não apontar cegamente produção para esse domínio quando o bundle activo do projecto está noutro host.
+- Rever `src/lib/constants.ts`, porque hoje `PRODUCTION_URL` está hardcoded para `https://app.senvia.pt`, o que pode estar a mascarar a origem real da versão live e a confundir links/embeds.
 
-2. **Enviar um kill-switch para limpar os devices já afetados**
-   - Publicar um `sw.js` de limpeza no mesmo caminho do service worker atual.
-   - Esse worker vai:
-     - assumir controlo imediato,
-     - apagar caches antigos,
-     - forçar reload das janelas abertas,
-     - fazer `unregister()`.
-   - Manter esse cleanup por pelo menos um ciclo de release para desalojar instalações antigas.
+3. Fortalecer a limpeza de sessões antigas/PWA no host real em uso
+- Manter o kill-switch actual, mas garantir cobertura total do host que os utilizadores realmente usam.
+- Validar se é preciso servir também um kill-switch compatível com caminhos/nome alternativos já usados anteriormente (`/service-worker.js` além de `/sw.js`, se aplicável).
+- Adicionar uma guarda explícita em `src/main.tsx` para desregistrar qualquer service worker antigo em preview/iframe e em cenários conhecidos de shell presa.
 
-3. **Blindar o app contra repetição do problema**
-   - Adicionar proteção em `src/main.tsx` para **nunca** registar service worker em preview/iframe.
-   - Se o PWA continuar ativo, configurar navegação HTML com estratégia segura e sem prender shell antigo.
-   - Se offline não for essencial, deixar apenas manifest/installability sem SW persistente.
+4. Adicionar prova visual inequívoca da versão activa
+- Substituir a versão hardcoded actual (`APP_VERSION = '1.30.1'`) por um identificador de build gerado no build ou derivado do bundle activo.
+- Mostrar esse identificador no login/sidebar para que se veja imediatamente se `app.senvia.pt` e `senvia-portugal-crm.lovable.app` estão na mesma versão.
+- Opcionalmente expor também o host actual junto da versão em ambientes administrativos, para eliminar dúvida sobre “qual live” está aberto.
 
-4. **Adicionar prova visível de versão/build**
-   - Mostrar uma identificação curta de build no login ou no rodapé/sidebar.
-   - Assim dá para confirmar imediatamente se Daniel está no build novo ou num shell velho, sem adivinhação.
+5. Validar o botão no host certo e em sessão autenticada
+- Testar novamente a rota `/leads` autenticada no host que o utilizador usa (`app.senvia.pt`) e confirmar visualmente se o cabeçalho mostra `Importar` + `Adicionar`.
+- Se o host continuar sem o botão apesar do código correcto, isolar se o problema é:
+  - deploy diferente entre hosts,
+  - shell antiga persistida,
+  - ou um frontend separado nesse domínio.
 
-5. **Validar nos dois cenários críticos**
-   - Confirmar no preview e no published live que:
-     - `Escolha Inteligente > Leads` mostra o botão **Importar**,
-     - um navegador “limpo” funciona,
-     - uma sessão com cache antigo é forçada a atualizar.
+6. Entrega esperada após implementação
+- O domínio live usado pelo utilizador passa a servir a mesma versão nova do frontend.
+- O botão `Importar` aparece ao lado de `Adicionar` em Leads > Pipeline.
+- A app mostra um identificador de build real para confirmar a versão em produção.
+- O risco de ficar preso em bundle antigo por service worker reduz drasticamente.
 
-## Resultado esperado
-Depois desta correção, o live deixa de ficar preso numa versão antiga e o botão **Importar** passa a aparecer de forma consistente para ti e para o Daniel, sem depender de republicar várias vezes ou mandar hard refresh manual.
-
-## Detalhes técnicos
-- Ficheiros prováveis a mexer:
-  - `vite.config.ts`
+Detalhes técnicos
+- Ficheiros mais prováveis para alteração:
+  - `src/lib/constants.ts`
   - `src/main.tsx`
-  - `src/sw.ts` ou substituição por kill-switch estático
-  - eventual ponto visual de versão no layout/login
-- Validação principal:
-  - published `/leads` com sessão autenticada
-  - device/sessão com cache antigo previamente registado no PWA
+  - `public/sw.js`
+  - possivelmente `public/service-worker.js`
+  - `src/components/layout/AppSidebar.tsx`
+  - `src/components/layout/MobileMenu.tsx`
+  - eventualmente `vite.config.ts` para injectar build id
+- Observações confirmadas nesta análise:
+  - `src/pages/Leads.tsx` renderiza sempre o botão `Importar` quando `activeTab === 'pipeline'`.
+  - A captura do utilizador mostra `app.senvia.pt/leads`, não o domínio publicado do projecto.
+  - O projecto publicado oficial continua a ser `https://senvia-portugal-crm.lovable.app`.
+  - `PRODUCTION_URL` está fixo para `https://app.senvia.pt`, o que merece correcção/alinhamento.
+
+Quando aprovares, eu implemento esta correcção focada no domínio live real que estás a usar, em vez de assumir que o problema está só no domínio publicado padrão.
