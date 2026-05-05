@@ -179,9 +179,12 @@ export function AppSidebar({
             </div>
           </div>
 
-          <div className="px-4 py-2 text-center">
-            <span className="text-[10px] text-sidebar-muted/60">
+          <div className="px-4 py-2 text-center leading-tight">
+            <span className="block text-[10px] text-sidebar-muted/60">
               Senvia OS v{APP_VERSION}
+            </span>
+            <span className="block text-[9px] text-sidebar-muted/40">
+              {typeof window !== 'undefined' ? window.location.host : ''}
             </span>
           </div>
         </div>

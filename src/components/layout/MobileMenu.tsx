@@ -145,8 +145,11 @@ export function MobileMenu({ isOpen, onClose, userName = "Utilizador", organizat
             Terminar Sessão
           </button>
           
-          <p className="text-center text-xs text-muted-foreground/50">
+          <p className="text-center text-xs text-muted-foreground/50 leading-tight">
             Senvia OS v{APP_VERSION}
+            <span className="block text-[10px] text-muted-foreground/40">
+              {typeof window !== 'undefined' ? window.location.host : ''}
+            </span>
           </p>
         </div>
       </div>
