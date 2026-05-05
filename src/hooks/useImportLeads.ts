@@ -13,6 +13,7 @@ interface ImportLeadsParams {
   rows: Record<string, string>[];
   mapping: Record<string, string>;
   assigneeIds: string[]; // round-robin pool (length 1 = single assignee)
+  stageKey: string;
 }
 
 const trim = (v: unknown) => (v === null || v === undefined ? "" : String(v).trim());
@@ -33,7 +34,7 @@ export function useImportLeads() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async ({ rows, mapping, assigneeIds }: ImportLeadsParams): Promise<ImportLeadsResult> => {
+    mutationFn: async ({ rows, mapping, assigneeIds, stageKey }: ImportLeadsParams): Promise<ImportLeadsResult> => {
       if (!organization?.id) throw new Error("Sem organização");
       if (!mapping.name) throw new Error("Mapeamento do campo Nome é obrigatório");
 
@@ -57,7 +58,7 @@ export function useImportLeads() {
         payloads.push({
           organization_id: organization.id,
           assigned_to: assignedTo,
-          status: "new",
+          status: stageKey,
           name,
           email: get(row, "email") || "",
           phone: get(row, "phone") || "",

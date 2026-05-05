@@ -9,6 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { ImportStep1Upload } from "@/components/marketing/import/ImportStep1Upload";
 import { useTeamMembers } from "@/hooks/useTeam";
 import { useImportLeads, type ImportLeadsResult } from "@/hooks/useImportLeads";
+import { usePipelineStages } from "@/hooks/usePipelineStages";
 
 interface ImportLeadsDialogProps {
   open: boolean;
@@ -63,11 +64,24 @@ export function ImportLeadsDialog({ open, onOpenChange }: ImportLeadsDialogProps
   const [distributionMode, setDistributionMode] = useState<DistributionMode>("round_robin_all");
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   const [singleUserId, setSingleUserId] = useState<string>("");
+  const [selectedStageKey, setSelectedStageKey] = useState<string>("");
   const [result, setResult] = useState<ImportLeadsResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const { data: teamMembers = [] } = useTeamMembers();
+  const { data: stages = [] } = usePipelineStages();
   const importMutation = useImportLeads();
+
+  const activeStages = useMemo(
+    () => stages.filter((s) => !s.is_final_positive && !s.is_final_negative),
+    [stages]
+  );
+
+  useEffect(() => {
+    if (activeStages.length > 0 && !selectedStageKey) {
+      setSelectedStageKey(activeStages[0].key);
+    }
+  }, [activeStages, selectedStageKey]);
 
   const activeMembers = useMemo(
     () => teamMembers.filter((m) => !m.is_banned && !m.is_paused),
@@ -84,6 +98,7 @@ export function ImportLeadsDialog({ open, onOpenChange }: ImportLeadsDialogProps
       setDistributionMode("round_robin_all");
       setSelectedMembers([]);
       setSingleUserId("");
+      setSelectedStageKey(activeStages[0]?.key ?? "");
       setResult(null);
       setError(null);
     }
@@ -138,6 +153,7 @@ export function ImportLeadsDialog({ open, onOpenChange }: ImportLeadsDialogProps
         rows,
         mapping,
         assigneeIds,
+        stageKey: selectedStageKey,
       });
       setResult(res);
     } catch (e) {
@@ -229,6 +245,28 @@ export function ImportLeadsDialog({ open, onOpenChange }: ImportLeadsDialogProps
 
           {step === 3 && (
             <div className="space-y-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Etapa do pipeline</Label>
+                <Select value={selectedStageKey} onValueChange={setSelectedStageKey}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecionar etapa..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {stages.map((s) => (
+                      <SelectItem key={s.key} value={s.key}>
+                        <span className="flex items-center gap-2">
+                          <span
+                            className="inline-block h-2 w-2 rounded-full"
+                            style={{ backgroundColor: s.color }}
+                          />
+                          {s.name}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
               <p className="text-sm text-muted-foreground">Escolhe como distribuir os {rows.length} leads:</p>
 
               <div className="space-y-2">
@@ -352,7 +390,7 @@ export function ImportLeadsDialog({ open, onOpenChange }: ImportLeadsDialogProps
               {step === 3 && (
                 <Button
                   onClick={handleImport}
-                  disabled={!distributionReady || importMutation.isPending}
+                  disabled={!distributionReady || !selectedStageKey || importMutation.isPending}
                 >
                   {importMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Importar {rows.length} leads
