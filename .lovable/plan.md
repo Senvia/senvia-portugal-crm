@@ -1,41 +1,47 @@
-## Problema
+## O que encontrei
+- No código, o botão **Importar** existe em `src/pages/Leads.tsx` e **não está protegido por permissão**.
+- No preview, entrando na organização **Escolha Inteligente**, o botão aparece normalmente.
+- No published live, o frontend já está a servir o bundle novo: a rede mostrou `PWAUpdateBanner` e o bundle JS publicado contém a string **"Importar"**.
+- Portanto, o problema mais provável **não é publish falhado** nem falta de código. O problema é um **shell antigo preso em cache por Service Worker/PWA** em alguns dispositivos/sessões live.
 
-O Daniel (Escolha Inteligente) não vê o botão "Importar" na página de Leads, embora o código esteja correto. A causa é o Service Worker (PWA) a servir uma versão antiga em cache. O `src/sw.ts` já tem `skipWaiting()` + `clients.claim()`, mas isso só ativa a nova versão **após** a próxima navegação completa — utilizadores com a app aberta há horas/dias continuam a ver a versão antiga indefinidamente.
+## Plano
+1. **Parar a origem do problema de cache**
+   - Remover a estratégia atual de PWA cache agressivo, ou reduzir para uma configuração segura.
+   - Como o objetivo principal é instalar o app e não offline complexo, migrar para uma abordagem mais segura para não continuar a servir bundles velhos.
 
-## Solução
+2. **Enviar um kill-switch para limpar os devices já afetados**
+   - Publicar um `sw.js` de limpeza no mesmo caminho do service worker atual.
+   - Esse worker vai:
+     - assumir controlo imediato,
+     - apagar caches antigos,
+     - forçar reload das janelas abertas,
+     - fazer `unregister()`.
+   - Manter esse cleanup por pelo menos um ciclo de release para desalojar instalações antigas.
 
-Adicionar um mecanismo de deteção de atualizações em runtime que avisa o utilizador quando há nova versão e força reload limpo.
+3. **Blindar o app contra repetição do problema**
+   - Adicionar proteção em `src/main.tsx` para **nunca** registar service worker em preview/iframe.
+   - Se o PWA continuar ativo, configurar navegação HTML com estratégia segura e sem prender shell antigo.
+   - Se offline não for essencial, deixar apenas manifest/installability sem SW persistente.
 
-### 1. Criar hook `src/hooks/usePWAUpdate.ts`
+4. **Adicionar prova visível de versão/build**
+   - Mostrar uma identificação curta de build no login ou no rodapé/sidebar.
+   - Assim dá para confirmar imediatamente se Daniel está no build novo ou num shell velho, sem adivinhação.
 
-- Usa `virtual:pwa-register` do `vite-plugin-pwa` (já instalado) com `useRegisterSW`.
-- Faz polling do SW a cada 60 minutos (`registration.update()`).
-- Quando deteta `needRefresh`, expõe estado + função `updateServiceWorker(true)`.
+5. **Validar nos dois cenários críticos**
+   - Confirmar no preview e no published live que:
+     - `Escolha Inteligente > Leads` mostra o botão **Importar**,
+     - um navegador “limpo” funciona,
+     - uma sessão com cache antigo é forçada a atualizar.
 
-### 2. Criar componente `src/components/pwa/PWAUpdateBanner.tsx`
+## Resultado esperado
+Depois desta correção, o live deixa de ficar preso numa versão antiga e o botão **Importar** passa a aparecer de forma consistente para ti e para o Daniel, sem depender de republicar várias vezes ou mandar hard refresh manual.
 
-- Toast persistente (sonner) no topo: "Nova versão disponível" + botão "Atualizar agora".
-- Ao clicar: chama `updateServiceWorker(true)` que faz `skipWaiting` + reload.
-- Aparece automaticamente quando o hook detecta atualização.
-
-### 3. Montar banner globalmente em `src/App.tsx`
-
-Adicionar `<PWAUpdateBanner />` ao lado do `<Toaster />` para estar disponível em qualquer rota.
-
-### 4. Ajustar `vite.config.ts`
-
-Mudar `injectRegister: 'auto'` para `injectRegister: false` (vamos registar manualmente via hook). Manter `registerType: 'autoUpdate'`.
-
-### 5. Bumpar `SW_VERSION` em `src/sw.ts`
-
-De `1.2.0` → `1.3.0` para garantir que o próximo deploy invalida caches antigos.
-
-## Comunicação ao Daniel (mensagem manual)
-
-Enquanto a fix nova não chega ao device dele, instruir:
-- **Browser**: `Ctrl + Shift + R` (Windows) ou `Cmd + Shift + R` (Mac).
-- **PWA instalado**: fechar app completamente e reabrir; se persistir, desinstalar e reinstalar.
-
-## Resultado
-
-Depois deste deploy, sempre que houver uma nova versão da Senvia OS, todos os utilizadores (incluindo PWA instalada) verão automaticamente um banner a pedir update — sem necessidade de hard refresh manual nem suporte case-by-case.
+## Detalhes técnicos
+- Ficheiros prováveis a mexer:
+  - `vite.config.ts`
+  - `src/main.tsx`
+  - `src/sw.ts` ou substituição por kill-switch estático
+  - eventual ponto visual de versão no layout/login
+- Validação principal:
+  - published `/leads` com sessão autenticada
+  - device/sessão com cache antigo previamente registado no PWA
