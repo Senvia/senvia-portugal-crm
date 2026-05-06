@@ -581,7 +581,7 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
                         />
                       ) : null}
 
-                      {canManageTeam && teamMembers && teamMembers.length > 0 && (
+                      {teamMembers && teamMembers.length > 0 && (
                         <FormField
                           control={form.control}
                           name="assigned_to"
