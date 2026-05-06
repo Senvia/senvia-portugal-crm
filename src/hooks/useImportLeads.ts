@@ -52,23 +52,28 @@ export function useImportLeads() {
 
       const importCode = generateImportCode();
 
-      // Criar registo de importação
-      const { data: importRecord, error: importError } = await supabase
-        .from("lead_imports")
-        .insert({
-          organization_id: organization.id,
-          imported_by: session?.user.id,
-          import_code: importCode,
-          file_name: fileName ?? null,
-          stage_key: stageKey,
-          assignee_ids: pool,
-        })
-        .select("id")
-        .single();
+      // Tentar criar registo de importação — opcional, não bloqueia se tabela não existir
+      let importId: string | null = null;
+      try {
+        const { data: importRecord, error: importError } = await (supabase as any)
+          .from("lead_imports")
+          .insert({
+            organization_id: organization.id,
+            imported_by: session?.user.id,
+            import_code: importCode,
+            file_name: fileName ?? null,
+            stage_key: stageKey,
+            assignee_ids: pool,
+          })
+          .select("id")
+          .single();
 
-      if (importError) throw new Error(`Erro ao criar registo de importação: ${importError.message}`);
-
-      const importId = importRecord.id;
+        if (!importError && importRecord) {
+          importId = importRecord.id;
+        }
+      } catch {
+        // Tabela pode não existir ainda — continua sem tracking
+      }
 
       const get = (row: Record<string, string>, key: string) => {
         const col = mapping[key];
@@ -84,11 +89,10 @@ export function useImportLeads() {
         const value = parseNumber(get(row, "value"));
         const assignedTo = pool[i % pool.length];
 
-        payloads.push({
+        const payload: Record<string, unknown> = {
           organization_id: organization.id,
           assigned_to: assignedTo,
           status: stageKey,
-          import_id: importId,
           name,
           email: get(row, "email") || "",
           phone: get(row, "phone") || "",
@@ -99,22 +103,27 @@ export function useImportLeads() {
           value: value ?? undefined,
           gdpr_consent: true,
           automation_enabled: false,
-        });
+        };
+
+        // Só inclui import_id se a tabela existiu e o registo foi criado
+        if (importId) payload.import_id = importId;
+
+        payloads.push(payload);
       });
 
       if (payloads.length === 0) {
-        // Actualizar registo com resultado
-        await supabase.from("lead_imports").update({
-          total_inserted: 0,
-          total_failed: rows.length,
-          first_error: "Nenhuma linha com nome válido",
-        }).eq("id", importId);
-
+        if (importId) {
+          await (supabase as any).from("lead_imports").update({
+            total_inserted: 0,
+            total_failed: rows.length,
+            first_error: "Nenhuma linha com nome válido",
+          }).eq("id", importId);
+        }
         return { inserted: 0, failed: rows.length, firstError: "Nenhuma linha com nome válido", importCode };
       }
 
-      // Insert in chunks
-      const chunkSize = 100;
+      // Insert in chunks of 200 para ser mais rápido
+      const chunkSize = 200;
       let inserted = 0;
       let failed = 0;
       let firstError: string | null = null;
@@ -130,12 +139,14 @@ export function useImportLeads() {
         }
       }
 
-      // Actualizar registo com totais finais
-      await supabase.from("lead_imports").update({
-        total_inserted: inserted,
-        total_failed: failed,
-        first_error: firstError,
-      }).eq("id", importId);
+      // Actualizar registo de importação com totais finais
+      if (importId) {
+        await (supabase as any).from("lead_imports").update({
+          total_inserted: inserted,
+          total_failed: failed,
+          first_error: firstError,
+        }).eq("id", importId);
+      }
 
       return { inserted, failed, firstError, importCode };
     },
