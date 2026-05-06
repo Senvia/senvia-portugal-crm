@@ -547,6 +547,18 @@ export default function Leads() {
     toast.success(`${selectedLeads.length} leads exportados para Excel`);
   };
 
+  const handleBulkDelete = async () => {
+    const ids = [...selectedIds];
+    const { error } = await supabase.from("leads").delete().in("id", ids);
+    if (error) {
+      toast.error("Erro ao apagar leads: " + error.message);
+      return;
+    }
+    queryClient.invalidateQueries({ queryKey: ["leads"] });
+    toast.success(`${ids.length} leads apagados`);
+    setSelectedIds([]);
+  };
+
   // Helper to get badge style from stage color
   const getBadgeStyle = (hexColor: string, isActive: boolean) => {
     if (isActive) {
@@ -739,6 +751,7 @@ export default function Leads() {
             onAssignTeamMember={() => setShowAssignModal(true)}
             onExportCsv={handleExportCsv}
             onExportExcel={handleExportExcel}
+            onDelete={handleBulkDelete}
             onClearSelection={() => setSelectedIds([])}
             entityLabel="leads selecionados"
           />

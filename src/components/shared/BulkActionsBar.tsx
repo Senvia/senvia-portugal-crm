@@ -1,18 +1,24 @@
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { CheckSquare, UserPlus, X, Download, FileSpreadsheet, FileText } from "lucide-react";
+import { CheckSquare, UserPlus, X, Download, FileSpreadsheet, FileText, Trash2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface BulkActionsBarProps {
   selectedCount: number;
   onAssignTeamMember: () => void;
   onExportCsv?: () => void;
   onExportExcel?: () => void;
+  onDelete?: () => void;
   onClearSelection: () => void;
   entityLabel?: string;
 }
@@ -22,10 +28,12 @@ export function BulkActionsBar({
   onAssignTeamMember,
   onExportCsv,
   onExportExcel,
+  onDelete,
   onClearSelection,
   entityLabel = "selecionados",
 }: BulkActionsBarProps) {
   const hasExportOptions = onExportCsv || onExportExcel;
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   return (
     <AnimatePresence>
@@ -79,6 +87,18 @@ export function BulkActionsBar({
               </DropdownMenu>
             )}
             
+            {onDelete && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setConfirmOpen(true)}
+                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+              >
+                <Trash2 className="h-4 w-4 sm:mr-1" />
+                <span className="hidden sm:inline">Apagar</span>
+              </Button>
+            )}
+
             <Button
               variant="ghost"
               size="sm"
@@ -91,6 +111,24 @@ export function BulkActionsBar({
           </div>
         </motion.div>
       )}
+
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Apagar {selectedCount} {entityLabel}?</AlertDialogTitle>
+            <AlertDialogDescription>Esta ação não pode ser desfeita.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => { setConfirmOpen(false); onDelete?.(); }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Apagar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AnimatePresence>
   );
 }
