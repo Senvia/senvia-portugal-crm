@@ -442,9 +442,8 @@ export function LeadDetailsModal({
                           </SelectItem>
                           {teamMembers
                             .filter(m => !m.is_banned && (m.role === 'salesperson' || m.role === 'admin' || m.role === 'viewer'))
-                            .filter(m => !m.is_paused || m.user_id === lead.assigned_to)
                             .map((member) => (
-                              <SelectItem key={member.user_id} value={member.user_id} disabled={member.is_paused && member.user_id !== lead.assigned_to}>
+                              <SelectItem key={member.user_id} value={member.user_id}>
                                 {member.full_name} ({ROLE_LABELS[member.role] || member.role}){member.is_paused ? ' · Pausado' : ''}
                               </SelectItem>
                             ))}

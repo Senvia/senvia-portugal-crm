@@ -600,7 +600,7 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
                                 <SelectContent>
                                   <SelectItem value="unassigned">Não atribuído</SelectItem>
                                   {teamMembers
-                                    .filter(m => !m.is_banned && !m.is_paused && (m.role === 'salesperson' || m.role === 'admin' || m.role === 'viewer'))
+                                    .filter(m => !m.is_banned && (m.role === 'salesperson' || m.role === 'admin' || m.role === 'viewer'))
                                     .map((member) => (
                                       <SelectItem key={member.user_id} value={member.user_id}>
                                         {member.full_name} ({RoleLabels[member.role] || member.role})
