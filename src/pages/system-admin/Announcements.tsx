@@ -31,9 +31,16 @@ interface Announcement {
   is_active: boolean;
   published_at: string;
   created_at: string;
+  expires_at: string | null;
 }
 
-const emptyForm = { title: "", content: "", version: "", image_url: "", is_active: true };
+function defaultExpiresAt() {
+  const d = new Date();
+  d.setDate(d.getDate() + 7);
+  return d.toISOString().slice(0, 10);
+}
+
+const emptyForm = { title: "", content: "", version: "", image_url: "", is_active: true, expires_at: defaultExpiresAt() };
 
 export default function SystemAdminAnnouncements() {
   const qc = useQueryClient();
@@ -62,6 +69,7 @@ export default function SystemAdminAnnouncements() {
         version: form.version || null,
         image_url: form.image_url || null,
         is_active: form.is_active,
+        expires_at: form.expires_at ? new Date(form.expires_at).toISOString() : null,
       };
       if (editingId) {
         const { error } = await (supabase as any).from("app_announcements").update(payload).eq("id", editingId);
@@ -114,7 +122,14 @@ export default function SystemAdminAnnouncements() {
 
   function openEdit(a: Announcement) {
     setEditingId(a.id);
-    setForm({ title: a.title, content: a.content, version: a.version ?? "", image_url: a.image_url ?? "", is_active: a.is_active });
+    setForm({
+      title: a.title,
+      content: a.content,
+      version: a.version ?? "",
+      image_url: a.image_url ?? "",
+      is_active: a.is_active,
+      expires_at: a.expires_at ? a.expires_at.slice(0, 10) : "",
+    });
     setDialogOpen(true);
   }
 
@@ -149,6 +164,7 @@ export default function SystemAdminAnnouncements() {
                   <TableHead>Título</TableHead>
                   <TableHead>Versão</TableHead>
                   <TableHead>Publicação</TableHead>
+                  <TableHead>Expira em</TableHead>
                   <TableHead>Ativo</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
@@ -160,6 +176,13 @@ export default function SystemAdminAnnouncements() {
                     <TableCell>{a.version || "—"}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {format(new Date(a.published_at), "dd MMM yyyy HH:mm", { locale: pt })}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {a.expires_at
+                        ? new Date(a.expires_at) < new Date()
+                          ? <span className="text-destructive">Expirado</span>
+                          : format(new Date(a.expires_at), "dd MMM yyyy", { locale: pt })
+                        : "—"}
                     </TableCell>
                     <TableCell>
                       <Switch checked={a.is_active} onCheckedChange={(v) => toggle.mutate({ id: a.id, is_active: v })} />
@@ -204,6 +227,15 @@ export default function SystemAdminAnnouncements() {
                 <Label>URL da Imagem</Label>
                 <Input value={form.image_url} onChange={(e) => setForm({ ...form, image_url: e.target.value })} placeholder="https://..." />
               </div>
+            </div>
+            <div>
+              <Label>Expira em (automático)</Label>
+              <Input
+                type="date"
+                value={form.expires_at}
+                onChange={(e) => setForm({ ...form, expires_at: e.target.value })}
+              />
+              <p className="text-xs text-muted-foreground mt-1">Deixa em branco para não expirar automaticamente. Por omissão: 7 dias.</p>
             </div>
             <div className="flex items-center gap-2">
               <Switch checked={form.is_active} onCheckedChange={(v) => setForm({ ...form, is_active: v })} />

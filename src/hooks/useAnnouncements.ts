@@ -10,6 +10,7 @@ interface Announcement {
   version: string | null;
   image_url: string | null;
   published_at: string;
+  expires_at: string | null;
 }
 
 function getStorageKey(userId: string) {
@@ -23,10 +24,12 @@ export function useAnnouncements() {
   const { data: announcement } = useQuery({
     queryKey: ['latest-announcement'],
     queryFn: async (): Promise<Announcement | null> => {
+      const now = new Date().toISOString();
       const { data, error } = await (supabase as any)
         .from('app_announcements')
-        .select('id, title, content, version, image_url, published_at')
+        .select('id, title, content, version, image_url, published_at, expires_at')
         .eq('is_active', true)
+        .or(`expires_at.is.null,expires_at.gt.${now}`)
         .order('published_at', { ascending: false })
         .limit(1)
         .maybeSingle();
