@@ -16,25 +16,33 @@ export function useLeads() {
     queryFn: async () => {
       if (!organization?.id) return [];
       
-      let query = supabase
+      let baseQuery = supabase
         .from('leads')
         .select('*')
         .eq('organization_id', organization.id)
         .order('created_at', { ascending: false });
-      
-      // Filter by user IDs (admin with filter, leader with team, or single user)
-      // Include unassigned leads so they don't vanish during reassignment
+
       if (effectiveUserIds) {
         const orFilters = effectiveUserIds
           .map(id => `assigned_to.eq.${id}`)
           .concat('assigned_to.is.null')
           .join(',');
-        query = query.or(orFilters);
+        baseQuery = baseQuery.or(orFilters);
       }
-      
-      const { data, error } = await query;
-      if (error) throw error;
-      return data as Lead[];
+
+      // Fetch in chunks of 1000 to bypass PostgREST default row limit
+      const chunkSize = 1000;
+      let allData: Lead[] = [];
+      let from = 0;
+      while (true) {
+        const { data, error } = await baseQuery.range(from, from + chunkSize - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        allData = allData.concat(data as Lead[]);
+        if (data.length < chunkSize) break;
+        from += chunkSize;
+      }
+      return allData;
     },
     enabled: !!organization?.id,
   });
