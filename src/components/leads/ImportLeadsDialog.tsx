@@ -84,7 +84,7 @@ export function ImportLeadsDialog({ open, onOpenChange }: ImportLeadsDialogProps
   }, [activeStages, selectedStageKey]);
 
   const activeMembers = useMemo(
-    () => teamMembers.filter((m) => !m.is_banned && !m.is_paused),
+    () => teamMembers.filter((m) => !m.is_banned),
     [teamMembers]
   );
 
