@@ -9,7 +9,7 @@ import { Json } from '@/integrations/supabase/types';
 
 export function useLeads() {
   const { organization } = useAuth();
-  const { effectiveUserIds } = useTeamFilter();
+  const { effectiveUserIds, isFilteringAll } = useTeamFilter();
   
   return useQuery({
     queryKey: ['leads', organization?.id, effectiveUserIds],
@@ -23,11 +23,10 @@ export function useLeads() {
         .order('created_at', { ascending: false });
 
       if (effectiveUserIds) {
-        const orFilters = effectiveUserIds
-          .map(id => `assigned_to.eq.${id}`)
-          .concat('assigned_to.is.null')
-          .join(',');
-        baseQuery = baseQuery.or(orFilters);
+        // Leads sem responsável só são visíveis para admins que veem tudo (sem filtro de membro)
+        const filters = effectiveUserIds.map(id => `assigned_to.eq.${id}`);
+        if (isFilteringAll) filters.push('assigned_to.is.null');
+        baseQuery = baseQuery.or(filters.join(','));
       }
 
       // Fetch in chunks of 1000 to bypass PostgREST default row limit
@@ -145,7 +144,7 @@ export function useDeleteLead() {
 
 export function useCreateLead() {
   const queryClient = useQueryClient();
-  const { organization } = useAuth();
+  const { organization, user } = useAuth();
   const { toast } = useToast();
   
   return useMutation({
@@ -207,7 +206,12 @@ export function useCreateLead() {
           }
         }
       }
-      
+
+      // Se ainda sem responsável, atribuir ao utilizador que está a criar
+      if (!assignedTo && user?.id) {
+        assignedTo = user.id;
+      }
+
       const { custom_data, ...rest } = leadData;
       const { data, error } = await supabase
         .from('leads')
