@@ -154,6 +154,7 @@ export function ImportLeadsDialog({ open, onOpenChange }: ImportLeadsDialogProps
         mapping,
         assigneeIds,
         stageKey: selectedStageKey,
+        fileName,
       });
       setResult(res);
     } catch (e) {
@@ -186,11 +187,16 @@ export function ImportLeadsDialog({ open, onOpenChange }: ImportLeadsDialogProps
           )}
 
           {result && (
-            <div className="mb-4 rounded-lg border border-primary/30 bg-primary/10 px-4 py-3 text-sm">
-              <strong>Importação concluída:</strong> {result.inserted} criados • {result.failed} falhados
+            <div className="mb-4 rounded-lg border border-primary/30 bg-primary/10 px-4 py-3 text-sm space-y-1">
+              <div className="flex items-center justify-between">
+                <strong>Importação concluída</strong>
+                <span className="font-mono text-xs bg-primary/10 border border-primary/20 rounded px-2 py-0.5 select-all">{result.importCode}</span>
+              </div>
+              <div className="text-muted-foreground">{result.inserted} criados{result.failed ? ` • ${result.failed} falhados` : ""}</div>
               {result.firstError && (
-                <div className="mt-1 text-xs text-muted-foreground">Primeiro erro: {result.firstError}</div>
+                <div className="text-xs text-muted-foreground">Primeiro erro: {result.firstError}</div>
               )}
+              <div className="text-xs text-muted-foreground">Guarda este código para rastrear ou corrigir este lote.</div>
             </div>
           )}
 
