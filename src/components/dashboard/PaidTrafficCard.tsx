@@ -5,13 +5,20 @@ import { usePipelineStages } from "@/hooks/usePipelineStages";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrendingUp, MousePointerClick } from "lucide-react";
 
-const PAID_SOURCES = [
-  "Facebook Ads",
-  "Google Ads",
-  "TikTok Ads",
-  "Instagram Ads",
-  "Tráfego Pago",
-];
+// Filtro PostgREST: apanha qualquer source que contenha "ads", "pago", "paid"
+// ou que seja uma das origens exactas conhecidas
+const PAID_FILTER = [
+  "source.ilike.*Ads*",
+  "source.ilike.*ads*",
+  "source.ilike.*pago*",
+  "source.ilike.*Pago*",
+  "source.ilike.*paid*",
+  "source.eq.Tráfego Pago",
+  "source.eq.Facebook Ads",
+  "source.eq.Google Ads",
+  "source.eq.TikTok Ads",
+  "source.eq.Instagram Ads",
+].join(",");
 
 export function PaidTrafficCard() {
   const { organization } = useAuth();
@@ -28,7 +35,7 @@ export function PaidTrafficCard() {
         .from("leads")
         .select("id, status, value, source")
         .eq("organization_id", organization.id)
-        .in("source", PAID_SOURCES);
+        .or(PAID_FILTER);
 
       if (error) throw error;
       if (!leads || leads.length === 0) return { total: 0, converted: 0, rate: 0, revenue: 0 };
@@ -88,11 +95,6 @@ export function PaidTrafficCard() {
             </p>
           </div>
         )}
-        <div className="mt-2">
-          <p className="text-xs text-muted-foreground">
-            Fontes: {PAID_SOURCES.join(" · ")}
-          </p>
-        </div>
       </CardContent>
     </Card>
   );
