@@ -18,6 +18,7 @@ const PAID_FILTER = [
   "source.eq.Google Ads",
   "source.eq.TikTok Ads",
   "source.eq.Instagram Ads",
+  "source.eq.Webhook Externo",
 ].join(",");
 
 export function PaidTrafficCard() {
