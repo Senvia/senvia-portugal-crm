@@ -52,6 +52,7 @@ const SOURCES = [
   "Referência",
   "Website (orgânico)",
   "Redes Sociais",
+  "Tráfego Pago",
   "Outro",
 ] as const;
 

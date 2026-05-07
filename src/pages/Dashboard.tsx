@@ -15,6 +15,7 @@ import { NicheType } from "@/lib/dashboard-templates";
 import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription";
 import { useModules } from "@/hooks/useModules";
 import { ActivationsPanel } from "@/components/dashboard/ActivationsPanel";
+import { PaidTrafficCard } from "@/components/dashboard/PaidTrafficCard";
 
 export default function Dashboard() {
   useRealtimeSubscription([
@@ -93,6 +94,7 @@ export default function Dashboard() {
           )}
           
           <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            <PaidTrafficCard />
             {visibleWidgets.filter(w => w.widget_type !== 'team_performance_table').map((widget) => (
               <DynamicWidget
                 key={widget.id || widget.widget_type}
