@@ -8,16 +8,9 @@ import { TrendingUp, MousePointerClick } from "lucide-react";
 // Filtro PostgREST: apanha qualquer source que contenha "ads", "pago", "paid"
 // ou que seja uma das origens exactas conhecidas
 const PAID_FILTER = [
-  "source.ilike.*Ads*",
-  "source.ilike.*ads*",
-  "source.ilike.*pago*",
-  "source.ilike.*Pago*",
-  "source.ilike.*paid*",
-  "source.eq.Tráfego Pago",
-  "source.eq.Facebook Ads",
-  "source.eq.Google Ads",
-  "source.eq.TikTok Ads",
-  "source.eq.Instagram Ads",
+  "source.ilike.%ads%",
+  "source.ilike.%pago%",
+  "source.ilike.%paid%",
   "source.eq.Webhook Externo",
 ].join(",");
 
