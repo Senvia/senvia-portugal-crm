@@ -18,10 +18,11 @@ export function PaidTrafficCard() {
   const { organization } = useAuth();
   const { data: stages = [] } = usePipelineStages();
 
-  const wonStageKey = stages.find((s) => s.is_final_positive)?.key ?? "won";
+  const wonKeys = stages.filter((s) => s.is_final_positive).map((s) => s.key);
+  const FALLBACK_WON = ["won", "fechado", "ganho", "closed", "convertido"];
 
   const { data, isLoading } = useQuery({
-    queryKey: ["paid-traffic-conversions", organization?.id, wonStageKey],
+    queryKey: ["paid-traffic-conversions", organization?.id, wonKeys.join(",")],
     queryFn: async () => {
       if (!organization?.id) return null;
 
@@ -35,7 +36,9 @@ export function PaidTrafficCard() {
       if (!leads || leads.length === 0) return { total: 0, converted: 0, rate: 0, revenue: 0 };
 
       const total = leads.length;
-      const converted = leads.filter((l) => l.status === wonStageKey);
+      const lowerWonKeys = wonKeys.map((k) => k.toLowerCase());
+      const keys = lowerWonKeys.length > 0 ? lowerWonKeys : FALLBACK_WON;
+      const converted = leads.filter((l) => keys.includes((l.status ?? "").toLowerCase()));
       const revenue = converted.reduce((sum, l) => sum + (l.value ?? 0), 0);
 
       return {
