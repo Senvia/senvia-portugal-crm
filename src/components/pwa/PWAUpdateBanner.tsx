@@ -47,15 +47,6 @@ export function PWAUpdateBanner() {
     };
     document.addEventListener("visibilitychange", onVisibility);
 
-    // Best-effort: clean up any previously installed service worker that
-    // might still be serving a stale shell from older builds.
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker
-        .getRegistrations()
-        .then((regs) => regs.forEach((r) => r.unregister().catch(() => {})))
-        .catch(() => {});
-    }
-
     return () => {
       cancelled = true;
       clearInterval(interval);
