@@ -5,50 +5,6 @@ import { useToast } from '@/hooks/use-toast';
 
 const VAPID_PUBLIC_KEY = 'BPheJr4xGbGEdqLeawCOx4bahUlERq9bOvn1dGznjrei6yRo4GfRYCJaj-WD_zVvMHekax5FQYUV-Uw89jyWFhA';
 
-/** Wait for SW to be ready, but bail out after `ms` to avoid infinite hang. */
-function swReady(ms = 8000): Promise<ServiceWorkerRegistration> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('Service worker não está pronto')), ms);
-    navigator.serviceWorker.ready.then((reg) => {
-      clearTimeout(timer);
-      resolve(reg);
-    }).catch((err) => {
-      clearTimeout(timer);
-      reject(err);
-    });
-  });
-}
-
-/** Ensure the push SW is registered; returns registration or null. */
-async function ensureSW(): Promise<ServiceWorkerRegistration | null> {
-  try {
-    // Check if already registered
-    const regs = await navigator.serviceWorker.getRegistrations();
-    const existing = regs.find((r) => r.active?.scriptURL?.endsWith('/sw.js'));
-    if (existing) return existing;
-
-    // Not registered yet — register now and wait
-    const reg = await navigator.serviceWorker.register('/sw.js');
-    // Wait for it to activate (up to 5s)
-    if (!reg.active) {
-      await new Promise<void>((resolve) => {
-        const sw = reg.installing || reg.waiting;
-        if (!sw) { resolve(); return; }
-        sw.addEventListener('statechange', function handler() {
-          if (sw.state === 'activated') {
-            sw.removeEventListener('statechange', handler);
-            resolve();
-          }
-        });
-        setTimeout(resolve, 5000);
-      });
-    }
-    return reg;
-  } catch {
-    return null;
-  }
-}
-
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = '='.repeat((4 - base64String.length % 4) % 4);
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
@@ -69,6 +25,43 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
   return window.btoa(binary);
 }
 
+/** Get the active SW registration, or null. Never throws, never hangs. */
+async function getSwRegistration(): Promise<ServiceWorkerRegistration | null> {
+  if (!('serviceWorker' in navigator)) return null;
+
+  try {
+    const regs = await navigator.serviceWorker.getRegistrations();
+    // Prefer one that's already active
+    const active = regs.find((r) => r.active);
+    if (active) return active;
+
+    // If there's one installing/waiting, wait briefly for it
+    const pending = regs.find((r) => r.installing || r.waiting);
+    if (pending) {
+      const sw = pending.installing || pending.waiting;
+      if (sw) {
+        await Promise.race([
+          new Promise<void>((resolve) => {
+            const handler = () => { if (sw.state === 'activated') { sw.removeEventListener('statechange', handler); resolve(); } };
+            sw.addEventListener('statechange', handler);
+          }),
+          new Promise<void>((resolve) => setTimeout(resolve, 3000)),
+        ]);
+      }
+      if (pending.active) return pending;
+    }
+
+    // Last resort: try registering now
+    const reg = await Promise.race([
+      navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000)),
+    ]);
+    return reg;
+  } catch {
+    return null;
+  }
+}
+
 export function usePushNotifications() {
   const [isSupported, setIsSupported] = useState(false);
   const [isSubscribed, setIsSubscribed] = useState(false);
@@ -81,24 +74,21 @@ export function usePushNotifications() {
     let cancelled = false;
 
     const check = async () => {
-      const supported =
-        'serviceWorker' in navigator &&
-        'PushManager' in window &&
-        'Notification' in window;
-
-      if (!cancelled) {
-        setIsSupported(supported);
-        setPermission(supported ? Notification.permission : 'default');
-      }
-
-      if (!supported || !user) {
-        if (!cancelled) setIsLoading(false);
-        return;
-      }
-
       try {
-        const reg = await ensureSW();
-        if (!reg || cancelled) { if (!cancelled) setIsLoading(false); return; }
+        const supported =
+          'serviceWorker' in navigator &&
+          'PushManager' in window &&
+          'Notification' in window;
+
+        if (!cancelled) {
+          setIsSupported(supported);
+          setPermission(supported ? Notification.permission : 'default');
+        }
+
+        if (!supported || !user) return;
+
+        const reg = await getSwRegistration();
+        if (!reg || cancelled) return;
 
         const subscription = await reg.pushManager.getSubscription();
         if (subscription && !cancelled) {
@@ -112,10 +102,11 @@ export function usePushNotifications() {
           if (!cancelled) setIsSubscribed(!error && !!data);
         }
       } catch (err) {
-        console.error('Error checking push subscription:', err);
+        console.error('[push] check error:', err);
+      } finally {
+        // ALWAYS stop loading — no matter what happens above
+        if (!cancelled) setIsLoading(false);
       }
-
-      if (!cancelled) setIsLoading(false);
     };
 
     check();
@@ -124,34 +115,24 @@ export function usePushNotifications() {
 
   const subscribe = useCallback(async () => {
     if (!isSupported || !user || !organization) {
-      toast({
-        title: 'Erro',
-        description: 'Notificações push não suportadas ou utilizador não autenticado.',
-        variant: 'destructive',
-      });
+      toast({ title: 'Erro', description: 'Notificações push não suportadas ou utilizador não autenticado.', variant: 'destructive' });
       return false;
     }
 
     setIsLoading(true);
-
     try {
       const permResult = await Notification.requestPermission();
       setPermission(permResult);
 
       if (permResult !== 'granted') {
-        toast({
-          title: 'Permissão negada',
-          description: 'Precisa de permitir notificações para receber alertas.',
-          variant: 'destructive',
-        });
-        setIsLoading(false);
+        toast({ title: 'Permissão negada', description: 'Precisa de permitir notificações para receber alertas.', variant: 'destructive' });
         return false;
       }
 
-      // Get or register the SW with timeout protection
-      const registration = await ensureSW();
+      const registration = await getSwRegistration();
       if (!registration) {
-        throw new Error('Não foi possível registar o service worker. Tente reabrir o app.');
+        toast({ title: 'Erro', description: 'Service worker não disponível. Feche e reabra o app.', variant: 'destructive' });
+        return false;
       }
 
       const applicationServerKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
@@ -162,9 +143,7 @@ export function usePushNotifications() {
 
       const p256dh = subscription.getKey('p256dh');
       const auth = subscription.getKey('auth');
-      if (!p256dh || !auth) {
-        throw new Error('Falha ao obter chaves de subscrição');
-      }
+      if (!p256dh || !auth) throw new Error('Falha ao obter chaves de subscrição');
 
       const { error } = await supabase
         .from('push_subscriptions')
@@ -174,28 +153,16 @@ export function usePushNotifications() {
           endpoint: subscription.endpoint,
           p256dh: arrayBufferToBase64(p256dh),
           auth: arrayBufferToBase64(auth),
-        }, {
-          onConflict: 'endpoint',
-        });
+        }, { onConflict: 'endpoint' });
 
-      if (error) {
-        console.error('Error saving subscription:', error);
-        throw new Error('Erro ao guardar subscrição');
-      }
+      if (error) throw new Error('Erro ao guardar subscrição');
 
       setIsSubscribed(true);
-      toast({
-        title: 'Notificações ativadas',
-        description: 'Vai receber alertas quando chegarem novos leads.',
-      });
+      toast({ title: 'Notificações ativadas', description: 'Vai receber alertas quando chegarem novos leads.' });
       return true;
     } catch (error) {
-      console.error('Error subscribing to push:', error);
-      toast({
-        title: 'Erro',
-        description: error instanceof Error ? error.message : 'Erro ao ativar notificações.',
-        variant: 'destructive',
-      });
+      console.error('[push] subscribe error:', error);
+      toast({ title: 'Erro', description: error instanceof Error ? error.message : 'Erro ao ativar notificações.', variant: 'destructive' });
       return false;
     } finally {
       setIsLoading(false);
@@ -204,36 +171,22 @@ export function usePushNotifications() {
 
   const unsubscribe = useCallback(async () => {
     if (!user) return false;
-
     setIsLoading(true);
-
     try {
-      const registration = await swReady(5000);
-      const subscription = await registration.pushManager.getSubscription();
-
-      if (subscription) {
-        await supabase
-          .from('push_subscriptions')
-          .delete()
-          .eq('user_id', user.id)
-          .eq('endpoint', subscription.endpoint);
-
-        await subscription.unsubscribe();
+      const reg = await getSwRegistration();
+      if (reg) {
+        const subscription = await reg.pushManager.getSubscription();
+        if (subscription) {
+          await supabase.from('push_subscriptions').delete().eq('user_id', user.id).eq('endpoint', subscription.endpoint);
+          await subscription.unsubscribe();
+        }
       }
-
       setIsSubscribed(false);
-      toast({
-        title: 'Notificações desativadas',
-        description: 'Já não vai receber alertas de novos leads.',
-      });
+      toast({ title: 'Notificações desativadas', description: 'Já não vai receber alertas de novos leads.' });
       return true;
     } catch (error) {
-      console.error('Error unsubscribing:', error);
-      toast({
-        title: 'Erro',
-        description: 'Erro ao desativar notificações.',
-        variant: 'destructive',
-      });
+      console.error('[push] unsubscribe error:', error);
+      toast({ title: 'Erro', description: 'Erro ao desativar notificações.', variant: 'destructive' });
       return false;
     } finally {
       setIsLoading(false);
@@ -244,13 +197,5 @@ export function usePushNotifications() {
     return isSubscribed ? await unsubscribe() : await subscribe();
   }, [isSubscribed, subscribe, unsubscribe]);
 
-  return {
-    isSupported,
-    isSubscribed,
-    isLoading,
-    permission,
-    subscribe,
-    unsubscribe,
-    toggle,
-  };
+  return { isSupported, isSubscribed, isLoading, permission, subscribe, unsubscribe, toggle };
 }
