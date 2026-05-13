@@ -36,7 +36,6 @@ import { useCreateSalePayment } from "@/hooks/useSalePayments";
 import { useCreateCpe, useUpdateCpe } from "@/hooks/useCpes";
 import { useAuth } from "@/contexts/AuthContext";
 import { useFinalStages } from "@/hooks/usePipelineStages";
-import { useUpdateLeadStatus } from "@/hooks/useLeads";
 import { formatCurrency } from "@/lib/format";
 import { getPlanById } from "@/lib/stripe-plans";
 import { supabase } from "@/integrations/supabase/client";
@@ -65,7 +64,7 @@ import { useServicosProducts } from "@/hooks/useServicosProducts";
 import { ServicosSection } from "@/components/proposals/ServicosSection";
 
 import { useSaleFieldsSettings } from "@/hooks/useSaleFieldsSettings";
-import { useCommissionMatrix, getVolumeTier, getTierRuleLabel } from "@/hooks/useCommissionMatrix";
+import { useCommissionMatrix, getVolumeTier } from "@/hooks/useCommissionMatrix";
 import { 
   type ProposalType,
   type ModeloServico,
@@ -132,7 +131,6 @@ export function CreateSaleModal({
   const createCpe = useCreateCpe();
   const updateCpe = useUpdateCpe();
   const { finalPositiveStage } = useFinalStages();
-  const updateLeadStatus = useUpdateLeadStatus();
   const { organization } = useAuth();
   const isTelecom = organization?.niche === 'telecom';
   const { modules } = useModules();
