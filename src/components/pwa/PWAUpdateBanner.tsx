@@ -57,7 +57,7 @@ export function PWAUpdateBanner() {
   if (!needRefresh) return null;
 
   return (
-    <div className="fixed inset-x-0 top-0 z-[100] flex justify-center px-4 pt-4 pointer-events-none">
+    <div className="fixed inset-x-0 top-0 z-[100] flex justify-center px-4 pt-[calc(env(safe-area-inset-top)+1rem)] pointer-events-none">
       <div className="pointer-events-auto flex items-center gap-3 rounded-lg border border-primary/30 bg-background/95 px-4 py-2.5 shadow-lg backdrop-blur">
         <RefreshCw className="h-4 w-4 text-primary" />
         <span className="text-sm font-medium text-foreground">Nova versão disponível</span>
