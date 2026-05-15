@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { usePersistedState } from "@/hooks/usePersistedState";
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,7 +17,7 @@ import { EditExpenseModal } from '@/components/finance/EditExpenseModal';
 import { formatCurrency, formatDate } from '@/lib/format';
 import { parseISO, startOfDay, endOfDay } from 'date-fns';
 import { DateRange } from 'react-day-picker';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import type { Expense } from '@/types/expenses';
 import {
   AlertDialog,
@@ -32,6 +32,7 @@ import {
 
 export default function Expenses() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { data: expenses, isLoading } = useExpenses();
   const { data: categories } = useExpenseCategories();
   const deleteExpense = useDeleteExpense();
@@ -44,6 +45,18 @@ export default function Expenses() {
   const [search, setSearch] = usePersistedState('expenses-search-v1', '');
   const [dateRange, setDateRange] = usePersistedState<DateRange | undefined>('expenses-daterange-v1', undefined);
   const [categoryFilter, setCategoryFilter] = usePersistedState('expenses-category-v1', 'all');
+
+  // Read date range from URL on mount
+  useEffect(() => {
+    const fromParam = searchParams.get('from');
+    const toParam = searchParams.get('to');
+    if (fromParam) {
+      setDateRange({
+        from: parseISO(fromParam),
+        to: toParam ? parseISO(toParam) : undefined,
+      });
+    }
+  }, [searchParams]);
 
   const filteredExpenses = useMemo(() => {
     if (!expenses) return [];

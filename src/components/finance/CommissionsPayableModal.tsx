@@ -3,7 +3,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useCommissionsDetail } from "@/hooks/useCommissionsDetail";
-import { useStripeCommissions } from "@/hooks/useStripeCommissions";
+import { useStripeCommissions, useMarkCommissionPaid } from "@/hooks/useStripeCommissions";
+import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +18,7 @@ interface CommissionsPayableModalProps {
 export function CommissionsPayableModal({ open, onOpenChange }: CommissionsPayableModalProps) {
   const { data, isLoading } = useCommissionsDetail();
   const { data: stripeData, isLoading: stripeLoading } = useStripeCommissions();
+  const markPaid = useMarkCommissionPaid();
   const [tab, setTab] = useState("direct");
 
   return (
@@ -116,7 +118,22 @@ export function CommissionsPayableModal({ open, onOpenChange }: CommissionsPayab
                   <div key={user.userId} className="rounded-lg border overflow-hidden">
                     <div className="bg-muted/50 px-4 py-3 flex items-center justify-between">
                       <span className="font-medium text-sm">{user.fullName}</span>
-                      <Badge variant="secondary">{formatCurrency(user.totalCommission)}</Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="secondary">{formatCurrency(user.totalCommission)}</Badge>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs"
+                          disabled={markPaid.isPending}
+                          onClick={() => markPaid.mutate({
+                            userId: user.userId,
+                            fullName: user.fullName,
+                            totalCommission: user.totalCommission,
+                          })}
+                        >
+                          {markPaid.isPending ? "A processar..." : "Marcar Pago"}
+                        </Button>
+                      </div>
                     </div>
                     <Table>
                       <TableHeader>

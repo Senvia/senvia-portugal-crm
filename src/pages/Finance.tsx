@@ -38,6 +38,7 @@ import { CommissionAnalysisTab } from "@/components/finance/CommissionAnalysisTa
 import { useAuth } from "@/contexts/AuthContext";
 import { useEffect, useState } from "react";
 import { useSalesCommissions } from "@/hooks/useSalesCommissions";
+import { useStripeCommissions } from "@/hooks/useStripeCommissions";
 import { CommissionsPayableModal } from "@/components/finance/CommissionsPayableModal";
 import { RenewalAlertsWidget } from "@/components/finance/RenewalAlertsWidget";
 import { hasPerfect2GetherAccess } from "@/lib/perfect2gether";
@@ -61,6 +62,7 @@ export default function Finance() {
   const [activeTab, setActiveTab] = usePersistedState("finance-tab-v1", isTelecom ? "outros" : "resumo");
   const [commissionsModalOpen, setCommissionsModalOpen] = useState(false);
   const { data: commissionsData } = useSalesCommissions();
+  const { data: stripeCommissionsData } = useStripeCommissions();
 
   useEffect(() => {
     if (organization && !validTabs.includes(activeTab)) {
@@ -70,6 +72,15 @@ export default function Finance() {
 
   const { stats, isLoading } = useFinanceStats({ dateRange });
   const navigate = useNavigate();
+
+  const navigateWithDateRange = (path: string, extra?: Record<string, string>) => {
+    const params = new URLSearchParams();
+    if (dateRange?.from) params.set("from", dateRange.from.toISOString().split("T")[0]);
+    if (dateRange?.to) params.set("to", dateRange.to.toISOString().split("T")[0]);
+    if (extra) Object.entries(extra).forEach(([k, v]) => params.set(k, v));
+    const qs = params.toString();
+    navigate(qs ? `${path}?${qs}` : path);
+  };
 
   const chartData = stats.cashflowTrend.map((point) => ({
     ...point,
@@ -133,7 +144,7 @@ export default function Finance() {
 
             <Card
               className="group cursor-pointer transition-colors hover:bg-muted/50"
-              onClick={() => navigate("/financeiro/pagamentos?status=paid")}
+              onClick={() => navigateWithDateRange("/financeiro/pagamentos", { status: "paid" })}
             >
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Recebido</CardTitle>
@@ -154,7 +165,7 @@ export default function Finance() {
 
             <Card
               className="group cursor-pointer transition-colors hover:bg-muted/50"
-              onClick={() => navigate("/financeiro/pagamentos?status=pending")}
+              onClick={() => navigateWithDateRange("/financeiro/pagamentos", { status: "pending" })}
             >
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Pendente</CardTitle>
@@ -175,7 +186,7 @@ export default function Finance() {
 
             <Card
               className="group cursor-pointer transition-colors hover:bg-muted/50"
-              onClick={() => navigate("/financeiro/pagamentos?status=overdue")}
+              onClick={() => navigateWithDateRange("/financeiro/pagamentos", { status: "overdue" })}
             >
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Atrasados</CardTitle>
@@ -196,7 +207,7 @@ export default function Finance() {
 
             <Card
               className="group cursor-pointer transition-colors hover:bg-muted/50"
-              onClick={() => navigate("/financeiro/despesas")}
+              onClick={() => navigateWithDateRange("/financeiro/despesas")}
             >
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Despesas</CardTitle>
@@ -261,7 +272,10 @@ export default function Finance() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-xl font-bold text-primary md:text-2xl">
-                    {formatCurrency(commissionsData?.reduce((sum, commission) => sum + commission.totalCommission, 0) || 0)}
+                    {formatCurrency(
+                      (commissionsData?.reduce((sum, commission) => sum + commission.totalCommission, 0) || 0)
+                      + (stripeCommissionsData?.grandTotal || 0)
+                    )}
                   </div>
                   <p className="text-xs text-muted-foreground">Total do período</p>
                 </CardContent>

@@ -60,6 +60,14 @@ export function useCreateExpense() {
     mutationFn: async (data: CreateExpenseData) => {
       if (!organization?.id) throw new Error('No organization');
 
+      // Calculate next_recurrence_date if recurring
+      let nextRecurrenceDate: string | null = null;
+      if (data.is_recurring) {
+        const d = new Date(data.expense_date + 'T00:00:00');
+        d.setMonth(d.getMonth() + 1);
+        nextRecurrenceDate = d.toISOString().split('T')[0];
+      }
+
       const { error } = await supabase.from('expenses').insert({
         organization_id: organization.id,
         category_id: data.category_id || null,
@@ -71,6 +79,7 @@ export function useCreateExpense() {
         receipt_file_url: data.receipt_file_url || null,
         created_by: session?.user?.id || null,
         bank_account_id: data.bank_account_id || null,
+        ...(nextRecurrenceDate ? { next_recurrence_date: nextRecurrenceDate } : {}),
       });
 
       if (error) throw error;
@@ -101,9 +110,19 @@ export function useUpdateExpense() {
 
   return useMutation({
     mutationFn: async ({ id, ...data }: UpdateExpenseData) => {
+      // Recalculate next_recurrence_date when toggling recurring
+      const updates: Record<string, unknown> = { ...data };
+      if (data.is_recurring && data.expense_date) {
+        const d = new Date(data.expense_date + 'T00:00:00');
+        d.setMonth(d.getMonth() + 1);
+        updates.next_recurrence_date = d.toISOString().split('T')[0];
+      } else if (data.is_recurring === false) {
+        updates.next_recurrence_date = null;
+      }
+
       const { error } = await supabase
         .from('expenses')
-        .update(data)
+        .update(updates)
         .eq('id', id);
 
       if (error) throw error;

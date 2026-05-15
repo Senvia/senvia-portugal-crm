@@ -82,11 +82,19 @@ export default function FinancePayments() {
   // Load sale items when draft modal is open
   const { data: saleItems } = useSaleItems(draftPayment?.sale_id);
 
-  // Read status from URL on mount
+  // Read filters from URL on mount
   useEffect(() => {
     const statusFromUrl = searchParams.get('status');
     if (statusFromUrl === 'pending' || statusFromUrl === 'paid' || statusFromUrl === 'overdue') {
       setStatusFilter(statusFromUrl);
+    }
+    const fromParam = searchParams.get('from');
+    const toParam = searchParams.get('to');
+    if (fromParam) {
+      setDateRange({
+        from: parseISO(fromParam),
+        to: toParam ? parseISO(toParam) : undefined,
+      });
     }
   }, [searchParams]);
 

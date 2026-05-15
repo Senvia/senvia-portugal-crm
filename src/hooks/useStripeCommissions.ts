@@ -1,8 +1,9 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useDashboardPeriod } from "@/stores/useDashboardPeriod";
 import { startOfMonth, endOfMonth, format } from "date-fns";
+import { toast } from "sonner";
 
 export interface StripeCommissionRecord {
   id: string;
@@ -45,6 +46,7 @@ export function useStripeCommissions() {
         .from("stripe_commission_records")
         .select("*")
         .eq("organization_id", orgId)
+        .eq("status", "pending")
         .gte("created_at", `${monthStart}T00:00:00`)
         .lte("created_at", `${monthEnd}T23:59:59`)
         .order("created_at", { ascending: false }) as any;
@@ -94,5 +96,68 @@ export function useStripeCommissions() {
       return { byUser, grandTotal };
     },
     enabled: !!orgId,
+  });
+}
+
+export function useMarkCommissionPaid() {
+  const queryClient = useQueryClient();
+  const { organization, session } = useAuth();
+
+  return useMutation({
+    mutationFn: async ({ recordId, userId, fullName, totalCommission }: {
+      recordId?: string;
+      userId?: string;
+      fullName?: string;
+      totalCommission?: number;
+    }) => {
+      const orgId = organization?.id;
+      if (!orgId) throw new Error("No organization");
+
+      // 1. Mark commission record(s) as paid
+      if (recordId) {
+        const { error } = await (supabase as any)
+          .from("stripe_commission_records")
+          .update({ status: "paid" })
+          .eq("id", recordId);
+        if (error) throw error;
+      } else if (userId) {
+        const { error } = await (supabase as any)
+          .from("stripe_commission_records")
+          .update({ status: "paid" })
+          .eq("organization_id", orgId)
+          .eq("user_id", userId)
+          .eq("status", "pending");
+        if (error) throw error;
+      }
+
+      // 2. Create an expense record for this commission payment
+      if (totalCommission && totalCommission > 0) {
+        const today = new Date().toISOString().split("T")[0];
+        const { error: expError } = await supabase
+          .from("expenses")
+          .insert({
+            organization_id: orgId,
+            description: `Comissão paga — ${fullName || "Comercial"}`,
+            amount: totalCommission,
+            expense_date: today,
+            is_recurring: false,
+            notes: `Comissão recorrente (Stripe) paga a ${fullName || "colaborador"}`,
+            created_by: session?.user?.id || null,
+          });
+        if (expError) throw expError;
+      }
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.refetchQueries({ queryKey: ["stripe-commissions"] }),
+        queryClient.refetchQueries({ queryKey: ["sales-commissions"] }),
+        queryClient.refetchQueries({ queryKey: ["expenses"] }),
+        queryClient.refetchQueries({ queryKey: ["finance-stats"] }),
+      ]);
+      toast.success("Comissão marcada como paga e registada como despesa!");
+    },
+    onError: () => {
+      toast.error("Erro ao marcar comissão como paga");
+    },
   });
 }

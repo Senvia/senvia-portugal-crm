@@ -231,38 +231,60 @@ async function handleInvoicePaid(supabase: any, stripe: Stripe, invoice: Stripe.
       .maybeSingle();
 
     const rate = globalRate > 0 ? globalRate : Number(member?.commission_rate || 0);
-    if (rate <= 0) { logStep("invoice.paid: no commission rate", { userId: sale.created_by }); return; }
-
-    const commissionAmount = amount * (rate / 100);
 
     // Extract period
     const periodStart = invoice.period_start ? new Date(invoice.period_start * 1000).toISOString().split("T")[0] : null;
     const periodEnd = invoice.period_end ? new Date(invoice.period_end * 1000).toISOString().split("T")[0] : null;
 
-    // Insert commission record
-    const { error: insertErr } = await supabase
-      .from("stripe_commission_records")
+    // Insert commission record (only if rate > 0)
+    if (rate > 0) {
+      const commissionAmount = amount * (rate / 100);
+      const { error: insertErr } = await supabase
+        .from("stripe_commission_records")
+        .insert({
+          organization_id: SENVIA_AGENCY_ORG_ID,
+          sale_id: sale.id,
+          user_id: sale.created_by,
+          client_org_id: clientOrgId,
+          amount,
+          commission_rate: rate,
+          commission_amount: commissionAmount,
+          stripe_invoice_id: stripeInvoiceId,
+          period_start: periodStart,
+          period_end: periodEnd,
+          plan,
+          status: "pending",
+        });
+
+      if (insertErr) {
+        logStep("invoice.paid: commission insert error", { error: insertErr.message });
+      } else {
+        logStep("invoice.paid: commission recorded", {
+          userId: sale.created_by, amount, rate, commissionAmount, plan
+        });
+      }
+    } else {
+      logStep("invoice.paid: no commission rate, skipping commission record", { userId: sale.created_by });
+    }
+
+    // Create sale_payments record so it appears in Finance
+    const paymentDate = periodStart || new Date().toISOString().split("T")[0];
+    const { error: paymentErr } = await supabase
+      .from("sale_payments")
       .insert({
         organization_id: SENVIA_AGENCY_ORG_ID,
         sale_id: sale.id,
-        user_id: sale.created_by,
-        client_org_id: clientOrgId,
         amount,
-        commission_rate: rate,
-        commission_amount: commissionAmount,
-        stripe_invoice_id: stripeInvoiceId,
-        period_start: periodStart,
-        period_end: periodEnd,
-        plan,
-        status: "pending",
+        payment_date: paymentDate,
+        status: "paid",
+        payment_method: "card",
+        notes: `Stripe ${plan ? PLAN_LIST_NAMES[plan] || plan : "subscription"} · ${stripeInvoiceId}`,
       });
 
-    if (insertErr) {
-      logStep("invoice.paid: insert error", { error: insertErr.message });
+    if (paymentErr) {
+      logStep("invoice.paid: payment insert error", { error: paymentErr.message });
     } else {
-      logStep("invoice.paid: commission recorded", { 
-        userId: sale.created_by, amount, rate, commissionAmount, plan 
-      });
+      logStep("invoice.paid: payment recorded in sale_payments", { saleId: sale.id, amount });
     }
 
     // Update linked sale value to reflect actual Stripe payment
