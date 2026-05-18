@@ -51,9 +51,10 @@ export function CreateClientModal({ open, onOpenChange, onCreated, initialData }
   const { data: teamMembers = [] } = useTeamMembers();
   const { data: fieldSettings } = useClientFieldsSettings();
   const invoicingEnabled = isBillingActive(organization);
-  
+  const isTelecom = organization?.niche === 'telecom';
+
   const settings = fieldSettings || DEFAULT_CLIENT_FIELDS_SETTINGS;
-  
+
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -71,6 +72,9 @@ export function CreateClientModal({ open, onOpenChange, onCreated, initialData }
   const [city, setCity] = useState("");
   const [postalCode, setPostalCode] = useState("");
   const [country, setCountry] = useState("PT");
+  const [distrito, setDistrito] = useState("");
+  const [conselho, setConselho] = useState("");
+  const [grupoEconomico, setGrupoEconomico] = useState("");
 
   const createClient = useCreateClient();
 
@@ -130,6 +134,9 @@ export function CreateClientModal({ open, onOpenChange, onCreated, initialData }
         country: country || undefined,
         lead_id: initialData?.leadId || undefined,
         assigned_to: assignedTo || undefined,
+        distrito: distrito.trim() || undefined,
+        conselho: conselho.trim() || undefined,
+        grupo_economico: grupoEconomico.trim() || undefined,
       },
       {
         onSuccess: (createdClient) => {
@@ -158,6 +165,9 @@ export function CreateClientModal({ open, onOpenChange, onCreated, initialData }
     setCity("");
     setPostalCode("");
     setCountry("PT");
+    setDistrito("");
+    setConselho("");
+    setGrupoEconomico("");
   };
 
   return (
@@ -344,6 +354,46 @@ export function CreateClientModal({ open, onOpenChange, onCreated, initialData }
                               ))}
                             </SelectContent>
                           </Select>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Telecom/Energy: Distrito, Conselho, Grupo Económico */}
+                {isTelecom && (
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base">Localização / Grupo</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="distrito">Distrito</Label>
+                          <Input
+                            id="distrito"
+                            value={distrito}
+                            onChange={(e) => setDistrito(e.target.value)}
+                            placeholder="Ex: Lisboa"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="conselho">Concelho</Label>
+                          <Input
+                            id="conselho"
+                            value={conselho}
+                            onChange={(e) => setConselho(e.target.value)}
+                            placeholder="Ex: Sintra"
+                          />
+                        </div>
+                        <div className="space-y-2 sm:col-span-2">
+                          <Label htmlFor="grupo-economico">Grupo Económico</Label>
+                          <Input
+                            id="grupo-economico"
+                            value={grupoEconomico}
+                            onChange={(e) => setGrupoEconomico(e.target.value)}
+                            placeholder="Ex: Grupo XYZ"
+                          />
                         </div>
                       </div>
                     </CardContent>

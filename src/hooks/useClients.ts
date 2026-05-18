@@ -83,6 +83,9 @@ interface CreateClientData {
   postal_code?: string;
   country?: string;
   assigned_to?: string;
+  distrito?: string;
+  conselho?: string;
+  grupo_economico?: string;
 }
 
 export function useCreateClient() {

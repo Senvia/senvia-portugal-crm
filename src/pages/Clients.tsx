@@ -1,16 +1,18 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 
 import { useSearchParams, useLocation } from "react-router-dom";
 import { usePersistedState } from "@/hooks/usePersistedState";
 import { useAuth } from "@/contexts/AuthContext";
+import { useQueryClient } from "@tanstack/react-query";
 import { SEO } from "@/components/SEO";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Search, Users, Crown, UserMinus, Euro, Shield } from "lucide-react";
+import { Plus, Search, Users, Crown, UserMinus, Euro, Shield, Upload } from "lucide-react";
 import { useClients, useClientStats, useDeleteClient } from "@/hooks/useClients";
 import { useClientLabels } from "@/hooks/useClientLabels";
+import { useTeamMembers } from "@/hooks/useTeam";
 import { ClientsTable } from "@/components/clients/ClientsTable";
 import { CreateClientModal } from "@/components/clients/CreateClientModal";
 import { EditClientModal } from "@/components/clients/EditClientModal";
@@ -23,9 +25,11 @@ import { formatCurrency } from "@/lib/format";
 import { mapClientsForExport, exportToCsv, exportToExcel } from "@/lib/export";
 import { useClientProposalTypes } from "@/hooks/useClientProposalTypes";
 import { CreateProposalModal } from "@/components/proposals/CreateProposalModal";
+import { importClients } from "@/lib/clients/import";
 import { toast } from "sonner";
 import { useModules } from "@/hooks/useModules";
 import { format, isWithinInterval, startOfDay, endOfDay, parseISO } from "date-fns";
+import * as XLSX from "xlsx";
 
 export default function Clients() {
   const { profile, organization } = useAuth();
@@ -43,13 +47,18 @@ export default function Clients() {
   const [showCreateProposal, setShowCreateProposal] = useState(false);
   const [proposalClientId, setProposalClientId] = useState<string | null>(null);
 
+  const queryClient = useQueryClient();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const { data: clients, isLoading } = useClients();
   const { stats } = useClientStats();
   const deleteClient = useDeleteClient();
   const labels = useClientLabels();
   const { clientTypesMap, isTelecom } = useClientProposalTypes();
+  const { data: teamMembers } = useTeamMembers();
   const { modules } = useModules();
   const showEnergy = isTelecom && modules.energy;
+  const [isImporting, setIsImporting] = useState(false);
 
   const filteredClients = useMemo(() => {
     if (!clients) return [];
@@ -165,6 +174,55 @@ export default function Clients() {
     toast.success(`${selectedClients.length} clientes exportados para Excel`);
   };
 
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !organization || !profile) return;
+    e.target.value = "";
+
+    setIsImporting(true);
+    const toastId = toast.loading("A ler ficheiro...");
+
+    try {
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const data = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet);
+
+      if (!data.length) {
+        toast.dismiss(toastId);
+        toast.error("Ficheiro vazio ou sem dados.");
+        setIsImporting(false);
+        return;
+      }
+
+      const result = await importClients(
+        data,
+        organization.id,
+        profile.id,
+        teamMembers || [],
+        (current, total) => toast.loading(`A importar: ${current}/${total}...`, { id: toastId })
+      );
+
+      toast.dismiss(toastId);
+
+      if (result.inserted > 0) {
+        toast.success(`${result.inserted} clientes importados com sucesso!`);
+      }
+      if (result.failed > 0) {
+        toast.error(`${result.failed} linhas falharam. ${result.errors[0] || ""}`);
+      }
+
+      queryClient.invalidateQueries({ queryKey: ["clients"] });
+      queryClient.invalidateQueries({ queryKey: ["cpes"] });
+    } catch (err) {
+      toast.dismiss(toastId);
+      toast.error("Erro ao processar ficheiro.");
+      console.error("[importClients] error:", err);
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
   return (
     <>
       <SEO 
@@ -181,10 +239,31 @@ export default function Clients() {
               Gestão de {labels.plural.toLowerCase()} e relacionamento comercial
             </p>
           </div>
-          <Button onClick={() => setShowCreateModal(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            {labels.new}
-          </Button>
+          <div className="flex items-center gap-2">
+            {isTelecom && (
+              <>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  className="hidden"
+                  onChange={handleImportFile}
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isImporting}
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  {isImporting ? "A importar..." : "Importar"}
+                </Button>
+              </>
+            )}
+            <Button onClick={() => setShowCreateModal(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              {labels.new}
+            </Button>
+          </div>
         </div>
 
         {/* Stats Cards */}

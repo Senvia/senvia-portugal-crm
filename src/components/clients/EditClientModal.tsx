@@ -43,9 +43,10 @@ export function EditClientModal({ client, open, onOpenChange }: EditClientModalP
   const { data: teamMembers = [] } = useTeamMembers();
   const { data: fieldSettings } = useClientFieldsSettings();
   const invoicingEnabled = isBillingActive(organization);
-  
+  const isTelecom = organization?.niche === 'telecom';
+
   const settings = fieldSettings || DEFAULT_CLIENT_FIELDS_SETTINGS;
-  
+
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -63,6 +64,9 @@ export function EditClientModal({ client, open, onOpenChange }: EditClientModalP
   const [city, setCity] = useState("");
   const [postalCode, setPostalCode] = useState("");
   const [country, setCountry] = useState("PT");
+  const [distrito, setDistrito] = useState("");
+  const [conselho, setConselho] = useState("");
+  const [grupoEconomico, setGrupoEconomico] = useState("");
 
   const updateClient = useUpdateClient();
 
@@ -96,6 +100,9 @@ export function EditClientModal({ client, open, onOpenChange }: EditClientModalP
       setCity(client.city || "");
       setPostalCode(client.postal_code || "");
       setCountry(client.country || "PT");
+      setDistrito(client.distrito || "");
+      setConselho(client.conselho || "");
+      setGrupoEconomico(client.grupo_economico || "");
     }
   }, [client]);
 
@@ -135,6 +142,9 @@ export function EditClientModal({ client, open, onOpenChange }: EditClientModalP
         postal_code: postalCode.trim() || null,
         country: country || null,
         assigned_to: assignedTo || null,
+        distrito: distrito.trim() || null,
+        conselho: conselho.trim() || null,
+        grupo_economico: grupoEconomico.trim() || null,
       },
       {
         onSuccess: () => {
@@ -324,6 +334,46 @@ export function EditClientModal({ client, open, onOpenChange }: EditClientModalP
                               ))}
                             </SelectContent>
                           </Select>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Telecom/Energy: Distrito, Conselho, Grupo Económico */}
+                {isTelecom && (
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base">Localização / Grupo</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="edit-distrito">Distrito</Label>
+                          <Input
+                            id="edit-distrito"
+                            value={distrito}
+                            onChange={(e) => setDistrito(e.target.value)}
+                            placeholder="Ex: Lisboa"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="edit-conselho">Concelho</Label>
+                          <Input
+                            id="edit-conselho"
+                            value={conselho}
+                            onChange={(e) => setConselho(e.target.value)}
+                            placeholder="Ex: Sintra"
+                          />
+                        </div>
+                        <div className="space-y-2 sm:col-span-2">
+                          <Label htmlFor="edit-grupo-economico">Grupo Económico</Label>
+                          <Input
+                            id="edit-grupo-economico"
+                            value={grupoEconomico}
+                            onChange={(e) => setGrupoEconomico(e.target.value)}
+                            placeholder="Ex: Grupo XYZ"
+                          />
                         </div>
                       </div>
                     </CardContent>

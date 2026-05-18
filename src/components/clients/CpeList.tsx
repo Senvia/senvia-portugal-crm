@@ -164,6 +164,13 @@ export function CpeList({ clientId }: CpeListProps) {
                           </div>
                         )}
 
+                        {cpe.consumo_anual != null && cpe.consumo_anual > 0 && (
+                          <div className="flex items-center gap-2">
+                            <Zap className="h-3.5 w-3.5" />
+                            <span>Consumo: {cpe.consumo_anual.toLocaleString('pt-PT')} kWh/ano</span>
+                          </div>
+                        )}
+
                         {cpe.notes && (
                           <p className="text-xs italic">{cpe.notes}</p>
                         )}
