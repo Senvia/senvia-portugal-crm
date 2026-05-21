@@ -161,7 +161,7 @@ async function handleWebhookMode(req: Request, token: string): Promise<Response>
   }
 
   // Insert lead
-  const { data: lead, error: leadError } = await supabase
+  let { data: lead, error: leadError } = await supabase
     .from('leads')
     .insert({
       organization_id: org.id,
@@ -177,10 +177,32 @@ async function handleWebhookMode(req: Request, token: string): Promise<Response>
       custom_data: Object.keys(customData).length > 0 ? customData : {},
     })
     .select()
-    .single();
+    .maybeSingle();
 
   if (leadError) {
     console.error('Error inserting webhook lead:', leadError);
+    return new Response(
+      JSON.stringify({ error: 'Erro ao guardar lead' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+
+  // If the de-duplication trigger updated an existing lead, the insert
+  // returns no row — fetch that lead instead.
+  if (!lead && cleanEmail) {
+    const { data: existingLead } = await supabase
+      .from('leads')
+      .select()
+      .eq('organization_id', org.id)
+      .ilike('email', cleanEmail)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    lead = existingLead;
+  }
+
+  if (!lead) {
+    console.error('Error inserting webhook lead: no row returned');
     return new Response(
       JSON.stringify({ error: 'Erro ao guardar lead' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -585,7 +607,7 @@ Deno.serve(async (req) => {
     }
 
     // Insert lead with custom data - use defaults for required DB fields
-    const { data: lead, error: leadError } = await supabase
+    let { data: lead, error: leadError } = await supabase
       .from('leads')
       .insert({
         organization_id: org.id,
@@ -605,10 +627,33 @@ Deno.serve(async (req) => {
         custom_data: body.custom_data || {},
       })
       .select()
-      .single();
+      .maybeSingle();
 
     if (leadError) {
       console.error('Error inserting lead:', leadError);
+      return new Response(
+        JSON.stringify({ error: 'Erro ao guardar contacto' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // If the de-duplication trigger updated an existing lead, the insert
+    // returns no row — fetch that lead instead.
+    const submittedEmail = body.email?.trim()?.toLowerCase();
+    if (!lead && submittedEmail) {
+      const { data: existingLead } = await supabase
+        .from('leads')
+        .select()
+        .eq('organization_id', org.id)
+        .ilike('email', submittedEmail)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      lead = existingLead;
+    }
+
+    if (!lead) {
+      console.error('Error inserting lead: no row returned');
       return new Response(
         JSON.stringify({ error: 'Erro ao guardar contacto' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

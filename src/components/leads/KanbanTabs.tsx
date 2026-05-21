@@ -1,7 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { LeadCard } from "./LeadCard";
 import { Lead, LeadTemperature } from "@/types";
-import { cn } from "@/lib/utils";
 import {
   Select,
   SelectContent,
@@ -9,10 +8,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { usePipelineStages, PipelineStage } from "@/hooks/usePipelineStages";
+import { usePipelineStages } from "@/hooks/usePipelineStages";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useLayoutEffect } from "react";
+import { useWindowVirtualizer } from "@tanstack/react-virtual";
 
 interface LeadEvent {
   id: string;
@@ -78,11 +78,38 @@ export function KanbanTabs({
   };
 
   const orphanLeads = getOrphanLeads();
-  const filteredLeads = activeStatus === '__orphan__' 
-    ? orphanLeads 
+  const filteredLeads = activeStatus === '__orphan__'
+    ? orphanLeads
     : getLeadsByStatus(activeStatus);
 
   const activeStage = stages.find(s => s.key === activeStatus);
+
+  // Window-based virtualization: only the cards currently on screen are kept
+  // in the DOM. A stage with thousands of leads no longer exhausts the
+  // browser's memory (which was crashing the page on mobile).
+  const listRef = useRef<HTMLDivElement>(null);
+  const [scrollMargin, setScrollMargin] = useState(0);
+
+  const virtualizer = useWindowVirtualizer({
+    count: filteredLeads.length,
+    estimateSize: () => 252,
+    overscan: 6,
+    scrollMargin,
+    getItemKey: (index) => filteredLeads[index]?.id ?? index,
+  });
+
+  // Track the list's distance from the top of the document so the virtualizer
+  // knows where its items begin. Re-measured on every render (cheap, guarded).
+  useLayoutEffect(() => {
+    const measure = () => {
+      if (!listRef.current) return;
+      const top = listRef.current.getBoundingClientRect().top + window.scrollY;
+      setScrollMargin((prev) => (Math.abs(prev - top) > 1 ? top : prev));
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  });
 
   if (isLoading) {
     return (
@@ -119,13 +146,13 @@ export function KanbanTabs({
               </>
             ) : activeStage ? (
               <>
-                <span 
-                  className="h-2 w-2 rounded-full" 
-                  style={getDotStyle(activeStage.color)} 
+                <span
+                  className="h-2 w-2 rounded-full"
+                  style={getDotStyle(activeStage.color)}
                 />
                 <span>{activeStage.name}</span>
-                <Badge 
-                  variant="secondary" 
+                <Badge
+                  variant="secondary"
                   className="ml-auto"
                   style={getBadgeStyle(activeStage.color)}
                 >
@@ -143,13 +170,13 @@ export function KanbanTabs({
             return (
               <SelectItem key={stage.id} value={stage.key}>
                 <div className="flex items-center gap-2">
-                  <span 
-                    className="h-2 w-2 rounded-full" 
-                    style={getDotStyle(stage.color)} 
+                  <span
+                    className="h-2 w-2 rounded-full"
+                    style={getDotStyle(stage.color)}
                   />
                   <span>{stage.name}</span>
-                  <Badge 
-                    variant="secondary" 
+                  <Badge
+                    variant="secondary"
                     className="ml-2"
                     style={getBadgeStyle(stage.color)}
                   >
@@ -174,28 +201,50 @@ export function KanbanTabs({
         </SelectContent>
       </Select>
 
-      {/* Leads List */}
-      <div className="space-y-3">
-        {filteredLeads.length === 0 ? (
-          <div className="text-center py-12 text-muted-foreground">
-            <p className="text-sm">Sem leads nesta fase</p>
-          </div>
-        ) : (
-          filteredLeads.map((lead) => (
-              <LeadCard
-                key={lead.id}
-                lead={lead}
-                upcomingEvent={leadEvents[lead.id]}
-                onStatusChange={onStatusChange}
-                onTemperatureChange={onTemperatureChange}
-                onViewDetails={onViewDetails}
-                onDelete={onDelete}
-                pipelineStages={stages}
-                isLocked={isFinalStatus(lead.status || '') && !isAdmin}
-              />
-          ))
-        )}
-      </div>
+      {/* Leads List (virtualized) */}
+      {filteredLeads.length === 0 ? (
+        <div className="text-center py-12 text-muted-foreground">
+          <p className="text-sm">Sem leads nesta fase</p>
+        </div>
+      ) : (
+        <div
+          ref={listRef}
+          className="relative w-full"
+          style={{ height: virtualizer.getTotalSize() }}
+        >
+          {virtualizer.getVirtualItems().map((item) => {
+            const lead = filteredLeads[item.index];
+            if (!lead) return null;
+            return (
+              <div
+                key={item.key}
+                data-index={item.index}
+                ref={virtualizer.measureElement}
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  width: "100%",
+                  transform: `translateY(${item.start - virtualizer.options.scrollMargin}px)`,
+                }}
+              >
+                <div className="pb-3">
+                  <LeadCard
+                    lead={lead}
+                    upcomingEvent={leadEvents[lead.id]}
+                    onStatusChange={onStatusChange}
+                    onTemperatureChange={onTemperatureChange}
+                    onViewDetails={onViewDetails}
+                    onDelete={onDelete}
+                    pipelineStages={stages}
+                    isLocked={isFinalStatus(lead.status || '') && !isAdmin}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

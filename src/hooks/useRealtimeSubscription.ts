@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, QueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -8,6 +8,32 @@ type TableName = 'leads' | 'proposals' | 'sales';
 interface RealtimeConfig {
   table: TableName;
   queryKeys: string[][];
+}
+
+// How long to wait after the last realtime event before refetching. A bulk
+// operation (e.g. importing thousands of leads) fires one event per row;
+// debouncing collapses that burst into a single refetch instead of thousands.
+const REALTIME_DEBOUNCE_MS = 400;
+
+/**
+ * Returns a debounced function that invalidates the given query keys.
+ * Multiple calls within the debounce window result in a single invalidation.
+ */
+function createDebouncedInvalidator(queryClient: QueryClient, queryKeys: string[][]) {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const flush = () => {
+    timer = null;
+    queryKeys.forEach((key) => queryClient.invalidateQueries({ queryKey: key }));
+  };
+  const trigger = () => {
+    if (timer) return;
+    timer = setTimeout(flush, REALTIME_DEBOUNCE_MS);
+  };
+  const cancel = () => {
+    if (timer) clearTimeout(timer);
+    timer = null;
+  };
+  return { trigger, cancel };
 }
 
 /**
@@ -20,6 +46,21 @@ export function useRealtimeSubscription(configs: RealtimeConfig[]) {
   useEffect(() => {
     if (!organization?.id) return;
 
+    const leads = createDebouncedInvalidator(queryClient, [
+      ['leads'],
+      ['dashboard-stats'],
+      ['lead-proposal-values'],
+    ]);
+    const proposals = createDebouncedInvalidator(queryClient, [
+      ['proposals'],
+      ['dashboard-stats'],
+      ['lead-proposal-values'],
+    ]);
+    const sales = createDebouncedInvalidator(queryClient, [
+      ['sales'],
+      ['dashboard-stats'],
+    ]);
+
     const channel = supabase
       .channel('db-changes')
       .on(
@@ -30,11 +71,7 @@ export function useRealtimeSubscription(configs: RealtimeConfig[]) {
           table: 'leads',
           filter: `organization_id=eq.${organization.id}`,
         },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ['leads'] });
-          queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
-          queryClient.invalidateQueries({ queryKey: ['lead-proposal-values'] });
-        }
+        leads.trigger
       )
       .on(
         'postgres_changes',
@@ -44,11 +81,7 @@ export function useRealtimeSubscription(configs: RealtimeConfig[]) {
           table: 'proposals',
           filter: `organization_id=eq.${organization.id}`,
         },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ['proposals'] });
-          queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
-          queryClient.invalidateQueries({ queryKey: ['lead-proposal-values'] });
-        }
+        proposals.trigger
       )
       .on(
         'postgres_changes',
@@ -58,14 +91,14 @@ export function useRealtimeSubscription(configs: RealtimeConfig[]) {
           table: 'sales',
           filter: `organization_id=eq.${organization.id}`,
         },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ['sales'] });
-          queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
-        }
+        sales.trigger
       )
       .subscribe();
 
     return () => {
+      leads.cancel();
+      proposals.cancel();
+      sales.cancel();
       supabase.removeChannel(channel);
     };
   }, [organization?.id, queryClient]);
@@ -81,6 +114,11 @@ export function useLeadsRealtime() {
   useEffect(() => {
     if (!organization?.id) return;
 
+    const { trigger, cancel } = createDebouncedInvalidator(queryClient, [
+      ['leads'],
+      ['lead-proposal-values'],
+    ]);
+
     const channel = supabase
       .channel('leads-changes')
       .on(
@@ -91,14 +129,12 @@ export function useLeadsRealtime() {
           table: 'leads',
           filter: `organization_id=eq.${organization.id}`,
         },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ['leads'] });
-          queryClient.invalidateQueries({ queryKey: ['lead-proposal-values'] });
-        }
+        trigger
       )
       .subscribe();
 
     return () => {
+      cancel();
       supabase.removeChannel(channel);
     };
   }, [organization?.id, queryClient]);
@@ -114,6 +150,11 @@ export function useProposalsRealtime() {
   useEffect(() => {
     if (!organization?.id) return;
 
+    const { trigger, cancel } = createDebouncedInvalidator(queryClient, [
+      ['proposals'],
+      ['lead-proposal-values'],
+    ]);
+
     const channel = supabase
       .channel('proposals-changes')
       .on(
@@ -124,14 +165,12 @@ export function useProposalsRealtime() {
           table: 'proposals',
           filter: `organization_id=eq.${organization.id}`,
         },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ['proposals'] });
-          queryClient.invalidateQueries({ queryKey: ['lead-proposal-values'] });
-        }
+        trigger
       )
       .subscribe();
 
     return () => {
+      cancel();
       supabase.removeChannel(channel);
     };
   }, [organization?.id, queryClient]);
@@ -147,6 +186,10 @@ export function useSalesRealtime() {
   useEffect(() => {
     if (!organization?.id) return;
 
+    const { trigger, cancel } = createDebouncedInvalidator(queryClient, [
+      ['sales'],
+    ]);
+
     const channel = supabase
       .channel('sales-changes')
       .on(
@@ -157,13 +200,12 @@ export function useSalesRealtime() {
           table: 'sales',
           filter: `organization_id=eq.${organization.id}`,
         },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ['sales'] });
-        }
+        trigger
       )
       .subscribe();
 
     return () => {
+      cancel();
       supabase.removeChannel(channel);
     };
   }, [organization?.id, queryClient]);

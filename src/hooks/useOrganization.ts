@@ -119,11 +119,13 @@ export function useTestWebhook() {
         console.error('Error fetching org data for webhook test:', orgError);
       }
 
-      // Create a real test lead in the database so n8n can update it
+      // Create a real test lead in the database so n8n can update it.
+      // Unique email per run so the de-duplication trigger never folds this
+      // into a previous test lead.
       const testLeadData = {
         organization_id: organization.id,
         name: 'Lead de Teste',
-        email: 'teste@exemplo.com',
+        email: `teste-${Date.now()}@exemplo.com`,
         phone: '+351912345678',
         source: 'Teste de Webhook',
         status: 'new' as const,

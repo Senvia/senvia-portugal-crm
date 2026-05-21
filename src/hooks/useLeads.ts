@@ -223,10 +223,26 @@ export function useCreateLead() {
           status: 'new',
         })
         .select()
-        .single();
-      
+        .maybeSingle();
+
       if (error) throw error;
-      return data;
+      if (data) return data;
+
+      // The de-duplication trigger updated an existing lead with the same
+      // email instead of inserting a new one — return that lead.
+      const dupEmail = (rest.email ?? '').trim();
+      if (dupEmail) {
+        const { data: existing } = await supabase
+          .from('leads')
+          .select()
+          .eq('organization_id', organization.id)
+          .ilike('email', dupEmail)
+          .order('updated_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (existing) return existing;
+      }
+      throw new Error('Não foi possível criar o lead.');
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['leads'] });

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { isPerfect2GetherOrg } from "@/lib/perfect2gether";
 import { useNavigate } from "react-router-dom";
 import { usePersistedState } from "@/hooks/usePersistedState";
@@ -153,30 +153,33 @@ export default function Leads() {
 
   const hasActiveFilters = searchQuery || statusFilter.length > 0 || dateRange.from || dateRange.to;
 
-  const filteredLeads = leads.filter(lead => {
-    // 1. Pesquisa accent-insensitive
+  const filteredLeads = useMemo(() => {
     const query = normalizeString(searchQuery);
-    const matchesSearch = query === "" || 
-      normalizeString(lead.name).includes(query) ||
-      normalizeString(lead.email).includes(query) ||
-      lead.phone.includes(searchQuery);
-    
-    // 2. Filtro de status
-    const matchesStatus = statusFilter.length === 0 || 
-      statusFilter.includes(lead.status || '');
-    
-    // 3. Filtro de data
-    const leadDate = lead.created_at ? new Date(lead.created_at) : null;
     const fromDate = dateRange.from ? startOfDay(dateRange.from) : null;
     const toDate = dateRange.to ? endOfDay(dateRange.to) : null;
-    const matchesDate =
-      (!fromDate || (leadDate && leadDate >= fromDate)) &&
-      (!toDate || (leadDate && leadDate <= toDate));
-    
-    const matchesTipologia = tipologiaFilter === 'all' || lead.tipologia === tipologiaFilter;
-    
-    return matchesSearch && matchesStatus && matchesDate && matchesTipologia;
-  });
+
+    return leads.filter(lead => {
+      // 1. Pesquisa accent-insensitive
+      const matchesSearch = query === "" ||
+        normalizeString(lead.name).includes(query) ||
+        normalizeString(lead.email).includes(query) ||
+        lead.phone.includes(searchQuery);
+
+      // 2. Filtro de status
+      const matchesStatus = statusFilter.length === 0 ||
+        statusFilter.includes(lead.status || '');
+
+      // 3. Filtro de data
+      const leadDate = lead.created_at ? new Date(lead.created_at) : null;
+      const matchesDate =
+        (!fromDate || (leadDate && leadDate >= fromDate)) &&
+        (!toDate || (leadDate && leadDate <= toDate));
+
+      const matchesTipologia = tipologiaFilter === 'all' || lead.tipologia === tipologiaFilter;
+
+      return matchesSearch && matchesStatus && matchesDate && matchesTipologia;
+    });
+  }, [leads, searchQuery, statusFilter, dateRange, tipologiaFilter]);
 
   // Check if a stage is of a special type (scheduled or proposal-like)
   const isScheduledStage = (stageKey: string) => {

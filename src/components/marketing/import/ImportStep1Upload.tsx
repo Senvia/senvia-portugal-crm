@@ -14,6 +14,9 @@ interface Props {
   onConfirm?: () => void;
 }
 
+// Max rows a single import can process. Rows beyond this are dropped.
+const MAX_IMPORT_ROWS = 5000;
+
 export const ImportStep1Upload = forwardRef<HTMLDivElement, Props>(function ImportStep1Upload({ fileName, headers, rows, onFileLoaded, onClearFile, onConfirm }, ref) {
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -53,19 +56,19 @@ export const ImportStep1Upload = forwardRef<HTMLDivElement, Props>(function Impo
     return ",";
   };
 
-  const parseCSVText = (text: string): { headers: string[]; rows: Record<string, string>[] } => {
+  const parseCSVText = (text: string): { headers: string[]; rows: Record<string, string>[]; total: number } => {
     const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
-    if (lines.length === 0) return { headers: [], rows: [] };
+    if (lines.length === 0) return { headers: [], rows: [], total: 0 };
     const delimiter = detectDelimiter(lines[0]);
     const headers = parseCSVLine(lines[0], delimiter);
     const rows: Record<string, string>[] = [];
-    for (let i = 1; i < lines.length && rows.length < 1000; i++) {
+    for (let i = 1; i < lines.length && rows.length < MAX_IMPORT_ROWS; i++) {
       const values = parseCSVLine(lines[i], delimiter);
       const row: Record<string, string> = {};
       headers.forEach((h, idx) => { row[h] = values[idx] ?? ""; });
       rows.push(row);
     }
-    return { headers, rows };
+    return { headers, rows, total: lines.length - 1 };
   };
 
   const handleFile = useCallback((file: File) => {
@@ -80,8 +83,11 @@ export const ImportStep1Upload = forwardRef<HTMLDivElement, Props>(function Impo
         if (text.includes("\ufffd")) {
           text = new TextDecoder("iso-8859-1").decode(buffer);
         }
-        const { headers: csvHeaders, rows: csvRows } = parseCSVText(text);
+        const { headers: csvHeaders, rows: csvRows, total } = parseCSVText(text);
         if (csvHeaders.length === 0) { toast.error("Ficheiro vazio"); return; }
+        if (total > csvRows.length) {
+          toast.warning(`O ficheiro tem ${total} linhas. Apenas as primeiras ${csvRows.length} serão importadas.`);
+        }
         onFileLoaded(file.name, csvHeaders, csvRows);
       };
       reader.readAsArrayBuffer(file);
@@ -96,7 +102,10 @@ export const ImportStep1Upload = forwardRef<HTMLDivElement, Props>(function Impo
       const json = XLSX.utils.sheet_to_json<Record<string, string>>(ws, { defval: "" });
       if (json.length === 0) { toast.error("Ficheiro vazio"); return; }
       const fileHeaders = Object.keys(json[0]);
-      onFileLoaded(file.name, fileHeaders, json.slice(0, 1000));
+      if (json.length > MAX_IMPORT_ROWS) {
+        toast.warning(`O ficheiro tem ${json.length} linhas. Apenas as primeiras ${MAX_IMPORT_ROWS} serão importadas.`);
+      }
+      onFileLoaded(file.name, fileHeaders, json.slice(0, MAX_IMPORT_ROWS));
     };
     reader.readAsArrayBuffer(file);
   }, [onFileLoaded]);
@@ -136,7 +145,7 @@ export const ImportStep1Upload = forwardRef<HTMLDivElement, Props>(function Impo
         >
           <Upload className="mx-auto mb-3 h-10 w-10 text-muted-foreground" />
           <p className="text-sm font-medium">Selecione seu arquivo ou arraste e solte aqui</p>
-          <p className="mt-1 text-xs text-muted-foreground">.xlsb, .xlsx, .xls, .csv ou .txt (máx. 1000 linhas)</p>
+          <p className="mt-1 text-xs text-muted-foreground">.xlsb, .xlsx, .xls, .csv ou .txt (máx. {MAX_IMPORT_ROWS.toLocaleString("pt-PT")} linhas)</p>
           <input ref={fileRef} type="file" className="hidden" accept=".xlsb,.xlsx,.xls,.csv,.txt" onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
         </div>
       ) : (

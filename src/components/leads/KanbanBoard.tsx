@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { Lead, LeadTemperature } from "@/types";
 import { LeadCard } from "./LeadCard";
 import { cn } from "@/lib/utils";
@@ -7,6 +7,7 @@ import { useLeadProposalValues } from "@/hooks/useLeadProposalValues";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertCircle } from "lucide-react";
+import { useWindowVirtualizer } from "@tanstack/react-virtual";
 
 interface LeadEvent {
   id: string;
@@ -24,13 +25,176 @@ interface KanbanBoardProps {
   onDelete: (leadId: string) => void;
 }
 
+interface KanbanColumnProps {
+  /** The pipeline stage, or null for the orphan ("Sem Etapa") column. */
+  stage: PipelineStage | null;
+  columnLeads: Lead[];
+  stages: PipelineStage[];
+  leadEvents: Record<string, LeadEvent>;
+  proposalValues?: Map<string, number>;
+  isAdmin: boolean;
+  draggedLead: string | null;
+  isOver: boolean;
+  isFinalStatus: (status: string) => boolean;
+  onDragStart: (e: React.DragEvent, leadId: string) => void;
+  onDragOver: (e: React.DragEvent, key: string) => void;
+  onDragLeave: () => void;
+  onDrop: (e: React.DragEvent, key: string) => void;
+  onStatusChange: (leadId: string, newStatus: string) => void;
+  onTemperatureChange: (leadId: string, temperature: LeadTemperature) => void;
+  onViewDetails: (lead: Lead) => void;
+  onDelete: (leadId: string) => void;
+}
+
+/**
+ * A single Kanban column. Cards are window-virtualized so a stage with
+ * thousands of leads keeps only the visible cards in the DOM.
+ */
+function KanbanColumn({
+  stage,
+  columnLeads,
+  stages,
+  leadEvents,
+  proposalValues,
+  isAdmin,
+  draggedLead,
+  isOver,
+  isFinalStatus,
+  onDragStart,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+  onStatusChange,
+  onTemperatureChange,
+  onViewDetails,
+  onDelete,
+}: KanbanColumnProps) {
+  const isOrphan = stage === null;
+  const dropKey = isOrphan ? "__orphan__" : stage.key;
+
+  const listRef = useRef<HTMLDivElement>(null);
+  const [scrollMargin, setScrollMargin] = useState(0);
+
+  const virtualizer = useWindowVirtualizer({
+    count: columnLeads.length,
+    estimateSize: () => 240,
+    overscan: 6,
+    scrollMargin,
+    getItemKey: (index) => columnLeads[index]?.id ?? index,
+  });
+
+  useLayoutEffect(() => {
+    const measure = () => {
+      if (!listRef.current) return;
+      const top = listRef.current.getBoundingClientRect().top + window.scrollY;
+      setScrollMargin((prev) => (Math.abs(prev - top) > 1 ? top : prev));
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  });
+
+  return (
+    <div
+      className={cn(
+        "flex w-80 min-w-[320px] flex-col rounded-xl border-t-4 bg-muted/30",
+        isOrphan && "border-t-orange-500",
+        isOver && "bg-primary/5"
+      )}
+      style={isOrphan ? undefined : { borderTopColor: stage.color }}
+      onDragOver={(e) => onDragOver(e, dropKey)}
+      onDragLeave={onDragLeave}
+      onDrop={isOrphan ? undefined : (e) => onDrop(e, dropKey)}
+    >
+      {/* Column Header */}
+      <div className="flex items-center justify-between p-4">
+        <div className="flex items-center gap-2">
+          {isOrphan && <AlertCircle className="h-4 w-4 text-orange-500" />}
+          <h3 className="font-semibold text-foreground">
+            {isOrphan ? "Sem Etapa" : stage.name}
+          </h3>
+          <span
+            className="flex h-6 min-w-6 items-center justify-center rounded-full px-2 text-xs font-medium"
+            style={
+              isOrphan
+                ? { backgroundColor: "rgb(249 115 22 / 0.15)", color: "rgb(249 115 22)" }
+                : { backgroundColor: `${stage.color}15`, color: stage.color }
+            }
+          >
+            {columnLeads.length}
+          </span>
+        </div>
+      </div>
+
+      {/* Cards Container (virtualized) */}
+      <div className="flex-1 px-3 pb-3">
+        {columnLeads.length === 0 ? (
+          <div
+            className={cn(
+              "flex h-32 items-center justify-center rounded-lg border-2 border-dashed text-sm text-muted-foreground",
+              isOver && "border-primary bg-primary/5"
+            )}
+          >
+            {isOver ? "Largar aqui" : "Sem leads"}
+          </div>
+        ) : (
+          <div
+            ref={listRef}
+            className="relative w-full"
+            style={{ height: virtualizer.getTotalSize() }}
+          >
+            {virtualizer.getVirtualItems().map((item) => {
+              const lead = columnLeads[item.index];
+              if (!lead) return null;
+              const draggable = !isFinalStatus(lead.status || "") || isAdmin;
+              return (
+                <div
+                  key={item.key}
+                  data-index={item.index}
+                  ref={virtualizer.measureElement}
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: "100%",
+                    transform: `translateY(${item.start - virtualizer.options.scrollMargin}px)`,
+                  }}
+                >
+                  <div
+                    className="pb-3"
+                    draggable={draggable}
+                    onDragStart={(e) => onDragStart(e, lead.id)}
+                  >
+                    <LeadCard
+                      lead={lead}
+                      proposalValue={proposalValues?.get(lead.id)}
+                      upcomingEvent={leadEvents[lead.id]}
+                      onStatusChange={onStatusChange}
+                      onTemperatureChange={onTemperatureChange}
+                      onViewDetails={onViewDetails}
+                      onDelete={onDelete}
+                      isDragging={draggedLead === lead.id}
+                      pipelineStages={stages}
+                      isLocked={isFinalStatus(lead.status || "") && !isAdmin}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function KanbanBoard({ leads, leadEvents = {}, onStatusChange, onTemperatureChange, onViewDetails, onDelete }: KanbanBoardProps) {
   const { data: stages, isLoading: stagesLoading } = usePipelineStages();
   const { data: proposalValues } = useLeadProposalValues();
   const { isAdmin } = usePermissions();
   const [draggedLead, setDraggedLead] = useState<string | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
-  
+
   const topScrollRef = useRef<HTMLDivElement>(null);
   const bottomScrollRef = useRef<HTMLDivElement>(null);
   const [scrollWidth, setScrollWidth] = useState(0);
@@ -58,7 +222,7 @@ export function KanbanBoard({ leads, leadEvents = {}, onStatusChange, onTemperat
     return stage?.is_final_positive || stage?.is_final_negative || false;
   };
 
-  const getLeadsByStatus = (statusKey: string) => 
+  const getLeadsByStatus = (statusKey: string) =>
     leads.filter(lead => lead.status === statusKey);
 
   // Get orphan leads (leads with status not matching any pipeline stage)
@@ -97,18 +261,6 @@ export function KanbanBoard({ leads, leadEvents = {}, onStatusChange, onTemperat
     setDragOverColumn(null);
   };
 
-  // Generate dynamic styles based on stage color
-  const getColumnBorderStyle = (stage: PipelineStage) => ({
-    borderTopColor: stage.color,
-  });
-
-  const getColumnBadgeStyle = (stage: PipelineStage) => ({
-    backgroundColor: `${stage.color}15`,
-    color: stage.color,
-  });
-
-  const orphanLeads = getOrphanLeads();
-
   if (stagesLoading) {
     return (
       <div className="flex gap-4 overflow-x-auto pb-4">
@@ -134,6 +286,8 @@ export function KanbanBoard({ leads, leadEvents = {}, onStatusChange, onTemperat
     );
   }
 
+  const orphanLeads = getOrphanLeads();
+
   return (
     <div className="flex flex-col">
       {/* Top scroll bar */}
@@ -153,125 +307,50 @@ export function KanbanBoard({ leads, leadEvents = {}, onStatusChange, onTemperat
       >
         {/* Orphan Leads Column - Only show if there are orphans */}
         {orphanLeads.length > 0 && (
-          <div
-            className={cn(
-              "flex w-80 min-w-[320px] flex-col rounded-xl border-t-4 bg-muted/30",
-              "border-t-orange-500",
-              dragOverColumn === '__orphan__' && "bg-primary/5"
-            )}
-            onDragOver={(e) => handleDragOver(e, '__orphan__')}
+          <KanbanColumn
+            stage={null}
+            columnLeads={orphanLeads}
+            stages={stages}
+            leadEvents={leadEvents}
+            proposalValues={proposalValues}
+            isAdmin={isAdmin}
+            draggedLead={draggedLead}
+            isOver={dragOverColumn === '__orphan__'}
+            isFinalStatus={isFinalStatus}
+            onDragStart={handleDragStart}
+            onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
-          >
-            {/* Column Header */}
-            <div className="flex items-center justify-between p-4">
-              <div className="flex items-center gap-2">
-                <AlertCircle className="h-4 w-4 text-orange-500" />
-                <h3 className="font-semibold text-foreground">
-                  Sem Etapa
-                </h3>
-                <span 
-                  className="flex h-6 min-w-6 items-center justify-center rounded-full px-2 text-xs font-medium bg-orange-500/15 text-orange-500"
-                >
-                  {orphanLeads.length}
-                </span>
-              </div>
-            </div>
-
-            {/* Cards Container */}
-            <div className="flex-1 space-y-3 px-3 pb-3">
-              {orphanLeads.map((lead) => (
-                <div
-                  key={lead.id}
-                  draggable={!isFinalStatus(lead.status || '') || isAdmin}
-                  onDragStart={(e) => handleDragStart(e, lead.id)}
-                  className="animate-fade-in"
-                >
-                  <LeadCard
-                    lead={lead}
-                    proposalValue={proposalValues?.get(lead.id)}
-                    upcomingEvent={leadEvents[lead.id]}
-                    onStatusChange={onStatusChange}
-                    onTemperatureChange={onTemperatureChange}
-                    onViewDetails={onViewDetails}
-                    onDelete={onDelete}
-                    isDragging={draggedLead === lead.id}
-                    pipelineStages={stages}
-                    isLocked={isFinalStatus(lead.status || '') && !isAdmin}
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
+            onDrop={handleDrop}
+            onStatusChange={onStatusChange}
+            onTemperatureChange={onTemperatureChange}
+            onViewDetails={onViewDetails}
+            onDelete={onDelete}
+          />
         )}
 
         {/* Regular Pipeline Columns */}
-        {stages.map((stage) => {
-          const columnLeads = getLeadsByStatus(stage.key);
-          const isOver = dragOverColumn === stage.key;
-
-          return (
-            <div
-              key={stage.id}
-              className={cn(
-                "flex w-80 min-w-[320px] flex-col rounded-xl border-t-4 bg-muted/30",
-                isOver && "bg-primary/5"
-              )}
-              style={getColumnBorderStyle(stage)}
-              onDragOver={(e) => handleDragOver(e, stage.key)}
-              onDragLeave={handleDragLeave}
-              onDrop={(e) => handleDrop(e, stage.key)}
-            >
-              {/* Column Header */}
-              <div className="flex items-center justify-between p-4">
-                <div className="flex items-center gap-2">
-                  <h3 className="font-semibold text-foreground">
-                    {stage.name}
-                  </h3>
-                  <span 
-                    className="flex h-6 min-w-6 items-center justify-center rounded-full px-2 text-xs font-medium"
-                    style={getColumnBadgeStyle(stage)}
-                  >
-                    {columnLeads.length}
-                  </span>
-                </div>
-              </div>
-
-              {/* Cards Container */}
-              <div className="flex-1 space-y-3 px-3 pb-3">
-                {columnLeads.map((lead) => (
-                  <div
-                    key={lead.id}
-                    draggable={!isFinalStatus(lead.status || '') || isAdmin}
-                    onDragStart={(e) => handleDragStart(e, lead.id)}
-                    className="animate-fade-in"
-                  >
-                    <LeadCard
-                      lead={lead}
-                      proposalValue={proposalValues?.get(lead.id)}
-                      upcomingEvent={leadEvents[lead.id]}
-                      onStatusChange={onStatusChange}
-                      onTemperatureChange={onTemperatureChange}
-                      onViewDetails={onViewDetails}
-                      onDelete={onDelete}
-                      isDragging={draggedLead === lead.id}
-                      pipelineStages={stages}
-                      isLocked={isFinalStatus(lead.status || '') && !isAdmin}
-                    />
-                  </div>
-                ))}
-
-                {columnLeads.length === 0 && (
-                  <div className={cn(
-                    "flex h-32 items-center justify-center rounded-lg border-2 border-dashed text-sm text-muted-foreground",
-                    isOver && "border-primary bg-primary/5"
-                  )}>
-                    {isOver ? "Largar aqui" : "Sem leads"}
-                  </div>
-                )}
-              </div>
-            </div>
-          );
-        })}
+        {stages.map((stage) => (
+          <KanbanColumn
+            key={stage.id}
+            stage={stage}
+            columnLeads={getLeadsByStatus(stage.key)}
+            stages={stages}
+            leadEvents={leadEvents}
+            proposalValues={proposalValues}
+            isAdmin={isAdmin}
+            draggedLead={draggedLead}
+            isOver={dragOverColumn === stage.key}
+            isFinalStatus={isFinalStatus}
+            onDragStart={handleDragStart}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            onStatusChange={onStatusChange}
+            onTemperatureChange={onTemperatureChange}
+            onViewDetails={onViewDetails}
+            onDelete={onDelete}
+          />
+        ))}
       </div>
     </div>
   );

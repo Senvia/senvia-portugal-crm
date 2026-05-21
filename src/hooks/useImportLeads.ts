@@ -5,6 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 
 export interface ImportLeadsResult {
   inserted: number;
+  updated: number;
   failed: number;
   firstError: string | null;
   importCode: string;
@@ -111,7 +112,26 @@ export function useImportLeads() {
         payloads.push(payload);
       });
 
-      if (payloads.length === 0) {
+      // De-duplicate the file by real email (last occurrence wins) so the same
+      // person is never imported twice in one go. Empty / placeholder emails
+      // cannot be matched, so those rows are all kept.
+      const emailIndex = new Map<string, number>();
+      const dedupedPayloads: Array<Record<string, unknown>> = [];
+      for (const payload of payloads) {
+        const email = String(payload.email ?? "").trim().toLowerCase();
+        const isRealEmail = email !== "" && !email.endsWith("@placeholder.local");
+        if (isRealEmail) {
+          const existingIdx = emailIndex.get(email);
+          if (existingIdx !== undefined) {
+            dedupedPayloads[existingIdx] = payload;
+            continue;
+          }
+          emailIndex.set(email, dedupedPayloads.length);
+        }
+        dedupedPayloads.push(payload);
+      }
+
+      if (dedupedPayloads.length === 0) {
         if (importId) {
           await (supabase as any).from("lead_imports").update({
             total_inserted: 0,
@@ -119,42 +139,48 @@ export function useImportLeads() {
             first_error: "Nenhuma linha com nome válido",
           }).eq("id", importId);
         }
-        return { inserted: 0, failed: rows.length, firstError: "Nenhuma linha com nome válido", importCode };
+        return { inserted: 0, updated: 0, failed: rows.length, firstError: "Nenhuma linha com nome válido", importCode };
       }
 
-      // Insert in chunks of 200 para ser mais rápido
+      // Send to the import_leads_bulk RPC in chunks. The RPC UPSERTs: a row
+      // whose email already exists updates that lead instead of duplicating it.
+      // Per-row side-effect triggers stay off, so large imports stay fast.
       const chunkSize = 200;
       let inserted = 0;
+      let updated = 0;
       let failed = 0;
       let firstError: string | null = null;
 
-      for (let i = 0; i < payloads.length; i += chunkSize) {
-        const chunk = payloads.slice(i, i + chunkSize);
-        const { data, error } = await supabase.from("leads").insert(chunk as any).select("id");
+      for (let i = 0; i < dedupedPayloads.length; i += chunkSize) {
+        const chunk = dedupedPayloads.slice(i, i + chunkSize);
+        const { data, error } = await (supabase as any).rpc("import_leads_bulk", {
+          p_leads: chunk,
+        });
         if (error) {
           failed += chunk.length;
           if (!firstError) firstError = error.message;
         } else {
-          inserted += data?.length ?? chunk.length;
+          inserted += Number(data?.inserted ?? 0);
+          updated += Number(data?.updated ?? 0);
         }
       }
 
       // Actualizar registo de importação com totais finais
       if (importId) {
         await (supabase as any).from("lead_imports").update({
-          total_inserted: inserted,
+          total_inserted: inserted + updated,
           total_failed: failed,
           first_error: firstError,
         }).eq("id", importId);
       }
 
-      return { inserted, failed, firstError, importCode };
+      return { inserted, updated, failed, firstError, importCode };
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["leads"] });
       toast({
         title: `Importação concluída · ${result.importCode}`,
-        description: `${result.inserted} leads criados${result.failed ? `, ${result.failed} falhados` : ""}. Guarda o código para referência futura.`,
+        description: `${result.inserted} criados${result.updated ? `, ${result.updated} atualizados` : ""}${result.failed ? `, ${result.failed} falhados` : ""}. Guarda o código para referência futura.`,
       });
     },
     onError: (error: any) => {

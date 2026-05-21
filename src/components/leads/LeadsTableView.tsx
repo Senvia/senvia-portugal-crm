@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useMemo, useRef, useLayoutEffect } from 'react';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
+import { useWindowVirtualizer } from '@tanstack/react-virtual';
 import { MessageCircle, Eye, Trash2, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import {
   Table,
@@ -79,7 +80,7 @@ export function LeadsTableView({
   const isTelecom = organization?.niche === 'telecom';
   const { modules } = useModules();
   const showEnergy = isTelecom && modules.energy;
-  
+
   const [sortField, setSortField] = useState<SortField>('created_at');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
@@ -113,42 +114,67 @@ export function LeadsTableView({
     }
   };
 
-  const sortedLeads = [...leads].sort((a, b) => {
-    let comparison = 0;
-    
-    switch (sortField) {
-      case 'name':
-        comparison = a.name.localeCompare(b.name);
-        break;
-      case 'email':
-        comparison = a.email.localeCompare(b.email);
-        break;
-      case 'status':
-        comparison = (a.status || '').localeCompare(b.status || '');
-        break;
-      case 'temperature':
-        comparison = (a.temperature || '').localeCompare(b.temperature || '');
-        break;
-      case 'tipologia':
-        comparison = (a.tipologia || '').localeCompare(b.tipologia || '');
-        break;
-      case 'value':
-        comparison = (a.value || 0) - (b.value || 0);
-        break;
-      case 'consumo_anual':
-        comparison = (a.consumo_anual || 0) - (b.consumo_anual || 0);
-        break;
-      case 'source':
-        comparison = (a.source || '').localeCompare(b.source || '');
-        break;
-      case 'created_at':
-        comparison = new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime();
-        break;
-    }
-    
-    return sortDirection === 'asc' ? comparison : -comparison;
+  const sortedLeads = useMemo(() => {
+    return [...leads].sort((a, b) => {
+      let comparison = 0;
+
+      switch (sortField) {
+        case 'name':
+          comparison = a.name.localeCompare(b.name);
+          break;
+        case 'email':
+          comparison = a.email.localeCompare(b.email);
+          break;
+        case 'status':
+          comparison = (a.status || '').localeCompare(b.status || '');
+          break;
+        case 'temperature':
+          comparison = (a.temperature || '').localeCompare(b.temperature || '');
+          break;
+        case 'tipologia':
+          comparison = (a.tipologia || '').localeCompare(b.tipologia || '');
+          break;
+        case 'value':
+          comparison = (a.value || 0) - (b.value || 0);
+          break;
+        case 'consumo_anual':
+          comparison = (a.consumo_anual || 0) - (b.consumo_anual || 0);
+          break;
+        case 'source':
+          comparison = (a.source || '').localeCompare(b.source || '');
+          break;
+        case 'created_at':
+          comparison = new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime();
+          break;
+      }
+
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+  }, [leads, sortField, sortDirection]);
+
+  // Window virtualization: only the rows on screen stay in the DOM, so a large
+  // lead list (each row carries a Select + AlertDialog) no longer crashes.
+  const tableBodyRef = useRef<HTMLTableSectionElement>(null);
+  const [scrollMargin, setScrollMargin] = useState(0);
+
+  const virtualizer = useWindowVirtualizer({
+    count: sortedLeads.length,
+    estimateSize: () => 64,
+    overscan: 10,
+    scrollMargin,
+    getItemKey: (index) => sortedLeads[index]?.id ?? index,
   });
 
+  useLayoutEffect(() => {
+    const measure = () => {
+      if (!tableBodyRef.current) return;
+      const top = tableBodyRef.current.getBoundingClientRect().top + window.scrollY;
+      setScrollMargin((prev) => (Math.abs(prev - top) > 1 ? top : prev));
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  });
 
   const handleWhatsAppClick = (phone: string, name: string) => {
     const formattedPhone = formatPhoneForWhatsApp(phone);
@@ -170,8 +196,8 @@ export function LeadsTableView({
     if (sortField !== field) {
       return <ArrowUpDown className="ml-1 h-3 w-3 text-muted-foreground" />;
     }
-    return sortDirection === 'asc' 
-      ? <ArrowUp className="ml-1 h-3 w-3" /> 
+    return sortDirection === 'asc'
+      ? <ArrowUp className="ml-1 h-3 w-3" />
       : <ArrowDown className="ml-1 h-3 w-3" />;
   };
 
@@ -197,6 +223,13 @@ export function LeadsTableView({
       </div>
     );
   }
+
+  const colSpan = showEnergy ? 11 : 10;
+  const virtualItems = virtualizer.getVirtualItems();
+  const paddingTop = virtualItems.length > 0 ? virtualItems[0].start - scrollMargin : 0;
+  const paddingBottom = virtualItems.length > 0
+    ? virtualizer.getTotalSize() - (virtualItems[virtualItems.length - 1].end - scrollMargin)
+    : 0;
 
   return (
     <div className="rounded-lg border border-border bg-card overflow-hidden">
@@ -252,20 +285,30 @@ export function LeadsTableView({
               <TableHead className="text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>
-          <TableBody>
+          <TableBody ref={tableBodyRef}>
             {sortedLeads.length === 0 ? (
             <TableRow>
-                <TableCell colSpan={showEnergy ? 11 : 10} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={colSpan} className="h-24 text-center text-muted-foreground">
                   Nenhum lead encontrado.
                 </TableCell>
               </TableRow>
             ) : (
-              sortedLeads.map((lead) => {
-                const currentStage = getStageByKey(lead.status || '');
-                const isSelected = selectedIds.includes(lead.id);
-                return (
+              <>
+                {paddingTop > 0 && (
+                  <tr aria-hidden="true">
+                    <td colSpan={colSpan} style={{ height: paddingTop, padding: 0 }} />
+                  </tr>
+                )}
+                {virtualItems.map((item) => {
+                  const lead = sortedLeads[item.index];
+                  if (!lead) return null;
+                  const currentStage = getStageByKey(lead.status || '');
+                  const isSelected = selectedIds.includes(lead.id);
+                  return (
                   <TableRow
-                    key={lead.id} 
+                    key={item.key}
+                    data-index={item.index}
+                    ref={virtualizer.measureElement}
                     className={cn(
                       "cursor-pointer hover:bg-muted/50",
                       isSelected && "bg-primary/5"
@@ -324,8 +367,8 @@ export function LeadsTableView({
                         disabled={isLocked}
                       >
                         <SelectTrigger className="w-[130px] h-8 border-0 bg-transparent p-0">
-                          <Badge 
-                            variant="outline" 
+                          <Badge
+                            variant="outline"
                             className="text-xs"
                             style={currentStage ? getStatusBadgeStyle(currentStage.color) : undefined}
                           >
@@ -335,8 +378,8 @@ export function LeadsTableView({
                         <SelectContent>
                           {stages.map((stage) => (
                             <SelectItem key={stage.id} value={stage.key}>
-                              <Badge 
-                                variant="outline" 
+                              <Badge
+                                variant="outline"
                                 className="text-xs"
                                 style={getStatusBadgeStyle(stage.color)}
                               >
@@ -375,8 +418,8 @@ export function LeadsTableView({
                     {showEnergy && (
                       <TableCell className="hidden sm:table-cell">
                         {lead.tipologia && TIPOLOGIA_STYLES[lead.tipologia] ? (
-                          <Badge 
-                            variant="outline" 
+                          <Badge
+                            variant="outline"
                             className={cn("text-xs gap-1", TIPOLOGIA_STYLES[lead.tipologia].color, TIPOLOGIA_STYLES[lead.tipologia].bgClass)}
                           >
                             <span>{TIPOLOGIA_STYLES[lead.tipologia].emoji}</span>
@@ -420,7 +463,7 @@ export function LeadsTableView({
                     </TableCell>
                     <TableCell className="hidden lg:table-cell">
                       <span className="text-muted-foreground text-sm">
-                        {lead.created_at 
+                        {lead.created_at
                           ? format(new Date(lead.created_at), 'dd MMM yyyy', { locale: pt })
                           : '-'}
                       </span>
@@ -466,8 +509,14 @@ export function LeadsTableView({
                       </div>
                     </TableCell>
                   </TableRow>
-                );
-              })
+                  );
+                })}
+                {paddingBottom > 0 && (
+                  <tr aria-hidden="true">
+                    <td colSpan={colSpan} style={{ height: paddingBottom, padding: 0 }} />
+                  </tr>
+                )}
+              </>
             )}
           </TableBody>
         </Table>

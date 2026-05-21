@@ -192,7 +192,7 @@ export function ImportLeadsDialog({ open, onOpenChange }: ImportLeadsDialogProps
                 <strong>Importação concluída</strong>
                 <span className="font-mono text-xs bg-primary/10 border border-primary/20 rounded px-2 py-0.5 select-all">{result.importCode}</span>
               </div>
-              <div className="text-muted-foreground">{result.inserted} criados{result.failed ? ` • ${result.failed} falhados` : ""}</div>
+              <div className="text-muted-foreground">{result.inserted} criados{result.updated ? ` • ${result.updated} atualizados` : ""}{result.failed ? ` • ${result.failed} falhados` : ""}</div>
               {result.firstError && (
                 <div className="text-xs text-muted-foreground">Primeiro erro: {result.firstError}</div>
               )}
