@@ -124,26 +124,20 @@ async function handleWebhookMode(req: Request, token: string): Promise<Response>
     const salesSettings = (org.sales_settings as any) || {};
     if (salesSettings.auto_assign_leads) {
       try {
-        const nowIso = new Date().toISOString();
-        let membersQuery = supabase
-          .from('organization_members')
-          .select('user_id')
-          .eq('organization_id', org.id)
-          .eq('is_active', true)
-          .or(`paused_until.is.null,paused_until.lt.${nowIso}`);
-        if (salesSettings.exclude_admins_from_assignment) {
-          membersQuery = membersQuery.neq('role', 'admin');
-        }
-        const { data: members } = await membersQuery.order('joined_at', { ascending: true });
-
-        if (members && members.length > 0) {
-          const currentIndex = salesSettings.round_robin_index || 0;
-          const safeIndex = currentIndex % members.length;
-          autoAssignedTo = members[safeIndex].user_id;
-          const nextIndex = (safeIndex + 1) % members.length;
-          await supabase.from('organizations').update({
-            sales_settings: { ...salesSettings, round_robin_index: nextIndex },
-          }).eq('id', org.id);
+        const { data: assignedId, error: rrError } = await supabase.rpc(
+          'get_next_round_robin_assignee',
+          {
+            p_org_id: org.id,
+            p_exclude_admins: salesSettings.exclude_admins_from_assignment ?? false,
+          }
+        );
+        if (rrError) {
+          console.error('Round-robin RPC failed:', rrError);
+        } else if (assignedId) {
+          autoAssignedTo = assignedId;
+          console.log('Round-robin assigned lead to:', assignedId);
+        } else {
+          console.warn('Round-robin returned no assignee (no eligible members?)');
         }
       } catch (rrErr) {
         console.error('Round-robin failed:', rrErr);
@@ -563,42 +557,29 @@ Deno.serve(async (req) => {
     }
 
     // ===== ROUND-ROBIN AUTO-ASSIGN =====
+    // Form-level fixed assignee takes priority over round-robin
     let autoAssignedTo: string | null = formSettings.assigned_to || null;
-    
-    if (!autoAssignedTo) {
+
+    if (autoAssignedTo) {
+      console.log('Form has fixed assignee, skipping round-robin:', autoAssignedTo);
+    } else {
       const salesSettings = (org.sales_settings as any) || {};
       if (salesSettings.auto_assign_leads) {
         try {
-          const nowIso2 = new Date().toISOString();
-          let membersQuery2 = supabase
-            .from('organization_members')
-            .select('user_id')
-            .eq('organization_id', org.id)
-            .eq('is_active', true)
-            .or(`paused_until.is.null,paused_until.lt.${nowIso2}`);
-          if (salesSettings.exclude_admins_from_assignment) {
-            membersQuery2 = membersQuery2.neq('role', 'admin');
-          }
-          const { data: members } = await membersQuery2.order('joined_at', { ascending: true });
-
-          if (members && members.length > 0) {
-            const currentIndex = salesSettings.round_robin_index || 0;
-            const safeIndex = currentIndex % members.length;
-            autoAssignedTo = members[safeIndex].user_id;
-            const nextIndex = (safeIndex + 1) % members.length;
-
-            // Update round_robin_index
-            await supabase
-              .from('organizations')
-              .update({
-                sales_settings: {
-                  ...salesSettings,
-                  round_robin_index: nextIndex,
-                },
-              })
-              .eq('id', org.id);
-
-            console.log(`Round-robin assigned lead to member index ${safeIndex}, next: ${nextIndex}`);
+          const { data: assignedId, error: rrError } = await supabase.rpc(
+            'get_next_round_robin_assignee',
+            {
+              p_org_id: org.id,
+              p_exclude_admins: salesSettings.exclude_admins_from_assignment ?? false,
+            }
+          );
+          if (rrError) {
+            console.error('Round-robin RPC failed:', rrError);
+          } else if (assignedId) {
+            autoAssignedTo = assignedId;
+            console.log('Round-robin assigned lead to:', assignedId);
+          } else {
+            console.warn('Round-robin returned no assignee (no eligible members?)');
           }
         } catch (rrErr) {
           console.error('Round-robin assignment failed:', rrErr);
