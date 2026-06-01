@@ -84,6 +84,7 @@ serve(async (req) => {
         await clearPaymentFailed(supabase, email);
         await markFirstPaid(supabase, email);
         await setCurrentPeriodEnd(supabase, email, sub.current_period_end);
+        await clearTempBillingExempt(supabase, email);
 
         const orgName = await getOrgNameByEmail(supabase, email);
 
@@ -119,6 +120,7 @@ serve(async (req) => {
             await clearPaymentFailed(supabase, email);
             await markFirstPaid(supabase, email);
             await setCurrentPeriodEnd(supabase, email, sub.current_period_end);
+            await clearTempBillingExempt(supabase, email);
             await dispatchAutomation(supabase, "stripe_subscription_renewed", { email, plan: plan || "unknown", nome: orgName });
             await syncStripeAutoLists(supabase, email, orgName, "renewed", plan || null);
           }
@@ -193,6 +195,22 @@ async function handleInvoicePaid(supabase: any, stripe: Stripe, invoice: Stripe.
     // Find the client organization by email
     const clientOrgId = await findOrgByEmail(supabase, email);
     if (!clientOrgId) { logStep("invoice.paid: no org found for email", { email }); return; }
+
+    // Renewals: refresh current_period_end + clear any temp billing_exempt
+    // workaround. (markFirstPaid is a no-op for orgs that already have it set,
+    // so it's safe to call here too — covers the rare case of a webhook gap
+    // where checkout.session.completed didn't reach us.)
+    await markFirstPaid(supabase, email);
+    const subForPeriod = invoice.subscription as string | null;
+    if (subForPeriod) {
+      try {
+        const subDetails = await stripe.subscriptions.retrieve(subForPeriod);
+        await setCurrentPeriodEnd(supabase, email, subDetails.current_period_end);
+      } catch (e) {
+        logStep("invoice.paid: failed to fetch sub for current_period_end", { error: (e as Error).message });
+      }
+    }
+    await clearTempBillingExempt(supabase, email);
 
     // Check for duplicate (same stripe invoice ID)
     const stripeInvoiceId = invoice.id;
@@ -542,6 +560,33 @@ async function setCurrentPeriodEnd(supabase: any, email: string, periodEndUnix: 
     .update({ current_period_end: iso })
     .eq("id", orgId);
   if (error) logStep("Failed to set current_period_end", { error: error.message });
+}
+
+// When a real payer (first_paid_at set) successfully pays via Stripe, clear
+// any temporary billing_exempt = true that the super admin set as a stop-gap
+// (typical case: customer was late paying, we toggled exempt to let them in,
+// then they paid). Demo/partner orgs that are legitimately exempt have
+// first_paid_at IS NULL and stay exempt.
+async function clearTempBillingExempt(supabase: any, email: string) {
+  const orgId = await findOrgByEmail(supabase, email);
+  if (!orgId) return;
+  const { data: org } = await supabase
+    .from("organizations")
+    .select("billing_exempt, first_paid_at")
+    .eq("id", orgId)
+    .maybeSingle();
+  if (!org?.billing_exempt) return; // not exempt — nothing to clear
+  if (!org?.first_paid_at) {
+    // exempt but never paid — looks like a demo/partner, leave it
+    logStep("billing_exempt left as-is (no first_paid_at, looks like demo)", { orgId });
+    return;
+  }
+  const { error } = await supabase
+    .from("organizations")
+    .update({ billing_exempt: false })
+    .eq("id", orgId);
+  if (error) logStep("Failed to clear temp billing_exempt", { error: error.message });
+  else logStep("Temp billing_exempt cleared after Stripe payment", { orgId });
 }
 
 async function clearPaymentFailed(supabase: any, email: string) {
