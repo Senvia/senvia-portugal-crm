@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { OptionCard } from "@/components/conversational/OptionCard";
 import { CustomField } from "@/types";
+import { normalizeEmail, normalizePtPhone } from "@/lib/validation/contact";
 
 interface DynamicStepProps {
   field: {
@@ -55,9 +56,24 @@ export const DynamicStep = ({
     setTimeout(() => onNext(option), 300);
   };
 
-  const isValid = !field.required || value.trim().length > 0;
-  const isPhoneValid = field.type === 'phone' ? value.length >= 9 : true;
-  const canSubmit = isValid && isPhoneValid;
+  const hasValue = value.trim().length > 0;
+  const meetsRequired = field.required ? hasValue : true;
+
+  // Validate format/heuristics for phone & email; same logic as the Edge
+  // Function so the user sees the same error inline instead of after submit.
+  let contactValidation: { ok: boolean; reason?: string } = { ok: true };
+  if (hasValue) {
+    if (field.type === 'phone') {
+      const r = normalizePtPhone(value);
+      contactValidation = r.ok ? { ok: true } : { ok: false, reason: r.reason };
+    } else if (field.type === 'email') {
+      const r = normalizeEmail(value);
+      contactValidation = r.ok ? { ok: true } : { ok: false, reason: r.reason };
+    }
+  }
+
+  const canSubmit = meetsRequired && contactValidation.ok;
+  const errorText = hasValue && !contactValidation.ok ? contactValidation.reason : '';
 
   // For select fields with options, render as cards
   if (field.fieldType === 'select' && field.options && field.options.length > 0) {
@@ -149,6 +165,12 @@ export const DynamicStep = ({
             placeholder={field.placeholder || field.label}
             className="text-base h-12 text-center"
           />
+        )}
+
+        {errorText && (
+          <p className="text-sm text-destructive text-center mt-2">
+            {errorText}
+          </p>
         )}
       </motion.div>
 

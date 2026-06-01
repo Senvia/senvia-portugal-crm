@@ -1,4 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { normalizeEmail, normalizePtPhone } from '../_shared/contact-validation.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -80,19 +81,38 @@ async function handleWebhookMode(req: Request, token: string): Promise<Response>
 
   console.log('Webhook mapped fields:', { name, email, phone, notes, source });
 
-  // Clean phone
-  let cleanPhone = null;
+  // Strict per-field validation, but lenient at the lead level: if a field
+  // is invalid we drop just that field (set to null/placeholder) instead of
+  // rejecting the whole webhook call. Returning 400 would cause Facebook
+  // Lead Ads / Zapier / Make to retry indefinitely.
+  let cleanPhone: string | null = null;
   if (phone) {
-    cleanPhone = String(phone).replace(/\s/g, '');
-    if (cleanPhone.length < 9 || cleanPhone.length > 15) cleanPhone = null;
+    const r = normalizePtPhone(phone);
+    if (r.ok) {
+      cleanPhone = r.value.replace(/^\+351/, ''); // store 9 national digits
+    } else {
+      console.warn('[submit-lead webhook] phone rejected:', r.reason, phone);
+    }
   }
 
-  // Clean email
-  let cleanEmail = null;
+  let cleanEmail: string | null = null;
   if (email) {
-    const emailStr = String(email).trim().toLowerCase();
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (emailRegex.test(emailStr)) cleanEmail = emailStr;
+    const r = normalizeEmail(email);
+    if (r.ok) {
+      cleanEmail = r.value;
+    } else {
+      console.warn('[submit-lead webhook] email rejected:', r.reason, email);
+    }
+  }
+
+  // Lead-level guard: if BOTH email AND phone are invalid, reject. A lead
+  // with neither is worthless and certainly fake.
+  if (!cleanPhone && !cleanEmail) {
+    console.warn('[submit-lead webhook] dropped — no valid contact method');
+    return new Response(
+      JSON.stringify({ error: 'Lead sem contacto válido' }),
+      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
   }
 
   // Deduplication check (same phone within 60s)
@@ -420,30 +440,37 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Validate email format if provided
+    // Strict server-side validation. The browser-side check is UX; this is
+    // the security boundary — bots and curl requests hit this directly. We
+    // reject:
+    //   * Disposable / obviously-fake emails (mailinator, test@test.com, etc.)
+    //   * PT phones that don't match the 9XX/2XX format or are all-same digit
+    let cleanEmail: string | null = null;
     if (body.email) {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(body.email)) {
-        console.error('Invalid email format');
+      const r = normalizeEmail(body.email);
+      if (!r.ok) {
+        console.warn('[submit-lead] email rejected:', r.reason, body.email);
         return new Response(
-          JSON.stringify({ error: 'Formato de email inválido' }),
+          JSON.stringify({ error: r.reason }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
+      cleanEmail = r.value;
     }
 
-    // Clean phone number if provided
-    let cleanPhone = null;
+    let cleanPhone: string | null = null;
     if (body.phone) {
-      cleanPhone = body.phone.replace(/\s/g, '');
-      // More flexible phone validation - just check it has reasonable length
-      if (cleanPhone.length < 9 || cleanPhone.length > 15) {
-        console.error('Invalid phone format');
+      const r = normalizePtPhone(body.phone);
+      if (!r.ok) {
+        console.warn('[submit-lead] phone rejected:', r.reason, body.phone);
         return new Response(
-          JSON.stringify({ error: 'Formato de telemóvel inválido' }),
+          JSON.stringify({ error: r.reason }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
+      // Store national digits only (9 digits, no +351) for back-compat with
+      // existing leads.phone format — most app code expects this shape.
+      cleanPhone = r.value.replace(/^\+351/, '');
     }
 
     // Create Supabase client with service role to bypass RLS
@@ -599,7 +626,7 @@ Deno.serve(async (req) => {
         name: org.niche === 'telecom'
           ? (body.company_name?.trim() || body.name?.trim() || 'Anónimo')
           : (body.name?.trim() || body.company_name?.trim() || 'Anónimo'),
-        email: body.email?.trim()?.toLowerCase() || 'nao-fornecido@placeholder.local',
+        email: cleanEmail || 'nao-fornecido@placeholder.local',
         phone: cleanPhone || '000000000',
         gdpr_consent: true,
         source: body.source || formSettings.form_name || 'Formulário Público',
@@ -620,7 +647,7 @@ Deno.serve(async (req) => {
 
     // If the de-duplication trigger updated an existing lead, the insert
     // returns no row — fetch that lead instead.
-    const submittedEmail = body.email?.trim()?.toLowerCase();
+    const submittedEmail = cleanEmail;
     if (!lead && submittedEmail) {
       const { data: existingLead } = await supabase
         .from('leads')

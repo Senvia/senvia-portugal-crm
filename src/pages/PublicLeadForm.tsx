@@ -13,6 +13,7 @@ import { PhoneInput } from '@/components/ui/phone-input';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, CheckCircle, AlertCircle, Zap } from 'lucide-react';
 import { FormSettings, DEFAULT_FORM_SETTINGS, CustomField, migrateFormSettings, MetaPixel } from '@/types';
+import { normalizeEmail, normalizePtPhone } from '@/lib/validation/contact';
 
 // Declare fbq for TypeScript
 declare global {
@@ -301,27 +302,42 @@ export default function PublicLeadForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const cleanPhone = phone.replace(/\s/g, '');
-    
-    // Dynamic validation based on field settings
+    // Dynamic validation based on field settings.
+    // Phone and email are also validated when filled but optional — bots that
+    // type "999999999" into an optional field still get rejected, matching
+    // the Edge Function behavior.
     if (settings.fields.name.visible && settings.fields.name.required) {
       if (!name || name.length < 2) {
         toast({ title: 'Erro', description: `${settings.fields.name.label} deve ter pelo menos 2 caracteres`, variant: 'destructive' });
         return;
       }
     }
-    
-    if (settings.fields.email.visible && settings.fields.email.required) {
-      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        toast({ title: 'Erro', description: 'Email inválido', variant: 'destructive' });
-        return;
+
+    let normalizedPhone = '';
+    if (settings.fields.phone.visible) {
+      const required = settings.fields.phone.required;
+      const hasValue = phone && phone.trim().length > 0;
+      if (required || hasValue) {
+        const r = normalizePtPhone(phone);
+        if (!r.ok) {
+          toast({ title: 'Telefone inválido', description: r.reason, variant: 'destructive' });
+          return;
+        }
+        normalizedPhone = r.value.replace(/^\+351/, '');
       }
     }
-    
-    if (settings.fields.phone.visible && settings.fields.phone.required) {
-      if (!cleanPhone || cleanPhone.length < 9) {
-        toast({ title: 'Erro', description: `${settings.fields.phone.label} é obrigatório`, variant: 'destructive' });
-        return;
+
+    let normalizedEmail = '';
+    if (settings.fields.email.visible) {
+      const required = settings.fields.email.required;
+      const hasValue = email && email.trim().length > 0;
+      if (required || hasValue) {
+        const r = normalizeEmail(email);
+        if (!r.ok) {
+          toast({ title: 'Email inválido', description: r.reason, variant: 'destructive' });
+          return;
+        }
+        normalizedEmail = r.value;
       }
     }
     
@@ -351,8 +367,8 @@ export default function PublicLeadForm() {
     try {
       const body: Record<string, unknown> = {
         name: name.trim() || null,
-        email: email.trim() || null,
-        phone: cleanPhone || null,
+        email: normalizedEmail || null,
+        phone: normalizedPhone || null,
         gdpr_consent: true,
         public_key: formData?.public_key,
         form_id: formData?.form_id,  // Include form_id for form-specific settings
