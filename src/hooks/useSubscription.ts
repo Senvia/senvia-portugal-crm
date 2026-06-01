@@ -59,6 +59,25 @@ const MODULE_REQUIRED_PLAN: Record<string, string> = {
   prospects: 'Elite',
 };
 
+// Plan tier ranking — used as a fallback for module locking when the plan's
+// features.modules map doesn't include a given key (e.g. "prospects" is in
+// MODULE_REQUIRED_PLAN but not in the plan-features modules map).
+const PLAN_RANK: Record<string, number> = {
+  basic: 0,
+  starter: 0,
+  pro: 1,
+  elite: 2,
+};
+
+// Minimum plan rank each gated module needs. Keep aligned with MODULE_REQUIRED_PLAN.
+const MODULE_REQUIRED_RANK: Record<string, number> = {
+  sales: 1,
+  finance: 2,
+  marketing: 1,
+  ecommerce: 2,
+  prospects: 2,
+};
+
 function isOrgOnTrial(org: { trial_ends_at?: string; billing_exempt?: boolean } | null): boolean {
   if (!org) return false;
   if ((org as any).billing_exempt) return false;
@@ -139,10 +158,23 @@ export function useSubscription() {
     return currentPlan.features?.features?.[feature] ?? false;
   };
 
+  // A module is "locked" when the current plan doesn't reach the tier required
+  // for it. Two paths to find that out:
+  //   1. The plan's features.modules map explicitly says false.
+  //   2. The module is in MODULE_REQUIRED_RANK and the plan rank is below it
+  //      (this catches modules like "prospects" that aren't in the plan map).
+  // The sidebar uses this flag to keep the menu item visible BUT with a padlock
+  // icon — so starter customers see what's available with an upgrade.
   const isModuleLocked = (moduleKey: string): boolean => {
+    if (isBillingExempt) return false; // exempt orgs already get FULL_ACCESS_PLAN
     const modulesMap = currentPlan.features?.modules;
-    if (!modulesMap) return false;
-    return moduleKey in modulesMap && !modulesMap[moduleKey as ModuleKey];
+    if (modulesMap && moduleKey in modulesMap) {
+      return !modulesMap[moduleKey as ModuleKey];
+    }
+    const requiredRank = MODULE_REQUIRED_RANK[moduleKey];
+    if (requiredRank === undefined) return false;
+    const currentRank = PLAN_RANK[currentPlan.id] ?? 0;
+    return currentRank < requiredRank;
   };
 
   const getRequiredPlan = (moduleKey: string): string => {
