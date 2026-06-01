@@ -144,7 +144,11 @@ export function useSubscription() {
     staleTime: 1000 * 60 * 10,
   });
 
-  const currentPlan = isBillingExempt ? FULL_ACCESS_PLAN : (plan || DEFAULT_PLAN);
+  // billing_exempt means "skip blockers", NOT "grant Elite access". The plan
+  // tier (and module visibility) is always controlled by the org's `plan`
+  // column. Demo orgs that should get full Elite access must have
+  // `plan = 'elite'` set explicitly — not just billing_exempt.
+  const currentPlan = plan || DEFAULT_PLAN;
 
   const canUseModule = (module: ModuleKey): boolean => {
     return currentPlan.features?.modules?.[module] ?? false;
@@ -166,7 +170,6 @@ export function useSubscription() {
   // The sidebar uses this flag to keep the menu item visible BUT with a padlock
   // icon — so starter customers see what's available with an upgrade.
   const isModuleLocked = (moduleKey: string): boolean => {
-    if (isBillingExempt) return false; // exempt orgs already get FULL_ACCESS_PLAN
     const modulesMap = currentPlan.features?.modules;
     if (modulesMap && moduleKey in modulesMap) {
       return !modulesMap[moduleKey as ModuleKey];

@@ -96,12 +96,18 @@ serve(async (req) => {
       org_data: orgData,
     });
 
-    // Billing exempt → elite, no checks at all
+    // billing_exempt means "skip all blockers" — NOT "grant Elite access".
+    // The actual plan tier (and therefore which modules are unlocked) is
+    // controlled by the org's `plan` column. Demo orgs that should have full
+    // Elite access must have `plan = 'elite'` set explicitly.
+    //
+    // This avoids the bug where the workaround `billing_exempt = true` to
+    // bypass a misbehaving trial blocker silently elevated a Starter customer
+    // to Elite-level module access.
     if (orgData?.billing_exempt === true) {
-      if (orgId) await supabase.from('organizations').update({ plan: 'elite' }).eq('id', orgId);
       return json({
         subscribed: true,
-        plan_id: 'elite',
+        plan_id: orgData.plan ?? 'starter',
         product_id: null,
         subscription_end: null,
         billing_exempt: true,
