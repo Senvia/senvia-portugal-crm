@@ -81,13 +81,20 @@ serve(async (req) => {
 
     let orgData: any = null;
     if (orgId) {
-      const { data } = await supabase
+      const { data, error: orgErr } = await supabase
         .from('organizations')
         .select('billing_exempt, trial_ends_at, payment_failed_at, first_paid_at, current_period_end')
         .eq('id', orgId)
         .maybeSingle();
       orgData = data;
+      if (orgErr) console.error("[check-subscription] org fetch error", orgErr);
     }
+
+    console.log("[check-subscription] entry", {
+      user_email: user.email,
+      org_id: orgId,
+      org_data: orgData,
+    });
 
     // Billing exempt → elite, no checks at all
     if (orgData?.billing_exempt === true) {
@@ -191,42 +198,74 @@ function getLegacyPaymentOverdue(orgData: any) {
 }
 
 // Builds the response for an org with no Stripe subscription found.
-// Two distinct branches:
-//   1. Already a paying customer (first_paid_at IS NOT NULL) — never re-treated
-//      as trial; the absence of an active sub here means the plan ended.
-//   2. Still in trial — uses trial_ends_at to compute days_remaining and
-//      trial_expired.
+//
+// Failure modes we explicitly DO NOT allow (no silent downgrade):
+//   * Payer (first_paid_at set) → never returns trial_expired: true
+//   * Payer with NULL current_period_end → returns plan_expired: false
+//     (we have no period info, so we MUST NOT lock them out)
+//   * Indeterminate state (no first_paid_at, no trial_ends_at) → returns
+//     trial_expired: false. Letting an unknown org in for one session is
+//     much less bad than locking out a real payer whose stamp got lost.
+//
+// Additional "has paid before" signals beyond first_paid_at:
+//   * current_period_end set (means a Stripe webhook or manual SQL touched it)
+//   * payment_failed_at set (means a sub existed and failed)
+// Any of these is enough to skip the trial branch entirely.
 function buildTrialResponse(orgData: any) {
   const po = getLegacyPaymentOverdue(orgData);
 
+  const hasPaidBefore = !!(
+    orgData?.first_paid_at ||
+    orgData?.current_period_end ||
+    orgData?.payment_failed_at
+  );
+
+  console.log("[check-subscription] buildTrialResponse", {
+    has_org_data: !!orgData,
+    first_paid_at: orgData?.first_paid_at ?? null,
+    current_period_end: orgData?.current_period_end ?? null,
+    trial_ends_at: orgData?.trial_ends_at ?? null,
+    payment_failed_at: orgData?.payment_failed_at ?? null,
+    hasPaidBefore,
+  });
+
   // PAYING CUSTOMER FALL-OUT: previously paid, no live sub right now.
   // We treat as plan-expired (renew CTA), never as trial.
-  if (orgData?.first_paid_at) {
+  if (hasPaidBefore) {
     const periodEnd = orgData?.current_period_end ? new Date(orgData.current_period_end) : null;
+    // No period_end → we don't know when renewal is due. Fail open: don't
+    // lock the payer out. The super admin can patch current_period_end later.
     const planExpired = periodEnd
       ? (Date.now() - periodEnd.getTime()) > GRACE_DAYS * 24 * 60 * 60 * 1000
-      : true;
+      : false;
     return {
       subscribed: false,
       plan_id: null,
       subscription_end: orgData?.current_period_end ?? null,
       on_trial: false,
       trial_expired: false,
-      first_paid_at: orgData.first_paid_at,
-      current_period_end: orgData.current_period_end ?? null,
+      first_paid_at: orgData?.first_paid_at ?? null,
+      current_period_end: orgData?.current_period_end ?? null,
       plan_expired: planExpired,
       payment_overdue: planExpired,
     };
   }
 
-  // TRIAL CUSTOMER: never paid.
+  // INDETERMINATE: no payer signal AND no trial_ends_at. Could be a brand-new
+  // org mid-onboarding, a corrupted row, or a payer whose stamps were wiped.
+  // Fail open — return trial_expired: false so the user can at least enter.
+  // The cleanup-expired-trials cron will not touch this org either because it
+  // requires trial_ends_at to be set + in the past.
   if (!orgData?.trial_ends_at) {
+    console.warn("[check-subscription] indeterminate org state — failing open", {
+      org_data_present: !!orgData,
+    });
     return {
       subscribed: false,
       plan_id: null,
       subscription_end: null,
       on_trial: false,
-      trial_expired: true,
+      trial_expired: false,
       first_paid_at: null,
       ...po,
     };
