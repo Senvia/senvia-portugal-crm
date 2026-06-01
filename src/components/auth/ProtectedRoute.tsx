@@ -89,12 +89,23 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   }
 
   // TRIAL customer with the trial period over (and never paid).
+  //
+  // Belt-and-suspenders: we ALSO read organization.first_paid_at directly from
+  // AuthContext (which selects * from organizations). If that's set, the org
+  // has paid at least once and must NEVER see the trial blocker, regardless
+  // of what the edge function response says. This protects against:
+  //   * Edge function deploy lag (old code without the first_paid_at logic)
+  //   * Edge function errors (returns null subscriptionStatus that defaults
+  //     to "trial" semantics elsewhere)
+  //   * Stripe API failures during sub lookup
+  const orgFirstPaidAt = (organization as { first_paid_at?: string | null } | null)?.first_paid_at;
   if (
     hasCheckedSub &&
     subscriptionStatus &&
     !subscriptionStatus.subscribed &&
     !subscriptionStatus.billing_exempt &&
     !subscriptionStatus.first_paid_at &&
+    !orgFirstPaidAt &&
     subscriptionStatus.trial_expired === true &&
     !location.pathname.startsWith('/settings')
   ) {
