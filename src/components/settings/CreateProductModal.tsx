@@ -19,6 +19,8 @@ export function CreateProductModal({ open, onOpenChange }: CreateProductModalPro
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
   const [isRecurring, setIsRecurring] = useState(false);
+  const [commissionValue, setCommissionValue] = useState('');
+  const [commissionRenewalValue, setCommissionRenewalValue] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,12 +33,16 @@ export function CreateProductModal({ open, onOpenChange }: CreateProductModalPro
       is_recurring: isRecurring,
       tax_value: null,
       tax_exemption_reason: null,
+      commission_value: commissionValue ? parseFloat(commissionValue) : null,
+      commission_renewal_value: commissionRenewalValue ? parseFloat(commissionRenewalValue) : null,
     }, {
       onSuccess: () => {
         setName('');
         setDescription('');
         setPrice('');
         setIsRecurring(false);
+        setCommissionValue('');
+        setCommissionRenewalValue('');
         onOpenChange(false);
       },
     });
@@ -80,6 +86,40 @@ export function CreateProductModal({ open, onOpenChange }: CreateProductModalPro
               onChange={(e) => setPrice(e.target.value)}
               placeholder="0.00"
             />
+          </div>
+
+          <div className="rounded-lg border bg-primary/5 p-4 space-y-3">
+            <p className="text-sm font-medium">Comissão por unidade</p>
+            <p className="text-xs text-muted-foreground -mt-1">
+              Valor pago ao comercial por cada unidade vendida.
+              Vendas de energia (com CPE) ignoram este campo e usam o motor próprio.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="commission" className="text-xs">Angariação (€)</Label>
+                <Input
+                  id="commission"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={commissionValue}
+                  onChange={(e) => setCommissionValue(e.target.value)}
+                  placeholder="0.00"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="commission-renewal" className="text-xs">Renovação (€)</Label>
+                <Input
+                  id="commission-renewal"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={commissionRenewalValue}
+                  onChange={(e) => setCommissionRenewalValue(e.target.value)}
+                  placeholder="(25% da angariação)"
+                />
+              </div>
+            </div>
           </div>
 
           <div className="rounded-lg border bg-muted/30 p-4 space-y-3">

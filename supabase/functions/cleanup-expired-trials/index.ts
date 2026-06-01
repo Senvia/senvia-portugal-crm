@@ -34,10 +34,15 @@ serve(async (req) => {
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - 60);
 
+    // CRITICAL: only orgs that NEVER paid (first_paid_at IS NULL) are eligible
+    // for the trial-cleanup purge. Customers who have ever paid stay untouched
+    // forever, even if a renewal lapses — those are handled by the "plan
+    // expired" blocker on the frontend, not by this destructive cron.
     const { data: expiredOrgs, error: fetchError } = await supabaseClient
       .from('organizations')
       .select('id, name, trial_ends_at')
       .eq('billing_exempt', false)
+      .is('first_paid_at', null)
       .not('trial_ends_at', 'is', null)
       .lt('trial_ends_at', cutoffDate.toISOString());
 

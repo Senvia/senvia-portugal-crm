@@ -17,6 +17,8 @@ interface ImportLeadsParams {
   assigneeIds: string[];
   stageKey: string;
   fileName?: string;
+  /** Mandatory user-given label for this import batch. */
+  name: string;
 }
 
 const trim = (v: unknown) => (v === null || v === undefined ? "" : String(v).trim());
@@ -44,9 +46,10 @@ export function useImportLeads() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async ({ rows, mapping, assigneeIds, stageKey, fileName }: ImportLeadsParams): Promise<ImportLeadsResult> => {
+    mutationFn: async ({ rows, mapping, assigneeIds, stageKey, fileName, name }: ImportLeadsParams): Promise<ImportLeadsResult> => {
       if (!organization?.id) throw new Error("Sem organização");
       if (!mapping.name) throw new Error("Mapeamento do campo Nome é obrigatório");
+      if (!name?.trim()) throw new Error("Nome da importação é obrigatório");
 
       const pool = assigneeIds.filter(Boolean);
       if (pool.length === 0) throw new Error("Nenhum responsável selecionado");
@@ -62,6 +65,7 @@ export function useImportLeads() {
             organization_id: organization.id,
             imported_by: session?.user.id,
             import_code: importCode,
+            name: name.trim(),
             file_name: fileName ?? null,
             stage_key: stageKey,
             assignee_ids: pool,

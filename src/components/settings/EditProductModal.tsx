@@ -22,6 +22,8 @@ export function EditProductModal({ product, open, onOpenChange }: EditProductMod
   const [price, setPrice] = useState(product.price?.toString() || '');
   const [isActive, setIsActive] = useState(product.is_active);
   const [isRecurring, setIsRecurring] = useState(product.is_recurring);
+  const [commissionValue, setCommissionValue] = useState(product.commission_value?.toString() || '');
+  const [commissionRenewalValue, setCommissionRenewalValue] = useState(product.commission_renewal_value?.toString() || '');
 
   useEffect(() => {
     setName(product.name);
@@ -29,6 +31,8 @@ export function EditProductModal({ product, open, onOpenChange }: EditProductMod
     setPrice(product.price?.toString() || '');
     setIsActive(product.is_active);
     setIsRecurring(product.is_recurring);
+    setCommissionValue(product.commission_value?.toString() || '');
+    setCommissionRenewalValue(product.commission_renewal_value?.toString() || '');
   }, [product]);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -45,6 +49,8 @@ export function EditProductModal({ product, open, onOpenChange }: EditProductMod
       tax_value: null,
       tax_exemption_reason: null,
       invoicexpress_id: product.invoicexpress_id,
+      commission_value: commissionValue ? parseFloat(commissionValue) : null,
+      commission_renewal_value: commissionRenewalValue ? parseFloat(commissionRenewalValue) : null,
     }, {
       onSuccess: () => onOpenChange(false),
     });
@@ -86,6 +92,40 @@ export function EditProductModal({ product, open, onOpenChange }: EditProductMod
               onChange={(e) => setPrice(e.target.value)}
               placeholder="0.00"
             />
+          </div>
+
+          <div className="rounded-lg border bg-primary/5 p-4 space-y-3">
+            <p className="text-sm font-medium">Comissão por unidade</p>
+            <p className="text-xs text-muted-foreground -mt-1">
+              Valor pago ao comercial por cada unidade vendida deste produto.
+              Vendas de energia (com CPE) ignoram este campo e usam o motor próprio.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-commission" className="text-xs">Angariação (€)</Label>
+                <Input
+                  id="edit-commission"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={commissionValue}
+                  onChange={(e) => setCommissionValue(e.target.value)}
+                  placeholder="0.00"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-commission-renewal" className="text-xs">Renovação (€)</Label>
+                <Input
+                  id="edit-commission-renewal"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={commissionRenewalValue}
+                  onChange={(e) => setCommissionRenewalValue(e.target.value)}
+                  placeholder="(25% da angariação)"
+                />
+              </div>
+            </div>
           </div>
 
           <div className="rounded-lg border bg-muted/30 p-4 space-y-3">

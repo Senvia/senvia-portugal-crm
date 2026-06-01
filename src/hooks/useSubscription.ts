@@ -34,6 +34,22 @@ const DEFAULT_PLAN: SubscriptionPlan = {
   },
 };
 
+// Used when an organization is flagged billing_exempt (demo / internal / partner
+// orgs that should have full product access without paying or depending on the
+// subscription_plans table being correctly seeded).
+const FULL_ACCESS_PLAN: SubscriptionPlan = {
+  id: 'elite',
+  name: 'Elite (Isento)',
+  max_users: null,
+  max_forms: null,
+  price_monthly: 0,
+  features: {
+    modules: { sales: true, finance: true, marketing: true, ecommerce: true },
+    integrations: { whatsapp: true, invoicing: true, meta_pixels: true, stripe: true },
+    features: { conversational_forms: true, multi_org: true, push_notifications: true, fidelization_alerts: true },
+  },
+};
+
 // Map module keys to minimum required plan for upsell messaging
 const MODULE_REQUIRED_PLAN: Record<string, string> = {
   sales: 'Pro',
@@ -53,7 +69,12 @@ function isOrgOnTrial(org: { trial_ends_at?: string; billing_exempt?: boolean } 
 
 export function useSubscription() {
   const { organization } = useAuth();
-  
+
+  // Billing-exempt orgs (demos, internal, partners) get full access regardless
+  // of what's in subscription_plans. Avoids having to maintain plan rows or
+  // toggle modules per org.
+  const isBillingExempt = !!(organization as any)?.billing_exempt;
+
   // If on trial, use 'elite' features; otherwise use the DB plan
   const onTrial = isOrgOnTrial(organization as any);
   const planId = onTrial ? 'elite' : (organization?.plan || 'starter');
@@ -104,7 +125,7 @@ export function useSubscription() {
     staleTime: 1000 * 60 * 10,
   });
 
-  const currentPlan = plan || DEFAULT_PLAN;
+  const currentPlan = isBillingExempt ? FULL_ACCESS_PLAN : (plan || DEFAULT_PLAN);
 
   const canUseModule = (module: ModuleKey): boolean => {
     return currentPlan.features?.modules?.[module] ?? false;

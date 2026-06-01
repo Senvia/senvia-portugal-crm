@@ -17,6 +17,10 @@ export interface Product {
   tax_value?: number | null;
   tax_exemption_reason?: string | null;
   invoicexpress_id?: number | null;
+  /** Commission earned per unit sold (telecom / fixed-commission products). */
+  commission_value?: number | null;
+  /** Commission per unit on renewal. Falls back to commission_value × 0.25. */
+  commission_renewal_value?: number | null;
   created_at: string;
   updated_at: string;
 }

@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { useOrganization, useUpdateOrganization } from '@/hooks/useOrganization';
 import { useServicosProducts } from '@/hooks/useServicosProducts';
+import { CommissionGlobalSettings } from './CommissionGlobalSettings';
 import type { CommissionMatrix, CommissionRule, SolarTier, EnergyCommissionConfig, EnergyMarginBand, TierDerivationRule, TierRules } from '@/hooks/useCommissionMatrix';
 import { DEFAULT_ENERGY_CONFIG, DEFAULT_TIER_RULES } from '@/hooks/useCommissionMatrix';
 
@@ -107,6 +108,12 @@ export function CommissionMatrixTab() {
       <p className="text-sm text-muted-foreground -mt-4">
         Configure como a comissão é calculada para cada produto. Clique num card para editar.
       </p>
+
+      <CommissionGlobalSettings />
+
+      <div>
+        <h3 className="text-sm font-medium mb-3">Por produto / serviço</h3>
+      </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
         {/* EE & Gás card */}

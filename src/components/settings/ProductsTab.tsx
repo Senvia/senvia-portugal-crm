@@ -7,6 +7,7 @@ import { useProducts, useDeleteProduct } from '@/hooks/useProducts';
 import { useSyncInvoiceXpressItems } from '@/hooks/useSyncInvoiceXpressItems';
 import { useAuth } from '@/contexts/AuthContext';
 import { ServicosProductsManager } from './ServicosProductsManager';
+import { hasPerfect2GetherAccess } from '@/lib/perfect2gether';
 import { CreateProductModal } from './CreateProductModal';
 import { EditProductModal } from './EditProductModal';
 import type { Product } from '@/types/proposals';
@@ -25,8 +26,15 @@ export function ProductsTab() {
   const { data: products = [], isLoading } = useProducts();
   const deleteProduct = useDeleteProduct();
   const syncItems = useSyncInvoiceXpressItems();
-  const { organization } = useAuth();
-  const isTelecom = (organization as any)?.niche === 'telecom';
+  const { organization, organizations, isSuperAdmin } = useAuth();
+  // The "Produtos Telecom (Serviços)" section below is legacy Perfect2Gether
+  // catalog (Solar/Baterias/Carregadores/...). Only show for Perfect2Gether
+  // orgs — every other telecom org uses the standard products table above.
+  const showServicosManager = hasPerfect2GetherAccess({
+    organizationId: organization?.id,
+    memberships: organizations,
+    isSuperAdmin,
+  });
   const hasInvoiceXpress = !!(organization as any)?.invoicexpress_api_key && !!(organization as any)?.invoicexpress_account_name;
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -180,7 +188,7 @@ export function ProductsTab() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {isTelecom && <ServicosProductsManager />}
+      {showServicosManager && <ServicosProductsManager />}
     </div>
   );
 }

@@ -49,7 +49,7 @@ export function useCreateProduct() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async (data: { name: string; description?: string; price?: number; is_recurring?: boolean; tax_value?: number | null; tax_exemption_reason?: string | null }) => {
+    mutationFn: async (data: { name: string; description?: string; price?: number; is_recurring?: boolean; tax_value?: number | null; tax_exemption_reason?: string | null; commission_value?: number | null; commission_renewal_value?: number | null }) => {
       const { error } = await supabase
         .from('products')
         .insert({
@@ -60,8 +60,10 @@ export function useCreateProduct() {
           is_recurring: data.is_recurring || false,
           tax_value: data.tax_value ?? null,
           tax_exemption_reason: data.tax_exemption_reason || null,
+          commission_value: data.commission_value ?? null,
+          commission_renewal_value: data.commission_renewal_value ?? null,
         });
-      
+
       if (error) throw error;
     },
     onSuccess: () => {
@@ -80,7 +82,7 @@ export function useUpdateProduct() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async ({ id, ...data }: { id: string; name?: string; description?: string | null; price?: number | null; is_active?: boolean; is_recurring?: boolean; tax_value?: number | null; tax_exemption_reason?: string | null; invoicexpress_id?: number | null }) => {
+    mutationFn: async ({ id, ...data }: { id: string; name?: string; description?: string | null; price?: number | null; is_active?: boolean; is_recurring?: boolean; tax_value?: number | null; tax_exemption_reason?: string | null; invoicexpress_id?: number | null; commission_value?: number | null; commission_renewal_value?: number | null }) => {
       const { error } = await supabase
         .from('products')
         .update(data)

@@ -69,21 +69,32 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     return <OnboardingWizard onComplete={() => setOnboardingComplete(true)} />;
   }
 
-  // Check payment overdue - block all pages except /settings
+  // PAYING CUSTOMER overdue past the grace window — show the "renew your plan"
+  // blocker (NOT the trial blocker). This branch is keyed off first_paid_at:
+  // once an org has paid even once, it is a paying customer forever and never
+  // sees the trial blocker again, regardless of trial_ends_at value.
   if (
     hasCheckedSub &&
-    subscriptionStatus?.payment_overdue === true &&
+    subscriptionStatus &&
+    !subscriptionStatus.billing_exempt &&
+    subscriptionStatus.first_paid_at &&
+    (subscriptionStatus.plan_expired === true || subscriptionStatus.payment_overdue === true) &&
     !location.pathname.startsWith('/settings')
   ) {
-    return <PaymentOverdueBlocker paymentFailedAt={subscriptionStatus.payment_failed_at} />;
+    return (
+      <PaymentOverdueBlocker
+        paymentFailedAt={subscriptionStatus.current_period_end ?? subscriptionStatus.payment_failed_at}
+      />
+    );
   }
 
-  // Check trial expired - block all pages except /settings
+  // TRIAL customer with the trial period over (and never paid).
   if (
     hasCheckedSub &&
     subscriptionStatus &&
     !subscriptionStatus.subscribed &&
     !subscriptionStatus.billing_exempt &&
+    !subscriptionStatus.first_paid_at &&
     subscriptionStatus.trial_expired === true &&
     !location.pathname.startsWith('/settings')
   ) {

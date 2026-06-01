@@ -35,10 +35,12 @@ export function useSalesCommissions() {
     queryFn: async (): Promise<CommissionEntry[]> => {
       if (!orgId || !commissionsEnabled) return [];
 
-      // Fetch sales for the period
+      // Fetch sales for the period. `comissao` is the authoritative commission
+      // for the sale — set either by the energy CPE engine, the telecom
+      // auto-fill trigger (products × multiplier), or manually by the admin.
       const { data: sales, error: salesError } = await supabase
         .from("sales")
-        .select("created_by, total_value")
+        .select("created_by, total_value, comissao")
         .eq("organization_id", orgId)
         .gte("sale_date", monthStart)
         .lte("sale_date", monthEnd)
@@ -46,7 +48,8 @@ export function useSalesCommissions() {
 
       if (salesError) throw salesError;
 
-      // Fetch members with commission rates
+      // Fetch members for the per-member rate (kept as informational column;
+      // the actual commission now comes from sales.comissao).
       const { data: members, error: membersError } = await supabase
         .from("organization_members")
         .select("user_id, commission_rate")
@@ -55,7 +58,6 @@ export function useSalesCommissions() {
 
       if (membersError) throw membersError;
 
-      // Fetch profiles for names via organization_members user_ids
       const memberUserIds = (members || []).map(m => m.user_id);
       const { data: profiles } = memberUserIds.length > 0
         ? await supabase.from("profiles").select("id, full_name").in("id", memberUserIds)
@@ -64,12 +66,14 @@ export function useSalesCommissions() {
       const profileMap = new Map((profiles || []).map(p => [p.id, p.full_name]));
       const memberRateMap = new Map(members?.map(m => [m.user_id, Number(m.commission_rate || 0)]) || []);
 
-      // Group sales by created_by
-      const grouped = new Map<string, { total: number; count: number }>();
+      // Group sales by created_by, summing both total_value and the
+      // already-computed commission.
+      const grouped = new Map<string, { total: number; commission: number; count: number }>();
       for (const sale of sales || []) {
         if (!sale.created_by) continue;
-        const current = grouped.get(sale.created_by) || { total: 0, count: 0 };
+        const current = grouped.get(sale.created_by) || { total: 0, commission: 0, count: 0 };
         current.total += Number(sale.total_value || 0);
+        current.commission += Number(sale.comissao || 0);
         current.count += 1;
         grouped.set(sale.created_by, current);
       }
@@ -83,7 +87,7 @@ export function useSalesCommissions() {
           totalSales: data.total,
           salesCount: data.count,
           commissionRate: rate,
-          totalCommission: data.total * (rate / 100),
+          totalCommission: data.commission,
         });
       }
 

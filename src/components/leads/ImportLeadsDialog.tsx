@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Loader2, Users, User, Shuffle } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -57,6 +58,7 @@ function autoMap(headers: string[]): Record<string, string> {
 
 export function ImportLeadsDialog({ open, onOpenChange }: ImportLeadsDialogProps) {
   const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [importName, setImportName] = useState("");
   const [fileName, setFileName] = useState("");
   const [headers, setHeaders] = useState<string[]>([]);
   const [rows, setRows] = useState<Record<string, string>[]>([]);
@@ -91,6 +93,7 @@ export function ImportLeadsDialog({ open, onOpenChange }: ImportLeadsDialogProps
   useEffect(() => {
     if (!open) {
       setStep(1);
+      setImportName("");
       setFileName("");
       setHeaders([]);
       setRows([]);
@@ -120,7 +123,7 @@ export function ImportLeadsDialog({ open, onOpenChange }: ImportLeadsDialogProps
     setMapping({});
   };
 
-  const canGoStep2 = !!fileName && rows.length > 0;
+  const canGoStep2 = !!fileName && rows.length > 0 && importName.trim() !== "";
   const nameMapped = !!mapping.name;
   const canGoStep3 = nameMapped;
 
@@ -155,6 +158,7 @@ export function ImportLeadsDialog({ open, onOpenChange }: ImportLeadsDialogProps
         assigneeIds,
         stageKey: selectedStageKey,
         fileName,
+        name: importName,
       });
       setResult(res);
     } catch (e) {
@@ -201,13 +205,32 @@ export function ImportLeadsDialog({ open, onOpenChange }: ImportLeadsDialogProps
           )}
 
           {step === 1 && (
-            <ImportStep1Upload
-              fileName={fileName}
-              headers={headers}
-              rows={rows}
-              onFileLoaded={handleFileLoaded}
-              onClearFile={clearFile}
-            />
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="import-name" className="text-sm font-medium">
+                  Nome da importação <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="import-name"
+                  placeholder="Ex: Leads telecom março 2026"
+                  value={importName}
+                  onChange={(e) => setImportName(e.target.value)}
+                  maxLength={120}
+                  autoFocus
+                />
+                <p className="text-xs text-muted-foreground">
+                  Identifica este lote para o conseguires encontrar/apagar mais tarde no histórico.
+                </p>
+              </div>
+
+              <ImportStep1Upload
+                fileName={fileName}
+                headers={headers}
+                rows={rows}
+                onFileLoaded={handleFileLoaded}
+                onClearFile={clearFile}
+              />
+            </div>
           )}
 
           {step === 2 && (

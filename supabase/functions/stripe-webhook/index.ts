@@ -82,6 +82,8 @@ serve(async (req) => {
 
         if (plan) await updateOrgPlan(supabase, email, plan);
         await clearPaymentFailed(supabase, email);
+        await markFirstPaid(supabase, email);
+        await setCurrentPeriodEnd(supabase, email, sub.current_period_end);
 
         const orgName = await getOrgNameByEmail(supabase, email);
 
@@ -115,6 +117,8 @@ serve(async (req) => {
           }
           if (sub.status === "active") {
             await clearPaymentFailed(supabase, email);
+            await markFirstPaid(supabase, email);
+            await setCurrentPeriodEnd(supabase, email, sub.current_period_end);
             await dispatchAutomation(supabase, "stripe_subscription_renewed", { email, plan: plan || "unknown", nome: orgName });
             await syncStripeAutoLists(supabase, email, orgName, "renewed", plan || null);
           }
@@ -508,6 +512,36 @@ async function recordPaymentFailed(supabase: any, email: string) {
   } else {
     logStep("Payment failure recorded", { orgId });
   }
+}
+
+// Marks the org as a paying customer on its first successful payment. Idempotent:
+// once first_paid_at is set, it never moves — even if a future payment fails,
+// the org is treated as a paying customer with an overdue renewal.
+async function markFirstPaid(supabase: any, email: string) {
+  const orgId = await findOrgByEmail(supabase, email);
+  if (!orgId) return;
+  const { error } = await supabase
+    .from("organizations")
+    .update({ first_paid_at: new Date().toISOString() })
+    .eq("id", orgId)
+    .is("first_paid_at", null);
+  if (error) logStep("Failed to mark first_paid_at", { error: error.message });
+  else logStep("first_paid_at marked (or already set)", { orgId });
+}
+
+// Persists the end of the current paid Stripe period — used by check-subscription
+// and the protected route to know when the next renewal is due (plus 4 days of
+// grace before blocking).
+async function setCurrentPeriodEnd(supabase: any, email: string, periodEndUnix: number | null | undefined) {
+  if (!periodEndUnix || periodEndUnix <= 0) return;
+  const orgId = await findOrgByEmail(supabase, email);
+  if (!orgId) return;
+  const iso = new Date(periodEndUnix * 1000).toISOString();
+  const { error } = await supabase
+    .from("organizations")
+    .update({ current_period_end: iso })
+    .eq("id", orgId);
+  if (error) logStep("Failed to set current_period_end", { error: error.message });
 }
 
 async function clearPaymentFailed(supabase: any, email: string) {

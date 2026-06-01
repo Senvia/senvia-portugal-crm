@@ -11,10 +11,9 @@ export function PaymentOverdueBlocker({ paymentFailedAt }: PaymentOverdueBlocker
   const navigate = useNavigate();
   const { openCustomerPortal, isLoading } = useStripeSubscription();
 
-  const failedDate = paymentFailedAt ? new Date(paymentFailedAt) : null;
-  const daysSinceFailure = failedDate
-    ? Math.floor((Date.now() - failedDate.getTime()) / (1000 * 60 * 60 * 24))
-    : 0;
+  // `paymentFailedAt` is now the end of the last paid Stripe period (renewal date).
+  // Falls back to a generic message if absent.
+  const renewalDate = paymentFailedAt ? new Date(paymentFailedAt) : null;
 
   return (
     <div className="fixed inset-0 z-[100] bg-background flex items-center justify-center p-4 pt-safe pb-safe">
@@ -25,11 +24,11 @@ export function PaymentOverdueBlocker({ paymentFailedAt }: PaymentOverdueBlocker
 
         <div className="space-y-2">
           <h1 className="text-2xl font-bold tracking-tight">
-            Pagamento em atraso
+            A tua mensalidade expirou
           </h1>
           <p className="text-muted-foreground text-sm">
-            O pagamento da sua subscrição falhou há {daysSinceFailure} {daysSinceFailure === 1 ? 'dia' : 'dias'}. 
-            Regularize o pagamento para continuar a utilizar o sistema.
+            Continuas a ser cliente — só precisas de renovar a mensalidade para
+            voltares a aceder ao sistema. Os teus dados ficam intactos.
           </p>
         </div>
 
@@ -37,12 +36,13 @@ export function PaymentOverdueBlocker({ paymentFailedAt }: PaymentOverdueBlocker
           <div className="flex items-center justify-center gap-2 text-destructive">
             <CreditCard className="h-4 w-4" />
             <span className="text-sm font-semibold">
-              Acesso suspenso por pagamento em atraso
+              Acesso suspenso até regularizares o pagamento
             </span>
           </div>
-          {failedDate && (
+          {renewalDate && (
             <p className="text-xs text-muted-foreground mt-2">
-              Falha de pagamento desde {failedDate.toLocaleDateString('pt-PT', { day: '2-digit', month: 'long', year: 'numeric' })}
+              Renovação prevista para{' '}
+              {renewalDate.toLocaleDateString('pt-PT', { day: '2-digit', month: 'long', year: 'numeric' })}
             </p>
           )}
         </div>
@@ -55,7 +55,7 @@ export function PaymentOverdueBlocker({ paymentFailedAt }: PaymentOverdueBlocker
             disabled={isLoading}
           >
             <CreditCard className="h-4 w-4" />
-            Regularizar Pagamento
+            Renovar Mensalidade
           </Button>
 
           <Button
@@ -65,7 +65,7 @@ export function PaymentOverdueBlocker({ paymentFailedAt }: PaymentOverdueBlocker
             onClick={() => navigate('/settings?tab=billing')}
           >
             <Settings className="h-4 w-4" />
-            Ver Planos
+            Ver Faturação
           </Button>
         </div>
       </div>

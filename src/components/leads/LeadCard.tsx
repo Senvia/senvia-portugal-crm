@@ -223,13 +223,13 @@ export function LeadCard({
         )}
         
         {/* Tipologia badge for Telecom */}
-        {showEnergy && lead.tipologia && (
-          <Badge 
-            variant="outline" 
+        {showEnergy && lead.tipologia && TIPOLOGIA_STYLES[lead.tipologia] && (
+          <Badge
+            variant="outline"
             className={cn("mt-2 gap-1", TIPOLOGIA_STYLES[lead.tipologia].color, TIPOLOGIA_STYLES[lead.tipologia].bgClass)}
           >
             <span>{TIPOLOGIA_STYLES[lead.tipologia].emoji}</span>
-            {TIPOLOGIA_LABELS[lead.tipologia]}
+            {TIPOLOGIA_LABELS[lead.tipologia] || lead.tipologia}
           </Badge>
         )}
         

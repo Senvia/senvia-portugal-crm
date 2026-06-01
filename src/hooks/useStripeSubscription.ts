@@ -5,7 +5,7 @@ import { useToast } from '@/hooks/use-toast';
 interface SubscriptionStatus {
   subscribed: boolean;
   plan_id: string | null;
-  product_id: string | null;
+  product_id?: string | null;
   subscription_end: string | null;
   billing_exempt?: boolean;
   on_trial?: boolean;
@@ -14,6 +14,13 @@ interface SubscriptionStatus {
   days_remaining?: number;
   payment_failed_at?: string;
   payment_overdue?: boolean;
+  /** Filled the moment the org makes its first Stripe payment. Once set, this org is never treated as a trial again. */
+  first_paid_at?: string | null;
+  /** End of the current paid Stripe period. After this + grace, plan_expired = true. */
+  current_period_end?: string | null;
+  /** True when a paying customer is past their renewal grace window. The plan-renewal blocker is keyed off this. */
+  plan_expired?: boolean;
+  status?: string;
 }
 
 export function useStripeSubscription() {

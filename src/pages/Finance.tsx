@@ -33,21 +33,21 @@ import { DateRange } from "react-day-picker";
 import { InvoicesContent } from "@/components/finance/InvoicesContent";
 import InternalRequests from "@/pages/finance/InternalRequests";
 import { BankAccountsTab } from "@/components/finance/BankAccountsTab";
-import { CommissionsTab } from "@/components/finance/CommissionsTab";
+import { TeamCommissionsTab } from "@/components/finance/TeamCommissionsTab";
 import { CommissionAnalysisTab } from "@/components/finance/CommissionAnalysisTab";
+import { MinhasComissoesModal } from "@/components/finance/MinhasComissoesModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEffect, useState } from "react";
-import { useSalesCommissions } from "@/hooks/useSalesCommissions";
-import { useStripeCommissions } from "@/hooks/useStripeCommissions";
-import { CommissionsPayableModal } from "@/components/finance/CommissionsPayableModal";
+import { useMyCommissions } from "@/hooks/useSalesApproval";
+import { useTeamCommissions } from "@/hooks/useTeamCommissions";
 import { RenewalAlertsWidget } from "@/components/finance/RenewalAlertsWidget";
 import { hasPerfect2GetherAccess } from "@/lib/perfect2gether";
 import { usePermissions } from "@/hooks/usePermissions";
+import { startOfMonth } from "date-fns";
 
 export default function Finance() {
   const { organization, organizations } = useAuth();
   const { isAdmin, isSuperAdmin } = usePermissions();
-  const isTelecom = organization?.niche === "telecom";
   const salesSettings = (organization?.sales_settings as { commissions_enabled?: boolean }) || {};
   const commissionsEnabled = !!salesSettings.commissions_enabled;
   const canViewCommissionAnalysis = hasPerfect2GetherAccess({
@@ -55,14 +55,34 @@ export default function Finance() {
     memberships: organizations,
     isSuperAdmin,
   }) && isAdmin;
-  const validTabs = isTelecom
-    ? ["outros", "comissoes", ...(canViewCommissionAnalysis ? ["analise-comissoes"] : [])]
-    : ["resumo", "contas", "faturas", "outros", ...(canViewCommissionAnalysis ? ["analise-comissoes"] : [])];
+  const validTabs = [
+    "resumo",
+    "contas",
+    "faturas",
+    "outros",
+    "comissoes",
+    ...(canViewCommissionAnalysis ? ["analise-comissoes"] : []),
+  ];
   const [dateRange, setDateRange] = usePersistedState<DateRange | undefined>("finance-daterange-v1", undefined);
-  const [activeTab, setActiveTab] = usePersistedState("finance-tab-v1", isTelecom ? "outros" : "resumo");
-  const [commissionsModalOpen, setCommissionsModalOpen] = useState(false);
-  const { data: commissionsData } = useSalesCommissions();
-  const { data: stripeCommissionsData } = useStripeCommissions();
+  const [activeTab, setActiveTab] = usePersistedState("finance-tab-v1", "resumo");
+  const [myCommissionsModalOpen, setMyCommissionsModalOpen] = useState(false);
+  const { data: myCommissions } = useMyCommissions();
+
+  // Current-month team commissions, for the admin Comissões card on Resumo.
+  const currentMonthIso = format(startOfMonth(new Date()), "yyyy-MM-dd");
+  const { data: teamCommissions } = useTeamCommissions(currentMonthIso);
+  const teamCommissionTotal = teamCommissions?.totalCommission ?? 0;
+  const teamSalesCount = teamCommissions?.salesCount ?? 0;
+
+  // Personal commission totals for the "Minhas Comissões" card (visible to all users)
+  const myPendingTotal = (myCommissions || []).reduce((sum, s) => {
+    const isPending = s.status === 'pending' || s.status === 'in_progress';
+    return isPending ? sum + (Number(s.comissao) || 0) : sum;
+  }, 0);
+  const myConfirmedTotal = (myCommissions || []).reduce((sum, s) => {
+    const isConfirmed = s.status === 'delivered' || s.status === 'fulfilled';
+    return isConfirmed ? sum + (Number(s.comissao) || 0) : sum;
+  }, 0);
 
   useEffect(() => {
     if (organization && !validTabs.includes(activeTab)) {
@@ -89,6 +109,48 @@ export default function Finance() {
 
   const hasFilters = dateRange?.from !== undefined;
 
+  // Non-admin users only see their personal commissions card. The rest of the
+  // Finance module (Resumo, Contas, Faturas, Outros, Comissões da equipa) is
+  // restricted to admins.
+  if (!isAdmin) {
+    return (
+      <div className="space-y-6 p-4 pb-20 md:p-6 md:pb-6 lg:p-8">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Financeiro</h1>
+          <p className="text-sm text-muted-foreground">As tuas comissões.</p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
+          <Card
+            className="group cursor-pointer transition-colors hover:bg-muted/50"
+            onClick={() => setMyCommissionsModalOpen(true)}
+          >
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">As Minhas Comissões</CardTitle>
+              <div className="flex items-center gap-1">
+                <Percent className="h-4 w-4 text-emerald-500" />
+                <ExternalLink className="h-3 w-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-xl font-bold text-emerald-600 md:text-2xl">
+                {formatCurrency(myConfirmedTotal)}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Confirmadas
+                {myPendingTotal > 0 && (
+                  <span className="ml-1">· {formatCurrency(myPendingTotal)} pendentes</span>
+                )}
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+
+        <MinhasComissoesModal open={myCommissionsModalOpen} onOpenChange={setMyCommissionsModalOpen} />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 p-4 pb-20 md:p-6 md:pb-6 lg:p-8">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -99,12 +161,12 @@ export default function Finance() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList>
-          {!isTelecom && <TabsTrigger value="resumo">Resumo</TabsTrigger>}
-          {!isTelecom && <TabsTrigger value="contas">Contas</TabsTrigger>}
-          {!isTelecom && <TabsTrigger value="faturas">Faturas</TabsTrigger>}
+        <TabsList className="flex-wrap h-auto">
+          <TabsTrigger value="resumo">Resumo</TabsTrigger>
+          <TabsTrigger value="contas">Contas</TabsTrigger>
+          <TabsTrigger value="faturas">Faturas</TabsTrigger>
           <TabsTrigger value="outros">Outros</TabsTrigger>
-          {isTelecom && <TabsTrigger value="comissoes">Comissões</TabsTrigger>}
+          <TabsTrigger value="comissoes">Comissões</TabsTrigger>
           {canViewCommissionAnalysis && <TabsTrigger value="analise-comissoes">Análise de Comissões</TabsTrigger>}
         </TabsList>
 
@@ -258,13 +320,37 @@ export default function Finance() {
               </CardContent>
             </Card>
 
-            {commissionsEnabled && (
+            <Card
+              className="group cursor-pointer transition-colors hover:bg-muted/50"
+              onClick={() => setMyCommissionsModalOpen(true)}
+            >
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">As Minhas Comissões</CardTitle>
+                <div className="flex items-center gap-1">
+                  <Percent className="h-4 w-4 text-emerald-500" />
+                  <ExternalLink className="h-3 w-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-xl font-bold text-emerald-600 md:text-2xl">
+                  {formatCurrency(myConfirmedTotal)}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Confirmadas
+                  {myPendingTotal > 0 && (
+                    <span className="ml-1">· {formatCurrency(myPendingTotal)} pendentes</span>
+                  )}
+                </p>
+              </CardContent>
+            </Card>
+
+            {isAdmin && (
               <Card
                 className="group cursor-pointer transition-colors hover:bg-muted/50"
-                onClick={() => setCommissionsModalOpen(true)}
+                onClick={() => setActiveTab("comissoes")}
               >
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Comissões a Pagar</CardTitle>
+                  <CardTitle className="text-sm font-medium">Comissões</CardTitle>
                   <div className="flex items-center gap-1">
                     <Percent className="h-4 w-4 text-primary" />
                     <ExternalLink className="h-3 w-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
@@ -272,18 +358,19 @@ export default function Finance() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-xl font-bold text-primary md:text-2xl">
-                    {formatCurrency(
-                      (commissionsData?.reduce((sum, commission) => sum + commission.totalCommission, 0) || 0)
-                      + (stripeCommissionsData?.grandTotal || 0)
-                    )}
+                    {formatCurrency(teamCommissionTotal)}
                   </div>
-                  <p className="text-xs text-muted-foreground">Total do período</p>
+                  <p className="text-xs text-muted-foreground">
+                    {teamSalesCount > 0
+                      ? `${teamSalesCount} venda(s) entregue(s) este mês`
+                      : "Equipa · este mês"}
+                  </p>
                 </CardContent>
               </Card>
             )}
           </div>
 
-          <CommissionsPayableModal open={commissionsModalOpen} onOpenChange={setCommissionsModalOpen} />
+          <MinhasComissoesModal open={myCommissionsModalOpen} onOpenChange={setMyCommissionsModalOpen} />
 
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start">
             <Card>
@@ -394,11 +481,9 @@ export default function Finance() {
           <InternalRequests />
         </TabsContent>
 
-        {isTelecom && (
-          <TabsContent value="comissoes" className="mt-0">
-            <CommissionsTab />
-          </TabsContent>
-        )}
+        <TabsContent value="comissoes" className="mt-0">
+          <TeamCommissionsTab />
+        </TabsContent>
 
         {canViewCommissionAnalysis && (
           <TabsContent value="analise-comissoes" className="mt-0">

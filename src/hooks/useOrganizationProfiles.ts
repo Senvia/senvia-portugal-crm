@@ -38,6 +38,7 @@ export const MODULE_SCHEMA: Record<string, ModuleSchema> = {
     subareas: {
       kanban: { label: 'Kanban / Lista', actions: ['view', 'add', 'edit', 'delete', 'assign'] },
       export: { label: 'Importar / Exportar', actions: ['export', 'import'] },
+      imports: { label: 'Histórico de Importações', actions: ['view', 'delete'] },
     },
   },
   clients: {
