@@ -18,6 +18,8 @@ import { useClients } from '@/hooks/useClients';
 import { useCreateProposalCpesBatch } from '@/hooks/useProposalCpes';
 import { useActiveProducts } from '@/hooks/useProducts';
 import { CreateClientModal } from '@/components/clients/CreateClientModal';
+import { CreateSaleModal } from '@/components/sales/CreateSaleModal';
+import { useNavigate } from 'react-router-dom';
 import { ProposalCpeSelector, type ProposalCpeDraft } from '@/components/proposals/ProposalCpeSelector';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCommissionMatrix } from '@/hooks/useCommissionMatrix';
@@ -87,6 +89,11 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
   
   const [isCreateClientOpen, setIsCreateClientOpen] = useState(false);
   const [attempted, setAttempted] = useState(false);
+
+  // Proposta criada já como "Aceite" → abre o modal de venda
+  const navigate = useNavigate();
+  const [showSaleModal, setShowSaleModal] = useState(false);
+  const [acceptedProposal, setAcceptedProposal] = useState<Proposal | null>(null);
 
   // validation moved after totalKwp declaration
 
@@ -314,7 +321,14 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
       status: status,
       notes: notes.trim() || undefined,
       proposal_date: proposalDate,
-      products: [],
+      products: !isTelecom
+        ? selectedProducts.map((p) => ({
+            product_id: p.product_id,
+            quantity: p.quantity,
+            unit_price: p.unit_price,
+            total: getProductTotal(p),
+          }))
+        : [],
       proposal_type: isTelecom ? proposalType : undefined,
       negotiation_type: isTelecom ? negotiationType : undefined,
       kwp: proposalType === 'servicos' ? (totalKwp || undefined) : undefined,
@@ -346,6 +360,9 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
             );
           }
         
+        // Captura antes do reset do formulário
+        const wasAccepted = status === 'accepted';
+
         setSelectedClientId(null);
         setNotes('');
         setProposalDate(new Date().toISOString().split('T')[0]);
@@ -358,9 +375,15 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
         setServicosProdutos([]);
         setServicosDetails({});
         setSelectedProducts([]);
-        
+
         onOpenChange(false);
         onSuccess?.(createdProposal as Proposal);
+
+        // Se foi criada como "Aceite", abre o modal de venda já pré-preenchido
+        if (wasAccepted && createdProposal?.id) {
+          setAcceptedProposal(createdProposal as Proposal);
+          setShowSaleModal(true);
+        }
       },
     });
   };
@@ -784,6 +807,27 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
         onOpenChange={setIsCreateClientOpen}
         onCreated={handleClientCreated}
       />
+
+      {acceptedProposal && (
+        <CreateSaleModal
+          open={showSaleModal}
+          onOpenChange={(o) => {
+            setShowSaleModal(o);
+            if (!o) setAcceptedProposal(null);
+          }}
+          prefillProposal={acceptedProposal}
+          prefillClientId={acceptedProposal.client_id}
+          prefillClient={(() => {
+            const c = clients.find((cl) => cl.id === acceptedProposal.client_id);
+            return c ? { id: c.id, name: c.name, email: c.email, nif: c.nif, code: c.code } : null;
+          })()}
+          onSaleCreated={() => {
+            setShowSaleModal(false);
+            setAcceptedProposal(null);
+            navigate('/sales');
+          }}
+        />
+      )}
     </>
   );
 }
