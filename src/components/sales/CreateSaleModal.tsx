@@ -714,7 +714,7 @@ export function CreateSaleModal({
           servicos_produtos: servicosProdutos.length > 0 ? servicosProdutos : undefined,
           servicos_details: Object.keys(servicosDetails).length > 0 ? servicosDetails : undefined,
         } : {}),
-        edp_proposal_number: edpProposalNumber.trim() || undefined,
+        ...(showEnergy && saleFields?.edp_proposal_number?.visible ? { edp_proposal_number: edpProposalNumber.trim() || undefined } : {}),
         activation_date: activationDate ? format(activationDate, 'yyyy-MM-dd') : undefined,
         has_recurring: hasRecurring || false,
         recurring_value: recurringValue,
@@ -1470,7 +1470,7 @@ export function CreateSaleModal({
                   </Card>
 
                   {/* EDP Proposal Number */}
-                  {saleFields?.edp_proposal_number?.visible && (<Card>
+                  {showEnergy && saleFields?.edp_proposal_number?.visible && (<Card>
                     <CardHeader className="pb-2 p-4">
                       <CardTitle className="text-sm font-medium text-muted-foreground">
                         {saleFields.edp_proposal_number.label}{saleFields.edp_proposal_number.required ? ' *' : ''}

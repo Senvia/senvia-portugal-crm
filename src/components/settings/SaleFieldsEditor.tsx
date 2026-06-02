@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Loader2, DollarSign, CreditCard, Calendar, MessageSquare, Save, Eye, EyeOff, ShoppingCart, FileText } from 'lucide-react';
 import { useSaleFieldsSettings, useUpdateSaleFieldsSettings } from '@/hooks/useSaleFieldsSettings';
 import { SaleFieldKey, SaleFieldsSettings, DEFAULT_SALE_FIELDS_SETTINGS, SALE_FIELD_ORDER } from '@/types/field-settings';
+import { useAuth } from '@/contexts/AuthContext';
+import { useModules } from '@/hooks/useModules';
 
 const FIELD_ICONS: Record<SaleFieldKey, React.ReactNode> = {
   value: <DollarSign className="h-4 w-4" />,
@@ -19,6 +21,11 @@ const FIELD_ICONS: Record<SaleFieldKey, React.ReactNode> = {
 export function SaleFieldsEditor() {
   const { data: savedSettings, isLoading } = useSaleFieldsSettings();
   const updateSettings = useUpdateSaleFieldsSettings();
+  const { organization } = useAuth();
+  const { modules } = useModules();
+  const showEnergy = organization?.niche === 'telecom' && modules.energy;
+  // EDP proposal number is energy-specific — only configurable for energy orgs
+  const fieldOrder = showEnergy ? SALE_FIELD_ORDER : SALE_FIELD_ORDER.filter((k) => k !== 'edp_proposal_number');
   const [settings, setSettings] = useState<SaleFieldsSettings>(DEFAULT_SALE_FIELDS_SETTINGS);
   const [hasChanges, setHasChanges] = useState(false);
 
@@ -55,7 +62,7 @@ export function SaleFieldsEditor() {
         </div>
 
         <div className="space-y-3">
-          {SALE_FIELD_ORDER.map((fieldKey) => {
+          {fieldOrder.map((fieldKey) => {
             const field = settings[fieldKey] ?? DEFAULT_SALE_FIELDS_SETTINGS[fieldKey];
             return (
               <div key={fieldKey} className={`flex flex-col sm:flex-row sm:items-center gap-3 p-3 rounded-lg border ${field.visible ? 'bg-card' : 'bg-muted/30'}`}>
