@@ -175,7 +175,7 @@ export function useCreateProposal() {
           proposal_date: data.proposal_date || new Date().toISOString().split('T')[0],
           created_by: user?.id,
           // Campos por tipo
-          proposal_type: data.proposal_type || 'energia',
+          proposal_type: data.proposal_type || null,
           negotiation_type: data.negotiation_type || null,
           consumo_anual: data.consumo_anual || null,
           margem: data.margem || null,
