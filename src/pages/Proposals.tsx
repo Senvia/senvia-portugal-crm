@@ -212,7 +212,7 @@ export default function Proposals() {
                       <Badge className={cn('text-xs', PROPOSAL_STATUS_COLORS[proposal.status])}>
                         {PROPOSAL_STATUS_LABELS[proposal.status]}
                       </Badge>
-                      {proposal.proposal_type && (
+                      {isTelecom && proposal.proposal_type && (
                         <Badge className={cn('text-xs', proposal.proposal_type === 'energia' ? 'bg-indigo-500/20 text-indigo-400' : 'bg-violet-500/20 text-violet-400')}>
                           {proposal.proposal_type === 'energia' ? <Zap className="h-3 w-3 mr-1" /> : <Wrench className="h-3 w-3 mr-1" />}
                           {PROPOSAL_TYPE_LABELS[proposal.proposal_type]}

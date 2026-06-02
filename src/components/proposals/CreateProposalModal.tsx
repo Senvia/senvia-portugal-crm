@@ -315,7 +315,7 @@ export function CreateProposalModal({ client, open, onOpenChange, onSuccess, pre
       notes: notes.trim() || undefined,
       proposal_date: proposalDate,
       products: [],
-      proposal_type: proposalType,
+      proposal_type: isTelecom ? proposalType : undefined,
       negotiation_type: isTelecom ? negotiationType : undefined,
       kwp: proposalType === 'servicos' ? (totalKwp || undefined) : undefined,
       modelo_servico: proposalType === 'servicos' ? modeloServico : undefined,
