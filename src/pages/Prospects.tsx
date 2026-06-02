@@ -11,7 +11,7 @@ import { useProspects, useProspectSalespeople } from "@/hooks/useProspects";
 import { useModules } from "@/hooks/useModules";
 import { mapProspectsForExport, exportToCsv, exportToExcel } from "@/lib/export";
 import { getProspectCom, getProspectSegment } from "@/lib/prospects/segment";
-import { normalizeString } from "@/lib/utils";
+import { matchesSearch } from "@/lib/utils";
 import { isPerfect2GetherOrg } from "@/lib/perfect2gether";
 import { ImportProspectsDialog } from "@/components/prospects/ImportProspectsDialog";
 import { DistributeProspectsDialog } from "@/components/prospects/DistributeProspectsDialog";
@@ -90,15 +90,15 @@ export default function Prospects() {
 
   const filteredProspects = useMemo(() => {
     return prospects.filter((prospect) => {
-      const query = normalizeString(searchQuery);
       const prospectCom = getProspectCom(prospect);
-      const matchesSearch =
-        !query ||
-        normalizeString(prospect.company_name).includes(query) ||
-        normalizeString(prospect.nif || "").includes(query) ||
-        normalizeString(prospect.cpe || "").includes(query) ||
-        normalizeString(prospect.email || "").includes(query) ||
-        normalizeString(prospect.phone || "").includes(query);
+      const matchesSearchTerm = matchesSearch(
+        searchQuery,
+        prospect.company_name,
+        prospect.nif,
+        prospect.cpe,
+        prospect.email,
+        prospect.phone,
+      );
 
       const matchesSalesperson =
         salespersonFilter === "all" ||
@@ -107,7 +107,7 @@ export default function Prospects() {
 
       const matchesCom = comFilter === "all" || prospectCom === comFilter;
 
-      return matchesSearch && matchesSalesperson && matchesCom;
+      return matchesSearchTerm && matchesSalesperson && matchesCom;
     });
   }, [comFilter, prospects, salespersonFilter, searchQuery]);
 

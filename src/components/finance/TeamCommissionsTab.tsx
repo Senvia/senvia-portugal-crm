@@ -13,7 +13,7 @@ import {
 import { ChevronDown, ChevronRight, FileX, Search, Wallet } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatCurrency } from '@/lib/format';
-import { normalizeString } from '@/lib/utils';
+import { matchesSearch } from '@/lib/utils';
 import { useTeamFilter } from '@/hooks/useTeamFilter';
 import { TeamMemberFilter } from '@/components/dashboard/TeamMemberFilter';
 import { useTeamCommissions } from '@/hooks/useTeamCommissions';
@@ -52,8 +52,7 @@ export function TeamCommissionsTab() {
   const totalCommission = data?.totalCommission || 0;
   const totalSales = data?.salesCount || 0;
 
-  const normalizedSearch = normalizeString(searchTerm);
-  const filtered = commercials.filter(c => normalizeString(c.name).includes(normalizedSearch));
+  const filtered = commercials.filter(c => matchesSearch(searchTerm, c.name));
 
   if (isLoading) {
     return (

@@ -16,7 +16,7 @@ import { TeamMemberFilter } from "@/components/dashboard/TeamMemberFilter";
 import { ImportChargebacksDialog } from "@/components/finance/ImportChargebacksDialog";
 import { useCommissionAnalysis, useSyncFileToSystem, type CommissionAnalysisCommercial, type FileDataRow, type ComparisonRow, type SyncFileToSystemItem } from "@/hooks/useCommissionAnalysis";
 import { useTeamFilter } from "@/hooks/useTeamFilter";
-import { normalizeString } from "@/lib/utils";
+import { matchesSearch } from "@/lib/utils";
 import { NEGOTIATION_TYPE_LABELS, type NegotiationType } from "@/types/proposals";
 import { toast } from "@/hooks/use-toast";
 
@@ -170,10 +170,9 @@ export function CommissionAnalysisTab() {
   const syncMutation = useSyncFileToSystem();
 
   const filteredCommercials = useMemo(() => {
-    const normalizedSearch = normalizeString(searchTerm);
-    if (!normalizedSearch) return data.commercials;
+    if (!searchTerm.trim()) return data.commercials;
 
-    return data.commercials.filter((item) => normalizeString(item.name).includes(normalizedSearch));
+    return data.commercials.filter((item) => matchesSearch(searchTerm, item.name));
   }, [data.commercials, searchTerm]);
 
   // Collect all discrepant rows that can be synced

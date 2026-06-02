@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 
 import { useSearchParams, useLocation } from "react-router-dom";
 import { usePersistedState } from "@/hooks/usePersistedState";
+import { matchesSearch } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQueryClient } from "@tanstack/react-query";
 import { SEO } from "@/components/SEO";
@@ -65,16 +66,17 @@ export default function Clients() {
     
     return clients.filter((client) => {
       if (search.trim()) {
-        const searchLower = search.toLowerCase();
-        const matchesSearch = 
-          client.name.toLowerCase().includes(searchLower) ||
-          client.email?.toLowerCase().includes(searchLower) ||
-          client.phone?.includes(search) ||
-          client.company?.toLowerCase().includes(searchLower) ||
-          client.code?.toLowerCase().includes(searchLower) ||
-          client.nif?.includes(search);
-        
-        if (!matchesSearch) return false;
+        const matchesSearchTerm = matchesSearch(
+          search,
+          client.name,
+          client.email,
+          client.phone,
+          client.company,
+          client.code,
+          client.nif,
+        );
+
+        if (!matchesSearchTerm) return false;
       }
 
       if (filters.status !== 'all' && client.status !== filters.status) {

@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { usePersistedState } from "@/hooks/usePersistedState";
+import { matchesSearch } from "@/lib/utils";
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -64,10 +65,7 @@ export default function Expenses() {
     return expenses.filter((expense) => {
       // Search
       if (search) {
-        const searchLower = search.toLowerCase();
-        const matchDesc = expense.description.toLowerCase().includes(searchLower);
-        const matchCat = expense.category?.name.toLowerCase().includes(searchLower);
-        if (!matchDesc && !matchCat) return false;
+        if (!matchesSearch(search, expense.description, expense.category?.name)) return false;
       }
 
       // Date range

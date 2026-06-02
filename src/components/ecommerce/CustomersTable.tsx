@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { matchesSearch } from "@/lib/utils";
 import { format } from "date-fns";
 import { pt } from "date-fns/locale";
 import { Users, Plus, Edit, Trash2, Mail, Phone } from "lucide-react";
@@ -39,14 +40,9 @@ export function CustomersTable() {
   const [editCustomer, setEditCustomer] = useState<Customer | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
-  const filteredCustomers = customers?.filter((customer) => {
-    const searchLower = search.toLowerCase();
-    return (
-      customer.name.toLowerCase().includes(searchLower) ||
-      customer.email.toLowerCase().includes(searchLower) ||
-      customer.phone?.toLowerCase().includes(searchLower)
-    );
-  });
+  const filteredCustomers = customers?.filter((customer) =>
+    matchesSearch(search, customer.name, customer.email, customer.phone)
+  );
 
   const handleDelete = () => {
     if (deleteId) {

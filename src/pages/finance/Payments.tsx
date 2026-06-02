@@ -19,6 +19,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useState, useMemo, useEffect } from "react";
 import { usePersistedState } from "@/hooks/usePersistedState";
+import { matchesSearch } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { PAYMENT_METHOD_LABELS, PAYMENT_METHODS, PAYMENT_RECORD_STATUS_LABELS, PaymentMethod } from "@/types/sales";
 import { exportToExcel } from "@/lib/export";
@@ -114,12 +115,13 @@ export default function FinancePayments() {
       } else if (statusFilter !== "all" && payment.status !== statusFilter) return false;
       if (methodFilter !== "all" && payment.payment_method !== methodFilter) return false;
       if (searchTerm) {
-        const search = searchTerm.toLowerCase();
-        const clientName = payment.client_name?.toLowerCase() || '';
-        const leadName = payment.lead_name?.toLowerCase() || '';
-        const saleCode = payment.sale.code?.toLowerCase() || '';
-        const invoiceRef = payment.invoice_reference?.toLowerCase() || '';
-        return clientName.includes(search) || leadName.includes(search) || saleCode.includes(search) || invoiceRef.includes(search);
+        return matchesSearch(
+          searchTerm,
+          payment.client_name,
+          payment.lead_name,
+          payment.sale.code,
+          payment.invoice_reference,
+        );
       }
       return true;
     });

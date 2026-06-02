@@ -1,3 +1,4 @@
+import { matchesSearch } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -150,10 +151,7 @@ export function InvoicesContent() {
         if (dateRange.to && docDate > endOfDay(dateRange.to)) return false;
       }
       if (searchTerm) {
-        const search = searchTerm.toLowerCase();
-        const ref = (doc.reference || '').toLowerCase();
-        const client = (doc.client_name || '').toLowerCase();
-        return ref.includes(search) || client.includes(search);
+        return matchesSearch(searchTerm, doc.reference, doc.client_name);
       }
       return true;
     });

@@ -39,7 +39,7 @@ import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search, Users, Loader2, X, Plus, LayoutGrid, List, Zap, BarChart3, Upload, History } from "lucide-react";
 import { format, endOfDay, startOfDay } from "date-fns";
-import { normalizeString } from "@/lib/utils";
+import { matchesSearch } from "@/lib/utils";
 import { mapLeadsForExport, exportToCsv, exportToExcel } from "@/lib/export";
 import { toast } from "sonner";
 import type { Lead, LeadTemperature, LeadTipologia } from "@/types";
@@ -156,16 +156,12 @@ export default function Leads() {
   const hasActiveFilters = searchQuery || statusFilter.length > 0 || dateRange.from || dateRange.to;
 
   const filteredLeads = useMemo(() => {
-    const query = normalizeString(searchQuery);
     const fromDate = dateRange.from ? startOfDay(dateRange.from) : null;
     const toDate = dateRange.to ? endOfDay(dateRange.to) : null;
 
     return leads.filter(lead => {
-      // 1. Pesquisa accent-insensitive
-      const matchesSearch = query === "" ||
-        normalizeString(lead.name).includes(query) ||
-        normalizeString(lead.email).includes(query) ||
-        lead.phone.includes(searchQuery);
+      // 1. Pesquisa accent-insensitive e por tokens fora de ordem
+      const matchesSearchTerm = matchesSearch(searchQuery, lead.name, lead.email, lead.phone);
 
       // 2. Filtro de status
       const matchesStatus = statusFilter.length === 0 ||
@@ -179,7 +175,7 @@ export default function Leads() {
 
       const matchesTipologia = tipologiaFilter === 'all' || lead.tipologia === tipologiaFilter;
 
-      return matchesSearch && matchesStatus && matchesDate && matchesTipologia;
+      return matchesSearchTerm && matchesStatus && matchesDate && matchesTipologia;
     });
   }, [leads, searchQuery, statusFilter, dateRange, tipologiaFilter]);
 

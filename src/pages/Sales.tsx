@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { usePersistedState } from "@/hooks/usePersistedState";
+import { matchesSearch } from "@/lib/utils";
 import { ShoppingBag, Search, TrendingUp, Package, CheckCircle, Plus, Zap, Download, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -92,16 +93,17 @@ export default function Sales() {
         return matchesStatus && matchesType && matchesDate;
       }
 
-      const searchLower = search.toLowerCase();
-      const matchesSearch =
-        sale.lead?.name?.toLowerCase().includes(searchLower) ||
-        sale.lead?.email?.toLowerCase().includes(searchLower) ||
-        sale.client?.name?.toLowerCase().includes(searchLower) ||
-        sale.client?.code?.toLowerCase().includes(searchLower) ||
-        sale.code?.toLowerCase().includes(searchLower) ||
-        sale.notes?.toLowerCase().includes(searchLower);
+      const matchesSearchTerm = matchesSearch(
+        search,
+        sale.lead?.name,
+        sale.lead?.email,
+        sale.client?.name,
+        sale.client?.code,
+        sale.code,
+        sale.notes,
+      );
 
-      return matchesSearch && matchesStatus && matchesType && matchesDate;
+      return matchesSearchTerm && matchesStatus && matchesType && matchesDate;
     });
   }, [sales, search, statusFilter, typeFilter, dateRange, isPerfect2Gether]);
 

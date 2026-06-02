@@ -10,7 +10,7 @@ import { formatCurrency } from '@/lib/format';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { useLiveCommissions } from '@/hooks/useLiveCommissions';
-import { normalizeString } from '@/lib/utils';
+import { matchesSearch } from '@/lib/utils';
 import { useTeamFilter } from '@/hooks/useTeamFilter';
 import { TeamMemberFilter } from '@/components/dashboard/TeamMemberFilter';
 
@@ -75,9 +75,8 @@ export function CommissionsTab() {
   const globalEnergyCommission = data?.globalEnergyCommission || 0;
   const globalServicosCommission = data?.globalServicosCommission || 0;
 
-  const normalizedSearch = normalizeString(searchTerm);
   const filteredCommercials = commercials.filter(item =>
-    normalizeString(item.name).includes(normalizedSearch)
+    matchesSearch(searchTerm, item.name)
   );
 
   return (

@@ -22,7 +22,7 @@ import {
   PROPOSAL_TYPE_LABELS,
 } from '@/types/proposals';
 import type { Proposal, ProposalStatus, ProposalType } from '@/types/proposals';
-import { cn } from '@/lib/utils';
+import { cn, matchesSearch } from '@/lib/utils';
 import { format } from 'date-fns';
 import { useTelecomProposalMetrics } from '@/hooks/useTelecomProposalMetrics';
 import { pt } from 'date-fns/locale';
@@ -46,12 +46,13 @@ export default function Proposals() {
     // Hide proposals that already have a sale created (telecom)
     if (isTelecom && (proposal as any).has_sale) return false;
     
-    const searchLower = search.toLowerCase();
-    const matchesSearch = !search || 
-      proposal.client?.name?.toLowerCase().includes(searchLower) ||
-      proposal.lead?.name?.toLowerCase().includes(searchLower) ||
-      proposal.code?.toLowerCase().includes(searchLower) ||
-      proposal.notes?.toLowerCase().includes(searchLower);
+    const matchesSearchTerm = matchesSearch(
+      search,
+      proposal.client?.name,
+      proposal.lead?.name,
+      proposal.code,
+      proposal.notes,
+    );
     const matchesStatus = statusFilter === 'all' || proposal.status === statusFilter;
     const matchesType = typeFilter === 'all' || proposal.proposal_type === typeFilter;
     const proposalDate = new Date(proposal.proposal_date);
@@ -59,7 +60,7 @@ export default function Proposals() {
       proposalDate >= dateRange.from &&
       (!dateRange.to || proposalDate <= dateRange.to)
     );
-    return matchesSearch && matchesStatus && matchesType && matchesDate;
+    return matchesSearchTerm && matchesStatus && matchesType && matchesDate;
   });
 
   const formatCurrency = (value: number) => {
