@@ -65,6 +65,7 @@ export type Database = {
         Row: {
           content: string
           created_at: string
+          expires_at: string | null
           id: string
           image_url: string | null
           is_active: boolean
@@ -75,6 +76,7 @@ export type Database = {
         Insert: {
           content: string
           created_at?: string
+          expires_at?: string | null
           id?: string
           image_url?: string | null
           is_active?: boolean
@@ -85,6 +87,7 @@ export type Database = {
         Update: {
           content?: string
           created_at?: string
+          expires_at?: string | null
           id?: string
           image_url?: string | null
           is_active?: boolean
@@ -739,6 +742,7 @@ export type Database = {
           alert_7d_sent: boolean | null
           client_id: string
           comercializador: string
+          consumo_anual: number | null
           created_at: string
           equipment_type: string
           fidelizacao_end: string | null
@@ -757,6 +761,7 @@ export type Database = {
           alert_7d_sent?: boolean | null
           client_id: string
           comercializador: string
+          consumo_anual?: number | null
           created_at?: string
           equipment_type: string
           fidelizacao_end?: string | null
@@ -775,6 +780,7 @@ export type Database = {
           alert_7d_sent?: boolean | null
           client_id?: string
           comercializador?: string
+          consumo_anual?: number | null
           created_at?: string
           equipment_type?: string
           fidelizacao_end?: string | null
@@ -891,9 +897,12 @@ export type Database = {
           code: string | null
           company: string | null
           company_nif: string | null
+          conselho: string | null
           country: string | null
           created_at: string | null
+          distrito: string | null
           email: string | null
+          grupo_economico: string | null
           id: string
           lead_id: string | null
           name: string
@@ -922,9 +931,12 @@ export type Database = {
           code?: string | null
           company?: string | null
           company_nif?: string | null
+          conselho?: string | null
           country?: string | null
           created_at?: string | null
+          distrito?: string | null
           email?: string | null
+          grupo_economico?: string | null
           id?: string
           lead_id?: string | null
           name: string
@@ -953,9 +965,12 @@ export type Database = {
           code?: string | null
           company?: string | null
           company_nif?: string | null
+          conselho?: string | null
           country?: string | null
           created_at?: string | null
+          distrito?: string | null
           email?: string | null
+          grupo_economico?: string | null
           id?: string
           lead_id?: string | null
           name?: string
@@ -1693,6 +1708,7 @@ export type Database = {
           expense_date: string
           id: string
           is_recurring: boolean | null
+          next_recurrence_date: string | null
           notes: string | null
           organization_id: string
           receipt_file_url: string | null
@@ -1708,6 +1724,7 @@ export type Database = {
           expense_date: string
           id?: string
           is_recurring?: boolean | null
+          next_recurrence_date?: string | null
           notes?: string | null
           organization_id: string
           receipt_file_url?: string | null
@@ -1723,6 +1740,7 @@ export type Database = {
           expense_date?: string
           id?: string
           is_recurring?: boolean | null
+          next_recurrence_date?: string | null
           notes?: string | null
           organization_id?: string
           receipt_file_url?: string | null
@@ -2092,6 +2110,63 @@ export type Database = {
           },
         ]
       }
+      lead_imports: {
+        Row: {
+          assignee_ids: string[]
+          created_at: string
+          file_name: string | null
+          first_error: string | null
+          id: string
+          import_code: string
+          imported_by: string
+          organization_id: string
+          stage_key: string
+          total_failed: number
+          total_inserted: number
+        }
+        Insert: {
+          assignee_ids?: string[]
+          created_at?: string
+          file_name?: string | null
+          first_error?: string | null
+          id?: string
+          import_code: string
+          imported_by: string
+          organization_id: string
+          stage_key: string
+          total_failed?: number
+          total_inserted?: number
+        }
+        Update: {
+          assignee_ids?: string[]
+          created_at?: string
+          file_name?: string | null
+          first_error?: string | null
+          id?: string
+          import_code?: string
+          imported_by?: string
+          organization_id?: string
+          stage_key?: string
+          total_failed?: number
+          total_inserted?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_imports_imported_by_fkey"
+            columns: ["imported_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_imports_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       leads: {
         Row: {
           assigned_to: string | null
@@ -2105,6 +2180,7 @@ export type Database = {
           form_id: string | null
           gdpr_consent: boolean
           id: string
+          import_id: string | null
           name: string
           notes: string | null
           organization_id: string
@@ -2128,6 +2204,7 @@ export type Database = {
           form_id?: string | null
           gdpr_consent?: boolean
           id?: string
+          import_id?: string | null
           name: string
           notes?: string | null
           organization_id: string
@@ -2151,6 +2228,7 @@ export type Database = {
           form_id?: string | null
           gdpr_consent?: boolean
           id?: string
+          import_id?: string | null
           name?: string
           notes?: string | null
           organization_id?: string
@@ -2171,6 +2249,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "leads_import_id_fkey"
+            columns: ["import_id"]
+            isOneToOne: false
+            referencedRelation: "lead_imports"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "leads_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
@@ -2178,6 +2263,156 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      leads_backup_dups_20260521: {
+        Row: {
+          assigned_to: string | null
+          automation_enabled: boolean | null
+          company_name: string | null
+          company_nif: string | null
+          consumo_anual: number | null
+          created_at: string | null
+          custom_data: Json | null
+          email: string | null
+          form_id: string | null
+          gdpr_consent: boolean | null
+          id: string | null
+          import_id: string | null
+          name: string | null
+          notes: string | null
+          organization_id: string | null
+          phone: string | null
+          source: string | null
+          status: string | null
+          temperature: string | null
+          tipologia: string | null
+          updated_at: string | null
+          value: number | null
+        }
+        Insert: {
+          assigned_to?: string | null
+          automation_enabled?: boolean | null
+          company_name?: string | null
+          company_nif?: string | null
+          consumo_anual?: number | null
+          created_at?: string | null
+          custom_data?: Json | null
+          email?: string | null
+          form_id?: string | null
+          gdpr_consent?: boolean | null
+          id?: string | null
+          import_id?: string | null
+          name?: string | null
+          notes?: string | null
+          organization_id?: string | null
+          phone?: string | null
+          source?: string | null
+          status?: string | null
+          temperature?: string | null
+          tipologia?: string | null
+          updated_at?: string | null
+          value?: number | null
+        }
+        Update: {
+          assigned_to?: string | null
+          automation_enabled?: boolean | null
+          company_name?: string | null
+          company_nif?: string | null
+          consumo_anual?: number | null
+          created_at?: string | null
+          custom_data?: Json | null
+          email?: string | null
+          form_id?: string | null
+          gdpr_consent?: boolean | null
+          id?: string | null
+          import_id?: string | null
+          name?: string | null
+          notes?: string | null
+          organization_id?: string | null
+          phone?: string | null
+          source?: string | null
+          status?: string | null
+          temperature?: string | null
+          tipologia?: string | null
+          updated_at?: string | null
+          value?: number | null
+        }
+        Relationships: []
+      }
+      leads_backup_import_b10cc0c1: {
+        Row: {
+          assigned_to: string | null
+          automation_enabled: boolean | null
+          company_name: string | null
+          company_nif: string | null
+          consumo_anual: number | null
+          created_at: string | null
+          custom_data: Json | null
+          email: string | null
+          form_id: string | null
+          gdpr_consent: boolean | null
+          id: string | null
+          import_id: string | null
+          name: string | null
+          notes: string | null
+          organization_id: string | null
+          phone: string | null
+          source: string | null
+          status: string | null
+          temperature: string | null
+          tipologia: string | null
+          updated_at: string | null
+          value: number | null
+        }
+        Insert: {
+          assigned_to?: string | null
+          automation_enabled?: boolean | null
+          company_name?: string | null
+          company_nif?: string | null
+          consumo_anual?: number | null
+          created_at?: string | null
+          custom_data?: Json | null
+          email?: string | null
+          form_id?: string | null
+          gdpr_consent?: boolean | null
+          id?: string | null
+          import_id?: string | null
+          name?: string | null
+          notes?: string | null
+          organization_id?: string | null
+          phone?: string | null
+          source?: string | null
+          status?: string | null
+          temperature?: string | null
+          tipologia?: string | null
+          updated_at?: string | null
+          value?: number | null
+        }
+        Update: {
+          assigned_to?: string | null
+          automation_enabled?: boolean | null
+          company_name?: string | null
+          company_nif?: string | null
+          consumo_anual?: number | null
+          created_at?: string | null
+          custom_data?: Json | null
+          email?: string | null
+          form_id?: string | null
+          gdpr_consent?: boolean | null
+          id?: string | null
+          import_id?: string | null
+          name?: string | null
+          notes?: string | null
+          organization_id?: string | null
+          phone?: string | null
+          source?: string | null
+          status?: string | null
+          temperature?: string | null
+          tipologia?: string | null
+          updated_at?: string | null
+          value?: number | null
+        }
+        Relationships: []
       }
       marketing_contacts: {
         Row: {
@@ -2782,6 +3017,7 @@ export type Database = {
           commission_matrix: Json | null
           contact_phone: string | null
           created_at: string | null
+          current_period_end: string | null
           enabled_modules: Json | null
           fidelization_alert_days: Json | null
           fidelization_create_event: boolean | null
@@ -2789,6 +3025,7 @@ export type Database = {
           fidelization_email_enabled: boolean | null
           fidelization_event_time: string | null
           finance_email: string | null
+          first_paid_at: string | null
           form_settings: Json | null
           id: string
           integrations_enabled: Json | null
@@ -2840,6 +3077,7 @@ export type Database = {
           commission_matrix?: Json | null
           contact_phone?: string | null
           created_at?: string | null
+          current_period_end?: string | null
           enabled_modules?: Json | null
           fidelization_alert_days?: Json | null
           fidelization_create_event?: boolean | null
@@ -2847,6 +3085,7 @@ export type Database = {
           fidelization_email_enabled?: boolean | null
           fidelization_event_time?: string | null
           finance_email?: string | null
+          first_paid_at?: string | null
           form_settings?: Json | null
           id?: string
           integrations_enabled?: Json | null
@@ -2898,6 +3137,7 @@ export type Database = {
           commission_matrix?: Json | null
           contact_phone?: string | null
           created_at?: string | null
+          current_period_end?: string | null
           enabled_modules?: Json | null
           fidelization_alert_days?: Json | null
           fidelization_create_event?: boolean | null
@@ -2905,6 +3145,7 @@ export type Database = {
           fidelization_email_enabled?: boolean | null
           fidelization_event_time?: string | null
           finance_email?: string | null
+          first_paid_at?: string | null
           form_settings?: Json | null
           id?: string
           integrations_enabled?: Json | null
@@ -3148,6 +3389,8 @@ export type Database = {
         Row: {
           category_id: string | null
           code: string | null
+          commission_renewal_value: number | null
+          commission_value: number | null
           compare_at_price: number | null
           created_at: string | null
           description: string | null
@@ -3176,6 +3419,8 @@ export type Database = {
         Insert: {
           category_id?: string | null
           code?: string | null
+          commission_renewal_value?: number | null
+          commission_value?: number | null
           compare_at_price?: number | null
           created_at?: string | null
           description?: string | null
@@ -3204,6 +3449,8 @@ export type Database = {
         Update: {
           category_id?: string | null
           code?: string | null
+          commission_renewal_value?: number | null
+          commission_value?: number | null
           compare_at_price?: number | null
           created_at?: string | null
           description?: string | null
@@ -4114,6 +4361,8 @@ export type Database = {
         Row: {
           activation_date: string | null
           anos_contrato: number | null
+          approved_at: string | null
+          approved_by: string | null
           client_id: string | null
           client_org_id: string | null
           code: string | null
@@ -4161,6 +4410,8 @@ export type Database = {
         Insert: {
           activation_date?: string | null
           anos_contrato?: number | null
+          approved_at?: string | null
+          approved_by?: string | null
           client_id?: string | null
           client_org_id?: string | null
           code?: string | null
@@ -4208,6 +4459,8 @@ export type Database = {
         Update: {
           activation_date?: string | null
           anos_contrato?: number | null
+          approved_at?: string | null
+          approved_by?: string | null
           client_id?: string | null
           client_org_id?: string | null
           code?: string | null
@@ -4606,6 +4859,7 @@ export type Database = {
         Args: { _bank_account_id: string; _transaction_date: string }
         Returns: number
       }
+      compute_sale_commission: { Args: { p_sale_id: string }; Returns: number }
       create_organization_for_current_user:
         | { Args: { _name: string; _slug: string }; Returns: string }
         | {
@@ -4683,6 +4937,10 @@ export type Database = {
           org_slug: string
           public_key: string
         }[]
+      }
+      get_next_round_robin_assignee: {
+        Args: { p_exclude_admins?: boolean; p_org_id: string }
+        Returns: string
       }
       get_org_by_public_key: { Args: { _public_key: string }; Returns: string }
       get_org_name_by_invite_token: {
@@ -4781,6 +5039,7 @@ export type Database = {
               unmatched_rows: number
             }[]
           }
+      import_leads_bulk: { Args: { p_leads: Json }; Returns: Json }
       is_org_admin: {
         Args: { _org_id: string; _user_id: string }
         Returns: boolean
@@ -4807,9 +5066,12 @@ export type Database = {
           code: string | null
           company: string | null
           company_nif: string | null
+          conselho: string | null
           country: string | null
           created_at: string | null
+          distrito: string | null
           email: string | null
+          grupo_economico: string | null
           id: string
           lead_id: string | null
           name: string
@@ -4918,6 +5180,7 @@ export type Database = {
           form_id: string | null
           gdpr_consent: boolean
           id: string
+          import_id: string | null
           name: string
           notes: string | null
           organization_id: string
@@ -4994,6 +5257,8 @@ export type Database = {
         Returns: {
           activation_date: string | null
           anos_contrato: number | null
+          approved_at: string | null
+          approved_by: string | null
           client_id: string | null
           client_org_id: string | null
           code: string | null
