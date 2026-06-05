@@ -39,6 +39,7 @@
         "@radix-ui/react-tooltip": "^1.2.7",
         "@supabase/supabase-js": "^2.49.8",
         "@tanstack/react-query": "^5.90.16",
+        "@tanstack/react-virtual": "^3.13.25",
         "@tiptap/extension-link": "^3.16.0",
         "@tiptap/extension-placeholder": "^3.16.0",
         "@tiptap/react": "^3.16.0",
@@ -404,6 +405,10 @@
     "@tanstack/query-core": ["@tanstack/query-core@5.90.16", "", {}, "sha512-MvtWckSVufs/ja463/K4PyJeqT+HMlJWtw6PrCpywznd2NSgO3m4KwO9RqbFqGg6iDE8vVMFWMeQI4Io3eEYww=="],
 
     "@tanstack/react-query": ["@tanstack/react-query@5.90.16", "", { "dependencies": { "@tanstack/query-core": "5.90.16" }, "peerDependencies": { "react": "^18 || ^19" } }, "sha512-bpMGOmV4OPmif7TNMteU/Ehf/hoC0Kf98PDc0F4BZkFrEapRMEqI/V6YS0lyzwSV6PQpY1y4xxArUIfBW5LVxQ=="],
+
+    "@tanstack/react-virtual": ["@tanstack/react-virtual@3.14.2", "https://europe-west1-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@tanstack/react-virtual/-/react-virtual-3.14.2.tgz", { "dependencies": { "@tanstack/virtual-core": "3.17.0" }, "peerDependencies": { "react": "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0", "react-dom": "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0" } }, "sha512-IpWnmCLvuymRfeeLNVXIzNEYBFLpd3drVIS91sqV78VTZFyldlChkOocZRCPp1B+Wnk09bcLNme8WaMU/9/9bQ=="],
+
+    "@tanstack/virtual-core": ["@tanstack/virtual-core@3.17.0", "https://europe-west1-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@tanstack/virtual-core/-/virtual-core-3.17.0.tgz", {}, "sha512-gOxY/hFkPh/XQYhnThBHzkbkX3Ed+z/iushyz+R+JAr213aXxUDgQoTgTdrDpBSRsjFM73P/KfUyWmaF9WHMkQ=="],
 
     "@tiptap/core": ["@tiptap/core@3.16.0", "", { "peerDependencies": { "@tiptap/pm": "^3.16.0" } }, "sha512-XegRaNuoQ/guzBQU2xHxOwFXXrtoXW9tiyXDhssSqylvZmBVSlRIPNHA6ArkHBKm6ehLf6+6Y9fF3uky1yCXYQ=="],
 
