@@ -16,7 +16,7 @@ const corsHeaders = {
 };
 
 // VAPID public key
-const VAPID_PUBLIC_KEY = 'BPheJr4xGbGEdqLeawCOx4bahUlERq9bOvn1dGznjrei6yRo4GfRYCJaj-WD_zVvMHekax5FQYUV-Uw89jyWFhA';
+const VAPID_PUBLIC_KEY = 'BMFQbnBKJMJK7rTde-4l2udgDG-ntk29I1rpaNrrrcZ8N-kIf3kgGy5jcEyaeCqICHLsi4bhG45n0RXBi8eawBc';
 
 // Helper to convert Uint8Array to ArrayBuffer
 function toArrayBuffer(arr: Uint8Array): ArrayBuffer {
