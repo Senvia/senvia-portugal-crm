@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
 import { OrganizationSelector } from './OrganizationSelector';
 import { ChallengeMFA } from './ChallengeMFA';
 import { TrialExpiredBlocker } from './TrialExpiredBlocker';
+import { PaymentOverdueBlocker } from './PaymentOverdueBlocker';
 import { useStripeSubscription } from '@/hooks/useStripeSubscription';
 import { usePipelineStages } from '@/hooks/usePipelineStages';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -15,17 +16,10 @@ import { WhatsNewDialog } from '@/components/announcements/WhatsNewDialog';
 export function ProtectedLayoutRoute() {
   const { user, isLoading, needsOrgSelection, organizations, selectOrganization, mfaStatus, completeMfaChallenge, organization, profile } = useAuth();
   const location = useLocation();
-  const { subscriptionStatus, checkSubscription } = useStripeSubscription();
-  const [hasCheckedSub, setHasCheckedSub] = useState(false);
+  const { subscriptionStatus, hasChecked: hasCheckedSub } = useStripeSubscription();
   const { data: pipelineStages, isLoading: stagesLoading } = usePipelineStages();
   const { isAdmin } = usePermissions();
   const [onboardingComplete, setOnboardingComplete] = useState(false);
-
-  useEffect(() => {
-    if (user && !needsOrgSelection && !hasCheckedSub) {
-      checkSubscription().then(() => setHasCheckedSub(true));
-    }
-  }, [user, needsOrgSelection, hasCheckedSub, checkSubscription]);
 
   if (isLoading) {
     return (
@@ -63,11 +57,36 @@ export function ProtectedLayoutRoute() {
     return <OnboardingWizard onComplete={() => setOnboardingComplete(true)} />;
   }
 
+  // PAYING CUSTOMER past the grace window → "renew your plan" blocker (NOT the
+  // trial blocker). Mirrors ProtectedRoute: this is the app's main layout route,
+  // so without this branch a paying-overdue customer would never be blocked.
+  // Only plan_expired blocks; payment_overdue (still in grace) shows the banner.
+  if (
+    hasCheckedSub &&
+    subscriptionStatus &&
+    !subscriptionStatus.billing_exempt &&
+    subscriptionStatus.first_paid_at &&
+    subscriptionStatus.plan_expired === true &&
+    !location.pathname.startsWith('/settings')
+  ) {
+    return (
+      <PaymentOverdueBlocker
+        paymentFailedAt={subscriptionStatus.current_period_end ?? subscriptionStatus.payment_failed_at ?? undefined}
+      />
+    );
+  }
+
+  // TRIAL customer with the trial over (and never paid). Belt-and-suspenders:
+  // also read organization.first_paid_at from AuthContext so a payer never sees
+  // the trial blocker even if the edge function response lags or errors.
+  const orgFirstPaidAt = (organization as { first_paid_at?: string | null } | null)?.first_paid_at;
   if (
     hasCheckedSub &&
     subscriptionStatus &&
     !subscriptionStatus.subscribed &&
     !subscriptionStatus.billing_exempt &&
+    !subscriptionStatus.first_paid_at &&
+    !orgFirstPaidAt &&
     subscriptionStatus.trial_expired === true &&
     !location.pathname.startsWith('/settings')
   ) {

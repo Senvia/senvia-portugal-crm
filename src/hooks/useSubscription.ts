@@ -34,22 +34,6 @@ const DEFAULT_PLAN: SubscriptionPlan = {
   },
 };
 
-// Used when an organization is flagged billing_exempt (demo / internal / partner
-// orgs that should have full product access without paying or depending on the
-// subscription_plans table being correctly seeded).
-const FULL_ACCESS_PLAN: SubscriptionPlan = {
-  id: 'elite',
-  name: 'Elite (Isento)',
-  max_users: null,
-  max_forms: null,
-  price_monthly: 0,
-  features: {
-    modules: { sales: true, finance: true, marketing: true, ecommerce: true },
-    integrations: { whatsapp: true, invoicing: true, meta_pixels: true, stripe: true },
-    features: { conversational_forms: true, multi_org: true, push_notifications: true, fidelization_alerts: true },
-  },
-};
-
 // Map module keys to minimum required plan for upsell messaging
 const MODULE_REQUIRED_PLAN: Record<string, string> = {
   sales: 'Pro',
@@ -78,9 +62,13 @@ const MODULE_REQUIRED_RANK: Record<string, number> = {
   prospects: 2,
 };
 
-function isOrgOnTrial(org: { trial_ends_at?: string; billing_exempt?: boolean } | null): boolean {
+function isOrgOnTrial(org: { trial_ends_at?: string; billing_exempt?: boolean; first_paid_at?: string | null } | null): boolean {
   if (!org) return false;
   if ((org as any).billing_exempt) return false;
+  // A customer who has ever paid is NOT on trial — they keep the plan they pay
+  // for, never the trial's full (elite) access, even if trial_ends_at is still
+  // in the future.
+  if ((org as any).first_paid_at) return false;
   const trialEnd = (org as any).trial_ends_at;
   if (!trialEnd) return false;
   return new Date(trialEnd).getTime() > Date.now();

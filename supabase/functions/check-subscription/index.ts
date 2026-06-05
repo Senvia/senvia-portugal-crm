@@ -12,10 +12,34 @@ const PRODUCT_TO_PLAN: Record<string, string> = {
   "prod_U0wG6doz0zgZFV": "elite",
 };
 
-// How long after the Stripe current_period_end the org keeps full access while
-// the customer settles the renewal. Past this window, the plan-expired blocker
-// shows up.
-const GRACE_DAYS = 4;
+// How many days after a failed payment the org keeps full access while the
+// customer settles the renewal. The clock is anchored on payment_failed_at
+// (the real failure date) — NOT current_period_end, which can be stale. Within
+// this window the customer sees a warning banner; past it, the plan-expired
+// blocker shows up.
+const GRACE_DAYS = 3;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// Single source of truth for the grace math. Given the failure timestamp,
+// decides whether the org is still in the warning window (payment_overdue) or
+// already past it (plan_expired), and exposes when the block happens.
+//   - payment_overdue: overdue but still inside the grace window → show banner
+//   - plan_expired:    grace window elapsed → show the full-screen blocker
+// The two are mutually exclusive. No failure timestamp → neither (fail open).
+function computeOverdueState(failedAtIso: string | null | undefined) {
+  if (!failedAtIso) {
+    return { payment_overdue: false, plan_expired: false, block_at: null, days_until_block: null };
+  }
+  const blockAtMs = new Date(failedAtIso).getTime() + GRACE_DAYS * DAY_MS;
+  const blocked = Date.now() > blockAtMs;
+  return {
+    payment_overdue: !blocked,
+    plan_expired: blocked,
+    block_at: new Date(blockAtMs).toISOString(),
+    days_until_block: Math.max(0, Math.ceil((blockAtMs - Date.now()) / DAY_MS)),
+  };
+}
 
 // Lightweight Stripe API calls without the heavy SDK
 async function stripeGet(path: string, key: string, params?: Record<string, string>) {
@@ -149,6 +173,10 @@ serve(async (req) => {
       ? new Date(periodEnd * 1000).toISOString()
       : null;
 
+    const status = subscription.status as string;
+    const isHealthy = status === "active" || status === "trialing";
+    const isOverdue = status === "past_due" || status === "unpaid";
+
     // Persist the renewal date + first-paid stamp so the cleanup cron, the
     // protected route and the blocker components have a single source of truth.
     if (orgId) {
@@ -158,19 +186,34 @@ serve(async (req) => {
         // First time we see this org with a sub in a payer status — stamp now.
         orgUpdates.first_paid_at = new Date().toISOString();
       }
+      // Sub healthy again → clear any lingering failure clock (self-heal in case
+      // the webhook's clear was missed).
+      if (isHealthy && orgData?.payment_failed_at) {
+        orgUpdates.payment_failed_at = null;
+      }
       await supabase.from('organizations').update(orgUpdates).eq('id', orgId);
     }
 
-    const status = subscription.status as string;
-    const isHealthy = status === "active" || status === "trialing";
-    const isOverdue = status === "past_due" || status === "unpaid";
+    // Anchor the grace window on the real failure date. If the webhook missed
+    // stamping payment_failed_at, self-heal using the period end (the renewal
+    // date ≈ when the charge failed). Write-once: never overwrite an existing
+    // stamp — doing so would push the block date forward and reintroduce the
+    // very bug we're fixing.
+    let failedAt: string | null = isHealthy ? null : (orgData?.payment_failed_at ?? null);
+    if (isOverdue && !failedAt) {
+      failedAt = subscriptionEnd ?? new Date().toISOString();
+      if (orgId) {
+        await supabase
+          .from('organizations')
+          .update({ payment_failed_at: failedAt })
+          .eq('id', orgId)
+          .is('payment_failed_at', null);
+      }
+    }
 
-    // Plan-expired: customer paid before but is currently overdue past the
-    // grace window. The frontend uses this to render PaymentOverdueBlocker
-    // (with the "renew your plan" copy — they're NOT a trial).
-    const planExpired = isOverdue && subscriptionEnd
-      ? (Date.now() - new Date(subscriptionEnd).getTime()) > GRACE_DAYS * 24 * 60 * 60 * 1000
-      : false;
+    // payment_overdue (in grace → banner) vs plan_expired (past grace →
+    // PaymentOverdueBlocker, "renew your plan" — they're NOT a trial).
+    const overdue = computeOverdueState(failedAt);
 
     return json({
       subscribed: isHealthy,
@@ -178,8 +221,11 @@ serve(async (req) => {
       product_id: productId,
       subscription_end: subscriptionEnd,
       status,
-      payment_overdue: planExpired,
-      plan_expired: planExpired,
+      payment_overdue: overdue.payment_overdue,
+      plan_expired: overdue.plan_expired,
+      block_at: overdue.block_at,
+      days_until_block: overdue.days_until_block,
+      payment_failed_at: failedAt,
       first_paid_at: orgData?.first_paid_at ?? new Date().toISOString(),
       current_period_end: subscriptionEnd,
     });
@@ -198,8 +244,7 @@ function json(data: any, status = 200) {
 
 function getLegacyPaymentOverdue(orgData: any) {
   if (!orgData?.payment_failed_at) return { payment_failed_at: null, payment_overdue: false };
-  const failedAt = new Date(orgData.payment_failed_at);
-  const overdue = (Date.now() - failedAt.getTime()) > 3 * 24 * 60 * 60 * 1000;
+  const overdue = (Date.now() - new Date(orgData.payment_failed_at).getTime()) > GRACE_DAYS * DAY_MS;
   return { payment_failed_at: orgData.payment_failed_at, payment_overdue: overdue };
 }
 
@@ -236,14 +281,13 @@ function buildTrialResponse(orgData: any) {
   });
 
   // PAYING CUSTOMER FALL-OUT: previously paid, no live sub right now.
-  // We treat as plan-expired (renew CTA), never as trial.
+  // We treat as plan-expired (renew CTA), never as trial. Same grace anchor as
+  // the live path: the real failure date, falling back to the renewal date
+  // (current_period_end) when we never recorded a failure. No anchor at all →
+  // fail open (don't lock the payer out; super admin can patch later).
   if (hasPaidBefore) {
-    const periodEnd = orgData?.current_period_end ? new Date(orgData.current_period_end) : null;
-    // No period_end → we don't know when renewal is due. Fail open: don't
-    // lock the payer out. The super admin can patch current_period_end later.
-    const planExpired = periodEnd
-      ? (Date.now() - periodEnd.getTime()) > GRACE_DAYS * 24 * 60 * 60 * 1000
-      : false;
+    const anchor = orgData?.payment_failed_at ?? orgData?.current_period_end ?? null;
+    const overdue = computeOverdueState(anchor);
     return {
       subscribed: false,
       plan_id: null,
@@ -252,8 +296,11 @@ function buildTrialResponse(orgData: any) {
       trial_expired: false,
       first_paid_at: orgData?.first_paid_at ?? null,
       current_period_end: orgData?.current_period_end ?? null,
-      plan_expired: planExpired,
-      payment_overdue: planExpired,
+      payment_failed_at: orgData?.payment_failed_at ?? null,
+      plan_expired: overdue.plan_expired,
+      payment_overdue: overdue.payment_overdue,
+      block_at: overdue.block_at,
+      days_until_block: overdue.days_until_block,
     };
   }
 

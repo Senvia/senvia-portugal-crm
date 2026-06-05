@@ -18,9 +18,8 @@ const INTEGRATION_ICONS: Record<string, React.ElementType> = {
 
 export function BillingTab() {
   const { organization } = useAuth();
-  const { isLoading, subscriptionStatus, checkSubscription, createCheckout, openCustomerPortal } = useStripeSubscription();
+  const { isLoading, subscriptionStatus, hasChecked, checkSubscription, createCheckout, openCustomerPortal } = useStripeSubscription();
   const [checkingPlan, setCheckingPlan] = useState<string | null>(null);
-  const [hasChecked, setHasChecked] = useState(false);
 
   const isOnTrial = subscriptionStatus?.on_trial === true;
   const hasActiveSubscription = subscriptionStatus?.subscribed === true;
@@ -28,12 +27,6 @@ export function BillingTab() {
   const currentPlanId = hasActiveSubscription ? (subscriptionStatus?.plan_id || 'starter') : null;
   const currentIndex = currentPlanId ? STRIPE_PLANS.findIndex(p => p.id === currentPlanId) : -1;
   const hasNoSubscription = !hasChecked || !hasActiveSubscription;
-
-  useEffect(() => {
-    if (!hasChecked) {
-      checkSubscription().then(() => setHasChecked(true));
-    }
-  }, [checkSubscription, hasChecked]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
