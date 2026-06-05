@@ -1,6 +1,8 @@
-import { useState, useCallback } from 'react';
+import { useCallback, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface SubscriptionStatus {
   subscribed: boolean;
@@ -12,33 +14,48 @@ interface SubscriptionStatus {
   trial_ends_at?: string;
   trial_expired?: boolean;
   days_remaining?: number;
-  payment_failed_at?: string;
+  payment_failed_at?: string | null;
+  /** True when a paying customer is overdue but still inside the grace window — show the warning banner, NOT the blocker. */
   payment_overdue?: boolean;
   /** Filled the moment the org makes its first Stripe payment. Once set, this org is never treated as a trial again. */
   first_paid_at?: string | null;
-  /** End of the current paid Stripe period. After this + grace, plan_expired = true. */
+  /** End of the current paid Stripe period. Display only ("next renewal"). */
   current_period_end?: string | null;
-  /** True when a paying customer is past their renewal grace window. The plan-renewal blocker is keyed off this. */
+  /** True when a paying customer is past their grace window. The plan-renewal blocker is keyed off this. */
   plan_expired?: boolean;
+  /** When access will be blocked (failure date + grace). Drives the countdown banner. */
+  block_at?: string | null;
+  /** Whole days left before the block. */
+  days_until_block?: number | null;
   status?: string;
 }
 
 export function useStripeSubscription() {
   const { toast } = useToast();
+  const { user, organization, needsOrgSelection } = useAuth();
+  // Isolated to the checkout/portal redirects — the status itself is driven by
+  // React Query below, so all consumers share a single fetch + auto re-check.
   const [isLoading, setIsLoading] = useState(false);
-  const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus | null>(null);
 
-  const checkSubscription = useCallback(async () => {
-    try {
+  const query = useQuery<SubscriptionStatus | null>({
+    queryKey: ['stripe-subscription', organization?.id ?? null],
+    queryFn: async () => {
       const { data, error } = await supabase.functions.invoke('check-subscription');
       if (error) throw error;
-      setSubscriptionStatus(data);
       return data as SubscriptionStatus;
-    } catch (error) {
-      console.error('Error checking subscription:', error);
-      return null;
-    }
-  }, []);
+    },
+    enabled: !!user && !needsOrgSelection,
+    staleTime: 1000 * 60,            // 1 min — avoid hammering on quick remounts
+    refetchInterval: 1000 * 60 * 5,  // re-check every 5 min so a live session blocks without a reload
+    refetchOnWindowFocus: true,      // re-check when the user comes back to the tab
+  });
+
+  // Kept for callers that want to force a refresh (e.g. after returning from
+  // the Stripe checkout). Returns the freshest status.
+  const checkSubscription = useCallback(async () => {
+    const { data } = await query.refetch();
+    return data ?? null;
+  }, [query]);
 
   const createCheckout = useCallback(async (priceId: string) => {
     setIsLoading(true);
@@ -94,7 +111,9 @@ export function useStripeSubscription() {
 
   return {
     isLoading,
-    subscriptionStatus,
+    subscriptionStatus: query.data ?? null,
+    /** True once the first subscription check has resolved. */
+    hasChecked: query.isFetched,
     checkSubscription,
     createCheckout,
     openCustomerPortal,

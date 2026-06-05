@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
@@ -18,17 +18,10 @@ interface ProtectedRouteProps {
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const { user, isLoading, needsOrgSelection, organizations, selectOrganization, mfaStatus, completeMfaChallenge, organization } = useAuth();
   const location = useLocation();
-  const { subscriptionStatus, checkSubscription } = useStripeSubscription();
-  const [hasCheckedSub, setHasCheckedSub] = useState(false);
+  const { subscriptionStatus, hasChecked: hasCheckedSub } = useStripeSubscription();
   const { data: pipelineStages, isLoading: stagesLoading } = usePipelineStages();
   const { isAdmin } = usePermissions();
   const [onboardingComplete, setOnboardingComplete] = useState(false);
-
-  useEffect(() => {
-    if (user && !needsOrgSelection && !hasCheckedSub) {
-      checkSubscription().then(() => setHasCheckedSub(true));
-    }
-  }, [user, needsOrgSelection, hasCheckedSub, checkSubscription]);
 
   if (isLoading) {
     return (
@@ -73,12 +66,14 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   // blocker (NOT the trial blocker). This branch is keyed off first_paid_at:
   // once an org has paid even once, it is a paying customer forever and never
   // sees the trial blocker again, regardless of trial_ends_at value.
+  // Only `plan_expired` blocks: while still inside the grace window
+  // (payment_overdue) the user keeps access and sees the warning banner instead.
   if (
     hasCheckedSub &&
     subscriptionStatus &&
     !subscriptionStatus.billing_exempt &&
     subscriptionStatus.first_paid_at &&
-    (subscriptionStatus.plan_expired === true || subscriptionStatus.payment_overdue === true) &&
+    subscriptionStatus.plan_expired === true &&
     !location.pathname.startsWith('/settings')
   ) {
     return (
