@@ -27,3 +27,9 @@ dist-ssr
 .vercel
 .claude
 supabase/.temp
+
+# Migration toolkit (local only — never commit credentials or DB dumps)
+migration/.env
+migration/dumps/
+migration/secrets.local.md
+secrets.local.md
