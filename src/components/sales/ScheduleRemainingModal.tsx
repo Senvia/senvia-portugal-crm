@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { format, addDays } from "date-fns";
 import { pt } from "date-fns/locale";
 import { CalendarIcon, Loader2 } from "lucide-react";
@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -25,6 +26,14 @@ import { formatCurrency } from "@/lib/format";
 import { useCreateSalePayment } from "@/hooks/useSalePayments";
 import type { PaymentMethod } from "@/types/sales";
 import { PAYMENT_METHODS, PAYMENT_METHOD_LABELS } from "@/types/sales";
+
+// Divide um total em N parcelas (última absorve o arredondamento).
+function evenSplit(total: number, n: number): number[] {
+  const base = Math.floor((total / n) * 100) / 100;
+  return Array.from({ length: n }, (_, i) =>
+    i === n - 1 ? +(total - base * (n - 1)).toFixed(2) : base
+  );
+}
 
 interface ScheduleRemainingModalProps {
   open: boolean;
@@ -53,15 +62,24 @@ export function ScheduleRemainingModal({
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const installments = useMemo(() => {
-    const base = Math.floor((remainingAmount / installmentCount) * 100) / 100;
-    return Array.from({ length: installmentCount }, (_, i) => {
-      if (i === installmentCount - 1) {
-        return +(remainingAmount - base * (installmentCount - 1)).toFixed(2);
-      }
-      return base;
+  const [amounts, setAmounts] = useState<number[]>(() => evenSplit(remainingAmount, installmentCount));
+
+  // Reset para a divisão igualitária quando muda o nº de parcelas / valor / reabre.
+  useEffect(() => {
+    setAmounts(evenSplit(remainingAmount, installmentCount));
+  }, [remainingAmount, installmentCount, open]);
+
+  const updateAmount = (index: number, value: string) => {
+    setAmounts((prev) => {
+      const next = [...prev];
+      next[index] = parseFloat(value) || 0;
+      return next;
     });
-  }, [remainingAmount, installmentCount]);
+  };
+
+  const total = amounts.reduce((s, a) => s + (a || 0), 0);
+  const diff = +(total - remainingAmount).toFixed(2);
+  const hasInvalid = amounts.length === 0 || amounts.some((a) => !a || a <= 0);
 
   const updateDate = (index: number, date: Date) => {
     setDates((prev) => {
@@ -78,7 +96,7 @@ export function ScheduleRemainingModal({
         await createPayment.mutateAsync({
           sale_id: saleId,
           organization_id: organizationId,
-          amount: installments[i],
+          amount: amounts[i],
           payment_date: format(dates[i], "yyyy-MM-dd"),
           payment_method: paymentMethod || null,
           status: "pending",
@@ -124,15 +142,22 @@ export function ScheduleRemainingModal({
 
           {/* Installment details */}
           <div className="space-y-3">
-            {installments.map((amount, i) => (
+            {amounts.map((amount, i) => (
               <div
                 key={i}
-                className="flex items-center gap-3 p-3 rounded-lg border bg-card"
+                className="flex items-center gap-2 p-3 rounded-lg border bg-card"
               >
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium">
-                    Parcela {i + 1}: {formatCurrency(amount)}
-                  </p>
+                <span className="text-sm font-medium whitespace-nowrap">Parcela {i + 1}</span>
+                <div className="relative flex-1 min-w-0">
+                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">€</span>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={amount}
+                    onChange={(e) => updateAmount(i, e.target.value)}
+                    className="h-8 pl-5 text-sm"
+                  />
                 </div>
                 <Popover>
                   <PopoverTrigger asChild>
@@ -160,6 +185,19 @@ export function ScheduleRemainingModal({
                 </Popover>
               </div>
             ))}
+          </div>
+
+          {/* Total das parcelas vs restante */}
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">Total das parcelas</span>
+            <span className={cn("font-semibold", diff !== 0 && "text-amber-600")}>
+              {formatCurrency(total)}
+              {diff !== 0 && (
+                <span className="ml-1 text-xs font-normal">
+                  ({diff > 0 ? "+" : ""}{formatCurrency(diff)} vs restante)
+                </span>
+              )}
+            </span>
           </div>
 
           {/* Payment method */}
@@ -196,7 +234,7 @@ export function ScheduleRemainingModal({
             <Button
               className="flex-1"
               onClick={handleSubmit}
-              disabled={isSubmitting}
+              disabled={isSubmitting || hasInvalid}
             >
               {isSubmitting ? (
                 <>
