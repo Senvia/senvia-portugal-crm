@@ -25,6 +25,12 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
   return window.btoa(binary);
 }
 
+function buffersEqual(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+
 /** Get the active SW registration, or null. Never throws, never hangs. */
 async function getSwRegistration(): Promise<ServiceWorkerRegistration | null> {
   if (!('serviceWorker' in navigator)) return null;
@@ -90,7 +96,39 @@ export function usePushNotifications() {
         const reg = await getSwRegistration();
         if (!reg || cancelled) return;
 
-        const subscription = await reg.pushManager.getSubscription();
+        let subscription = await reg.pushManager.getSubscription();
+
+        // Auto-heal: se a subscrição existente foi feita com uma chave VAPID
+        // DIFERENTE da atual (ex.: após rotação de chaves na migração), ela está
+        // morta — renova silenciosamente para a chave nova.
+        if (subscription && Notification.permission === 'granted' && organization) {
+          const currentKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
+          const subKey = subscription.options?.applicationServerKey;
+          const stale = subKey ? !buffersEqual(new Uint8Array(subKey), currentKey) : false;
+          if (stale) {
+            try {
+              await supabase.from('push_subscriptions').delete().eq('user_id', user.id).eq('endpoint', subscription.endpoint);
+              await subscription.unsubscribe();
+              subscription = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: currentKey });
+              const p256dh = subscription.getKey('p256dh');
+              const auth = subscription.getKey('auth');
+              if (p256dh && auth) {
+                await supabase.from('push_subscriptions').upsert({
+                  user_id: user.id,
+                  organization_id: organization.id,
+                  endpoint: subscription.endpoint,
+                  p256dh: arrayBufferToBase64(p256dh),
+                  auth: arrayBufferToBase64(auth),
+                }, { onConflict: 'endpoint' });
+              }
+              if (!cancelled) setIsSubscribed(true);
+              return;
+            } catch (e) {
+              console.error('[push] auto-renew failed:', e);
+            }
+          }
+        }
+
         if (subscription && !cancelled) {
           const { data, error } = await supabase
             .from('push_subscriptions')
@@ -111,7 +149,7 @@ export function usePushNotifications() {
 
     check();
     return () => { cancelled = true; };
-  }, [user]);
+  }, [user, organization]);
 
   const subscribe = useCallback(async () => {
     if (!isSupported || !user || !organization) {
