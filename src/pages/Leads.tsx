@@ -29,7 +29,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { usePipelineStages } from "@/hooks/usePipelineStages";
 import type { Proposal } from "@/types/proposals";
 import type { CalendarEvent } from "@/types/calendar";
-import { useLeads, useUpdateLeadStatus, useDeleteLead, useUpdateLead } from "@/hooks/useLeads";
+import { useLeads, useUpdateLeadStatus, useDeleteLead, useUpdateLead, useArchivedLeads, useArchiveLeads, useUnarchiveLeads, useArchiveLeadsByStage } from "@/hooks/useLeads";
+import { ArchiveByStageDialog } from "@/components/leads/ArchiveByStageDialog";
 import { useClients, useConvertLeadToClient } from "@/hooks/useClients";
 import { useLeadsRealtime, useProposalsRealtime } from "@/hooks/useRealtimeSubscription";
 import { Input } from "@/components/ui/input";
@@ -37,7 +38,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Users, Loader2, X, Plus, LayoutGrid, List, Zap, BarChart3, Upload, History } from "lucide-react";
+import { Search, Users, Loader2, X, Plus, LayoutGrid, List, Zap, BarChart3, Upload, History, Archive } from "lucide-react";
 import { format, endOfDay, startOfDay } from "date-fns";
 import { matchesSearch } from "@/lib/utils";
 import { mapLeadsForExport, exportToCsv, exportToExcel } from "@/lib/export";
@@ -63,6 +64,9 @@ export default function Leads() {
   const deleteLead = useDeleteLead();
   const updateLead = useUpdateLead();
   const convertLeadToClient = useConvertLeadToClient();
+  const archiveLeads = useArchiveLeads();
+  const unarchiveLeads = useUnarchiveLeads();
+  const archiveByStage = useArchiveLeadsByStage();
   const navigate = useNavigate();
   
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
@@ -119,6 +123,14 @@ export default function Leads() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showAssignModal, setShowAssignModal] = useState(false);
 
+  // Archiving
+  const [showArchived, setShowArchived] = useState(false);
+  const [isArchiveByStageOpen, setIsArchiveByStageOpen] = useState(false);
+  const { data: archivedLeads = [], isLoading: archivedLoading } = useArchivedLeads(showArchived);
+  const baseLeads = showArchived ? archivedLeads : leads;
+  // Archived view forces the table layout (Kanban doesn't apply to archived).
+  const effectiveViewMode = showArchived ? 'table' : viewMode;
+
   // Persist view mode preference
   useEffect(() => {
     localStorage.setItem('leads-view-mode', viewMode);
@@ -148,10 +160,17 @@ export default function Leads() {
     setDateRange({ from: undefined, to: undefined });
   };
 
-  // Clear selection when filters change
+  // Clear selection when filters change or when switching active/archived view
   useEffect(() => {
     setSelectedIds([]);
-  }, [searchQuery, statusFilter, dateRange]);
+  }, [searchQuery, statusFilter, dateRange, showArchived]);
+
+  // Count of ACTIVE leads per stage (for the "Archive by stage" dialog)
+  const activeCountsByStage = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const l of leads) m[l.status || ''] = (m[l.status || ''] || 0) + 1;
+    return m;
+  }, [leads]);
 
   const hasActiveFilters = searchQuery || statusFilter.length > 0 || dateRange.from || dateRange.to;
 
@@ -159,7 +178,7 @@ export default function Leads() {
     const fromDate = dateRange.from ? startOfDay(dateRange.from) : null;
     const toDate = dateRange.to ? endOfDay(dateRange.to) : null;
 
-    return leads.filter(lead => {
+    return baseLeads.filter(lead => {
       // 1. Pesquisa accent-insensitive e por tokens fora de ordem
       const matchesSearchTerm = matchesSearch(searchQuery, lead.name, lead.email, lead.phone);
 
@@ -177,7 +196,7 @@ export default function Leads() {
 
       return matchesSearchTerm && matchesStatus && matchesDate && matchesTipologia;
     });
-  }, [leads, searchQuery, statusFilter, dateRange, tipologiaFilter]);
+  }, [baseLeads, searchQuery, statusFilter, dateRange, tipologiaFilter]);
 
   // Check if a stage is of a special type (scheduled or proposal-like)
   const isScheduledStage = (stageKey: string) => {
@@ -556,8 +575,24 @@ export default function Leads() {
       return;
     }
     queryClient.invalidateQueries({ queryKey: ["leads"] });
+    queryClient.invalidateQueries({ queryKey: ["leads-archived"] });
     toast.success(`${ids.length} leads apagados`);
     setSelectedIds([]);
+  };
+
+  const handleBulkArchive = async () => {
+    await archiveLeads.mutateAsync([...selectedIds]);
+    setSelectedIds([]);
+  };
+
+  const handleBulkRestore = async () => {
+    await unarchiveLeads.mutateAsync([...selectedIds]);
+    setSelectedIds([]);
+  };
+
+  const handleArchiveByStage = async (stageKey: string) => {
+    await archiveByStage.mutateAsync(stageKey);
+    setIsArchiveByStageOpen(false);
   };
 
   // Helper to get badge style from stage color
@@ -586,8 +621,13 @@ export default function Leads() {
               <div className="flex items-center gap-2">
                 <h1 className="text-xl lg:text-2xl font-bold text-foreground">Leads</h1>
                 <Badge variant="secondary" className="text-xs font-medium">
-                  {hasActiveFilters ? `${filteredLeads.length} / ${leads.length}` : leads.length}
+                  {hasActiveFilters ? `${filteredLeads.length} / ${baseLeads.length}` : baseLeads.length}
                 </Badge>
+                {showArchived && (
+                  <Badge variant="outline" className="text-xs font-medium border-amber-500/40 text-amber-600">
+                    Arquivadas
+                  </Badge>
+                )}
               </div>
               <p className="text-sm text-muted-foreground hidden sm:block">Gerencie os contactos da sua organização.</p>
             </div>
@@ -634,6 +674,16 @@ export default function Leads() {
                   <Button onClick={() => setIsAddModalOpen(true)} className="shrink-0 h-9 lg:h-10">
                     <Plus className="h-4 w-4 sm:mr-2" />
                     <span className="hidden sm:inline">Adicionar</span>
+                  </Button>
+                  {!showArchived && (
+                    <Button variant="outline" onClick={() => setIsArchiveByStageOpen(true)} className="shrink-0 h-9 lg:h-10" title="Arquivar todas as leads de uma etapa">
+                      <Archive className="h-4 w-4 sm:mr-2" />
+                      <span className="hidden sm:inline">Arquivar etapa</span>
+                    </Button>
+                  )}
+                  <Button variant={showArchived ? 'secondary' : 'outline'} onClick={() => setShowArchived(v => !v)} className="shrink-0 h-9 lg:h-10" title={showArchived ? 'Voltar às leads ativas' : 'Ver leads arquivadas'}>
+                    <Archive className="h-4 w-4 sm:mr-2" />
+                    <span className="hidden sm:inline">{showArchived ? 'Ver ativas' : 'Arquivadas'}</span>
                   </Button>
                 </>
               )}
@@ -750,20 +800,22 @@ export default function Leads() {
 
         <TabsContent value="pipeline" className="mt-0">
         {/* Bulk Actions Bar */}
-        {viewMode === 'table' && (
+        {effectiveViewMode === 'table' && (
           <BulkActionsBar
             selectedCount={selectedIds.length}
             onAssignTeamMember={() => setShowAssignModal(true)}
             onExportCsv={handleExportCsv}
             onExportExcel={handleExportExcel}
             onDelete={handleBulkDelete}
+            onArchive={showArchived ? undefined : handleBulkArchive}
+            onRestore={showArchived ? handleBulkRestore : undefined}
             onClearSelection={() => setSelectedIds([])}
             entityLabel="leads selecionados"
           />
         )}
 
         <div className="rounded-xl border bg-card p-3 lg:p-4">
-          {isLoading ? (
+          {(showArchived ? archivedLoading : isLoading) ? (
             <div className="flex h-64 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
           ) : filteredLeads.length === 0 && searchQuery ? (
             <div className="flex h-64 flex-col items-center justify-center text-muted-foreground">
@@ -773,9 +825,9 @@ export default function Leads() {
           ) : filteredLeads.length === 0 ? (
             <div className="flex h-64 flex-col items-center justify-center text-muted-foreground">
               <Users className="h-12 w-12 mb-4 opacity-50" />
-              <p className="text-lg font-medium">Sem leads por agora</p>
+              <p className="text-lg font-medium">{showArchived ? 'Sem leads arquivadas' : 'Sem leads por agora'}</p>
             </div>
-          ) : viewMode === 'kanban' ? (
+          ) : effectiveViewMode === 'kanban' ? (
             <ResponsiveKanban leads={filteredLeads} onStatusChange={handleStatusChange} onTemperatureChange={handleTemperatureChange} onViewDetails={handleViewDetails} onDelete={handleDelete} />
           ) : (
             <LeadsTableView 
@@ -799,6 +851,14 @@ export default function Leads() {
         <AddLeadModal open={isAddModalOpen} onOpenChange={setIsAddModalOpen} />
         <ImportLeadsDialog open={isImportModalOpen} onOpenChange={setIsImportModalOpen} />
         <ImportsHistoryDialog open={isImportsHistoryOpen} onOpenChange={setIsImportsHistoryOpen} />
+        <ArchiveByStageDialog
+          open={isArchiveByStageOpen}
+          onOpenChange={setIsArchiveByStageOpen}
+          stages={stages}
+          counts={activeCountsByStage}
+          onConfirm={handleArchiveByStage}
+          isPending={archiveByStage.isPending}
+        />
         
         <EventDetailsModal
           open={isEventDetailsModalOpen}

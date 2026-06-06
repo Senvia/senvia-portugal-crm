@@ -20,6 +20,7 @@ export function useLeads() {
         .from('leads')
         .select('*')
         .eq('organization_id', organization.id)
+        .is('archived_at', null)
         .order('created_at', { ascending: false });
 
       if (effectiveUserIds) {
@@ -297,4 +298,132 @@ export function useLeadStats() {
     conversionRate,
     pipelineValue,
   };
+}
+
+// --- Arquivamento de leads --------------------------------------------------
+
+// Leads arquivadas (vista "Ver arquivadas"). Só é buscada quando `enabled`.
+export function useArchivedLeads(enabled: boolean) {
+  const { organization } = useAuth();
+  const { effectiveUserIds, isFilteringAll } = useTeamFilter();
+
+  return useQuery({
+    queryKey: ['leads-archived', organization?.id, effectiveUserIds],
+    queryFn: async () => {
+      if (!organization?.id) return [];
+
+      let baseQuery = supabase
+        .from('leads')
+        .select('*')
+        .eq('organization_id', organization.id)
+        .not('archived_at', 'is', null)
+        .order('archived_at', { ascending: false });
+
+      if (effectiveUserIds) {
+        const filters = effectiveUserIds.map(id => `assigned_to.eq.${id}`);
+        if (isFilteringAll) filters.push('assigned_to.is.null');
+        baseQuery = baseQuery.or(filters.join(','));
+      }
+
+      const chunkSize = 1000;
+      let allData: Lead[] = [];
+      let from = 0;
+      while (true) {
+        const { data, error } = await baseQuery.range(from, from + chunkSize - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        allData = allData.concat(data as Lead[]);
+        if (data.length < chunkSize) break;
+        from += chunkSize;
+      }
+      return allData;
+    },
+    enabled: enabled && !!organization?.id,
+  });
+}
+
+function useInvalidateLeads() {
+  const queryClient = useQueryClient();
+  return () => {
+    queryClient.invalidateQueries({ queryKey: ['leads'] });
+    queryClient.invalidateQueries({ queryKey: ['leads-archived'] });
+    queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+  };
+}
+
+export function useArchiveLeads() {
+  const invalidate = useInvalidateLeads();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (ids: string[]) => {
+      const { error } = await supabase
+        .from('leads')
+        .update({ archived_at: new Date().toISOString() } as never)
+        .in('id', ids);
+      if (error) throw error;
+      return ids.length;
+    },
+    onSuccess: (n) => {
+      invalidate();
+      toast({ title: 'Leads arquivadas', description: `${n} lead(s) arquivada(s). Podes restaurá-las em "Ver arquivadas".` });
+    },
+    onError: (error) => {
+      toast({ title: 'Erro', description: 'Não foi possível arquivar os leads.', variant: 'destructive' });
+      console.error('Error archiving leads:', error);
+    },
+  });
+}
+
+export function useUnarchiveLeads() {
+  const invalidate = useInvalidateLeads();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (ids: string[]) => {
+      const { error } = await supabase
+        .from('leads')
+        .update({ archived_at: null } as never)
+        .in('id', ids);
+      if (error) throw error;
+      return ids.length;
+    },
+    onSuccess: (n) => {
+      invalidate();
+      toast({ title: 'Leads restauradas', description: `${n} lead(s) restaurada(s).` });
+    },
+    onError: (error) => {
+      toast({ title: 'Erro', description: 'Não foi possível restaurar os leads.', variant: 'destructive' });
+      console.error('Error unarchiving leads:', error);
+    },
+  });
+}
+
+export function useArchiveLeadsByStage() {
+  const invalidate = useInvalidateLeads();
+  const { organization } = useAuth();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (stageKey: string) => {
+      if (!organization?.id) throw new Error('Sem organização');
+      const { data, error } = await supabase
+        .from('leads')
+        .update({ archived_at: new Date().toISOString() } as never)
+        .eq('organization_id', organization.id)
+        .eq('status', stageKey)
+        .is('archived_at', null)
+        .select('id');
+      if (error) throw error;
+      return data?.length ?? 0;
+    },
+    onSuccess: (n) => {
+      invalidate();
+      toast({ title: 'Leads arquivadas', description: `${n} lead(s) da etapa arquivada(s).` });
+    },
+    onError: (error) => {
+      toast({ title: 'Erro', description: 'Não foi possível arquivar a etapa.', variant: 'destructive' });
+      console.error('Error archiving by stage:', error);
+    },
+  });
 }

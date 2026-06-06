@@ -126,6 +126,7 @@ export function TeamPerformanceTable() {
         .from("leads")
         .select("assigned_to")
         .eq("organization_id", orgId)
+        .is("archived_at", null)
         .gte("created_at", monthStart)
         .lte("created_at", monthEnd)
         .in("assigned_to", memberIds);
