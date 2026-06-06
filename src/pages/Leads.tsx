@@ -38,7 +38,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Users, Loader2, X, Plus, LayoutGrid, List, Zap, BarChart3, Upload, History, Archive } from "lucide-react";
+import { Search, Users, Loader2, X, Plus, LayoutGrid, List, Zap, BarChart3, Upload, History, Archive, Layers, CheckSquare } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { format, endOfDay, startOfDay } from "date-fns";
 import { matchesSearch } from "@/lib/utils";
 import { mapLeadsForExport, exportToCsv, exportToExcel } from "@/lib/export";
@@ -680,10 +681,27 @@ export default function Leads() {
                     <span className="hidden sm:inline">Adicionar</span>
                   </Button>
                   {!showArchived && (
-                    <Button variant="outline" onClick={() => setIsArchiveByStageOpen(true)} className="shrink-0 h-9 lg:h-10" title="Arquivar todas as leads de uma etapa">
-                      <Archive className="h-4 w-4 sm:mr-2" />
-                      <span className="hidden sm:inline">Arquivar etapa</span>
-                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" className="shrink-0 h-9 lg:h-10" title="Arquivar leads">
+                          <Archive className="h-4 w-4 sm:mr-2" />
+                          <span className="hidden sm:inline">Arquivar</span>
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-56">
+                        <DropdownMenuItem onClick={() => setIsArchiveByStageOpen(true)}>
+                          <Layers className="h-4 w-4 mr-2" />
+                          Arquivar leads de um estado
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          disabled={selectedIds.length === 0}
+                          onClick={handleBulkArchive}
+                        >
+                          <CheckSquare className="h-4 w-4 mr-2" />
+                          Arquivar leads selecionados{selectedIds.length > 0 ? ` (${selectedIds.length})` : ''}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   )}
                   <Button variant={showArchived ? 'secondary' : 'outline'} onClick={() => setShowArchived(v => !v)} className="shrink-0 h-9 lg:h-10" title={showArchived ? 'Voltar às leads ativas' : 'Ver leads arquivadas'}>
                     <Archive className="h-4 w-4 sm:mr-2" />
@@ -811,7 +829,6 @@ export default function Leads() {
             onExportCsv={handleExportCsv}
             onExportExcel={handleExportExcel}
             onDelete={handleBulkDelete}
-            onArchive={showArchived ? undefined : handleBulkArchive}
             onRestore={showArchived ? handleBulkRestore : undefined}
             onClearSelection={() => setSelectedIds([])}
             entityLabel="leads selecionados"
