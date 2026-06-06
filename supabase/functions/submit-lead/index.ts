@@ -337,8 +337,7 @@ async function handleWebhookMode(req: Request, token: string): Promise<Response>
 <table width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background-color:#1e293b;border-radius:16px;overflow:hidden">
   <tr><td style="padding:32px 32px 24px;text-align:center">
     <img src="${logoUrl}" alt="Senvia OS" width="140" style="display:inline-block;margin-bottom:24px" />
-    <h1 style="color:#ffffff;font-size:22px;margin:0 0 4px">🚀 Novo Lead Recebido</h1>
-    <p style="color:#94a3b8;font-size:14px;margin:0">Organização: <strong style="color:#cbd5e1">${org.name}</strong></p>
+    <h1 style="color:#ffffff;font-size:22px;margin:0">🚀 Novo Lead Recebido</h1>
   </td></tr>
   <tr><td style="padding:0 32px 24px">
     <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#0f172a;border-radius:12px;border:1px solid #334155">
@@ -923,8 +922,7 @@ Deno.serve(async (req) => {
 <table width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background-color:#1e293b;border-radius:16px;overflow:hidden">
   <tr><td style="padding:32px 32px 24px;text-align:center">
     <img src="${logoUrl}" alt="Senvia OS" width="140" style="display:inline-block;margin-bottom:24px" />
-    <h1 style="color:#ffffff;font-size:22px;margin:0 0 4px">🚀 Novo Lead Recebido</h1>
-    <p style="color:#94a3b8;font-size:14px;margin:0">Organização: <strong style="color:#cbd5e1">${org.name}</strong></p>
+    <h1 style="color:#ffffff;font-size:22px;margin:0">🚀 Novo Lead Recebido</h1>
   </td></tr>
   <tr><td style="padding:0 32px 24px">
     <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#0f172a;border-radius:12px;border:1px solid #334155">
