@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { CheckSquare, UserPlus, X, Download, FileSpreadsheet, FileText, Trash2 } from "lucide-react";
+import { CheckSquare, UserPlus, X, Download, FileSpreadsheet, FileText, Trash2, Archive, ArchiveRestore } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,6 +19,8 @@ interface BulkActionsBarProps {
   onExportCsv?: () => void;
   onExportExcel?: () => void;
   onDelete?: () => void;
+  onArchive?: () => void;
+  onRestore?: () => void;
   onClearSelection: () => void;
   entityLabel?: string;
 }
@@ -29,11 +31,14 @@ export function BulkActionsBar({
   onExportCsv,
   onExportExcel,
   onDelete,
+  onArchive,
+  onRestore,
   onClearSelection,
   entityLabel = "selecionados",
 }: BulkActionsBarProps) {
   const hasExportOptions = onExportCsv || onExportExcel;
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
 
   return (
     <AnimatePresence>
@@ -87,6 +92,30 @@ export function BulkActionsBar({
               </DropdownMenu>
             )}
             
+            {onArchive && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setArchiveConfirmOpen(true)}
+                className="flex-1 sm:flex-none"
+              >
+                <Archive className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Arquivar</span>
+              </Button>
+            )}
+
+            {onRestore && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={onRestore}
+                className="flex-1 sm:flex-none"
+              >
+                <ArchiveRestore className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Restaurar</span>
+              </Button>
+            )}
+
             {onDelete && (
               <Button
                 variant="ghost"
@@ -125,6 +154,23 @@ export function BulkActionsBar({
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Apagar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={archiveConfirmOpen} onOpenChange={setArchiveConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Arquivar {selectedCount} {entityLabel}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Ficam ocultas das vistas e contagens, mas não são apagadas. Podes restaurá-las depois em "Ver arquivadas".
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setArchiveConfirmOpen(false); onArchive?.(); }}>
+              Arquivar
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

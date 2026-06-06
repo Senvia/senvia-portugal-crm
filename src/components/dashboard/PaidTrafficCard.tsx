@@ -30,6 +30,7 @@ export function PaidTrafficCard() {
         .from("leads")
         .select("id, status, value, source")
         .eq("organization_id", organization.id)
+        .is("archived_at", null)
         .or(PAID_FILTER);
 
       if (error) throw error;

@@ -67,6 +67,7 @@ export interface Lead {
   company_name?: string | null;
   created_at: string;
   updated_at?: string;
+  archived_at?: string | null;
 }
 
 // Form entity (multiple per organization)
