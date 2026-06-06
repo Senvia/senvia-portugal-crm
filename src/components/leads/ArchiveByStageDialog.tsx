@@ -31,13 +31,10 @@ export function ArchiveByStageDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Arquivar por etapa</DialogTitle>
-          <DialogDescription>
-            Arquiva todas as leads ativas de uma etapa de uma só vez. Ficam ocultas das
-            vistas e contagens, mas não são apagadas — podes restaurá-las em "Arquivadas".
-          </DialogDescription>
+          <DialogDescription>Arquiva todas as leads ativas de uma etapa. É reversível.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3 py-1">
