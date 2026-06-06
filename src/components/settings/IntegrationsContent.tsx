@@ -396,7 +396,7 @@ function InboundWebhookSection() {
     return () => { cancelled = true; };
   }, [organization?.id]);
 
-  const baseFn = 'https://zppcobirzgpfcrnxznwe.supabase.co/functions/v1/submit-lead?mode=webhook&token=';
+  const baseFn = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/submit-lead?mode=webhook&token=`;
   const webhookUrl = webhookToken ? `${baseFn}${webhookToken}` : '';
   const dedicatedUrl = dedicatedToken ? `${baseFn}${dedicatedToken}` : '';
 
@@ -644,8 +644,8 @@ function BrevoForm({ brevoApiKey, setBrevoApiKey, brevoSenderEmail, setBrevoSend
       <div className="space-y-2">
         <Label>Webhook URL (Tracking)</Label>
         <div className="flex items-center gap-2">
-          <Input readOnly value="https://zppcobirzgpfcrnxznwe.supabase.co/functions/v1/brevo-webhook" className="text-xs font-mono bg-muted" />
-          <Button type="button" variant="outline" size="sm" onClick={() => { navigator.clipboard.writeText("https://zppcobirzgpfcrnxznwe.supabase.co/functions/v1/brevo-webhook"); }}>
+          <Input readOnly value={`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/brevo-webhook`} className="text-xs font-mono bg-muted" />
+          <Button type="button" variant="outline" size="sm" onClick={() => { navigator.clipboard.writeText(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/brevo-webhook`); }}>
             Copiar
           </Button>
         </div>
