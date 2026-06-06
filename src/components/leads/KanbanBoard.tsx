@@ -23,6 +23,7 @@ interface KanbanBoardProps {
   onTemperatureChange: (leadId: string, temperature: LeadTemperature) => void;
   onViewDetails: (lead: Lead) => void;
   onDelete: (leadId: string) => void;
+  onArchive?: (leadId: string) => void;
 }
 
 interface KanbanColumnProps {
@@ -44,6 +45,7 @@ interface KanbanColumnProps {
   onTemperatureChange: (leadId: string, temperature: LeadTemperature) => void;
   onViewDetails: (lead: Lead) => void;
   onDelete: (leadId: string) => void;
+  onArchive?: (leadId: string) => void;
 }
 
 /**
@@ -68,6 +70,7 @@ function KanbanColumn({
   onTemperatureChange,
   onViewDetails,
   onDelete,
+  onArchive,
 }: KanbanColumnProps) {
   const isOrphan = stage === null;
   const dropKey = isOrphan ? "__orphan__" : stage.key;
@@ -173,6 +176,7 @@ function KanbanColumn({
                       onTemperatureChange={onTemperatureChange}
                       onViewDetails={onViewDetails}
                       onDelete={onDelete}
+                      onArchive={onArchive}
                       isDragging={draggedLead === lead.id}
                       pipelineStages={stages}
                       isLocked={isFinalStatus(lead.status || "") && !isAdmin}
@@ -188,7 +192,7 @@ function KanbanColumn({
   );
 }
 
-export function KanbanBoard({ leads, leadEvents = {}, onStatusChange, onTemperatureChange, onViewDetails, onDelete }: KanbanBoardProps) {
+export function KanbanBoard({ leads, leadEvents = {}, onStatusChange, onTemperatureChange, onViewDetails, onDelete, onArchive }: KanbanBoardProps) {
   const { data: stages, isLoading: stagesLoading } = usePipelineStages();
   const { data: proposalValues } = useLeadProposalValues();
   const { isAdmin } = usePermissions();
@@ -325,6 +329,7 @@ export function KanbanBoard({ leads, leadEvents = {}, onStatusChange, onTemperat
             onTemperatureChange={onTemperatureChange}
             onViewDetails={onViewDetails}
             onDelete={onDelete}
+            onArchive={onArchive}
           />
         )}
 
@@ -349,6 +354,7 @@ export function KanbanBoard({ leads, leadEvents = {}, onStatusChange, onTemperat
             onTemperatureChange={onTemperatureChange}
             onViewDetails={onViewDetails}
             onDelete={onDelete}
+            onArchive={onArchive}
           />
         ))}
       </div>

@@ -6,7 +6,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useModules } from "@/hooks/useModules";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MessageCircle, Phone, Mail, MoreVertical, GripVertical, Thermometer, CalendarClock, Zap } from "lucide-react";
+import { MessageCircle, Phone, Mail, MoreVertical, GripVertical, Thermometer, CalendarClock, Zap, Archive } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
@@ -35,6 +35,7 @@ interface LeadCardProps {
   onTemperatureChange?: (leadId: string, temperature: LeadTemperature) => void;
   onViewDetails?: (lead: Lead) => void;
   onDelete?: (leadId: string) => void;
+  onArchive?: (leadId: string) => void;
   isDragging?: boolean;
   pipelineStages?: PipelineStage[];
   isLocked?: boolean;
@@ -46,8 +47,9 @@ export function LeadCard({
   upcomingEvent,
   onStatusChange, 
   onTemperatureChange,
-  onViewDetails, 
+  onViewDetails,
   onDelete,
+  onArchive,
   isDragging,
   pipelineStages = [],
   isLocked = false,
@@ -160,10 +162,19 @@ export function LeadCard({
                 🔒 Estado bloqueado (apenas admin)
               </DropdownMenuItem>
             )}
+            {onArchive && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onArchive(lead.id); }}>
+                  <Archive className="h-4 w-4 mr-2" />
+                  Arquivar
+                </DropdownMenuItem>
+              </>
+            )}
             {canDeleteLeads && (
               <>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem 
+                <DropdownMenuItem
                   className="text-destructive focus:text-destructive"
                   onClick={(e) => { e.stopPropagation(); onDelete?.(lead.id); }}
                 >

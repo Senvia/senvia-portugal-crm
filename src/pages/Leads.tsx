@@ -590,6 +590,10 @@ export default function Leads() {
     setSelectedIds([]);
   };
 
+  const handleArchiveOne = (leadId: string) => {
+    archiveLeads.mutate([leadId]);
+  };
+
   const handleArchiveByStage = async (stageKey: string) => {
     await archiveByStage.mutateAsync(stageKey);
     setIsArchiveByStageOpen(false);
@@ -828,7 +832,7 @@ export default function Leads() {
               <p className="text-lg font-medium">{showArchived ? 'Sem leads arquivadas' : 'Sem leads por agora'}</p>
             </div>
           ) : effectiveViewMode === 'kanban' ? (
-            <ResponsiveKanban leads={filteredLeads} onStatusChange={handleStatusChange} onTemperatureChange={handleTemperatureChange} onViewDetails={handleViewDetails} onDelete={handleDelete} />
+            <ResponsiveKanban leads={filteredLeads} onStatusChange={handleStatusChange} onTemperatureChange={handleTemperatureChange} onViewDetails={handleViewDetails} onDelete={handleDelete} onArchive={handleArchiveOne} />
           ) : (
             <LeadsTableView 
               leads={filteredLeads} 

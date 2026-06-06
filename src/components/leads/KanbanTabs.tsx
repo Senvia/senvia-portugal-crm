@@ -28,6 +28,7 @@ interface KanbanTabsProps {
   onTemperatureChange: (leadId: string, newTemperature: LeadTemperature) => void;
   onViewDetails: (lead: Lead) => void;
   onDelete: (leadId: string) => void;
+  onArchive?: (leadId: string) => void;
 }
 
 // Helper to generate badge style from hex color
@@ -50,6 +51,7 @@ export function KanbanTabs({
   onTemperatureChange,
   onViewDetails,
   onDelete,
+  onArchive,
 }: KanbanTabsProps) {
   const { data: stages = [], isLoading } = usePipelineStages();
   const { isAdmin } = usePermissions();
@@ -236,6 +238,7 @@ export function KanbanTabs({
                     onTemperatureChange={onTemperatureChange}
                     onViewDetails={onViewDetails}
                     onDelete={onDelete}
+                    onArchive={onArchive}
                     pipelineStages={stages}
                     isLocked={isFinalStatus(lead.status || '') && !isAdmin}
                   />

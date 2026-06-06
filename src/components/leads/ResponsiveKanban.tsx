@@ -10,6 +10,7 @@ interface ResponsiveKanbanProps {
   onTemperatureChange: (leadId: string, newTemperature: LeadTemperature) => void;
   onViewDetails: (lead: Lead) => void;
   onDelete: (leadId: string) => void;
+  onArchive?: (leadId: string) => void;
 }
 
 export function ResponsiveKanban(props: ResponsiveKanbanProps) {
