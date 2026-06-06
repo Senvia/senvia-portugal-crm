@@ -1,6 +1,17 @@
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
+import { ErrorBoundary, reloadOnce } from "./components/ErrorBoundary";
+
+// When a lazily-loaded chunk fails to preload (e.g. a new deploy replaced the
+// hashed files while this tab was open), Vite fires `vite:preloadError`.
+// Auto-reload (once) instead of leaving the user on a blank screen.
+if (typeof window !== "undefined") {
+  window.addEventListener("vite:preloadError", (e) => {
+    e.preventDefault();
+    reloadOnce();
+  });
+}
 
 // Register a lightweight push-notification service worker.
 // It does NOT cache anything (avoids stale shells from old vite-plugin-pwa).
@@ -23,4 +34,8 @@ if (typeof window !== "undefined" && "serviceWorker" in navigator) {
   })();
 }
 
-createRoot(document.getElementById("root")!).render(<App />);
+createRoot(document.getElementById("root")!).render(
+  <ErrorBoundary>
+    <App />
+  </ErrorBoundary>
+);
