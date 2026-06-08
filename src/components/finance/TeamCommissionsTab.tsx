@@ -3,6 +3,7 @@ import { format, subMonths, startOfMonth } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -10,15 +11,19 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
-import { ChevronDown, ChevronRight, FileX, Search, Wallet, Percent } from 'lucide-react';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
+} from '@/components/ui/dialog';
+import { ChevronDown, ChevronRight, FileX, Search, Wallet, RefreshCw } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Button } from '@/components/ui/button';
 import { formatCurrency } from '@/lib/format';
-import { matchesSearch } from '@/lib/utils';
+import { cn, matchesSearch } from '@/lib/utils';
 import { useTeamFilter } from '@/hooks/useTeamFilter';
 import { TeamMemberFilter } from '@/components/dashboard/TeamMemberFilter';
-import { useTeamCommissions } from '@/hooks/useTeamCommissions';
-import { CommissionsPayableModal } from '@/components/finance/CommissionsPayableModal';
+import { BankAccountSelect } from '@/components/finance/BankAccountSelect';
+import {
+  useCommercialCommissions, usePayCommercialCommissions, type CommercialCommission,
+} from '@/hooks/useCommercialCommissions';
 
 function generateMonthOptions() {
   const options: { value: string; label: string }[] = [];
@@ -39,9 +44,11 @@ export function TeamCommissionsTab() {
   const [selectedMonth, setSelectedMonth] = useState(monthOptions[0]?.value);
   const [searchTerm, setSearchTerm] = useState('');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [payableOpen, setPayableOpen] = useState(false);
+  const [payTarget, setPayTarget] = useState<CommercialCommission | null>(null);
+  const [bankAccount, setBankAccount] = useState('none');
 
-  const { data, isLoading } = useTeamCommissions(selectedMonth, effectiveUserIds);
+  const { data, isLoading } = useCommercialCommissions(selectedMonth, effectiveUserIds);
+  const payMutation = usePayCommercialCommissions();
 
   const toggle = (id: string) => {
     setExpanded(prev => {
@@ -52,10 +59,28 @@ export function TeamCommissionsTab() {
   };
 
   const commercials = data?.commercials || [];
-  const totalCommission = data?.totalCommission || 0;
-  const totalSales = data?.salesCount || 0;
-
+  const total = data?.total || 0;
+  const totalPending = data?.totalPending || 0;
   const filtered = commercials.filter(c => matchesSearch(searchTerm, c.name));
+
+  const openPay = (entry: CommercialCommission) => {
+    setBankAccount('none');
+    setPayTarget(entry);
+  };
+
+  const confirmPay = () => {
+    if (!payTarget) return;
+    payMutation.mutate(
+      {
+        fullName: payTarget.name,
+        bankAccountId: bankAccount === 'none' ? null : bankAccount,
+        saleIds: payTarget.pendingSaleIds,
+        recordIds: payTarget.pendingRecordIds,
+        total: payTarget.totalPending,
+      },
+      { onSuccess: () => setPayTarget(null) },
+    );
+  };
 
   if (isLoading) {
     return (
@@ -89,13 +114,7 @@ export function TeamCommissionsTab() {
             className="pl-9"
           />
         </div>
-        <Button variant="outline" className="gap-2 sm:ml-auto" onClick={() => setPayableOpen(true)}>
-          <Percent className="h-4 w-4" />
-          Comissões a Pagar
-        </Button>
       </div>
-
-      <CommissionsPayableModal open={payableOpen} onOpenChange={setPayableOpen} />
 
       {commercials.length === 0 ? (
         <Card>
@@ -103,7 +122,7 @@ export function TeamCommissionsTab() {
             <FileX className="h-12 w-12 text-muted-foreground/50 mb-4" />
             <h3 className="text-lg font-medium mb-1">Sem comissões neste mês</h3>
             <p className="text-sm text-muted-foreground max-w-md">
-              Apenas vendas marcadas como "Entregue" entram na contagem. Ainda nenhuma venda foi entregue neste período.
+              Entram aqui as comissões de vendas entregues e de subscrições (recorrentes) deste período.
             </p>
           </CardContent>
         </Card>
@@ -114,13 +133,15 @@ export function TeamCommissionsTab() {
               <div className="flex items-center gap-3">
                 <Wallet className="h-5 w-5 text-primary" />
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Total Comissões do Mês</p>
-                  <p className="text-2xl font-bold">{formatCurrency(totalCommission)}</p>
+                  <p className="text-sm font-medium text-muted-foreground">Comissões do Mês</p>
+                  <p className="text-2xl font-bold">{formatCurrency(total)}</p>
                 </div>
               </div>
-              <Badge variant="outline" className="text-sm">
-                {totalSales} venda(s) entregue(s)
-              </Badge>
+              {totalPending > 0 && (
+                <Badge variant="outline" className="border-amber-500/30 bg-amber-500/20 text-amber-600 text-sm">
+                  {formatCurrency(totalPending)} por pagar
+                </Badge>
+              )}
             </CardContent>
           </Card>
 
@@ -131,73 +152,141 @@ export function TeamCommissionsTab() {
                   <TableRow>
                     <TableHead className="w-8"></TableHead>
                     <TableHead>Comercial</TableHead>
-                    <TableHead className="text-right">Vendas</TableHead>
                     <TableHead className="text-right">Comissão</TableHead>
+                    <TableHead>Estado</TableHead>
+                    <TableHead className="text-right">Ação</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filtered.map(entry => (
-                    <>
-                      <TableRow
-                        key={entry.userId}
-                        className="cursor-pointer"
-                        onClick={() => toggle(entry.userId)}
-                      >
-                        <TableCell>
-                          {expanded.has(entry.userId)
-                            ? <ChevronDown className="h-4 w-4" />
-                            : <ChevronRight className="h-4 w-4" />}
-                        </TableCell>
-                        <TableCell className="font-medium">{entry.name}</TableCell>
-                        <TableCell className="text-right">{entry.salesCount}</TableCell>
-                        <TableCell className="text-right font-semibold">
-                          {formatCurrency(entry.totalCommission)}
-                        </TableCell>
-                      </TableRow>
-                      {expanded.has(entry.userId) && (
-                        <TableRow key={`${entry.userId}-detail`}>
-                          <TableCell colSpan={4} className="bg-muted/30 p-0">
-                            <div className="p-4">
-                              <Table>
-                                <TableHeader>
-                                  <TableRow>
-                                    <TableHead>Data</TableHead>
-                                    <TableHead>Cliente</TableHead>
-                                    <TableHead>Código</TableHead>
-                                    <TableHead className="text-right">Valor venda</TableHead>
-                                    <TableHead className="text-right">Comissão</TableHead>
-                                  </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                  {entry.sales.map(s => (
-                                    <TableRow key={s.saleId}>
-                                      <TableCell className="text-xs">
-                                        {(s.activationDate || s.saleDate)
-                                          ? format(new Date(s.activationDate || s.saleDate!), 'dd MMM yyyy', { locale: pt })
-                                          : '—'}
-                                      </TableCell>
-                                      <TableCell className="text-xs">{s.clientName || '—'}</TableCell>
-                                      <TableCell className="text-xs font-mono">{s.saleCode || '—'}</TableCell>
-                                      <TableCell className="text-right text-xs">{formatCurrency(s.totalValue)}</TableCell>
-                                      <TableCell className="text-right text-xs font-medium">
-                                        {formatCurrency(s.comissao)}
-                                      </TableCell>
-                                    </TableRow>
-                                  ))}
-                                </TableBody>
-                              </Table>
-                            </div>
+                  {filtered.map(entry => {
+                    const isPending = entry.totalPending > 0;
+                    return (
+                      <>
+                        <TableRow
+                          key={entry.userId}
+                          className="cursor-pointer"
+                          onClick={() => toggle(entry.userId)}
+                        >
+                          <TableCell>
+                            {expanded.has(entry.userId)
+                              ? <ChevronDown className="h-4 w-4" />
+                              : <ChevronRight className="h-4 w-4" />}
+                          </TableCell>
+                          <TableCell className="font-medium">{entry.name}</TableCell>
+                          <TableCell className="text-right font-semibold">
+                            {formatCurrency(entry.total)}
+                          </TableCell>
+                          <TableCell>
+                            {isPending ? (
+                              <Badge variant="outline" className="border-amber-500/30 bg-amber-500/20 text-amber-600">
+                                {formatCurrency(entry.totalPending)} pendente
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="border-green-500/30 bg-green-500/20 text-green-600">
+                                Pago
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {isPending && (
+                              <Button
+                                size="sm"
+                                onClick={(e) => { e.stopPropagation(); openPay(entry); }}
+                              >
+                                Pagar
+                              </Button>
+                            )}
                           </TableCell>
                         </TableRow>
-                      )}
-                    </>
-                  ))}
+                        {expanded.has(entry.userId) && (
+                          <TableRow key={`${entry.userId}-detail`}>
+                            <TableCell colSpan={5} className="bg-muted/30 p-0">
+                              <div className="p-4">
+                                <Table>
+                                  <TableHeader>
+                                    <TableRow>
+                                      <TableHead>Tipo</TableHead>
+                                      <TableHead>Cliente / Venda</TableHead>
+                                      <TableHead>Data</TableHead>
+                                      <TableHead className="text-right">Comissão</TableHead>
+                                      <TableHead>Estado</TableHead>
+                                    </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                    {entry.items.map(item => (
+                                      <TableRow key={`${item.kind}-${item.id}`}>
+                                        <TableCell className="text-xs">
+                                          {item.kind === 'recurring' ? (
+                                            <span className="inline-flex items-center gap-1 text-muted-foreground">
+                                              <RefreshCw className="h-3 w-3" /> Recorrente
+                                            </span>
+                                          ) : (
+                                            <span className="text-muted-foreground">Direta</span>
+                                          )}
+                                        </TableCell>
+                                        <TableCell className="text-xs">{item.label}</TableCell>
+                                        <TableCell className="text-xs">
+                                          {item.date ? format(new Date(item.date), 'dd MMM yyyy', { locale: pt }) : '—'}
+                                        </TableCell>
+                                        <TableCell className="text-right text-xs font-medium">{formatCurrency(item.amount)}</TableCell>
+                                        <TableCell>
+                                          <Badge
+                                            variant="outline"
+                                            className={cn(
+                                              'text-[10px]',
+                                              item.paid
+                                                ? 'border-green-500/30 bg-green-500/20 text-green-600'
+                                                : 'border-amber-500/30 bg-amber-500/20 text-amber-600',
+                                            )}
+                                          >
+                                            {item.paid ? 'Pago' : 'Pendente'}
+                                          </Badge>
+                                        </TableCell>
+                                      </TableRow>
+                                    ))}
+                                  </TableBody>
+                                </Table>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </CardContent>
           </Card>
         </>
       )}
+
+      <Dialog open={!!payTarget} onOpenChange={(o) => !o && setPayTarget(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Pagar comissões — {payTarget?.name}</DialogTitle>
+            <DialogDescription>
+              Vais marcar como pagas as comissões pendentes deste comercial e registar a despesa.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-1">
+            <div className="rounded-lg border bg-muted/30 p-4 flex items-center justify-between">
+              <span className="text-sm font-medium text-muted-foreground">Total a pagar</span>
+              <span className="text-xl font-bold text-primary">{formatCurrency(payTarget?.totalPending || 0)}</span>
+            </div>
+            <BankAccountSelect value={bankAccount} onChange={setBankAccount} label="Conta de onde sai" />
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPayTarget(null)} disabled={payMutation.isPending}>
+              Cancelar
+            </Button>
+            <Button onClick={confirmPay} disabled={payMutation.isPending}>
+              {payMutation.isPending ? 'A processar...' : `Pagar ${formatCurrency(payTarget?.totalPending || 0)}`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
