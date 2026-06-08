@@ -15,7 +15,6 @@ import {
 import { useFinanceStats } from "@/hooks/useFinanceStats";
 import { formatCurrency } from "@/lib/format";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useNavigate } from "react-router-dom";
 import {
   AreaChart,
   Area,
@@ -36,6 +35,7 @@ import { BankAccountsTab } from "@/components/finance/BankAccountsTab";
 import { TeamCommissionsTab } from "@/components/finance/TeamCommissionsTab";
 import { CommissionAnalysisTab } from "@/components/finance/CommissionAnalysisTab";
 import { MinhasComissoesModal } from "@/components/finance/MinhasComissoesModal";
+import { FinanceCardDetail, type FinanceDetailType } from "@/components/finance/FinanceCardDetail";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEffect, useState } from "react";
 import { useMyCommissions } from "@/hooks/useSalesApproval";
@@ -66,6 +66,7 @@ export default function Finance() {
   const [dateRange, setDateRange] = usePersistedState<DateRange | undefined>("finance-daterange-v1", undefined);
   const [activeTab, setActiveTab] = usePersistedState("finance-tab-v1", "resumo");
   const [myCommissionsModalOpen, setMyCommissionsModalOpen] = useState(false);
+  const [detailView, setDetailView] = useState<FinanceDetailType | null>(null);
   const { data: myCommissions } = useMyCommissions();
 
   // Current-month team commissions, for the admin Comissões card on Resumo.
@@ -90,22 +91,7 @@ export default function Finance() {
     }
   }, [organization, activeTab, setActiveTab, validTabs]);
 
-  const { stats, isLoading } = useFinanceStats({ dateRange });
-  const navigate = useNavigate();
-
-  const navigateWithDateRange = (path: string, extra?: Record<string, string>) => {
-    const params = new URLSearchParams();
-    if (dateRange?.from) {
-      params.set("from", dateRange.from.toISOString().split("T")[0]);
-      if (dateRange?.to) params.set("to", dateRange.to.toISOString().split("T")[0]);
-    } else {
-      // No period selected: clear any date filter persisted on the destination.
-      params.set("clearDates", "1");
-    }
-    if (extra) Object.entries(extra).forEach(([k, v]) => params.set(k, v));
-    const qs = params.toString();
-    navigate(qs ? `${path}?${qs}` : path);
-  };
+  const { stats, isLoading, payments } = useFinanceStats({ dateRange });
 
   const chartData = stats.cashflowTrend.map((point) => ({
     ...point,
@@ -193,11 +179,27 @@ export default function Finance() {
             </CardContent>
           </Card>
 
+          {detailView ? (
+            <FinanceCardDetail
+              type={detailView}
+              dateRange={dateRange}
+              payments={payments}
+              dueSoonPayments={stats.dueSoonPayments}
+              onBack={() => setDetailView(null)}
+            />
+          ) : (
+            <>
           <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-7">
-            <Card>
+            <Card
+              className="group cursor-pointer transition-colors hover:bg-muted/50"
+              onClick={() => setDetailView("faturado")}
+            >
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Total Faturado</CardTitle>
-                <Wallet className="h-4 w-4 text-muted-foreground" />
+                <div className="flex items-center gap-1">
+                  <Wallet className="h-4 w-4 text-muted-foreground" />
+                  <ExternalLink className="h-3 w-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                </div>
               </CardHeader>
               <CardContent>
                 {isLoading ? (
@@ -211,7 +213,7 @@ export default function Finance() {
 
             <Card
               className="group cursor-pointer transition-colors hover:bg-muted/50"
-              onClick={() => navigateWithDateRange("/financeiro/pagamentos", { status: "paid" })}
+              onClick={() => setDetailView("received")}
             >
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Recebido</CardTitle>
@@ -232,7 +234,7 @@ export default function Finance() {
 
             <Card
               className="group cursor-pointer transition-colors hover:bg-muted/50"
-              onClick={() => navigate("/financeiro/pagamentos?status=pending&clearDates=1")}
+              onClick={() => setDetailView("pending")}
             >
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Pendente</CardTitle>
@@ -253,7 +255,7 @@ export default function Finance() {
 
             <Card
               className="group cursor-pointer transition-colors hover:bg-muted/50"
-              onClick={() => navigateWithDateRange("/financeiro/pagamentos", { status: "overdue" })}
+              onClick={() => setDetailView("overdue")}
             >
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Atrasados</CardTitle>
@@ -274,7 +276,7 @@ export default function Finance() {
 
             <Card
               className="group cursor-pointer transition-colors hover:bg-muted/50"
-              onClick={() => navigateWithDateRange("/financeiro/despesas")}
+              onClick={() => setDetailView("expenses")}
             >
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Despesas</CardTitle>
@@ -293,10 +295,16 @@ export default function Finance() {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card
+              className="group cursor-pointer transition-colors hover:bg-muted/50"
+              onClick={() => setDetailView("balance")}
+            >
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Balanço</CardTitle>
-                <Scale className="h-4 w-4 text-primary" />
+                <div className="flex items-center gap-1">
+                  <Scale className="h-4 w-4 text-primary" />
+                  <ExternalLink className="h-3 w-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                </div>
               </CardHeader>
               <CardContent>
                 {isLoading ? (
@@ -310,10 +318,16 @@ export default function Finance() {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card
+              className="group cursor-pointer transition-colors hover:bg-muted/50"
+              onClick={() => setDetailView("dueSoon")}
+            >
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">A Vencer (7 dias)</CardTitle>
-                <CalendarDays className="h-4 w-4 text-blue-500" />
+                <div className="flex items-center gap-1">
+                  <CalendarDays className="h-4 w-4 text-blue-500" />
+                  <ExternalLink className="h-3 w-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                </div>
               </CardHeader>
               <CardContent>
                 {isLoading ? (
@@ -327,7 +341,7 @@ export default function Finance() {
 
             <Card
               className="group cursor-pointer transition-colors hover:bg-muted/50"
-              onClick={() => setMyCommissionsModalOpen(true)}
+              onClick={() => setDetailView("myCommissions")}
             >
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">As Minhas Comissões</CardTitle>
@@ -374,8 +388,6 @@ export default function Finance() {
               </Card>
             )}
           </div>
-
-          <MinhasComissoesModal open={myCommissionsModalOpen} onOpenChange={setMyCommissionsModalOpen} />
 
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start">
             <Card>
@@ -472,6 +484,8 @@ export default function Finance() {
 
             <RenewalAlertsWidget />
           </div>
+            </>
+          )}
         </TabsContent>
 
         <TabsContent value="contas" className="mt-0">
