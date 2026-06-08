@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { addDays, endOfDay, format, isWithinInterval, parseISO, startOfDay, subDays } from 'date-fns';
+import { addDays, endOfDay, format, isSameMonth, isWithinInterval, parseISO, startOfDay, subDays } from 'date-fns';
 import type { CashflowPoint, FinanceStats, PaymentWithSale } from '@/types/finance';
 import type { PaymentMethod, PaymentRecordStatus, RecurringStatus } from '@/types/sales';
 import { DateRange } from 'react-day-picker';
@@ -49,6 +49,9 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
             client_org_id,
             recurring_status,
             next_renewal_date,
+            sale_date,
+            has_recurring,
+            recurring_value,
             leads:lead_id (name),
             crm_clients:client_id (name)
           )
@@ -90,6 +93,9 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
           client_org_id: (payment.sales as { client_org_id?: string | null } | null)?.client_org_id ?? null,
           recurring_status: (payment.sales as { recurring_status?: RecurringStatus | null } | null)?.recurring_status ?? null,
           next_renewal_date: (payment.sales as { next_renewal_date?: string | null } | null)?.next_renewal_date ?? null,
+          sale_date: (payment.sales as { sale_date?: string | null } | null)?.sale_date ?? null,
+          has_recurring: Boolean((payment.sales as { has_recurring?: boolean } | null)?.has_recurring),
+          recurring_value: Number((payment.sales as { recurring_value?: number } | null)?.recurring_value || 0),
         },
         client_name: payment.sales?.crm_clients?.name || null,
         lead_name: payment.sales?.leads?.name || null,
@@ -183,7 +189,18 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
     // they ignore the date filter and always reflect the full history.
     const eligibleGlobalPayments = (payments || []).filter((payment) => !isStripePlanPayment(payment) || payment.status === 'paid');
 
-    const totalBilled = filteredSales.reduce((sum, sale) => sum + sale.total_value, 0);
+    // Faturado = vendas criadas no período + cada renovação de venda recorrente
+    // no período (usando o recurring_value/preço do plano). Exclui o pagamento do
+    // mês de criação (já contado no total_value da venda) para não duplicar.
+    const renewalBilled = filteredPayments.reduce((sum, payment) => {
+      const sale = payment.sale;
+      if (payment.status !== 'paid' || !sale.has_recurring || !sale.sale_date) return sum;
+      if (isSameMonth(parseISO(payment.payment_date), parseISO(sale.sale_date))) return sum;
+      const value = Number(sale.recurring_value) || Number(sale.total_value) || 0;
+      return sum + value;
+    }, 0);
+
+    const totalBilled = filteredSales.reduce((sum, sale) => sum + sale.total_value, 0) + renewalBilled;
 
     const totalReceived = eligibleFilteredPayments
       .filter((payment) => payment.status === 'paid')

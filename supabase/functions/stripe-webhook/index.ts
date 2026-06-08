@@ -300,16 +300,43 @@ async function handleInvoicePaid(supabase: any, stripe: Stripe, invoice: Stripe.
     const paymentDate = paidAtUnix
       ? new Date(paidAtUnix * 1000).toISOString().split("T")[0]
       : new Date().toISOString().split("T")[0];
+
+    // The amount recorded in Finance is the NET actually received (gross minus
+    // Stripe fees), read from the charge's balance transaction. Commission and
+    // the sale value stay on the gross (plan price). Falls back to gross if the
+    // balance transaction is unavailable.
+    let netAmount = amount;
+    let stripeFee = 0;
+    try {
+      let chargeId = (invoice.charge as string) || null;
+      if (!chargeId && invoice.payment_intent) {
+        const pi = await stripe.paymentIntents.retrieve(invoice.payment_intent as string);
+        chargeId = (pi.latest_charge as string) || null;
+      }
+      if (chargeId) {
+        const charge = await stripe.charges.retrieve(chargeId, { expand: ["balance_transaction"] });
+        const bt = charge.balance_transaction as Stripe.BalanceTransaction | string | null;
+        if (bt && typeof bt !== "string") {
+          netAmount = (bt.net || 0) / 100;
+          stripeFee = (bt.fee || 0) / 100;
+        }
+      }
+    } catch (e) {
+      logStep("invoice.paid: could not fetch balance_transaction for net amount", { error: (e as Error).message });
+    }
+
+    const planLabel = plan ? PLAN_LIST_NAMES[plan] || plan : "subscription";
+    const feeNote = stripeFee > 0 ? ` · bruto ${amount.toFixed(2)}€, taxa ${stripeFee.toFixed(2)}€` : "";
     const { error: paymentErr } = await supabase
       .from("sale_payments")
       .insert({
         organization_id: SENVIA_AGENCY_ORG_ID,
         sale_id: sale.id,
-        amount,
+        amount: netAmount,
         payment_date: paymentDate,
         status: "paid",
         payment_method: "card",
-        notes: `Stripe ${plan ? PLAN_LIST_NAMES[plan] || plan : "subscription"} · ${stripeInvoiceId}`,
+        notes: `Stripe ${planLabel} · ${stripeInvoiceId}${feeNote}`,
       });
 
     if (paymentErr) {

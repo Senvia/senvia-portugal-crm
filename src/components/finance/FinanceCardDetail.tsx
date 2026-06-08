@@ -7,7 +7,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { ArrowLeft, Plus } from "lucide-react";
-import { format, parseISO, startOfDay, endOfDay } from "date-fns";
+import { format, parseISO, startOfDay, endOfDay, isSameMonth } from "date-fns";
 import { pt } from "date-fns/locale";
 import type { DateRange } from "react-day-picker";
 import { formatCurrency } from "@/lib/format";
@@ -127,14 +127,19 @@ function PaymentsDetailTable({ payments }: { payments: PaymentWithSale[] }) {
   );
 }
 
-function SalesDetailTable({ dateRange }: { dateRange?: DateRange }) {
+interface RenewalRow { id: string; date: string; label: string; amount: number; }
+
+function SalesDetailTable({ dateRange, renewals = [] }: { dateRange?: DateRange; renewals?: RenewalRow[] }) {
   const { data: sales = [], isLoading } = useSales();
   const filtered = useMemo(
     () => sales.filter((s) => inRange(s.sale_date, dateRange)),
     [sales, dateRange],
   );
   if (isLoading) return <Skeleton className="h-64 w-full" />;
-  const total = filtered.reduce((s, v) => s + (Number(v.total_value) || 0), 0);
+  const salesTotal = filtered.reduce((s, v) => s + (Number(v.total_value) || 0), 0);
+  const renewalsTotal = renewals.reduce((s, r) => s + r.amount, 0);
+  const total = salesTotal + renewalsTotal;
+  const count = filtered.length + renewals.length;
   return (
     <div className="rounded-md border">
       <Table>
@@ -148,26 +153,41 @@ function SalesDetailTable({ dateRange }: { dateRange?: DateRange }) {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {filtered.length === 0 ? (
+          {count === 0 ? (
             <EmptyRow cols={5} />
           ) : (
-            filtered.map((s) => (
-              <TableRow key={s.id}>
-                <TableCell className="whitespace-nowrap">{fmtDate(s.sale_date)}</TableCell>
-                <TableCell>{s.client?.name || s.lead?.name || "—"}</TableCell>
-                <TableCell>{s.code}</TableCell>
-                <TableCell>
-                  <Badge variant="outline" className={cn(SALE_STATUS_COLORS[s.status])}>
-                    {SALE_STATUS_LABELS[s.status]}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-right font-medium">{formatCurrency(s.total_value)}</TableCell>
-              </TableRow>
-            ))
+            <>
+              {filtered.map((s) => (
+                <TableRow key={s.id}>
+                  <TableCell className="whitespace-nowrap">{fmtDate(s.sale_date)}</TableCell>
+                  <TableCell>{s.client?.name || s.lead?.name || "—"}</TableCell>
+                  <TableCell>{s.code}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className={cn(SALE_STATUS_COLORS[s.status])}>
+                      {SALE_STATUS_LABELS[s.status]}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right font-medium">{formatCurrency(s.total_value)}</TableCell>
+                </TableRow>
+              ))}
+              {renewals.map((r) => (
+                <TableRow key={`renewal-${r.id}`}>
+                  <TableCell className="whitespace-nowrap">{fmtDate(r.date)}</TableCell>
+                  <TableCell>{r.label}</TableCell>
+                  <TableCell>—</TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className="border-blue-500/30 bg-blue-500/20 text-blue-600">
+                      Renovação
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right font-medium">{formatCurrency(r.amount)}</TableCell>
+                </TableRow>
+              ))}
+            </>
           )}
         </TableBody>
       </Table>
-      {filtered.length > 0 && <TotalFooter count={filtered.length} total={total} />}
+      {count > 0 && <TotalFooter count={count} total={total} />}
     </div>
   );
 }
@@ -268,6 +288,21 @@ export function FinanceCardDetail({ type, dateRange, payments, allPayments, dueS
   }, [allPayments]);
   const receivedTotal = useMemo(() => received.reduce((s, p) => s + p.amount, 0), [received]);
 
+  // Recurring renewals in the period (for the "Total Faturado" detail) — paid
+  // recurring payments whose month differs from the sale's creation month.
+  const renewals = useMemo<RenewalRow[]>(
+    () => payments
+      .filter((p) => p.status === "paid" && p.sale?.has_recurring && p.sale?.sale_date
+        && !isSameMonth(parseISO(p.payment_date), parseISO(p.sale.sale_date as string)))
+      .map((p) => ({
+        id: p.id,
+        date: p.payment_date,
+        label: p.client_name || p.lead_name || p.sale?.code || "Renovação",
+        amount: Number(p.sale?.recurring_value) || Number(p.sale?.total_value) || p.amount,
+      })),
+    [payments],
+  );
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
@@ -285,7 +320,7 @@ export function FinanceCardDetail({ type, dateRange, payments, allPayments, dueS
 
       {type === "expenses" && <AddExpenseModal open={addExpenseOpen} onOpenChange={setAddExpenseOpen} />}
 
-      {type === "faturado" && <SalesDetailTable dateRange={dateRange} />}
+      {type === "faturado" && <SalesDetailTable dateRange={dateRange} renewals={renewals} />}
       {type === "received" && <PaymentsDetailTable payments={received} />}
       {type === "pending" && <PaymentsDetailTable payments={pending} />}
       {type === "overdue" && <PaymentsDetailTable payments={overdue} />}

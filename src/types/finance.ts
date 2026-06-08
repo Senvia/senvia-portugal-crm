@@ -29,6 +29,9 @@ export interface PaymentWithSale {
     client_org_id?: string | null;
     recurring_status?: RecurringStatus | null;
     next_renewal_date?: string | null;
+    sale_date?: string | null;
+    has_recurring?: boolean;
+    recurring_value?: number;
   };
   client_name: string | null;
   lead_name: string | null;
