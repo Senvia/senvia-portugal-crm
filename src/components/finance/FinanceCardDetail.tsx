@@ -1,4 +1,5 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -6,7 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Plus } from "lucide-react";
 import { format, parseISO, startOfDay, endOfDay } from "date-fns";
 import { pt } from "date-fns/locale";
 import type { DateRange } from "react-day-picker";
@@ -21,6 +22,7 @@ import {
 import { useSales } from "@/hooks/useSales";
 import { useExpenses } from "@/hooks/useExpenses";
 import { MinhasComissoesContent } from "@/components/finance/MinhasComissoesContent";
+import { AddExpenseModal } from "@/components/finance/AddExpenseModal";
 
 export type FinanceDetailType =
   | "faturado" | "received" | "pending" | "overdue" | "dueSoon" | "expenses" | "balance" | "myCommissions";
@@ -248,6 +250,10 @@ function BalanceDetail({
 }
 
 export function FinanceCardDetail({ type, dateRange, payments, allPayments, dueSoonPayments, onBack }: FinanceCardDetailProps) {
+  const navigate = useNavigate();
+  const [addExpenseOpen, setAddExpenseOpen] = useState(false);
+  const isPaymentType = type === "received" || type === "pending" || type === "overdue" || type === "dueSoon";
+
   const received = useMemo(() => payments.filter((p) => p.status === "paid"), [payments]);
   // Pending/overdue always show the full history (ignore the period filter) —
   // they represent the outstanding balance, not a period metric.
@@ -270,7 +276,25 @@ export function FinanceCardDetail({ type, dateRange, payments, allPayments, dueS
           <ArrowLeft className="h-4 w-4" /> Voltar
         </Button>
         <h2 className="text-lg font-semibold">{TITLES[type]}</h2>
+
+        {type === "expenses" && (
+          <div className="ml-auto flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => navigate("/financeiro/despesas")}>
+              Página completa
+            </Button>
+            <Button size="sm" className="gap-1.5" onClick={() => setAddExpenseOpen(true)}>
+              <Plus className="h-4 w-4" /> Nova Despesa
+            </Button>
+          </div>
+        )}
+        {isPaymentType && (
+          <Button variant="outline" size="sm" className="ml-auto" onClick={() => navigate("/financeiro/pagamentos")}>
+            Página completa
+          </Button>
+        )}
       </div>
+
+      {type === "expenses" && <AddExpenseModal open={addExpenseOpen} onOpenChange={setAddExpenseOpen} />}
 
       {type === "faturado" && <SalesDetailTable dateRange={dateRange} />}
       {type === "received" && <PaymentsDetailTable payments={received} />}
