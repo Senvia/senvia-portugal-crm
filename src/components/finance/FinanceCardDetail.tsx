@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -250,9 +249,7 @@ function BalanceDetail({
 }
 
 export function FinanceCardDetail({ type, dateRange, payments, allPayments, dueSoonPayments, onBack }: FinanceCardDetailProps) {
-  const navigate = useNavigate();
   const [addExpenseOpen, setAddExpenseOpen] = useState(false);
-  const isPaymentType = type === "received" || type === "pending" || type === "overdue" || type === "dueSoon";
 
   const received = useMemo(() => payments.filter((p) => p.status === "paid"), [payments]);
   // Pending/overdue always show the full history (ignore the period filter) —
@@ -278,18 +275,8 @@ export function FinanceCardDetail({ type, dateRange, payments, allPayments, dueS
         <h2 className="text-lg font-semibold">{TITLES[type]}</h2>
 
         {type === "expenses" && (
-          <div className="ml-auto flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => navigate("/financeiro/despesas")}>
-              Página completa
-            </Button>
-            <Button size="sm" className="gap-1.5" onClick={() => setAddExpenseOpen(true)}>
-              <Plus className="h-4 w-4" /> Nova Despesa
-            </Button>
-          </div>
-        )}
-        {isPaymentType && (
-          <Button variant="outline" size="sm" className="ml-auto" onClick={() => navigate("/financeiro/pagamentos")}>
-            Página completa
+          <Button size="sm" className="ml-auto gap-1.5" onClick={() => setAddExpenseOpen(true)}>
+            <Plus className="h-4 w-4" /> Nova Despesa
           </Button>
         )}
       </div>

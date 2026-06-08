@@ -86,6 +86,7 @@ export function useCreateExpense() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['expenses'] });
+      queryClient.invalidateQueries({ queryKey: ['expenses-stats'] });
       queryClient.invalidateQueries({ queryKey: ['finance-stats'] });
       toast({ title: 'Despesa registada com sucesso!' });
     },
@@ -129,6 +130,7 @@ export function useUpdateExpense() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['expenses'] });
+      queryClient.invalidateQueries({ queryKey: ['expenses-stats'] });
       queryClient.invalidateQueries({ queryKey: ['finance-stats'] });
       toast({ title: 'Despesa atualizada!' });
     },
@@ -154,6 +156,7 @@ export function useDeleteExpense() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['expenses'] });
+      queryClient.invalidateQueries({ queryKey: ['expenses-stats'] });
       queryClient.invalidateQueries({ queryKey: ['finance-stats'] });
       toast({ title: 'Despesa removida!' });
     },
