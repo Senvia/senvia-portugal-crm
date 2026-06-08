@@ -75,7 +75,7 @@ function EmptyRow({ cols }: { cols: number }) {
   return (
     <TableRow>
       <TableCell colSpan={cols} className="h-24 text-center text-muted-foreground">
-        Sem registos no período.
+        Sem registos.
       </TableCell>
     </TableRow>
   );
@@ -249,18 +249,18 @@ function BalanceDetail({
 
 export function FinanceCardDetail({ type, dateRange, payments, allPayments, dueSoonPayments, onBack }: FinanceCardDetailProps) {
   const received = useMemo(() => payments.filter((p) => p.status === "paid"), [payments]);
-  // Pending/overdue start from the full history (show everything by default) and
-  // can be narrowed by selecting a period manually.
+  // Pending/overdue always show the full history (ignore the period filter) —
+  // they represent the outstanding balance, not a period metric.
   const pending = useMemo(
-    () => allPayments.filter((p) => p.status === "pending" && !isPlanPayment(p) && inRange(p.payment_date, dateRange)),
-    [allPayments, dateRange],
+    () => allPayments.filter((p) => p.status === "pending" && !isPlanPayment(p)),
+    [allPayments],
   );
   const overdue = useMemo(() => {
     const cutoff = startOfDay(new Date());
     return allPayments.filter(
-      (p) => p.status === "pending" && !isPlanPayment(p) && parseISO(p.payment_date) < cutoff && inRange(p.payment_date, dateRange),
+      (p) => p.status === "pending" && !isPlanPayment(p) && parseISO(p.payment_date) < cutoff,
     );
-  }, [allPayments, dateRange]);
+  }, [allPayments]);
   const receivedTotal = useMemo(() => received.reduce((s, p) => s + p.amount, 0), [received]);
 
   return (
