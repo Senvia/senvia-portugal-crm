@@ -2,7 +2,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTeamMembers } from '@/hooks/useTeam';
-import { startOfMonth, endOfMonth, format } from 'date-fns';
+import { startOfMonth, endOfMonth, startOfDay, endOfDay, parseISO, format } from 'date-fns';
+import type { DateRange } from 'react-day-picker';
 import { toast } from 'sonner';
 
 export interface CommissionItem {
@@ -152,6 +153,60 @@ export function useCommercialCommissions(selectedMonth: string, effectiveUserIds
       return { commercials, total, totalPending };
     },
     enabled: !!organizationId && !!selectedMonth,
+  });
+}
+
+/**
+ * Org-wide commission total for a date range (for the Resumo "Comissões" card):
+ * direct-sale commissions (delivered/fulfilled, by activation/sale date) +
+ * pending recurring commissions (by created_at). When no range is given,
+ * returns the all-time total.
+ */
+export function useTeamCommissionTotal(dateRange?: DateRange) {
+  const { organization } = useAuth();
+  const orgId = organization?.id;
+  const fromKey = dateRange?.from ? dateRange.from.toISOString() : 'all';
+  const toKey = dateRange?.to ? dateRange.to.toISOString() : 'none';
+
+  return useQuery<{ total: number; count: number }>({
+    queryKey: ['team-commission-total', orgId, fromKey, toKey],
+    queryFn: async () => {
+      if (!orgId) return { total: 0, count: 0 };
+
+      const inRange = (dateStr?: string | null) => {
+        if (!dateRange?.from) return true;
+        if (!dateStr) return false;
+        const d = parseISO(dateStr);
+        if (d < startOfDay(dateRange.from)) return false;
+        if (dateRange.to && d > endOfDay(dateRange.to)) return false;
+        return true;
+      };
+
+      const { data: sales } = await supabase
+        .from('sales')
+        .select('comissao, sale_date, activation_date')
+        .eq('organization_id', orgId)
+        .in('status', ['delivered', 'fulfilled']);
+
+      let total = 0;
+      let count = 0;
+      for (const s of (sales || []) as any[]) {
+        const amount = Number(s.comissao || 0);
+        if (amount > 0 && inRange(s.activation_date || s.sale_date)) { total += amount; count += 1; }
+      }
+
+      const { data: recs } = await (supabase as any)
+        .from('stripe_commission_records')
+        .select('commission_amount, created_at, status')
+        .eq('organization_id', orgId)
+        .eq('status', 'pending');
+      for (const r of (recs || []) as any[]) {
+        if (inRange(r.created_at)) total += Number(r.commission_amount || 0);
+      }
+
+      return { total, count };
+    },
+    enabled: !!orgId,
   });
 }
 

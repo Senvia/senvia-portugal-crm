@@ -21,10 +21,11 @@ import {
 import { useSales } from "@/hooks/useSales";
 import { useExpenses } from "@/hooks/useExpenses";
 import { MinhasComissoesContent } from "@/components/finance/MinhasComissoesContent";
+import { TeamCommissionsTab } from "@/components/finance/TeamCommissionsTab";
 import { AddExpenseModal } from "@/components/finance/AddExpenseModal";
 
 export type FinanceDetailType =
-  | "faturado" | "received" | "pending" | "overdue" | "dueSoon" | "expenses" | "balance" | "myCommissions";
+  | "faturado" | "received" | "pending" | "overdue" | "dueSoon" | "expenses" | "balance" | "myCommissions" | "commissions";
 
 interface FinanceCardDetailProps {
   type: FinanceDetailType;
@@ -49,6 +50,7 @@ const TITLES: Record<FinanceDetailType, string> = {
   expenses: "Despesas",
   balance: "Balanço",
   myCommissions: "As Minhas Comissões",
+  commissions: "Comissões",
 };
 
 function inRange(dateStr: string, dateRange?: DateRange) {
@@ -290,6 +292,7 @@ export function FinanceCardDetail({ type, dateRange, payments, allPayments, dueS
       {type === "dueSoon" && <PaymentsDetailTable payments={dueSoonPayments} />}
       {type === "expenses" && <ExpensesDetailTable dateRange={dateRange} />}
       {type === "myCommissions" && <MinhasComissoesContent />}
+      {type === "commissions" && <TeamCommissionsTab />}
       {type === "balance" && (
         <BalanceDetail dateRange={dateRange} received={received} receivedTotal={receivedTotal} />
       )}

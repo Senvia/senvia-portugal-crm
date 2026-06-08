@@ -25,7 +25,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts";
-import { format, parseISO } from "date-fns";
+import { format, parseISO, startOfDay, endOfDay } from "date-fns";
 import { pt } from "date-fns/locale";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { DateRange } from "react-day-picker";
@@ -39,12 +39,10 @@ import { FinanceCardDetail, type FinanceDetailType } from "@/components/finance/
 import { useAuth } from "@/contexts/AuthContext";
 import { useEffect, useState } from "react";
 import { useMyCommissions } from "@/hooks/useSalesApproval";
-import { useTeamCommissions } from "@/hooks/useTeamCommissions";
-import { useStripeCommissions } from "@/hooks/useStripeCommissions";
+import { useTeamCommissionTotal } from "@/hooks/useCommercialCommissions";
 import { RenewalAlertsWidget } from "@/components/finance/RenewalAlertsWidget";
 import { hasPerfect2GetherAccess } from "@/lib/perfect2gether";
 import { usePermissions } from "@/hooks/usePermissions";
-import { startOfMonth } from "date-fns";
 
 export default function Finance() {
   const { organization, organizations } = useAuth();
@@ -70,22 +68,28 @@ export default function Finance() {
   const [detailView, setDetailView] = useState<FinanceDetailType | null>(null);
   const { data: myCommissions } = useMyCommissions();
 
-  // Current-month team commissions, for the admin Comissões card on Resumo.
-  const currentMonthIso = format(startOfMonth(new Date()), "yyyy-MM-dd");
-  const { data: teamCommissions } = useTeamCommissions(currentMonthIso);
-  // Recurring (Stripe) commissions are tracked separately from direct-sale
-  // commissions; include them so the card reflects everything owed this month.
-  const { data: stripeCommissions } = useStripeCommissions();
-  const recurringCommissionTotal = stripeCommissions?.grandTotal ?? 0;
-  const teamCommissionTotal = (teamCommissions?.totalCommission ?? 0) + recurringCommissionTotal;
-  const teamSalesCount = teamCommissions?.salesCount ?? 0;
+  // Commission cards respect the selected period (direct + recurring).
+  const inPeriod = (dateStr?: string | null) => {
+    if (!dateRange?.from) return true;
+    if (!dateStr) return false;
+    const d = parseISO(dateStr);
+    if (d < startOfDay(dateRange.from)) return false;
+    if (dateRange.to && d > endOfDay(dateRange.to)) return false;
+    return true;
+  };
 
-  // Personal commission totals for the "Minhas Comissões" card (visible to all users)
-  const myPendingTotal = (myCommissions || []).reduce((sum, s) => {
+  // Team commissions (admin Comissões card) — period-aware.
+  const { data: teamCommission } = useTeamCommissionTotal(dateRange);
+  const teamCommissionTotal = teamCommission?.total ?? 0;
+  const teamSalesCount = teamCommission?.count ?? 0;
+
+  // Personal commission totals ("As Minhas Comissões") — filtered by period (sale date).
+  const myInPeriod = (myCommissions || []).filter((s) => inPeriod(s.sale_date));
+  const myPendingTotal = myInPeriod.reduce((sum, s) => {
     const isPending = s.status === 'pending' || s.status === 'in_progress';
     return isPending ? sum + (Number(s.comissao) || 0) : sum;
   }, 0);
-  const myConfirmedTotal = (myCommissions || []).reduce((sum, s) => {
+  const myConfirmedTotal = myInPeriod.reduce((sum, s) => {
     const isConfirmed = s.status === 'delivered' || s.status === 'fulfilled';
     return isConfirmed ? sum + (Number(s.comissao) || 0) : sum;
   }, 0);
@@ -372,7 +376,7 @@ export default function Finance() {
             {isAdmin && (
               <Card
                 className="group cursor-pointer transition-colors hover:bg-muted/50"
-                onClick={() => setActiveTab("comissoes")}
+                onClick={() => setDetailView("commissions")}
               >
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Comissões</CardTitle>
@@ -387,9 +391,8 @@ export default function Finance() {
                   </div>
                   <p className="text-xs text-muted-foreground">
                     {teamSalesCount > 0
-                      ? `${teamSalesCount} venda(s) entregue(s) este mês`
-                      : "Equipa · este mês"}
-                    {recurringCommissionTotal > 0 && ` · inclui ${formatCurrency(recurringCommissionTotal)} recorrente`}
+                      ? `${teamSalesCount} venda(s) ${hasFilters ? "no período" : "no total"}`
+                      : "Equipa"}
                   </p>
                 </CardContent>
               </Card>
