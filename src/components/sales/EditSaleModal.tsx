@@ -505,13 +505,17 @@ export function EditSaleModal({
             if (product?.is_recurring && item.first_due_date) {
               const paymentDateStr = format(item.first_due_date, 'yyyy-MM-dd');
               
+              // Check for ANY existing payment on this date (paid or pending).
+              // Filtering by status === 'pending' here caused a duplicate to be
+              // generated when a sale value was edited after the installment had
+              // already been paid: the paid row was not found, so a new pending
+              // row was created at the new price on the old date.
               const { data: existingPayments } = await supabase
                 .from('sale_payments')
                 .select('id')
                 .eq('sale_id', sale.id)
-                .eq('payment_date', paymentDateStr)
-                .eq('status', 'pending');
-              
+                .eq('payment_date', paymentDateStr);
+
               if (!existingPayments || existingPayments.length === 0) {
                 await createSalePayment.mutateAsync({
                   sale_id: sale.id,
