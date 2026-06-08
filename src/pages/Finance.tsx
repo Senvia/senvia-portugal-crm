@@ -40,6 +40,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useEffect, useState } from "react";
 import { useMyCommissions } from "@/hooks/useSalesApproval";
 import { useTeamCommissions } from "@/hooks/useTeamCommissions";
+import { useStripeCommissions } from "@/hooks/useStripeCommissions";
 import { RenewalAlertsWidget } from "@/components/finance/RenewalAlertsWidget";
 import { hasPerfect2GetherAccess } from "@/lib/perfect2gether";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -72,7 +73,11 @@ export default function Finance() {
   // Current-month team commissions, for the admin Comissões card on Resumo.
   const currentMonthIso = format(startOfMonth(new Date()), "yyyy-MM-dd");
   const { data: teamCommissions } = useTeamCommissions(currentMonthIso);
-  const teamCommissionTotal = teamCommissions?.totalCommission ?? 0;
+  // Recurring (Stripe) commissions are tracked separately from direct-sale
+  // commissions; include them so the card reflects everything owed this month.
+  const { data: stripeCommissions } = useStripeCommissions();
+  const recurringCommissionTotal = stripeCommissions?.grandTotal ?? 0;
+  const teamCommissionTotal = (teamCommissions?.totalCommission ?? 0) + recurringCommissionTotal;
   const teamSalesCount = teamCommissions?.salesCount ?? 0;
 
   // Personal commission totals for the "Minhas Comissões" card (visible to all users)
@@ -384,6 +389,7 @@ export default function Finance() {
                     {teamSalesCount > 0
                       ? `${teamSalesCount} venda(s) entregue(s) este mês`
                       : "Equipa · este mês"}
+                    {recurringCommissionTotal > 0 && ` · inclui ${formatCurrency(recurringCommissionTotal)} recorrente`}
                   </p>
                 </CardContent>
               </Card>

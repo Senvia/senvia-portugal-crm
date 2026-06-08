@@ -10,13 +10,15 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
-import { ChevronDown, ChevronRight, FileX, Search, Wallet } from 'lucide-react';
+import { ChevronDown, ChevronRight, FileX, Search, Wallet, Percent } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
 import { formatCurrency } from '@/lib/format';
 import { matchesSearch } from '@/lib/utils';
 import { useTeamFilter } from '@/hooks/useTeamFilter';
 import { TeamMemberFilter } from '@/components/dashboard/TeamMemberFilter';
 import { useTeamCommissions } from '@/hooks/useTeamCommissions';
+import { CommissionsPayableModal } from '@/components/finance/CommissionsPayableModal';
 
 function generateMonthOptions() {
   const options: { value: string; label: string }[] = [];
@@ -37,6 +39,7 @@ export function TeamCommissionsTab() {
   const [selectedMonth, setSelectedMonth] = useState(monthOptions[0]?.value);
   const [searchTerm, setSearchTerm] = useState('');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [payableOpen, setPayableOpen] = useState(false);
 
   const { data, isLoading } = useTeamCommissions(selectedMonth, effectiveUserIds);
 
@@ -86,7 +89,13 @@ export function TeamCommissionsTab() {
             className="pl-9"
           />
         </div>
+        <Button variant="outline" className="gap-2 sm:ml-auto" onClick={() => setPayableOpen(true)}>
+          <Percent className="h-4 w-4" />
+          Comissões a Pagar
+        </Button>
       </div>
+
+      <CommissionsPayableModal open={payableOpen} onOpenChange={setPayableOpen} />
 
       {commercials.length === 0 ? (
         <Card>
