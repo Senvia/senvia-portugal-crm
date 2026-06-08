@@ -180,9 +180,12 @@ export function AppSidebar({
           </div>
 
           <div className="px-4 py-2 text-center leading-tight">
-            <span className="block text-[10px] text-sidebar-muted/60">
+            <NavLink
+              to="/novidades"
+              className="block text-[10px] text-sidebar-muted/60 transition-colors hover:text-sidebar-muted"
+            >
               Senvia OS v{APP_VERSION}
-            </span>
+            </NavLink>
             <span className="block text-[9px] text-sidebar-muted/40">
               {typeof window !== 'undefined' ? window.location.host : ''}
             </span>

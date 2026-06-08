@@ -10,7 +10,8 @@ import { SalesPerformancePanel } from "@/components/dashboard/SalesPerformancePa
 import { MetricsPanel } from "@/components/dashboard/MetricsPanel";
 import { CommissionsWidget } from "@/components/dashboard/CommissionsWidget";
 import { TeamPerformanceTable } from "@/components/dashboard/TeamPerformanceTable";
-import { Loader2 } from "lucide-react";
+import { Loader2, Sparkles } from "lucide-react";
+import { Link } from "react-router-dom";
 import { NicheType } from "@/lib/dashboard-templates";
 import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription";
 import { useModules } from "@/hooks/useModules";
@@ -51,6 +52,13 @@ export default function Dashboard() {
         </div>
         
         <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+          <Link
+            to="/novidades"
+            className="flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <Sparkles className="h-4 w-4" />
+            <span>O que há de novo</span>
+          </Link>
           <DashboardPeriodFilter />
           <TeamMemberFilter className="w-[160px] sm:w-[180px]" />
         </div>
