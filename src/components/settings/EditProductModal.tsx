@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { RefreshCw } from 'lucide-react';
 import { useUpdateProduct } from '@/hooks/useProducts';
+import { useOrganization } from '@/hooks/useOrganization';
 import type { Product } from '@/types/proposals';
 
 interface EditProductModalProps {
@@ -17,6 +18,13 @@ interface EditProductModalProps {
 
 export function EditProductModal({ product, open, onOpenChange }: EditProductModalProps) {
   const updateProduct = useUpdateProduct();
+  const { data: org } = useOrganization();
+  // Per-product commission field is relevant for telecom (matrix products) or
+  // when a non-telecom org chose the "per product/service" commission mode.
+  const settings = (org?.sales_settings as { commission_mode?: string; commission_percentage?: number | null }) || {};
+  const isTelecom = (org as { niche?: string } | undefined)?.niche === "telecom";
+  const commissionMode = settings.commission_mode || ((settings.commission_percentage ?? 0) > 0 ? "global" : "per_product");
+  const showCommission = isTelecom || commissionMode === "per_product";
   const [name, setName] = useState(product.name);
   const [description, setDescription] = useState(product.description || '');
   const [price, setPrice] = useState(product.price?.toString() || '');
@@ -94,11 +102,13 @@ export function EditProductModal({ product, open, onOpenChange }: EditProductMod
             />
           </div>
 
+          {showCommission && (
           <div className="rounded-lg border bg-primary/5 p-4 space-y-3">
             <p className="text-sm font-medium">Comissão por unidade</p>
             <p className="text-xs text-muted-foreground -mt-1">
-              Valor pago ao comercial por cada unidade vendida deste produto.
-              Vendas de energia (com CPE) ignoram este campo e usam o motor próprio.
+              {isTelecom
+                ? "Valor pago ao comercial por cada unidade vendida deste produto. Vendas de energia (com CPE) ignoram este campo e usam o motor próprio."
+                : "Valor pago ao comercial por cada unidade vendida deste produto."}
             </p>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
@@ -127,6 +137,7 @@ export function EditProductModal({ product, open, onOpenChange }: EditProductMod
               </div>
             </div>
           </div>
+          )}
 
           <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
             <div className="flex items-center justify-between">

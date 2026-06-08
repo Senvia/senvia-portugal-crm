@@ -3,7 +3,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Download, Search, FileText, X, Loader2, ArrowUpDown, ArrowUp, ArrowDown, FileDown } from "lucide-react";
+import { Download, Search, FileText, X, Loader2, ArrowUpDown, ArrowUp, ArrowDown, FileDown, Plus } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { SaleInvoicePicker } from "@/components/finance/SaleInvoicePicker";
+import { CreditNoteInvoicePicker } from "@/components/finance/CreditNoteInvoicePicker";
+import { isInvoiceXpressActive } from "@/components/sales/SaleFiscalInfo";
 import { useInvoices, useSyncInvoices } from "@/hooks/useInvoices";
 import { useCreditNotes, useSyncCreditNotes } from "@/hooks/useCreditNotes";
 import { formatCurrency, formatDate } from "@/lib/format";
@@ -52,12 +56,15 @@ export function InvoicesContent() {
   const { data: creditNotesData, isLoading: loadingCreditNotes } = useCreditNotes();
   const { organization } = useAuth();
   const { data: orgData } = useOrganization();
-  const isInvoicexpressEnabled = (orgData?.integrations_enabled as any)?.invoicexpress === true;
+  // Invoicing is active for both InvoiceXpress and KeyInvoice orgs (the old
+  // check only looked at the invoicexpress flag, which is false for KeyInvoice).
+  const isInvoicexpressEnabled = isInvoiceXpressActive(orgData) || isInvoiceXpressActive(organization);
   const syncInvoices = useSyncInvoices();
   const syncCreditNotes = useSyncCreditNotes();
   const hasSynced = useRef(false);
   const [searchTerm, setSearchTerm] = usePersistedState("invoices-search-v1", "");
   const [dateRange, setDateRange] = usePersistedState<DateRange | undefined>("invoices-daterange-v1", undefined);
+  const [pickerMode, setPickerMode] = useState<'invoice' | 'credit-note' | null>(null);
   const [viewingId, setViewingId] = useState<string | null>(null);
   const SORT_KEY = 'finance-invoices-sort-v1';
   const VALID_FIELDS: SortField[] = ['reference', 'document_type', 'date', 'client_name', 'status', 'total'];
@@ -254,6 +261,20 @@ export function InvoicesContent() {
           </p>
         </div>
         <div className="flex gap-2">
+          {isInvoicexpressEnabled && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm" className="gap-2">
+                  <Plus className="h-4 w-4" />
+                  <span>Criar</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setPickerMode('invoice')}>Nova Fatura</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setPickerMode('credit-note')}>Nota de Crédito</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
           <Button onClick={handleExport} variant="outline" size="sm" className="gap-2">
             <Download className="h-4 w-4" />
             <span className="hidden sm:inline">Exportar</span>
@@ -422,6 +443,9 @@ export function InvoicesContent() {
           paymentId={selectedInvoice.payment_id}
         />
       )}
+
+      <SaleInvoicePicker open={pickerMode === 'invoice'} onOpenChange={(o) => !o && setPickerMode(null)} />
+      <CreditNoteInvoicePicker open={pickerMode === 'credit-note'} onOpenChange={(o) => !o && setPickerMode(null)} />
     </div>
   );
 }

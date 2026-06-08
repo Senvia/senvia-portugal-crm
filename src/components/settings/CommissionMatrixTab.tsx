@@ -63,6 +63,7 @@ function getDefaultRule(method: string): CommissionRule {
 
 export function CommissionMatrixTab() {
   const { data: org } = useOrganization();
+  const isTelecom = (org as { niche?: string } | undefined)?.niche === "telecom";
   const updateOrg = useUpdateOrganization();
   const { products: SERVICOS_PRODUCTS } = useServicosProducts();
   const [localMatrix, setLocalMatrix] = useState<CommissionMatrix>({});
@@ -111,6 +112,7 @@ export function CommissionMatrixTab() {
 
       <CommissionGlobalSettings />
 
+      {isTelecom && (<>
       <div>
         <h3 className="text-sm font-medium mb-3">Por produto / serviço</h3>
       </div>
@@ -186,6 +188,7 @@ export function CommissionMatrixTab() {
           onClose={() => setOpenEnergy(false)}
         />
       )}
+      </>)}
     </div>
   );
 }

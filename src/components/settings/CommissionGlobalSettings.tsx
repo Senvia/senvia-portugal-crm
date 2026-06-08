@@ -4,46 +4,52 @@ import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Info, Percent } from "lucide-react";
+import { Info, Percent, TrendingUp, Package } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { useOrganization, useUpdateOrganization } from "@/hooks/useOrganization";
+
+type CommissionMode = "global" | "per_product";
 
 interface SalesSettings {
   commissions_enabled?: boolean;
   commission_percentage?: number | null;
+  commission_mode?: CommissionMode;
   [key: string]: unknown;
 }
 
 /**
- * Org-wide commission settings (enable + global %). Lives at the top of the
- * Matriz de Comissões tab because it's a commission rule, not a sales
- * workflow rule. Persists in `organizations.sales_settings` (same column as
- * before) — UI moved, data unchanged.
+ * Org-wide commission settings. For non-telecom orgs the admin chooses a mode:
+ * a single global % over the sale total, or per-product commission values set
+ * in the product catalog. Telecom/energy orgs keep the matrix below.
+ * Persists in `organizations.sales_settings`.
  */
 export function CommissionGlobalSettings() {
   const { data: org } = useOrganization();
   const updateOrganization = useUpdateOrganization();
   const currentSettings: SalesSettings = (org?.sales_settings as SalesSettings) || {};
+  const isTelecom = (org as { niche?: string } | undefined)?.niche === "telecom";
 
   const [enabled, setEnabled] = useState(false);
   const [percentage, setPercentage] = useState("");
+  const [mode, setMode] = useState<CommissionMode>("global");
 
   useEffect(() => {
     setEnabled(!!currentSettings.commissions_enabled);
-    setPercentage(
-      currentSettings.commission_percentage != null && currentSettings.commission_percentage > 0
-        ? String(currentSettings.commission_percentage)
-        : ""
-    );
+    const pct = currentSettings.commission_percentage;
+    setPercentage(pct != null && pct > 0 ? String(pct) : "");
+    setMode(currentSettings.commission_mode || (pct != null && pct > 0 ? "global" : "per_product"));
   }, [org?.sales_settings]);
 
   const parsedPct = percentage ? parseFloat(percentage) : null;
   const currentPct = currentSettings.commission_percentage != null && currentSettings.commission_percentage > 0
     ? currentSettings.commission_percentage
     : null;
+  const currentMode = currentSettings.commission_mode || (currentPct ? "global" : "per_product");
 
   const hasChanges =
     enabled !== !!currentSettings.commissions_enabled ||
-    (parsedPct || null) !== (currentPct || null);
+    (parsedPct || null) !== (currentPct || null) ||
+    (!isTelecom && mode !== currentMode);
 
   const handleSave = () => {
     updateOrganization.mutate({
@@ -51,9 +57,13 @@ export function CommissionGlobalSettings() {
         ...currentSettings,
         commissions_enabled: enabled,
         commission_percentage: parsedPct && parsedPct > 0 ? parsedPct : null,
+        ...(isTelecom ? {} : { commission_mode: mode }),
       },
     });
   };
+
+  // For non-telecom, the global % field only matters in "global" mode.
+  const showPercentage = enabled && (isTelecom || mode === "global");
 
   return (
     <Card>
@@ -80,7 +90,44 @@ export function CommissionGlobalSettings() {
           />
         </div>
 
-        {enabled && (
+        {/* Mode selector — non-telecom orgs only */}
+        {enabled && !isTelecom && (
+          <div className="space-y-2 border-t pt-5">
+            <Label className="text-sm">Como calcular a comissão?</Label>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => setMode("global")}
+                className={cn(
+                  "flex items-start gap-2 rounded-lg border p-3 text-left transition-colors",
+                  mode === "global" ? "border-primary bg-primary/5" : "hover:bg-muted/50",
+                )}
+              >
+                <TrendingUp className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <div>
+                  <p className="text-sm font-medium">Comissão global</p>
+                  <p className="text-xs text-muted-foreground">Uma % sobre o valor total de cada venda.</p>
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode("per_product")}
+                className={cn(
+                  "flex items-start gap-2 rounded-lg border p-3 text-left transition-colors",
+                  mode === "per_product" ? "border-primary bg-primary/5" : "hover:bg-muted/50",
+                )}
+              >
+                <Package className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <div>
+                  <p className="text-sm font-medium">Comissão por produto/serviço</p>
+                  <p className="text-xs text-muted-foreground">Valor definido no cadastro de cada produto.</p>
+                </div>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {showPercentage && (
           <div className="space-y-3 border-t pt-5">
             <div className="space-y-2">
               <Label htmlFor="commission_percentage_matrix" className="text-sm">
@@ -101,13 +148,22 @@ export function CommissionGlobalSettings() {
             <div className="flex gap-2 p-3 rounded-md bg-muted/50 border">
               <Info className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
               <p className="text-xs text-muted-foreground leading-relaxed">
-                Aplicada como <strong>fallback</strong> sobre o valor total da venda quando
-                os produtos não têm comissão configurada. Para regras detalhadas por produto
-                ou energia, usa as secções abaixo. Se preferes definir a percentagem
-                individualmente por colaborador, deixa este campo vazio e configura em
-                Equipa &gt; Editar Dados.
+                {isTelecom
+                  ? "Aplicada como fallback sobre o valor total da venda quando os produtos não têm comissão configurada. Para regras detalhadas por produto ou energia, usa as secções abaixo."
+                  : "Aplicada sobre o valor total de cada venda."}
               </p>
             </div>
+          </div>
+        )}
+
+        {/* Per-product note — non-telecom */}
+        {enabled && !isTelecom && mode === "per_product" && (
+          <div className="flex gap-2 rounded-md border bg-muted/50 p-3">
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              Define a comissão de cada produto/serviço em <strong>Definições &gt; Produtos</strong> (campo
+              "Comissão por unidade"). Produtos sem valor definido não geram comissão.
+            </p>
           </div>
         )}
 

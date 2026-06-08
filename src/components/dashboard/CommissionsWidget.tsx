@@ -1,6 +1,4 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useSalesCommissions } from "@/hooks/useSalesCommissions";
 import { useStripeCommissions } from "@/hooks/useStripeCommissions";
@@ -10,8 +8,7 @@ import { Percent, TrendingUp, Receipt, RefreshCw } from "lucide-react";
 export function CommissionsWidget() {
   const { data: entries, isLoading } = useSalesCommissions();
   const { data: stripeData, isLoading: stripeLoading } = useStripeCommissions();
-  const { user, roles } = useAuth();
-  const isAdmin = roles.includes("admin") || roles.includes("super_admin");
+  const { user } = useAuth();
 
   if (isLoading || stripeLoading) {
     return (
@@ -26,16 +23,16 @@ export function CommissionsWidget() {
     );
   }
 
-  const myEntries = isAdmin ? (entries || []) : (entries || []).filter(e => e.userId === user?.id);
+  // This dashboard widget is always personal: the logged-in user's own
+  // commissions (direct from their sales + recurring from their subscriptions).
+  // The team-wide view lives in Financeiro → Comissões.
+  const myEntries = (entries || []).filter(e => e.userId === user?.id);
   const totalCommissions = myEntries.reduce((sum, e) => sum + e.totalCommission, 0);
   const totalSales = myEntries.reduce((sum, e) => sum + e.totalSales, 0);
   const totalCount = myEntries.reduce((sum, e) => sum + e.salesCount, 0);
 
-  // Stripe recurring commissions
-  const stripeTotal = stripeData?.grandTotal || 0;
-  const stripeByUser = isAdmin 
-    ? (stripeData?.byUser || []) 
-    : (stripeData?.byUser || []).filter(u => u.userId === user?.id);
+  // Stripe recurring commissions (this user's only)
+  const stripeByUser = (stripeData?.byUser || []).filter(u => u.userId === user?.id);
   const myStripeTotal = stripeByUser.reduce((s, u) => s + u.totalCommission, 0);
 
   const hasDirectData = myEntries.length > 0;
@@ -96,34 +93,6 @@ export function CommissionsWidget() {
             </p>
           </div>
         </div>
-
-        {/* Table */}
-        {isAdmin && myEntries.length > 1 && (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Comercial</TableHead>
-                <TableHead className="text-right">Vendas</TableHead>
-                <TableHead className="text-right">%</TableHead>
-                <TableHead className="text-right">Comissão</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {myEntries.map((entry) => (
-                <TableRow key={entry.userId}>
-                  <TableCell className="font-medium">{entry.fullName}</TableCell>
-                  <TableCell className="text-right">{formatCurrency(entry.totalSales)}</TableCell>
-                  <TableCell className="text-right">
-                    <Badge variant="secondary">{entry.commissionRate}%</Badge>
-                  </TableCell>
-                  <TableCell className="text-right font-medium text-primary">
-                    {formatCurrency(entry.totalCommission)}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
       </CardContent>
     </Card>
   );

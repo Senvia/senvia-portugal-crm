@@ -7,6 +7,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useProposals } from "@/hooks/useProposals";
 import { useTeamMembers, type TeamMember } from "@/hooks/useTeam";
 import { useTeamFilter } from "@/hooks/useTeamFilter";
+import { usePipelineStages } from "@/hooks/usePipelineStages";
 import { supabase } from "@/integrations/supabase/client";
 import { useDashboardPeriod } from "@/stores/useDashboardPeriod";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -35,6 +36,7 @@ interface MemberPerformance {
   userId: string;
   name: string;
   leads: number;
+  wonLeads: number;
   proposals: number;
   openProposalValue: number;
   salesDelivered: number;
@@ -45,7 +47,15 @@ interface MemberPerformance {
 export function TeamPerformanceTable() {
   const { user, profile, organization } = useAuth();
   const { data: members = [] } = useTeamMembers();
+  const { data: pipelineStages = [] } = usePipelineStages();
   const { data: scopedProposals = [], isLoading: proposalsLoading } = useProposals();
+
+  // A lead is "converted" when it reaches a final-positive (won) stage.
+  const convertedStatusKeys = useMemo(() => {
+    const keys = new Set(pipelineStages.filter((s) => s.is_final_positive).map((s) => s.key));
+    keys.add("won"); // fallback for orgs without an explicit final-positive stage
+    return keys;
+  }, [pipelineStages]);
   const { selectedMemberId, canFilterByTeam, isTeamLeader, teamMemberIds, dataScope } = useTeamFilter();
   const { selectedMonth } = useDashboardPeriod();
   const cardRef = useRef<HTMLDivElement>(null);
@@ -124,7 +134,7 @@ export function TeamPerformanceTable() {
       if (!orgId || memberIds.length === 0) return [];
       const { data, error } = await supabase
         .from("leads")
-        .select("assigned_to")
+        .select("assigned_to, status")
         .eq("organization_id", orgId)
         .is("archived_at", null)
         .gte("created_at", monthStart)
@@ -157,7 +167,9 @@ export function TeamPerformanceTable() {
 
   const rows: MemberPerformance[] = useMemo(() => {
     return filteredMembers.map((member) => {
-      const memberLeads = (leadsData || []).filter((lead) => lead.assigned_to === member.user_id).length;
+      const memberLeadRows = (leadsData || []).filter((lead) => lead.assigned_to === member.user_id);
+      const memberLeads = memberLeadRows.length;
+      const wonLeads = memberLeadRows.filter((lead) => lead.status && convertedStatusKeys.has(lead.status)).length;
       const memberProposals = proposalsInPeriod.filter((proposal) => proposal.created_by === member.user_id);
       const openProposalValue = memberProposals
         .filter((proposal) => proposal.status === "draft" || proposal.status === "sent" || proposal.status === "negotiating")
@@ -165,12 +177,14 @@ export function TeamPerformanceTable() {
       const memberSales = (salesData || []).filter((sale) => sale.created_by === member.user_id);
       const delivered = memberSales.filter((sale) => sale.status === "delivered" || sale.status === "completed");
       const commission = delivered.reduce((sum, sale) => sum + (sale.comissao || 0), 0);
-      const conversionRate = memberLeads > 0 ? (delivered.length / memberLeads) * 100 : 0;
+      // Conversion is lead-based: how many of the member's leads were won.
+      const conversionRate = memberLeads > 0 ? (wonLeads / memberLeads) * 100 : 0;
 
       return {
         userId: member.user_id,
         name: member.full_name + (member.user_id === user?.id ? " (eu)" : ""),
         leads: memberLeads,
+        wonLeads,
         proposals: memberProposals.length,
         openProposalValue,
         salesDelivered: delivered.length,
@@ -178,22 +192,23 @@ export function TeamPerformanceTable() {
         conversionRate,
       };
     });
-  }, [filteredMembers, leadsData, proposalsInPeriod, salesData, user?.id]);
+  }, [filteredMembers, leadsData, proposalsInPeriod, salesData, user?.id, convertedStatusKeys]);
 
   const totals = useMemo(() => {
     return rows.reduce(
       (acc, row) => ({
         leads: acc.leads + row.leads,
+        wonLeads: acc.wonLeads + row.wonLeads,
         proposals: acc.proposals + row.proposals,
         openProposalValue: acc.openProposalValue + row.openProposalValue,
         salesDelivered: acc.salesDelivered + row.salesDelivered,
         commission: acc.commission + row.commission,
       }),
-      { leads: 0, proposals: 0, openProposalValue: 0, salesDelivered: 0, commission: 0 },
+      { leads: 0, wonLeads: 0, proposals: 0, openProposalValue: 0, salesDelivered: 0, commission: 0 },
     );
   }, [rows]);
 
-  const totalConversion = totals.leads > 0 ? (totals.salesDelivered / totals.leads) * 100 : 0;
+  const totalConversion = totals.leads > 0 ? (totals.wonLeads / totals.leads) * 100 : 0;
   const showTotals = rows.length > 1;
   const scopeLabel = getScopeLabel(dataScope, selectedMemberName, isTeamLeader);
 
