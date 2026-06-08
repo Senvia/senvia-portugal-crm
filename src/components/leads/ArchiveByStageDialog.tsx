@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select, SelectContent, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Archive } from "lucide-react";
 import type { PipelineStage } from "@/hooks/usePipelineStages";
@@ -23,6 +23,16 @@ export function ArchiveByStageDialog({
 }: ArchiveByStageDialogProps) {
   const [stageKey, setStageKey] = useState<string>("");
   const count = stageKey ? (counts[stageKey] ?? 0) : 0;
+
+  // Statuses present on leads that have no matching registered pipeline stage
+  // (e.g. left over from CSV imports). Without this, leads in those statuses
+  // would never appear here and could not be archived by stage.
+  const orphanStatuses = useMemo(() => {
+    const stageKeys = new Set(stages.map((s) => s.key));
+    return Object.keys(counts)
+      .filter((k) => k && !stageKeys.has(k))
+      .sort((a, b) => (counts[b] ?? 0) - (counts[a] ?? 0));
+  }, [stages, counts]);
 
   const handleOpenChange = (o: boolean) => {
     if (!o) setStageKey("");
@@ -48,6 +58,17 @@ export function ArchiveByStageDialog({
                   {s.name} ({counts[s.key] ?? 0})
                 </SelectItem>
               ))}
+              {orphanStatuses.length > 0 && (
+                <>
+                  <SelectSeparator />
+                  <SelectLabel>Sem etapa (importadas)</SelectLabel>
+                  {orphanStatuses.map((status) => (
+                    <SelectItem key={status} value={status}>
+                      {status} ({counts[status] ?? 0})
+                    </SelectItem>
+                  ))}
+                </>
+              )}
             </SelectContent>
           </Select>
 
