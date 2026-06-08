@@ -133,6 +133,8 @@ See [agent_docs/edge_functions.md](agent_docs/edge_functions.md) for the full Ed
 8. **Language:** UI text in Portuguese (pt-PT). Code, comments, and docs in English. Commits in Portuguese.
 9. **No tests exist.** Verify manually. Don't add test infrastructure unless explicitly asked.
 10. **Stripe agency org ID** is hardcoded: `06fe9e1d-9670-45b0-8717-c5a6e90be380` (in stripe-webhook).
+11. **GitHub account = `Senvia` ONLY.** This repo belongs to the **Senvia** org. Always use the `Senvia` GitHub account for all git/gh operations — never `marketingdasprent-alt` or any other. Do not ask which account; it's always Senvia. The remote is bound to it (`https://Senvia@github.com/Senvia/senvia-portugal-crm.git`) so it works even when the global active gh account is different. Commit identity for this repo: `Senvia <geral.senvia@gmail.com>` (set in repo-local git config).
+12. **Active Supabase project** is `chhmfwlimtbsyjmgtokn`. The old ref `zppcobirzgpfcrnxznwe` (still hardcoded in old migration files and the `VITE_*` vars of `.env`) is the **dead/migrated-away project** — ignore it.
 
 ## Agent Docs
 
