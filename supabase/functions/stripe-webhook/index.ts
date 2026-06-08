@@ -202,10 +202,14 @@ async function handleInvoicePaid(supabase: any, stripe: Stripe, invoice: Stripe.
     // where checkout.session.completed didn't reach us.)
     await markFirstPaid(supabase, email);
     const subForPeriod = invoice.subscription as string | null;
+    let subscriptionRenewalDate: string | null = null;
     if (subForPeriod) {
       try {
         const subDetails = await stripe.subscriptions.retrieve(subForPeriod);
         await setCurrentPeriodEnd(supabase, email, subDetails.current_period_end);
+        if (subDetails.current_period_end) {
+          subscriptionRenewalDate = new Date(subDetails.current_period_end * 1000).toISOString().split("T")[0];
+        }
       } catch (e) {
         logStep("invoice.paid: failed to fetch sub for current_period_end", { error: (e as Error).message });
       }
@@ -321,7 +325,12 @@ async function handleInvoicePaid(supabase: any, stripe: Stripe, invoice: Stripe.
         total_value: amount,
         recurring_value: amount,
         recurring_status: "active",
-        next_renewal_date: periodEnd,
+        // Next renewal = the subscription's real current period end. The invoice
+        // period can lag a cycle behind, which left the sale flagged "to renew"
+        // right after a successful payment. Fall back to the invoice period only
+        // if the subscription period is unavailable.
+        next_renewal_date: subscriptionRenewalDate || periodEnd,
+        last_renewal_date: paymentDate,
         ...(sale.status === "pending" ? { status: "in_progress" } : {}),
       })
       .eq("id", sale.id);
