@@ -28,10 +28,16 @@ export type FinanceDetailType =
 interface FinanceCardDetailProps {
   type: FinanceDetailType;
   dateRange?: DateRange;
+  /** Date-filtered payments (used by Recebido/Balanço). */
   payments: PaymentWithSale[];
+  /** All payments, unfiltered by period (used by Pendente/Atrasados). */
+  allPayments: PaymentWithSale[];
   dueSoonPayments: PaymentWithSale[];
   onBack: () => void;
 }
+
+/** Stripe plan/subscription payments are excluded from pending/overdue, matching the card totals. */
+const isPlanPayment = (p: PaymentWithSale) => Boolean(p.sale?.client_org_id);
 
 const TITLES: Record<FinanceDetailType, string> = {
   faturado: "Total Faturado",
@@ -241,13 +247,20 @@ function BalanceDetail({
   );
 }
 
-export function FinanceCardDetail({ type, dateRange, payments, dueSoonPayments, onBack }: FinanceCardDetailProps) {
+export function FinanceCardDetail({ type, dateRange, payments, allPayments, dueSoonPayments, onBack }: FinanceCardDetailProps) {
   const received = useMemo(() => payments.filter((p) => p.status === "paid"), [payments]);
-  const pending = useMemo(() => payments.filter((p) => p.status === "pending"), [payments]);
+  // Pending/overdue start from the full history (show everything by default) and
+  // can be narrowed by selecting a period manually.
+  const pending = useMemo(
+    () => allPayments.filter((p) => p.status === "pending" && !isPlanPayment(p) && inRange(p.payment_date, dateRange)),
+    [allPayments, dateRange],
+  );
   const overdue = useMemo(() => {
     const cutoff = startOfDay(new Date());
-    return payments.filter((p) => p.status === "pending" && parseISO(p.payment_date) < cutoff);
-  }, [payments]);
+    return allPayments.filter(
+      (p) => p.status === "pending" && !isPlanPayment(p) && parseISO(p.payment_date) < cutoff && inRange(p.payment_date, dateRange),
+    );
+  }, [allPayments, dateRange]);
   const receivedTotal = useMemo(() => received.reduce((s, p) => s + p.amount, 0), [received]);
 
   return (

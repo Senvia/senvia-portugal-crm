@@ -91,7 +91,7 @@ export default function Finance() {
     }
   }, [organization, activeTab, setActiveTab, validTabs]);
 
-  const { stats, isLoading, payments } = useFinanceStats({ dateRange });
+  const { stats, isLoading, payments, allPayments } = useFinanceStats({ dateRange });
 
   const chartData = stats.cashflowTrend.map((point) => ({
     ...point,
@@ -184,6 +184,7 @@ export default function Finance() {
               type={detailView}
               dateRange={dateRange}
               payments={payments}
+              allPayments={allPayments}
               dueSoonPayments={stats.dueSoonPayments}
               onBack={() => setDetailView(null)}
             />
@@ -249,7 +250,7 @@ export default function Finance() {
                 ) : (
                   <div className="text-xl font-bold text-amber-600 md:text-2xl">{formatCurrency(stats.totalPending)}</div>
                 )}
-                <p className="text-xs text-muted-foreground">{hasFilters ? "No período" : "Total por receber"}</p>
+                <p className="text-xs text-muted-foreground">Total por receber</p>
               </CardContent>
             </Card>
 

@@ -179,6 +179,9 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
     const now = new Date();
     const next7Days = addDays(now, 7);
     const eligibleFilteredPayments = filteredPayments.filter((payment) => !isStripePlanPayment(payment) || payment.status === 'paid');
+    // Pending and overdue are an outstanding balance, not a period metric, so
+    // they ignore the date filter and always reflect the full history.
+    const eligibleGlobalPayments = (payments || []).filter((payment) => !isStripePlanPayment(payment) || payment.status === 'paid');
 
     const totalBilled = filteredSales.reduce((sum, sale) => sum + sale.total_value, 0);
 
@@ -186,7 +189,7 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
       .filter((payment) => payment.status === 'paid')
       .reduce((sum, payment) => sum + payment.amount, 0);
 
-    const totalPending = eligibleFilteredPayments
+    const totalPending = eligibleGlobalPayments
       .filter((payment) => payment.status === 'pending')
       .reduce((sum, payment) => sum + payment.amount, 0);
 
@@ -200,7 +203,7 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
 
     const dueSoon = dueSoonPayments.reduce((sum, payment) => sum + payment.amount, 0);
 
-    const overduePayments = eligibleFilteredPayments.filter((payment) => {
+    const overduePayments = eligibleGlobalPayments.filter((payment) => {
       if (payment.status !== 'pending') return false;
       const date = parseISO(payment.payment_date);
       return date < startOfDay(now);
@@ -255,5 +258,6 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
     stats,
     isLoading,
     payments: filteredPayments,
+    allPayments: payments || [],
   };
 }
