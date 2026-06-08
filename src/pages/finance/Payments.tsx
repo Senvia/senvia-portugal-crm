@@ -89,6 +89,12 @@ export default function FinancePayments() {
     if (statusFromUrl === 'pending' || statusFromUrl === 'paid' || statusFromUrl === 'overdue') {
       setStatusFilter(statusFromUrl);
     }
+    // Coming from the global "Pendente" card: clear any persisted date filter
+    // so all pending payments are visible regardless of month.
+    if (searchParams.get('clearDates') === '1') {
+      setDateRange(undefined);
+      return;
+    }
     const fromParam = searchParams.get('from');
     const toParam = searchParams.get('to');
     if (fromParam) {

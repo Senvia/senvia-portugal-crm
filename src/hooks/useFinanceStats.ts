@@ -179,7 +179,6 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
     const now = new Date();
     const next7Days = addDays(now, 7);
     const eligibleFilteredPayments = filteredPayments.filter((payment) => !isStripePlanPayment(payment) || payment.status === 'paid');
-    const globalPendingPayments = (payments || []).filter((payment) => payment.status === 'pending' && !isStripePlanPayment(payment));
 
     const totalBilled = filteredSales.reduce((sum, sale) => sum + sale.total_value, 0);
 
@@ -187,7 +186,9 @@ export function useFinanceStats(options?: UseFinanceStatsOptions) {
       .filter((payment) => payment.status === 'paid')
       .reduce((sum, payment) => sum + payment.amount, 0);
 
-    const totalPending = globalPendingPayments.reduce((sum, payment) => sum + payment.amount, 0);
+    const totalPending = eligibleFilteredPayments
+      .filter((payment) => payment.status === 'pending')
+      .reduce((sum, payment) => sum + payment.amount, 0);
 
     const dueSoonPayments = eligibleFilteredPayments
       .filter((payment) => {

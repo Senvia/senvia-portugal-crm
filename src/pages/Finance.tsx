@@ -95,8 +95,13 @@ export default function Finance() {
 
   const navigateWithDateRange = (path: string, extra?: Record<string, string>) => {
     const params = new URLSearchParams();
-    if (dateRange?.from) params.set("from", dateRange.from.toISOString().split("T")[0]);
-    if (dateRange?.to) params.set("to", dateRange.to.toISOString().split("T")[0]);
+    if (dateRange?.from) {
+      params.set("from", dateRange.from.toISOString().split("T")[0]);
+      if (dateRange?.to) params.set("to", dateRange.to.toISOString().split("T")[0]);
+    } else {
+      // No period selected: clear any date filter persisted on the destination.
+      params.set("clearDates", "1");
+    }
     if (extra) Object.entries(extra).forEach(([k, v]) => params.set(k, v));
     const qs = params.toString();
     navigate(qs ? `${path}?${qs}` : path);
@@ -227,7 +232,7 @@ export default function Finance() {
 
             <Card
               className="group cursor-pointer transition-colors hover:bg-muted/50"
-              onClick={() => navigateWithDateRange("/financeiro/pagamentos", { status: "pending" })}
+              onClick={() => navigate("/financeiro/pagamentos?status=pending&clearDates=1")}
             >
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Pendente</CardTitle>
@@ -242,7 +247,7 @@ export default function Finance() {
                 ) : (
                   <div className="text-xl font-bold text-amber-600 md:text-2xl">{formatCurrency(stats.totalPending)}</div>
                 )}
-                <p className="text-xs text-muted-foreground">Saldo global por receber</p>
+                <p className="text-xs text-muted-foreground">{hasFilters ? "No período" : "Total por receber"}</p>
               </CardContent>
             </Card>
 
