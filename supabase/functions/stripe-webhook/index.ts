@@ -289,8 +289,13 @@ async function handleInvoicePaid(supabase: any, stripe: Stripe, invoice: Stripe.
       logStep("invoice.paid: no commission rate, skipping commission record", { userId: sale.created_by });
     }
 
-    // Create sale_payments record so it appears in Finance
-    const paymentDate = periodStart || new Date().toISOString().split("T")[0];
+    // Create sale_payments record so it appears in Finance.
+    // Use the actual payment date (when the invoice was paid), NOT the billing
+    // period start — otherwise the payment shows up in the wrong month.
+    const paidAtUnix = invoice.status_transitions?.paid_at ?? invoice.created;
+    const paymentDate = paidAtUnix
+      ? new Date(paidAtUnix * 1000).toISOString().split("T")[0]
+      : new Date().toISOString().split("T")[0];
     const { error: paymentErr } = await supabase
       .from("sale_payments")
       .insert({
