@@ -6,7 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { ArrowLeft, Plus } from "lucide-react";
+import { ArrowLeft, Plus, Pencil, Trash2 } from "lucide-react";
 import { format, parseISO, startOfDay, endOfDay, isSameMonth } from "date-fns";
 import { pt } from "date-fns/locale";
 import type { DateRange } from "react-day-picker";
@@ -19,10 +19,16 @@ import {
   PAYMENT_METHOD_LABELS,
 } from "@/types/sales";
 import { useSales } from "@/hooks/useSales";
-import { useExpenses } from "@/hooks/useExpenses";
+import { useExpenses, useDeleteExpense } from "@/hooks/useExpenses";
 import { MinhasComissoesContent } from "@/components/finance/MinhasComissoesContent";
 import { TeamCommissionsTab } from "@/components/finance/TeamCommissionsTab";
 import { AddExpenseModal } from "@/components/finance/AddExpenseModal";
+import { EditExpenseModal } from "@/components/finance/EditExpenseModal";
+import type { Expense } from "@/types/expenses";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export type FinanceDetailType =
   | "faturado" | "received" | "pending" | "overdue" | "dueSoon" | "expenses" | "balance" | "myCommissions" | "commissions";
@@ -194,6 +200,9 @@ function SalesDetailTable({ dateRange, renewals = [] }: { dateRange?: DateRange;
 
 function ExpensesDetailTable({ dateRange }: { dateRange?: DateRange }) {
   const { data: expenses = [], isLoading } = useExpenses();
+  const deleteExpense = useDeleteExpense();
+  const [editExpense, setEditExpense] = useState<Expense | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
   const filtered = useMemo(
     () => expenses.filter((e) => inRange(e.expense_date, dateRange)),
     [expenses, dateRange],
@@ -209,11 +218,12 @@ function ExpensesDetailTable({ dateRange }: { dateRange?: DateRange }) {
             <TableHead>Descrição</TableHead>
             <TableHead>Categoria</TableHead>
             <TableHead className="text-right">Valor</TableHead>
+            <TableHead className="w-[1%]"></TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {filtered.length === 0 ? (
-            <EmptyRow cols={4} />
+            <EmptyRow cols={5} />
           ) : (
             filtered.map((e) => (
               <TableRow key={e.id}>
@@ -221,12 +231,50 @@ function ExpensesDetailTable({ dateRange }: { dateRange?: DateRange }) {
                 <TableCell>{e.description}</TableCell>
                 <TableCell>{e.category?.name || "—"}</TableCell>
                 <TableCell className="text-right font-medium">{formatCurrency(e.amount)}</TableCell>
+                <TableCell>
+                  <div className="flex justify-end gap-1">
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditExpense(e)}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDeleteId(e.id)}>
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
+                </TableCell>
               </TableRow>
             ))
           )}
         </TableBody>
       </Table>
       {filtered.length > 0 && <TotalFooter count={filtered.length} total={total} />}
+
+      {editExpense && (
+        <EditExpenseModal
+          expense={editExpense}
+          open={!!editExpense}
+          onOpenChange={(open) => !open && setEditExpense(null)}
+        />
+      )}
+
+      <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminar despesa?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação é irreversível. A despesa será permanentemente removida.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => { if (deleteId) { deleteExpense.mutate(deleteId); setDeleteId(null); } }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

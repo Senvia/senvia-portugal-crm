@@ -9,9 +9,16 @@ const corsHeaders = {
 
 const log = (s: string, d?: unknown) => console.log(`[BACKFILL-STRIPE-NET] ${s}${d ? " - " + JSON.stringify(d) : ""}`);
 
-type NetFee = { ok: true; gross: number; net: number; fee: number } | { ok: false; reason: string };
+type NetFee =
+  | { ok: true; gross: number; net: number; fee: number; cardFee: number; billingFee: number }
+  | { ok: false; reason: string };
+
+// Stripe Billing "Usage Fee" — charged separately (~0,7% of the recurring
+// amount), not part of the charge's balance_transaction. Approximated here.
+const BILLING_FEE_RATE = 0.007;
 
 const idOf = (v: any): string | null => (typeof v === "string" ? v : v?.id) || null;
+const round2 = (n: number) => Math.round(n * 100) / 100;
 
 // Resolve the Stripe fee + net for an invoice. Tries, in order: invoice.charge,
 // invoice.payment_intent, invoice.payments[].payment.payment_intent (API basil),
@@ -41,7 +48,11 @@ async function getNetFee(stripe: Stripe, invoiceId: string): Promise<NetFee> {
   if (typeof bt === "string") bt = await stripe.balanceTransactions.retrieve(bt);
   if (!bt) return { ok: false, reason: "sem balance_transaction" };
 
-  return { ok: true, gross, net: (bt.net || 0) / 100, fee: (bt.fee || 0) / 100 };
+  const cardFee = (bt.fee || 0) / 100;
+  const billingFee = round2(gross * BILLING_FEE_RATE);
+  const fee = round2(cardFee + billingFee);
+  const net = round2(gross - fee);
+  return { ok: true, gross, net, fee, cardFee, billingFee };
 }
 
 // One-off: recompute already-recorded Stripe sale_payments to the NET amount
@@ -64,12 +75,12 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, serviceKey);
 
     // Auto-recorded Stripe payments carry the invoice id ("... · in_XXX") in notes.
-    // Skip ones already adjusted (notes contain "taxa").
+    // Skip ones already adjusted with the billing fee (notes contain "billing").
     const { data: payments, error } = await supabase
       .from("sale_payments")
       .select("id, amount, notes")
       .ilike("notes", "%in\\_%")
-      .not("notes", "ilike", "%taxa%");
+      .not("notes", "ilike", "%billing%");
     if (error) throw error;
 
     let updated = 0;
@@ -82,14 +93,16 @@ serve(async (req) => {
       try {
         const nf = await getNetFee(stripe, invoiceId);
         if (!nf.ok) { results.push({ invoiceId, skipped: nf.reason }); continue; }
-        const newNotes = `${p.notes} · bruto ${nf.gross.toFixed(2)}€, taxa ${nf.fee.toFixed(2)}€`;
+        // Rebuild notes from the base (strip any previous " · bruto …" suffix) so re-runs stay clean.
+        const baseNotes = String(p.notes || "").split(" · bruto")[0];
+        const newNotes = `${baseNotes} · bruto ${nf.gross.toFixed(2)}€, taxa ${nf.fee.toFixed(2)}€ (cartão ${nf.cardFee.toFixed(2)} + billing ${nf.billingFee.toFixed(2)})`;
         const { error: upErr } = await supabase
           .from("sale_payments")
           .update({ amount: nf.net, notes: newNotes })
           .eq("id", p.id);
         if (upErr) { results.push({ invoiceId, error: upErr.message }); continue; }
         updated++;
-        results.push({ invoiceId, gross: nf.gross, net: nf.net, fee: nf.fee });
+        results.push({ invoiceId, gross: nf.gross, net: nf.net, fee: nf.fee, cardFee: nf.cardFee, billingFee: nf.billingFee });
       } catch (e) {
         results.push({ invoiceId, error: (e as Error).message });
       }

@@ -302,9 +302,12 @@ async function handleInvoicePaid(supabase: any, stripe: Stripe, invoice: Stripe.
       : new Date().toISOString().split("T")[0];
 
     // The amount recorded in Finance is the NET actually received (gross minus
-    // Stripe fees), read from the charge's balance transaction. Commission and
-    // the sale value stay on the gross (plan price). Falls back to gross if the
-    // balance transaction is unavailable.
+    // Stripe fees): the card processing fee (from the balance transaction) PLUS
+    // the Stripe Billing usage fee (~0,7%, charged separately, approximated).
+    // Commission and the sale value stay on the gross (plan price). Falls back
+    // to gross if the balance transaction is unavailable.
+    const BILLING_FEE_RATE = 0.007;
+    const round2 = (n: number) => Math.round(n * 100) / 100;
     let netAmount = amount;
     let stripeFee = 0;
     try {
@@ -325,8 +328,10 @@ async function handleInvoicePaid(supabase: any, stripe: Stripe, invoice: Stripe.
       let bt: any = charge && typeof charge !== "string" ? charge.balance_transaction : null;
       if (typeof bt === "string") bt = await stripe.balanceTransactions.retrieve(bt);
       if (bt) {
-        netAmount = (bt.net || 0) / 100;
-        stripeFee = (bt.fee || 0) / 100;
+        const cardFee = (bt.fee || 0) / 100;
+        const billingFee = round2(amount * BILLING_FEE_RATE);
+        stripeFee = round2(cardFee + billingFee);
+        netAmount = round2(amount - stripeFee);
       } else {
         logStep("invoice.paid: net unavailable, using gross", { invoice: inv.id });
       }
