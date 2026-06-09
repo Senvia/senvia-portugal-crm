@@ -126,6 +126,25 @@ export function useCommercialCommissions(selectedMonth: string, effectiveUserIds
         : { data: [] as any[] };
       const orgMap = new Map((orgsRes.data || []).map((o: any) => [o.id, o.name]));
 
+      // Friendly label for recurring records via their linked sale's client
+      // (manual renewals have no tenant org, so the org name would be wrong).
+      const recSaleIds = [...new Set(recs.map(r => r.sale_id).filter(Boolean))] as string[];
+      const recSalesRes = recSaleIds.length
+        ? await supabase.from('sales').select('id, client_id, lead_id, code').in('id', recSaleIds)
+        : { data: [] as any[] };
+      const recSales = (recSalesRes.data as any[]) || [];
+      const recCIds = [...new Set(recSales.map(s => s.client_id).filter(Boolean))] as string[];
+      const recLIds = [...new Set(recSales.map(s => s.lead_id).filter(Boolean))] as string[];
+      const [recCRes, recLRes] = await Promise.all([
+        recCIds.length ? supabase.from('crm_clients').select('id, name, company').in('id', recCIds) : Promise.resolve({ data: [] as any[] }),
+        recLIds.length ? supabase.from('leads').select('id, name').in('id', recLIds) : Promise.resolve({ data: [] as any[] }),
+      ]);
+      const recCMap = new Map((recCRes.data || []).map((c: any) => [c.id, c.name || c.company]));
+      const recLMap = new Map((recLRes.data || []).map((l: any) => [l.id, l.name]));
+      const recSaleLabel = new Map<string, string>(
+        recSales.map((s: any) => [s.id, recCMap.get(s.client_id) || recLMap.get(s.lead_id) || s.code || 'Subscrição']),
+      );
+
       const memberName = (userId: string) => {
         if (userId === 'unassigned') return 'Sem Comercial';
         const m = members?.find((m: any) => m.user_id === userId);
@@ -154,7 +173,7 @@ export function useCommercialCommissions(selectedMonth: string, effectiveUserIds
         const e = ensure((r.user_id as string) || 'unassigned');
         const amount = Number(r.commission_amount || 0);
         const paid = r.status === 'paid';
-        e.items.push({ kind: 'recurring', id: r.id, label: orgMap.get(r.client_org_id) || 'Subscrição', date: r.created_at, amount, saleValue: null, paid });
+        e.items.push({ kind: 'recurring', id: r.id, label: recSaleLabel.get(r.sale_id) || orgMap.get(r.client_org_id) || 'Subscrição', date: r.created_at, amount, saleValue: Number(r.amount || 0), paid });
         e.total += amount;
         if (paid) e.totalPaid += amount; else { e.totalPending += amount; e.pendingRecordIds.push(r.id); }
       }

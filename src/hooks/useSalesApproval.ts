@@ -193,6 +193,8 @@ export interface MyCommissionSale {
   client_name: string | null;
   /** True when the sale is fully paid (sum of paid parcels >= total, or payment_status paid). */
   is_paid: boolean;
+  /** 'direct' = one-off/initial sale; 'recurring' = a recurring renewal commission. */
+  kind: 'direct' | 'recurring';
 }
 
 /**
@@ -276,7 +278,12 @@ export function useMyCommissions() {
         if (!leadNameMap.has(l.id)) leadNameMap.set(l.id, (l.name as string) || null);
       }
 
-      return sales.map((s: any) => ({
+      const nameOfSale = (s: any): string | null =>
+        (s.client_id && clientNameMap.get(s.client_id)) ||
+        (s.lead_id && leadNameMap.get(s.lead_id)) ||
+        null;
+
+      const directResults: MyCommissionSale[] = sales.map((s: any) => ({
         id: s.id,
         code: s.code,
         status: s.status,
@@ -286,14 +293,41 @@ export function useMyCommissions() {
         activation_date: s.activation_date,
         created_at: s.created_at,
         approved_at: s.approved_at,
-        client_name:
-          (s.client_id && clientNameMap.get(s.client_id)) ||
-          (s.lead_id && leadNameMap.get(s.lead_id)) ||
-          null,
+        client_name: nameOfSale(s),
         is_paid:
           (Number(s.total_value) > 0 && (paidSum.get(s.id) || 0) >= Number(s.total_value) - 0.01) ||
           s.payment_status === 'paid',
+        kind: 'direct',
       }));
+
+      // Recurring commissions (Stripe + manual renewals) attributed to this user.
+      // These are always "earned" (the client already paid the renewal).
+      const saleClientName = new Map<string, string | null>(
+        (sales as any[]).map((s) => [s.id as string, nameOfSale(s)]),
+      );
+      const { data: recRecords } = await supabase
+        .from('stripe_commission_records' as any)
+        .select('id, sale_id, amount, commission_amount, plan, created_at')
+        .eq('organization_id', organizationId)
+        .eq('user_id', userId);
+      const recurringResults: MyCommissionSale[] = ((recRecords as any[]) || []).map((r) => ({
+        id: r.id,
+        code: 'Recorrente',
+        status: 'delivered',
+        total_value: Number(r.amount || 0),
+        comissao: Number(r.commission_amount || 0),
+        sale_date: r.created_at,
+        activation_date: r.created_at,
+        created_at: r.created_at,
+        approved_at: r.created_at,
+        client_name: (r.sale_id && saleClientName.get(r.sale_id)) || r.plan || 'Subscrição',
+        is_paid: true,
+        kind: 'recurring',
+      }));
+
+      return [...directResults, ...recurringResults].sort((a, b) =>
+        (b.sale_date || b.created_at || '').localeCompare(a.sale_date || a.created_at || ''),
+      );
     },
     enabled: !!organizationId && !!userId,
   });
