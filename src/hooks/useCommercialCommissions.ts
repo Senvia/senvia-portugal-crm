@@ -12,6 +12,7 @@ export interface CommissionItem {
   label: string;         // client / sale label
   date: string | null;
   amount: number;        // commission amount
+  saleValue: number | null; // sale total value (direct sales); null for recurring
   paid: boolean;
 }
 
@@ -57,17 +58,34 @@ export function useCommercialCommissions(selectedMonth: string, effectiveUserIds
       // --- Direct commissions (delivered/fulfilled sales with commission) ---
       const { data: sales, error: salesErr } = await supabase
         .from('sales')
-        .select('id, code, comissao, total_value, client_id, lead_id, created_by, sale_date, activation_date, commission_paid_at')
+        .select('id, code, comissao, total_value, client_id, lead_id, created_by, sale_date, activation_date, commission_paid_at, payment_status')
         .eq('organization_id', organizationId)
         .in('status', ['delivered', 'fulfilled']);
       if (salesErr) throw salesErr;
 
-      const inMonth = (sales || []).filter((s: any) => {
+      const candidateSales = (sales || []).filter((s: any) => {
         const ref = s.activation_date || s.sale_date;
         if (!ref) return false;
         const d = new Date(ref);
         return d >= monthStart && d <= monthEnd && Number(s.comissao || 0) > 0;
       });
+
+      // A commission is only payable when the sale is RECEIVED (concluded AND
+      // fully paid by the client). Sum the paid parcels per candidate sale and
+      // keep only the received ones — unreceived sales are not yet payable.
+      const candIds = candidateSales.map((s: any) => s.id);
+      const { data: candPays } = candIds.length
+        ? await supabase.from('sale_payments').select('sale_id, amount, status').in('sale_id', candIds)
+        : { data: [] as any[] };
+      const candPaidSum = new Map<string, number>();
+      for (const p of (candPays as any[]) || []) {
+        if (p.status === 'paid') candPaidSum.set(p.sale_id, (candPaidSum.get(p.sale_id) || 0) + Number(p.amount || 0));
+      }
+      const isReceived = (s: any) =>
+        (Number(s.total_value) > 0 && (candPaidSum.get(s.id) || 0) >= Number(s.total_value) - 0.01) ||
+        s.payment_status === 'paid';
+
+      const inMonth = candidateSales.filter(isReceived);
 
       const clientIds = [...new Set(inMonth.map((s: any) => s.client_id).filter(Boolean))] as string[];
       const leadIds = [...new Set(inMonth.map((s: any) => s.lead_id).filter(Boolean))] as string[];
@@ -128,7 +146,7 @@ export function useCommercialCommissions(selectedMonth: string, effectiveUserIds
         const e = ensure(getCommercial(s));
         const amount = Number(s.comissao || 0);
         const paid = !!s.commission_paid_at;
-        e.items.push({ kind: 'direct', id: s.id, label: getClientName(s), date: s.activation_date || s.sale_date || null, amount, paid });
+        e.items.push({ kind: 'direct', id: s.id, label: getClientName(s), date: s.activation_date || s.sale_date || null, amount, saleValue: Number(s.total_value || 0), paid });
         e.total += amount;
         if (paid) e.totalPaid += amount; else { e.totalPending += amount; e.pendingSaleIds.push(s.id); }
       }
@@ -136,7 +154,7 @@ export function useCommercialCommissions(selectedMonth: string, effectiveUserIds
         const e = ensure((r.user_id as string) || 'unassigned');
         const amount = Number(r.commission_amount || 0);
         const paid = r.status === 'paid';
-        e.items.push({ kind: 'recurring', id: r.id, label: orgMap.get(r.client_org_id) || 'Subscrição', date: r.created_at, amount, paid });
+        e.items.push({ kind: 'recurring', id: r.id, label: orgMap.get(r.client_org_id) || 'Subscrição', date: r.created_at, amount, saleValue: null, paid });
         e.total += amount;
         if (paid) e.totalPaid += amount; else { e.totalPending += amount; e.pendingRecordIds.push(r.id); }
       }
@@ -184,15 +202,30 @@ export function useTeamCommissionTotal(dateRange?: DateRange) {
 
       const { data: sales } = await supabase
         .from('sales')
-        .select('comissao, sale_date, activation_date')
+        .select('id, comissao, total_value, sale_date, activation_date, payment_status')
         .eq('organization_id', orgId)
         .in('status', ['delivered', 'fulfilled']);
 
+      // Only count commissions on RECEIVED sales (concluded AND fully paid).
+      const candidates = ((sales || []) as any[]).filter(
+        (s) => Number(s.comissao || 0) > 0 && inRange(s.activation_date || s.sale_date),
+      );
+      const candIds = candidates.map((s) => s.id);
+      const { data: candPays } = candIds.length
+        ? await supabase.from('sale_payments').select('sale_id, amount, status').in('sale_id', candIds)
+        : { data: [] as any[] };
+      const paidSum = new Map<string, number>();
+      for (const p of (candPays as any[]) || []) {
+        if (p.status === 'paid') paidSum.set(p.sale_id, (paidSum.get(p.sale_id) || 0) + Number(p.amount || 0));
+      }
+
       let total = 0;
       let count = 0;
-      for (const s of (sales || []) as any[]) {
-        const amount = Number(s.comissao || 0);
-        if (amount > 0 && inRange(s.activation_date || s.sale_date)) { total += amount; count += 1; }
+      for (const s of candidates) {
+        const received =
+          (Number(s.total_value) > 0 && (paidSum.get(s.id) || 0) >= Number(s.total_value) - 0.01) ||
+          s.payment_status === 'paid';
+        if (received) { total += Number(s.comissao || 0); count += 1; }
       }
 
       const { data: recs } = await (supabase as any)

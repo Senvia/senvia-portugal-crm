@@ -374,7 +374,7 @@ export function FinanceCardDetail({ type, dateRange, payments, allPayments, dueS
       {type === "overdue" && <PaymentsDetailTable payments={overdue} />}
       {type === "dueSoon" && <PaymentsDetailTable payments={dueSoonPayments} />}
       {type === "expenses" && <ExpensesDetailTable dateRange={dateRange} />}
-      {type === "myCommissions" && <MinhasComissoesContent />}
+      {type === "myCommissions" && <MinhasComissoesContent dateRange={dateRange} />}
       {type === "commissions" && <TeamCommissionsTab />}
       {type === "balance" && (
         <BalanceDetail dateRange={dateRange} received={received} receivedTotal={receivedTotal} />

@@ -256,6 +256,26 @@ export function useMyCommissions() {
         if (p.status === 'paid') paidSum.set(p.sale_id, (paidSum.get(p.sale_id) || 0) + Number(p.amount || 0));
       }
 
+      // Resolve client/lead names for ALL returned sales — not only those whose
+      // client/lead is assigned to the user (e.g. sales the user created, whose
+      // client may be unassigned or assigned to someone else).
+      const saleClientIds = [...new Set(sales.map((s: any) => s.client_id).filter(Boolean))];
+      const saleLeadIds = [...new Set(sales.map((s: any) => s.lead_id).filter(Boolean))];
+      const [moreClientsRes, moreLeadsRes] = await Promise.all([
+        saleClientIds.length > 0
+          ? supabase.from('crm_clients').select('id, name, company').in('id', saleClientIds)
+          : Promise.resolve({ data: [] as any[] }),
+        saleLeadIds.length > 0
+          ? supabase.from('leads').select('id, name').in('id', saleLeadIds)
+          : Promise.resolve({ data: [] as any[] }),
+      ]);
+      for (const c of (moreClientsRes.data as any[]) || []) {
+        if (!clientNameMap.has(c.id)) clientNameMap.set(c.id, (c.name as string) || (c.company as string) || null);
+      }
+      for (const l of (moreLeadsRes.data as any[]) || []) {
+        if (!leadNameMap.has(l.id)) leadNameMap.set(l.id, (l.name as string) || null);
+      }
+
       return sales.map((s: any) => ({
         id: s.id,
         code: s.code,

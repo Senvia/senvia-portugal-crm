@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
-import { format, startOfMonth } from 'date-fns';
+import { format, startOfMonth, startOfDay, endOfDay, parseISO } from 'date-fns';
 import { pt } from 'date-fns/locale';
+import type { DateRange } from 'react-day-picker';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -42,9 +43,21 @@ function badgeMeta(s: CommissionSale): { label: string; className: string } {
   };
 }
 
-export function MinhasComissoesContent() {
-  const { data: sales = [], isLoading } = useMyCommissions();
+export function MinhasComissoesContent({ dateRange }: { dateRange?: DateRange }) {
+  const { data: allSales = [], isLoading } = useMyCommissions();
   const [filter, setFilter] = useState<StatusFilter>('pending');
+
+  // Respect the selected period: filter by sale date (the "Data" column).
+  const sales = useMemo(() => {
+    if (!dateRange?.from) return allSales;
+    const from = startOfDay(dateRange.from);
+    const to = endOfDay(dateRange.to ?? dateRange.from);
+    return allSales.filter((s) => {
+      if (!s.sale_date) return false;
+      const d = parseISO(s.sale_date);
+      return d >= from && d <= to;
+    });
+  }, [allSales, dateRange]);
 
   const stats = useMemo(() => {
     const monthStart = startOfMonth(new Date());

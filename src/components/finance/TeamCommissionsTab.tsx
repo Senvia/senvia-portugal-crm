@@ -208,6 +208,7 @@ export function TeamCommissionsTab() {
                                       <TableHead>Tipo</TableHead>
                                       <TableHead>Cliente / Venda</TableHead>
                                       <TableHead>Data</TableHead>
+                                      <TableHead className="text-right">Valor venda</TableHead>
                                       <TableHead className="text-right">Comissão</TableHead>
                                       <TableHead>Estado</TableHead>
                                     </TableRow>
@@ -227,6 +228,9 @@ export function TeamCommissionsTab() {
                                         <TableCell className="text-xs">{item.label}</TableCell>
                                         <TableCell className="text-xs">
                                           {item.date ? format(new Date(item.date), 'dd MMM yyyy', { locale: pt }) : '—'}
+                                        </TableCell>
+                                        <TableCell className="text-right text-xs">
+                                          {item.saleValue != null ? formatCurrency(item.saleValue) : '—'}
                                         </TableCell>
                                         <TableCell className="text-right text-xs font-medium">{formatCurrency(item.amount)}</TableCell>
                                         <TableCell>
