@@ -10,18 +10,37 @@ import { useMyCommissions } from '@/hooks/useSalesApproval';
 import { formatCurrency } from '@/lib/format';
 
 type StatusFilter = 'pending' | 'confirmed' | 'cancelled' | 'all';
+type Bucket = 'confirmed' | 'pending' | 'cancelled';
 
-const STATUS_META: Record<string, { label: string; className: string }> = {
-  pending: { label: 'Pendente', className: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400' },
-  in_progress: { label: 'Pendente', className: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400' },
-  delivered: { label: 'Confirmada', className: 'bg-green-500/10 text-green-700 dark:text-green-400' },
-  fulfilled: { label: 'Confirmada', className: 'bg-green-500/10 text-green-700 dark:text-green-400' },
-  cancelled: { label: 'Anulada', className: 'bg-red-500/10 text-red-700 dark:text-red-400' },
+interface CommissionSale {
+  status: string;
+  is_paid: boolean;
+}
+
+// Commission is only "confirmed" (earned/payable) when the sale is concluded
+// (delivered/fulfilled) AND fully paid. Anything else (not concluded, or
+// concluded but unpaid) is pending; cancelled is cancelled.
+const bucketOf = (s: CommissionSale): Bucket => {
+  if (s.status === 'cancelled') return 'cancelled';
+  if ((s.status === 'delivered' || s.status === 'fulfilled') && s.is_paid) return 'confirmed';
+  return 'pending';
 };
 
-const isPending = (status: string) => status === 'pending' || status === 'in_progress';
-const isConfirmed = (status: string) => status === 'delivered' || status === 'fulfilled';
-const isCancelled = (status: string) => status === 'cancelled';
+const isConfirmed = (s: CommissionSale) => bucketOf(s) === 'confirmed';
+const isPending = (s: CommissionSale) => bucketOf(s) === 'pending';
+const isCancelled = (s: CommissionSale) => bucketOf(s) === 'cancelled';
+
+function badgeMeta(s: CommissionSale): { label: string; className: string } {
+  const b = bucketOf(s);
+  if (b === 'confirmed') return { label: 'Confirmada', className: 'bg-green-500/10 text-green-700 dark:text-green-400' };
+  if (b === 'cancelled') return { label: 'Anulada', className: 'bg-red-500/10 text-red-700 dark:text-red-400' };
+  // pending: distinguish "concluded but awaiting payment" from "not concluded yet"
+  const concluded = s.status === 'delivered' || s.status === 'fulfilled';
+  return {
+    label: concluded ? 'Aguarda pagamento' : 'Pendente',
+    className: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',
+  };
+}
 
 export function MinhasComissoesContent() {
   const { data: sales = [], isLoading } = useMyCommissions();
@@ -37,10 +56,10 @@ export function MinhasComissoesContent() {
 
     for (const s of sales) {
       const c = Number(s.comissao) || 0;
-      if (isPending(s.status)) {
+      if (isPending(s)) {
         pendingTotal += c;
         pendingCount++;
-      } else if (isConfirmed(s.status)) {
+      } else if (isConfirmed(s)) {
         confirmedTotal += c;
         confirmedCount++;
         const ref = s.approved_at
@@ -56,9 +75,9 @@ export function MinhasComissoesContent() {
 
   const filtered = useMemo(() => {
     if (filter === 'all') return sales;
-    if (filter === 'pending') return sales.filter(s => isPending(s.status));
-    if (filter === 'confirmed') return sales.filter(s => isConfirmed(s.status));
-    if (filter === 'cancelled') return sales.filter(s => isCancelled(s.status));
+    if (filter === 'pending') return sales.filter(s => isPending(s));
+    if (filter === 'confirmed') return sales.filter(s => isConfirmed(s));
+    if (filter === 'cancelled') return sales.filter(s => isCancelled(s));
     return sales;
   }, [sales, filter]);
 
@@ -132,7 +151,7 @@ export function MinhasComissoesContent() {
               </TableHeader>
               <TableBody>
                 {filtered.map(s => {
-                  const meta = STATUS_META[s.status] || { label: s.status, className: '' };
+                  const meta = badgeMeta(s);
                   return (
                     <TableRow key={s.id}>
                       <TableCell className="text-sm">

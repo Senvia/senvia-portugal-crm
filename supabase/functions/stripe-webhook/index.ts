@@ -308,18 +308,27 @@ async function handleInvoicePaid(supabase: any, stripe: Stripe, invoice: Stripe.
     let netAmount = amount;
     let stripeFee = 0;
     try {
-      let chargeId = (invoice.charge as string) || null;
-      if (!chargeId && invoice.payment_intent) {
-        const pi = await stripe.paymentIntents.retrieve(invoice.payment_intent as string);
-        chargeId = (pi.latest_charge as string) || null;
+      const idOf = (v: any): string | null => (typeof v === "string" ? v : v?.id) || null;
+      const inv = invoice as any;
+      let chargeId = idOf(inv.charge);
+      let piId = idOf(inv.payment_intent);
+      if (!chargeId && !piId && inv.payments?.data?.length) {
+        piId = idOf(inv.payments.data[0]?.payment?.payment_intent);
       }
+      let charge: any = null;
       if (chargeId) {
-        const charge = await stripe.charges.retrieve(chargeId, { expand: ["balance_transaction"] });
-        const bt = charge.balance_transaction as Stripe.BalanceTransaction | string | null;
-        if (bt && typeof bt !== "string") {
-          netAmount = (bt.net || 0) / 100;
-          stripeFee = (bt.fee || 0) / 100;
-        }
+        charge = await stripe.charges.retrieve(chargeId, { expand: ["balance_transaction"] });
+      } else if (piId) {
+        const pi: any = await stripe.paymentIntents.retrieve(piId, { expand: ["latest_charge.balance_transaction"] });
+        charge = pi.latest_charge;
+      }
+      let bt: any = charge && typeof charge !== "string" ? charge.balance_transaction : null;
+      if (typeof bt === "string") bt = await stripe.balanceTransactions.retrieve(bt);
+      if (bt) {
+        netAmount = (bt.net || 0) / 100;
+        stripeFee = (bt.fee || 0) / 100;
+      } else {
+        logStep("invoice.paid: net unavailable, using gross", { invoice: inv.id });
       }
     } catch (e) {
       logStep("invoice.paid: could not fetch balance_transaction for net amount", { error: (e as Error).message });

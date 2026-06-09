@@ -9,23 +9,39 @@ const corsHeaders = {
 
 const log = (s: string, d?: unknown) => console.log(`[BACKFILL-STRIPE-NET] ${s}${d ? " - " + JSON.stringify(d) : ""}`);
 
-// Resolve the Stripe fee + net for an invoice id, via its charge (or payment intent).
-async function getNetFee(stripe: Stripe, invoiceId: string): Promise<{ gross: number; net: number; fee: number } | null> {
-  const invoice = await stripe.invoices.retrieve(invoiceId);
-  let chargeId = (invoice as any).charge as string | null;
-  if (!chargeId && (invoice as any).payment_intent) {
-    const pi = await stripe.paymentIntents.retrieve((invoice as any).payment_intent as string);
-    chargeId = (pi.latest_charge as string) || null;
+type NetFee = { ok: true; gross: number; net: number; fee: number } | { ok: false; reason: string };
+
+const idOf = (v: any): string | null => (typeof v === "string" ? v : v?.id) || null;
+
+// Resolve the Stripe fee + net for an invoice. Tries, in order: invoice.charge,
+// invoice.payment_intent, invoice.payments[].payment.payment_intent (API basil),
+// then the charge's balance_transaction (retrieving it if it's just an id).
+async function getNetFee(stripe: Stripe, invoiceId: string): Promise<NetFee> {
+  const invoice: any = await stripe.invoices.retrieve(invoiceId, { expand: ["payments"] });
+  const gross = (invoice.amount_paid || 0) / 100;
+
+  let chargeId = idOf(invoice.charge);
+  let piId = idOf(invoice.payment_intent);
+  if (!chargeId && !piId && invoice.payments?.data?.length) {
+    piId = idOf(invoice.payments.data[0]?.payment?.payment_intent);
   }
-  if (!chargeId) return null;
-  const charge = await stripe.charges.retrieve(chargeId, { expand: ["balance_transaction"] });
-  const bt = charge.balance_transaction as Stripe.BalanceTransaction | string | null;
-  if (!bt || typeof bt === "string") return null;
-  return {
-    gross: (invoice.amount_paid || 0) / 100,
-    net: (bt.net || 0) / 100,
-    fee: (bt.fee || 0) / 100,
-  };
+
+  let charge: any = null;
+  if (chargeId) {
+    charge = await stripe.charges.retrieve(chargeId, { expand: ["balance_transaction"] });
+  } else if (piId) {
+    const pi: any = await stripe.paymentIntents.retrieve(piId, { expand: ["latest_charge.balance_transaction"] });
+    charge = pi.latest_charge;
+  }
+  if (!charge || typeof charge === "string") {
+    return { ok: false, reason: `sem charge (invoice keys: ${Object.keys(invoice).join(",")})` };
+  }
+
+  let bt: any = charge.balance_transaction;
+  if (typeof bt === "string") bt = await stripe.balanceTransactions.retrieve(bt);
+  if (!bt) return { ok: false, reason: "sem balance_transaction" };
+
+  return { ok: true, gross, net: (bt.net || 0) / 100, fee: (bt.fee || 0) / 100 };
 }
 
 // One-off: recompute already-recorded Stripe sale_payments to the NET amount
@@ -65,7 +81,7 @@ serve(async (req) => {
       const invoiceId = match[0];
       try {
         const nf = await getNetFee(stripe, invoiceId);
-        if (!nf) { results.push({ invoiceId, skipped: "no balance transaction" }); continue; }
+        if (!nf.ok) { results.push({ invoiceId, skipped: nf.reason }); continue; }
         const newNotes = `${p.notes} · bruto ${nf.gross.toFixed(2)}€, taxa ${nf.fee.toFixed(2)}€`;
         const { error: upErr } = await supabase
           .from("sale_payments")

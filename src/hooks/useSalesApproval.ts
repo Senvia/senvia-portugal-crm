@@ -191,6 +191,8 @@ export interface MyCommissionSale {
   created_at: string;
   approved_at: string | null;
   client_name: string | null;
+  /** True when the sale is fully paid (sum of paid parcels >= total, or payment_status paid). */
+  is_paid: boolean;
 }
 
 /**
@@ -236,12 +238,23 @@ export function useMyCommissions() {
 
       const { data: sales, error } = await supabase
         .from('sales')
-        .select('id, code, status, total_value, comissao, sale_date, activation_date, created_at, approved_at, client_id, lead_id')
+        .select('id, code, status, total_value, comissao, sale_date, activation_date, created_at, approved_at, client_id, lead_id, payment_status')
         .eq('organization_id', organizationId)
         .or(filters.join(','))
         .order('created_at', { ascending: false });
       if (error) throw error;
       if (!sales) return [];
+
+      // Determine which sales are fully paid (commission only counts when the
+      // sale is concluded AND paid). Sum the paid parcels per sale.
+      const saleIds = sales.map((s: any) => s.id);
+      const { data: pays } = saleIds.length > 0
+        ? await supabase.from('sale_payments').select('sale_id, amount, status').in('sale_id', saleIds)
+        : { data: [] as any[] };
+      const paidSum = new Map<string, number>();
+      for (const p of (pays as any[]) || []) {
+        if (p.status === 'paid') paidSum.set(p.sale_id, (paidSum.get(p.sale_id) || 0) + Number(p.amount || 0));
+      }
 
       return sales.map((s: any) => ({
         id: s.id,
@@ -257,6 +270,9 @@ export function useMyCommissions() {
           (s.client_id && clientNameMap.get(s.client_id)) ||
           (s.lead_id && leadNameMap.get(s.lead_id)) ||
           null,
+        is_paid:
+          (Number(s.total_value) > 0 && (paidSum.get(s.id) || 0) >= Number(s.total_value) - 0.01) ||
+          s.payment_status === 'paid',
       }));
     },
     enabled: !!organizationId && !!userId,
