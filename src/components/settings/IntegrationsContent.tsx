@@ -1,13 +1,19 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Webhook, Send, Loader2, Eye, EyeOff, MessageCircle, Mail, Receipt, ArrowLeft, ChevronRight, Plus, Trash2, Link2, Copy, Check } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Webhook, Send, Loader2, Eye, EyeOff, MessageCircle, Mail, Receipt, ArrowLeft, ChevronRight, ChevronDown, Plus, Trash2, Link2, Copy, Check, Users, RefreshCw, Pencil, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LucideIcon } from "lucide-react";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useOrganizationWebhooks, useCreateWebhook, useToggleWebhook, useDeleteWebhook, OrganizationWebhook } from "@/hooks/useOrganizationWebhooks";
+import { useLeadIntakeWebhooks, useCreateLeadIntakeWebhook, useUpdateLeadIntakeWebhook, useDeleteLeadIntakeWebhook, LeadIntakeWebhook } from "@/hooks/useLeadIntakeWebhooks";
+import { useTeamMembers } from "@/hooks/useTeam";
 import { useTestWebhook } from "@/hooks/useOrganization";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -352,110 +358,113 @@ function WebhooksManager() {
 
 // --- Inbound Webhook (Zapier/Make) ---
 
+type MemberOption = { user_id: string; full_name: string };
+
+// Seletor de utilizadores: rádio (1 só) quando a rotação está desligada,
+// checkboxes (vários) quando está ligada.
+function MemberSelector({
+  members,
+  value,
+  rotate,
+  onChange,
+}: {
+  members: MemberOption[];
+  value: string[];
+  rotate: boolean;
+  onChange: (next: string[]) => void;
+}) {
+  if (members.length === 0) {
+    return <p className="text-xs text-muted-foreground">Não há utilizadores na equipa para atribuir.</p>;
+  }
+
+  const rowClass = (checked: boolean) =>
+    cn(
+      "flex items-center gap-2 rounded-md border px-2.5 py-2 cursor-pointer transition-colors",
+      checked ? "border-primary/40 bg-primary/5" : "bg-background hover:bg-accent/50"
+    );
+
+  if (!rotate) {
+    return (
+      <RadioGroup
+        value={value[0] || ''}
+        onValueChange={(v) => onChange([v])}
+        className="grid grid-cols-1 sm:grid-cols-2 gap-1.5"
+      >
+        {members.map((m) => (
+          <label key={m.user_id} className={rowClass(value[0] === m.user_id)}>
+            <RadioGroupItem value={m.user_id} />
+            <span className="text-sm truncate">{m.full_name}</span>
+          </label>
+        ))}
+      </RadioGroup>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+      {members.map((m) => {
+        const checked = value.includes(m.user_id);
+        return (
+          <label key={m.user_id} className={rowClass(checked)}>
+            <Checkbox
+              checked={checked}
+              onCheckedChange={() =>
+                onChange(checked ? value.filter((id) => id !== m.user_id) : [...value, m.user_id])
+              }
+            />
+            <span className="text-sm truncate">{m.full_name}</span>
+          </label>
+        );
+      })}
+    </div>
+  );
+}
+
+// Resumo curto para o cabeçalho recolhido do cartão
+function assigneeSummary(webhook: LeadIntakeWebhook, members: MemberOption[]): string {
+  const ids = webhook.assigned_user_ids || [];
+  if (ids.length === 0) return 'Sem responsável';
+  if (webhook.rotate_enabled) return `Rotativa · ${ids.length} ${ids.length === 1 ? 'pessoa' : 'pessoas'}`;
+  const first = members.find((m) => m.user_id === ids[0]);
+  return `Fixo · ${first?.full_name || '1 pessoa'}`;
+}
+
 function InboundWebhookSection() {
-  const { organization } = useAuth();
-  const [copied, setCopied] = useState(false);
-  const [copiedDedicated, setCopiedDedicated] = useState(false);
-  const [webhookToken, setWebhookToken] = useState<string | null>(null);
-  const [dedicatedToken, setDedicatedToken] = useState<string | null>(null);
-  const [dedicatedUserId, setDedicatedUserId] = useState<string | null>(null);
-  const [members, setMembers] = useState<Array<{ user_id: string; full_name: string }>>([]);
-  const [loading, setLoading] = useState(true);
-  const [savingUser, setSavingUser] = useState(false);
-  const [generatingToken, setGeneratingToken] = useState(false);
+  const { data: webhooks = [], isLoading } = useLeadIntakeWebhooks();
+  const { data: members = [], isLoading: loadingMembers } = useTeamMembers();
+  const createWebhook = useCreateLeadIntakeWebhook();
 
-  useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      if (!organization?.id) return;
-      const { supabase } = await import('@/integrations/supabase/client');
+  const [isAdding, setIsAdding] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newRotate, setNewRotate] = useState(false);
+  const [newUsers, setNewUsers] = useState<string[]>([]);
+  const [showHelp, setShowHelp] = useState(false);
 
-      // Org tokens
-      const { data: orgRow } = await supabase
-        .from('organizations')
-        .select('webhook_token, webhook_token_dedicated, webhook_dedicated_user_id')
-        .eq('id', organization.id)
-        .single();
+  const memberOptions: MemberOption[] = members.map((m) => ({
+    user_id: m.user_id,
+    full_name: m.full_name || m.email || 'Sem nome',
+  }));
 
-      // Members for assignee selector
-      const { data: memberRows } = await supabase.functions.invoke('get-team-members', {
-        body: { organization_id: organization.id }
-      });
+  const resetForm = () => { setNewName(''); setNewRotate(false); setNewUsers([]); setIsAdding(false); };
 
-      if (cancelled) return;
-      setWebhookToken((orgRow as any)?.webhook_token || null);
-      setDedicatedToken((orgRow as any)?.webhook_token_dedicated || null);
-      setDedicatedUserId((orgRow as any)?.webhook_dedicated_user_id || null);
-      setMembers(((memberRows as any[]) || []).map(m => ({
-        user_id: m.user_id,
-        full_name: m.full_name,
-      })));
-      setLoading(false);
-    };
-    load();
-    return () => { cancelled = true; };
-  }, [organization?.id]);
+  // Regras: rotação OFF -> exatamente 1; rotação ON -> pelo menos 2
+  const usersValid = newRotate ? newUsers.length >= 2 : newUsers.length === 1;
+  const canCreate = !!newName.trim() && usersValid && !createWebhook.isPending;
 
-  const baseFn = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/submit-lead?mode=webhook&token=`;
-  const webhookUrl = webhookToken ? `${baseFn}${webhookToken}` : '';
-  const dedicatedUrl = dedicatedToken ? `${baseFn}${dedicatedToken}` : '';
-
-  const handleCopy = (url: string, kind: 'main' | 'dedicated') => {
-    if (!url) return;
-    navigator.clipboard.writeText(url);
-    if (kind === 'main') {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } else {
-      setCopiedDedicated(true);
-      setTimeout(() => setCopiedDedicated(false), 2000);
-    }
+  const handleAdd = () => {
+    if (!canCreate) return;
+    createWebhook.mutate(
+      { name: newName.trim(), assigned_user_ids: newUsers, rotate_enabled: newRotate },
+      { onSuccess: resetForm }
+    );
   };
 
-  const generateRandomToken = () => {
-    const arr = new Uint8Array(24);
-    crypto.getRandomValues(arr);
-    return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
+  const handleToggleRotate = (enabled: boolean) => {
+    setNewRotate(enabled);
+    if (!enabled && newUsers.length > 1) setNewUsers([newUsers[0]]); // mantém só 1
   };
 
-  const handleGenerateDedicated = async () => {
-    if (!organization?.id) return;
-    setGeneratingToken(true);
-    try {
-      const { supabase } = await import('@/integrations/supabase/client');
-      const newToken = generateRandomToken();
-      const { error } = await supabase
-        .from('organizations')
-        .update({ webhook_token_dedicated: newToken })
-        .eq('id', organization.id);
-      if (error) throw error;
-      setDedicatedToken(newToken);
-    } catch (err) {
-      console.error('Erro ao gerar token dedicado:', err);
-    } finally {
-      setGeneratingToken(false);
-    }
-  };
-
-  const handleSaveDedicatedUser = async (userId: string) => {
-    if (!organization?.id) return;
-    setSavingUser(true);
-    try {
-      const { supabase } = await import('@/integrations/supabase/client');
-      const { error } = await supabase
-        .from('organizations')
-        .update({ webhook_dedicated_user_id: userId || null })
-        .eq('id', organization.id);
-      if (error) throw error;
-      setDedicatedUserId(userId || null);
-    } catch (err) {
-      console.error('Erro ao guardar utilizador dedicado:', err);
-    } finally {
-      setSavingUser(false);
-    }
-  };
-
-  if (loading) {
+  if (isLoading || loadingMembers) {
     return (
       <div className="flex items-center gap-2 text-muted-foreground">
         <Loader2 className="h-4 w-4 animate-spin" />
@@ -465,116 +474,329 @@ function InboundWebhookSection() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="rounded-lg bg-primary/5 border border-primary/20 p-4">
         <h4 className="font-medium text-sm mb-1">🔗 Receber leads de fontes externas</h4>
         <p className="text-sm text-muted-foreground">
-          Use estes URLs para receber leads automaticamente do <strong>Zapier</strong>, <strong>Make (Integromat)</strong>, ou qualquer outra plataforma de automação. Ideal para integrar com <strong>Facebook Lead Ads</strong>, Google Forms, etc.
+          Crie um webhook para cada origem de leads (campanha, formulário, parceiro…). Cada um tem o seu próprio link, escolhe quem da equipa recebe os contactos e pode distribuí-los automaticamente.
         </p>
       </div>
 
-      {/* === WEBHOOK GERAL (Round-Robin) === */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <Label>URL do Webhook Geral (Round-Robin)</Label>
-          <Badge variant="secondary" className="text-xs">Distribui pela equipa</Badge>
-        </div>
-        <div className="flex items-center gap-2">
-          <Input readOnly value={webhookUrl} className="text-xs font-mono bg-muted" />
-          <Button type="button" variant="outline" size="sm" onClick={() => handleCopy(webhookUrl, 'main')} className="shrink-0">
-            {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-            {copied ? 'Copiado' : 'Copiar'}
-          </Button>
-        </div>
-        <p className="text-xs text-muted-foreground">Os leads enviados para este URL são distribuídos automaticamente entre os comerciais activos (round-robin).</p>
+      {/* Lista de webhooks */}
+      <div className="space-y-2.5">
+        {webhooks.map((wh) => (
+          <IntakeWebhookCard key={wh.id} webhook={wh} members={memberOptions} />
+        ))}
       </div>
 
-      {/* === WEBHOOK DEDICADO (1 utilizador fixo) === */}
-      <div className="rounded-lg border-2 border-dashed border-primary/30 p-4 space-y-4 bg-primary/5">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h4 className="font-semibold text-sm flex items-center gap-2">
-              🎯 Webhook Dedicado (entrega a 1 utilizador fixo)
-            </h4>
-            <p className="text-xs text-muted-foreground mt-1">
-              Endpoint adicional para campanhas específicas. Todos os leads vão directos para o utilizador escolhido, sem round-robin.
-            </p>
-          </div>
+      {webhooks.length === 0 && !isAdding && (
+        <div className="text-center py-8 text-muted-foreground">
+          <Link2 className="h-8 w-8 mx-auto mb-2 opacity-50" />
+          <p className="text-sm">Ainda não tens webhooks de entrada</p>
         </div>
+      )}
 
-        <div className="space-y-2">
-          <Label>Utilizador que recebe todos os leads</Label>
-          <select
-            className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
-            value={dedicatedUserId || ''}
-            disabled={savingUser}
-            onChange={(e) => handleSaveDedicatedUser(e.target.value)}
-          >
-            <option value="">— Seleccionar utilizador —</option>
-            {members.map((m) => (
-              <option key={m.user_id} value={m.user_id}>{m.full_name}</option>
-            ))}
-          </select>
-        </div>
-
-        {dedicatedToken ? (
+      {/* Criação */}
+      {isAdding ? (
+        <div className="space-y-4 p-4 rounded-lg border-2 border-primary/30 bg-primary/5">
           <div className="space-y-2">
-            <Label>URL do Webhook Dedicado</Label>
-            <div className="flex items-center gap-2">
-              <Input readOnly value={dedicatedUrl} className="text-xs font-mono bg-muted" />
-              <Button type="button" variant="outline" size="sm" onClick={() => handleCopy(dedicatedUrl, 'dedicated')} className="shrink-0">
-                {copiedDedicated ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                {copiedDedicated ? 'Copiado' : 'Copiar'}
-              </Button>
-            </div>
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-xs text-muted-foreground">Cole este URL num cenário separado do Make/Zapier.</p>
-              <Button type="button" variant="ghost" size="sm" onClick={handleGenerateDedicated} disabled={generatingToken} className="text-xs h-7">
-                {generatingToken && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
-                Gerar novo token
-              </Button>
-            </div>
-            {!dedicatedUserId && (
-              <div className="rounded-md bg-amber-500/10 border border-amber-500/20 p-2">
-                <p className="text-xs text-amber-700 dark:text-amber-400">
-                  ⚠️ Selecciona um utilizador acima — sem isso, os leads ficam sem responsável.
+            <Label htmlFor="iwh-name">Nome do webhook</Label>
+            <Input
+              id="iwh-name"
+              autoFocus
+              placeholder="Ex: Facebook Ads — Campanha Verão"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+            />
+          </div>
+
+          <div className="flex items-center justify-between gap-3 rounded-md border bg-background/60 p-3">
+            <div className="flex items-start gap-2">
+              <RefreshCw className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+              <div className="space-y-0.5">
+                <Label className="text-sm font-medium">Distribuição rotativa</Label>
+                <p className="text-xs text-muted-foreground">
+                  {newRotate
+                    ? 'Os leads rodam entre os utilizadores escolhidos (round-robin).'
+                    : 'Todos os leads vão para um único utilizador.'}
                 </p>
               </div>
+            </div>
+            <Switch checked={newRotate} onCheckedChange={handleToggleRotate} />
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-xs flex items-center gap-1.5">
+              <Users className="h-3.5 w-3.5" />
+              {newRotate ? 'Quem recebe os leads (escolhe 2 ou mais)' : 'Quem recebe os leads (escolhe 1)'}
+            </Label>
+            <MemberSelector members={memberOptions} value={newUsers} rotate={newRotate} onChange={setNewUsers} />
+            {!usersValid && (
+              <p className="text-xs text-amber-600 dark:text-amber-400">
+                {newRotate ? 'Seleciona pelo menos 2 utilizadores.' : 'Seleciona exatamente 1 utilizador.'}
+              </p>
             )}
           </div>
-        ) : (
-          <Button type="button" variant="default" size="sm" onClick={handleGenerateDedicated} disabled={generatingToken}>
-            {generatingToken && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-            <Plus className="h-3 w-3 mr-1" />
-            Activar Webhook Dedicado
-          </Button>
+
+          <div className="flex gap-2">
+            <Button size="sm" onClick={handleAdd} disabled={!canCreate}>
+              {createWebhook.isPending && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+              Criar webhook
+            </Button>
+            <Button size="sm" variant="ghost" onClick={resetForm}>Cancelar</Button>
+          </div>
+        </div>
+      ) : (
+        <Button variant="outline" onClick={() => setIsAdding(true)} className="w-full">
+          <Plus className="mr-2 h-4 w-4" />
+          Adicionar Webhook de Entrada
+        </Button>
+      )}
+
+      {/* Ajuda (recolhida por defeito) */}
+      <div className="rounded-lg border">
+        <button
+          type="button"
+          onClick={() => setShowHelp((v) => !v)}
+          className="w-full flex items-center justify-between p-3 text-sm font-medium hover:bg-accent/40 transition-colors rounded-lg"
+        >
+          <span>📋 Como ligar ao Zapier / Make</span>
+          <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", showHelp && "rotate-180")} />
+        </button>
+        {showHelp && (
+          <div className="px-4 pb-4 space-y-2 border-t pt-3">
+            <ol className="text-sm text-muted-foreground space-y-2 list-decimal list-inside">
+              <li>Cria um cenário/zap com o trigger desejado (Facebook Lead Ads, Google Forms, etc.)</li>
+              <li>Adiciona uma ação HTTP <strong>POST</strong> com o URL do webhook (botão Copiar em cada um)</li>
+              <li>Body type: <strong>JSON</strong></li>
+              <li>Mapeia os campos:
+                <ul className="ml-4 mt-1 space-y-1 list-disc">
+                  <li><code className="bg-muted px-1 rounded text-xs">name</code> → Nome completo</li>
+                  <li><code className="bg-muted px-1 rounded text-xs">email</code> → Email</li>
+                  <li><code className="bg-muted px-1 rounded text-xs">phone</code> → Telefone</li>
+                  <li><code className="bg-muted px-1 rounded text-xs">company</code> → Empresa (opcional)</li>
+                  <li><code className="bg-muted px-1 rounded text-xs">source</code> → Fonte (opcional)</li>
+                  <li><code className="bg-muted px-1 rounded text-xs">notes</code> → Notas (opcional)</li>
+                </ul>
+              </li>
+            </ol>
+            <p className="text-xs text-amber-600 dark:text-amber-400">
+              ⚠️ Não partilhes estes URLs publicamente — cada link autentica a tua organização.
+            </p>
+          </div>
         )}
       </div>
+    </div>
+  );
+}
 
-      <div className="rounded-lg border p-4 space-y-3">
-        <h4 className="font-medium text-sm">📋 Como configurar no Zapier / Make</h4>
-        <ol className="text-sm text-muted-foreground space-y-2 list-decimal list-inside">
-          <li>Crie um cenário/zap com o trigger desejado (Facebook Lead Ads, Google Forms, etc.)</li>
-          <li>Adicione uma acção HTTP <strong>POST</strong> com o URL acima</li>
-          <li>Body type: <strong>JSON</strong></li>
-          <li>Mapeie os campos:
-            <ul className="ml-4 mt-1 space-y-1 list-disc">
-              <li><code className="bg-muted px-1 rounded text-xs">name</code> → Nome completo</li>
-              <li><code className="bg-muted px-1 rounded text-xs">email</code> → Email</li>
-              <li><code className="bg-muted px-1 rounded text-xs">phone</code> → Telefone</li>
-              <li><code className="bg-muted px-1 rounded text-xs">company</code> → Empresa (opcional)</li>
-              <li><code className="bg-muted px-1 rounded text-xs">source</code> → Fonte (opcional)</li>
-              <li><code className="bg-muted px-1 rounded text-xs">notes</code> → Notas (opcional)</li>
-            </ul>
-          </li>
-        </ol>
+// --- Cartão de um webhook de entrada ---
+
+function IntakeWebhookCard({
+  webhook,
+  members,
+}: {
+  webhook: LeadIntakeWebhook;
+  members: MemberOption[];
+}) {
+  const updateWebhook = useUpdateLeadIntakeWebhook();
+  const deleteWebhook = useDeleteLeadIntakeWebhook();
+
+  const [expanded, setExpanded] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState(webhook.name);
+
+  const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/submit-lead?mode=webhook&token=${webhook.token}`;
+  const selected = webhook.assigned_user_ids || [];
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const saveName = () => {
+    const trimmed = nameDraft.trim();
+    setEditingName(false);
+    if (trimmed && trimmed !== webhook.name) {
+      updateWebhook.mutate({ id: webhook.id, name: trimmed });
+    } else {
+      setNameDraft(webhook.name);
+    }
+  };
+
+  const setUsers = (next: string[]) => {
+    updateWebhook.mutate({ id: webhook.id, assigned_user_ids: next });
+  };
+
+  const toggleRotate = (enabled: boolean) => {
+    // Ao desligar a rotação, mantém só 1 utilizador (regra: 1 fixo)
+    if (!enabled && selected.length > 1) {
+      updateWebhook.mutate({ id: webhook.id, rotate_enabled: false, assigned_user_ids: [selected[0]] });
+    } else {
+      updateWebhook.mutate({ id: webhook.id, rotate_enabled: enabled });
+    }
+  };
+
+  // Avisos de validação
+  const rotateOffInvalid = !webhook.rotate_enabled && selected.length !== 1;
+  const rotateOnHint = webhook.rotate_enabled && selected.length < 2;
+  const needsAttention = rotateOffInvalid || (webhook.is_active && selected.length === 0);
+
+  return (
+    <div className={cn("rounded-lg border bg-card overflow-hidden", !webhook.is_active && "opacity-70")}>
+      {/* Cabeçalho recolhível */}
+      <div className="flex items-center gap-2 p-3">
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="flex items-center gap-2 flex-1 min-w-0 text-left"
+        >
+          <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform shrink-0", expanded && "rotate-180")} />
+          <span className={cn("h-2 w-2 rounded-full shrink-0", webhook.is_active ? "bg-green-500" : "bg-muted-foreground/40")} />
+          <span className="text-sm font-medium truncate">{webhook.name}</span>
+          {webhook.is_system && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground border rounded px-1.5 py-0.5 shrink-0">
+                    <ShieldCheck className="h-3 w-3" /> Predefinido
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="text-xs max-w-[220px]">Webhook base da tua conta. Podes editá-lo ou desativá-lo, mas não eliminá-lo.</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+          {needsAttention && (
+            <span className="text-[10px] text-amber-600 dark:text-amber-400 border border-amber-500/30 bg-amber-500/10 rounded px-1.5 py-0.5 shrink-0">
+              ⚠️ Configurar
+            </span>
+          )}
+        </button>
+        <span className="hidden sm:block text-xs text-muted-foreground truncate max-w-[160px]">
+          {assigneeSummary(webhook, members)}
+        </span>
+        <Switch
+          checked={webhook.is_active}
+          onCheckedChange={(checked) => updateWebhook.mutate({ id: webhook.id, is_active: checked })}
+          onClick={(e) => e.stopPropagation()}
+        />
       </div>
 
-      <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-3">
-        <p className="text-sm text-amber-600 dark:text-amber-400">
-          ⚠️ <strong>Importante:</strong> Não partilhe estes URLs publicamente. Cada token autentica a tua organização.
-        </p>
-      </div>
+      {/* Conteúdo expandido */}
+      {expanded && (
+        <div className="px-4 pb-4 pt-1 space-y-4 border-t">
+          {/* Nome */}
+          <div className="space-y-1.5">
+            <Label className="text-xs">Nome</Label>
+            {editingName ? (
+              <Input
+                autoFocus
+                value={nameDraft}
+                onChange={(e) => setNameDraft(e.target.value)}
+                onBlur={saveName}
+                onKeyDown={(e) => { if (e.key === 'Enter') saveName(); if (e.key === 'Escape') { setNameDraft(webhook.name); setEditingName(false); } }}
+                className="h-9 text-sm"
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => { setNameDraft(webhook.name); setEditingName(true); }}
+                className="flex items-center gap-1.5 text-sm hover:text-primary transition-colors group w-full"
+              >
+                <span className="truncate">{webhook.name}</span>
+                <Pencil className="h-3 w-3 opacity-40 group-hover:opacity-80 shrink-0" />
+              </button>
+            )}
+          </div>
+
+          {/* URL */}
+          <div className="space-y-1.5">
+            <Label className="text-xs">URL do Webhook</Label>
+            <div className="flex items-center gap-2">
+              <Input readOnly value={url} className="text-xs font-mono bg-muted text-muted-foreground" />
+              <Button type="button" variant="outline" size="sm" onClick={handleCopy} className="shrink-0">
+                {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                {copied ? 'Copiado' : 'Copiar'}
+              </Button>
+            </div>
+          </div>
+
+          {/* Distribuição rotativa */}
+          <div className="flex items-center justify-between gap-3 rounded-md border bg-muted/30 p-3">
+            <div className="flex items-start gap-2">
+              <RefreshCw className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+              <div className="space-y-0.5">
+                <Label className="text-sm font-medium">Distribuição rotativa</Label>
+                <p className="text-xs text-muted-foreground">
+                  {webhook.rotate_enabled
+                    ? 'Os leads rodam entre os utilizadores selecionados (round-robin).'
+                    : 'Todos os leads vão para um único utilizador.'}
+                </p>
+              </div>
+            </div>
+            <Switch checked={webhook.rotate_enabled} onCheckedChange={toggleRotate} />
+          </div>
+
+          {/* Utilizadores que recebem */}
+          <div className="space-y-2">
+            <Label className="text-xs flex items-center gap-1.5">
+              <Users className="h-3.5 w-3.5" />
+              {webhook.rotate_enabled ? 'Quem recebe os leads (2 ou mais)' : 'Quem recebe os leads (1 pessoa)'}
+            </Label>
+            <MemberSelector members={members} value={selected} rotate={webhook.rotate_enabled} onChange={setUsers} />
+
+            {rotateOffInvalid && (
+              <p className="text-xs text-amber-600 dark:text-amber-400">
+                {selected.length === 0
+                  ? '⚠️ Seleciona 1 utilizador — sem isso os leads ficam sem responsável (só os admins são notificados).'
+                  : '⚠️ Com a rotação desligada só pode haver 1 utilizador.'}
+              </p>
+            )}
+            {rotateOnHint && (
+              <p className="text-xs text-blue-600 dark:text-blue-400">
+                💡 Seleciona pelo menos 2 utilizadores para a rotação fazer sentido.
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground">
+              Quem recebe o lead é notificado por email/push. Os administradores são sempre notificados de todos os webhooks.
+            </p>
+          </div>
+
+          {/* Eliminar (com confirmação) — só webhooks não predefinidos */}
+          {!webhook.is_system && (
+            <div className="flex justify-end pt-1 border-t">
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive mt-3">
+                    <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Eliminar webhook
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Eliminar "{webhook.name}"?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      O link deixa de funcionar e qualquer integração externa (Make, Zapier, Facebook…) que o use para de enviar leads. Esta ação não pode ser anulada.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => deleteWebhook.mutate(webhook.id)}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      Eliminar
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

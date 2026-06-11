@@ -29,27 +29,90 @@ async function handleWebhookMode(req: Request, token: string): Promise<Response>
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-  // Try standard webhook token first
-  let { data: org } = await supabase
-    .from('organizations')
-    .select('id, name, niche, webhook_url, whatsapp_instance, whatsapp_api_key, whatsapp_base_url, meta_pixels, sales_settings, brevo_api_key, brevo_sender_email, slug, webhook_dedicated_user_id')
-    .eq('webhook_token', token)
-    .maybeSingle();
+  const ORG_COLS = 'id, name, niche, webhook_url, whatsapp_instance, whatsapp_api_key, whatsapp_base_url, meta_pixels, sales_settings, brevo_api_key, brevo_sender_email, slug, webhook_dedicated_user_id';
 
+  let org: any = null;
   let dedicatedUserId: string | null = null;
 
-  // If not found, try dedicated webhook token (forces assignment to specific user)
-  if (!org) {
-    const { data: dedicatedOrg } = await supabase
-      .from('organizations')
-      .select('id, name, niche, webhook_url, whatsapp_instance, whatsapp_api_key, whatsapp_base_url, meta_pixels, sales_settings, brevo_api_key, brevo_sender_email, slug, webhook_dedicated_user_id')
-      .eq('webhook_token_dedicated', token)
-      .maybeSingle();
+  // Per-webhook config (named inbound webhooks with own user list + round-robin).
+  // Authoritative when the token matches a row here.
+  let intakeAssignee: string | null = null;
+  let intakeWebhookName: string | null = null;
+  let isIntakeWebhook = false;
 
-    if (dedicatedOrg) {
-      org = dedicatedOrg;
-      dedicatedUserId = dedicatedOrg.webhook_dedicated_user_id || null;
-      console.log('Dedicated webhook matched. Forced assignee:', dedicatedUserId);
+  // ===== NEW: per-organization named inbound webhooks (lead_intake_webhooks) =====
+  // Wrapped in try/catch so the function still works if the migration hasn't run yet.
+  let intakeWebhook: any = null;
+  try {
+    const { data } = await supabase
+      .from('lead_intake_webhooks')
+      .select('id, organization_id, name, is_active, assigned_user_ids, rotate_enabled')
+      .eq('token', token)
+      .maybeSingle();
+    intakeWebhook = data;
+  } catch (e) {
+    console.warn('lead_intake_webhooks lookup failed (table missing?):', (e as Error).message);
+  }
+
+  if (intakeWebhook) {
+    if (intakeWebhook.is_active === false) {
+      console.warn('Inbound webhook is disabled:', intakeWebhook.id);
+      // 200 to avoid retry storms from Facebook/Zapier/Make
+      return new Response(
+        JSON.stringify({ success: false, error: 'Webhook desativado' }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    isIntakeWebhook = true;
+    intakeWebhookName = intakeWebhook.name || null;
+
+    const { data: orgRow } = await supabase
+      .from('organizations')
+      .select(ORG_COLS)
+      .eq('id', intakeWebhook.organization_id)
+      .maybeSingle();
+    org = orgRow;
+
+    if (org) {
+      // Resolve assignee atomically (handles rotate on/off internally)
+      try {
+        const { data: assignee, error: assigneeError } = await supabase.rpc(
+          'get_next_webhook_assignee',
+          { p_webhook_id: intakeWebhook.id }
+        );
+        if (assigneeError) {
+          console.error('get_next_webhook_assignee failed:', assigneeError);
+        } else {
+          intakeAssignee = (assignee as string) || null;
+        }
+      } catch (rrErr) {
+        console.error('Webhook assignee RPC failed:', rrErr);
+      }
+    }
+  } else {
+    // ===== LEGACY FALLBACK (tokens not yet/never migrated) =====
+    // Standard webhook token first
+    const { data: stdOrg } = await supabase
+      .from('organizations')
+      .select(ORG_COLS)
+      .eq('webhook_token', token)
+      .maybeSingle();
+    org = stdOrg;
+
+    // Dedicated webhook token (forces assignment to specific user)
+    if (!org) {
+      const { data: dedicatedOrg } = await supabase
+        .from('organizations')
+        .select(ORG_COLS)
+        .eq('webhook_token_dedicated', token)
+        .maybeSingle();
+
+      if (dedicatedOrg) {
+        org = dedicatedOrg;
+        dedicatedUserId = dedicatedOrg.webhook_dedicated_user_id || null;
+        console.log('Dedicated webhook matched. Forced assignee:', dedicatedUserId);
+      }
     }
   }
 
@@ -61,7 +124,7 @@ async function handleWebhookMode(req: Request, token: string): Promise<Response>
     );
   }
 
-  console.log('Webhook mode: org found:', org.name, dedicatedUserId ? '(dedicated)' : '(standard)');
+  console.log('Webhook mode: org found:', org.name, isIntakeWebhook ? `(intake: ${intakeWebhookName})` : dedicatedUserId ? '(dedicated)' : '(standard)');
 
   const rawBody = await req.json();
   console.log('Webhook payload received:', JSON.stringify(rawBody).substring(0, 500));
@@ -77,7 +140,7 @@ async function handleWebhookMode(req: Request, token: string): Promise<Response>
   const phone = rawBody.phone || rawBody.phone_number || rawBody.telefone || rawBody.tel || null;
   const company = rawBody.company || rawBody.company_name || rawBody.empresa || null;
   const notes = rawBody.notes || rawBody.message || rawBody.mensagem || rawBody.observacoes || null;
-  const source = rawBody.source || rawBody.fonte || 'Webhook Externo';
+  const source = rawBody.source || rawBody.fonte || intakeWebhookName || 'Webhook Externo';
 
   console.log('Webhook mapped fields:', { name, email, phone, notes, source });
 
@@ -135,9 +198,15 @@ async function handleWebhookMode(req: Request, token: string): Promise<Response>
     }
   }
 
-  // Assignment: dedicated webhook forces a specific user, otherwise round-robin
+  // Assignment priority:
+  //  1) Named inbound webhook -> its own users + round-robin (resolved above)
+  //  2) Legacy dedicated webhook -> forced single user
+  //  3) Legacy general webhook -> org-level round-robin
   let autoAssignedTo: string | null = null;
-  if (dedicatedUserId) {
+  if (isIntakeWebhook) {
+    autoAssignedTo = intakeAssignee;
+    console.log('Inbound webhook assignee:', autoAssignedTo);
+  } else if (dedicatedUserId) {
     autoAssignedTo = dedicatedUserId;
     console.log('Dedicated webhook: bypassing round-robin, assigning to', dedicatedUserId);
   } else {
