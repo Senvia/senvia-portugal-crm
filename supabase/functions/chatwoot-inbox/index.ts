@@ -92,7 +92,15 @@ Deno.serve(async (req) => {
         all.push(...payload);
         if (payload.length < 25) break;
       }
-      return json({ conversations: all.map((c: any) => normalizeConversation(c, cfg.chatwootUrl)) });
+      const normalized = all.map((c: any) => normalizeConversation(c, cfg.chatwootUrl));
+      // Drop WhatsApp LID artifacts: contacts whose "phone" is actually a LID
+      // (14+ digits, no real name) — these are duplicates of the real contact.
+      const isLidArtifact = (c: NormalizedConversation) => {
+        const digits = (c.contact_phone || '').replace(/\D/g, '');
+        const nameIsNumber = /^[0-9+\s]+$/.test((c.contact_name || '').trim());
+        return nameIsNumber && digits.length >= 14;
+      };
+      return json({ conversations: normalized.filter((c) => !isLidArtifact(c)) });
     }
 
     if (action === 'get_messages') {
