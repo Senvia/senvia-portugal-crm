@@ -76,11 +76,23 @@ Deno.serve(async (req) => {
     const base = `/api/v1/accounts/${cw.accountId}`;
 
     if (action === 'list_conversations') {
-      const res = await chatwootFetch(cfg, cw.token, `${base}/conversations?status=open&assignee_type=all`);
-      if (!res.ok) return json({ error: 'Falha ao carregar conversas' }, 502);
-      const data = await res.json();
-      const payload = data?.data?.payload ?? data?.payload ?? [];
-      return json({ conversations: payload.map((c: any) => normalizeConversation(c, cfg.chatwootUrl)) });
+      // Fetch all statuses across several pages so imported history (which lands
+      // as "resolved") and older conversations also show up. Chatwoot pages by 25.
+      const all: any[] = [];
+      for (let page = 1; page <= 6; page++) {
+        const res = await chatwootFetch(
+          cfg, cw.token, `${base}/conversations?status=all&assignee_type=all&page=${page}`,
+        );
+        if (!res.ok) {
+          if (page === 1) return json({ error: 'Falha ao carregar conversas' }, 502);
+          break;
+        }
+        const data = await res.json();
+        const payload = data?.data?.payload ?? data?.payload ?? [];
+        all.push(...payload);
+        if (payload.length < 25) break;
+      }
+      return json({ conversations: all.map((c: any) => normalizeConversation(c, cfg.chatwootUrl)) });
     }
 
     if (action === 'get_messages') {
