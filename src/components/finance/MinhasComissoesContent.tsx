@@ -11,34 +11,50 @@ import { useMyCommissions } from '@/hooks/useSalesApproval';
 import { formatCurrency } from '@/lib/format';
 
 type StatusFilter = 'pending' | 'confirmed' | 'cancelled' | 'all';
-type Bucket = 'confirmed' | 'pending' | 'cancelled';
 
 interface CommissionSale {
   status: string;
   is_paid: boolean;
+  total_value: number;
+  paid_amount: number;
+  comissao: number | null;
 }
 
-// Commission is only "confirmed" (earned/payable) when the sale is concluded
-// (delivered/fulfilled) AND fully paid. Anything else (not concluded, or
-// concluded but unpaid) is pending; cancelled is cancelled.
-const bucketOf = (s: CommissionSale): Bucket => {
-  if (s.status === 'cancelled') return 'cancelled';
-  if ((s.status === 'delivered' || s.status === 'fulfilled') && s.is_paid) return 'confirmed';
-  return 'pending';
-};
+const EPS = 0.005;
+const isConcluded = (s: CommissionSale) => s.status === 'delivered' || s.status === 'fulfilled';
+const isCancelled = (s: CommissionSale) => s.status === 'cancelled';
 
-const isConfirmed = (s: CommissionSale) => bucketOf(s) === 'confirmed';
-const isPending = (s: CommissionSale) => bucketOf(s) === 'pending';
-const isCancelled = (s: CommissionSale) => bucketOf(s) === 'cancelled';
+// Fraction of the sale value already received from the client. Commission is
+// earned proportionally to what the client has actually paid: a concluded sale
+// with 80€ paid out of 150€ has earned 80/150 of its commission.
+function earnedFraction(s: CommissionSale): number {
+  if (isCancelled(s) || !isConcluded(s)) return 0; // not concluded → nothing earned yet
+  if (s.is_paid) return 1;                          // fully paid
+  const tv = Number(s.total_value) || 0;
+  if (tv <= 0) return 0;
+  return Math.min(1, Math.max(0, Number(s.paid_amount || 0) / tv));
+}
+
+// Split a sale's commission into its earned (confirmed) and outstanding
+// (pending) portions, proportional to the amount the client has paid.
+function portions(s: CommissionSale): { confirmed: number; pending: number; fraction: number } {
+  if (isCancelled(s)) return { confirmed: 0, pending: 0, fraction: 0 };
+  const c = Number(s.comissao) || 0;
+  const f = earnedFraction(s);
+  return { confirmed: c * f, pending: c * (1 - f), fraction: f };
+}
+
+const hasConfirmed = (s: CommissionSale) => portions(s).confirmed > EPS;
+const hasPending = (s: CommissionSale) => portions(s).pending > EPS;
 
 function badgeMeta(s: CommissionSale): { label: string; className: string } {
-  const b = bucketOf(s);
-  if (b === 'confirmed') return { label: 'Confirmada', className: 'bg-green-500/10 text-green-700 dark:text-green-400' };
-  if (b === 'cancelled') return { label: 'Anulada', className: 'bg-red-500/10 text-red-700 dark:text-red-400' };
-  // pending: distinguish "concluded but awaiting payment" from "not concluded yet"
-  const concluded = s.status === 'delivered' || s.status === 'fulfilled';
+  if (isCancelled(s)) return { label: 'Anulada', className: 'bg-red-500/10 text-red-700 dark:text-red-400' };
+  const { fraction } = portions(s);
+  if (fraction >= 0.999) return { label: 'Confirmada', className: 'bg-green-500/10 text-green-700 dark:text-green-400' };
+  if (fraction > 0) return { label: `Parcial (${Math.round(fraction * 100)}%)`, className: 'bg-blue-500/10 text-blue-700 dark:text-blue-400' };
+  // nothing earned: distinguish "concluded but awaiting payment" from "not concluded yet"
   return {
-    label: concluded ? 'Aguarda pagamento' : 'Pendente',
+    label: isConcluded(s) ? 'Aguarda pagamento' : 'Pendente',
     className: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',
   };
 }
@@ -68,19 +84,21 @@ export function MinhasComissoesContent({ dateRange }: { dateRange?: DateRange })
     let monthTotal = 0;
 
     for (const s of sales) {
-      const c = Number(s.comissao) || 0;
-      if (isPending(s)) {
-        pendingTotal += c;
+      if (isCancelled(s)) continue;
+      const { confirmed, pending } = portions(s);
+      if (pending > EPS) {
+        pendingTotal += pending;
         pendingCount++;
-      } else if (isConfirmed(s)) {
-        confirmedTotal += c;
+      }
+      if (confirmed > EPS) {
+        confirmedTotal += confirmed;
         confirmedCount++;
         const ref = s.approved_at
           ? new Date(s.approved_at)
           : s.activation_date
             ? new Date(s.activation_date)
             : null;
-        if (ref && ref >= monthStart) monthTotal += c;
+        if (ref && ref >= monthStart) monthTotal += confirmed;
       }
     }
     return { pendingTotal, pendingCount, confirmedTotal, confirmedCount, monthTotal };
@@ -88,11 +106,20 @@ export function MinhasComissoesContent({ dateRange }: { dateRange?: DateRange })
 
   const filtered = useMemo(() => {
     if (filter === 'all') return sales;
-    if (filter === 'pending') return sales.filter(s => isPending(s));
-    if (filter === 'confirmed') return sales.filter(s => isConfirmed(s));
+    if (filter === 'pending') return sales.filter(s => hasPending(s));
+    if (filter === 'confirmed') return sales.filter(s => hasConfirmed(s));
     if (filter === 'cancelled') return sales.filter(s => isCancelled(s));
     return sales;
   }, [sales, filter]);
+
+  // In the pending/confirmed tabs, show only the relevant portion of the
+  // commission for partially-paid sales; elsewhere show the full amount.
+  const displayCommission = (s: CommissionSale): number => {
+    const p = portions(s);
+    if (filter === 'pending') return p.pending;
+    if (filter === 'confirmed') return p.confirmed;
+    return Number(s.comissao) || 0;
+  };
 
   return (
     <div className="space-y-6">
@@ -181,7 +208,7 @@ export function MinhasComissoesContent({ dateRange }: { dateRange?: DateRange })
                       <TableCell className="text-right">{formatCurrency(s.total_value)}</TableCell>
                       <TableCell className="text-right font-medium">
                         {s.comissao
-                          ? formatCurrency(s.comissao)
+                          ? formatCurrency(displayCommission(s))
                           : <span className="text-muted-foreground">-</span>}
                       </TableCell>
                       <TableCell>
