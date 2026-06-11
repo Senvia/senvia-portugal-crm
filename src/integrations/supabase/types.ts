@@ -3004,6 +3004,56 @@ export type Database = {
           },
         ]
       }
+      messaging_channels: {
+        Row: {
+          channel_type: string
+          chatwoot_inbox_id: number | null
+          created_at: string | null
+          evolution_instance: string | null
+          id: string
+          metadata: Json | null
+          organization_id: string
+          phone_number: string | null
+          provider: string
+          status: string
+          updated_at: string | null
+        }
+        Insert: {
+          channel_type: string
+          chatwoot_inbox_id?: number | null
+          created_at?: string | null
+          evolution_instance?: string | null
+          id?: string
+          metadata?: Json | null
+          organization_id: string
+          phone_number?: string | null
+          provider: string
+          status?: string
+          updated_at?: string | null
+        }
+        Update: {
+          channel_type?: string
+          chatwoot_inbox_id?: number | null
+          created_at?: string | null
+          evolution_instance?: string | null
+          id?: string
+          metadata?: Json | null
+          organization_id?: string
+          phone_number?: string | null
+          provider?: string
+          status?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messaging_channels_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organizations: {
         Row: {
           ai_qualification_rules: string | null
@@ -3012,6 +3062,8 @@ export type Database = {
           brevo_api_key: string | null
           brevo_sender_email: string | null
           calendar_alert_settings: Json | null
+          chatwoot_account_id: number | null
+          chatwoot_account_token: string | null
           client_fields_settings: Json | null
           code: string | null
           commission_matrix: Json | null
@@ -3072,6 +3124,8 @@ export type Database = {
           brevo_api_key?: string | null
           brevo_sender_email?: string | null
           calendar_alert_settings?: Json | null
+          chatwoot_account_id?: number | null
+          chatwoot_account_token?: string | null
           client_fields_settings?: Json | null
           code?: string | null
           commission_matrix?: Json | null
@@ -3132,6 +3186,8 @@ export type Database = {
           brevo_api_key?: string | null
           brevo_sender_email?: string | null
           calendar_alert_settings?: Json | null
+          chatwoot_account_id?: number | null
+          chatwoot_account_token?: string | null
           client_fields_settings?: Json | null
           code?: string | null
           commission_matrix?: Json | null

@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Webhook, Send, Loader2, Eye, EyeOff, MessageCircle, Mail, Receipt, ArrowLeft, ChevronRight, ChevronDown, Plus, Trash2, Link2, Copy, Check, Users, RefreshCw, Pencil, ShieldCheck } from "lucide-react";
+import { Webhook, Send, Loader2, Eye, EyeOff, MessageCircle, Mail, Receipt, ArrowLeft, ChevronRight, ChevronDown, Plus, Trash2, Link2, Copy, Check, Users, RefreshCw, Pencil, Smartphone, CheckCircle2, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LucideIcon } from "lucide-react";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -15,6 +15,8 @@ import { useOrganizationWebhooks, useCreateWebhook, useToggleWebhook, useDeleteW
 import { useLeadIntakeWebhooks, useCreateLeadIntakeWebhook, useUpdateLeadIntakeWebhook, useDeleteLeadIntakeWebhook, LeadIntakeWebhook } from "@/hooks/useLeadIntakeWebhooks";
 import { useTeamMembers } from "@/hooks/useTeam";
 import { useTestWebhook } from "@/hooks/useOrganization";
+import { useWhatsappChannel } from "@/hooks/useMessagingChannels";
+import { ConnectWhatsAppModal } from "./ConnectWhatsAppModal";
 import { useAuth } from "@/contexts/AuthContext";
 
 interface IntegrationsContentProps {
@@ -804,14 +806,44 @@ function IntakeWebhookCard({
 // --- Form sub-components ---
 
 function WhatsAppForm({ whatsappBaseUrl, setWhatsappBaseUrl, whatsappInstance, setWhatsappInstance, whatsappApiKey, setWhatsappApiKey, showWhatsappApiKey, setShowWhatsappApiKey, handleSaveWhatsApp, updateOrganizationIsPending }: IntegrationsContentProps) {
+  const [connectOpen, setConnectOpen] = useState(false);
+  const { channel } = useWhatsappChannel();
+  const isConnected = channel?.status === 'connected';
   return (
     <>
+      {/* Multicanal — conectar WhatsApp ao inbox (Chatwoot + Evolution) */}
+      <div className="rounded-lg border p-4 space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="rounded-md bg-green-500/10 p-2 shrink-0">
+              <Smartphone className="h-5 w-5 text-green-600" />
+            </div>
+            <div>
+              <p className="font-medium text-sm">Inbox Multicanal</p>
+              <p className="text-xs text-muted-foreground">
+                {isConnected
+                  ? `Conectado${channel?.phone_number ? ` · +${channel.phone_number}` : ''}`
+                  : 'Liga o teu WhatsApp para receber e responder mensagens dentro do CRM.'}
+              </p>
+            </div>
+          </div>
+          {isConnected && (
+            <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20 text-[10px] gap-1">
+              <CheckCircle2 className="h-3 w-3" /> Conectado
+            </Badge>
+          )}
+        </div>
+        <Button onClick={() => setConnectOpen(true)} variant={isConnected ? 'outline' : 'default'} className="w-full">
+          <Smartphone className="mr-2 h-4 w-4" />
+          {isConnected ? 'Reconectar WhatsApp' : 'Conectar WhatsApp'}
+        </Button>
+      </div>
+      <ConnectWhatsAppModal open={connectOpen} onOpenChange={setConnectOpen} />
+
+      {/* Legacy — mensagem de receção automática ao novo Lead (Evolution por org) */}
       <div className="rounded-lg bg-blue-500/10 border border-blue-500/20 p-3 space-y-2">
         <p className="text-sm text-blue-600 dark:text-blue-400">
-          📩 Atualmente, a integração do WhatsApp Business tem como único propósito enviar uma mensagem de receção ao novo Lead que acabou de subscrever. Exemplo: <em>"Olá, seja bem-vindo! Recebemos os seus dados e em breve um agente vai entrar em contacto."</em>
-        </p>
-        <p className="text-sm text-blue-600 dark:text-blue-400">
-          🚀 Em breve vamos adicionar novas funcionalidades a esta integração.
+          📩 Os campos abaixo servem para enviar uma mensagem de receção automática ao novo Lead que acabou de subscrever. Exemplo: <em>"Olá, seja bem-vindo! Recebemos os seus dados e em breve um agente vai entrar em contacto."</em>
         </p>
       </div>
       <div className="space-y-2">

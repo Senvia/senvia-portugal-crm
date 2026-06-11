@@ -121,3 +121,24 @@ Rate resolution: `organizations.sales_settings.commission_percentage` (global) >
 ## Payment Method Values
 
 Enum-like string: `mbway`, `transfer`, `cash`, `card`, `check`, `other`. Labels in `src/types/sales.ts` → `PAYMENT_METHOD_LABELS`.
+
+## Multicanal (WhatsApp / Instagram / Facebook inbox)
+
+Omnichannel messaging built on **Chatwoot** (headless backend) + **Evolution API** (WhatsApp). Each organization gets its own isolated Chatwoot account; each connected channel is one row in `messaging_channels`.
+
+**`organizations` (new columns):**
+- `chatwoot_account_id` `integer` — the org Chatwoot account id (provisioned on first connect via the Chatwoot Platform API).
+- `chatwoot_account_token` `text` — access token for that account (used to read conversations in Phase 2).
+
+**`messaging_channels`** (1 row per channel per org, unique `(organization_id, channel_type)`):
+- `channel_type` — whatsapp | instagram | facebook
+- `provider` — evolution | meta
+- `evolution_instance` — Evolution instance name (`senvia-<org-id-prefix>`)
+- `chatwoot_inbox_id` — inbox auto-created in Chatwoot
+- `status` — disconnected | connecting | connected | error
+- `phone_number` — filled once connected
+- `metadata` `jsonb`
+
+RLS mirrors `forms`: members SELECT, admins manage (`get_user_org_id` + `has_role('admin')`), super_admin full access. Edge functions (`whatsapp-connect`, `whatsapp-status`) use the service role and validate org-admin membership manually.
+
+Required Supabase secrets: `EVOLUTION_API_URL`, `EVOLUTION_API_KEY`, `CHATWOOT_URL`, `CHATWOOT_PLATFORM_TOKEN`.

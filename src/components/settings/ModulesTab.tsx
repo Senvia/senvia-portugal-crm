@@ -1,4 +1,4 @@
-import { FileText, Calendar, ShoppingBag, Store, UserCheck, Mail, Wallet, Zap, Search } from "lucide-react";
+import { FileText, Calendar, ShoppingBag, Store, UserCheck, Mail, Wallet, Zap, Search, MessageSquare } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +15,7 @@ interface ModuleConfig {
 }
 
 const MODULES: ModuleConfig[] = [
+  { key: 'inbox', label: 'Caixa de Entrada', description: 'Mensagens de WhatsApp, Instagram e Facebook num só lugar', icon: MessageSquare },
   { key: 'clients', label: 'Clientes', description: 'Gestão de clientes e relacionamento comercial', icon: UserCheck },
   { key: 'proposals', label: 'Propostas', description: 'Gestão de propostas e orçamentos comerciais', icon: FileText },
   { key: 'sales', label: 'Vendas', description: 'Gestão de vendas e entregas', icon: ShoppingBag },

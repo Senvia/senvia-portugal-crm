@@ -19,6 +19,7 @@ const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Novidades = lazy(() => import("./pages/Novidades"));
 const NovidadeDetail = lazy(() => import("./pages/NovidadeDetail"));
 const Leads = lazy(() => import("./pages/Leads"));
+const Inbox = lazy(() => import("./pages/Inbox"));
 const Prospects = lazy(() => import("./pages/Prospects"));
 const PortalTotalLink = lazy(() => import("./pages/PortalTotalLink"));
 const PortalTotalLinkHome = lazy(() => import("./pages/portal-total-link/Home"));
@@ -98,6 +99,7 @@ const App = () => (
                   <Route path="/novidades" element={<Novidades />} />
                   <Route path="/novidades/:id" element={<NovidadeDetail />} />
                   <Route path="/leads" element={<Leads />} />
+                  <Route path="/inbox" element={<Inbox />} />
                   <Route path="/prospects" element={<Prospects />} />
                   <Route path="/portal-total-link" element={<PortalTotalLink />}>
                     <Route index element={<Navigate to="home" replace />} />
