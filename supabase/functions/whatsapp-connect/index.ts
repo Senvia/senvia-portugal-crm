@@ -43,9 +43,6 @@ Deno.serve(async (req) => {
         instanceName,
         integration: 'WHATSAPP-BAILEYS',
         qrcode: true,
-        // Ask WhatsApp for the full history on the first device link, so the
-        // client's existing chats import into Chatwoot on their first scan.
-        syncFullHistory: true,
       });
       if (!createRes.ok) {
         const text = await createRes.text();
@@ -66,11 +63,12 @@ Deno.serve(async (req) => {
       reopenConversation: true,
       conversationPending: false,
       mergeBrazilContacts: false,
-      // Import history on the FIRST connection so the client sees existing
-      // chats automatically (no manual step / no re-scan for new clients).
-      importContacts: true,
-      importMessages: true,
-      daysLimitImportMessages: 90,
+      // History import is disabled: WhatsApp's LID identifiers make imported
+      // chats messy (duplicates, broken send routing). The inbox starts clean
+      // and fills with live conversations, which route correctly.
+      importContacts: false,
+      importMessages: false,
+      daysLimitImportMessages: 7,
       autoCreate: true,
       organization: org.name,
       logo: '',
