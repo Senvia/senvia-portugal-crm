@@ -5,6 +5,7 @@
 //   - send_message   { conversation_id, content }
 import {
   corsHeaders, json, getConfig, authOrgMember, getOrgChatwoot, chatwootFetch,
+  instanceNameForOrg, evolutionFetch,
 } from '../_shared/multicanal.ts';
 
 interface NormalizedConversation {
@@ -115,16 +116,31 @@ Deno.serve(async (req) => {
     if (action === 'send_message') {
       if (!conversation_id) return json({ error: 'conversation_id em falta' }, 400);
       if (!content || !String(content).trim()) return json({ error: 'Mensagem vazia' }, 400);
-      const res = await chatwootFetch(
-        cfg, cw.token, `${base}/conversations/${conversation_id}/messages`, 'POST',
-        { content: String(content), message_type: 'outgoing' },
-      );
-      if (!res.ok) {
-        console.error('Chatwoot send failed:', res.status, await res.text());
-        return json({ error: 'Falha ao enviar mensagem' }, 502);
+
+      // Send OUTBOUND directly through Evolution (by the contact's phone number),
+      // instead of relying on the Chatwoot -> Evolution relay. Imported
+      // conversations have a broken contact_inbox.source_id (a random UUID) that
+      // does not route back to WhatsApp, so the relay silently drops them. The
+      // phone number is always correct, so this delivers for EVERY conversation.
+      // Evolution mirrors the sent message back into Chatwoot, so it still shows
+      // up in the inbox via the polling refetch.
+      const convRes = await chatwootFetch(cfg, cw.token, `${base}/conversations/${conversation_id}`);
+      if (!convRes.ok) return json({ error: 'Conversa não encontrada' }, 502);
+      const conv = await convRes.json();
+      const sender = conv?.meta?.sender ?? conv?.payload?.meta?.sender ?? {};
+      const number = String(sender.phone_number ?? sender.identifier ?? '').replace(/\D/g, '');
+      if (!number) return json({ error: 'Contacto sem número de telefone' }, 422);
+
+      const instance = instanceNameForOrg(organization_id);
+      const evoRes = await evolutionFetch(cfg, `/message/sendText/${instance}`, 'POST', {
+        number,
+        text: String(content),
+      });
+      if (!evoRes.ok) {
+        console.error('Evolution send failed:', evoRes.status, await evoRes.text());
+        return json({ error: 'Falha ao enviar para o WhatsApp' }, 502);
       }
-      const msg = await res.json();
-      return json({ message: normalizeMessage(msg) });
+      return json({ ok: true });
     }
 
     if (action === 'mark_read') {
