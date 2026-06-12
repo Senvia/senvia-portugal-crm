@@ -492,46 +492,48 @@ export function ConversationTasks({
               <p className="rounded-lg bg-muted/60 p-2 text-[11px] italic text-muted-foreground">“{editing.source_message}”</p>
             )}
           </div>
-          <DialogFooter className="flex-row items-center gap-2 sm:justify-between">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-destructive hover:text-destructive"
-              onClick={() => { if (editing) deleteTask.mutate(editing.id); setEditing(null); }}
-            >
-              <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-              Apagar
-            </Button>
-            <div className="flex items-center gap-2">
+          <DialogFooter className="flex-row items-center gap-1.5 sm:justify-between">
+            {/* Ações sobre a tarefa (à esquerda) vs guardar a edição (à direita) */}
+            <div className="flex items-center gap-1.5">
               <Button
-                variant="outline"
+                variant="ghost"
                 size="sm"
+                className="px-2 text-destructive hover:text-destructive"
+                onClick={() => { if (editing) deleteTask.mutate(editing.id); setEditing(null); }}
+              >
+                <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                Apagar
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="px-2 text-emerald-600 hover:text-emerald-700"
                 onClick={() => {
                   if (editing) toggleTask.mutate({ id: editing.id, done: !editing.done_at });
                   setEditing(null);
                 }}
               >
                 <Check className="mr-1.5 h-3.5 w-3.5" />
-                {editing?.done_at ? "Reabrir" : "Concluir"}
-              </Button>
-              <Button
-                size="sm"
-                disabled={!editTitle.trim() || updateTask.isPending}
-                onClick={() => {
-                  if (!editing) return;
-                  updateTask.mutate({
-                    id: editing.id,
-                    title: editTitle,
-                    description: editDesc,
-                    dueAt: editDue ? new Date(editDue) : null,
-                    assignedTo: editAssignee === "none" ? null : editAssignee,
-                  });
-                  setEditing(null);
-                }}
-              >
-                Guardar
+                {editing?.done_at ? "Reabrir tarefa" : "Marcar concluída"}
               </Button>
             </div>
+            <Button
+              size="sm"
+              disabled={!editTitle.trim() || updateTask.isPending}
+              onClick={() => {
+                if (!editing) return;
+                updateTask.mutate({
+                  id: editing.id,
+                  title: editTitle,
+                  description: editDesc,
+                  dueAt: editDue ? new Date(editDue) : null,
+                  assignedTo: editAssignee === "none" ? null : editAssignee,
+                });
+                setEditing(null);
+              }}
+            >
+              Guardar
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
