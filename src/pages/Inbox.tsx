@@ -72,7 +72,7 @@ import {
   Loader2, MessageSquare, Send, ArrowLeft, Smartphone, Search, FileText, Clock,
   Check, CheckCheck, Download, Paperclip, Mic, Smile, Zap, X, Plus, Archive,
   ArchiveRestore, UserPlus, Reply, ChevronUp, Trash2, Pin, PinOff,
-  Pencil, Tag, UserCog, PanelRight, AlarmClock, ExternalLink, Sparkles, PenLine, ClipboardList,
+  Pencil, Tag, UserCog, PanelRight, AlarmClock, ExternalLink, Sparkles, PenLine,
   BellOff, Bell, Settings2, WifiOff, FileDown, ClipboardList, CalendarClock,
   ChevronsUpDown,
 } from "lucide-react";
