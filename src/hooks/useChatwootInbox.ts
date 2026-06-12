@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -41,6 +41,8 @@ export interface InboxMessage {
   content: string;
   outgoing: boolean;
   is_activity: boolean;
+  // Private note: agent-only, never sent to the customer's WhatsApp.
+  is_private?: boolean;
   created_at: string | number | null;
   sender_name: string | null;
   // Delivery status of outgoing messages: sent | delivered | read | failed.
@@ -142,6 +144,83 @@ export function useInboxRealtime(): boolean {
   }, [organization?.id, queryClient]);
 
   return live;
+}
+
+export interface PresencePeer {
+  userId: string;
+  name: string;
+  conversationId: number | null;
+  typing: boolean;
+}
+
+// Shared agent presence across the org: who currently has which conversation
+// open, and whether they're typing. Powers collision warnings (two agents on the
+// same chat) so the team doesn't send duplicate replies. Built on Supabase
+// Realtime Presence — one channel per org, each agent tracks their open chat.
+// Returns a map of conversationId -> peers (OTHER agents, never self).
+export function useInboxPresence(
+  conversationId: number | null,
+  typing: boolean,
+  selfName: string,
+): Map<number, PresencePeer[]> {
+  const { organization, user } = useAuth();
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const subscribedRef = useRef(false);
+  // Latest state read inside the subscribe callback without resubscribing.
+  const stateRef = useRef({ conversationId, typing, selfName });
+  stateRef.current = { conversationId, typing, selfName };
+  const [peers, setPeers] = useState<Map<number, PresencePeer[]>>(new Map());
+
+  // Subscribe once per org/user; re-tracking on changes happens in the effect below.
+  useEffect(() => {
+    if (!organization?.id || !user?.id) return;
+    const userId = user.id;
+    const channel = supabase.channel(`inbox-presence-${organization.id}`, {
+      config: { presence: { key: userId } },
+    });
+    channelRef.current = channel;
+
+    const recompute = () => {
+      const raw = channel.presenceState() as unknown as Record<string, PresencePeer[]>;
+      const map = new Map<number, PresencePeer[]>();
+      for (const [key, metas] of Object.entries(raw)) {
+        if (key === userId) continue; // never warn about ourselves
+        const meta = metas[metas.length - 1]; // most recent track() wins
+        if (!meta || meta.conversationId == null) continue;
+        const arr = map.get(meta.conversationId) ?? [];
+        arr.push(meta);
+        map.set(meta.conversationId, arr);
+      }
+      setPeers(map);
+    };
+
+    channel
+      .on('presence', { event: 'sync' }, recompute)
+      .on('presence', { event: 'join' }, recompute)
+      .on('presence', { event: 'leave' }, recompute)
+      .subscribe((status) => {
+        subscribedRef.current = status === 'SUBSCRIBED';
+        if (status === 'SUBSCRIBED') {
+          const s = stateRef.current;
+          channel.track({ userId, name: s.selfName, conversationId: s.conversationId, typing: s.typing });
+        }
+      });
+
+    return () => {
+      subscribedRef.current = false;
+      channelRef.current = null;
+      supabase.removeChannel(channel);
+    };
+  }, [organization?.id, user?.id]);
+
+  // Push our latest open-conversation / typing state to the channel.
+  useEffect(() => {
+    const channel = channelRef.current;
+    if (!channel || !subscribedRef.current || !user?.id) return;
+    channel.track({ userId: user.id, name: selfName, conversationId, typing });
+  }, [conversationId, typing, selfName, user?.id]);
+
+  return peers;
 }
 
 // Conversation identity for merging: same contact = same row (matches the
@@ -398,6 +477,26 @@ export function useSendInboxMessage() {
   });
 }
 
+// Post a private internal note (agent-only). Goes straight to Chatwoot, never to
+// WhatsApp. The note lands in the thread on the next refetch/realtime event.
+export function useSendInternalNote() {
+  const { organization } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ conversationId, content }: { conversationId: number; content: string }) => {
+      if (!organization?.id) throw new Error('Organização não encontrada');
+      return invokeInbox<{ ok: boolean }>(organization.id, {
+        action: 'send_note',
+        conversation_id: conversationId,
+        content,
+      });
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['inbox-messages', organization?.id, variables.conversationId] });
+    },
+  });
+}
+
 // Start a conversation with a number that never wrote to us.
 export function useStartConversation() {
   const { organization } = useAuth();
@@ -567,6 +666,23 @@ export function useCreateLabel() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['inbox-labels', organization?.id] });
+    },
+  });
+}
+
+// Deletes a label account-wide (Chatwoot also strips it from every conversation).
+export function useDeleteLabel() {
+  const { organization } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (labelId: number) => {
+      if (!organization?.id) throw new Error('Organização não encontrada');
+      return invokeInbox(organization.id, { action: 'delete_label', label_id: labelId });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inbox-labels', organization?.id] });
+      // Conversations may have carried the deleted label — refresh their chips.
+      queryClient.invalidateQueries({ queryKey: ['inbox-conversations', organization?.id] });
     },
   });
 }

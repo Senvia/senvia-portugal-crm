@@ -20,14 +20,13 @@ import {
   useRenameContact,
   useInboxLabels,
   useCreateLabel,
+  useDeleteLabel,
   useSetConversationLabels,
   useCannedResponses,
   useCreateCannedResponse,
   useDeleteCannedResponse,
   useDeleteMessage,
   useCrmRecord,
-  useUpdateLeadNotes,
-  useUpdateClientNotes,
   useTypingPresence,
   useSuggestReply,
   useScheduledMessages,
@@ -43,11 +42,14 @@ import {
   InboxAttachment,
   InboxMessage,
   OutgoingAttachment,
+  PresencePeer,
+  useInboxPresence,
   useTranscribeAudio,
 } from "@/hooks/useChatwootInbox";
 import { useCreateCommunication } from "@/hooks/useClientCommunications";
 import { useTeamMembers } from "@/hooks/useTeam";
 import { ConversationTasks } from "@/components/inbox/ConversationTasks";
+import { ContactNotes } from "@/components/contacts/ContactNotes";
 import { useOpenInboxTasks, isTaskOverdue, phoneSuffix } from "@/hooks/useInboxTasks";
 import { useCreateEvent } from "@/hooks/useCalendarEvents";
 import { useAuth } from "@/contexts/AuthContext";
@@ -74,7 +76,7 @@ import {
   ArchiveRestore, UserPlus, Reply, ChevronUp, Trash2, Pin, PinOff,
   Pencil, Tag, UserCog, PanelRight, AlarmClock, ExternalLink, Sparkles, PenLine,
   BellOff, Bell, Settings2, WifiOff, FileDown, ClipboardList, CalendarClock,
-  ChevronsUpDown,
+  ChevronsUpDown, Eye,
 } from "lucide-react";
 import { cn, matchesSearch } from "@/lib/utils";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -85,6 +87,14 @@ function initials(name: string): string {
 
 function firstName(name: string): string {
   return (name || "").trim().split(/\s+/)[0] || "";
+}
+
+// E.164 display: exactly one leading "+". Chatwoot may store the number already
+// with a "+", so a naive `+${phone}` would render "++351...". Strip non-digits
+// and re-add a single prefix — idempotent whether or not the source has a "+".
+function displayPhone(phone: string | null | undefined): string {
+  const digits = String(phone ?? "").replace(/\D/g, "");
+  return digits ? `+${digits}` : "";
 }
 
 function toMs(value: string | number | null): number {
@@ -132,6 +142,27 @@ function dayKey(ms: number): string {
   return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 }
 
+// SLA severity by how long the customer has been waiting for a reply.
+// ok < 15 min, warn 15–60 min, late ≥ 60 min. Drives the traffic-light colours.
+type SlaLevel = "ok" | "warn" | "late";
+function slaLevel(since: number | null): SlaLevel | null {
+  if (!since) return null;
+  const mins = (Date.now() - since * 1000) / 60000;
+  if (mins >= 60) return "late";
+  if (mins >= 15) return "warn";
+  return "ok";
+}
+const SLA_DOT: Record<SlaLevel, string> = {
+  ok: "bg-emerald-500",
+  warn: "bg-amber-500",
+  late: "bg-red-500",
+};
+const SLA_BADGE: Record<SlaLevel, string> = {
+  ok: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300",
+  warn: "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300",
+  late: "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300",
+};
+
 // "à espera 5m / 2h / 3d"
 function waitingLabel(since: number | null): string | null {
   if (!since) return null;
@@ -141,6 +172,32 @@ function waitingLabel(since: number | null): string | null {
   const hours = Math.floor(mins / 60);
   if (hours < 24) return `${hours}h`;
   return `${Math.floor(hours / 24)}d`;
+}
+
+// Chatwoot emits conversation activity/system messages in English ("X added
+// <label>", "Conversation resolved by Y"). Translate the common ones to pt-PT so
+// the list preview reads in Portuguese even before the backend (which now hides
+// activities from the preview) is redeployed. Patterns are tightly shaped — a
+// capitalised agent name + a verb — so real customer messages are left untouched.
+function translateActivity(text: string): string {
+  if (!text) return text;
+  const NAME = String.raw`\p{Lu}[\p{L}]+(?:[ '\-]\p{L}+)*`;
+  const LABELS = String.raw`[\p{L}\p{N}_-]+(?:,\s*[\p{L}\p{N}_-]+)*`;
+  let m: RegExpMatchArray | null;
+  if ((m = text.match(new RegExp(`^(${NAME}) added (${LABELS})$`, "u")))) {
+    return `${m[1]} adicionou ${m[2].includes(",") ? "as etiquetas" : "a etiqueta"} ${m[2]}`;
+  }
+  if ((m = text.match(new RegExp(`^(${NAME}) removed (${LABELS})$`, "u")))) {
+    return `${m[1]} removeu ${m[2].includes(",") ? "as etiquetas" : "a etiqueta"} ${m[2]}`;
+  }
+  if ((m = text.match(/^Assigned to (.+?) by (.+)$/))) return `Atribuída a ${m[1]} por ${m[2]}`;
+  if ((m = text.match(/^(.+?) self-assigned this conversation$/i))) return `${m[1]} atribuiu a conversa a si`;
+  if ((m = text.match(/^Conversation was marked resolved by (.+)$/i))) return `Conversa resolvida por ${m[1]}`;
+  if ((m = text.match(/^Conversation was (?:marked )?reopened by (.+)$/i))) return `Conversa reaberta por ${m[1]}`;
+  if (/^Conversation was marked resolved$/i.test(text)) return "Conversa resolvida";
+  if (/^Conversation was reopened$/i.test(text)) return "Conversa reaberta";
+  if (/^Conversation was marked pending$/i.test(text)) return "Conversa marcada como pendente";
+  return text;
 }
 
 // Replace {{nome}} with the contact's first name in quick replies.
@@ -407,6 +464,12 @@ export default function Inbox() {
   const [pinned, setPinned] = useState<number[]>(loadPinned);
   // Muted conversations (localStorage) — no sound/badge for these.
   const [muted, setMuted] = useState<number[]>(loadMutedIds);
+  // Whether WE are actively typing — broadcast to teammates for collision warnings.
+  const [selfTyping, setSelfTyping] = useState(false);
+  const typingResetRef = useRef<number | null>(null);
+  // Composer "+" menu: 'menu' (actions) or 'emoji' (picker grid).
+  const [plusOpen, setPlusOpen] = useState(false);
+  const [plusView, setPlusView] = useState<"menu" | "emoji">("menu");
   // Outgoing message signature (*Nome:*) — useful when several agents share the number.
   const [signing, setSigning] = useState<boolean>(() => localStorage.getItem("inbox-signature-v1") === "1");
   // Out-of-hours auto-reply settings dialog.
@@ -435,10 +498,16 @@ export default function Inbox() {
   // CRM contact panel: fixed right column on desktop (persisted), Sheet on mobile.
   const [panelOpen, setPanelOpen] = useState<boolean>(() => localStorage.getItem("inbox-panel-v1") !== "0");
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [notesDraft, setNotesDraft] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  // Latest list/selection/action for the singly-bound keyboard handler.
+  const kbdRef = useRef<{
+    filtered: InboxConversation[];
+    selectedId: number | null;
+    archive: () => void;
+  }>({ filtered: [], selectedId: null, archive: () => {} });
   const prevUnreadRef = useRef<number>(0);
   const lastTypingRef = useRef<number>(0);
   const lastAutoReadRef = useRef<number>(0);
@@ -471,7 +540,9 @@ export default function Inbox() {
   const renameContact = useRenameContact();
   const { data: labels = [] } = useInboxLabels();
   const createLabel = useCreateLabel();
+  const deleteLabel = useDeleteLabel();
   const setLabels = useSetConversationLabels();
+  const [managingLabels, setManagingLabels] = useState(false);
   const { data: canned = [] } = useCannedResponses();
   const createCanned = useCreateCannedResponse();
   const deleteCanned = useDeleteCannedResponse();
@@ -492,8 +563,6 @@ export default function Inbox() {
     [selected?.crm_id, selected?.crm_kind, selected?.crm_name, phoneMatch],
   );
   const { data: crmRecord } = useCrmRecord(contactMatch);
-  const updateLeadNotes = useUpdateLeadNotes();
-  const updateClientNotes = useUpdateClientNotes();
   // Open proposals/sales for client panel.
   const clientId = contactMatch?.kind === "client" ? contactMatch.id : null;
   const { data: openProposals = [] } = useClientProposals(clientId);
@@ -631,6 +700,9 @@ export default function Inbox() {
     const seen = new Set<number>();
     const all: InboxMessage[] = [];
     for (const m of [...older, ...messages]) {
+      // Private Chatwoot messages (legacy notes + send-failure system notices)
+      // are not shown in the thread — notes now live in the DB-backed panel.
+      if (m.is_private) continue;
       if (!seen.has(m.id) && !deletedIds.has(m.id)) { seen.add(m.id); all.push(m); }
     }
     return all.sort((a, b) => toMs(a.created_at) - toMs(b.created_at));
@@ -686,7 +758,7 @@ export default function Inbox() {
     setReplyTo(null);
     setOutAttachments([]);
     setPendingVoice(null);
-    setNotesDraft(null);
+    setSelfTyping(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId, markRead]);
 
@@ -709,6 +781,10 @@ export default function Inbox() {
   }, [selectedId, thread, loadingOlder, loadOlder, toast]);
 
   const myName = teamMembers.find((m) => m.user_id === user?.id)?.full_name || "";
+
+  // Live presence of other agents: collision detection (who else is in this chat).
+  const presence = useInboxPresence(selectedId, selfTyping, myName);
+  const peersHere = selectedId ? presence.get(selectedId) ?? [] : [];
 
   const doSend = useCallback(
     async (rawText: string, attachment?: OutgoingAttachment) => {
@@ -741,6 +817,8 @@ export default function Inbox() {
         },
       );
       setReplyTo(null);
+      setSelfTyping(false);
+      if (typingResetRef.current) window.clearTimeout(typingResetRef.current);
     },
     [selectedId, selected?.contact_phone, replyTo, sendMessage, toast, signing, myName],
   );
@@ -974,10 +1052,66 @@ export default function Inbox() {
     );
   };
 
+  // Keep the keyboard handler's data fresh without rebinding the listener.
+  kbdRef.current = { filtered, selectedId, archive: handleToggleArchive };
+  // ---- Keyboard shortcuts (desktop power-use): j/k navigate, e archive,
+  // / search, c new conversation, n toggle note. Ignored while typing. ----
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target as HTMLElement | null;
+      const tag = t?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || t?.isContentEditable) {
+        if (e.key === "Escape") t?.blur();
+        return;
+      }
+      const { filtered: list, selectedId: sel, archive } = kbdRef.current;
+      const move = (delta: number) => {
+        if (list.length === 0) return;
+        const idx = list.findIndex((c) => c.id === sel);
+        const next =
+          idx === -1
+            ? delta > 0 ? 0 : list.length - 1
+            : Math.min(list.length - 1, Math.max(0, idx + delta));
+        setSelectedId(list[next].id);
+      };
+      switch (e.key) {
+        case "j":
+        case "ArrowDown":
+          e.preventDefault();
+          move(1);
+          break;
+        case "k":
+        case "ArrowUp":
+          e.preventDefault();
+          move(-1);
+          break;
+        case "e":
+          if (sel) {
+            e.preventDefault();
+            archive();
+          }
+          break;
+        case "/":
+          e.preventDefault();
+          searchInputRef.current?.focus();
+          break;
+        case "c":
+          e.preventDefault();
+          setNewConvOpen(true);
+          break;
+        default:
+          break;
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   // ---- CRM: define a contact as Lead/Client, or link to an existing record ----
   const handleDefineAs = (kind: "lead" | "client") => {
     if (!selected?.contact_phone) return;
-    const payload = { name: selected.contact_name, phone: `+${selected.contact_phone}` };
+    const payload = { name: selected.contact_name, phone: displayPhone(selected.contact_phone) };
     const mutation = kind === "lead" ? createLead : createClient;
     mutation.mutate(payload, {
       onSuccess: (record) => {
@@ -1072,7 +1206,7 @@ export default function Inbox() {
           <div className="min-w-0 flex-1 space-y-0.5">
             <p className="truncate font-semibold">{selected.contact_name}</p>
             {selected.contact_phone && (
-              <p className="truncate text-xs text-muted-foreground">+{selected.contact_phone}</p>
+              <p className="truncate text-xs text-muted-foreground">{displayPhone(selected.contact_phone)}</p>
             )}
             {crmRecord?.email && (
               <p className="truncate text-xs text-muted-foreground">{crmRecord.email}</p>
@@ -1220,12 +1354,57 @@ export default function Inbox() {
 
       {/* Tags */}
       <div className="rounded-xl border bg-card p-3">
-        <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          <Tag className="h-3.5 w-3.5 text-violet-500" /> Etiquetas
-        </p>
+        <div className="mb-2 flex items-center justify-between">
+          <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <Tag className="h-3.5 w-3.5 text-violet-500" /> Etiquetas
+          </p>
+          {labels.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setManagingLabels((v) => !v)}
+              className={cn(
+                "rounded px-1.5 py-0.5 text-[10px] font-medium transition-colors",
+                managingLabels ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-accent",
+              )}
+            >
+              {managingLabels ? "Concluir" : "Gerir"}
+            </button>
+          )}
+        </div>
+        {managingLabels && (
+          <p className="mb-2 text-[10px] text-muted-foreground">
+            Apagar remove a etiqueta de toda a equipa e de todas as conversas.
+          </p>
+        )}
         <div className="flex flex-wrap gap-1.5">
           {labels.map((l) => {
             const active = selected.labels.includes(l.title);
+            if (managingLabels) {
+              return (
+                <span
+                  key={l.id}
+                  className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground"
+                >
+                  {l.title}
+                  <button
+                    type="button"
+                    title={`Apagar etiqueta "${l.title}"`}
+                    disabled={deleteLabel.isPending}
+                    onClick={() => {
+                      if (!window.confirm(`Apagar a etiqueta "${l.title}" para toda a equipa? Será removida de todas as conversas.`)) return;
+                      deleteLabel.mutate(l.id, {
+                        onSuccess: () => toast({ title: "Etiqueta apagada" }),
+                        onError: (err) =>
+                          toast({ title: "Falha ao apagar", description: (err as Error).message, variant: "destructive" }),
+                      });
+                    }}
+                    className="rounded-full p-0.5 hover:bg-red-500/10 hover:text-red-600"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              );
+            }
             return (
               <button
                 key={l.id}
@@ -1271,6 +1450,9 @@ export default function Inbox() {
           </Button>
         </div>
       </div>
+
+      {/* Unified contact notes (DB-backed, shared with the CRM record) */}
+      <ContactNotes phone={selected.contact_phone} source="inbox" />
 
       {/* Details */}
       {crmRecord?.kind === "lead" && (
@@ -1366,59 +1548,43 @@ export default function Inbox() {
         />
       )}
 
-      {/* Internal notes — leads and clients */}
-      {crmRecord && (
-        <div className="rounded-xl border bg-card p-3">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Notas internas</p>
-          <Textarea
-            value={notesDraft ?? crmRecord.notes ?? ""}
-            onChange={(e) => setNotesDraft(e.target.value)}
-            rows={3}
-            placeholder={`Notas sobre ${crmRecord.kind === "lead" ? "esta lead" : "este cliente"}...`}
-            className="text-sm"
-          />
-          <Button
-            size="sm"
-            variant="secondary"
-            className="mt-2 w-full"
-            disabled={notesDraft === null || updateLeadNotes.isPending || updateClientNotes.isPending}
-            onClick={() => {
-              const notes = notesDraft ?? "";
-              if (crmRecord.kind === "lead") {
-                updateLeadNotes.mutate(
-                  { leadId: crmRecord.id, notes },
-                  { onSuccess: () => { setNotesDraft(null); toast({ title: "Notas guardadas" }); } },
-                );
-              } else {
-                updateClientNotes.mutate(
-                  { clientId: crmRecord.id, notes },
-                  { onSuccess: () => { setNotesDraft(null); toast({ title: "Notas guardadas" }); } },
-                );
-              }
-            }}
-          >
-            {(updateLeadNotes.isPending || updateClientNotes.isPending) ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : null}
-            Guardar notas
-          </Button>
-        </div>
-      )}
-
-
       </div>{/* end gap-3 flex col */}
     </div>
   );
 
-  // Thread rows with date separators interleaved.
-  const threadRows: Array<{ type: "sep"; key: string; label: string } | { type: "msg"; key: string; msg: InboxMessage }> = [];
+  // Thread rows with date separators interleaved. Consecutive messages from the
+  // same sender within a short window are grouped: only the LAST keeps a tail +
+  // timestamp, and the gap between them tightens — the WhatsApp "grouped" look.
+  type ThreadRow =
+    | { type: "sep"; key: string; label: string }
+    | { type: "msg"; key: string; msg: InboxMessage; firstOfGroup: boolean; lastOfGroup: boolean };
+  const threadRows: ThreadRow[] = [];
+  const GROUP_WINDOW = 5 * 60 * 1000; // 5 min
+  const msgs = thread.filter((m) => !m.is_activity);
+  const sameSender = (a: InboxMessage, b: InboxMessage) =>
+    a.outgoing === b.outgoing &&
+    (a.sender_name || "") === (b.sender_name || "") &&
+    !!a.is_private === !!b.is_private;
   let lastDay = "";
-  for (const m of thread.filter((m) => !m.is_activity)) {
+  for (let i = 0; i < msgs.length; i++) {
+    const m = msgs[i];
     const ms = toMs(m.created_at);
     const k = dayKey(ms);
-    if (k !== lastDay) {
+    const dayChanged = k !== lastDay;
+    if (dayChanged) {
       lastDay = k;
       threadRows.push({ type: "sep", key: `sep-${k}`, label: dayLabel(ms) });
     }
-    threadRows.push({ type: "msg", key: `m-${m.id}`, msg: m });
+    const prev = msgs[i - 1];
+    const next = msgs[i + 1];
+    const firstOfGroup =
+      dayChanged || !prev || !sameSender(prev, m) || ms - toMs(prev.created_at) > GROUP_WINDOW;
+    const lastOfGroup =
+      !next ||
+      dayKey(toMs(next.created_at)) !== k ||
+      !sameSender(next, m) ||
+      toMs(next.created_at) - ms > GROUP_WINDOW;
+    threadRows.push({ type: "msg", key: `m-${m.id}`, msg: m, firstOfGroup, lastOfGroup });
   }
 
   return (
@@ -1508,9 +1674,10 @@ export default function Inbox() {
           <div className="relative mb-3">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
+              ref={searchInputRef}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Procurar por nome ou mensagem..."
+              placeholder="Procurar por nome ou mensagem... ( / )"
               className="pl-9"
             />
           </div>
@@ -1566,6 +1733,7 @@ export default function Inbox() {
                 pinned={pinned.includes(c.id)}
                 muted={muted.includes(c.id)}
                 taskState={taskStateByPhone.get(phoneSuffix(c.contact_phone)) ?? null}
+                viewers={presence.get(c.id)}
                 onClick={() => setSelectedId(c.id)}
               />
             ))
@@ -1607,10 +1775,23 @@ export default function Inbox() {
                 <div className="flex items-center gap-1.5">
                   <p className="truncate text-sm font-medium">{selected.contact_name}</p>
                   {isPinned && <Pin className="h-3 w-3 shrink-0 text-muted-foreground" />}
+                  {(() => {
+                    const sla = selected.status !== "resolved" ? slaLevel(selected.waiting_since) : null;
+                    if (!sla) return null;
+                    return (
+                      <span
+                        className={cn("flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium", SLA_BADGE[sla])}
+                        title={sla === "late" ? "Resposta atrasada (>1h)" : sla === "warn" ? "À espera (>15m)" : "À espera"}
+                      >
+                        <span className={cn("h-1.5 w-1.5 rounded-full", SLA_DOT[sla])} />
+                        à espera {waitingLabel(selected.waiting_since)}
+                      </span>
+                    );
+                  })()}
                 </div>
                 <div className="flex items-center gap-2">
                   {selected.contact_phone && (
-                    <p className="truncate text-xs text-muted-foreground">+{selected.contact_phone}</p>
+                    <p className="truncate text-xs text-muted-foreground">{displayPhone(selected.contact_phone)}</p>
                   )}
                   {selected.assigned_name && (
                     <span className="rounded-full bg-muted px-1.5 text-[10px] text-muted-foreground">
@@ -1677,8 +1858,39 @@ export default function Inbox() {
 
             </div>
 
+            {/* Collision warning: another agent is in this same conversation */}
+            {peersHere.length > 0 && (
+              <div
+                className={cn(
+                  "flex items-center gap-2 border-b px-3 py-1.5 text-xs",
+                  peersHere.some((p) => p.typing)
+                    ? "bg-red-500/10 text-red-700"
+                    : "bg-amber-500/10 text-amber-700",
+                )}
+              >
+                <Eye className="h-3.5 w-3.5 shrink-0" />
+                <span className="min-w-0 flex-1 truncate">
+                  {peersHere.some((p) => p.typing) ? (
+                    <>
+                      <span className="font-medium">
+                        {peersHere.filter((p) => p.typing).map((p) => firstName(p.name) || "Alguém").join(", ")}
+                      </span>{" "}
+                      está a responder — cuidado com respostas duplicadas
+                    </>
+                  ) : (
+                    <>
+                      <span className="font-medium">
+                        {peersHere.map((p) => firstName(p.name) || "Alguém").join(", ")}
+                      </span>{" "}
+                      {peersHere.length > 1 ? "estão a ver esta conversa" : "está a ver esta conversa"}
+                    </>
+                  )}
+                </span>
+              </div>
+            )}
+
             {/* Messages */}
-            <div className="flex-1 space-y-2 overflow-y-auto bg-muted/20 p-4">
+            <div className="flex flex-1 flex-col overflow-y-auto bg-muted/20 p-4">
               {loadingMessages && thread.length === 0 ? (
                 <div className="flex items-center justify-center gap-2 py-10 text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -1687,7 +1899,7 @@ export default function Inbox() {
               ) : (
                 <>
                   {thread.length >= 20 && !noMoreOlder[selected.id] && (
-                    <div className="flex justify-center">
+                    <div className="flex justify-center pb-2">
                       <Button variant="ghost" size="sm" disabled={loadingOlder} onClick={handleLoadOlder}>
                         {loadingOlder ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <ChevronUp className="mr-1.5 h-3.5 w-3.5" />}
                         Carregar mensagens anteriores
@@ -1696,7 +1908,7 @@ export default function Inbox() {
                   )}
                   {threadRows.map((row) =>
                     row.type === "sep" ? (
-                      <div key={row.key} className="flex justify-center py-1">
+                      <div key={row.key} className="flex justify-center py-2">
                         <span className="rounded-full bg-muted px-3 py-0.5 text-[11px] font-medium text-muted-foreground">
                           {row.label}
                         </span>
@@ -1705,6 +1917,8 @@ export default function Inbox() {
                       <MessageBubble
                         key={row.key}
                         m={row.msg}
+                        firstOfGroup={row.firstOfGroup}
+                        lastOfGroup={row.lastOfGroup}
                         onPreview={setPreviewUrl}
                         onReply={(m) => setReplyTo({ waId: m.wa_id!, content: m.content, outgoing: m.outgoing })}
                         onTask={
@@ -1737,7 +1951,7 @@ export default function Inbox() {
                     ),
                   )}
                   {visiblePending.map((p) => (
-                    <div key={p.key} className="flex justify-end">
+                    <div key={p.key} className="mt-0.5 flex justify-end">
                       <div className="max-w-[75%] rounded-2xl rounded-br-sm bg-primary/80 px-3 py-2 text-sm text-primary-foreground">
                         <p className="whitespace-pre-wrap break-words">{p.content}</p>
                         <p className="mt-1 flex items-center justify-end gap-1 text-[10px] text-primary-foreground/70">
@@ -1847,30 +2061,99 @@ export default function Inbox() {
             ) : (
               <form onSubmit={handleSend} onPaste={handlePaste} className="flex items-center gap-1.5 border-t p-3">
                 <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handlePickFile} />
-                <Button type="button" variant="ghost" size="icon" title="Anexar ficheiros" onClick={() => fileInputRef.current?.click()}>
-                  <Paperclip className="h-4 w-4" />
-                </Button>
 
-                {/* Emoji picker */}
-                <Popover>
+                {/* "+" menu — groups attach / emoji / schedule / signature to keep the bar uncluttered */}
+                <Popover
+                  open={plusOpen}
+                  onOpenChange={(o) => {
+                    setPlusOpen(o);
+                    if (!o) setPlusView("menu");
+                  }}
+                >
                   <PopoverTrigger asChild>
-                    <Button type="button" variant="ghost" size="icon" title="Emoji">
-                      <Smile className="h-4 w-4" />
+                    <Button type="button" variant="ghost" size="icon" title="Mais opções">
+                      <Plus className="h-4 w-4" />
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent side="top" align="start" className="w-64 p-2">
-                    <div className="grid grid-cols-10 gap-0.5">
-                      {EMOJIS.map((e) => (
+                  <PopoverContent side="top" align="start" className="w-60 p-1.5">
+                    {plusView === "emoji" ? (
+                      <div>
                         <button
-                          key={e}
                           type="button"
-                          onClick={() => setDraft((d) => d + e)}
-                          className="rounded p-1 text-lg hover:bg-accent"
+                          onClick={() => setPlusView("menu")}
+                          className="mb-1 flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-accent"
                         >
-                          {e}
+                          <ArrowLeft className="h-3.5 w-3.5" /> Emoji
                         </button>
-                      ))}
-                    </div>
+                        <div className="grid grid-cols-8 gap-0.5">
+                          {EMOJIS.map((e) => (
+                            <button
+                              key={e}
+                              type="button"
+                              onClick={() => setDraft((d) => d + e)}
+                              className="rounded p-1 text-lg hover:bg-accent"
+                            >
+                              {e}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPlusOpen(false);
+                            fileInputRef.current?.click();
+                          }}
+                          className="flex items-center gap-2.5 rounded-md px-2 py-2 text-sm hover:bg-accent"
+                        >
+                          <Paperclip className="h-4 w-4 text-muted-foreground" /> Anexar ficheiros
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPlusView("emoji")}
+                          className="flex items-center gap-2.5 rounded-md px-2 py-2 text-sm hover:bg-accent"
+                        >
+                          <Smile className="h-4 w-4 text-muted-foreground" /> Emoji
+                        </button>
+                        {selected.contact_phone && (
+                          <button
+                            type="button"
+                            disabled={!draft.trim()}
+                            onClick={() => {
+                              setPlusOpen(false);
+                              const d = new Date();
+                              d.setDate(d.getDate() + 1);
+                              d.setHours(9, 0, 0, 0);
+                              const pad = (n: number) => String(n).padStart(2, "0");
+                              setScheduleAt(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`);
+                              setScheduleOpen(true);
+                            }}
+                            className="flex items-center gap-2.5 rounded-md px-2 py-2 text-sm hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            <CalendarClock className="h-4 w-4 text-muted-foreground" /> Agendar envio
+                          </button>
+                        )}
+                        {teamMembers.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const next = !signing;
+                              setSigning(next);
+                              localStorage.setItem("inbox-signature-v1", next ? "1" : "0");
+                            }}
+                            className="flex items-center justify-between rounded-md px-2 py-2 text-sm hover:bg-accent"
+                          >
+                            <span className="flex items-center gap-2.5">
+                              <PenLine className={cn("h-4 w-4", signing ? "text-primary" : "text-muted-foreground")} />
+                              Assinar com o meu nome
+                            </span>
+                            {signing && <Check className="h-4 w-4 text-primary" />}
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </PopoverContent>
                 </Popover>
 
@@ -1957,23 +2240,6 @@ export default function Inbox() {
                   {suggestReply.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4 text-violet-500" />}
                 </Button>
 
-                {/* Signature toggle */}
-                {teamMembers.length > 1 && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    title={signing ? "Assinatura ativa — o cliente vê o teu nome" : "Assinar mensagens com o teu nome"}
-                    onClick={() => {
-                      const next = !signing;
-                      setSigning(next);
-                      localStorage.setItem("inbox-signature-v1", next ? "1" : "0");
-                    }}
-                  >
-                    <PenLine className={cn("h-4 w-4", signing && "text-primary")} />
-                  </Button>
-                )}
-
                 <Input
                   value={draft}
                   onChange={(e) => {
@@ -1983,30 +2249,14 @@ export default function Inbox() {
                       lastTypingRef.current = Date.now();
                       sendTyping(selected.contact_phone);
                     }
+                    // Broadcast typing to teammates; auto-clear after a short pause.
+                    setSelfTyping(true);
+                    if (typingResetRef.current) window.clearTimeout(typingResetRef.current);
+                    typingResetRef.current = window.setTimeout(() => setSelfTyping(false), 3000);
                   }}
                   placeholder={outAttachments.length > 0 ? "Legenda (opcional)..." : "Escreve uma mensagem..."}
                   autoComplete="off"
                 />
-
-                {draft.trim() && selected.contact_phone && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    title="Agendar envio"
-                    onClick={() => {
-                      const d = new Date();
-                      d.setDate(d.getDate() + 1);
-                      d.setHours(9, 0, 0, 0);
-                      // datetime-local needs local time without timezone suffix.
-                      const pad = (n: number) => String(n).padStart(2, "0");
-                      setScheduleAt(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`);
-                      setScheduleOpen(true);
-                    }}
-                  >
-                    <CalendarClock className="h-4 w-4" />
-                  </Button>
-                )}
 
                 {draft.trim() || outAttachments.length > 0 ? (
                   <Button type="submit" size="icon" disabled={sendMessage.isPending}>
@@ -2226,7 +2476,7 @@ export default function Inbox() {
             onOpenChange={setCreateClientModalOpen}
             initialData={{
               name: selected.contact_name,
-              phone: selected.contact_phone ? `+${selected.contact_phone}` : undefined,
+              phone: selected.contact_phone ? displayPhone(selected.contact_phone) : undefined,
               source: "whatsapp",
             }}
             onCreated={(clientId) => {
@@ -2403,12 +2653,16 @@ function MessageBubble({
   onReply,
   onDelete,
   onTask,
+  firstOfGroup = true,
+  lastOfGroup = true,
 }: {
   m: InboxMessage;
   onPreview: (url: string) => void;
   onReply: (m: InboxMessage) => void;
   onDelete?: (m: InboxMessage) => void;
   onTask?: (m: InboxMessage) => void;
+  firstOfGroup?: boolean;
+  lastOfGroup?: boolean;
 }) {
   const taskButton = onTask ? (
     <button
@@ -2420,8 +2674,15 @@ function MessageBubble({
       <ClipboardList className="h-3.5 w-3.5" />
     </button>
   ) : null;
+
   return (
-    <div className={cn("group flex items-end gap-1", m.outgoing ? "justify-end" : "justify-start")}>
+    <div
+      className={cn(
+        "group flex items-end gap-1",
+        firstOfGroup ? "mt-2.5" : "mt-0.5",
+        m.outgoing ? "justify-end" : "justify-start",
+      )}
+    >
       {m.outgoing && (
         <div className="flex items-center">
           {onDelete && (
@@ -2442,21 +2703,23 @@ function MessageBubble({
         className={cn(
           "max-w-[75%] space-y-1 rounded-2xl px-3 py-2 text-sm",
           m.outgoing
-            ? "rounded-br-sm bg-primary text-primary-foreground"
-            : "rounded-bl-sm bg-card border",
+            ? cn("bg-primary text-primary-foreground", lastOfGroup && "rounded-br-sm")
+            : cn("border bg-card", lastOfGroup && "rounded-bl-sm"),
         )}
       >
-        {m.outgoing && m.sender_name && (
+        {m.outgoing && m.sender_name && firstOfGroup && (
           <p className="text-[10px] font-medium text-primary-foreground/70">{m.sender_name}</p>
         )}
         {m.attachments?.map((a, i) => (
           <AttachmentView key={a.id ?? i} attachment={a} outgoing={m.outgoing} messageId={m.id} onPreview={onPreview} />
         ))}
         {m.content && <p className="whitespace-pre-wrap break-words">{m.content}</p>}
-        <p className={cn("mt-1 flex items-center justify-end gap-1 text-[10px]", m.outgoing ? "text-primary-foreground/70" : "text-muted-foreground")}>
-          {formatTime(m.created_at)}
-          {m.outgoing && <StatusTicks status={m.status} />}
-        </p>
+        {lastOfGroup && (
+          <p className={cn("mt-1 flex items-center justify-end gap-1 text-[10px]", m.outgoing ? "text-primary-foreground/70" : "text-muted-foreground")}>
+            {formatTime(m.created_at)}
+            {m.outgoing && <StatusTicks status={m.status} />}
+          </p>
+        )}
       </div>
       {!m.outgoing && (
         <div className="flex items-center">
@@ -2514,6 +2777,7 @@ function ConversationRow({
   pinned,
   muted,
   taskState,
+  viewers,
   onClick,
 }: {
   conversation: InboxConversation;
@@ -2521,9 +2785,12 @@ function ConversationRow({
   pinned: boolean;
   muted: boolean;
   taskState?: "open" | "overdue" | null;
+  viewers?: PresencePeer[];
   onClick: () => void;
 }) {
-  const waiting = conversation.status !== "resolved" ? waitingLabel(conversation.waiting_since) : null;
+  const open = conversation.status !== "resolved";
+  const waiting = open ? waitingLabel(conversation.waiting_since) : null;
+  const sla = open ? slaLevel(conversation.waiting_since) : null;
   return (
     <button
       onClick={onClick}
@@ -2548,13 +2815,34 @@ function ConversationRow({
                 aria-label={taskState === "overdue" ? "Tarefa atrasada" : "Tarefa aberta"}
               />
             )}
+            {viewers && viewers.length > 0 && (
+              <Eye
+                className={cn("h-3 w-3 shrink-0", viewers.some((v) => v.typing) ? "animate-pulse text-red-500" : "text-amber-500")}
+                aria-label={`${viewers.map((v) => firstName(v.name) || "Agente").join(", ")} ${viewers.some((v) => v.typing) ? "está a responder" : "está a ver"}`}
+              />
+            )}
           </p>
           <span className="shrink-0 text-[10px] text-muted-foreground">{formatListDate(conversation.updated_at)}</span>
         </div>
         <div className="flex items-center justify-between gap-2">
-          <p className="truncate text-xs text-muted-foreground">{conversation.last_message || "—"}</p>
-          {waiting && (
-            <span className="shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+          <p className="truncate text-xs text-muted-foreground">
+            {conversation.last_message ? translateActivity(conversation.last_message) : "—"}
+          </p>
+          {waiting && sla && (
+            <span
+              className={cn(
+                "flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium",
+                SLA_BADGE[sla],
+              )}
+              title={
+                sla === "late"
+                  ? "Resposta atrasada (>1h)"
+                  : sla === "warn"
+                    ? "À espera há algum tempo (>15m)"
+                    : "À espera há pouco tempo"
+              }
+            >
+              <span className={cn("h-1.5 w-1.5 rounded-full", SLA_DOT[sla])} />
               à espera {waiting}
             </span>
           )}
