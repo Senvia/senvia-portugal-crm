@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { usePersistedState } from "@/hooks/usePersistedState";
 import { matchesSearch } from "@/lib/utils";
 import { ShoppingBag, Search, TrendingUp, Package, CheckCircle, Plus, Zap, Download, Loader2 } from "lucide-react";
@@ -51,6 +52,13 @@ export default function Sales() {
   const [saleToEdit, setSaleToEdit] = useState<SaleWithDetails | null>(null);
   const [pendingSaleId, setPendingSaleId] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [searchParams] = useSearchParams();
+
+  // Deep-link: ?sale=<id> opens the sale modal directly
+  useEffect(() => {
+    const id = searchParams.get("sale");
+    if (id) setPendingSaleId(id);
+  }, [searchParams]);
 
   // Reactively open sale details when pendingSaleId matches a sale in cache
   useEffect(() => {

@@ -41,17 +41,22 @@ import {
   InboxAttachment,
   InboxMessage,
   OutgoingAttachment,
+  useTranscribeAudio,
 } from "@/hooks/useChatwootInbox";
 import { useCreateCommunication } from "@/hooks/useClientCommunications";
 import { useTeamMembers } from "@/hooks/useTeam";
 import { useCreateEvent } from "@/hooks/useCalendarEvents";
 import { useAuth } from "@/contexts/AuthContext";
 import { useClientProposals, useClientSales } from "@/hooks/useClientHistory";
-import { useUpdateClient } from "@/hooks/useClients";
+import { useUpdateClient, useClient } from "@/hooks/useClients";
+import { useLeadById, useUpdateLeadStatus, useUpdateLead } from "@/hooks/useLeads";
 import { CreateClientModal } from "@/components/clients/CreateClientModal";
+import { EditClientModal } from "@/components/clients/EditClientModal";
 import { AddLeadModal } from "@/components/leads/AddLeadModal";
+import { LeadDetailsModal } from "@/components/leads/LeadDetailsModal";
 import { ConnectWhatsAppModal } from "@/components/settings/ConnectWhatsAppModal";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -213,14 +218,59 @@ function DownloadButton({ url, extension, className }: { url: string; extension?
   );
 }
 
+// Audio attachment with inline Groq Whisper transcription (on-demand, cached in localStorage).
+function AudioAttachment({ url, extension, outgoing, messageId }: {
+  url: string; extension: string | null; outgoing: boolean; messageId: number;
+}) {
+  const { text, loading, error, transcribe } = useTranscribeAudio(messageId, url);
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-1">
+        <audio controls src={url} className="max-w-full" preload="none" />
+        <DownloadButton url={url} extension={extension} />
+      </div>
+      {text ? (
+        <p className={cn(
+          "rounded-lg px-2.5 py-1.5 text-xs leading-relaxed",
+          outgoing ? "bg-primary-foreground/10 text-primary-foreground/90" : "bg-muted text-foreground",
+        )}>
+          {text}
+        </p>
+      ) : (
+        <button
+          type="button"
+          onClick={transcribe}
+          disabled={loading}
+          className={cn(
+            "flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-colors",
+            outgoing
+              ? "bg-primary-foreground/15 text-primary-foreground hover:bg-primary-foreground/25"
+              : "bg-muted text-muted-foreground hover:bg-accent hover:text-foreground",
+            loading && "cursor-not-allowed opacity-60",
+          )}
+        >
+          {loading
+            ? <><Loader2 className="h-3 w-3 animate-spin" /> A transcrever...</>
+            : error
+              ? <><Mic className="h-3 w-3" /> Tentar novamente</>
+              : <><Mic className="h-3 w-3" /> Transcrever</>
+          }
+        </button>
+      )}
+    </div>
+  );
+}
+
 // Renders a message attachment by type: image, audio, video, or generic file link.
 function AttachmentView({
   attachment,
   outgoing,
+  messageId,
   onPreview,
 }: {
   attachment: InboxAttachment;
   outgoing: boolean;
+  messageId: number;
   onPreview: (url: string) => void;
 }) {
   const url = attachment.data_url;
@@ -234,12 +284,7 @@ function AttachmentView({
     );
   }
   if (attachment.file_type === "audio") {
-    return (
-      <div className="flex items-center gap-1">
-        <audio controls src={url} className="max-w-full" preload="none" />
-        <DownloadButton url={url} extension={attachment.extension} />
-      </div>
-    );
+    return <AudioAttachment url={url} extension={attachment.extension} outgoing={outgoing} messageId={messageId} />;
   }
   if (attachment.file_type === "video") {
     return (
@@ -302,20 +347,6 @@ function ContactAvatar({ name, src, className }: { name: string; src?: string | 
     >
       {initials(name)}
     </div>
-  );
-}
-
-// Compact full-width action row used in the contact panel.
-function PanelAction({ icon: Icon, label, onClick }: { icon: React.ElementType; label: string; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent"
-    >
-      <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
-      {label}
-    </button>
   );
 }
 
@@ -463,6 +494,15 @@ export default function Inbox() {
   const activeProposals = openProposals.filter((p: any) => ["draft","sent","negotiating"].includes(p.status));
   const activeSales = openSales.filter((s: any) => ["in_progress","fulfilled"].includes(s.status));
   // Associate-to-existing combobox.
+  // Edit client / lead modal — opens inline without leaving inbox.
+  const [editCrmOpen, setEditCrmOpen] = useState(false);
+  const editClientId = editCrmOpen && contactMatch?.kind === "client" ? contactMatch.id : null;
+  const editLeadId   = editCrmOpen && contactMatch?.kind === "lead"   ? contactMatch.id : null;
+  const { data: editClientData } = useClient(editClientId);
+  const { data: editLeadData }   = useLeadById(editLeadId);
+  const updateLeadStatus = useUpdateLeadStatus();
+  const updateLeadInline = useUpdateLead();
+
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkQuery, setLinkQuery] = useState("");
   // "Adicionar ao CRM" dialog.
@@ -471,7 +511,8 @@ export default function Inbox() {
   // Modais nativos de criação.
   const [createClientModalOpen, setCreateClientModalOpen] = useState(false);
   const [createLeadModalOpen, setCreateLeadModalOpen] = useState(false);
-  const { data: linkResults = [] } = useSearchCrmRecords(linkOpen ? linkQuery : "");
+  const searchActive = linkOpen || (addToCrmOpen && addToCrmTab === "existing");
+  const { data: linkResults = [] } = useSearchCrmRecords(searchActive ? linkQuery : "");
   const sendTyping = useTypingPresence();
   const suggestReply = useSuggestReply();
   const { data: scheduledMsgs = [] } = useScheduledMessages(selected?.contact_phone);
@@ -987,124 +1028,88 @@ export default function Inbox() {
   // mobile — same content in both. Order: profile → assign → tags → details →
   // notes → conversation actions.
   const contactPanel = selected && (
-    <div className="flex h-full flex-col space-y-4 overflow-y-auto p-4">
-      {/* Profile — avatar on the left, info on the right */}
-      <div className="flex items-start gap-3 pt-2">
-        <ContactAvatar name={selected.contact_name} src={selected.contact_thumbnail} className="h-20 w-20 shrink-0" />
-        <div className="min-w-0 flex-1 space-y-0.5">
-          <p className="truncate font-semibold">{selected.contact_name}</p>
-          {selected.contact_phone && (
-            <p className="truncate text-xs text-muted-foreground">+{selected.contact_phone}</p>
-          )}
-          {crmRecord?.email && (
-            <p className="truncate text-xs text-muted-foreground">{crmRecord.email}</p>
-          )}
-          <div className="pt-1">
-            {contactMatch ? (
-              <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-[11px] font-medium text-primary">
-                {contactMatch.kind === "client" ? "Cliente" : "Lead"}
-              </span>
-            ) : (
-              <span className="rounded-full bg-muted px-2.5 py-0.5 text-[11px] text-muted-foreground">
-                Sem registo no CRM
-              </span>
+    <div className="flex h-full flex-col overflow-y-auto">
+      {/* Profile — gradient header */}
+      <div className="relative bg-gradient-to-br from-green-500/15 via-primary/5 to-transparent px-4 pb-4 pt-5">
+        <div className="flex items-center gap-3">
+          <ContactAvatar name={selected.contact_name} src={selected.contact_thumbnail} className="h-16 w-16 shrink-0 ring-2 ring-white/80 shadow-md" />
+          <div className="min-w-0 flex-1 space-y-0.5">
+            <p className="truncate font-semibold">{selected.contact_name}</p>
+            {selected.contact_phone && (
+              <p className="truncate text-xs text-muted-foreground">+{selected.contact_phone}</p>
             )}
+            {crmRecord?.email && (
+              <p className="truncate text-xs text-muted-foreground">{crmRecord.email}</p>
+            )}
+            <div className="pt-1">
+              {contactMatch ? (
+                <span className={cn(
+                  "rounded-full px-2.5 py-0.5 text-[11px] font-medium",
+                  contactMatch.kind === "client"
+                    ? "bg-emerald-500/15 text-emerald-700"
+                    : "bg-primary/10 text-primary",
+                )}>
+                  {contactMatch.kind === "client" ? "Cliente" : "Lead"}
+                </span>
+              ) : (
+                <span className="rounded-full bg-muted px-2.5 py-0.5 text-[11px] text-muted-foreground">
+                  Sem registo no CRM
+                </span>
+              )}
+            </div>
           </div>
         </div>
-      </div>
-
-      {/* CRM association */}
-      <div className="border-t pt-3">
-        <p className="mb-1.5 text-xs font-medium text-muted-foreground">CRM</p>
-        {contactMatch ? (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between gap-2 rounded-lg border p-2">
-              <div className="flex min-w-0 items-center gap-2">
-                <span className={cn(
-                  "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold",
-                  contactMatch.kind === "client" ? "bg-emerald-500/10 text-emerald-600" : "bg-primary/10 text-primary",
-                )}>
-                  {contactMatch.kind === "client" ? "C" : "L"}
-                </span>
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">{contactMatch.name}</p>
-                  <p className="text-[11px] text-muted-foreground">{contactMatch.kind === "client" ? "Cliente" : "Lead"}</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                title="Remover associação"
-                onClick={handleUnlink}
-                className="shrink-0 rounded p-1 text-muted-foreground hover:bg-accent"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
-            <div className="flex gap-1.5">
-              <Button
-                variant="outline"
-                size="sm"
-                className="flex-1"
-                onClick={() => navigate(contactMatch.kind === "client" ? "/clients" : "/leads")}
-              >
-                <ExternalLink className="mr-1.5 h-3.5 w-3.5" /> Abrir ficha
-              </Button>
-              <Button variant="outline" size="sm" className="flex-1" onClick={() => setLinkOpen(true)}>
-                Alterar
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            <p className="text-xs text-muted-foreground">Este contacto ainda não está no CRM.</p>
-            <Button variant="ghost" size="sm" className="w-full" onClick={() => { setAddToCrmTab("existing"); setAddToCrmOpen(true); }}>
-              <Search className="mr-1.5 h-3.5 w-3.5" /> Associar a existente
-            </Button>
-          </div>
-        )}
-
-        {/* Associate-to-existing combobox */}
-        <Popover open={linkOpen} onOpenChange={(o) => { setLinkOpen(o); if (!o) setLinkQuery(""); }}>
+      </div>{/* end gradient header */}
+      {/* Action icon bar — compact row right below the profile */}
+      <div className="flex items-center justify-around border-t border-border/50 bg-muted/20 px-2 py-1.5">
+        <button type="button" title="Renomear contacto" onClick={() => { setRenameValue(selected.contact_name); setRenameOpen(true); }}
+          className="flex flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">
+          <Pencil className="h-4 w-4 text-blue-500" /><span>Renomear</span>
+        </button>
+        <button type="button" title={isPinned ? "Desafixar" : "Fixar no topo"} onClick={() => togglePin(selected.id)}
+          className="flex flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">
+          {isPinned ? <PinOff className="h-4 w-4 text-amber-500" /> : <Pin className="h-4 w-4 text-amber-500" />}
+          <span>{isPinned ? "Desafixar" : "Fixar"}</span>
+        </button>
+        <button type="button" title={muted.includes(selected.id) ? "Reativar notificações" : "Silenciar"} onClick={handleToggleMute}
+          className="flex flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">
+          {muted.includes(selected.id) ? <Bell className="h-4 w-4 text-slate-400" /> : <BellOff className="h-4 w-4 text-slate-400" />}
+          <span>{muted.includes(selected.id) ? "Reativar" : "Silenciar"}</span>
+        </button>
+        <Popover open={reminderOpen} onOpenChange={setReminderOpen}>
           <PopoverTrigger asChild>
-            <span className="sr-only">Associar</span>
+            <button type="button" title="Lembrar-me de responder"
+              className="flex flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">
+              <AlarmClock className="h-4 w-4 text-orange-500" /><span>Lembrar</span>
+            </button>
           </PopoverTrigger>
-          <PopoverContent align="start" className="w-72 p-0">
-            <Command shouldFilter={false}>
-              <CommandInput value={linkQuery} onValueChange={setLinkQuery} placeholder="Procurar lead ou cliente..." className="h-9" />
-              <CommandList>
-                <CommandEmpty>
-                  {linkQuery.trim().length < 2 ? "Escreve para procurar..." : "Nada encontrado."}
-                </CommandEmpty>
-                <CommandGroup>
-                  {linkResults.map((r) => (
-                    <CommandItem
-                      key={`${r.kind}-${r.id}`}
-                      value={`${r.kind}-${r.id}`}
-                      onSelect={() => handleLinkExisting(r)}
-                    >
-                      <span className={cn(
-                        "mr-2 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-semibold",
-                        r.kind === "client" ? "bg-emerald-500/10 text-emerald-600" : "bg-primary/10 text-primary",
-                      )}>
-                        {r.kind === "client" ? "C" : "L"}
-                      </span>
-                      <span className="min-w-0 flex-1 truncate">{r.name}</span>
-                      <span className="ml-2 shrink-0 text-[10px] text-muted-foreground">
-                        {r.kind === "client" ? "Cliente" : "Lead"}
-                      </span>
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              </CommandList>
-            </Command>
+          <PopoverContent align="center" className="w-52 p-1">
+            <p className="px-2 py-1 text-[11px] text-muted-foreground">Cria um lembrete e envia notificação.</p>
+            {[{ label: "Daqui a 1 hora", run: () => snooze(1) }, { label: "Daqui a 3 horas", run: () => snooze(3) }, { label: "Amanhã de manhã (9h)", run: () => snooze("tomorrow") }].map((opt) => (
+              <button key={opt.label} type="button" onClick={() => { opt.run(); setReminderOpen(false); }}
+                className="block w-full rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent">{opt.label}</button>
+            ))}
+            <div className="my-1 border-t" />
+            <button type="button" onClick={() => {
+              const d = new Date(Date.now() + 60 * 60000); const pad = (n: number) => String(n).padStart(2, "0");
+              setCustomReminderAt(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`);
+              setReminderOpen(false); setCustomReminderOpen(true);
+            }} className="block w-full rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent">Escolher data e hora...</button>
           </PopoverContent>
         </Popover>
+        <button type="button" title={isArchived ? "Restaurar conversa" : "Arquivar conversa"} onClick={handleToggleArchive}
+          className="flex flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">
+          {isArchived ? <ArchiveRestore className="h-4 w-4 text-emerald-500" /> : <Archive className="h-4 w-4 text-destructive" />}
+          <span>{isArchived ? "Restaurar" : "Arquivar"}</span>
+        </button>
       </div>
 
+      <div className="flex flex-col gap-3 p-4">
+
       {/* Assign to team member — searchable combobox (scales to large teams) */}
-      <div className="border-t pt-3">
-        <p className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-          <UserCog className="h-3.5 w-3.5" /> Atribuir a
+      <div className="rounded-xl border bg-card p-3">
+        <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <UserCog className="h-3.5 w-3.5 text-primary" /> Atribuir a
         </p>
         <Popover open={assignOpen} onOpenChange={setAssignOpen}>
           <PopoverTrigger asChild>
@@ -1178,9 +1183,9 @@ export default function Inbox() {
       </div>
 
       {/* Tags */}
-      <div className="border-t pt-3">
-        <p className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-          <Tag className="h-3.5 w-3.5" /> Etiquetas
+      <div className="rounded-xl border bg-card p-3">
+        <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <Tag className="h-3.5 w-3.5 text-violet-500" /> Etiquetas
         </p>
         <div className="flex flex-wrap gap-1.5">
           {labels.map((l) => {
@@ -1233,14 +1238,15 @@ export default function Inbox() {
 
       {/* Details */}
       {crmRecord?.kind === "lead" && (
-        <div className="space-y-2 border-t pt-3 text-sm">
+        <div className="rounded-xl border bg-card p-3 space-y-2 text-sm">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Detalhes</p>
           <div className="flex items-center justify-between gap-2">
             <span className="text-xs text-muted-foreground">Estado</span>
-            <span className="text-xs font-medium">{crmRecord.status || "—"}</span>
+            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">{crmRecord.status || "—"}</span>
           </div>
           <div className="flex items-center justify-between gap-2">
             <span className="text-xs text-muted-foreground">Valor</span>
-            <span className="text-xs font-medium">
+            <span className="text-xs font-semibold text-emerald-600">
               {crmRecord.value != null ? `${Number(crmRecord.value).toLocaleString("pt-PT")} €` : "—"}
             </span>
           </div>
@@ -1249,27 +1255,71 @@ export default function Inbox() {
 
       {/* Open proposals / sales — only for clients */}
       {(activeProposals.length > 0 || activeSales.length > 0) && (
-        <div className="border-t pt-3 space-y-1.5">
-          <p className="text-xs font-medium text-muted-foreground">Em aberto</p>
-          {activeSales.map((s: any) => (
-            <div key={s.id} className="flex items-center justify-between rounded-md bg-muted/50 px-2.5 py-1.5 text-xs">
-              <span className="truncate font-medium">{s.title || "Venda"}</span>
-              <span className="ml-2 shrink-0 rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-600">Venda</span>
-            </div>
-          ))}
-          {activeProposals.map((p: any) => (
-            <div key={p.id} className="flex items-center justify-between rounded-md bg-muted/50 px-2.5 py-1.5 text-xs">
-              <span className="truncate font-medium">{p.title || "Proposta"}</span>
-              <span className="ml-2 shrink-0 rounded-full bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium text-blue-600">Proposta</span>
-            </div>
-          ))}
+        <div className="rounded-xl border border-amber-200/60 bg-amber-500/5 p-3 space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Em aberto</p>
+          {activeSales.map((s: any) => {
+            const saleStatusLabel: Record<string, string> = { in_progress: "Em curso", fulfilled: "Concluída", pending: "Pendente" };
+            const saleStatusColor: Record<string, string> = { in_progress: "bg-amber-500 text-white", fulfilled: "bg-emerald-500 text-white", pending: "bg-slate-400 text-white" };
+            return (
+              <button key={s.id} type="button" onClick={() => navigate(`/sales?sale=${s.id}`)}
+                className="w-full rounded-lg border border-amber-200/50 bg-white/60 px-2.5 py-2 text-left transition-colors hover:bg-amber-50/80 dark:bg-card/60">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-xs font-semibold">{s.code ? `Venda ${s.code}` : (s.title || "Venda")}</p>
+                    {s.title && s.code && <p className="truncate text-[11px] text-muted-foreground">{s.title}</p>}
+                  </div>
+                  <span className={cn("shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium", saleStatusColor[s.status] ?? "bg-slate-400 text-white")}>
+                    {saleStatusLabel[s.status] ?? s.status}
+                  </span>
+                </div>
+                <div className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
+                  {s.total_value != null && (
+                    <span className="font-medium text-amber-700">
+                      {new Intl.NumberFormat("pt-PT", { style: "currency", currency: "EUR" }).format(s.total_value)}
+                    </span>
+                  )}
+                  {s.created_at && (
+                    <span>{new Date(s.created_at).toLocaleDateString("pt-PT", { day: "2-digit", month: "short", year: "numeric" })}</span>
+                  )}
+                </div>
+              </button>
+            );
+          })}
+          {activeProposals.map((p: any) => {
+            const propStatusLabel: Record<string, string> = { draft: "Rascunho", sent: "Enviada", negotiating: "Em negociação" };
+            const propStatusColor: Record<string, string> = { draft: "bg-slate-400 text-white", sent: "bg-blue-500 text-white", negotiating: "bg-violet-500 text-white" };
+            return (
+              <button key={p.id} type="button" onClick={() => navigate(`/proposals?proposal=${p.id}`)}
+                className="w-full rounded-lg border border-blue-200/50 bg-white/60 px-2.5 py-2 text-left transition-colors hover:bg-blue-50/80 dark:bg-card/60">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-xs font-semibold">{p.code ? `Proposta ${p.code}` : (p.title || "Proposta")}</p>
+                    {p.title && p.code && <p className="truncate text-[11px] text-muted-foreground">{p.title}</p>}
+                  </div>
+                  <span className={cn("shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium", propStatusColor[p.status] ?? "bg-slate-400 text-white")}>
+                    {propStatusLabel[p.status] ?? p.status}
+                  </span>
+                </div>
+                <div className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
+                  {p.total_value != null && (
+                    <span className="font-medium text-blue-700">
+                      {new Intl.NumberFormat("pt-PT", { style: "currency", currency: "EUR" }).format(p.total_value)}
+                    </span>
+                  )}
+                  {p.created_at && (
+                    <span>{new Date(p.created_at).toLocaleDateString("pt-PT", { day: "2-digit", month: "short", year: "numeric" })}</span>
+                  )}
+                </div>
+              </button>
+            );
+          })}
         </div>
       )}
 
       {/* Internal notes — leads and clients */}
       {crmRecord && (
-        <div className="border-t pt-3">
-          <p className="mb-1.5 text-xs font-medium text-muted-foreground">Notas internas</p>
+        <div className="rounded-xl border bg-card p-3">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Notas internas</p>
           <Textarea
             value={notesDraft ?? crmRecord.notes ?? ""}
             onChange={(e) => setNotesDraft(e.target.value)}
@@ -1303,77 +1353,8 @@ export default function Inbox() {
         </div>
       )}
 
-      {/* Conversation actions */}
-      <div className="border-t pt-3">
-        <p className="mb-1.5 text-xs font-medium text-muted-foreground">Ações</p>
-        <div className="space-y-0.5">
-          <PanelAction icon={Pencil} label="Renomear contacto" onClick={() => { setRenameValue(selected.contact_name); setRenameOpen(true); }} />
-          <PanelAction
-            icon={isPinned ? PinOff : Pin}
-            label={isPinned ? "Desafixar" : "Fixar no topo"}
-            onClick={() => togglePin(selected.id)}
-          />
-          <PanelAction
-            icon={muted.includes(selected.id) ? Bell : BellOff}
-            label={muted.includes(selected.id) ? "Reativar notificações" : "Silenciar conversa"}
-            onClick={handleToggleMute}
-          />
-          <Popover open={reminderOpen} onOpenChange={setReminderOpen}>
-            <PopoverTrigger asChild>
-              <button
-                type="button"
-                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent"
-              >
-                <AlarmClock className="h-4 w-4 shrink-0 text-muted-foreground" />
-                Lembrar-me de responder
-              </button>
-            </PopoverTrigger>
-            <PopoverContent align="start" className="w-56 p-1">
-              <p className="px-2 py-1 text-[11px] text-muted-foreground">
-                Cria um lembrete na Agenda e envia-te uma notificação.
-              </p>
-              {[
-                { label: "Daqui a 1 hora", run: () => snooze(1) },
-                { label: "Daqui a 3 horas", run: () => snooze(3) },
-                { label: "Amanhã de manhã (9h)", run: () => snooze("tomorrow") },
-              ].map((opt) => (
-                <button
-                  key={opt.label}
-                  type="button"
-                  onClick={() => { opt.run(); setReminderOpen(false); }}
-                  className="block w-full rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent"
-                >
-                  {opt.label}
-                </button>
-              ))}
-              <div className="my-1 border-t" />
-              <button
-                type="button"
-                onClick={() => {
-                  const d = new Date(Date.now() + 60 * 60000);
-                  const pad = (n: number) => String(n).padStart(2, "0");
-                  setCustomReminderAt(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`);
-                  setReminderOpen(false);
-                  setCustomReminderOpen(true);
-                }}
-                className="block w-full rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent"
-              >
-                Escolher data e hora...
-              </button>
-            </PopoverContent>
-          </Popover>
-          <PanelAction icon={FileDown} label="Exportar conversa (.txt)" onClick={handleExport} />
-          {contactMatch?.kind === "client" && (
-            <PanelAction icon={ClipboardList} label="Registar no cliente" onClick={handleRegisterClient} />
-          )}
-          <PanelAction
-            icon={isArchived ? ArchiveRestore : Archive}
-            label={isArchived ? "Restaurar conversa" : "Arquivar conversa"}
-            onClick={handleToggleArchive}
-          />
-        </div>
-      </div>
 
+      </div>{/* end gap-3 flex col */}
     </div>
   );
 
@@ -1553,8 +1534,29 @@ export default function Inbox() {
                 </div>
               </div>
 
-              {/* Adicionar ao CRM — abre diálogo com opções */}
-              {!contactMatch && selected.contact_phone && (
+              {/* CRM: contacto associado → ficha + alterar; desconhecido → adicionar */}
+              {contactMatch ? (
+                <div className="hidden items-center gap-1 sm:flex">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm">
+                        <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                        {contactMatch.kind === "client" ? "Cliente" : "Lead"}
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => navigate(contactMatch.kind === "client" ? `/clients?client=${contactMatch.id}` : `/leads?lead=${contactMatch.id}`)}>
+                        <ExternalLink className="mr-2 h-4 w-4" />
+                        Ver ficha completa
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setEditCrmOpen(true)}>
+                        <Pencil className="mr-2 h-4 w-4" />
+                        Editar ficha
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              ) : selected.contact_phone ? (
                 <Button
                   variant="outline"
                   size="sm"
@@ -1564,7 +1566,7 @@ export default function Inbox() {
                   <UserPlus className="mr-1.5 h-3.5 w-3.5" />
                   Adicionar ao CRM
                 </Button>
-              )}
+              ) : null}
 
               {/* Contact panel toggle: fixed column on desktop, sheet on mobile */}
               <Button
@@ -2138,6 +2140,22 @@ export default function Inbox() {
             open={createLeadModalOpen}
             onOpenChange={setCreateLeadModalOpen}
           />
+          {/* Edit client inline — no need to leave inbox */}
+          <EditClientModal
+            client={editClientData ?? null}
+            open={editCrmOpen && contactMatch?.kind === "client" && !!editClientData}
+            onOpenChange={(o) => { if (!o) setEditCrmOpen(false); }}
+            inboxContact={{ name: selected.contact_name, phone: selected.contact_phone }}
+          />
+          {/* Edit lead inline */}
+          <LeadDetailsModal
+            lead={editLeadData ?? null}
+            open={editCrmOpen && contactMatch?.kind === "lead" && !!editLeadData}
+            onOpenChange={(o) => { if (!o) setEditCrmOpen(false); }}
+            onStatusChange={(leadId, status) => updateLeadStatus.mutate({ leadId, status })}
+            onUpdate={(leadId, updates) => updateLeadInline.mutate({ leadId, updates })}
+            inboxContact={{ name: selected.contact_name, phone: selected.contact_phone }}
+          />
         </>
       )}
 
@@ -2322,7 +2340,7 @@ function MessageBubble({
           <p className="text-[10px] font-medium text-primary-foreground/70">{m.sender_name}</p>
         )}
         {m.attachments?.map((a, i) => (
-          <AttachmentView key={a.id ?? i} attachment={a} outgoing={m.outgoing} onPreview={onPreview} />
+          <AttachmentView key={a.id ?? i} attachment={a} outgoing={m.outgoing} messageId={m.id} onPreview={onPreview} />
         ))}
         {m.content && <p className="whitespace-pre-wrap break-words">{m.content}</p>}
         <p className={cn("mt-1 flex items-center justify-end gap-1 text-[10px]", m.outgoing ? "text-primary-foreground/70" : "text-muted-foreground")}>
@@ -2332,6 +2350,46 @@ function MessageBubble({
       </div>
       {!m.outgoing && m.wa_id && <ReplyButton onClick={() => onReply(m)} />}
     </div>
+  );
+}
+
+function ChannelBadge({ channel }: { channel: string | null }) {
+  if (!channel) return null;
+  const ch = channel.toLowerCase();
+  if (ch.includes("instagram")) {
+    return (
+      <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full ring-2 ring-background"
+        style={{ background: "linear-gradient(135deg,#f9ce34,#ee2a7b,#6228d7)" }}>
+        <svg viewBox="0 0 24 24" className="h-2.5 w-2.5 fill-white"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 1.17.054 1.97.24 2.43.403a4.9 4.9 0 0 1 1.772 1.153 4.9 4.9 0 0 1 1.153 1.772c.163.46.35 1.26.403 2.43.058 1.266.07 1.646.07 4.85s-.012 3.584-.07 4.85c-.054 1.17-.24 1.97-.403 2.43a4.9 4.9 0 0 1-1.153 1.772 4.9 4.9 0 0 1-1.772 1.153c-.46.163-1.26.35-2.43.403-1.266.058-1.646.07-4.85.07s-3.584-.012-4.85-.07c-1.17-.054-1.97-.24-2.43-.403a4.9 4.9 0 0 1-1.772-1.153 4.9 4.9 0 0 1-1.153-1.772c-.163-.46-.35-1.26-.403-2.43C2.175 15.747 2.163 15.367 2.163 12s.012-3.584.07-4.85c.054-1.17.24-1.97.403-2.43A4.9 4.9 0 0 1 3.79 2.948a4.9 4.9 0 0 1 1.772-1.153c.46-.163 1.26-.35 2.43-.403C9.258 1.334 9.638 1.322 12 1.322Zm0 1.838c-3.162 0-3.535.012-4.787.069-1.055.048-1.63.224-2.011.372a3.07 3.07 0 0 0-1.138.74 3.07 3.07 0 0 0-.74 1.138c-.148.382-.324.956-.372 2.011-.057 1.252-.069 1.625-.069 4.787s.012 3.535.069 4.787c.048 1.055.224 1.63.372 2.011.19.487.45.9.74 1.138.238.29.651.55 1.138.74.382.148.956.324 2.011.372 1.252.057 1.625.069 4.787.069s3.535-.012 4.787-.069c1.055-.048 1.63-.224 2.011-.372a3.07 3.07 0 0 0 1.138-.74 3.07 3.07 0 0 0 .74-1.138c.148-.382.324-.956.372-2.011.057-1.252.069-1.625.069-4.787s-.012-3.535-.069-4.787c-.048-1.055-.224-1.63-.372-2.011a3.07 3.07 0 0 0-.74-1.138 3.07 3.07 0 0 0-1.138-.74c-.382-.148-.956-.324-2.011-.372-1.252-.057-1.625-.069-4.787-.069ZM12 6.865a5.135 5.135 0 1 1 0 10.27 5.135 5.135 0 0 1 0-10.27Zm0 1.838a3.297 3.297 0 1 0 0 6.594 3.297 3.297 0 0 0 0-6.594Zm5.338-3.205a1.2 1.2 0 1 1 0 2.4 1.2 1.2 0 0 1 0-2.4Z"/></svg>
+      </span>
+    );
+  }
+  if (ch.includes("telegram")) {
+    return (
+      <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-[#229ED9] ring-2 ring-background">
+        <svg viewBox="0 0 24 24" className="h-2.5 w-2.5 fill-white"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+      </span>
+    );
+  }
+  if (ch.includes("email")) {
+    return (
+      <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-slate-500 ring-2 ring-background">
+        <svg viewBox="0 0 24 24" className="h-2.5 w-2.5 fill-white"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z"/></svg>
+      </span>
+    );
+  }
+  if (ch.includes("facebook")) {
+    return (
+      <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-[#1877F2] ring-2 ring-background">
+        <svg viewBox="0 0 24 24" className="h-2.5 w-2.5 fill-white"><path d="M24 12.073C24 5.405 18.627 0 12 0S0 5.405 0 12.073C0 18.1 4.388 23.094 10.125 24v-8.437H7.078v-3.49h3.047V9.41c0-3.025 1.791-4.697 4.533-4.697 1.313 0 2.686.236 2.686.236v2.97h-1.513c-1.491 0-1.956.93-1.956 1.886v2.267h3.328l-.532 3.49h-2.796V24C19.612 23.094 24 18.1 24 12.073z"/></svg>
+      </span>
+    );
+  }
+  // Default: WhatsApp (api channel or any other → assume WhatsApp since that's the main channel here)
+  return (
+    <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-[#25D366] ring-2 ring-background">
+      <svg viewBox="0 0 24 24" className="h-2.5 w-2.5 fill-white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z"/></svg>
+    </span>
   );
 }
 
@@ -2357,7 +2415,10 @@ function ConversationRow({
         active && "bg-accent",
       )}
     >
-      <ContactAvatar name={conversation.contact_name} src={conversation.contact_thumbnail} className="h-10 w-10" />
+      <div className="relative shrink-0">
+        <ContactAvatar name={conversation.contact_name} src={conversation.contact_thumbnail} className="h-10 w-10" />
+        <ChannelBadge channel={conversation.channel} />
+      </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
           <p className="flex min-w-0 items-center gap-1 truncate text-sm font-medium">

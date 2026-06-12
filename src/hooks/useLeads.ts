@@ -48,6 +48,25 @@ export function useLeads() {
   });
 }
 
+export function useLeadById(leadId: string | null) {
+  const { organization } = useAuth();
+  return useQuery({
+    queryKey: ['lead', leadId],
+    queryFn: async () => {
+      if (!organization?.id || !leadId) return null;
+      const { data, error } = await supabase
+        .from('leads')
+        .select('*')
+        .eq('id', leadId)
+        .eq('organization_id', organization.id)
+        .single();
+      if (error) throw error;
+      return data as Lead;
+    },
+    enabled: !!organization?.id && !!leadId,
+  });
+}
+
 export function useUpdateLeadStatus() {
   const queryClient = useQueryClient();
   const { toast } = useToast();

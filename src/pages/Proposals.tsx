@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { usePersistedState } from "@/hooks/usePersistedState";
 
 import { useAuth } from "@/contexts/AuthContext";
@@ -41,6 +42,16 @@ export default function Proposals() {
   const [dateRange, setDateRange] = usePersistedState<DateRange | undefined>('proposals-date-range-v1', undefined);
   const [selectedProposal, setSelectedProposal] = useState<Proposal | null>(null);
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [searchParams] = useSearchParams();
+
+  // Deep-link: ?proposal=<id> opens the proposal modal directly
+  useEffect(() => {
+    const id = searchParams.get("proposal");
+    if (id && proposals.length > 0) {
+      const found = proposals.find((p) => p.id === id);
+      if (found) setSelectedProposal(found);
+    }
+  }, [searchParams, proposals]);
 
   const filteredProposals = proposals.filter((proposal) => {
     // Hide proposals that already have a sale created (telecom)

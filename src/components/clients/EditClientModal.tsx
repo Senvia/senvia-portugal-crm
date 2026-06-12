@@ -35,9 +35,11 @@ interface EditClientModalProps {
   client: CrmClient | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  // When opened from inbox — shows a copy-hint with the WhatsApp contact data.
+  inboxContact?: { name: string; phone: string | null };
 }
 
-export function EditClientModal({ client, open, onOpenChange }: EditClientModalProps) {
+export function EditClientModal({ client, open, onOpenChange, inboxContact }: EditClientModalProps) {
   const labels = useClientLabels();
   const { organization } = useAuth();
   const { data: teamMembers = [] } = useTeamMembers();
@@ -165,6 +167,29 @@ export function EditClientModal({ client, open, onOpenChange }: EditClientModalP
             Atualize as informações do {labels.singular.toLowerCase()}.
           </DialogDescription>
         </DialogHeader>
+
+        {inboxContact && (
+          <div className="shrink-0 flex items-center gap-3 border-b bg-green-500/5 px-4 sm:px-6 py-2.5">
+            <span className="text-[11px] font-medium text-green-700 uppercase tracking-wide shrink-0">WhatsApp</span>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 min-w-0">
+              <button type="button" title="Clica para copiar o nome"
+                onClick={() => navigator.clipboard.writeText(inboxContact.name)}
+                className="flex items-center gap-1 text-sm text-foreground hover:text-primary transition-colors">
+                <span className="truncate max-w-[200px]">{inboxContact.name}</span>
+                <svg viewBox="0 0 24 24" className="h-3 w-3 shrink-0 text-muted-foreground"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+              </button>
+              {inboxContact.phone && (
+                <button type="button" title="Clica para copiar o telefone"
+                  onClick={() => navigator.clipboard.writeText(`+${inboxContact.phone}`)}
+                  className="flex items-center gap-1 text-sm text-foreground hover:text-primary transition-colors">
+                  <span>+{inboxContact.phone}</span>
+                  <svg viewBox="0 0 24 24" className="h-3 w-3 shrink-0 text-muted-foreground"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                </button>
+              )}
+            </div>
+            <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">clica para copiar</span>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto">
           <div className="max-w-6xl mx-auto p-4 sm:p-6">

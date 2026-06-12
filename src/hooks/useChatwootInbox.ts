@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -830,4 +831,42 @@ export function useSearchCrmRecords(query: string) {
     enabled: !!organization?.id && term.length >= 2,
     staleTime: 30 * 1000,
   });
+}
+
+
+const TRANSCRIPT_CACHE_PREFIX = 'inbox_transcript_v1_';
+
+// Transcribes an audio attachment using Groq Whisper via the transcribe-audio
+// edge function. Caches the result in localStorage so it survives page reload.
+export function useTranscribeAudio(messageId: number, url: string | null) {
+  const { organization } = useAuth();
+  const cacheKey = `${TRANSCRIPT_CACHE_PREFIX}${messageId}`;
+
+  const [text, setText] = useState<string | null>(() => {
+    try { return localStorage.getItem(cacheKey); } catch { return null; }
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const transcribe = useCallback(async () => {
+    if (!url || !organization?.id || text || loading) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const { data, error: fnErr } = await supabase.functions.invoke('transcribe-audio', {
+        body: { organization_id: organization.id, url },
+      });
+      if (fnErr) throw fnErr;
+      const result: string = data?.text ?? '';
+      setText(result);
+      try { localStorage.setItem(cacheKey, result); } catch {}
+    } catch (e) {
+      setError('Não foi possível transcrever o áudio.');
+      console.error('transcribe-audio error:', e);
+    } finally {
+      setLoading(false);
+    }
+  }, [url, organization?.id, text, loading, cacheKey]);
+
+  return { text, loading, error, transcribe };
 }
