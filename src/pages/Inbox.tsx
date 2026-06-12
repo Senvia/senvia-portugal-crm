@@ -47,6 +47,8 @@ import {
 } from "@/hooks/useChatwootInbox";
 import { useCreateCommunication } from "@/hooks/useClientCommunications";
 import { useTeamMembers } from "@/hooks/useTeam";
+import { ConversationTasks } from "@/components/inbox/ConversationTasks";
+import { useOpenInboxTasks, isTaskOverdue, phoneSuffix } from "@/hooks/useInboxTasks";
 import { useCreateEvent } from "@/hooks/useCalendarEvents";
 import { useAuth } from "@/contexts/AuthContext";
 import { useClientProposals, useClientSales } from "@/hooks/useClientHistory";
@@ -70,7 +72,7 @@ import {
   Loader2, MessageSquare, Send, ArrowLeft, Smartphone, Search, FileText, Clock,
   Check, CheckCheck, Download, Paperclip, Mic, Smile, Zap, X, Plus, Archive,
   ArchiveRestore, UserPlus, Reply, ChevronUp, Trash2, Pin, PinOff,
-  Pencil, Tag, UserCog, PanelRight, AlarmClock, ExternalLink, Sparkles, PenLine,
+  Pencil, Tag, UserCog, PanelRight, AlarmClock, ExternalLink, Sparkles, PenLine, ClipboardList,
   BellOff, Bell, Settings2, WifiOff, FileDown, ClipboardList, CalendarClock,
   ChevronsUpDown,
 } from "lucide-react";
@@ -527,6 +529,35 @@ export default function Inbox() {
   const saveAutoReply = useSaveAutoReplyConfig();
   const createCommunication = useCreateCommunication();
   const [searchParams, setSearchParams] = useSearchParams();
+
+  // ---- Tarefas ----
+  const { data: openTasks = [] } = useOpenInboxTasks(channelConfigured);
+  // "Transformar mensagem em tarefa" pre-fills the panel quick-add.
+  const [taskPrefill, setTaskPrefill] = useState<string | null>(null);
+  // Badge per conversation: phone suffix -> open / overdue.
+  const taskStateByPhone = useMemo(() => {
+    const map = new Map<string, "open" | "overdue">();
+    for (const t of openTasks) {
+      const key = phoneSuffix(t.contact_phone);
+      if (!key) continue;
+      if (isTaskOverdue(t)) map.set(key, "overdue");
+      else if (!map.has(key)) map.set(key, "open");
+    }
+    return map;
+  }, [openTasks]);
+  // Minhas tarefas (atribuídas a mim, ou sem responsável criadas por mim).
+  const myTasks = useMemo(
+    () => openTasks.filter((t) => t.assigned_to === user?.id || (!t.assigned_to && t.created_by === user?.id)),
+    [openTasks, user?.id],
+  );
+  const myOverdueCount = useMemo(() => myTasks.filter(isTaskOverdue).length, [myTasks]);
+  const openTaskConversation = (phone: string | null) => {
+    const suffix = phoneSuffix(phone);
+    if (!suffix) return;
+    const found = conversations.find((c) => phoneSuffix(c.contact_phone) === suffix);
+    if (found) setSelectedId(found.id);
+    else toast({ title: "Conversa não encontrada", description: "O contacto já não está na caixa de entrada." });
+  };
 
   // Deep link from Leads/Clients: /inbox?phone=351912345678 opens (or starts)
   // the conversation with that number.
@@ -1321,6 +1352,20 @@ export default function Inbox() {
         </div>
       )}
 
+      {/* Tarefas da conversa — "prometi e não esqueço" */}
+      {selected?.contact_phone && (
+        <ConversationTasks
+          phone={selected.contact_phone}
+          contactName={selected.contact_name}
+          conversationId={selected.id}
+          leadId={contactMatch?.kind === "lead" ? contactMatch.id : null}
+          clientId={contactMatch?.kind === "client" ? contactMatch.id : null}
+          teamMembers={teamMembers}
+          prefill={taskPrefill}
+          onPrefillConsumed={() => setTaskPrefill(null)}
+        />
+      )}
+
       {/* Internal notes — leads and clients */}
       {crmRecord && (
         <div className="rounded-xl border bg-card p-3">
@@ -1406,6 +1451,44 @@ export default function Inbox() {
               Caixa de Entrada
             </h1>
             <div className="flex gap-1.5">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="icon" variant="ghost" title="Minhas tarefas" className="relative">
+                    <ClipboardList className="h-4 w-4" />
+                    {myTasks.length > 0 && (
+                      <span
+                        className={cn(
+                          "absolute -right-0.5 -top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[9px] font-semibold text-white",
+                          myOverdueCount > 0 ? "bg-red-500" : "bg-primary",
+                        )}
+                      >
+                        {myTasks.length}
+                      </span>
+                    )}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-72">
+                  <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
+                    Minhas tarefas{myOverdueCount > 0 ? ` — ${myOverdueCount} atrasada(s)` : ""}
+                  </div>
+                  {myTasks.length === 0 && (
+                    <div className="px-2 pb-2 text-xs text-muted-foreground">Sem tarefas abertas. 🎉</div>
+                  )}
+                  {myTasks.slice(0, 10).map((t) => (
+                    <DropdownMenuItem key={t.id} className="flex-col items-start gap-0.5" onClick={() => openTaskConversation(t.contact_phone)}>
+                      <span className="w-full truncate text-xs font-medium">{t.title}</span>
+                      <span className="flex w-full items-center gap-1.5 text-[10px] text-muted-foreground">
+                        {t.contact_name && <span className="truncate">{t.contact_name}</span>}
+                        {t.due_at && (
+                          <span className={cn("ml-auto shrink-0", isTaskOverdue(t) && "font-semibold text-red-600")}>
+                            {new Date(t.due_at).toLocaleString("pt-PT", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                        )}
+                      </span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
               <Button
                 size="icon"
                 variant="ghost"
@@ -1482,6 +1565,7 @@ export default function Inbox() {
                 active={c.id === selectedId}
                 pinned={pinned.includes(c.id)}
                 muted={muted.includes(c.id)}
+                taskState={taskStateByPhone.get(phoneSuffix(c.contact_phone)) ?? null}
                 onClick={() => setSelectedId(c.id)}
               />
             ))
@@ -1623,6 +1707,14 @@ export default function Inbox() {
                         m={row.msg}
                         onPreview={setPreviewUrl}
                         onReply={(m) => setReplyTo({ waId: m.wa_id!, content: m.content, outgoing: m.outgoing })}
+                        onTask={
+                          selected.contact_phone
+                            ? (m) => {
+                                setTaskPrefill(m.content || "Follow-up");
+                                toast({ title: "Tarefa pré-preenchida", description: "Completa-a no painel de tarefas à direita." });
+                              }
+                            : undefined
+                        }
                         onDelete={
                           row.msg.outgoing && row.msg.wa_id && selected.contact_phone
                             ? (m) => {
@@ -2310,12 +2402,24 @@ function MessageBubble({
   onPreview,
   onReply,
   onDelete,
+  onTask,
 }: {
   m: InboxMessage;
   onPreview: (url: string) => void;
   onReply: (m: InboxMessage) => void;
   onDelete?: (m: InboxMessage) => void;
+  onTask?: (m: InboxMessage) => void;
 }) {
+  const taskButton = onTask ? (
+    <button
+      type="button"
+      title="Criar tarefa a partir desta mensagem"
+      onClick={() => onTask(m)}
+      className="rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-accent group-hover:opacity-100"
+    >
+      <ClipboardList className="h-3.5 w-3.5" />
+    </button>
+  ) : null;
   return (
     <div className={cn("group flex items-end gap-1", m.outgoing ? "justify-end" : "justify-start")}>
       {m.outgoing && (
@@ -2330,6 +2434,7 @@ function MessageBubble({
               <Trash2 className="h-3.5 w-3.5" />
             </button>
           )}
+          {taskButton}
           {m.wa_id && <ReplyButton onClick={() => onReply(m)} />}
         </div>
       )}
@@ -2353,7 +2458,12 @@ function MessageBubble({
           {m.outgoing && <StatusTicks status={m.status} />}
         </p>
       </div>
-      {!m.outgoing && m.wa_id && <ReplyButton onClick={() => onReply(m)} />}
+      {!m.outgoing && (
+        <div className="flex items-center">
+          {m.wa_id && <ReplyButton onClick={() => onReply(m)} />}
+          {taskButton}
+        </div>
+      )}
     </div>
   );
 }
@@ -2403,12 +2513,14 @@ function ConversationRow({
   active,
   pinned,
   muted,
+  taskState,
   onClick,
 }: {
   conversation: InboxConversation;
   active: boolean;
   pinned: boolean;
   muted: boolean;
+  taskState?: "open" | "overdue" | null;
   onClick: () => void;
 }) {
   const waiting = conversation.status !== "resolved" ? waitingLabel(conversation.waiting_since) : null;
@@ -2430,6 +2542,12 @@ function ConversationRow({
             {pinned && <Pin className="h-3 w-3 shrink-0 text-muted-foreground" />}
             {muted && <BellOff className="h-3 w-3 shrink-0 text-muted-foreground" />}
             <span className="truncate">{conversation.contact_name}</span>
+            {taskState && (
+              <ClipboardList
+                className={cn("h-3 w-3 shrink-0", taskState === "overdue" ? "text-red-500" : "text-amber-500")}
+                aria-label={taskState === "overdue" ? "Tarefa atrasada" : "Tarefa aberta"}
+              />
+            )}
           </p>
           <span className="shrink-0 text-[10px] text-muted-foreground">{formatListDate(conversation.updated_at)}</span>
         </div>

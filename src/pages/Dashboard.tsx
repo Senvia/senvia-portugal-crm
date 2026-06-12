@@ -6,6 +6,7 @@ import { DashboardPeriodFilter } from "@/components/dashboard/DashboardPeriodFil
 import { FidelizationAlertsWidget } from "@/components/dashboard/FidelizationAlertsWidget";
 import { CalendarAlertsWidget } from "@/components/dashboard/CalendarAlertsWidget";
 import { InboxAlertsWidget } from "@/components/dashboard/InboxAlertsWidget";
+import { TasksWidget } from "@/components/dashboard/TasksWidget";
 import { CommitmentPanel } from "@/components/dashboard/CommitmentPanel";
 import { SalesPerformancePanel } from "@/components/dashboard/SalesPerformancePanel";
 import { MetricsPanel } from "@/components/dashboard/MetricsPanel";
@@ -92,6 +93,7 @@ export default function Dashboard() {
                 <CalendarAlertsWidget />
               )}
               {modules.inbox && <InboxAlertsWidget />}
+              {modules.inbox && <TasksWidget />}
             </div>
           )}
 

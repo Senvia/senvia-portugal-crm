@@ -80,6 +80,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { SendLeadEmailModal } from "./SendLeadEmailModal";
 import { isPlaceholderEmail, displayEmail } from "@/lib/leadUtils";
+import { RecordTasks } from "@/components/inbox/RecordTasks";
 
 const TECHNICAL_TRACKING_KEYS = ['fbclid', 'gclid', 'fbc', 'fbp'] as const;
 const HIDDEN_CUSTOM_DATA_KEYS = ['metadata', 'prospect_id', 'source_file_name', 'prospect_source', 'cpe'] as const;
@@ -574,6 +575,9 @@ export function LeadDetailsModal({
                     />
                   </CardContent>
                 </Card>
+
+                {/* Tarefas da conversa (Caixa de Entrada) */}
+                <RecordTasks phone={lead.phone} />
 
                 {/* Attachments Card - Telecom only */}
                 {isTelecom && lead.id && (

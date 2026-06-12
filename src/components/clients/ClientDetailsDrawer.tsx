@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { RecordTasks } from "@/components/inbox/RecordTasks";
 import {
   Mail,
   Phone,
@@ -283,6 +284,9 @@ export function ClientDetailsDrawer({
                     </CardContent>
                   </Card>
                 )}
+
+                {/* Tarefas da conversa (Caixa de Entrada) */}
+                <RecordTasks phone={client.phone} />
 
                 {/* Notas */}
                 <Card>
