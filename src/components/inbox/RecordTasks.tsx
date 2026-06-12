@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 export function RecordTasks({ phone }: { phone: string | null | undefined }) {
   const { data: tasks = [] } = useConversationTasks(phone);
   const toggleTask = useToggleInboxTask();
-  const open = tasks.filter((t) => !t.done_at);
+  const open = tasks.filter((t) => !t.done_at && !t.suggested);
   if (!phone || open.length === 0) return null;
 
   return (

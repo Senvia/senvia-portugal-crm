@@ -23,6 +23,102 @@ const MEDIA_LABELS: Record<string, string> = {
   file: '📄 Documento',
 };
 
+// Run work after the response is sent (Supabase edge runtime); fall back to a
+// floating promise locally.
+function runInBackground(p: Promise<unknown>): void {
+  const er = (globalThis as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } }).EdgeRuntime;
+  if (er?.waitUntil) er.waitUntil(p);
+  else p.catch(() => {});
+}
+
+const norm = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N} ]/gu, '').replace(/\s+/g, ' ').trim();
+
+// ---- AI task suggestions (fase 2) ----
+// Classify the message with Gemini Flash: does it imply a concrete follow-up
+// task (a promise by the agent, or a request by the customer)? If so, insert a
+// SUGGESTED inbox_task — the user accepts/dismisses it in the conversation
+// panel. Runs in background; never blocks the webhook response.
+function suggestTaskFromMessage(
+  admin: ReturnType<typeof createClient>,
+  org: { id: string },
+  event: any,
+  channelMeta: Record<string, unknown> | null,
+): void {
+  runInBackground((async () => {
+    try {
+      if ((channelMeta as any)?.ai_tasks_enabled === false) return; // opt-out per org
+      const geminiKey = Deno.env.get('GEMINI_API_KEY');
+      if (!geminiKey) return;
+
+      const content = String(event.content ?? '').trim();
+      if (content.length < 15 || content.length > 1200) return; // noise filter
+      const sender = event.conversation?.meta?.sender ?? {};
+      const phone = String(sender.phone_number ?? '').replace(/\D/g, '');
+      if (!phone) return; // groups / unknown contacts
+      const incoming = event.message_type === 'incoming';
+
+      // Cap + dedupe: at most 3 open suggestions per contact; skip repeated titles.
+      const { data: existing } = await admin
+        .from('inbox_tasks')
+        .select('id, title, suggested')
+        .eq('organization_id', org.id)
+        .like('contact_phone', `%${phone.slice(-9)}`)
+        .is('done_at', null);
+      const openSuggestions = (existing ?? []).filter((t: any) => t.suggested);
+      if (openSuggestions.length >= 3) return;
+
+      const aiRes = await fetch('https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${geminiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'gemini-2.5-flash',
+          temperature: 0,
+          messages: [
+            {
+              role: 'system',
+              content:
+                'És um assistente de CRM. Analisa UMA mensagem de WhatsApp de uma conversa comercial e decide se implica uma TAREFA concreta para o comercial. É tarefa quando: (1) o comercial promete algo ("amanhã envio-te", "vou verificar e digo"); (2) o cliente pede algo que exige ação ("consegues enviar-me o preço?"). NÃO é tarefa: saudações, agradecimentos, confirmações vagas ("ok", "combinado" sem ação), conversa social. Responde APENAS com JSON válido, sem markdown: {"tarefa": boolean, "titulo": string, "prazo_iso": string|null, "confianca": number}. titulo: imperativo curto em pt-PT (ex.: "Enviar proposta atualizada"). prazo_iso: data/hora ISO 8601 quando a mensagem indica prazo ("amanhã"→09:00, "até sexta"→sexta 18:00, "logo"→hoje 21:00); null se não indicar. confianca: 0 a 1.',
+            },
+            {
+              role: 'user',
+              content: `Mensagem ${incoming ? 'do CLIENTE' : 'do COMERCIAL (eu)'}: "${content}"\nAgora (Lisboa): ${new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Lisbon' })}`,
+            },
+          ],
+        }),
+      });
+      if (!aiRes.ok) return;
+      const aiData = await aiRes.json();
+      const raw = String(aiData?.choices?.[0]?.message?.content ?? '').replace(/```json|```/g, '').trim();
+      let out: any;
+      try { out = JSON.parse(raw); } catch { return; }
+      if (!out?.tarefa || Number(out.confianca ?? 0) < 0.75 || !out.titulo) return;
+
+      const title = String(out.titulo).slice(0, 160);
+      if ((existing ?? []).some((t: any) => norm(t.title) === norm(title))) return;
+
+      let dueAt: string | null = null;
+      if (out.prazo_iso) {
+        const d = new Date(out.prazo_iso);
+        if (!isNaN(d.getTime()) && d.getTime() > Date.now()) dueAt = d.toISOString();
+      }
+
+      await admin.from('inbox_tasks').insert({
+        organization_id: org.id,
+        created_by: null, // null = sugerida pela IA
+        suggested: true,
+        source_message: content.slice(0, 300),
+        conversation_id: event.conversation?.id ?? null,
+        contact_phone: phone,
+        contact_name: sender.name ?? null,
+        title,
+        due_at: dueAt,
+      });
+    } catch (e) {
+      console.error('ai task suggestion failed:', e);
+    }
+  })());
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
   if (req.method !== 'POST') return ok();
@@ -73,17 +169,22 @@ Deno.serve(async (req) => {
       console.error('realtime broadcast failed:', e);
     }
 
+    // Channel row feeds the AI suggestions (both directions) and the auto-reply.
+    const { data: channel } = await admin
+      .from('messaging_channels')
+      .select('evolution_instance, metadata')
+      .eq('organization_id', org.id)
+      .eq('channel_type', 'whatsapp')
+      .maybeSingle();
+
+    // AI task suggestions — promises by the agent AND requests by the customer.
+    suggestTaskFromMessage(admin, org, event, (channel?.metadata as Record<string, unknown>) ?? null);
+
     // Everything below (auto-reply + push notification) is for INCOMING only.
     if (event.message_type !== 'incoming') return ok();
 
     // ---- Out-of-hours auto-reply (configured in messaging_channels.metadata) ----
     try {
-      const { data: channel } = await admin
-        .from('messaging_channels')
-        .select('evolution_instance, metadata')
-        .eq('organization_id', org.id)
-        .eq('channel_type', 'whatsapp')
-        .maybeSingle();
       const ar = (channel?.metadata as any)?.auto_reply;
       if (ar?.enabled && ar?.message && channel?.evolution_instance) {
         // "Outside hours" = current Lisbon time NOT within [start, end).

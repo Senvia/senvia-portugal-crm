@@ -10,11 +10,12 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import {
   useConversationTasks, useCreateInboxTask, useToggleInboxTask, useUpdateInboxTask,
-  useDeleteInboxTask, isTaskOverdue, type InboxTask,
+  useDeleteInboxTask, useAcceptSuggestedTask, useAiTasksEnabled, useSaveAiTasksEnabled,
+  isTaskOverdue, type InboxTask,
 } from "@/hooks/useInboxTasks";
 import { cn } from "@/lib/utils";
 import {
-  CalendarClock, Check, ChevronDown, ChevronRight, ClipboardList, Loader2, MoreVertical, Plus, Trash2,
+  CalendarClock, Check, ChevronDown, ChevronRight, ClipboardList, Loader2, MoreVertical, Plus, Sparkles, Trash2, X,
 } from "lucide-react";
 
 interface TeamMemberLite {
@@ -95,6 +96,9 @@ export function ConversationTasks({
   const toggleTask = useToggleInboxTask();
   const updateTask = useUpdateInboxTask();
   const deleteTask = useDeleteInboxTask();
+  const acceptSuggestion = useAcceptSuggestedTask();
+  const { data: aiEnabled = true } = useAiTasksEnabled();
+  const saveAiEnabled = useSaveAiTasksEnabled();
 
   const [title, setTitle] = useState("");
   const [duePreset, setDuePreset] = useState("today");
@@ -113,7 +117,8 @@ export function ConversationTasks({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefill]);
 
-  const open = tasks.filter((t) => !t.done_at);
+  const suggestions = tasks.filter((t) => t.suggested && !t.done_at);
+  const open = tasks.filter((t) => !t.done_at && !t.suggested);
   const done = tasks.filter((t) => !!t.done_at);
 
   const handleAdd = () => {
@@ -154,7 +159,66 @@ export function ConversationTasks({
       <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
         <ClipboardList className="h-3.5 w-3.5" />
         Tarefas{open.length > 0 ? ` (${open.length})` : ""}
+        <button
+          type="button"
+          title={aiEnabled ? "Sugestões por IA: ligadas (clica para desligar)" : "Sugestões por IA: desligadas (clica para ligar)"}
+          onClick={() => saveAiEnabled.mutate(!aiEnabled)}
+          className={cn(
+            "ml-auto rounded p-0.5 transition-colors",
+            aiEnabled ? "text-violet-500 hover:text-violet-600" : "text-muted-foreground/40 hover:text-muted-foreground",
+          )}
+        >
+          <Sparkles className="h-3.5 w-3.5" />
+        </button>
       </p>
+
+      {/* AI suggestions — accepted becomes a real task, dismissed disappears */}
+      {suggestions.length > 0 && (
+        <div className="mb-2 space-y-1.5">
+          {suggestions.map((t) => {
+            const due = t.due_at ? formatDue(t.due_at) : null;
+            return (
+              <div key={t.id} className="rounded-lg border border-violet-200 bg-violet-500/5 p-2">
+                <p className="flex items-start gap-1.5 text-xs leading-snug">
+                  <Sparkles className="mt-0.5 h-3 w-3 shrink-0 text-violet-500" />
+                  <span className="min-w-0 break-words font-medium">{t.title}</span>
+                </p>
+                {t.source_message && (
+                  <p className="mt-1 truncate pl-[18px] text-[10px] italic text-muted-foreground">“{t.source_message}”</p>
+                )}
+                <div className="mt-1.5 flex items-center gap-1.5 pl-[18px]">
+                  {due && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-medium text-violet-700">
+                      <CalendarClock className="h-2.5 w-2.5" />
+                      {due.label}
+                    </span>
+                  )}
+                  <div className="ml-auto flex items-center gap-1">
+                    <Button
+                      size="sm"
+                      className="h-6 bg-violet-600 px-2 text-[11px] hover:bg-violet-700"
+                      disabled={acceptSuggestion.isPending}
+                      onClick={() => acceptSuggestion.mutate(t.id)}
+                    >
+                      <Check className="mr-1 h-3 w-3" />
+                      Aceitar
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 px-2 text-[11px] text-muted-foreground"
+                      onClick={() => deleteTask.mutate(t.id)}
+                    >
+                      <X className="mr-1 h-3 w-3" />
+                      Ignorar
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Open tasks */}
       <div className="space-y-1">

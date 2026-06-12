@@ -28,6 +28,7 @@ Deno.serve(async (req) => {
       .select('id, organization_id, title, contact_name, contact_phone, assigned_to, created_by')
       .is('done_at', null)
       .eq('reminder_sent', false)
+      .eq('suggested', false) // AI suggestions only remind after being accepted
       .not('due_at', 'is', null)
       .lte('due_at', new Date().toISOString())
       .limit(50);
@@ -46,6 +47,7 @@ Deno.serve(async (req) => {
       if (!claimed) continue;
 
       const target = t.assigned_to ?? t.created_by;
+      if (!target) continue; // AI task accepted without assignee — no one to ping
       try {
         await fetch(`${supabaseUrl}/functions/v1/send-push-notification`, {
           method: 'POST',

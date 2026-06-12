@@ -8,7 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
 export interface InboxTask {
   id: string;
   organization_id: string;
-  created_by: string;
+  created_by: string | null; // null = sugerida pela IA
   assigned_to: string | null;
   conversation_id: number | null;
   contact_phone: string | null;
@@ -19,6 +19,9 @@ export interface InboxTask {
   due_at: string | null;
   done_at: string | null;
   created_at: string;
+  // AI suggestion: true until a user accepts it (no reminders/badges meanwhile).
+  suggested: boolean;
+  source_message: string | null;
 }
 
 // The table is newer than the auto-generated Supabase types — hence the cast.
@@ -44,6 +47,7 @@ export function useOpenInboxTasks(enabled = true) {
         .select('*')
         .eq('organization_id', organization.id)
         .is('done_at', null)
+        .eq('suggested', false) // suggestions only count once accepted
         .order('due_at', { ascending: true, nullsFirst: false })
         .limit(300);
       if (error) throw error;
@@ -165,6 +169,82 @@ export function useUpdateInboxTask() {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['inbox-tasks'] });
+    },
+  });
+}
+
+// Accept an AI suggestion: it becomes a real task assigned to the accepting
+// user (reminder arms itself via due_at, which the suggestion already carries).
+export function useAcceptSuggestedTask() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await tasksTable()
+        .update({ suggested: false, assigned_to: user?.id ?? null })
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: ['inbox-tasks'] });
+      const snapshots = queryClient.getQueriesData<InboxTask[]>({ queryKey: ['inbox-tasks'] });
+      queryClient.setQueriesData<InboxTask[]>({ queryKey: ['inbox-tasks'] }, (old) =>
+        (old ?? []).map((t) => (t.id === id ? { ...t, suggested: false, assigned_to: user?.id ?? null } : t)),
+      );
+      return { snapshots };
+    },
+    onError: (_e, _v, ctx) => {
+      for (const [key, data] of ctx?.snapshots ?? []) queryClient.setQueryData(key, data);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['inbox-tasks'] });
+    },
+  });
+}
+
+// ---- Per-org toggle for AI suggestions (messaging_channels.metadata) ----
+
+export function useAiTasksEnabled() {
+  const { organization } = useAuth();
+  return useQuery({
+    queryKey: ['inbox-ai-tasks-enabled', organization?.id],
+    queryFn: async (): Promise<boolean> => {
+      if (!organization?.id) return true;
+      const { data } = await supabase
+        .from('messaging_channels')
+        .select('metadata')
+        .eq('organization_id', organization.id)
+        .eq('channel_type', 'whatsapp')
+        .maybeSingle();
+      return (data?.metadata as { ai_tasks_enabled?: boolean } | null)?.ai_tasks_enabled !== false;
+    },
+    enabled: !!organization?.id,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useSaveAiTasksEnabled() {
+  const { organization } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (enabled: boolean) => {
+      if (!organization?.id) throw new Error('Organização não encontrada');
+      const { data } = await supabase
+        .from('messaging_channels')
+        .select('metadata')
+        .eq('organization_id', organization.id)
+        .eq('channel_type', 'whatsapp')
+        .maybeSingle();
+      const metadata = { ...((data?.metadata as Record<string, unknown>) ?? {}), ai_tasks_enabled: enabled };
+      const { error } = await supabase
+        .from('messaging_channels')
+        .update({ metadata })
+        .eq('organization_id', organization.id)
+        .eq('channel_type', 'whatsapp');
+      if (error) throw error;
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['inbox-ai-tasks-enabled'] });
     },
   });
 }
