@@ -203,33 +203,33 @@ export function ConversationTasks({
                 {t.source_message && (
                   <p className="mt-1 truncate pl-[18px] text-[10px] italic text-muted-foreground">“{t.source_message}”</p>
                 )}
-                <div className="mt-1.5 flex items-center gap-1.5 pl-[18px]">
-                  {due && (
+                {due && (
+                  <div className="mt-1.5 pl-[18px]">
                     <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-medium text-violet-700">
                       <CalendarClock className="h-2.5 w-2.5" />
                       {due.label}
                     </span>
-                  )}
-                  <div className="ml-auto flex items-center gap-1">
-                    <Button
-                      size="sm"
-                      className="h-6 bg-violet-600 px-2 text-[11px] hover:bg-violet-700"
-                      disabled={acceptSuggestion.isPending}
-                      onClick={() => acceptSuggestion.mutate(t.id)}
-                    >
-                      <Check className="mr-1 h-3 w-3" />
-                      Aceitar
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-6 px-2 text-[11px] text-muted-foreground"
-                      onClick={() => deleteTask.mutate(t.id)}
-                    >
-                      <X className="mr-1 h-3 w-3" />
-                      Ignorar
-                    </Button>
                   </div>
+                )}
+                <div className="mt-1.5 flex items-center gap-1.5 pl-[18px]">
+                  <Button
+                    size="sm"
+                    className="h-6 flex-1 bg-violet-600 px-2 text-[11px] hover:bg-violet-700"
+                    disabled={acceptSuggestion.isPending}
+                    onClick={() => acceptSuggestion.mutate(t.id)}
+                  >
+                    <Check className="mr-1 h-3 w-3" />
+                    Aceitar
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-6 flex-1 px-2 text-[11px] text-muted-foreground"
+                    onClick={() => deleteTask.mutate(t.id)}
+                  >
+                    <X className="mr-1 h-3 w-3" />
+                    Ignorar
+                  </Button>
                 </div>
               </div>
             );
