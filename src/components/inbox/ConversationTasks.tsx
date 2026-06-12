@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -91,6 +95,13 @@ function firstName(name: string | null | undefined): string {
   return (name || "").trim().split(/\s+/)[0] || "";
 }
 
+// ISO timestamp -> value for <input type="datetime-local"> (local time).
+function toLocalInput(iso: string): string {
+  const d = new Date(iso);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
 // ---- component ----
 
 export function ConversationTasks({
@@ -125,7 +136,21 @@ export function ConversationTasks({
   const [customDue, setCustomDue] = useState("");
   const [assignee, setAssignee] = useState("me");
   const [showDone, setShowDone] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  // Detail modal (view/edit/complete/delete a task).
+  const [editing, setEditing] = useState<InboxTask | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editDesc, setEditDesc] = useState("");
+  const [editDue, setEditDue] = useState("");
+  const [editAssignee, setEditAssignee] = useState("none");
+
+  const openDetail = (t: InboxTask) => {
+    setEditing(t);
+    setEditTitle(t.title);
+    setEditDesc(t.description ?? "");
+    setEditDue(t.due_at ? toLocalInput(t.due_at) : "");
+    setEditAssignee(t.assigned_to ?? "none");
+  };
 
   // "Transformar mensagem em tarefa" lands here pre-filled.
   useEffect(() => {
@@ -271,8 +296,11 @@ export function ConversationTasks({
               >
                 <Check className="h-3 w-3" />
               </button>
-              <div className="min-w-0 flex-1">
+              <button type="button" className="min-w-0 flex-1 text-left" onClick={() => openDetail(t)} title="Ver detalhes">
                 <p className="break-words text-xs leading-snug">{t.title}</p>
+                {t.description && (
+                  <p className="mt-0.5 truncate text-[10px] text-muted-foreground">{t.description}</p>
+                )}
                 <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
                   {due && (
                     <span
@@ -291,7 +319,7 @@ export function ConversationTasks({
                     <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{assigned}</span>
                   )}
                 </div>
-              </div>
+              </button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button type="button" className="rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-accent group-hover:opacity-100">
@@ -326,14 +354,15 @@ export function ConversationTasks({
 
       {/* Quick add */}
       <div className="mt-2 space-y-1.5">
-        <div className="flex items-center gap-1.5">
-          <Input
+        <div className="flex items-end gap-1.5">
+          <Textarea
             ref={inputRef}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAdd(); } }}
+            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleAdd(); } }}
             placeholder="Adicionar tarefa..."
-            className="h-8 text-xs"
+            rows={Math.min(4, Math.max(1, Math.ceil(title.length / 32)))}
+            className="min-h-[32px] resize-none px-2 py-1.5 text-xs"
           />
           <Button size="icon" className="h-8 w-8 shrink-0" disabled={!title.trim() || createTask.isPending} onClick={handleAdd}>
             {createTask.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
@@ -396,7 +425,9 @@ export function ConversationTasks({
                   >
                     <Check className="h-3 w-3" />
                   </button>
-                  <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground line-through">{t.title}</p>
+                  <button type="button" className="min-w-0 flex-1 truncate text-left text-xs text-muted-foreground line-through" onClick={() => openDetail(t)}>
+                    {t.title}
+                  </button>
                   <button
                     type="button"
                     onClick={() => deleteTask.mutate(t.id)}
@@ -410,6 +441,100 @@ export function ConversationTasks({
           )}
         </div>
       )}
+
+      {/* Detail modal: view/edit/complete/delete a task */}
+      <Dialog open={!!editing} onOpenChange={(o) => { if (!o) setEditing(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <ClipboardList className="h-4 w-4" />
+              Detalhes da tarefa
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <p className="mb-1 text-xs font-medium text-muted-foreground">Tarefa</p>
+              <Textarea value={editTitle} onChange={(e) => setEditTitle(e.target.value)} rows={2} className="resize-none text-sm" />
+            </div>
+            <div>
+              <p className="mb-1 text-xs font-medium text-muted-foreground">Descrição</p>
+              <Textarea
+                value={editDesc}
+                onChange={(e) => setEditDesc(e.target.value)}
+                rows={4}
+                placeholder="Detalhes, contexto, passos..."
+                className="text-sm"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <p className="mb-1 text-xs font-medium text-muted-foreground">Prazo</p>
+                <Input type="datetime-local" value={editDue} onChange={(e) => setEditDue(e.target.value)} className="h-9 text-xs" />
+              </div>
+              <div>
+                <p className="mb-1 text-xs font-medium text-muted-foreground">Responsável</p>
+                <Select value={editAssignee} onValueChange={setEditAssignee}>
+                  <SelectTrigger className="h-9 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sem responsável</SelectItem>
+                    {teamMembers.map((m) => (
+                      <SelectItem key={m.user_id} value={m.user_id}>
+                        {m.user_id === user?.id ? "Eu" : firstName(m.full_name) || "Membro"}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            {editing?.source_message && (
+              <p className="rounded-lg bg-muted/60 p-2 text-[11px] italic text-muted-foreground">“{editing.source_message}”</p>
+            )}
+          </div>
+          <DialogFooter className="flex-row items-center gap-2 sm:justify-between">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-destructive hover:text-destructive"
+              onClick={() => { if (editing) deleteTask.mutate(editing.id); setEditing(null); }}
+            >
+              <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+              Apagar
+            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (editing) toggleTask.mutate({ id: editing.id, done: !editing.done_at });
+                  setEditing(null);
+                }}
+              >
+                <Check className="mr-1.5 h-3.5 w-3.5" />
+                {editing?.done_at ? "Reabrir" : "Concluir"}
+              </Button>
+              <Button
+                size="sm"
+                disabled={!editTitle.trim() || updateTask.isPending}
+                onClick={() => {
+                  if (!editing) return;
+                  updateTask.mutate({
+                    id: editing.id,
+                    title: editTitle,
+                    description: editDesc,
+                    dueAt: editDue ? new Date(editDue) : null,
+                    assignedTo: editAssignee === "none" ? null : editAssignee,
+                  });
+                  setEditing(null);
+                }}
+              >
+                Guardar
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

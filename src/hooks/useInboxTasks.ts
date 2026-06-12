@@ -16,6 +16,7 @@ export interface InboxTask {
   lead_id: string | null;
   client_id: string | null;
   title: string;
+  description: string | null;
   due_at: string | null;
   done_at: string | null;
   created_at: string;
@@ -154,11 +155,12 @@ export function useToggleInboxTask() {
 export function useUpdateInboxTask() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, dueAt, assignedTo, title }: {
+    mutationFn: async ({ id, dueAt, assignedTo, title, description }: {
       id: string;
       dueAt?: Date | null;
       assignedTo?: string | null;
       title?: string;
+      description?: string | null;
     }) => {
       const updates: Record<string, unknown> = {};
       if (dueAt !== undefined) {
@@ -167,6 +169,7 @@ export function useUpdateInboxTask() {
       }
       if (assignedTo !== undefined) updates.assigned_to = assignedTo;
       if (title !== undefined) updates.title = title.trim();
+      if (description !== undefined) updates.description = description?.trim() || null;
       const { error } = await tasksTable().update(updates).eq('id', id);
       if (error) throw error;
     },
