@@ -110,15 +110,23 @@ export function useInboxRealtime(): boolean {
   useEffect(() => {
     if (!organization?.id) return;
     const orgId = organization.id;
+    // Collapse bursts (several messages within ~400ms) into ONE refetch — each
+    // list refetch costs Chatwoot real server time.
+    let timer: number | null = null;
     const channel = supabase
       .channel(`inbox-${orgId}`)
       .on('broadcast', { event: 'message' }, () => {
-        queryClient.invalidateQueries({ queryKey: ['inbox-conversations', orgId] });
-        // Prefix match: refetches whichever thread is open, whatever its altIds.
-        queryClient.invalidateQueries({ queryKey: ['inbox-messages', orgId] });
+        if (timer !== null) return;
+        timer = window.setTimeout(() => {
+          timer = null;
+          queryClient.invalidateQueries({ queryKey: ['inbox-conversations', orgId] });
+          // Prefix match: refetches whichever thread is open, whatever its altIds.
+          queryClient.invalidateQueries({ queryKey: ['inbox-messages', orgId] });
+        }, 400);
       })
       .subscribe((status) => setLive(status === 'SUBSCRIBED'));
     return () => {
+      if (timer !== null) window.clearTimeout(timer);
       setLive(false);
       supabase.removeChannel(channel);
     };
@@ -127,18 +135,41 @@ export function useInboxRealtime(): boolean {
   return live;
 }
 
+// Conversation identity for merging: same contact = same row (matches the
+// server-side mergeByContact), falling back to the conversation id.
+function convKey(c: InboxConversation): string {
+  return (c.contact_phone || '').replace(/\D/g, '') || `id-${c.id}`;
+}
+
 // List the open conversations for the org's Chatwoot account.
+// Chatwoot is slow per page (>1s), so only the FIRST load fetches the full 6
+// pages; every refresh fetches just the 2 newest pages and merges them over the
+// cached list (recent activity always lands on page 1).
 // With realtime connected (live=true) the poll is just a safety net.
 export function useInboxConversations(enabled = true, live = false) {
   const { organization } = useAuth();
+  const queryClient = useQueryClient();
   return useQuery({
     queryKey: ['inbox-conversations', organization?.id],
     queryFn: async (): Promise<InboxConversation[]> => {
       if (!organization?.id) return [];
+      const previous = queryClient.getQueryData<InboxConversation[]>(
+        ['inbox-conversations', organization.id],
+      );
+      const mode = previous && previous.length > 0 ? 'fresh' : 'full';
       const res = await invokeInbox<{ conversations: InboxConversation[] }>(organization.id, {
         action: 'list_conversations',
+        mode,
       });
-      return res.conversations || [];
+      const fresh = res.conversations || [];
+      if (mode === 'full' || !previous) return fresh;
+      // Merge: fresh rows win; keep cached rows for contacts not in the fresh
+      // window (no recent activity — their state can only have changed through
+      // our own optimistic patches, which are already in `previous`).
+      const seenKeys = new Set(fresh.map(convKey));
+      const seenIds = new Set(fresh.flatMap((c) => [c.id, ...(c.alt_ids ?? [])]));
+      const rest = previous.filter((c) => !seenKeys.has(convKey(c)) && !seenIds.has(c.id));
+      return [...fresh, ...rest];
     },
     enabled: enabled && !!organization?.id,
     refetchInterval: !enabled ? false : live ? 20000 : 5000,

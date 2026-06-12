@@ -257,11 +257,14 @@ Deno.serve(async (req) => {
       // Fire-and-forget: make sure push notifications are wired for this account.
       ensureChatwootWebhook(cfg, cw.token, cw.accountId);
 
-      // Fetch all statuses across several pages so imported history (which lands
-      // as "resolved") and older conversations also show up. Chatwoot pages by 25.
-      // Pages are fetched in PARALLEL — sequential fetches made every poll ~6x slower.
+      // Chatwoot takes >1s PER page and serves few requests at once — 6 pages on
+      // every poll was queueing the whole server ("loading forever"). Only the
+      // FIRST load fetches deep (6 pages); refreshes fetch the 2 newest pages
+      // (50 conversations by latest activity) and the client merges them into
+      // its cached list.
+      const pageNums = body.mode === 'fresh' ? [1, 2] : [1, 2, 3, 4, 5, 6];
       const pages = await Promise.all(
-        [1, 2, 3, 4, 5, 6].map(async (page) => {
+        pageNums.map(async (page) => {
           const res = await chatwootFetch(
             cfg, cw.token, `${base}/conversations?status=all&assignee_type=all&page=${page}`,
           );
