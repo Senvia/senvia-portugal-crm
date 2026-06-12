@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -46,6 +46,11 @@ function presetToDate(preset: string, custom: string): Date | null {
       return d;
     case "today": {
       d.setHours(18, 0, 0, 0);
+      if (d.getTime() < Date.now()) d.setHours(new Date().getHours() + 1, 0, 0, 0);
+      return d;
+    }
+    case "tonight": {
+      d.setHours(21, 0, 0, 0);
       if (d.getTime() < Date.now()) d.setHours(new Date().getHours() + 1, 0, 0, 0);
       return d;
     }
@@ -102,7 +107,21 @@ export function ConversationTasks({
   const saveAiEnabled = useSaveAiTasksEnabled();
 
   const [title, setTitle] = useState("");
-  const [duePreset, setDuePreset] = useState("today");
+  // Presets adapt to the clock: "Hoje (18h)" disappears once 18h is near/past
+  // (replaced by "Hoje à noite (21h)" until ~20h30; after that, tomorrow).
+  const duePresetOptions = useMemo(() => {
+    const now = new Date();
+    const h = now.getHours() + now.getMinutes() / 60;
+    const opts: Array<[string, string]> = [["1h", "Daqui a 1 hora"]];
+    if (h < 17.5) opts.push(["today", "Hoje (18h)"]);
+    else if (h < 20.5) opts.push(["tonight", "Hoje à noite (21h)"]);
+    opts.push(["tomorrow", "Amanhã (9h)"], ["monday", "Segunda (9h)"], ["custom", "Data à escolha…"], ["none", "Sem prazo"]);
+    return opts;
+  }, []);
+  const [duePreset, setDuePreset] = useState(() => {
+    const h = new Date().getHours();
+    return h < 17 ? "today" : "tomorrow";
+  });
   const [customDue, setCustomDue] = useState("");
   const [assignee, setAssignee] = useState("me");
   const [showDone, setShowDone] = useState(false);
@@ -326,12 +345,9 @@ export function ConversationTasks({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="1h">Daqui a 1 hora</SelectItem>
-              <SelectItem value="today">Hoje (18h)</SelectItem>
-              <SelectItem value="tomorrow">Amanhã (9h)</SelectItem>
-              <SelectItem value="monday">Segunda (9h)</SelectItem>
-              <SelectItem value="custom">Data à escolha…</SelectItem>
-              <SelectItem value="none">Sem prazo</SelectItem>
+              {duePresetOptions.map(([value, label]) => (
+                <SelectItem key={value} value={value}>{label}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <Select value={assignee} onValueChange={setAssignee}>
