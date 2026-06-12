@@ -4,11 +4,12 @@
 //   - search                { q }
 //   - get_messages          { conversation_id | conversation_ids, before? }
 //   - send_message          { conversation_id, content?, contact_phone?, quoted_id?, attachment? }
+//   - send_note             { conversation_id, content }   (private, agent-only)
 //   - start_conversation    { phone, content }
 //   - toggle_status         { conversation_id, status: 'open' | 'resolved' }
 //   - assign_conversation   { conversation_id, user_id, user_name }
 //   - rename_contact        { contact_id, name }
-//   - list_labels / create_label { title } / set_labels { conversation_id, labels }
+//   - list_labels / create_label { title } / set_labels { conversation_id, labels } / delete_label { label_id }
 //   - list_canned / create_canned { content } / delete_canned { canned_id }
 //   - delete_message        { wa_id, phone }
 //   - mark_read             { conversation_id | conversation_ids }
@@ -66,7 +67,12 @@ function prettyContent(content: string | null): string | null {
 function normalizeConversation(c: any, base: string): NormalizedConversation {
   const sender = c?.meta?.sender || {};
   const messages = Array.isArray(c?.messages) ? c.messages : [];
-  const last = messages[messages.length - 1];
+  // Prefer the last REAL message for the preview (skip Chatwoot activity/system
+  // messages, message_type 2). But the list window often contains ONLY the last
+  // message — if that is an activity, filtering would leave nothing, so fall
+  // back to the actual last message and let the client translate it to pt-PT.
+  const realMessages = messages.filter((m: any) => m?.message_type !== 2);
+  const last = realMessages[realMessages.length - 1] ?? messages[messages.length - 1];
   // Media messages have no text — show the type label ("🎵 Áudio") in the
   // list preview instead of an empty dash, WhatsApp-style.
   let lastMessage = prettyContent(last?.content ?? null);
@@ -163,6 +169,8 @@ function normalizeMessage(m: any, base: string) {
     // Chatwoot message_type: 0 incoming, 1 outgoing, 2 activity, 3 template
     outgoing: m?.message_type === 1 || m?.message_type === 3,
     is_activity: m?.message_type === 2,
+    // Private note: agent-only, never delivered to the customer's WhatsApp.
+    is_private: m?.private === true,
     created_at: m?.created_at ?? null,
     sender_name: m?.sender?.name ?? null,
     // Delivery status of outgoing messages: sent | delivered | read | failed.
@@ -403,6 +411,24 @@ Deno.serve(async (req) => {
       return json({ ok: true });
     }
 
+    if (action === 'send_note') {
+      // Internal note: agent-only. Posted DIRECTLY to Chatwoot as a private
+      // message — it is NOT routed through Evolution, so the customer never sees
+      // it on WhatsApp.
+      if (!conversation_id) return json({ error: 'conversation_id em falta' }, 400);
+      const text = String(content ?? '').trim();
+      if (!text) return json({ error: 'Nota vazia' }, 400);
+      const res = await chatwootFetch(
+        cfg, cw.token, `${base}/conversations/${conversation_id}/messages`, 'POST',
+        { content: text, message_type: 'outgoing', private: true },
+      );
+      if (!res.ok) {
+        console.error('Chatwoot note failed:', res.status, await res.text());
+        return json({ error: 'Falha ao guardar a nota' }, 502);
+      }
+      return json({ ok: true });
+    }
+
     if (action === 'start_conversation') {
       // Message a number that has no conversation yet. Evolution mirrors the sent
       // message into Chatwoot, which creates the conversation; the list poll then
@@ -505,6 +531,16 @@ Deno.serve(async (req) => {
         cfg, cw.token, `${base}/conversations/${conversation_id}/labels`, 'POST', { labels },
       );
       if (!res.ok) return json({ error: 'Falha ao atualizar etiquetas' }, 502);
+      return json({ ok: true });
+    }
+
+    if (action === 'delete_label') {
+      const labelId = Number(body.label_id);
+      if (!labelId) return json({ error: 'label_id em falta' }, 400);
+      // Account-level delete: removes the label definition (Chatwoot also strips
+      // it from every conversation that had it).
+      const res = await chatwootFetch(cfg, cw.token, `${base}/labels/${labelId}`, 'DELETE');
+      if (!res.ok) return json({ error: 'Falha ao apagar etiqueta' }, 502);
       return json({ ok: true });
     }
 
