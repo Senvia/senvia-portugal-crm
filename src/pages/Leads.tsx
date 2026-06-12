@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { isPerfect2GetherOrg } from "@/lib/perfect2gether";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { usePersistedState } from "@/hooks/usePersistedState";
 import { usePermissions } from "@/hooks/usePermissions";
 
@@ -69,7 +69,8 @@ export default function Leads() {
   const unarchiveLeads = useUnarchiveLeads();
   const archiveByStage = useArchiveLeadsByStage();
   const navigate = useNavigate();
-  
+  const [searchParams, setSearchParams] = useSearchParams();
+
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -83,6 +84,20 @@ export default function Leads() {
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [pendingLead, setPendingLead] = useState<Lead | null>(null);
   
+  // Auto-open lead details from URL param (e.g. "Ver ficha completa" na Inbox).
+  useEffect(() => {
+    const leadId = searchParams.get("lead");
+    if (leadId && leads.length > 0) {
+      const lead = leads.find((l) => l.id === leadId);
+      if (lead) {
+        setSelectedLead(lead);
+        setIsModalOpen(true);
+      }
+      setSearchParams({}, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, leads]);
+
   // Lost lead dialog state
   const [isLostDialogOpen, setIsLostDialogOpen] = useState(false);
   const [pendingLostStatus, setPendingLostStatus] = useState<{ leadId: string; status: string } | null>(null);

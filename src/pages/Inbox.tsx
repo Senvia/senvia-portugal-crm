@@ -1549,7 +1549,7 @@ export default function Inbox() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => navigate(contactMatch.kind === "client" ? `/clients?client=${contactMatch.id}` : `/leads?lead=${contactMatch.id}`)}>
+                      <DropdownMenuItem onClick={() => navigate(contactMatch.kind === "client" ? `/clients?highlight=${contactMatch.id}` : `/leads?lead=${contactMatch.id}`)}>
                         <ExternalLink className="mr-2 h-4 w-4" />
                         Ver ficha completa
                       </DropdownMenuItem>
