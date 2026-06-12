@@ -60,21 +60,22 @@ export async function authOrgAdmin(
   const admin = createClient(cfg.supabaseUrl, cfg.serviceKey);
 
   // Must be an active admin member of THIS organization (multi-tenant check).
-  const { data: membership } = await admin
-    .from('organization_members')
-    .select('role, is_active')
-    .eq('organization_id', organizationId)
-    .eq('user_id', user.id)
-    .eq('is_active', true)
-    .maybeSingle();
-
-  // Super admins (global) are allowed too.
-  const { data: superRole } = await admin
-    .from('user_roles')
-    .select('role')
-    .eq('user_id', user.id)
-    .eq('role', 'super_admin')
-    .maybeSingle();
+  // Super admins (global) are allowed too. Checks run in parallel.
+  const [{ data: membership }, { data: superRole }] = await Promise.all([
+    admin
+      .from('organization_members')
+      .select('role, is_active')
+      .eq('organization_id', organizationId)
+      .eq('user_id', user.id)
+      .eq('is_active', true)
+      .maybeSingle(),
+    admin
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', user.id)
+      .eq('role', 'super_admin')
+      .maybeSingle(),
+  ]);
 
   const isAdmin = membership?.role === 'admin' || !!superRole;
   if (!isAdmin) {
@@ -103,20 +104,23 @@ export async function authOrgMember(
 
   const admin = createClient(cfg.supabaseUrl, cfg.serviceKey);
 
-  const { data: membership } = await admin
-    .from('organization_members')
-    .select('is_active')
-    .eq('organization_id', organizationId)
-    .eq('user_id', user.id)
-    .eq('is_active', true)
-    .maybeSingle();
-
-  const { data: superRole } = await admin
-    .from('user_roles')
-    .select('role')
-    .eq('user_id', user.id)
-    .eq('role', 'super_admin')
-    .maybeSingle();
+  // Run both checks in parallel — sequential round trips were a visible part of
+  // the inbox latency (every action pays this cost).
+  const [{ data: membership }, { data: superRole }] = await Promise.all([
+    admin
+      .from('organization_members')
+      .select('is_active')
+      .eq('organization_id', organizationId)
+      .eq('user_id', user.id)
+      .eq('is_active', true)
+      .maybeSingle(),
+    admin
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', user.id)
+      .eq('role', 'super_admin')
+      .maybeSingle(),
+  ]);
 
   if (!membership && !superRole) {
     return { error: json({ error: 'Sem acesso a esta organização' }, 403) };
@@ -143,7 +147,7 @@ export async function chatwootFetch(
   cfg: MulticanalConfig,
   token: string,
   path: string,
-  method: 'GET' | 'POST' | 'PATCH' = 'GET',
+  method: 'GET' | 'POST' | 'PATCH' | 'DELETE' = 'GET',
   body?: unknown,
 ): Promise<Response> {
   return fetch(`${cfg.chatwootUrl}${path}`, {
@@ -157,7 +161,7 @@ export async function chatwootFetch(
 export async function evolutionFetch(
   cfg: MulticanalConfig,
   path: string,
-  method: 'GET' | 'POST' | 'DELETE' = 'GET',
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET',
   body?: unknown,
 ): Promise<Response> {
   return fetch(`${cfg.evolutionUrl}${path}`, {

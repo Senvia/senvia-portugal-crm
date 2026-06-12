@@ -1,8 +1,19 @@
 // chatwoot-inbox — proxy between Senvia OS and the org's Chatwoot account.
 // Hides the account token from the browser. Actions:
 //   - list_conversations
-//   - get_messages   { conversation_id }
-//   - send_message   { conversation_id, content }
+//   - search                { q }
+//   - get_messages          { conversation_id | conversation_ids, before? }
+//   - send_message          { conversation_id, content?, contact_phone?, quoted_id?, attachment? }
+//   - start_conversation    { phone, content }
+//   - toggle_status         { conversation_id, status: 'open' | 'resolved' }
+//   - assign_conversation   { conversation_id, user_id, user_name }
+//   - rename_contact        { contact_id, name }
+//   - list_labels / create_label { title } / set_labels { conversation_id, labels }
+//   - list_canned / create_canned { content } / delete_canned { canned_id }
+//   - delete_message        { wa_id, phone }
+//   - mark_read             { conversation_id | conversation_ids }
+//   - download_attachment   { url }
+import { createClient } from 'npm:@supabase/supabase-js@2';
 import {
   corsHeaders, json, getConfig, authOrgMember, getOrgChatwoot, chatwootFetch,
   instanceNameForOrg, evolutionFetch,
@@ -10,6 +21,8 @@ import {
 
 interface NormalizedConversation {
   id: number;
+  alt_ids: number[];
+  contact_id: number | null;
   contact_name: string;
   contact_phone: string | null;
   contact_thumbnail: string | null;
@@ -18,6 +31,11 @@ interface NormalizedConversation {
   status: string;
   channel: string | null;
   updated_at: number | null;
+  // Set when the LAST message is from the customer (they're waiting on us).
+  waiting_since: number | null;
+  labels: string[];
+  assigned_id: string | null;
+  assigned_name: string | null;
 }
 
 // Chatwoot thumbnails can be relative paths (/rails/...) — make them absolute.
@@ -27,35 +45,168 @@ function absoluteUrl(url: string | null | undefined, base: string): string | nul
   return `${base}${url.startsWith('/') ? '' : '/'}${url}`;
 }
 
+// Imported history stores media as text placeholders (the media itself was not
+// imported) — show a friendly label instead of the raw "_<Image Message>_".
+const MEDIA_PLACEHOLDERS: Record<string, string> = {
+  'image': '📷 Imagem',
+  'audio': '🎵 Áudio',
+  'video': '🎬 Vídeo',
+  'document': '📄 Documento',
+  'file': '📄 Documento',
+  'sticker': '💟 Sticker',
+};
+
+function prettyContent(content: string | null): string | null {
+  if (!content) return content;
+  const m = content.match(/^_?<(\w+) Message>_?$/i);
+  if (m) return MEDIA_PLACEHOLDERS[m[1].toLowerCase()] ?? '📎 Anexo';
+  return content;
+}
+
 function normalizeConversation(c: any, base: string): NormalizedConversation {
   const sender = c?.meta?.sender || {};
   const messages = Array.isArray(c?.messages) ? c.messages : [];
   const last = messages[messages.length - 1];
+  // Media messages have no text — show the type label ("🎵 Áudio") in the
+  // list preview instead of an empty dash, WhatsApp-style.
+  let lastMessage = prettyContent(last?.content ?? null);
+  if (!lastMessage && Array.isArray(last?.attachments) && last.attachments.length > 0) {
+    const ft = String(last.attachments[0]?.file_type ?? 'file');
+    lastMessage = MEDIA_PLACEHOLDERS[ft] ?? '📎 Anexo';
+  }
+  const custom = c?.custom_attributes ?? {};
   return {
     id: c?.id,
+    alt_ids: [],
+    contact_id: sender?.id ?? null,
     contact_name: sender?.name || sender?.phone_number || 'Contacto',
     contact_phone: sender?.phone_number ?? null,
     contact_thumbnail: absoluteUrl(sender?.thumbnail, base),
-    last_message: last?.content ?? null,
+    last_message: lastMessage,
     unread_count: c?.unread_count ?? 0,
     status: c?.status ?? 'open',
     channel: c?.meta?.channel ?? null,
     updated_at: c?.last_activity_at ?? c?.timestamp ?? null,
+    waiting_since: last && last.message_type === 0 ? (last.created_at ?? null) : null,
+    labels: Array.isArray(c?.labels) ? c.labels : [],
+    // Empty string = cleared assignment (Chatwoot drops null on merge, so we
+    // store "" to remove instead of null).
+    assigned_id: custom.senvia_assigned_id || null,
+    assigned_name: custom.senvia_assigned_name || null,
+    // Manual CRM link (overrides the phone-based auto-match). kind: lead | client.
+    crm_kind: custom.senvia_crm_kind || null,
+    crm_id: custom.senvia_crm_id || null,
+    crm_name: custom.senvia_crm_name || null,
   };
 }
 
-function normalizeMessage(m: any) {
+// Hide WhatsApp groups (sending by phone number cannot route to a group) and
+// LID artifacts (duplicate contacts whose "phone" is a long internal id).
+function isHiddenConversation(c: any, normalized: NormalizedConversation): boolean {
+  const identifier = String(c?.meta?.sender?.identifier ?? '');
+  if (identifier.includes('@g.us')) return true;
+  const digits = (normalized.contact_phone || '').replace(/\D/g, '');
+  const nameIsNumber = /^[0-9+\s]+$/.test((normalized.contact_name || '').trim());
+  return nameIsNumber && digits.length >= 14;
+}
+
+// The same contact can end up with several Chatwoot conversations (imported
+// history + live, LID artifacts...). Merge them into one row per phone — the
+// newest conversation is the primary; the rest become alt_ids whose messages
+// the client merges into one thread.
+function mergeByContact(sorted: NormalizedConversation[]): NormalizedConversation[] {
+  const byPhone = new Map<string, NormalizedConversation>();
+  const out: NormalizedConversation[] = [];
+  for (const c of sorted) {
+    const key = (c.contact_phone || '').replace(/\D/g, '');
+    if (!key) {
+      out.push(c);
+      continue;
+    }
+    const primary = byPhone.get(key);
+    if (!primary) {
+      byPhone.set(key, c);
+      out.push(c);
+    } else {
+      primary.alt_ids.push(c.id);
+      primary.unread_count += c.unread_count || 0;
+      // If any of the merged conversations is open, the contact is active.
+      if (primary.status === 'resolved' && c.status !== 'resolved') primary.status = c.status;
+      if (!primary.assigned_id && c.assigned_id) {
+        primary.assigned_id = c.assigned_id;
+        primary.assigned_name = c.assigned_name;
+      }
+      primary.labels = [...new Set([...primary.labels, ...c.labels])];
+    }
+  }
+  return out;
+}
+
+function normalizeMessage(m: any, base: string) {
+  const attachments = (Array.isArray(m?.attachments) ? m.attachments : []).map((a: any) => ({
+    id: a?.id,
+    file_type: a?.file_type ?? 'file',
+    data_url: absoluteUrl(a?.data_url, base),
+    thumb_url: absoluteUrl(a?.thumb_url, base),
+    file_size: a?.file_size ?? null,
+    extension: a?.extension ?? null,
+  }));
+  // When the real attachment exists, drop the "_<Image Message>_" placeholder so
+  // the bubble shows only the media; keep the pretty label for imported history
+  // (text-only import, no attachment to render).
+  const rawContent = m?.content ?? '';
+  const isPlaceholder = /^_?<\w+ Message>_?$/i.test(rawContent);
+  const content = attachments.length > 0 && isPlaceholder ? '' : prettyContent(rawContent);
   return {
     id: m?.id,
-    content: m?.content ?? '',
+    content,
     // Chatwoot message_type: 0 incoming, 1 outgoing, 2 activity, 3 template
     outgoing: m?.message_type === 1 || m?.message_type === 3,
     is_activity: m?.message_type === 2,
     created_at: m?.created_at ?? null,
     sender_name: m?.sender?.name ?? null,
-    attachments: Array.isArray(m?.attachments) ? m.attachments : [],
+    // Delivery status of outgoing messages: sent | delivered | read | failed.
+    status: m?.status ?? null,
+    // WhatsApp message id (WAID: prefix stripped) — used to quote/reply/delete.
+    wa_id: m?.source_id ? String(m.source_id).replace(/^WAID:/i, '') : null,
+    attachments,
   };
 }
+
+// Ensure the org's Chatwoot account has a webhook pointing at our
+// chatwoot-webhook function (push notifications for incoming messages).
+// Memoized per account for the lifetime of this edge instance.
+const webhookEnsured = new Set<number>();
+async function ensureChatwootWebhook(
+  cfg: ReturnType<typeof getConfig>,
+  token: string,
+  accountId: number,
+): Promise<void> {
+  if (webhookEnsured.has(accountId)) return;
+  webhookEnsured.add(accountId);
+  try {
+    const hookUrl = `${cfg.supabaseUrl}/functions/v1/chatwoot-webhook`;
+    const base = `/api/v1/accounts/${accountId}`;
+    const listRes = await chatwootFetch(cfg, token, `${base}/webhooks`);
+    if (!listRes.ok) return;
+    const data = await listRes.json();
+    const hooks: any[] = data?.payload ?? data ?? [];
+    if (hooks.some((h: any) => (h?.url ?? h?.webhook?.url) === hookUrl)) return;
+    await chatwootFetch(cfg, token, `${base}/webhooks`, 'POST', {
+      webhook: { url: hookUrl, subscriptions: ['message_created'] },
+    });
+  } catch (e) {
+    console.error('ensureChatwootWebhook failed:', e);
+    webhookEnsured.delete(accountId);
+  }
+}
+
+// Map a client attachment kind to the Evolution sendMedia mediatype.
+const MEDIA_TYPES: Record<string, string> = {
+  image: 'image',
+  video: 'video',
+  document: 'document',
+};
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
@@ -66,56 +217,104 @@ Deno.serve(async (req) => {
     if (!cfg.chatwootUrl) return json({ error: 'Chatwoot não configurado' }, 500);
 
     const body = await req.json().catch(() => ({}));
-    const { organization_id, action, conversation_id, content } = body;
+    const { organization_id, action, conversation_id, content, contact_phone } = body;
 
-    const auth = await authOrgMember(req, cfg, organization_id);
+    // Auth and Chatwoot-account lookup are independent — run them in parallel.
+    // The cw result is only USED after auth passes, so this leaks nothing.
+    const [auth, cw] = await Promise.all([
+      authOrgMember(req, cfg, organization_id),
+      getOrgChatwoot(createClient(cfg.supabaseUrl, cfg.serviceKey), organization_id),
+    ]);
     if ('error' in auth) return auth.error;
-
-    const cw = await getOrgChatwoot(auth.admin, organization_id);
     if (!cw) return json({ error: 'Esta organização ainda não tem WhatsApp ligado.' }, 409);
 
     const base = `/api/v1/accounts/${cw.accountId}`;
+    const instance = instanceNameForOrg(organization_id);
 
     if (action === 'list_conversations') {
+      // Fire-and-forget: make sure push notifications are wired for this account.
+      ensureChatwootWebhook(cfg, cw.token, cw.accountId);
+
       // Fetch all statuses across several pages so imported history (which lands
       // as "resolved") and older conversations also show up. Chatwoot pages by 25.
-      const all: any[] = [];
-      for (let page = 1; page <= 6; page++) {
-        const res = await chatwootFetch(
-          cfg, cw.token, `${base}/conversations?status=all&assignee_type=all&page=${page}`,
-        );
-        if (!res.ok) {
-          if (page === 1) return json({ error: 'Falha ao carregar conversas' }, 502);
-          break;
-        }
-        const data = await res.json();
-        const payload = data?.data?.payload ?? data?.payload ?? [];
-        all.push(...payload);
-        if (payload.length < 25) break;
-      }
-      const normalized = all.map((c: any) => normalizeConversation(c, cfg.chatwootUrl));
-      // Drop WhatsApp LID artifacts: contacts whose "phone" is actually a LID
-      // (14+ digits, no real name) — these are duplicates of the real contact.
-      const isLidArtifact = (c: NormalizedConversation) => {
-        const digits = (c.contact_phone || '').replace(/\D/g, '');
-        const nameIsNumber = /^[0-9+\s]+$/.test((c.contact_name || '').trim());
-        return nameIsNumber && digits.length >= 14;
-      };
-      return json({ conversations: normalized.filter((c) => !isLidArtifact(c)) });
+      // Pages are fetched in PARALLEL — sequential fetches made every poll ~6x slower.
+      const pages = await Promise.all(
+        [1, 2, 3, 4, 5, 6].map(async (page) => {
+          const res = await chatwootFetch(
+            cfg, cw.token, `${base}/conversations?status=all&assignee_type=all&page=${page}`,
+          );
+          if (!res.ok) return page === 1 ? null : [];
+          const data = await res.json();
+          return data?.data?.payload ?? data?.payload ?? [];
+        }),
+      );
+      if (pages[0] === null) return json({ error: 'Falha ao carregar conversas' }, 502);
+      const all: any[] = pages.flatMap((p) => p ?? []);
+      // Newest activity first, always — Chatwoot page order is not guaranteed
+      // across parallel pages. Merge duplicate conversations per contact.
+      const sorted = all
+        .map((c: any) => ({ raw: c, n: normalizeConversation(c, cfg.chatwootUrl) }))
+        .filter(({ raw, n }) => !isHiddenConversation(raw, n))
+        .map(({ n }) => n)
+        .sort((a, b) => (b.updated_at ?? 0) - (a.updated_at ?? 0));
+      return json({ conversations: mergeByContact(sorted) });
+    }
+
+    if (action === 'search') {
+      const q = String(body.q ?? '').trim();
+      if (q.length < 3) return json({ conversations: [] });
+      const res = await chatwootFetch(
+        cfg, cw.token, `${base}/conversations/search?q=${encodeURIComponent(q)}`,
+      );
+      if (!res.ok) return json({ conversations: [] });
+      const data = await res.json();
+      const payload = data?.payload ?? data?.data?.payload ?? [];
+      const normalized = payload
+        .map((c: any) => ({ raw: c, n: normalizeConversation(c, cfg.chatwootUrl) }))
+        .filter(({ raw, n }: any) => !isHiddenConversation(raw, n))
+        .map(({ n }: any) => n);
+      return json({ conversations: normalized });
     }
 
     if (action === 'get_messages') {
-      if (!conversation_id) return json({ error: 'conversation_id em falta' }, 400);
-      const res = await chatwootFetch(cfg, cw.token, `${base}/conversations/${conversation_id}/messages`);
-      if (!res.ok) return json({ error: 'Falha ao carregar mensagens' }, 502);
-      const data = await res.json();
-      const payload = data?.payload ?? [];
-      return json({ messages: payload.map(normalizeMessage) });
+      const ids: number[] = Array.isArray(body.conversation_ids) && body.conversation_ids.length > 0
+        ? body.conversation_ids.map(Number).filter(Boolean)
+        : conversation_id ? [Number(conversation_id)] : [];
+      if (ids.length === 0) return json({ error: 'conversation_id em falta' }, 400);
+
+      // "before" pages back through history — applies to the primary conversation.
+      const before = body.before ? `?before=${encodeURIComponent(String(body.before))}` : '';
+      if (before) {
+        const res = await chatwootFetch(
+          cfg, cw.token, `${base}/conversations/${ids[0]}/messages${before}`,
+        );
+        if (!res.ok) return json({ error: 'Falha ao carregar mensagens' }, 502);
+        const data = await res.json();
+        return json({ messages: (data?.payload ?? []).map((m: any) => normalizeMessage(m, cfg.chatwootUrl)) });
+      }
+
+      // Merge the threads of all conversations of this contact into one.
+      const results = await Promise.all(
+        ids.map(async (id) => {
+          const res = await chatwootFetch(cfg, cw.token, `${base}/conversations/${id}/messages`);
+          if (!res.ok) return [];
+          const data = await res.json();
+          return (data?.payload ?? []).map((m: any) => normalizeMessage(m, cfg.chatwootUrl));
+        }),
+      );
+      const merged = results
+        .flat()
+        .sort((a: any, b: any) => (a.created_at ?? 0) - (b.created_at ?? 0));
+      return json({ messages: merged });
     }
 
     if (action === 'send_message') {
       if (!conversation_id) return json({ error: 'conversation_id em falta' }, 400);
-      if (!content || !String(content).trim()) return json({ error: 'Mensagem vazia' }, 400);
+      const attachment = body.attachment as
+        | { data: string; mimetype: string; filename: string; kind: string }
+        | undefined;
+      const text = String(content ?? '').trim();
+      if (!text && !attachment) return json({ error: 'Mensagem vazia' }, 400);
 
       // Send OUTBOUND directly through Evolution (by the contact's phone number),
       // instead of relying on the Chatwoot -> Evolution relay. Imported
@@ -124,18 +323,51 @@ Deno.serve(async (req) => {
       // phone number is always correct, so this delivers for EVERY conversation.
       // Evolution mirrors the sent message back into Chatwoot, so it still shows
       // up in the inbox via the polling refetch.
-      const convRes = await chatwootFetch(cfg, cw.token, `${base}/conversations/${conversation_id}`);
-      if (!convRes.ok) return json({ error: 'Conversa não encontrada' }, 502);
-      const conv = await convRes.json();
-      const sender = conv?.meta?.sender ?? conv?.payload?.meta?.sender ?? {};
-      const number = String(sender.phone_number ?? sender.identifier ?? '').replace(/\D/g, '');
+      // The client passes contact_phone (already in its conversation list) to skip
+      // a Chatwoot round trip; fall back to the lookup when absent.
+      let number = String(contact_phone ?? '').replace(/\D/g, '');
+      if (!number) {
+        const convRes = await chatwootFetch(cfg, cw.token, `${base}/conversations/${conversation_id}`);
+        if (!convRes.ok) return json({ error: 'Conversa não encontrada' }, 502);
+        const conv = await convRes.json();
+        const sender = conv?.meta?.sender ?? conv?.payload?.meta?.sender ?? {};
+        number = String(sender.phone_number ?? sender.identifier ?? '').replace(/\D/g, '');
+      }
       if (!number) return json({ error: 'Contacto sem número de telefone' }, 422);
 
-      const instance = instanceNameForOrg(organization_id);
-      const evoRes = await evolutionFetch(cfg, `/message/sendText/${instance}`, 'POST', {
-        number,
-        text: String(content),
-      });
+      // Reply/quote: reference the original WhatsApp message by its id.
+      const quoted = body.quoted_id
+        ? { key: { id: String(body.quoted_id).replace(/^WAID:/i, '') } }
+        : undefined;
+
+      let evoRes: Response;
+      if (attachment && attachment.kind === 'voice') {
+        // Voice note (recorded in the CRM). encoding:true makes Evolution convert
+        // to the WhatsApp ptt format (ogg/opus) server-side.
+        evoRes = await evolutionFetch(cfg, `/message/sendWhatsAppAudio/${instance}`, 'POST', {
+          number,
+          audio: attachment.data,
+          encoding: true,
+          ...(quoted ? { quoted } : {}),
+        });
+      } else if (attachment) {
+        const mediatype = MEDIA_TYPES[attachment.kind] ?? 'document';
+        evoRes = await evolutionFetch(cfg, `/message/sendMedia/${instance}`, 'POST', {
+          number,
+          mediatype,
+          mimetype: attachment.mimetype,
+          media: attachment.data,
+          fileName: attachment.filename,
+          ...(text ? { caption: text } : {}),
+          ...(quoted ? { quoted } : {}),
+        });
+      } else {
+        evoRes = await evolutionFetch(cfg, `/message/sendText/${instance}`, 'POST', {
+          number,
+          text,
+          ...(quoted ? { quoted } : {}),
+        });
+      }
       if (!evoRes.ok) {
         console.error('Evolution send failed:', evoRes.status, await evoRes.text());
         return json({ error: 'Falha ao enviar para o WhatsApp' }, 502);
@@ -143,12 +375,300 @@ Deno.serve(async (req) => {
       return json({ ok: true });
     }
 
-    if (action === 'mark_read') {
+    if (action === 'start_conversation') {
+      // Message a number that has no conversation yet. Evolution mirrors the sent
+      // message into Chatwoot, which creates the conversation; the list poll then
+      // picks it up.
+      const phone = String(body.phone ?? '').replace(/\D/g, '');
+      const text = String(content ?? '').trim();
+      if (!phone || phone.length < 9) return json({ error: 'Número inválido' }, 400);
+      if (!text) return json({ error: 'Mensagem vazia' }, 400);
+      const evoRes = await evolutionFetch(cfg, `/message/sendText/${instance}`, 'POST', {
+        number: phone,
+        text,
+      });
+      if (!evoRes.ok) {
+        console.error('Evolution start failed:', evoRes.status, await evoRes.text());
+        return json({ error: 'Falha ao enviar — confirma que o número tem WhatsApp' }, 502);
+      }
+      return json({ ok: true });
+    }
+
+    if (action === 'toggle_status') {
+      if (!conversation_id) return json({ error: 'conversation_id em falta' }, 400);
+      const status = body.status === 'resolved' ? 'resolved' : 'open';
+      const res = await chatwootFetch(
+        cfg, cw.token, `${base}/conversations/${conversation_id}/toggle_status`, 'POST', { status },
+      );
+      if (!res.ok) return json({ error: 'Falha ao atualizar a conversa' }, 502);
+      return json({ ok: true });
+    }
+
+    if (action === 'assign_conversation') {
+      // Chatwoot agents don't map to CRM users (each org has a single bot agent),
+      // so the assignment lives in conversation custom_attributes instead.
+      if (!conversation_id) return json({ error: 'conversation_id em falta' }, 400);
+      // Use "" (not null) to clear — Chatwoot's custom_attributes merge silently
+      // drops null values, which would leave the old assignment in place.
+      const res = await chatwootFetch(
+        cfg, cw.token, `${base}/conversations/${conversation_id}/custom_attributes`, 'POST',
+        {
+          custom_attributes: {
+            senvia_assigned_id: body.user_id ?? '',
+            senvia_assigned_name: body.user_name ?? '',
+          },
+        },
+      );
+      if (!res.ok) return json({ error: 'Falha ao atribuir a conversa' }, 502);
+      return json({ ok: true });
+    }
+
+    if (action === 'link_crm') {
+      // Manually link the conversation to an existing lead/client (overrides the
+      // phone auto-match). Empty kind/id clears the link.
       if (!conversation_id) return json({ error: 'conversation_id em falta' }, 400);
       const res = await chatwootFetch(
-        cfg, cw.token, `${base}/conversations/${conversation_id}/update_last_seen`, 'POST',
+        cfg, cw.token, `${base}/conversations/${conversation_id}/custom_attributes`, 'POST',
+        {
+          custom_attributes: {
+            senvia_crm_kind: body.kind ?? '',
+            senvia_crm_id: body.id ?? '',
+            senvia_crm_name: body.name ?? '',
+          },
+        },
       );
-      return json({ ok: res.ok });
+      if (!res.ok) return json({ error: 'Falha ao associar' }, 502);
+      return json({ ok: true });
+    }
+
+    if (action === 'rename_contact') {
+      const contactId = Number(body.contact_id);
+      const name = String(body.name ?? '').trim();
+      if (!contactId || !name) return json({ error: 'Dados em falta' }, 400);
+      const res = await chatwootFetch(cfg, cw.token, `${base}/contacts/${contactId}`, 'PATCH', { name });
+      if (!res.ok) return json({ error: 'Falha ao renomear o contacto' }, 502);
+      return json({ ok: true });
+    }
+
+    if (action === 'list_labels') {
+      const res = await chatwootFetch(cfg, cw.token, `${base}/labels`);
+      if (!res.ok) return json({ labels: [] });
+      const data = await res.json();
+      const payload = data?.payload ?? [];
+      return json({ labels: payload.map((l: any) => ({ id: l.id, title: l.title, color: l.color ?? null })) });
+    }
+
+    if (action === 'create_label') {
+      const title = String(body.title ?? '').trim().toLowerCase().replace(/\s+/g, '-');
+      if (!title) return json({ error: 'Título em falta' }, 400);
+      const res = await chatwootFetch(cfg, cw.token, `${base}/labels`, 'POST', {
+        title,
+        color: '#1F93FF',
+        show_on_sidebar: true,
+      });
+      if (!res.ok) return json({ error: 'Falha ao criar etiqueta' }, 502);
+      return json({ ok: true });
+    }
+
+    if (action === 'set_labels') {
+      if (!conversation_id) return json({ error: 'conversation_id em falta' }, 400);
+      const labels = Array.isArray(body.labels) ? body.labels.map(String) : [];
+      const res = await chatwootFetch(
+        cfg, cw.token, `${base}/conversations/${conversation_id}/labels`, 'POST', { labels },
+      );
+      if (!res.ok) return json({ error: 'Falha ao atualizar etiquetas' }, 502);
+      return json({ ok: true });
+    }
+
+    if (action === 'list_canned') {
+      const res = await chatwootFetch(cfg, cw.token, `${base}/canned_responses`);
+      if (!res.ok) return json({ canned: [] });
+      const data = await res.json();
+      const list = Array.isArray(data) ? data : data?.payload ?? [];
+      return json({ canned: list.map((c: any) => ({ id: c.id, content: c.content })) });
+    }
+
+    if (action === 'create_canned') {
+      const text = String(body.content ?? '').trim();
+      if (!text) return json({ error: 'Conteúdo em falta' }, 400);
+      // short_code is required by Chatwoot — derive it from the content.
+      const shortCode = text.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 30).replace(/^-|-$/g, '') || `resposta-${Date.now()}`;
+      const res = await chatwootFetch(cfg, cw.token, `${base}/canned_responses`, 'POST', {
+        short_code: shortCode,
+        content: text,
+      });
+      if (!res.ok) return json({ error: 'Falha ao guardar a resposta rápida' }, 502);
+      return json({ ok: true });
+    }
+
+    if (action === 'delete_canned') {
+      const cannedId = Number(body.canned_id);
+      if (!cannedId) return json({ error: 'canned_id em falta' }, 400);
+      const res = await chatwootFetch(cfg, cw.token, `${base}/canned_responses/${cannedId}`, 'DELETE');
+      if (!res.ok) return json({ error: 'Falha ao apagar a resposta rápida' }, 502);
+      return json({ ok: true });
+    }
+
+    if (action === 'typing') {
+      // Show "typing..." on the contact's WhatsApp while the agent writes.
+      const phone = String(body.phone ?? '').replace(/\D/g, '');
+      if (!phone) return json({ ok: false });
+      // Fire-and-forget; never block the composer on this.
+      evolutionFetch(cfg, `/chat/sendPresence/${instance}`, 'POST', {
+        number: phone,
+        presence: 'composing',
+        delay: 4000,
+      }).catch(() => {});
+      return json({ ok: true });
+    }
+
+    if (action === 'suggest_reply') {
+      // AI-drafted reply based on the recent conversation (Gemini — same key
+      // the Otto assistant uses).
+      const geminiKey = Deno.env.get('GEMINI_API_KEY');
+      if (!geminiKey) return json({ error: 'IA não configurada (GEMINI_API_KEY em falta)' }, 500);
+      const ids: number[] = Array.isArray(body.conversation_ids) && body.conversation_ids.length > 0
+        ? body.conversation_ids.map(Number).filter(Boolean)
+        : conversation_id ? [Number(conversation_id)] : [];
+      if (ids.length === 0) return json({ error: 'conversation_id em falta' }, 400);
+
+      const results = await Promise.all(
+        ids.map(async (id) => {
+          const res = await chatwootFetch(cfg, cw.token, `${base}/conversations/${id}/messages`);
+          if (!res.ok) return [];
+          const data = await res.json();
+          return (data?.payload ?? []).map((m: any) => normalizeMessage(m, cfg.chatwootUrl));
+        }),
+      );
+      const history = results
+        .flat()
+        .filter((m: any) => !m.is_activity && m.content)
+        .sort((a: any, b: any) => (a.created_at ?? 0) - (b.created_at ?? 0))
+        .slice(-25)
+        .map((m: any) => `${m.outgoing ? 'EU' : 'CLIENTE'}: ${m.content}`)
+        .join('\n');
+      if (!history) return json({ error: 'Sem histórico suficiente' }, 422);
+
+      const aiRes = await fetch('https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${geminiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'gemini-2.5-flash',
+          temperature: 0.4,
+          messages: [
+            {
+              role: 'system',
+              content:
+                'És um assistente de vendas português (PT-PT). Vais sugerir a PRÓXIMA resposta do comercial ("EU") nesta conversa de WhatsApp com um cliente. Regras: responde APENAS com o texto da mensagem sugerida, sem aspas, sem explicações. Tom profissional mas próximo, adequado a WhatsApp (curto, direto, no máximo 3 frases). Nunca inventes dados, preços ou compromissos que não estejam na conversa.',
+            },
+            { role: 'user', content: `Conversa:\n${history}\n\nSugere a próxima resposta de EU:` },
+          ],
+        }),
+      });
+      if (!aiRes.ok) {
+        console.error('suggest_reply AI failed:', aiRes.status, await aiRes.text());
+        return json({ error: 'Falha na IA — tenta novamente' }, 502);
+      }
+      const aiData = await aiRes.json();
+      const suggestion = String(aiData?.choices?.[0]?.message?.content ?? '').trim();
+      if (!suggestion) return json({ error: 'A IA não devolveu sugestão' }, 502);
+      return json({ suggestion });
+    }
+
+    if (action === 'delete_message') {
+      // Delete-for-everyone on WhatsApp via Evolution. The Chatwoot mirror keeps
+      // the original text; the client hides it locally.
+      const waId = String(body.wa_id ?? '').replace(/^WAID:/i, '');
+      const phone = String(body.phone ?? '').replace(/\D/g, '');
+      if (!waId || !phone) return json({ error: 'Dados em falta' }, 400);
+      const res = await evolutionFetch(cfg, `/chat/deleteMessageForEveryone/${instance}`, 'DELETE', {
+        id: waId,
+        remoteJid: `${phone}@s.whatsapp.net`,
+        fromMe: true,
+      });
+      if (!res.ok) {
+        console.error('Evolution delete failed:', res.status, await res.text());
+        return json({ error: 'Falha ao apagar a mensagem no WhatsApp' }, 502);
+      }
+      return json({ ok: true });
+    }
+
+    if (action === 'download_attachment') {
+      // Proxy the file through the edge function: the browser cannot fetch
+      // Chatwoot attachments directly (no CORS headers on Active Storage).
+      const fileUrl = String(body.url ?? '');
+      // Only proxy files hosted on OUR Chatwoot — never arbitrary URLs (SSRF).
+      if (!fileUrl.startsWith(`${cfg.chatwootUrl}/`)) {
+        return json({ error: 'URL inválido' }, 400);
+      }
+      const fileRes = await fetch(fileUrl);
+      if (!fileRes.ok) return json({ error: 'Falha ao transferir o ficheiro' }, 502);
+      return new Response(fileRes.body, {
+        headers: { ...corsHeaders, 'Content-Type': 'application/octet-stream' },
+      });
+    }
+
+    if (action === 'mark_read') {
+      const ids: number[] = Array.isArray(body.conversation_ids) && body.conversation_ids.length > 0
+        ? body.conversation_ids.map(Number).filter(Boolean)
+        : conversation_id ? [Number(conversation_id)] : [];
+      if (ids.length === 0) return json({ error: 'conversation_id em falta' }, 400);
+
+      // 1) Mark as read in Chatwoot (clears the CRM unread badge) — all the
+      // contact's conversations (primary + merged alts).
+      const cwResults = await Promise.all(
+        ids.map((id) =>
+          chatwootFetch(cfg, cw.token, `${base}/conversations/${id}/update_last_seen`, 'POST'),
+        ),
+      );
+
+      // 2) Send WhatsApp read receipts via Evolution so the sender sees blue ticks.
+      try {
+        const convRes = await chatwootFetch(cfg, cw.token, `${base}/conversations/${ids[0]}`);
+        if (convRes.ok) {
+          const conv = await convRes.json();
+          const sender = conv?.meta?.sender ?? conv?.payload?.meta?.sender ?? {};
+          const rawPhone = String(sender.phone_number ?? sender.identifier ?? '').replace(/\D/g, '');
+          if (rawPhone) {
+            const remoteJid = `${rawPhone}@s.whatsapp.net`;
+
+            // Get incoming message IDs from Chatwoot (source_id = WhatsApp message key).
+            const readMessages: { remoteJid: string; fromMe: boolean; id: string }[] = [];
+            const seen = new Set<string>();
+            const msgsResults = await Promise.all(
+              ids.map((id) => chatwootFetch(cfg, cw.token, `${base}/conversations/${id}/messages`)),
+            );
+            for (const msgsRes of msgsResults) {
+              if (!msgsRes.ok) continue;
+              const msgsData = await msgsRes.json();
+              // Chatwoot stores the WhatsApp message id as "WAID:<id>" — strip the
+              // prefix, otherwise WhatsApp silently ignores the receipt (Evolution
+              // still answers 201 because it sends it blindly).
+              for (const m of msgsData?.payload ?? []) {
+                if (m.message_type !== 0 || !m.source_id) continue;
+                const id = String(m.source_id).replace(/^WAID:/i, '');
+                if (!seen.has(id)) {
+                  seen.add(id);
+                  readMessages.push({ remoteJid, fromMe: false, id });
+                }
+              }
+            }
+
+            if (readMessages.length > 0) {
+              const evoRes = await evolutionFetch(
+                cfg, `/chat/markMessageAsRead/${instance}`, 'POST', { readMessages },
+              );
+              if (!evoRes.ok) {
+                console.error('Evolution markMessageAsRead failed:', evoRes.status, await evoRes.text());
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Evolution read receipt failed:', e);
+      }
+
+      return json({ ok: cwResults.every((r) => r.ok) });
     }
 
     return json({ error: 'Ação inválida' }, 400);

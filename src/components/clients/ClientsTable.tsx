@@ -30,7 +30,8 @@ import {
 import { MoreHorizontal, Eye, Pencil, Trash2, Phone, Mail, Building2, MessageCircle, User } from "lucide-react";
 import { CrmClient, CLIENT_STATUS_STYLES } from "@/types/clients";
 import { useClientLabels } from "@/hooks/useClientLabels";
-import { formatDate, getWhatsAppUrl } from "@/lib/format";
+import { formatDate, getInboxUrl } from "@/lib/format";
+import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useTeamMembers } from "@/hooks/useTeam";
@@ -286,14 +287,10 @@ export function ClientsTable({ clients, onEdit, onView, onDelete, selectedIds = 
                       </DropdownMenuItem>
                       {client.phone && (
                         <DropdownMenuItem asChild>
-                          <a
-                            href={getWhatsAppUrl(client.phone)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
+                          <Link to={getInboxUrl(client.phone)}>
                             <MessageCircle className="h-4 w-4 mr-2" />
                             WhatsApp
-                          </a>
+                          </Link>
                         </DropdownMenuItem>
                       )}
                       {canDeleteLeads && (

@@ -23,7 +23,8 @@ import {
   ExternalLink
 } from "lucide-react";
 import { CrmClient, CLIENT_STATUS_LABELS, CLIENT_STATUS_STYLES, CLIENT_SOURCE_LABELS } from "@/types/clients";
-import { formatDate, formatDateTime, getWhatsAppUrl, formatCurrency } from "@/lib/format";
+import { formatDate, formatDateTime, getInboxUrl, formatCurrency } from "@/lib/format";
+import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { LeadAttachments } from "@/components/leads/LeadAttachments";
 
@@ -86,16 +87,11 @@ export function ClientDetailsModal({ client, open, onOpenChange, onEdit }: Clien
               <div className="flex items-center gap-3 text-sm">
                 <Phone className="h-4 w-4 text-muted-foreground" />
                 <span>{client.phone}</span>
-                <a
-                  href={getWhatsAppUrl(client.phone)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="ml-auto"
-                >
+                <Link to={getInboxUrl(client.phone)} className="ml-auto">
                   <Button variant="ghost" size="sm" className="h-7 px-2">
                     <MessageCircle className="h-4 w-4 text-green-500" />
                   </Button>
-                </a>
+                </Link>
               </div>
             )}
             

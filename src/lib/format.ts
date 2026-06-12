@@ -95,6 +95,15 @@ export function cleanIban(value: string): string {
 }
 
 /**
+ * Internal deep link to the CRM inbox conversation for a phone number.
+ * Opens (or starts) the WhatsApp conversation inside the Caixa de Entrada.
+ */
+export function getInboxUrl(phone: string): string {
+  const digits = formatPhoneForWhatsApp(phone);
+  return `/inbox?phone=${digits}`;
+}
+
+/**
  * Generate WhatsApp URL
  */
 export function getWhatsAppUrl(phone: string, message?: string): string {

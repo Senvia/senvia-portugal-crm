@@ -2,7 +2,8 @@ import { Lead, STATUS_LABELS, LeadStatus, LeadTemperature, LeadTipologia, TEMPER
 import { isPerfect2GetherOrg } from "@/lib/perfect2gether";
 import { LeadAttachments } from "@/components/leads/LeadAttachments";
 import { usePipelineStages } from "@/hooks/usePipelineStages";
-import { formatDate, formatDateTime, getWhatsAppUrl } from "@/lib/format";
+import { formatDate, formatDateTime, getInboxUrl } from "@/lib/format";
+import { useNavigate } from "react-router-dom";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTeamMembers } from "@/hooks/useTeam";
@@ -122,6 +123,7 @@ export function LeadDetailsModal({
   onDelete,
   onUpdate
 }: LeadDetailsModalProps) {
+  const navigate = useNavigate();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
   const { canDeleteLeads, canManageTeam, isAdmin } = usePermissions();
@@ -795,7 +797,7 @@ export function LeadDetailsModal({
                       <Button
                         variant="whatsapp"
                         className="w-full"
-                        onClick={() => window.open(getWhatsAppUrl(lead.phone), '_blank')}
+                        onClick={() => navigate(getInboxUrl(lead.phone))}
                       >
                         <MessageCircle className="h-4 w-4" />
                         Enviar WhatsApp

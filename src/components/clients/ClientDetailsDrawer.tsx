@@ -31,7 +31,8 @@ import {
   Euro,
   ChevronRight,
 } from "lucide-react";
-import { formatDate, formatCurrency, getWhatsAppUrl } from "@/lib/format";
+import { formatDate, formatCurrency, getInboxUrl } from "@/lib/format";
+import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { PROPOSAL_STATUS_LABELS, PROPOSAL_STATUS_COLORS, type ProposalStatus, type Proposal } from "@/types/proposals";
 import { SALE_STATUS_LABELS, SALE_STATUS_COLORS, type SaleStatus } from "@/types/sales";
@@ -200,14 +201,12 @@ export function ClientDetailsDrawer({
                         <span className="text-muted-foreground">Telefone</span>
                         <div className="flex items-center gap-2">
                           <span>{client.phone}</span>
-                          <a
-                            href={getWhatsAppUrl(client.phone)}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                          <Link
+                            to={getInboxUrl(client.phone)}
                             className="text-success hover:underline text-xs"
                           >
                             WhatsApp
-                          </a>
+                          </Link>
                         </div>
                       </div>
                     )}
@@ -415,10 +414,10 @@ export function ClientDetailsDrawer({
                             </a>
                           </Button>
                           <Button variant="outline" size="sm" className="flex-1 text-success border-success/20 hover:bg-success/10" asChild>
-                            <a href={getWhatsAppUrl(client.phone)} target="_blank" rel="noopener noreferrer">
+                            <Link to={getInboxUrl(client.phone)}>
                               <MessageSquare className="h-4 w-4 mr-1" />
                               WhatsApp
-                            </a>
+                            </Link>
                           </Button>
                         </div>
                       )}

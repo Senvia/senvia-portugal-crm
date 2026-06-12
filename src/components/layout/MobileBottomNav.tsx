@@ -3,10 +3,12 @@ import { NavLink, useLocation } from "react-router-dom";
 import { LayoutDashboard, Users, Settings, Shield, Calendar, FileText, ShoppingBag, Store, UserCheck, Mail, Wallet, Lock, Building2, Search, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
+import { useOttoStore } from "@/stores/useOttoStore";
 import { useModules, EnabledModules } from "@/hooks/useModules";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useSubscription } from "@/hooks/useSubscription";
 import { UpgradeModal } from "@/components/shared/UpgradeModal";
+import { InboxUnreadBadge } from "./InboxUnreadBadge";
 import { hasPerfect2GetherAccess } from "@/lib/perfect2gether";
 
 interface NavItem {
@@ -33,6 +35,7 @@ const allNavItems: NavItem[] = [
 
 export function MobileBottomNav() {
   const location = useLocation();
+  const { setOpen: setOttoOpen } = useOttoStore();
   const { isSuperAdmin, organization, organizations } = useAuth();
   const { modules } = useModules();
   const { canViewModule } = usePermissions();
@@ -105,6 +108,9 @@ export function MobileBottomNav() {
                   {locked && (
                     <Lock className="h-2.5 w-2.5 absolute -top-1 -right-1.5 text-muted-foreground/60" />
                   )}
+                  {item.to === "/inbox" && !locked && (
+                    <InboxUnreadBadge className="absolute -right-2.5 -top-1.5 h-4 min-w-[16px] px-1 text-[9px]" />
+                  )}
                 </div>
                 <span className={cn(
                   "text-[10px] font-medium",
@@ -115,6 +121,16 @@ export function MobileBottomNav() {
               </NavLink>
             );
           })}
+
+          {/* Otto support chat — opens the assistant window (no route) */}
+          <button
+            type="button"
+            onClick={() => setOttoOpen(true)}
+            className="flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-xl transition-all min-w-[60px] text-muted-foreground"
+          >
+            <img src="/otto-mascot.svg" alt="Otto" className="h-5 w-5 rounded-full" />
+            <span className="text-[10px] font-medium">Suporte</span>
+          </button>
         </div>
       </nav>
 

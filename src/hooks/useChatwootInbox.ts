@@ -4,6 +4,9 @@ import { useAuth } from '@/contexts/AuthContext';
 
 export interface InboxConversation {
   id: number;
+  // Other Chatwoot conversations of the SAME contact, merged into this row.
+  alt_ids: number[];
+  contact_id: number | null;
   contact_name: string;
   contact_phone: string | null;
   contact_thumbnail: string | null;
@@ -12,6 +15,24 @@ export interface InboxConversation {
   status: string;
   channel: string | null;
   updated_at: number | null;
+  // Set when the LAST message is from the customer (they're waiting on us).
+  waiting_since: number | null;
+  labels: string[];
+  assigned_id: string | null;
+  assigned_name: string | null;
+  // Manual CRM link (overrides the phone-based auto-match).
+  crm_kind: 'lead' | 'client' | null;
+  crm_id: string | null;
+  crm_name: string | null;
+}
+
+export interface InboxAttachment {
+  id?: number;
+  file_type: string;
+  data_url: string | null;
+  thumb_url: string | null;
+  file_size: number | null;
+  extension: string | null;
 }
 
 export interface InboxMessage {
@@ -21,7 +42,19 @@ export interface InboxMessage {
   is_activity: boolean;
   created_at: string | number | null;
   sender_name: string | null;
-  attachments: Array<{ data_url?: string; file_type?: string }>;
+  // Delivery status of outgoing messages: sent | delivered | read | failed.
+  status: string | null;
+  // WhatsApp message id — used to quote/reply.
+  wa_id: string | null;
+  attachments: InboxAttachment[];
+}
+
+// Attachment payload for sending (base64, no data: prefix).
+export interface OutgoingAttachment {
+  data: string;
+  mimetype: string;
+  filename: string;
+  kind: 'image' | 'video' | 'document' | 'voice';
 }
 
 async function invokeInbox<T>(organizationId: string, payload: Record<string, unknown>): Promise<T> {
@@ -46,36 +79,126 @@ export function useInboxConversations(enabled = true) {
       return res.conversations || [];
     },
     enabled: enabled && !!organization?.id,
-    refetchInterval: enabled ? 8000 : false,
+    refetchInterval: enabled ? 5000 : false,
   });
 }
 
-// Messages of a conversation (polled while one is open).
-export function useInboxMessages(conversationId: number | null) {
+const MUTED_KEY = 'inbox-muted-v1';
+
+export function loadMutedIds(): number[] {
+  try {
+    const arr = JSON.parse(localStorage.getItem(MUTED_KEY) || '[]');
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveMutedIds(ids: number[]) {
+  localStorage.setItem(MUTED_KEY, JSON.stringify(ids));
+}
+
+// Conversations that should count as "unread" for badges: active (not archived),
+// real contacts (not the Evolution control bot), not muted, with unread messages.
+export function countUnreadConversations(conversations: InboxConversation[]): number {
+  const muted = new Set(loadMutedIds());
+  return conversations.filter(
+    (c) =>
+      c.status !== 'resolved' &&
+      c.contact_name !== 'EvolutionAPI' &&
+      !muted.has(c.id) &&
+      (c.unread_count || 0) > 0,
+  ).length;
+}
+
+// Number of conversations with unread messages (WhatsApp-style badge: counts
+// CHATS, not messages — old imported history would otherwise inflate it).
+// Shares the conversations cache, so the sidebar badge costs nothing extra while
+// the inbox page is open; alone it polls at a relaxed 20s.
+export function useInboxUnreadTotal(enabled = true) {
   const { organization } = useAuth();
+  const query = useQuery({
+    queryKey: ['inbox-conversations', organization?.id],
+    queryFn: async (): Promise<InboxConversation[]> => {
+      if (!organization?.id) return [];
+      const res = await invokeInbox<{ conversations: InboxConversation[] }>(organization.id, {
+        action: 'list_conversations',
+      });
+      return res.conversations || [];
+    },
+    enabled: enabled && !!organization?.id,
+    refetchInterval: enabled ? 20000 : false,
+  });
+  return { total: countUnreadConversations(query.data || []), isLoading: query.isLoading };
+}
+
+// Messages of a conversation (polled while one is open). Passing altIds merges
+// the threads of the contact's other conversations into one.
+export function useInboxMessages(conversationId: number | null, altIds: number[] = []) {
+  const { organization } = useAuth();
+  const allIds = conversationId ? [conversationId, ...altIds] : [];
   return useQuery({
-    queryKey: ['inbox-messages', organization?.id, conversationId],
+    queryKey: ['inbox-messages', organization?.id, conversationId, altIds.join(',')],
     queryFn: async (): Promise<InboxMessage[]> => {
       if (!organization?.id || !conversationId) return [];
       const res = await invokeInbox<{ messages: InboxMessage[] }>(organization.id, {
         action: 'get_messages',
-        conversation_id: conversationId,
+        conversation_ids: allIds,
       });
       return res.messages || [];
     },
     enabled: !!organization?.id && !!conversationId,
-    refetchInterval: conversationId ? 5000 : false,
+    refetchInterval: conversationId ? 2500 : false,
+    // Keep already-opened conversations cached: switching back shows the thread
+    // instantly (background refetch updates it) instead of a full-screen loader.
+    gcTime: 30 * 60 * 1000,
   });
 }
 
-// Mark a conversation as read (clears the unread badge in Chatwoot).
+// Server-side search across MESSAGE CONTENT (not just contact names).
+export function useSearchConversations(q: string) {
+  const { organization } = useAuth();
+  const term = q.trim();
+  return useQuery({
+    queryKey: ['inbox-search', organization?.id, term],
+    queryFn: async (): Promise<InboxConversation[]> => {
+      if (!organization?.id || term.length < 3) return [];
+      const res = await invokeInbox<{ conversations: InboxConversation[] }>(organization.id, {
+        action: 'search',
+        q: term,
+      });
+      return res.conversations || [];
+    },
+    enabled: !!organization?.id && term.length >= 3,
+    staleTime: 30 * 1000,
+  });
+}
+
+// Fetch a page of OLDER messages (before the given message id).
+export function useLoadOlderMessages() {
+  const { organization } = useAuth();
+  return async (conversationId: number, beforeId: number): Promise<InboxMessage[]> => {
+    if (!organization?.id) return [];
+    const res = await invokeInbox<{ messages: InboxMessage[] }>(organization.id, {
+      action: 'get_messages',
+      conversation_id: conversationId,
+      before: beforeId,
+    });
+    return res.messages || [];
+  };
+}
+
+// Mark a conversation (and the contact's merged alts) as read.
 export function useMarkConversationRead() {
   const { organization } = useAuth();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (conversationId: number) => {
+    mutationFn: async ({ conversationId, altIds = [] }: { conversationId: number; altIds?: number[] }) => {
       if (!organization?.id) return;
-      await invokeInbox(organization.id, { action: 'mark_read', conversation_id: conversationId });
+      await invokeInbox(organization.id, {
+        action: 'mark_read',
+        conversation_ids: [conversationId, ...altIds],
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['inbox-conversations', organization?.id] });
@@ -83,22 +206,628 @@ export function useMarkConversationRead() {
   });
 }
 
-// Send a reply on a conversation.
+// Download an attachment via the edge function proxy (Chatwoot blocks direct
+// browser fetches with CORS) and save it to disk.
+export function useDownloadAttachment() {
+  const { organization } = useAuth();
+  return async (url: string, extension?: string | null) => {
+    if (!organization?.id) return;
+    const name = (() => {
+      try {
+        const last = decodeURIComponent(new URL(url).pathname.split('/').pop() || '');
+        if (last && last.includes('.')) return last;
+      } catch {
+        // malformed URL — use the generic name below
+      }
+      return `anexo${extension ? `.${extension}` : ''}`;
+    })();
+    const { data, error } = await supabase.functions.invoke('chatwoot-inbox', {
+      body: { organization_id: organization.id, action: 'download_attachment', url },
+    });
+    if (error || !(data instanceof Blob)) {
+      // Proxy failed — last resort, let the browser open it.
+      window.open(url, '_blank', 'noopener');
+      return;
+    }
+    const objectUrl = URL.createObjectURL(data);
+    const a = document.createElement('a');
+    a.href = objectUrl;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(objectUrl);
+  };
+}
+
+// Send a reply on a conversation (text, attachment, and/or quoting a message).
 export function useSendInboxMessage() {
   const { organization } = useAuth();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ conversationId, content }: { conversationId: number; content: string }) => {
+    mutationFn: async ({
+      conversationId,
+      content,
+      contactPhone,
+      attachment,
+      quotedId,
+    }: {
+      conversationId: number;
+      content: string;
+      contactPhone?: string | null;
+      attachment?: OutgoingAttachment;
+      quotedId?: string | null;
+    }) => {
       if (!organization?.id) throw new Error('Organização não encontrada');
-      return invokeInbox<{ message: InboxMessage }>(organization.id, {
+      return invokeInbox<{ ok: boolean }>(organization.id, {
         action: 'send_message',
         conversation_id: conversationId,
         content,
+        // Passing the phone lets the edge function skip a Chatwoot lookup.
+        contact_phone: contactPhone ?? undefined,
+        attachment,
+        quoted_id: quotedId ?? undefined,
       });
     },
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['inbox-messages', organization?.id, variables.conversationId] });
       queryClient.invalidateQueries({ queryKey: ['inbox-conversations', organization?.id] });
     },
+  });
+}
+
+// Start a conversation with a number that never wrote to us.
+export function useStartConversation() {
+  const { organization } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ phone, content }: { phone: string; content: string }) => {
+      if (!organization?.id) throw new Error('Organização não encontrada');
+      return invokeInbox<{ ok: boolean }>(organization.id, {
+        action: 'start_conversation',
+        phone,
+        content,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inbox-conversations', organization?.id] });
+    },
+  });
+}
+
+// Archive (resolve) or reopen a conversation.
+export function useToggleConversationStatus() {
+  const { organization } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ conversationId, status }: { conversationId: number; status: 'open' | 'resolved' }) => {
+      if (!organization?.id) throw new Error('Organização não encontrada');
+      return invokeInbox<{ ok: boolean }>(organization.id, {
+        action: 'toggle_status',
+        conversation_id: conversationId,
+        status,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inbox-conversations', organization?.id] });
+    },
+  });
+}
+
+// ---- CRM linking: find the lead/client behind a WhatsApp phone number ----
+
+export interface ContactMatch {
+  kind: 'lead' | 'client';
+  id: string;
+  name: string;
+}
+
+// Matches by the last 9 digits (PT national number) so formatting differences
+// ("+351 910...", "351910...", "910...") still match.
+export function useContactMatch(phone: string | null | undefined) {
+  const { organization } = useAuth();
+  const digits = (phone || '').replace(/\D/g, '');
+  const suffix = digits.slice(-9);
+  return useQuery({
+    queryKey: ['inbox-contact-match', organization?.id, suffix],
+    queryFn: async (): Promise<ContactMatch | null> => {
+      if (!organization?.id || suffix.length < 9) return null;
+      const [{ data: clients }, { data: leads }] = await Promise.all([
+        supabase
+          .from('crm_clients')
+          .select('id, name')
+          .eq('organization_id', organization.id)
+          .like('phone', `%${suffix}`)
+          .limit(1),
+        supabase
+          .from('leads')
+          .select('id, name')
+          .eq('organization_id', organization.id)
+          .like('phone', `%${suffix}`)
+          .limit(1),
+      ]);
+      // A converted client outranks the original lead.
+      if (clients && clients.length > 0) return { kind: 'client', id: clients[0].id, name: clients[0].name };
+      if (leads && leads.length > 0) return { kind: 'lead', id: leads[0].id, name: leads[0].name };
+      return null;
+    },
+    enabled: !!organization?.id && suffix.length >= 9,
+    staleTime: 60 * 1000,
+  });
+}
+
+// ---- Conversation tools: assign, rename, labels, canned responses, delete ----
+
+export function useAssignConversation() {
+  const { organization } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ conversationId, userId, userName }: { conversationId: number; userId: string | null; userName: string | null }) => {
+      if (!organization?.id) throw new Error('Organização não encontrada');
+      return invokeInbox(organization.id, {
+        action: 'assign_conversation',
+        conversation_id: conversationId,
+        user_id: userId,
+        user_name: userName,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inbox-conversations', organization?.id] });
+    },
+  });
+}
+
+export function useRenameContact() {
+  const { organization } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ contactId, name }: { contactId: number; name: string }) => {
+      if (!organization?.id) throw new Error('Organização não encontrada');
+      return invokeInbox(organization.id, { action: 'rename_contact', contact_id: contactId, name });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inbox-conversations', organization?.id] });
+    },
+  });
+}
+
+export interface InboxLabel {
+  id: number;
+  title: string;
+  color: string | null;
+}
+
+export function useInboxLabels() {
+  const { organization } = useAuth();
+  return useQuery({
+    queryKey: ['inbox-labels', organization?.id],
+    queryFn: async (): Promise<InboxLabel[]> => {
+      if (!organization?.id) return [];
+      const res = await invokeInbox<{ labels: InboxLabel[] }>(organization.id, { action: 'list_labels' });
+      return res.labels || [];
+    },
+    enabled: !!organization?.id,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useCreateLabel() {
+  const { organization } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (title: string) => {
+      if (!organization?.id) throw new Error('Organização não encontrada');
+      return invokeInbox(organization.id, { action: 'create_label', title });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inbox-labels', organization?.id] });
+    },
+  });
+}
+
+export function useSetConversationLabels() {
+  const { organization } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ conversationId, labels }: { conversationId: number; labels: string[] }) => {
+      if (!organization?.id) throw new Error('Organização não encontrada');
+      return invokeInbox(organization.id, { action: 'set_labels', conversation_id: conversationId, labels });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inbox-conversations', organization?.id] });
+    },
+  });
+}
+
+export interface CannedResponse {
+  id: number;
+  content: string;
+}
+
+// Quick replies shared by the whole organization (stored as Chatwoot canned
+// responses — no extra table needed). Use {{nome}} for the contact's first name.
+export function useCannedResponses() {
+  const { organization } = useAuth();
+  return useQuery({
+    queryKey: ['inbox-canned', organization?.id],
+    queryFn: async (): Promise<CannedResponse[]> => {
+      if (!organization?.id) return [];
+      const res = await invokeInbox<{ canned: CannedResponse[] }>(organization.id, { action: 'list_canned' });
+      return res.canned || [];
+    },
+    enabled: !!organization?.id,
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useCreateCannedResponse() {
+  const { organization } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (content: string) => {
+      if (!organization?.id) throw new Error('Organização não encontrada');
+      return invokeInbox(organization.id, { action: 'create_canned', content });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inbox-canned', organization?.id] });
+    },
+  });
+}
+
+export function useDeleteCannedResponse() {
+  const { organization } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (cannedId: number) => {
+      if (!organization?.id) throw new Error('Organização não encontrada');
+      return invokeInbox(organization.id, { action: 'delete_canned', canned_id: cannedId });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inbox-canned', organization?.id] });
+    },
+  });
+}
+
+// Delete-for-everyone on WhatsApp. The Chatwoot mirror keeps the original text;
+// the UI hides it locally after success.
+export function useDeleteMessage() {
+  const { organization } = useAuth();
+  return useMutation({
+    mutationFn: async ({ waId, phone }: { waId: string; phone: string }) => {
+      if (!organization?.id) throw new Error('Organização não encontrada');
+      return invokeInbox(organization.id, { action: 'delete_message', wa_id: waId, phone });
+    },
+  });
+}
+
+// Notify the contact's WhatsApp that we're typing (fire-and-forget).
+export function useTypingPresence() {
+  const { organization } = useAuth();
+  return (phone: string | null | undefined) => {
+    if (!organization?.id || !phone) return;
+    supabase.functions
+      .invoke('chatwoot-inbox', {
+        body: { organization_id: organization.id, action: 'typing', phone },
+      })
+      .catch(() => {});
+  };
+}
+
+// AI-drafted next reply for the open conversation.
+export function useSuggestReply() {
+  const { organization } = useAuth();
+  return useMutation({
+    mutationFn: async ({ conversationId, altIds = [] }: { conversationId: number; altIds?: number[] }) => {
+      if (!organization?.id) throw new Error('Organização não encontrada');
+      const res = await invokeInbox<{ suggestion: string }>(organization.id, {
+        action: 'suggest_reply',
+        conversation_ids: [conversationId, ...altIds],
+      });
+      return res.suggestion;
+    },
+  });
+}
+
+// ---- Out-of-hours auto-reply config (stored in messaging_channels.metadata) ----
+
+export interface AutoReplyConfig {
+  enabled: boolean;
+  start: string; // "09:00"
+  end: string;   // "18:00"
+  message: string;
+}
+
+const DEFAULT_AUTO_REPLY: AutoReplyConfig = {
+  enabled: false,
+  start: '09:00',
+  end: '18:00',
+  message: 'Olá! Recebemos a tua mensagem. O nosso horário é das 9h às 18h — respondemos assim que possível. 🙏',
+};
+
+export function useAutoReplyConfig() {
+  const { organization } = useAuth();
+  return useQuery({
+    queryKey: ['inbox-auto-reply', organization?.id],
+    queryFn: async (): Promise<AutoReplyConfig> => {
+      if (!organization?.id) return DEFAULT_AUTO_REPLY;
+      const { data } = await supabase
+        .from('messaging_channels')
+        .select('metadata')
+        .eq('organization_id', organization.id)
+        .eq('channel_type', 'whatsapp')
+        .maybeSingle();
+      const ar = (data?.metadata as { auto_reply?: Partial<AutoReplyConfig> } | null)?.auto_reply;
+      return { ...DEFAULT_AUTO_REPLY, ...(ar ?? {}) };
+    },
+    enabled: !!organization?.id,
+  });
+}
+
+export function useSaveAutoReplyConfig() {
+  const { organization } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (config: AutoReplyConfig) => {
+      if (!organization?.id) throw new Error('Organização não encontrada');
+      const { data } = await supabase
+        .from('messaging_channels')
+        .select('metadata')
+        .eq('organization_id', organization.id)
+        .eq('channel_type', 'whatsapp')
+        .maybeSingle();
+      const metadata = { ...((data?.metadata as Record<string, unknown>) ?? {}), auto_reply: config };
+      const { error } = await supabase
+        .from('messaging_channels')
+        .update({ metadata })
+        .eq('organization_id', organization.id)
+        .eq('channel_type', 'whatsapp');
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inbox-auto-reply'] });
+    },
+  });
+}
+
+// ---- Scheduled messages (write now, send later via pg_cron) ----
+
+export interface ScheduledMessage {
+  id: string;
+  phone: string;
+  content: string;
+  send_at: string;
+  status: string;
+}
+
+// The table is newer than the auto-generated Supabase types — hence the cast.
+const scheduledTable = () => (supabase as any).from('scheduled_messages');
+
+export function useScheduledMessages(phone: string | null | undefined) {
+  const { organization } = useAuth();
+  const suffix = (phone || '').replace(/\D/g, '').slice(-9);
+  return useQuery({
+    queryKey: ['inbox-scheduled', organization?.id, suffix],
+    queryFn: async (): Promise<ScheduledMessage[]> => {
+      if (!organization?.id || suffix.length < 9) return [];
+      const { data, error } = await scheduledTable()
+        .select('id, phone, content, send_at, status')
+        .eq('organization_id', organization.id)
+        .eq('status', 'pending')
+        .like('phone', `%${suffix}`)
+        .order('send_at', { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as ScheduledMessage[];
+    },
+    enabled: !!organization?.id && suffix.length >= 9,
+    refetchInterval: 30000,
+  });
+}
+
+export function useScheduleMessage() {
+  const { organization, user } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ phone, content, sendAt }: { phone: string; content: string; sendAt: Date }) => {
+      if (!organization?.id || !user?.id) throw new Error('Organização não encontrada');
+      const { error } = await scheduledTable().insert({
+        organization_id: organization.id,
+        created_by: user.id,
+        phone: phone.replace(/\D/g, ''),
+        content,
+        send_at: sendAt.toISOString(),
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inbox-scheduled'] });
+    },
+  });
+}
+
+export function useCancelScheduledMessage() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await scheduledTable().update({ status: 'cancelled' }).eq('id', id).eq('status', 'pending');
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inbox-scheduled'] });
+    },
+  });
+}
+
+// ---- CRM record behind the conversation (side panel) ----
+
+export interface CrmRecordDetail {
+  kind: 'lead' | 'client';
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  status: string | null;
+  value: number | null;
+  notes: string | null;
+}
+
+export function useCrmRecord(match: ContactMatch | null | undefined) {
+  return useQuery({
+    queryKey: ['inbox-crm-record', match?.kind, match?.id],
+    queryFn: async (): Promise<CrmRecordDetail | null> => {
+      if (!match) return null;
+      if (match.kind === 'lead') {
+        const { data } = await supabase
+          .from('leads')
+          .select('id, name, email, phone, status, value, notes')
+          .eq('id', match.id)
+          .maybeSingle();
+        if (!data) return null;
+        return { kind: 'lead', ...data, value: data.value ?? null, notes: data.notes ?? null };
+      }
+      const { data } = await supabase
+        .from('crm_clients')
+        .select('id, name, email, phone')
+        .eq('id', match.id)
+        .maybeSingle();
+      if (!data) return null;
+      return { kind: 'client', ...data, status: null, value: null, notes: null };
+    },
+    enabled: !!match,
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useUpdateLeadNotes() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ leadId, notes }: { leadId: string; notes: string }) => {
+      const { error } = await supabase.from('leads').update({ notes }).eq('id', leadId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inbox-crm-record'] });
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+    },
+  });
+}
+
+// Create a lead directly from a WhatsApp conversation.
+export function useCreateLeadFromContact() {
+  const { organization } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ name, phone }: { name: string; phone: string }) => {
+      if (!organization?.id) throw new Error('Organização não encontrada');
+      const { data, error } = await supabase
+        .from('leads')
+        .insert({
+          organization_id: organization.id,
+          name,
+          phone,
+          email: '',
+          source: 'whatsapp',
+          status: 'new',
+          gdpr_consent: true,
+        })
+        .select('id, name')
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      queryClient.invalidateQueries({ queryKey: ['inbox-contact-match'] });
+    },
+  });
+}
+
+// Create a client directly from a WhatsApp conversation.
+export function useCreateClientFromContact() {
+  const { organization } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ name, phone }: { name: string; phone: string }) => {
+      if (!organization?.id) throw new Error('Organização não encontrada');
+      const { data, error } = await supabase
+        .from('crm_clients')
+        .insert({
+          organization_id: organization.id,
+          name,
+          phone,
+          source: 'whatsapp',
+          status: 'active',
+        })
+        .select('id, name')
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['clients'] });
+      queryClient.invalidateQueries({ queryKey: ['inbox-contact-match'] });
+    },
+  });
+}
+
+// Manually link the conversation to an existing lead/client (or clear it).
+export function useLinkCrm() {
+  const { organization } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      conversationId,
+      kind,
+      id,
+      name,
+    }: {
+      conversationId: number;
+      kind: 'lead' | 'client' | null;
+      id: string | null;
+      name: string | null;
+    }) => {
+      if (!organization?.id) throw new Error('Organização não encontrada');
+      return invokeInbox(organization.id, {
+        action: 'link_crm',
+        conversation_id: conversationId,
+        kind: kind ?? '',
+        id: id ?? '',
+        name: name ?? '',
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inbox-conversations', organization?.id] });
+    },
+  });
+}
+
+// Search existing leads + clients by name (for manual association).
+export function useSearchCrmRecords(query: string) {
+  const { organization } = useAuth();
+  const term = query.trim();
+  return useQuery({
+    queryKey: ['inbox-crm-search', organization?.id, term],
+    queryFn: async (): Promise<ContactMatch[]> => {
+      if (!organization?.id || term.length < 2) return [];
+      const [{ data: leads }, { data: clients }] = await Promise.all([
+        supabase
+          .from('leads')
+          .select('id, name')
+          .eq('organization_id', organization.id)
+          .ilike('name', `%${term}%`)
+          .limit(8),
+        supabase
+          .from('crm_clients')
+          .select('id, name')
+          .eq('organization_id', organization.id)
+          .ilike('name', `%${term}%`)
+          .limit(8),
+      ]);
+      return [
+        ...(clients ?? []).map((c) => ({ kind: 'client' as const, id: c.id, name: c.name })),
+        ...(leads ?? []).map((l) => ({ kind: 'lead' as const, id: l.id, name: l.name })),
+      ];
+    },
+    enabled: !!organization?.id && term.length >= 2,
+    staleTime: 30 * 1000,
   });
 }

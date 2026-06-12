@@ -5,6 +5,7 @@ import { TeamMemberFilter } from "@/components/dashboard/TeamMemberFilter";
 import { DashboardPeriodFilter } from "@/components/dashboard/DashboardPeriodFilter";
 import { FidelizationAlertsWidget } from "@/components/dashboard/FidelizationAlertsWidget";
 import { CalendarAlertsWidget } from "@/components/dashboard/CalendarAlertsWidget";
+import { InboxAlertsWidget } from "@/components/dashboard/InboxAlertsWidget";
 import { CommitmentPanel } from "@/components/dashboard/CommitmentPanel";
 import { SalesPerformancePanel } from "@/components/dashboard/SalesPerformancePanel";
 import { MetricsPanel } from "@/components/dashboard/MetricsPanel";
@@ -82,7 +83,7 @@ export default function Dashboard() {
             </div>
           )}
 
-          {(isTelecom && clientsModuleEnabled || calendarModuleEnabled) && (
+          {(isTelecom && clientsModuleEnabled || calendarModuleEnabled || modules.inbox) && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {isTelecom && clientsModuleEnabled && (
                 <FidelizationAlertsWidget />
@@ -90,6 +91,7 @@ export default function Dashboard() {
               {calendarModuleEnabled && (
                 <CalendarAlertsWidget />
               )}
+              {modules.inbox && <InboxAlertsWidget />}
             </div>
           )}
 

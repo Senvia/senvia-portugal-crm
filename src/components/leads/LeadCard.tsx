@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Lead, LeadTemperature, LeadTipologia, TEMPERATURE_LABELS, TEMPERATURE_STYLES, TIPOLOGIA_LABELS, TIPOLOGIA_STYLES } from "@/types";
-import { formatRelativeTime, getWhatsAppUrl, formatCurrency } from "@/lib/format";
+import { formatRelativeTime, getInboxUrl, formatCurrency } from "@/lib/format";
+import { useNavigate } from "react-router-dom";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useAuth } from "@/contexts/AuthContext";
 import { useModules } from "@/hooks/useModules";
@@ -54,6 +55,7 @@ export function LeadCard({
   pipelineStages = [],
   isLocked = false,
 }: LeadCardProps) {
+  const navigate = useNavigate();
   const { canDeleteLeads } = usePermissions();
   const { organization } = useAuth();
   const [showEmailModal, setShowEmailModal] = useState(false);
@@ -282,7 +284,7 @@ export function LeadCard({
           className="flex-1"
           onClick={(e) => {
             e.stopPropagation();
-            window.open(getWhatsAppUrl(lead.phone), '_blank');
+            navigate(getInboxUrl(lead.phone));
           }}
         >
           <MessageCircle className="h-4 w-4" />

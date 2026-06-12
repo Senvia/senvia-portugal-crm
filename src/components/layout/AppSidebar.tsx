@@ -3,12 +3,14 @@ import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { LayoutDashboard, Users, Settings, LogOut, Shield, Calendar, FileText, ShoppingBag, Store, UserCheck, Mail, Wallet, Lock, Search, Building2, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
+import { useOttoStore } from "@/stores/useOttoStore";
 import { useModules, EnabledModules } from "@/hooks/useModules";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useSubscription } from "@/hooks/useSubscription";
 import { APP_VERSION } from "@/lib/constants";
 import type { AppRole } from "@/types";
 import { OrganizationSwitcher } from "./OrganizationSwitcher";
+import { InboxUnreadBadge } from "./InboxUnreadBadge";
 import { UpgradeModal } from "@/components/shared/UpgradeModal";
 import { hasPerfect2GetherAccess } from "@/lib/perfect2gether";
 
@@ -53,6 +55,7 @@ export function AppSidebar({
   const location = useLocation();
   const navigate = useNavigate();
   const { signOut, roles, isSuperAdmin, organization, organizations } = useAuth();
+  const { setOpen: setOttoOpen } = useOttoStore();
   const { modules } = useModules();
   const { canViewModule } = usePermissions();
   const { isModuleLocked, getRequiredPlan } = useSubscription();
@@ -127,10 +130,21 @@ export function AppSidebar({
                 >
                   <item.icon className="h-5 w-5" />
                   <span className="flex-1">{item.label}</span>
+                  {item.to === "/inbox" && !locked && <InboxUnreadBadge />}
                   {locked && <Lock className="h-3.5 w-3.5 text-sidebar-muted/60" />}
                 </NavLink>
               );
             })}
+
+            {/* Otto support chat — opens the assistant window (no route) */}
+            <button
+              type="button"
+              onClick={() => setOttoOpen(true)}
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-sidebar-muted transition-all duration-200 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+            >
+              <img src="/otto-mascot.svg" alt="Otto" className="h-5 w-5 rounded-full" />
+              <span className="flex-1 text-left">Suporte / Otto</span>
+            </button>
 
             {hasPerfect2GetherModuleAccess && (
               <NavLink

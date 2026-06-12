@@ -34,13 +34,24 @@ self.addEventListener("push", (e) => {
   }
 
   e.waitUntil(
-    self.registration.showNotification(data.title, {
-      body: data.body,
-      icon: "/icon-192.png",
-      badge: "/icon-192.png",
-      data: { url: data.url || "/dashboard" },
-      vibrate: [200, 100, 200],
-    })
+    (async () => {
+      // Inbox notifications: skip when the user already has the inbox open and
+      // focused — the in-app sound/badge covers it, a popup would just annoy.
+      if (data.url && data.url.startsWith("/inbox")) {
+        const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+        const focusedOnInbox = clients.some(
+          (c) => c.focused && c.visibilityState === "visible" && new URL(c.url).pathname.startsWith("/inbox")
+        );
+        if (focusedOnInbox) return;
+      }
+      await self.registration.showNotification(data.title, {
+        body: data.body,
+        icon: "/icon-192.png",
+        badge: "/icon-192.png",
+        data: { url: data.url || "/dashboard" },
+        vibrate: [200, 100, 200],
+      });
+    })()
   );
 });
 
