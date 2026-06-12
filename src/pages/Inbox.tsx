@@ -27,6 +27,7 @@ import {
   useDeleteMessage,
   useCrmRecord,
   useUpdateLeadNotes,
+  useUpdateClientNotes,
   useTypingPresence,
   useSuggestReply,
   useScheduledMessages,
@@ -49,7 +50,7 @@ import { useTeamMembers } from "@/hooks/useTeam";
 import { useCreateEvent } from "@/hooks/useCalendarEvents";
 import { useAuth } from "@/contexts/AuthContext";
 import { useClientProposals, useClientSales } from "@/hooks/useClientHistory";
-import { useUpdateClient, useClient } from "@/hooks/useClients";
+import { useClient } from "@/hooks/useClients";
 import { useLeadById, useUpdateLeadStatus, useUpdateLead } from "@/hooks/useLeads";
 import { CreateClientModal } from "@/components/clients/CreateClientModal";
 import { EditClientModal } from "@/components/clients/EditClientModal";
@@ -490,7 +491,7 @@ export default function Inbox() {
   );
   const { data: crmRecord } = useCrmRecord(contactMatch);
   const updateLeadNotes = useUpdateLeadNotes();
-  const updateClient = useUpdateClient();
+  const updateClientNotes = useUpdateClientNotes();
   // Open proposals/sales for client panel.
   const clientId = contactMatch?.kind === "client" ? contactMatch.id : null;
   const { data: openProposals = [] } = useClientProposals(clientId);
@@ -1335,7 +1336,7 @@ export default function Inbox() {
             size="sm"
             variant="secondary"
             className="mt-2 w-full"
-            disabled={notesDraft === null || updateLeadNotes.isPending || updateClient.isPending}
+            disabled={notesDraft === null || updateLeadNotes.isPending || updateClientNotes.isPending}
             onClick={() => {
               const notes = notesDraft ?? "";
               if (crmRecord.kind === "lead") {
@@ -1344,14 +1345,14 @@ export default function Inbox() {
                   { onSuccess: () => { setNotesDraft(null); toast({ title: "Notas guardadas" }); } },
                 );
               } else {
-                updateClient.mutate(
-                  { id: crmRecord.id, notes },
+                updateClientNotes.mutate(
+                  { clientId: crmRecord.id, notes },
                   { onSuccess: () => { setNotesDraft(null); toast({ title: "Notas guardadas" }); } },
                 );
               }
             }}
           >
-            {(updateLeadNotes.isPending || updateClient.isPending) ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : null}
+            {(updateLeadNotes.isPending || updateClientNotes.isPending) ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : null}
             Guardar notas
           </Button>
         </div>

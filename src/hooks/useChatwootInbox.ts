@@ -831,11 +831,11 @@ export function useCrmRecord(match: ContactMatch | null | undefined) {
       }
       const { data } = await supabase
         .from('crm_clients')
-        .select('id, name, email, phone')
+        .select('id, name, email, phone, notes')
         .eq('id', match.id)
         .maybeSingle();
       if (!data) return null;
-      return { kind: 'client', ...data, status: null, value: null, notes: null };
+      return { kind: 'client', ...data, status: null, value: null, notes: data.notes ?? null };
     },
     enabled: !!match,
     staleTime: 30 * 1000,
@@ -852,6 +852,22 @@ export function useUpdateLeadNotes() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['inbox-crm-record'] });
       queryClient.invalidateQueries({ queryKey: ['leads'] });
+    },
+  });
+}
+
+// Mirror of useUpdateLeadNotes for clients — invalidates the inbox CRM panel so
+// the saved note shows up immediately (the generic useUpdateClient doesn't).
+export function useUpdateClientNotes() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ clientId, notes }: { clientId: string; notes: string }) => {
+      const { error } = await supabase.from('crm_clients').update({ notes }).eq('id', clientId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inbox-crm-record'] });
+      queryClient.invalidateQueries({ queryKey: ['clients'] });
     },
   });
 }
