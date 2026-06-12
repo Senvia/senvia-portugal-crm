@@ -190,7 +190,10 @@ async function ensureChatwootWebhook(
     const listRes = await chatwootFetch(cfg, token, `${base}/webhooks`);
     if (!listRes.ok) return;
     const data = await listRes.json();
-    const hooks: any[] = data?.payload ?? data ?? [];
+    // Chatwoot wraps the list: { payload: { webhooks: [...] } } (older builds
+    // return the array directly) — normalize before checking.
+    const raw = data?.payload?.webhooks ?? data?.payload ?? data;
+    const hooks: any[] = Array.isArray(raw) ? raw : [];
     if (hooks.some((h: any) => (h?.url ?? h?.webhook?.url) === hookUrl)) return;
     await chatwootFetch(cfg, token, `${base}/webhooks`, 'POST', {
       webhook: { url: hookUrl, subscriptions: ['message_created'] },

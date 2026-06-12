@@ -55,6 +55,7 @@ function suggestTaskFromMessage(
       const sender = event.conversation?.meta?.sender ?? {};
       const phone = String(sender.phone_number ?? '').replace(/\D/g, '');
       if (!phone) return; // groups / unknown contacts
+      console.log('[ai-task] analyzing message for', phone, 'len', content.length);
       const incoming = event.message_type === 'incoming';
 
       // Cap + dedupe: at most 3 open suggestions per contact; skip repeated titles.
@@ -67,11 +68,16 @@ function suggestTaskFromMessage(
       const openSuggestions = (existing ?? []).filter((t: any) => t.suggested);
       if (openSuggestions.length >= 3) return;
 
-      const aiRes = await fetch('https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', {
+      // Gemini occasionally answers 503 (model overloaded) — walk down the
+      // sibling models instead of dropping the suggestion.
+      const MODELS = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash'];
+      let aiRes: Response | null = null;
+      for (const model of MODELS) {
+        aiRes = await fetch('https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', {
         method: 'POST',
         headers: { Authorization: `Bearer ${geminiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'gemini-2.5-flash',
+          model,
           temperature: 0,
           messages: [
             {
@@ -85,12 +91,19 @@ function suggestTaskFromMessage(
             },
           ],
         }),
-      });
-      if (!aiRes.ok) return;
+        });
+        if (aiRes.ok) break;
+        const errText = (await aiRes.text()).slice(0, 120);
+        console.error(`[ai-task] ${model} failed:`, aiRes.status, errText);
+        // Only overload/rate-limit warrants trying the next model.
+        if (aiRes.status !== 503 && aiRes.status !== 429) return;
+      }
+      if (!aiRes || !aiRes.ok) return;
       const aiData = await aiRes.json();
       const raw = String(aiData?.choices?.[0]?.message?.content ?? '').replace(/```json|```/g, '').trim();
       let out: any;
-      try { out = JSON.parse(raw); } catch { return; }
+      try { out = JSON.parse(raw); } catch { console.error('[ai-task] bad JSON:', raw.slice(0, 150)); return; }
+      console.log('[ai-task] verdict:', JSON.stringify(out).slice(0, 200));
       if (!out?.tarefa || Number(out.confianca ?? 0) < 0.75 || !out.titulo) return;
 
       const title = String(out.titulo).slice(0, 160);
@@ -102,7 +115,7 @@ function suggestTaskFromMessage(
         if (!isNaN(d.getTime()) && d.getTime() > Date.now()) dueAt = d.toISOString();
       }
 
-      await admin.from('inbox_tasks').insert({
+      const { error: insErr } = await admin.from('inbox_tasks').insert({
         organization_id: org.id,
         created_by: null, // null = sugerida pela IA
         suggested: true,
@@ -113,6 +126,8 @@ function suggestTaskFromMessage(
         title,
         due_at: dueAt,
       });
+      if (insErr) console.error('[ai-task] insert failed:', insErr.message);
+      else console.log('[ai-task] suggestion created:', title);
     } catch (e) {
       console.error('ai task suggestion failed:', e);
     }

@@ -113,9 +113,17 @@ export function useInboxRealtime(): boolean {
     // Collapse bursts (several messages within ~400ms) into ONE refetch — each
     // list refetch costs Chatwoot real server time.
     let timer: number | null = null;
+    let taskTimer: number | null = null;
     const channel = supabase
       .channel(`inbox-${orgId}`)
       .on('broadcast', { event: 'message' }, () => {
+        // AI task suggestions land a few seconds after the message — refresh
+        // the tasks caches once the classifier has had time to run.
+        if (taskTimer !== null) window.clearTimeout(taskTimer);
+        taskTimer = window.setTimeout(() => {
+          taskTimer = null;
+          queryClient.invalidateQueries({ queryKey: ['inbox-tasks'] });
+        }, 8000);
         if (timer !== null) return;
         timer = window.setTimeout(() => {
           timer = null;
@@ -127,6 +135,7 @@ export function useInboxRealtime(): boolean {
       .subscribe((status) => setLive(status === 'SUBSCRIBED'));
     return () => {
       if (timer !== null) window.clearTimeout(timer);
+      if (taskTimer !== null) window.clearTimeout(taskTimer);
       setLive(false);
       supabase.removeChannel(channel);
     };

@@ -80,6 +80,9 @@ export function useConversationTasks(phone: string | null | undefined) {
     },
     enabled: !!organization?.id && suffix.length >= 9,
     staleTime: 15 * 1000,
+    // AI suggestions land seconds after a message — poll lightly so they show
+    // up in the open panel without switching conversations.
+    refetchInterval: 20 * 1000,
   });
 }
 
