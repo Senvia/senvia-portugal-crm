@@ -1,5 +1,5 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState, useCallback } from 'react';
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { useState, useCallback, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -67,8 +67,69 @@ async function invokeInbox<T>(organizationId: string, payload: Record<string, un
   return data as T;
 }
 
-// List the open conversations for the org's Chatwoot account (polled).
-export function useInboxConversations(enabled = true) {
+// ---- Optimistic cache patching ----
+// Every inbox mutation round-trips edge function -> Chatwoot/Evolution (1-3s).
+// Patch the conversations cache IMMEDIATELY so the UI reacts on click, and roll
+// back if the server rejects. Background refetch/polling reconciles afterwards.
+
+async function patchConversations(
+  queryClient: QueryClient,
+  orgId: string | undefined,
+  match: (c: InboxConversation) => boolean,
+  patch: Partial<InboxConversation> | ((c: InboxConversation) => Partial<InboxConversation>),
+): Promise<InboxConversation[] | undefined> {
+  const key = ['inbox-conversations', orgId];
+  // Abort in-flight fetches so a stale response doesn't overwrite the patch.
+  await queryClient.cancelQueries({ queryKey: key });
+  const previous = queryClient.getQueryData<InboxConversation[]>(key);
+  queryClient.setQueryData<InboxConversation[]>(key, (old) =>
+    (old ?? []).map((c) =>
+      match(c) ? { ...c, ...(typeof patch === 'function' ? patch(c) : patch) } : c,
+    ),
+  );
+  return previous;
+}
+
+function rollbackConversations(
+  queryClient: QueryClient,
+  orgId: string | undefined,
+  previous: InboxConversation[] | undefined,
+) {
+  if (previous) queryClient.setQueryData(['inbox-conversations', orgId], previous);
+}
+
+// Realtime push: chatwoot-webhook broadcasts on `inbox-<org>` whenever a message
+// lands in Chatwoot (incoming, or our own send mirrored back). Refetching on the
+// event makes receiving near-instant; polling becomes a relaxed fallback.
+// Returns `live` so callers can stretch their poll intervals while connected.
+export function useInboxRealtime(): boolean {
+  const { organization } = useAuth();
+  const queryClient = useQueryClient();
+  const [live, setLive] = useState(false);
+
+  useEffect(() => {
+    if (!organization?.id) return;
+    const orgId = organization.id;
+    const channel = supabase
+      .channel(`inbox-${orgId}`)
+      .on('broadcast', { event: 'message' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['inbox-conversations', orgId] });
+        // Prefix match: refetches whichever thread is open, whatever its altIds.
+        queryClient.invalidateQueries({ queryKey: ['inbox-messages', orgId] });
+      })
+      .subscribe((status) => setLive(status === 'SUBSCRIBED'));
+    return () => {
+      setLive(false);
+      supabase.removeChannel(channel);
+    };
+  }, [organization?.id, queryClient]);
+
+  return live;
+}
+
+// List the open conversations for the org's Chatwoot account.
+// With realtime connected (live=true) the poll is just a safety net.
+export function useInboxConversations(enabled = true, live = false) {
   const { organization } = useAuth();
   return useQuery({
     queryKey: ['inbox-conversations', organization?.id],
@@ -80,7 +141,7 @@ export function useInboxConversations(enabled = true) {
       return res.conversations || [];
     },
     enabled: enabled && !!organization?.id,
-    refetchInterval: enabled ? 5000 : false,
+    refetchInterval: !enabled ? false : live ? 20000 : 5000,
   });
 }
 
@@ -133,9 +194,9 @@ export function useInboxUnreadTotal(enabled = true) {
   return { total: countUnreadConversations(query.data || []), isLoading: query.isLoading };
 }
 
-// Messages of a conversation (polled while one is open). Passing altIds merges
-// the threads of the contact's other conversations into one.
-export function useInboxMessages(conversationId: number | null, altIds: number[] = []) {
+// Messages of a conversation (refetched on realtime events; polled as fallback).
+// Passing altIds merges the threads of the contact's other conversations into one.
+export function useInboxMessages(conversationId: number | null, altIds: number[] = [], live = false) {
   const { organization } = useAuth();
   const allIds = conversationId ? [conversationId, ...altIds] : [];
   return useQuery({
@@ -149,7 +210,7 @@ export function useInboxMessages(conversationId: number | null, altIds: number[]
       return res.messages || [];
     },
     enabled: !!organization?.id && !!conversationId,
-    refetchInterval: conversationId ? 2500 : false,
+    refetchInterval: !conversationId ? false : live ? 15000 : 2500,
     // Keep already-opened conversations cached: switching back shows the thread
     // instantly (background refetch updates it) instead of a full-screen loader.
     gcTime: 30 * 60 * 1000,
@@ -190,6 +251,8 @@ export function useLoadOlderMessages() {
 }
 
 // Mark a conversation (and the contact's merged alts) as read.
+// Optimistic: the unread badge clears on click; the server call (Chatwoot +
+// WhatsApp blue ticks) runs behind. No invalidate — the regular refetch reconciles.
 export function useMarkConversationRead() {
   const { organization } = useAuth();
   const queryClient = useQueryClient();
@@ -201,9 +264,14 @@ export function useMarkConversationRead() {
         conversation_ids: [conversationId, ...altIds],
       });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['inbox-conversations', organization?.id] });
-    },
+    onMutate: async ({ conversationId }) => ({
+      previous: await patchConversations(
+        queryClient, organization?.id,
+        (c) => c.id === conversationId,
+        { unread_count: 0 },
+      ),
+    }),
+    onError: (_e, _v, ctx) => rollbackConversations(queryClient, organization?.id, ctx?.previous),
   });
 }
 
@@ -270,9 +338,22 @@ export function useSendInboxMessage() {
         quoted_id: quotedId ?? undefined,
       });
     },
+    // Optimistic: the conversation row updates instantly (preview + jumps to the
+    // top); the thread bubble is handled by the page's `pending` mechanism.
+    onMutate: async ({ conversationId, content, attachment }) => ({
+      previous: await patchConversations(
+        queryClient, organization?.id,
+        (c) => c.id === conversationId,
+        {
+          last_message: content?.trim() || (attachment ? '📎 Anexo' : ''),
+          updated_at: Math.floor(Date.now() / 1000),
+          waiting_since: null,
+        },
+      ),
+    }),
+    onError: (_e, _v, ctx) => rollbackConversations(queryClient, organization?.id, ctx?.previous),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['inbox-messages', organization?.id, variables.conversationId] });
-      queryClient.invalidateQueries({ queryKey: ['inbox-conversations', organization?.id] });
     },
   });
 }
@@ -309,7 +390,15 @@ export function useToggleConversationStatus() {
         status,
       });
     },
-    onSuccess: () => {
+    onMutate: async ({ conversationId, status }) => ({
+      previous: await patchConversations(
+        queryClient, organization?.id,
+        (c) => c.id === conversationId,
+        { status },
+      ),
+    }),
+    onError: (_e, _v, ctx) => rollbackConversations(queryClient, organization?.id, ctx?.previous),
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['inbox-conversations', organization?.id] });
     },
   });
@@ -372,7 +461,15 @@ export function useAssignConversation() {
         user_name: userName,
       });
     },
-    onSuccess: () => {
+    onMutate: async ({ conversationId, userId, userName }) => ({
+      previous: await patchConversations(
+        queryClient, organization?.id,
+        (c) => c.id === conversationId,
+        { assigned_id: userId, assigned_name: userName },
+      ),
+    }),
+    onError: (_e, _v, ctx) => rollbackConversations(queryClient, organization?.id, ctx?.previous),
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['inbox-conversations', organization?.id] });
     },
   });
@@ -386,7 +483,15 @@ export function useRenameContact() {
       if (!organization?.id) throw new Error('Organização não encontrada');
       return invokeInbox(organization.id, { action: 'rename_contact', contact_id: contactId, name });
     },
-    onSuccess: () => {
+    onMutate: async ({ contactId, name }) => ({
+      previous: await patchConversations(
+        queryClient, organization?.id,
+        (c) => c.contact_id === contactId,
+        { contact_name: name },
+      ),
+    }),
+    onError: (_e, _v, ctx) => rollbackConversations(queryClient, organization?.id, ctx?.previous),
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['inbox-conversations', organization?.id] });
     },
   });
@@ -434,7 +539,15 @@ export function useSetConversationLabels() {
       if (!organization?.id) throw new Error('Organização não encontrada');
       return invokeInbox(organization.id, { action: 'set_labels', conversation_id: conversationId, labels });
     },
-    onSuccess: () => {
+    onMutate: async ({ conversationId, labels }) => ({
+      previous: await patchConversations(
+        queryClient, organization?.id,
+        (c) => c.id === conversationId,
+        { labels },
+      ),
+    }),
+    onError: (_e, _v, ctx) => rollbackConversations(queryClient, organization?.id, ctx?.previous),
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['inbox-conversations', organization?.id] });
     },
   });
@@ -795,7 +908,15 @@ export function useLinkCrm() {
         name: name ?? '',
       });
     },
-    onSuccess: () => {
+    onMutate: async ({ conversationId, kind, id, name }) => ({
+      previous: await patchConversations(
+        queryClient, organization?.id,
+        (c) => c.id === conversationId,
+        { crm_kind: kind, crm_id: id, crm_name: name },
+      ),
+    }),
+    onError: (_e, _v, ctx) => rollbackConversations(queryClient, organization?.id, ctx?.previous),
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['inbox-conversations', organization?.id] });
     },
   });

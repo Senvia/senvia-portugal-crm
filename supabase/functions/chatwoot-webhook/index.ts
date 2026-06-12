@@ -29,9 +29,7 @@ Deno.serve(async (req) => {
 
   try {
     const event = await req.json().catch(() => null);
-    // Only notify on INCOMING customer messages (not our replies, not activity).
     if (!event || event.event !== 'message_created') return ok();
-    if (event.message_type !== 'incoming') return ok();
     if (event.private) return ok();
 
     const accountId = event.account?.id;
@@ -48,6 +46,35 @@ Deno.serve(async (req) => {
       .eq('chatwoot_account_id', accountId)
       .maybeSingle();
     if (!org) return ok();
+
+    // Realtime nudge FIRST (lowest latency): open Senvia inboxes subscribe to
+    // `inbox-<org>` and refetch immediately, instead of waiting for the poll.
+    // Fired for incoming AND outgoing (our sends mirror back via Evolution).
+    try {
+      await fetch(`${supabaseUrl}/realtime/v1/api/broadcast`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: serviceKey,
+          Authorization: `Bearer ${serviceKey}`,
+        },
+        body: JSON.stringify({
+          messages: [{
+            topic: `inbox-${org.id}`,
+            event: 'message',
+            payload: {
+              conversation_id: event.conversation?.id ?? null,
+              incoming: event.message_type === 'incoming',
+            },
+          }],
+        }),
+      });
+    } catch (e) {
+      console.error('realtime broadcast failed:', e);
+    }
+
+    // Everything below (auto-reply + push notification) is for INCOMING only.
+    if (event.message_type !== 'incoming') return ok();
 
     // ---- Out-of-hours auto-reply (configured in messaging_channels.metadata) ----
     try {

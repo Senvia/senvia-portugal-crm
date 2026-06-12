@@ -3,6 +3,7 @@ import { useWhatsappChannel } from "@/hooks/useMessagingChannels";
 import {
   useInboxConversations,
   useInboxMessages,
+  useInboxRealtime,
   useSendInboxMessage,
   useMarkConversationRead,
   useDownloadAttachment,
@@ -443,10 +444,13 @@ export default function Inbox() {
   // A configured-but-dropped channel keeps the inbox usable (Chatwoot still
   // serves history) with a reconnect banner instead.
   const channelConfigured = !!channel;
-  const { data: conversations = [], isLoading: loadingConvos } = useInboxConversations(channelConfigured);
+  // Realtime: refetch the instant a message lands (incoming or our mirrored
+  // sends). While connected, the polls below stretch into mere safety nets.
+  const live = useInboxRealtime();
+  const { data: conversations = [], isLoading: loadingConvos } = useInboxConversations(channelConfigured, live);
   const selected = conversations.find((c) => c.id === selectedId) || null;
   const altIds = selected?.alt_ids ?? [];
-  const { data: messages = [], isLoading: loadingMessages } = useInboxMessages(selectedId, altIds);
+  const { data: messages = [], isLoading: loadingMessages } = useInboxMessages(selectedId, altIds, live);
   // Debounced server-side search (one request after typing pauses, not per key).
   const [debouncedSearch, setDebouncedSearch] = useState("");
   useEffect(() => {

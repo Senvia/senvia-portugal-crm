@@ -208,6 +208,28 @@ const MEDIA_TYPES: Record<string, string> = {
   document: 'document',
 };
 
+// Org -> Chatwoot creds cache (60s TTL): saves a DB round trip on EVERY call.
+// Auth still runs per request — this only caches the org's account id + token.
+const orgCwCache = new Map<string, { v: { accountId: number; token: string }; at: number }>();
+async function getOrgChatwootCached(
+  admin: ReturnType<typeof createClient>,
+  organizationId: string,
+): Promise<{ accountId: number; token: string } | null> {
+  const hit = orgCwCache.get(organizationId);
+  if (hit && Date.now() - hit.at < 60_000) return hit.v;
+  const v = await getOrgChatwoot(admin, organizationId);
+  if (v) orgCwCache.set(organizationId, { v, at: Date.now() });
+  return v;
+}
+
+// Run work after the response is sent (Supabase edge runtime); fall back to a
+// floating promise locally.
+function runInBackground(p: Promise<unknown>): void {
+  const er = (globalThis as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } }).EdgeRuntime;
+  if (er?.waitUntil) er.waitUntil(p);
+  else p.catch(() => {});
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
   if (req.method !== 'POST') return json({ error: 'Método não permitido' }, 405);
@@ -223,7 +245,7 @@ Deno.serve(async (req) => {
     // The cw result is only USED after auth passes, so this leaks nothing.
     const [auth, cw] = await Promise.all([
       authOrgMember(req, cfg, organization_id),
-      getOrgChatwoot(createClient(cfg.supabaseUrl, cfg.serviceKey), organization_id),
+      getOrgChatwootCached(createClient(cfg.supabaseUrl, cfg.serviceKey), organization_id),
     ]);
     if ('error' in auth) return auth.error;
     if (!cw) return json({ error: 'Esta organização ainda não tem WhatsApp ligado.' }, 409);
@@ -622,51 +644,53 @@ Deno.serve(async (req) => {
         ),
       );
 
-      // 2) Send WhatsApp read receipts via Evolution so the sender sees blue ticks.
-      try {
-        const convRes = await chatwootFetch(cfg, cw.token, `${base}/conversations/${ids[0]}`);
-        if (convRes.ok) {
+      // 2) WhatsApp read receipts (blue ticks) via Evolution — heavy (several
+      // Chatwoot + Evolution round trips), so it runs AFTER the response; the
+      // client never waits on it.
+      runInBackground((async () => {
+        try {
+          const convRes = await chatwootFetch(cfg, cw.token, `${base}/conversations/${ids[0]}`);
+          if (!convRes.ok) return;
           const conv = await convRes.json();
           const sender = conv?.meta?.sender ?? conv?.payload?.meta?.sender ?? {};
           const rawPhone = String(sender.phone_number ?? sender.identifier ?? '').replace(/\D/g, '');
-          if (rawPhone) {
-            const remoteJid = `${rawPhone}@s.whatsapp.net`;
+          if (!rawPhone) return;
+          const remoteJid = `${rawPhone}@s.whatsapp.net`;
 
-            // Get incoming message IDs from Chatwoot (source_id = WhatsApp message key).
-            const readMessages: { remoteJid: string; fromMe: boolean; id: string }[] = [];
-            const seen = new Set<string>();
-            const msgsResults = await Promise.all(
-              ids.map((id) => chatwootFetch(cfg, cw.token, `${base}/conversations/${id}/messages`)),
-            );
-            for (const msgsRes of msgsResults) {
-              if (!msgsRes.ok) continue;
-              const msgsData = await msgsRes.json();
-              // Chatwoot stores the WhatsApp message id as "WAID:<id>" — strip the
-              // prefix, otherwise WhatsApp silently ignores the receipt (Evolution
-              // still answers 201 because it sends it blindly).
-              for (const m of msgsData?.payload ?? []) {
-                if (m.message_type !== 0 || !m.source_id) continue;
-                const id = String(m.source_id).replace(/^WAID:/i, '');
-                if (!seen.has(id)) {
-                  seen.add(id);
-                  readMessages.push({ remoteJid, fromMe: false, id });
-                }
-              }
-            }
-
-            if (readMessages.length > 0) {
-              const evoRes = await evolutionFetch(
-                cfg, `/chat/markMessageAsRead/${instance}`, 'POST', { readMessages },
-              );
-              if (!evoRes.ok) {
-                console.error('Evolution markMessageAsRead failed:', evoRes.status, await evoRes.text());
+          // Get incoming message IDs from Chatwoot (source_id = WhatsApp message key).
+          const readMessages: { remoteJid: string; fromMe: boolean; id: string }[] = [];
+          const seen = new Set<string>();
+          const msgsResults = await Promise.all(
+            ids.map((id) => chatwootFetch(cfg, cw.token, `${base}/conversations/${id}/messages`)),
+          );
+          for (const msgsRes of msgsResults) {
+            if (!msgsRes.ok) continue;
+            const msgsData = await msgsRes.json();
+            // Chatwoot stores the WhatsApp message id as "WAID:<id>" — strip the
+            // prefix, otherwise WhatsApp silently ignores the receipt (Evolution
+            // still answers 201 because it sends it blindly).
+            for (const m of msgsData?.payload ?? []) {
+              if (m.message_type !== 0 || !m.source_id) continue;
+              const id = String(m.source_id).replace(/^WAID:/i, '');
+              if (!seen.has(id)) {
+                seen.add(id);
+                readMessages.push({ remoteJid, fromMe: false, id });
               }
             }
           }
+
+          if (readMessages.length > 0) {
+            const evoRes = await evolutionFetch(
+              cfg, `/chat/markMessageAsRead/${instance}`, 'POST', { readMessages },
+            );
+            if (!evoRes.ok) {
+              console.error('Evolution markMessageAsRead failed:', evoRes.status, await evoRes.text());
+            }
+          }
+        } catch (e) {
+          console.error('Evolution read receipt failed:', e);
         }
-      } catch (e) {
-        console.error('Evolution read receipt failed:', e);
-      }
+      })());
 
       return json({ ok: cwResults.every((r) => r.ok) });
     }
