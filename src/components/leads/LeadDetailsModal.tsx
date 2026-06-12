@@ -81,6 +81,7 @@ import { toast } from "@/hooks/use-toast";
 import { SendLeadEmailModal } from "./SendLeadEmailModal";
 import { isPlaceholderEmail, displayEmail } from "@/lib/leadUtils";
 import { RecordTasks } from "@/components/inbox/RecordTasks";
+import { ContactNotes } from "@/components/contacts/ContactNotes";
 
 const TECHNICAL_TRACKING_KEYS = ['fbclid', 'gclid', 'fbc', 'fbp'] as const;
 const HIDDEN_CUSTOM_DATA_KEYS = ['metadata', 'prospect_id', 'source_file_name', 'prospect_source', 'cpe'] as const;
@@ -552,29 +553,8 @@ export function LeadDetailsModal({
                   </Card>
                 )}
 
-                {/* Notes Card */}
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                      <FileText className="h-4 w-4" />
-                      Observações Internas
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <Textarea
-                      placeholder="Notas sobre este lead..."
-                      rows={4}
-                      value={editNotes}
-                      onChange={(e) => setEditNotes(e.target.value)}
-                      onFocus={() => setIsEditingNotes(true)}
-                      onBlur={() => {
-                        handleNotesBlur();
-                        setTimeout(() => setIsEditingNotes(false), 600);
-                      }}
-                      className="resize-none"
-                    />
-                  </CardContent>
-                </Card>
+                {/* Unified contact notes (shared with the inbox & client record) */}
+                <ContactNotes phone={lead.phone} source="crm" />
 
                 {/* Tarefas da conversa (Caixa de Entrada) */}
                 <RecordTasks phone={lead.phone} />

@@ -33,6 +33,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { Loader2, Zap, UserCircle, X, User, Upload, FileText, Trash2, Paperclip, Building2, Contact, Settings2, StickyNote, Eye, AlertTriangle } from "lucide-react";
 import { useCreateLead } from "@/hooks/useLeads";
+import { useAddContactNote } from "@/hooks/useContactNotes";
 import { useNifValidation } from "@/hooks/useNifValidation";
 import { useTeamMembers } from "@/hooks/useTeam";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -105,6 +106,7 @@ interface AddLeadModalProps {
 
 export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
   const createLead = useCreateLead();
+  const addContactNote = useAddContactNote();
   const uploadAttachment = useUploadLeadAttachment();
   const { data: teamMembers } = useTeamMembers();
   const { canManageTeam } = usePermissions();
@@ -205,7 +207,8 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
           if (!form.getValues('company_name') && data.company) form.setValue('company_name', data.company);
           if (!form.getValues('email') && data.email) form.setValue('email', data.email);
           if (!form.getValues('phone') && data.phone) form.setValue('phone', data.phone);
-          if (!form.getValues('notes') && data.notes) form.setValue('notes', data.notes);
+          // Notes are keyed by phone — the matched contact's notes already show in
+          // the unified timeline, so no pre-fill needed.
         }
       } else {
         setMatchedClient(null);
@@ -229,7 +232,6 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
       source: data.source,
       temperature: data.temperature as LeadTemperature,
       value: showEnergy ? undefined : (data.value ? Number(data.value) : undefined),
-      notes: data.notes,
       gdpr_consent: data.gdpr_consent,
       automation_enabled: hasActiveWhatsappAutomation && data.automation_enabled,
       assigned_to: data.assigned_to && data.assigned_to !== 'unassigned' ? data.assigned_to : undefined,
@@ -242,6 +244,11 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
       for (const file of pendingFiles) {
         await uploadAttachment.mutateAsync({ leadId: lead.id, file });
       }
+    }
+
+    // Notes go to the unified contact_notes timeline (by phone), not the legacy column.
+    if (data.notes?.trim() && data.phone?.trim()) {
+      addContactNote.mutate({ phone: data.phone.trim(), content: data.notes.trim(), source: "crm" });
     }
 
     setMatchedClient(null);

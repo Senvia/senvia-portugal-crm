@@ -21,6 +21,7 @@ import {
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { useCreateClient } from "@/hooks/useClients";
+import { useAddContactNote } from "@/hooks/useContactNotes";
 import { useClientLabels } from "@/hooks/useClientLabels";
 import { useNifValidation } from "@/hooks/useNifValidation";
 import { useTeamMembers } from "@/hooks/useTeam";
@@ -77,6 +78,7 @@ export function CreateClientModal({ open, onOpenChange, onCreated, initialData }
   const [grupoEconomico, setGrupoEconomico] = useState("");
 
   const createClient = useCreateClient();
+  const addContactNote = useAddContactNote();
 
   const nifValidation = useNifValidation({
     nif,
@@ -106,7 +108,7 @@ export function CreateClientModal({ open, onOpenChange, onCreated, initialData }
     if (settings.nif.visible && settings.nif.required && !nif.trim()) return false;
     if (settings.company_nif?.visible && settings.company_nif?.required && !companyNif.trim()) return false;
     if (settings.address.visible && settings.address.required && !addressLine1.trim()) return false;
-    if (settings.notes.visible && settings.notes.required && !notes.trim()) return false;
+    // Notes are now an optional "add note to timeline" box — never block on them.
     if (nifValidation.isDuplicate || companyNifValidation.isDuplicate) return false;
     return true;
   }, [name, email, phone, company, nif, companyNif, addressLine1, notes, settings, nifValidation.isDuplicate, companyNifValidation.isDuplicate]);
@@ -126,7 +128,6 @@ export function CreateClientModal({ open, onOpenChange, onCreated, initialData }
         billing_target: billingTarget,
         status,
         source: source || undefined,
-        notes: notes.trim() || undefined,
         address_line1: addressLine1.trim() || undefined,
         address_line2: addressLine2.trim() || undefined,
         city: city.trim() || undefined,
@@ -140,6 +141,13 @@ export function CreateClientModal({ open, onOpenChange, onCreated, initialData }
       },
       {
         onSuccess: (createdClient) => {
+          // Notes now live in the unified contact_notes timeline (by phone),
+          // not the legacy column.
+          const noteText = notes.trim();
+          const notePhone = phone.trim();
+          if (noteText && notePhone) {
+            addContactNote.mutate({ phone: notePhone, content: noteText, source: "crm" });
+          }
           resetForm();
           onOpenChange(false);
           onCreated?.(createdClient.id);

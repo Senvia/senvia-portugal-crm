@@ -13,6 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RecordTasks } from "@/components/inbox/RecordTasks";
+import { ContactNotes } from "@/components/contacts/ContactNotes";
 import {
   Mail,
   Phone,
@@ -288,48 +289,8 @@ export function ClientDetailsDrawer({
                 {/* Tarefas da conversa (Caixa de Entrada) */}
                 <RecordTasks phone={client.phone} />
 
-                {/* Notas */}
-                <Card>
-                  <CardHeader className="pb-3">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-base">Notas</CardTitle>
-                      {!isEditingNotes ? (
-                        <Button variant="ghost" size="sm" onClick={() => setIsEditingNotes(true)}>
-                          <Edit className="h-4 w-4 mr-1" />
-                          Editar
-                        </Button>
-                      ) : (
-                        <div className="flex gap-2">
-                          <Button variant="ghost" size="sm" onClick={handleCancelNotes}>
-                            <X className="h-4 w-4 mr-1" />
-                            Cancelar
-                          </Button>
-                          <Button variant="default" size="sm" onClick={handleSaveNotes} disabled={updateClient.isPending}>
-                            <Save className="h-4 w-4 mr-1" />
-                            Guardar
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    {isEditingNotes ? (
-                      <Textarea
-                        value={editedNotes}
-                        onChange={(e) => setEditedNotes(e.target.value)}
-                        placeholder="Adicionar notas sobre este cliente..."
-                        className="min-h-[120px]"
-                      />
-                    ) : (
-                      <div 
-                        className="text-sm text-muted-foreground whitespace-pre-wrap min-h-[80px] p-3 bg-muted/30 rounded-lg cursor-pointer hover:bg-muted/50 transition-colors"
-                        onClick={() => setIsEditingNotes(true)}
-                      >
-                        {client.notes || "Clique para adicionar notas..."}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
+                {/* Unified contact notes (shared with the inbox & lead record) */}
+                <ContactNotes phone={client.phone} source="crm" />
 
                 {/* Histórico / Timeline */}
                 <Card>

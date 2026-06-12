@@ -21,6 +21,7 @@ import {
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { useUpdateClient } from "@/hooks/useClients";
+import { useAddContactNote } from "@/hooks/useContactNotes";
 import { useClientLabels } from "@/hooks/useClientLabels";
 import { useNifValidation } from "@/hooks/useNifValidation";
 import { useTeamMembers } from "@/hooks/useTeam";
@@ -71,6 +72,7 @@ export function EditClientModal({ client, open, onOpenChange, inboxContact }: Ed
   const [grupoEconomico, setGrupoEconomico] = useState("");
 
   const updateClient = useUpdateClient();
+  const addContactNote = useAddContactNote();
 
   const nifValidation = useNifValidation({
     nif,
@@ -95,7 +97,8 @@ export function EditClientModal({ client, open, onOpenChange, inboxContact }: Ed
       setBillingTarget((client.billing_target as BillingTarget) || "client");
       setStatus(client.status);
       setSource(client.source || "");
-      setNotes(client.notes || "");
+      // Notes live in the unified timeline now — this field just ADDS a new note.
+      setNotes("");
       setAssignedTo(client.assigned_to || "");
       setAddressLine1(client.address_line1 || "");
       setAddressLine2(client.address_line2 || "");
@@ -116,7 +119,7 @@ export function EditClientModal({ client, open, onOpenChange, inboxContact }: Ed
     if (settings.nif.visible && settings.nif.required && !nif.trim()) return false;
     if (settings.company_nif?.visible && settings.company_nif?.required && !companyNif.trim()) return false;
     if (settings.address.visible && settings.address.required && !addressLine1.trim()) return false;
-    if (settings.notes.visible && settings.notes.required && !notes.trim()) return false;
+    // Notes are now an optional "add note to timeline" box — never block on them.
     if (nifValidation.isDuplicate || companyNifValidation.isDuplicate) return false;
     return true;
   }, [name, email, phone, company, nif, companyNif, addressLine1, notes, settings, nifValidation.isDuplicate, companyNifValidation.isDuplicate]);
@@ -137,7 +140,6 @@ export function EditClientModal({ client, open, onOpenChange, inboxContact }: Ed
         billing_target: billingTarget,
         status,
         source: source || null,
-        notes: notes.trim() || null,
         address_line1: addressLine1.trim() || null,
         address_line2: addressLine2.trim() || null,
         city: city.trim() || null,
@@ -150,6 +152,11 @@ export function EditClientModal({ client, open, onOpenChange, inboxContact }: Ed
       },
       {
         onSuccess: () => {
+          const noteText = notes.trim();
+          const notePhone = phone.trim();
+          if (noteText && notePhone) {
+            addContactNote.mutate({ phone: notePhone, content: noteText, source: "crm" });
+          }
           onOpenChange(false);
         },
       }
@@ -405,12 +412,12 @@ export function EditClientModal({ client, open, onOpenChange, inboxContact }: Ed
                   </Card>
                 )}
 
-                {/* Notes */}
+                {/* Notes — adds a new entry to the unified notes timeline */}
                 {settings.notes.visible && (
                   <Card>
                     <CardHeader className="pb-3">
                       <CardTitle className="text-base">
-                        {settings.notes.label} {settings.notes.required && '*'}
+                        Adicionar nota {settings.notes.required && '*'}
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
@@ -418,7 +425,7 @@ export function EditClientModal({ client, open, onOpenChange, inboxContact }: Ed
                         id="edit-notes"
                         value={notes}
                         onChange={(e) => setNotes(e.target.value)}
-                        placeholder={`Notas sobre o ${labels.singular.toLowerCase()}...`}
+                        placeholder="Escreve uma nota para adicionar ao histórico…"
                         rows={4}
                         required={settings.notes.required}
                       />
