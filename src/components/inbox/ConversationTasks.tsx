@@ -8,6 +8,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "@/hooks/use-toast";
 import {
   useConversationTasks, useCreateInboxTask, useToggleInboxTask, useUpdateInboxTask,
   useDeleteInboxTask, useAcceptSuggestedTask, useAiTasksEnabled, useSaveAiTasksEnabled,
@@ -162,13 +163,29 @@ export function ConversationTasks({
         <button
           type="button"
           title={aiEnabled ? "Sugestões por IA: ligadas (clica para desligar)" : "Sugestões por IA: desligadas (clica para ligar)"}
-          onClick={() => saveAiEnabled.mutate(!aiEnabled)}
+          onClick={() => {
+            const next = !aiEnabled;
+            saveAiEnabled.mutate(next, {
+              onSuccess: () =>
+                toast({
+                  title: next ? "✨ Sugestões por IA ligadas" : "Sugestões por IA desligadas",
+                  description: next
+                    ? "A IA vai sugerir tarefas a partir de promessas e pedidos nas conversas."
+                    : "A IA deixa de sugerir tarefas nesta organização.",
+                }),
+              onError: (err) =>
+                toast({ title: "Não foi possível alterar", description: (err as Error).message, variant: "destructive" }),
+            });
+          }}
           className={cn(
-            "ml-auto rounded p-0.5 transition-colors",
-            aiEnabled ? "text-violet-500 hover:text-violet-600" : "text-muted-foreground/40 hover:text-muted-foreground",
+            "ml-auto flex items-center gap-1 rounded px-1 py-0.5 text-[10px] font-medium normal-case tracking-normal transition-colors",
+            aiEnabled
+              ? "bg-violet-500/10 text-violet-600 hover:bg-violet-500/20"
+              : "bg-muted text-muted-foreground/60 hover:text-muted-foreground",
           )}
         >
-          <Sparkles className="h-3.5 w-3.5" />
+          <Sparkles className="h-3 w-3" />
+          {aiEnabled ? "IA on" : "IA off"}
         </button>
       </p>
 

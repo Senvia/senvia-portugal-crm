@@ -236,12 +236,26 @@ export function useSaveAiTasksEnabled() {
         .eq('channel_type', 'whatsapp')
         .maybeSingle();
       const metadata = { ...((data?.metadata as Record<string, unknown>) ?? {}), ai_tasks_enabled: enabled };
-      const { error } = await supabase
+      // .select() detects silent RLS denials (0 rows updated = no permission).
+      const { data: updated, error } = await supabase
         .from('messaging_channels')
         .update({ metadata })
         .eq('organization_id', organization.id)
-        .eq('channel_type', 'whatsapp');
+        .eq('channel_type', 'whatsapp')
+        .select('id');
       if (error) throw error;
+      if (!updated || updated.length === 0) throw new Error('Apenas administradores podem alterar esta opção.');
+    },
+    // Optimistic: the sparkles flips on click; rolls back if the server refuses.
+    onMutate: async (enabled) => {
+      const key = ['inbox-ai-tasks-enabled', organization?.id];
+      await queryClient.cancelQueries({ queryKey: key });
+      const previous = queryClient.getQueryData<boolean>(key);
+      queryClient.setQueryData(key, enabled);
+      return { previous };
+    },
+    onError: (_e, _v, ctx) => {
+      queryClient.setQueryData(['inbox-ai-tasks-enabled', organization?.id], ctx?.previous);
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['inbox-ai-tasks-enabled'] });
