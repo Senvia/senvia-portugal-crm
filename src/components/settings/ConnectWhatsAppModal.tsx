@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import {
   Dialog,
   DialogContent,
@@ -25,6 +25,11 @@ export function ConnectWhatsAppModal({ open, onOpenChange, channelId, label }: C
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   // For a new channel the id is only known after the first connect() response.
   const [activeChannelId, setActiveChannelId] = useState<string | undefined>(channelId);
+  // Refs avoid stale closures in the refresh interval: it always reconnects the
+  // SAME channel instead of creating a new row, and never fires while one is
+  // already in flight (the cause of the duplicate "A ligar..." rows).
+  const activeIdRef = useRef<string | undefined>(channelId);
+  const inFlightRef = useRef(false);
 
   // Only poll status once we KNOW which channel we're connecting. For a new caixa
   // the id only exists after the first connect() response; polling earlier (with no
@@ -33,12 +38,18 @@ export function ConnectWhatsAppModal({ open, onOpenChange, channelId, label }: C
   const { data: status } = useWhatsappStatus(open && !!activeChannelId, activeChannelId);
   const connected = status?.status === "connected";
 
-  // Fetch (or refresh) the QR code.
-  const refreshQr = async () => {
+  // Fetch (or refresh) the QR code. Guarded so concurrent/duplicate calls (e.g. the
+  // 30s refresh firing before a slow first connect returns) never create extra rows.
+  const refreshQr = useCallback(async () => {
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
     try {
       setErrorMsg(null);
-      const data = await connect({ channelId: activeChannelId ?? channelId, label });
-      if (data.channel_id) setActiveChannelId(data.channel_id);
+      const data = await connect({ channelId: activeIdRef.current ?? channelId, label });
+      if (data.channel_id) {
+        activeIdRef.current = data.channel_id;
+        setActiveChannelId(data.channel_id);
+      }
       if (data.already_connected) {
         setQr(null);
         setPairingCode(null);
@@ -48,18 +59,22 @@ export function ConnectWhatsAppModal({ open, onOpenChange, channelId, label }: C
       setPairingCode(data.pairing_code ?? null);
     } catch (e) {
       setErrorMsg((e as Error).message || "Não foi possível gerar o QR code.");
+    } finally {
+      inFlightRef.current = false;
     }
-  };
+  }, [connect, channelId, label]);
 
   // On open: load the first QR. On close: reset state.
   useEffect(() => {
     if (open) {
+      activeIdRef.current = channelId;
       setActiveChannelId(channelId);
       refreshQr();
     } else {
       setQr(null);
       setPairingCode(null);
       setErrorMsg(null);
+      activeIdRef.current = channelId;
       setActiveChannelId(channelId);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
