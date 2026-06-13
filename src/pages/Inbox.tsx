@@ -507,6 +507,7 @@ export default function Inbox() {
   const [newConvOpen, setNewConvOpen] = useState(false);
   const [newConvPhone, setNewConvPhone] = useState("");
   const [newConvMessage, setNewConvMessage] = useState("");
+  const [newConvCaixa, setNewConvCaixa] = useState<number | null>(null); // chatwoot_inbox_id to send from
   // Rename contact dialog.
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameValue, setRenameValue] = useState("");
@@ -1304,12 +1305,19 @@ export default function Inbox() {
   };
 
   // ---- New conversation ----
+  // Connected caixas we can send a new conversation from (need a known inbox id).
+  const sendableCaixas = useMemo(
+    () => channels.filter((c) => c.status === "connected" && c.chatwoot_inbox_id != null),
+    [channels],
+  );
+  const effectiveNewConvCaixa = newConvCaixa ?? sendableCaixas[0]?.chatwoot_inbox_id ?? null;
+
   const handleStartConversation = () => {
     const phone = newConvPhone.replace(/\D/g, "");
     const content = newConvMessage.trim();
     if (phone.length < 9 || !content) return;
     startConversation.mutate(
-      { phone, content },
+      { phone, content, inboxId: effectiveNewConvCaixa },
       {
         onSuccess: () => {
           setNewConvOpen(false);
@@ -1324,17 +1332,17 @@ export default function Inbox() {
     );
   };
 
-  // ---- Empty state: WhatsApp never configured ----
+  // ---- Empty state: no caixa connected yet ----
   if (!channelConfigured) {
     return (
       <div className="flex h-screen flex-col items-center justify-center gap-4 p-8 text-center">
-        <div className="rounded-2xl bg-green-500/10 p-5">
-          <Smartphone className="h-12 w-12 text-green-600" />
+        <div className="rounded-2xl bg-primary/10 p-5">
+          <Inbox className="h-12 w-12 text-primary" />
         </div>
         <div>
-          <h2 className="text-xl font-semibold">Liga o teu WhatsApp</h2>
+          <h2 className="text-xl font-semibold">Liga a tua primeira caixa de entrada</h2>
           <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-            Conecta o teu número para receberes e responderes às mensagens dos clientes aqui, dentro do Senvia.
+            Conecta um canal para receberes e responderes às mensagens dos clientes aqui, dentro do Senvia. O WhatsApp já está disponível (Instagram, Facebook e Email em breve).
           </p>
         </div>
         <Button onClick={() => setConnectOpen(true)}>
@@ -1365,6 +1373,11 @@ export default function Inbox() {
             )}
             {crmRecord?.email && (
               <p className="truncate text-xs text-muted-foreground">{crmRecord.email}</p>
+            )}
+            {channelByInbox.size > 1 && selected.inbox_id != null && channelByInbox.get(selected.inbox_id) && (
+              <p className="truncate text-[11px] text-muted-foreground">
+                via {channelByInbox.get(selected.inbox_id)!.label || "WhatsApp"}
+              </p>
             )}
             <div className="pt-1">
               {contactMatch ? (
@@ -2453,6 +2466,29 @@ export default function Inbox() {
             <DialogTitle>Nova conversa</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
+            {sendableCaixas.length > 1 && (
+              <div>
+                <label className="mb-1 block text-xs font-medium text-muted-foreground">Enviar pela caixa</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {sendableCaixas.map((c) => {
+                    const active = effectiveNewConvCaixa === c.chatwoot_inbox_id;
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => setNewConvCaixa(c.chatwoot_inbox_id ?? null)}
+                        className={cn(
+                          "rounded-full px-2.5 py-1 text-xs font-medium transition-colors",
+                          active ? "bg-foreground text-background" : "bg-muted text-muted-foreground hover:bg-accent",
+                        )}
+                      >
+                        {c.label || "WhatsApp"}{c.phone_number ? ` · +${c.phone_number}` : ""}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
             <div>
               <label className="mb-1 block text-xs font-medium text-muted-foreground">Número de WhatsApp</label>
               <Input

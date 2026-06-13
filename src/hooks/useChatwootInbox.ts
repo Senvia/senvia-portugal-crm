@@ -528,12 +528,13 @@ export function useStartConversation() {
   const { organization } = useAuth();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ phone, content }: { phone: string; content: string }) => {
+    mutationFn: async ({ phone, content, inboxId }: { phone: string; content: string; inboxId?: number | null }) => {
       if (!organization?.id) throw new Error('Organização não encontrada');
       return invokeInbox<{ ok: boolean }>(organization.id, {
         action: 'start_conversation',
         phone,
         content,
+        inbox_id: inboxId ?? undefined,
       });
     },
     onSuccess: () => {
