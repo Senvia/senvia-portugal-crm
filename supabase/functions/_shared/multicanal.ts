@@ -199,7 +199,7 @@ export async function chatwootFetch(
     method,
     headers: { 'Content-Type': 'application/json', api_access_token: token },
     body: body ? JSON.stringify(body) : undefined,
-  });
+  }, 25000);
 }
 
 // Call the Evolution API.
@@ -209,11 +209,13 @@ export async function evolutionFetch(
   method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET',
   body?: unknown,
 ): Promise<Response> {
+  // Evolution instance provisioning (create + QR for a fresh number) can take well
+  // over the default 15s, so give it a longer leash to avoid a false 500/AbortError.
   return fetchWithTimeout(`${cfg.evolutionUrl}${path}`, {
     method,
     headers: { 'Content-Type': 'application/json', apikey: cfg.evolutionKey },
     body: body ? JSON.stringify(body) : undefined,
-  });
+  }, 45000);
 }
 
 interface OrgRow {
