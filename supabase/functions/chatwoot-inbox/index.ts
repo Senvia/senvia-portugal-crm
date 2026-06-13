@@ -382,12 +382,18 @@ Deno.serve(async (req) => {
       const pageNums = body.mode === 'fresh' ? [1, 2] : [1, 2, 3, 4, 5, 6];
       const pages = await Promise.all(
         pageNums.map(async (page) => {
-          const res = await chatwootFetch(
-            cfg, cw.token, `${base}/conversations?status=all&assignee_type=all&page=${page}`,
-          );
-          if (!res.ok) return page === 1 ? null : [];
-          const data = await res.json();
-          return data?.data?.payload ?? data?.payload ?? [];
+          // A slow/aborted page must NOT fail the whole list (Chatwoot can be slow
+          // and the fetch aborts on timeout). Degrade to an empty page instead.
+          try {
+            const res = await chatwootFetch(
+              cfg, cw.token, `${base}/conversations?status=all&assignee_type=all&page=${page}`,
+            );
+            if (!res.ok) return page === 1 ? null : [];
+            const data = await res.json();
+            return data?.data?.payload ?? data?.payload ?? [];
+          } catch (_e) {
+            return [];
+          }
         }),
       );
       if (pages[0] === null) return json({ error: 'Falha ao carregar conversas' }, 502);
@@ -435,11 +441,15 @@ Deno.serve(async (req) => {
       let ids = reqIds;
       if (!vis.isAdmin && vis.restricted.size > 0) {
         const checked = await Promise.all(reqIds.map(async (id) => {
-          const r = await chatwootFetch(cfg, cw.token, `${base}/conversations/${id}`);
-          if (!r.ok) return null;
-          const conv = await r.json();
-          const inbox = conv?.inbox_id ?? conv?.payload?.inbox_id ?? null;
-          return canSee(vis, inbox) ? id : null;
+          try {
+            const r = await chatwootFetch(cfg, cw.token, `${base}/conversations/${id}`);
+            if (!r.ok) return null;
+            const conv = await r.json();
+            const inbox = conv?.inbox_id ?? conv?.payload?.inbox_id ?? null;
+            return canSee(vis, inbox) ? id : null;
+          } catch (_e) {
+            return null;
+          }
         }));
         ids = checked.filter((x): x is number => x != null);
       }
@@ -448,21 +458,30 @@ Deno.serve(async (req) => {
       // "before" pages back through history — applies to the primary conversation.
       const before = body.before ? `?before=${encodeURIComponent(String(body.before))}` : '';
       if (before) {
-        const res = await chatwootFetch(
-          cfg, cw.token, `${base}/conversations/${ids[0]}/messages${before}`,
-        );
-        if (!res.ok) return json({ error: 'Falha ao carregar mensagens' }, 502);
-        const data = await res.json();
-        return json({ messages: (data?.payload ?? []).map((m: any) => normalizeMessage(m, cfg.chatwootUrl)) });
+        try {
+          const res = await chatwootFetch(
+            cfg, cw.token, `${base}/conversations/${ids[0]}/messages${before}`,
+          );
+          if (!res.ok) return json({ error: 'Falha ao carregar mensagens' }, 502);
+          const data = await res.json();
+          return json({ messages: (data?.payload ?? []).map((m: any) => normalizeMessage(m, cfg.chatwootUrl)) });
+        } catch (_e) {
+          return json({ messages: [] });
+        }
       }
 
-      // Merge the threads of all conversations of this contact into one.
+      // Merge the threads of all conversations of this contact into one. A slow/
+      // aborted thread degrades to empty instead of failing the whole request.
       const results = await Promise.all(
         ids.map(async (id) => {
-          const res = await chatwootFetch(cfg, cw.token, `${base}/conversations/${id}/messages`);
-          if (!res.ok) return [];
-          const data = await res.json();
-          return (data?.payload ?? []).map((m: any) => normalizeMessage(m, cfg.chatwootUrl));
+          try {
+            const res = await chatwootFetch(cfg, cw.token, `${base}/conversations/${id}/messages`);
+            if (!res.ok) return [];
+            const data = await res.json();
+            return (data?.payload ?? []).map((m: any) => normalizeMessage(m, cfg.chatwootUrl));
+          } catch (_e) {
+            return [];
+          }
         }),
       );
       const merged = results
