@@ -46,7 +46,7 @@ async function handleWebhookMode(req: Request, token: string): Promise<Response>
   try {
     const { data } = await supabase
       .from('lead_intake_webhooks')
-      .select('id, organization_id, name, is_active, assigned_user_ids, rotate_enabled')
+      .select('id, organization_id, name, is_active, assigned_user_ids, rotate_enabled, notify_all_admins')
       .eq('token', token)
       .maybeSingle();
     intakeWebhook = data;
@@ -203,9 +203,13 @@ async function handleWebhookMode(req: Request, token: string): Promise<Response>
   //  2) Legacy dedicated webhook -> forced single user
   //  3) Legacy general webhook -> org-level round-robin
   let autoAssignedTo: string | null = null;
+  // Notificacao: por defeito todos os admins recebem (legacy/dedicado/standard).
+  // Nos webhooks de entrada, respeita o toggle "notify_all_admins": se false,
+  // so o utilizador a quem o lead foi atribuido e' notificado.
+  const notifyAllAdmins = isIntakeWebhook ? (intakeWebhook?.notify_all_admins !== false) : true;
   if (isIntakeWebhook) {
     autoAssignedTo = intakeAssignee;
-    console.log('Inbound webhook assignee:', autoAssignedTo);
+    console.log('Inbound webhook assignee:', autoAssignedTo, '| notifyAllAdmins:', notifyAllAdmins);
   } else if (dedicatedUserId) {
     autoAssignedTo = dedicatedUserId;
     console.log('Dedicated webhook: bypassing round-robin, assigning to', dedicatedUserId);
@@ -329,31 +333,36 @@ async function handleWebhookMode(req: Request, token: string): Promise<Response>
     }).catch((err) => console.error(`Webhook failed: ${whUrl}`, err.message));
   }
 
-  // Push notification - fetch admin IDs to target only admins + assigned
+  // Push notification - target admins (unless this webhook opted out) + assigned
   try {
-    const { data: pushAdminMembers } = await supabase
-      .from('organization_members')
-      .select('user_id')
-      .eq('organization_id', org.id)
-      .eq('role', 'admin')
-      .eq('is_active', true);
-    const pushUserIds = (pushAdminMembers || []).map((m: any) => m.user_id);
+    let pushUserIds: string[] = [];
+    if (notifyAllAdmins) {
+      const { data: pushAdminMembers } = await supabase
+        .from('organization_members')
+        .select('user_id')
+        .eq('organization_id', org.id)
+        .eq('role', 'admin')
+        .eq('is_active', true);
+      pushUserIds = (pushAdminMembers || []).map((m: any) => m.user_id);
+    }
     if (autoAssignedTo && !pushUserIds.includes(autoAssignedTo)) {
       pushUserIds.push(autoAssignedTo);
     }
 
-    fetch(`${supabaseUrl}/functions/v1/send-push-notification`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${serviceRoleKey}` },
-      body: JSON.stringify({
-        organization_id: org.id,
-        user_ids: pushUserIds,
-        title: '🚀 Novo Lead!',
-        body: `${lead.name} - ${lead.source}`,
-        url: '/leads',
-        tag: `lead-${lead.id}`,
-      }),
-    }).catch((err) => console.error('Push failed:', err.message));
+    if (pushUserIds.length > 0) {
+      fetch(`${supabaseUrl}/functions/v1/send-push-notification`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${serviceRoleKey}` },
+        body: JSON.stringify({
+          organization_id: org.id,
+          user_ids: pushUserIds,
+          title: '🚀 Novo Lead!',
+          body: `${lead.name} - ${lead.source}`,
+          url: '/leads',
+          tag: `lead-${lead.id}`,
+        }),
+      }).catch((err) => console.error('Push failed:', err.message));
+    }
   } catch (pushErr) {
     console.error('Error preparing push notification:', pushErr);
   }
@@ -367,17 +376,19 @@ async function handleWebhookMode(req: Request, token: string): Promise<Response>
     const senderName = orgBrevoEmail ? org.name : 'Senvia';
 
     if (brevoKey) {
-      // Fetch admin emails
-      const { data: adminMembers } = await supabase
-        .from('organization_members')
-        .select('user_id')
-        .eq('organization_id', org.id)
-        .eq('role', 'admin')
-        .eq('is_active', true);
+      // Fetch admin emails (unless this webhook opted out of admin-wide notification)
+      let adminIds: string[] = [];
+      if (notifyAllAdmins) {
+        const { data: adminMembers } = await supabase
+          .from('organization_members')
+          .select('user_id')
+          .eq('organization_id', org.id)
+          .eq('role', 'admin')
+          .eq('is_active', true);
+        adminIds = (adminMembers || []).map((m: any) => m.user_id);
+      }
 
-      const adminIds = (adminMembers || []).map((m: any) => m.user_id);
-
-      // Add assigned salesperson if not already admin
+      // Add assigned salesperson if not already included
       if (autoAssignedTo && !adminIds.includes(autoAssignedTo)) {
         adminIds.push(autoAssignedTo);
       }
