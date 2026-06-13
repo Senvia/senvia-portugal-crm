@@ -53,6 +53,7 @@ import { ContactNotes } from "@/components/contacts/ContactNotes";
 import { useOpenInboxTasks, isTaskOverdue, phoneSuffix } from "@/hooks/useInboxTasks";
 import { useCreateEvent } from "@/hooks/useCalendarEvents";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useClientProposals, useClientSales } from "@/hooks/useClientHistory";
 import { useClient } from "@/hooks/useClients";
 import { useLeadById, useUpdateLeadStatus, useUpdateLead } from "@/hooks/useLeads";
@@ -454,6 +455,15 @@ export default function Inbox() {
   const { toast } = useToast();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { isAdmin } = usePermissions();
+  // Caixas the current user may see (mirrors the server visibility rule): admin,
+  // caixa with no assignees, or a caixa the user is assigned to.
+  const visibleCaixas = useMemo(
+    () => [...channelByInbox.values()].filter(
+      (c) => isAdmin || !c.assigned_user_ids?.length || (!!user?.id && c.assigned_user_ids.includes(user.id)),
+    ),
+    [channelByInbox, isAdmin, user?.id],
+  );
   const [connectOpen, setConnectOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
@@ -544,7 +554,8 @@ export default function Inbox() {
   // The full connect screen only shows when the channel was NEVER configured.
   // A configured-but-dropped channel keeps the inbox usable (Chatwoot still
   // serves history) with a reconnect banner instead.
-  const channelConfigured = !!channel;
+  // Inbox is usable as soon as the org has ANY connected caixa (not only WhatsApp).
+  const channelConfigured = channels.some((c) => c.status === "connected") || !!channel;
   // Realtime: refetch the instant a message lands (incoming or our mirrored
   // sends). While connected, the polls below stretch into mere safety nets.
   const live = useInboxRealtime();
@@ -712,10 +723,16 @@ export default function Inbox() {
 
   // Number of CONVERSATIONS with unread messages (not message total) — matches
   // the sidebar badge and avoids inflated counts from old imported history.
-  const unreadTotal = useMemo(() => countUnreadConversations(visible), [visible]);
+  // Tab counts reflect the active caixa filter (else the numbers mislead when a
+  // single caixa is selected).
+  const scoped = useMemo(
+    () => (caixaFilter != null ? visible.filter((c) => c.inbox_id === caixaFilter) : visible),
+    [visible, caixaFilter],
+  );
+  const unreadTotal = useMemo(() => countUnreadConversations(scoped), [scoped]);
   const waitingTotal = useMemo(
-    () => visible.filter((c) => c.status !== "resolved" && !!c.waiting_since).length,
-    [visible],
+    () => scoped.filter((c) => c.status !== "resolved" && !!c.waiting_since).length,
+    [scoped],
   );
 
   // Notification sound when new unread messages arrive while the page is open.
@@ -1305,12 +1322,17 @@ export default function Inbox() {
   };
 
   // ---- New conversation ----
-  // Connected caixas we can send a new conversation from (need a known inbox id).
+  // Caixas the user can send a new conversation from (visible + connected).
   const sendableCaixas = useMemo(
-    () => channels.filter((c) => c.status === "connected" && c.chatwoot_inbox_id != null),
-    [channels],
+    () => visibleCaixas.filter((c) => c.status === "connected"),
+    [visibleCaixas],
   );
-  const effectiveNewConvCaixa = newConvCaixa ?? sendableCaixas[0]?.chatwoot_inbox_id ?? null;
+  const effectiveNewConvCaixa =
+    newConvCaixa
+    ?? (caixaFilter != null && sendableCaixas.some((c) => c.chatwoot_inbox_id === caixaFilter)
+      ? caixaFilter
+      : sendableCaixas[0]?.chatwoot_inbox_id)
+    ?? null;
 
   const handleStartConversation = () => {
     const phone = newConvPhone.replace(/\D/g, "");
@@ -1374,7 +1396,7 @@ export default function Inbox() {
             {crmRecord?.email && (
               <p className="truncate text-xs text-muted-foreground">{crmRecord.email}</p>
             )}
-            {channelByInbox.size > 1 && selected.inbox_id != null && channelByInbox.get(selected.inbox_id) && (
+            {visibleCaixas.length > 1 && selected.inbox_id != null && channelByInbox.get(selected.inbox_id) && (
               <p className="truncate text-[11px] text-muted-foreground">
                 via {channelByInbox.get(selected.inbox_id)!.label || "WhatsApp"}
               </p>
@@ -1840,8 +1862,8 @@ export default function Inbox() {
             ))}
           </div>
 
-          {/* Caixa filter — only when the org has more than one identifiable caixa */}
-          {channelByInbox.size > 1 && (
+          {/* Caixa filter — only when the user can see more than one caixa */}
+          {visibleCaixas.length > 1 && (
             <div className="flex flex-wrap gap-1.5 mt-2 border-t pt-2">
               <button
                 onClick={() => setCaixaFilter(null)}
@@ -1852,7 +1874,7 @@ export default function Inbox() {
               >
                 Todas as caixas
               </button>
-              {[...channelByInbox.values()].map((ch) => {
+              {visibleCaixas.map((ch) => {
                 const active = caixaFilter === ch.chatwoot_inbox_id;
                 const dot = ch.channel_type === 'whatsapp' ? '#25D366'
                   : ch.channel_type === 'instagram' ? '#E4405F'
@@ -1905,7 +1927,7 @@ export default function Inbox() {
                 muted={muted.includes(c.id)}
                 taskState={taskStateByPhone.get(phoneSuffix(c.contact_phone)) ?? null}
                 viewers={presence.get(c.id)}
-                caixaLabel={channelByInbox.size > 1 && c.inbox_id != null ? channelByInbox.get(c.inbox_id)?.label ?? null : null}
+                caixaLabel={visibleCaixas.length > 1 && c.inbox_id != null ? channelByInbox.get(c.inbox_id)?.label ?? null : null}
                 onSelect={setSelectedId}
               />
             ))

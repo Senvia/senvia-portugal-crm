@@ -423,15 +423,27 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'get_messages') {
-      const ids: number[] = Array.isArray(body.conversation_ids) && body.conversation_ids.length > 0
+      const reqIds: number[] = Array.isArray(body.conversation_ids) && body.conversation_ids.length > 0
         ? body.conversation_ids.map(Number).filter(Boolean)
         : conversation_id ? [Number(conversation_id)] : [];
-      if (ids.length === 0) return json({ error: 'conversation_id em falta' }, 400);
+      if (reqIds.length === 0) return json({ error: 'conversation_id em falta' }, 400);
 
-      // Block reading a restricted caixa the viewer can't access.
-      if (body.inbox_id != null && !canSee(await getVisibility(), Number(body.inbox_id))) {
-        return json({ error: 'Sem acesso a esta caixa' }, 403);
+      // Block reading a restricted caixa the viewer can't access. For non-admins
+      // with restricted caixas, resolve EACH conversation's inbox and drop the ones
+      // they can't see (a contact can have threads across caixas; never leak one).
+      const vis = await getVisibility();
+      let ids = reqIds;
+      if (!vis.isAdmin && vis.restricted.size > 0) {
+        const checked = await Promise.all(reqIds.map(async (id) => {
+          const r = await chatwootFetch(cfg, cw.token, `${base}/conversations/${id}`);
+          if (!r.ok) return null;
+          const conv = await r.json();
+          const inbox = conv?.inbox_id ?? conv?.payload?.inbox_id ?? null;
+          return canSee(vis, inbox) ? id : null;
+        }));
+        ids = checked.filter((x): x is number => x != null);
       }
+      if (ids.length === 0) return json({ messages: [] });
 
       // "before" pages back through history — applies to the primary conversation.
       const before = body.before ? `?before=${encodeURIComponent(String(body.before))}` : '';
