@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Webhook, Send, Loader2, Eye, EyeOff, MessageCircle, Mail, Receipt, ArrowLeft, ChevronRight, ChevronDown, Plus, Trash2, Link2, Copy, Check, Users, RefreshCw, Pencil, CheckCircle2, ShieldCheck, Inbox, Megaphone, Instagram, Facebook } from "lucide-react";
+import { Webhook, Send, Loader2, Eye, EyeOff, MessageCircle, Mail, Receipt, ArrowLeft, ChevronRight, ChevronDown, Plus, Trash2, Link2, Copy, Check, Users, RefreshCw, Pencil, CheckCircle2, ShieldCheck, Inbox, Megaphone } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LucideIcon } from "lucide-react";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -18,6 +18,7 @@ import { useTeamMembers } from "@/hooks/useTeam";
 import { useTestWebhook } from "@/hooks/useOrganization";
 import { useMessagingChannels, useDeleteChannel, useCleanupOrphanChannels } from "@/hooks/useMessagingChannels";
 import { ConnectWhatsAppModal } from "./ConnectWhatsAppModal";
+import { WhatsAppIcon, InstagramIcon, MessengerIcon } from "./channelIcons";
 import { useAuth } from "@/contexts/AuthContext";
 
 interface IntegrationsContentProps {
@@ -862,15 +863,16 @@ function IntakeWebhookCard({
 
 // Channel catalog for the "+ Nova caixa" picker. Only WhatsApp is active in
 // Phase 1; Instagram/Facebook/Email are shown as coming soon.
-const CHANNEL_CATALOG: { type: string; label: string; icon: LucideIcon; available: boolean }[] = [
-  { type: 'whatsapp', label: 'WhatsApp', icon: MessageCircle, available: true },
-  { type: 'instagram', label: 'Instagram', icon: Instagram, available: false },
-  { type: 'facebook', label: 'Facebook Messenger', icon: Facebook, available: false },
-  { type: 'email', label: 'Email', icon: Mail, available: false },
+type ChannelIcon = React.ComponentType<{ className?: string }>;
+const CHANNEL_CATALOG: { type: string; label: string; icon: ChannelIcon; color: string; available: boolean }[] = [
+  { type: 'whatsapp', label: 'WhatsApp', icon: WhatsAppIcon, color: 'text-[#25D366]', available: true },
+  { type: 'instagram', label: 'Instagram', icon: InstagramIcon, color: 'text-[#E4405F]', available: false },
+  { type: 'facebook', label: 'Facebook Messenger', icon: MessengerIcon, color: 'text-[#0084FF]', available: false },
+  { type: 'email', label: 'Email', icon: Mail, color: 'text-muted-foreground', available: false },
 ];
 
 function channelMeta(type: string) {
-  return CHANNEL_CATALOG.find((c) => c.type === type) || { type, label: type, icon: MessageCircle, available: true };
+  return CHANNEL_CATALOG.find((c) => c.type === type) || { type, label: type, icon: MessageCircle, color: 'text-muted-foreground', available: true };
 }
 
 const CHANNEL_STATUS_LABEL: Record<string, string> = {
@@ -915,8 +917,8 @@ function InboxesManager() {
             const connected = ch.status === 'connected';
             return (
               <div key={ch.id} className="flex items-center gap-3 p-3 rounded-lg border bg-card">
-                <div className={cn('rounded-md p-2 shrink-0', connected ? 'bg-green-500/10' : 'bg-muted')}>
-                  <Icon className={cn('h-5 w-5', connected ? 'text-green-600' : 'text-muted-foreground')} />
+                <div className={cn('rounded-md p-2 shrink-0', connected ? 'bg-muted' : 'bg-muted opacity-60')}>
+                  <Icon className={cn('h-5 w-5', meta.color)} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-sm truncate">
@@ -970,7 +972,7 @@ function InboxesManager() {
                     c.available ? '' : 'opacity-50',
                   )}
                 >
-                  <Icon className="h-5 w-5 shrink-0 text-primary" />
+                  <Icon className={cn('h-5 w-5 shrink-0', c.color)} />
                   <span className="text-sm font-medium min-w-0">
                     {c.label}
                     {!c.available && <span className="block text-[10px] text-muted-foreground font-normal">Em breve</span>}
