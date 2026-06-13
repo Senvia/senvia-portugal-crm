@@ -279,7 +279,9 @@ export function useInboxConversations(enabled = true, live = false) {
     queryKey: ['inbox-conversations', organization?.id],
     queryFn: () => (organization?.id ? fetchConversationsMerged(queryClient, organization.id) : Promise.resolve([])),
     enabled: enabled && !!organization?.id,
-    refetchInterval: !enabled || mutating ? false : live ? 20000 : 5000,
+    // Gentle fallback polling (realtime is the primary freshness path). 5s was too
+    // aggressive and piled up requests on a slow Chatwoot; 15s is plenty as a net.
+    refetchInterval: !enabled || mutating ? false : live ? 20000 : 15000,
   });
 }
 
@@ -348,8 +350,8 @@ export function useInboxMessages(conversationId: number | null, altIds: number[]
     },
     enabled: !!organization?.id && !!conversationId,
     // Suspend polling during a mutation so a refetch can't revert the optimistic
-    // bubble/patch mid-send.
-    refetchInterval: !conversationId || mutating ? false : live ? 15000 : 2500,
+    // bubble/patch mid-send. Relaxed fallback (was 2.5s, too heavy on a slow Chatwoot).
+    refetchInterval: !conversationId || mutating ? false : live ? 15000 : 8000,
     // Keep already-opened conversations cached: switching back shows the thread
     // instantly (background refetch updates it) instead of a full-screen loader.
     gcTime: 30 * 60 * 1000,
