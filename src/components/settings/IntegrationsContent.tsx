@@ -16,7 +16,7 @@ import { useOrganizationWebhooks, useCreateWebhook, useToggleWebhook, useDeleteW
 import { useLeadIntakeWebhooks, useCreateLeadIntakeWebhook, useUpdateLeadIntakeWebhook, useDeleteLeadIntakeWebhook, LeadIntakeWebhook } from "@/hooks/useLeadIntakeWebhooks";
 import { useTeamMembers } from "@/hooks/useTeam";
 import { useTestWebhook } from "@/hooks/useOrganization";
-import { useMessagingChannels, useDeleteChannel, useCleanupOrphanChannels } from "@/hooks/useMessagingChannels";
+import { useMessagingChannels, useDeleteChannel, useCleanupOrphanChannels, useUpdateChannelAssignment } from "@/hooks/useMessagingChannels";
 import { ConnectWhatsAppModal } from "./ConnectWhatsAppModal";
 import { WhatsAppIcon, InstagramIcon, MessengerIcon } from "./channelIcons";
 import { useAuth } from "@/contexts/AuthContext";
@@ -887,8 +887,11 @@ const CHANNEL_STATUS_LABEL: Record<string, string> = {
 // surfaced as "em breve" until their providers are wired.
 function InboxesManager() {
   const { data: channels = [] } = useMessagingChannels();
+  const { data: members = [] } = useTeamMembers();
   const deleteChannel = useDeleteChannel();
   const cleanupOrphans = useCleanupOrphanChannels();
+  const updateAssign = useUpdateChannelAssignment();
+  const [accessId, setAccessId] = useState<string | null>(null); // caixa whose "quem atende" panel is open
   const orphanCount = channels.filter((c) => c.status !== 'connected').length;
   // Modal target: reconnect (channelId) or create new (label, no channelId).
   const [modal, setModal] = useState<{ open: boolean; channelId?: string; label?: string }>({ open: false });
@@ -915,36 +918,108 @@ function InboxesManager() {
             const meta = channelMeta(ch.channel_type);
             const Icon = meta.icon;
             const connected = ch.status === 'connected';
+            const accessOpen = accessId === ch.id;
+            const attendants = ch.assigned_user_ids || [];
             return (
-              <div key={ch.id} className="flex items-center gap-3 p-3 rounded-lg border bg-card">
-                <div className={cn('rounded-md p-2 shrink-0', connected ? 'bg-muted' : 'bg-muted opacity-60')}>
-                  <Icon className={cn('h-5 w-5', meta.color)} />
+              <div key={ch.id} className="rounded-lg border bg-card overflow-hidden">
+                <div className="flex items-center gap-3 p-3">
+                  <div className={cn('rounded-md p-2 shrink-0', connected ? 'bg-muted' : 'bg-muted opacity-60')}>
+                    <Icon className={cn('h-5 w-5', meta.color)} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm truncate">
+                      {ch.label || meta.label}
+                      {ch.phone_number ? ` · +${ch.phone_number}` : ''}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {meta.label} · {CHANNEL_STATUS_LABEL[ch.status] || ch.status}
+                      {attendants.length > 0 && ` · ${attendants.length} a atender`}
+                    </p>
+                  </div>
+                  {connected && (
+                    <Badge variant="outline" className="text-[10px] gap-1 bg-green-500/10 text-green-600 border-green-500/20">
+                      <CheckCircle2 className="h-3 w-3" /> Ligada
+                    </Badge>
+                  )}
+                  {ch.channel_type === 'whatsapp' && (
+                    <Button variant="outline" size="sm" onClick={() => setModal({ open: true, channelId: ch.id })} className="shrink-0">
+                      {connected ? 'Reconectar' : 'Ligar'}
+                    </Button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setAccessId(accessOpen ? null : ch.id)}
+                    className={cn('p-1.5 transition-colors shrink-0', accessOpen ? 'text-primary' : 'text-muted-foreground hover:text-foreground')}
+                    title="Quem atende esta caixa"
+                  >
+                    <Users className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setToDelete(ch.id)}
+                    className="p-1.5 text-muted-foreground hover:text-destructive transition-colors shrink-0"
+                    title="Remover caixa"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm truncate">
-                    {ch.label || meta.label}
-                    {ch.phone_number ? ` · +${ch.phone_number}` : ''}
-                  </p>
-                  <p className="text-xs text-muted-foreground">{meta.label} · {CHANNEL_STATUS_LABEL[ch.status] || ch.status}</p>
-                </div>
-                {connected && (
-                  <Badge variant="outline" className="text-[10px] gap-1 bg-green-500/10 text-green-600 border-green-500/20">
-                    <CheckCircle2 className="h-3 w-3" /> Ligada
-                  </Badge>
+
+                {accessOpen && (
+                  <div className="border-t px-4 py-3 space-y-3 bg-muted/20">
+                    <div className="space-y-1">
+                      <Label className="text-xs flex items-center gap-1.5">
+                        <Users className="h-3.5 w-3.5" /> Quem atende esta caixa
+                      </Label>
+                      <p className="text-[11px] text-muted-foreground">
+                        Vazio = todos veem esta caixa no Inbox. Com pessoas selecionadas, só elas (e os administradores) a veem.
+                      </p>
+                    </div>
+
+                    {members.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">Não há colaboradores na equipa.</p>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                        {members.map((m) => {
+                          const checked = attendants.includes(m.user_id);
+                          return (
+                            <label
+                              key={m.user_id}
+                              className={cn(
+                                'flex items-center gap-2 rounded-md px-2 py-1.5 cursor-pointer transition-colors',
+                                checked ? 'bg-primary/10' : 'hover:bg-accent/50',
+                              )}
+                            >
+                              <Checkbox
+                                checked={checked}
+                                onCheckedChange={() => {
+                                  const next = checked
+                                    ? attendants.filter((id) => id !== m.user_id)
+                                    : [...attendants, m.user_id];
+                                  updateAssign.mutate({ channelId: ch.id, assigned_user_ids: next });
+                                }}
+                              />
+                              <span className="text-sm truncate">{m.full_name}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between gap-3 pt-1 border-t">
+                      <Label className="text-sm font-normal flex items-center gap-2 pt-2">
+                        <RefreshCw className="h-4 w-4 text-muted-foreground" />
+                        Distribuir contactos novos (rotação)
+                      </Label>
+                      <Switch
+                        checked={ch.rotate_enabled}
+                        onCheckedChange={(v) => updateAssign.mutate({ channelId: ch.id, rotate_enabled: v })}
+                      />
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      Com rotação, cada contacto novo desta caixa é atribuído a um dos colaboradores acima, à vez.
+                    </p>
+                  </div>
                 )}
-                {ch.channel_type === 'whatsapp' && (
-                  <Button variant="outline" size="sm" onClick={() => setModal({ open: true, channelId: ch.id })} className="shrink-0">
-                    {connected ? 'Reconectar' : 'Ligar'}
-                  </Button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setToDelete(ch.id)}
-                  className="p-1.5 text-muted-foreground hover:text-destructive transition-colors shrink-0"
-                  title="Remover caixa"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
               </div>
             );
           })}

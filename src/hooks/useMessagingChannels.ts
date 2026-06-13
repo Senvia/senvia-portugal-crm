@@ -15,6 +15,10 @@ export interface MessagingChannel {
   chatwoot_inbox_id: number | null;
   status: ChannelStatus;
   phone_number: string | null;
+  // Collaborators who attend this caixa (empty = everyone). Drives inbox
+  // visibility, auto-assignment and notifications.
+  assigned_user_ids: string[];
+  rotate_enabled: boolean;
   metadata: Record<string, unknown> | null;
   created_at: string | null;
   updated_at: string | null;
@@ -101,6 +105,30 @@ export function useDeleteChannel() {
       });
       if (error) throw error;
       if ((data as { error?: string })?.error) throw new Error((data as { error?: string }).error);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['messaging-channels', organization?.id] });
+    },
+  });
+}
+
+// Update which collaborators attend a caixa (+ optional round-robin). Admin-gated
+// by RLS. Empty list = everyone can see it.
+export function useUpdateChannelAssignment() {
+  const { organization } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { channelId: string; assigned_user_ids?: string[]; rotate_enabled?: boolean }) => {
+      if (!organization?.id) throw new Error('Organização não encontrada');
+      const patch: Record<string, unknown> = {};
+      if (vars.assigned_user_ids !== undefined) patch.assigned_user_ids = vars.assigned_user_ids;
+      if (vars.rotate_enabled !== undefined) patch.rotate_enabled = vars.rotate_enabled;
+      const { error } = await supabase
+        .from('messaging_channels')
+        .update(patch)
+        .eq('id', vars.channelId)
+        .eq('organization_id', organization.id);
+      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['messaging-channels', organization?.id] });
