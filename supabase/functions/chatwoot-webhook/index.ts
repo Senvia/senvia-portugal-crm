@@ -220,11 +220,11 @@ Deno.serve(async (req) => {
     // when the org has several WhatsApp numbers. Falls back to the org's first
     // WhatsApp channel (covers the legacy row whose inbox id isn't stored yet).
     const inboxId = event.conversation?.inbox_id ?? event.inbox?.id ?? null;
-    let channel: { evolution_instance: string | null; metadata: unknown } | null = null;
+    let channel: { id?: string; evolution_instance: string | null; metadata: unknown; assigned_user_ids?: string[] | null } | null = null;
     if (inboxId != null) {
       const { data } = await admin
         .from('messaging_channels')
-        .select('evolution_instance, metadata')
+        .select('id, evolution_instance, metadata, assigned_user_ids')
         .eq('organization_id', org.id)
         .eq('chatwoot_inbox_id', inboxId)
         .maybeSingle();
@@ -233,7 +233,7 @@ Deno.serve(async (req) => {
     if (!channel) {
       const { data } = await admin
         .from('messaging_channels')
-        .select('evolution_instance, metadata')
+        .select('id, evolution_instance, metadata, assigned_user_ids')
         .eq('organization_id', org.id)
         .eq('channel_type', 'whatsapp')
         .order('created_at', { ascending: true })
@@ -295,6 +295,32 @@ Deno.serve(async (req) => {
       console.error('auto-reply failed:', e);
     }
 
+    // ---- Auto-assign: distribute new conversations round-robin among the caixa's
+    // collaborators (only if unassigned and the caixa has members). ----
+    const caixaMembers = Array.isArray(channel?.assigned_user_ids) ? channel!.assigned_user_ids! : [];
+    try {
+      const alreadyAssigned = event.conversation?.custom_attributes?.senvia_assigned_id;
+      if (!alreadyAssigned && caixaMembers.length > 0 && channel?.id && event.conversation?.id) {
+        const { data: assignee } = await admin.rpc('get_next_channel_assignee', { p_channel_id: channel.id });
+        if (assignee) {
+          const { data: prof } = await admin.from('profiles').select('full_name').eq('id', assignee).maybeSingle();
+          const cwUrl = (Deno.env.get('CHATWOOT_URL') || '').replace(/\/$/, '');
+          if (cwUrl && org.chatwoot_account_token) {
+            await fetch(
+              `${cwUrl}/api/v1/accounts/${accountId}/conversations/${event.conversation.id}/custom_attributes`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', api_access_token: org.chatwoot_account_token },
+                body: JSON.stringify({ custom_attributes: { senvia_assigned_id: assignee, senvia_assigned_name: prof?.full_name || '' } }),
+              },
+            );
+          }
+        }
+      }
+    } catch (e) {
+      console.error('auto-assign failed:', e);
+    }
+
     const senderName =
       event.conversation?.meta?.sender?.name ||
       event.sender?.name ||
@@ -306,18 +332,21 @@ Deno.serve(async (req) => {
       || (attachments[0] ? (MEDIA_LABELS[attachments[0].file_type] ?? '📎 Anexo') : 'Nova mensagem');
 
     // Reuse the existing push pipeline (VAPID web push to push_subscriptions).
+    // When the caixa has collaborators, notify only them; otherwise the whole org.
+    const pushPayload: Record<string, unknown> = {
+      organization_id: org.id,
+      title: `💬 ${senderName}`,
+      body: preview.slice(0, 140),
+      url: '/inbox',
+      // One notification per conversation: a newer message replaces the
+      // previous notification instead of stacking.
+      tag: `inbox-${event.conversation?.id ?? 'new'}`,
+    };
+    if (caixaMembers.length > 0) pushPayload.user_ids = caixaMembers;
     await fetch(`${supabaseUrl}/functions/v1/send-push-notification`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${serviceKey}` },
-      body: JSON.stringify({
-        organization_id: org.id,
-        title: `💬 ${senderName}`,
-        body: preview.slice(0, 140),
-        url: '/inbox',
-        // One notification per conversation: a newer message replaces the
-        // previous notification instead of stacking.
-        tag: `inbox-${event.conversation?.id ?? 'new'}`,
-      }),
+      body: JSON.stringify(pushPayload),
     });
 
     return ok();
