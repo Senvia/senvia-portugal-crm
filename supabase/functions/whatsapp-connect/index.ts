@@ -81,6 +81,17 @@ Deno.serve(async (req) => {
     const baseLabel = (channelRow.label || '').trim() || 'WhatsApp';
     const inboxName = channel_id ? baseLabel : `${baseLabel} ${channelRow.id.slice(0, 6)}`;
 
+    // Persist the instance name IMMEDIATELY (before the slow Evolution/Chatwoot
+    // provisioning) so a status poll for THIS channel resolves to its own instance
+    // right away, instead of falling back to another channel and reporting a wrong
+    // "connected" while we wait.
+    if (!channelRow.evolution_instance) {
+      await admin
+        .from('messaging_channels')
+        .update({ evolution_instance: instanceName })
+        .eq('id', channelRow.id);
+    }
+
     // 3) Ensure the Evolution instance exists
     const fetchRes = await evolutionFetch(cfg, `/instance/fetchInstances?instanceName=${instanceName}`);
     const existing = fetchRes.ok ? await fetchRes.json() : [];

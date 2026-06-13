@@ -21,7 +21,10 @@ async function resolveChannel(
       .eq('organization_id', organizationId)
       .maybeSingle();
     if (!data) return null;
-    return { id: data.id, instance: data.evolution_instance || instanceNameForOrg(organizationId) };
+    // Do NOT fall back to the org's legacy instance for a SPECIFIC channel: a null
+    // instance means it isn't provisioned yet (report disconnected), never "use the
+    // other channel" — that caused a new caixa to show the existing number as connected.
+    return { id: data.id, instance: data.evolution_instance || '' };
   }
   const { data } = await admin
     .from('messaging_channels')
@@ -55,6 +58,8 @@ Deno.serve(async (req) => {
     const resolved = await resolveChannel(admin, organization_id, channel_id);
     if (!resolved) return json({ status: 'disconnected', phone_number: null });
     const instanceName = resolved.instance;
+    // Channel exists but has no instance yet (still being provisioned) -> not connected.
+    if (!instanceName) return json({ status: 'connecting', phone_number: null });
 
     // Connection state
     const stateRes = await evolutionFetch(cfg, `/instance/connectionState/${instanceName}`);

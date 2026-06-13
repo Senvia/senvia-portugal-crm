@@ -26,7 +26,11 @@ export function ConnectWhatsAppModal({ open, onOpenChange, channelId, label }: C
   // For a new channel the id is only known after the first connect() response.
   const [activeChannelId, setActiveChannelId] = useState<string | undefined>(channelId);
 
-  const { data: status } = useWhatsappStatus(open, activeChannelId);
+  // Only poll status once we KNOW which channel we're connecting. For a new caixa
+  // the id only exists after the first connect() response; polling earlier (with no
+  // channel_id) would fall back to the org's existing channel and wrongly report
+  // "connected", hiding the QR.
+  const { data: status } = useWhatsappStatus(open && !!activeChannelId, activeChannelId);
   const connected = status?.status === "connected";
 
   // Fetch (or refresh) the QR code.
