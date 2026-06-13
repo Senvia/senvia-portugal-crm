@@ -36,10 +36,30 @@ Deno.serve(async (req) => {
 
   try {
     const cfg = getConfig();
-    const { organization_id, channel_id, cleanup } = await req.json().catch(() => ({}));
+    const { organization_id, channel_id, cleanup, logout } = await req.json().catch(() => ({}));
     const auth = await authOrgAdmin(req, cfg, organization_id);
     if ('error' in auth) return auth.error;
     const { admin } = auth;
+
+    // ===== Logout: end the WhatsApp session but KEEP the instance + row, so it can
+    // be reconnected later (re-scan QR on the SAME instance). =====
+    if (logout && channel_id) {
+      const { data: row } = await admin
+        .from('messaging_channels')
+        .select('id, evolution_instance')
+        .eq('id', channel_id)
+        .eq('organization_id', organization_id)
+        .maybeSingle();
+      if (!row) return json({ error: 'Caixa não encontrada' }, 404);
+      if (row.evolution_instance) {
+        try { await evolutionFetch(cfg, `/instance/logout/${row.evolution_instance}`, 'DELETE'); } catch (_e) { /* ignore */ }
+      }
+      await admin
+        .from('messaging_channels')
+        .update({ status: 'disconnected', phone_number: null })
+        .eq('id', channel_id);
+      return json({ ok: true, disconnected: true });
+    }
 
     // ===== Cleanup mode: remove orphan instances + non-connected rows =====
     if (cleanup) {

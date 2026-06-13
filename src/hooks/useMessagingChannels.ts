@@ -137,6 +137,26 @@ export function useUpdateChannelAssignment() {
   });
 }
 
+// Log out a channel's WhatsApp session WITHOUT deleting it — the instance stays so
+// it can be reconnected (re-scan QR). Status goes to 'disconnected'.
+export function useLogoutChannel() {
+  const { organization } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (channelId: string) => {
+      if (!organization?.id) throw new Error('Organização não encontrada');
+      const { data, error } = await supabase.functions.invoke('whatsapp-disconnect', {
+        body: { organization_id: organization.id, channel_id: channelId, logout: true },
+      });
+      if (error) throw error;
+      if ((data as { error?: string })?.error) throw new Error((data as { error?: string }).error);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['messaging-channels', organization?.id] });
+    },
+  });
+}
+
 // One-shot cleanup of orphan channels: removes every non-connected channel of the
 // org plus any leftover Evolution instances with the org's prefix.
 export function useCleanupOrphanChannels() {

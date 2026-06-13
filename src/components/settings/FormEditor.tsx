@@ -51,9 +51,8 @@ import {
   Mail
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
-import { Checkbox } from "@/components/ui/checkbox";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { MessageTemplateField, WELCOME_VARIABLES } from './MessageTemplateField';
+import { CollaboratorPicker } from './CollaboratorPicker';
 import { useUpdateForm } from '@/hooks/useForms';
 import { usePipelineStages } from '@/hooks/usePipelineStages';
 import { useTeamMembers } from '@/hooks/useTeam';
@@ -336,55 +335,12 @@ export function FormEditor({ form, onBack }: FormEditorProps) {
                 {rotateEnabled ? 'Quem recebe os leads (2 ou mais)' : 'Quem recebe os leads (1 pessoa)'}
               </Label>
 
-              {(!teamMembers || teamMembers.length === 0) ? (
-                <p className="text-xs text-muted-foreground">Não há utilizadores na equipa para atribuir.</p>
-              ) : rotateEnabled ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                  {teamMembers.map((m) => {
-                    const checked = assignedUserIds.includes(m.user_id);
-                    return (
-                      <label
-                        key={m.user_id}
-                        className={cn(
-                          "flex items-center gap-2 rounded-md px-2 py-1.5 cursor-pointer transition-colors",
-                          checked ? "bg-primary/10" : "hover:bg-accent/50"
-                        )}
-                      >
-                        <Checkbox
-                          checked={checked}
-                          onCheckedChange={() =>
-                            setAssignedUserIds(
-                              checked
-                                ? assignedUserIds.filter((id) => id !== m.user_id)
-                                : [...assignedUserIds, m.user_id]
-                            )
-                          }
-                        />
-                        <span className="text-sm truncate">{m.full_name}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              ) : (
-                <RadioGroup
-                  value={assignedUserIds[0] || ''}
-                  onValueChange={(v) => setAssignedUserIds(v ? [v] : [])}
-                  className="grid grid-cols-1 sm:grid-cols-2 gap-1.5"
-                >
-                  {teamMembers.map((m) => (
-                    <label
-                      key={m.user_id}
-                      className={cn(
-                        "flex items-center gap-2 rounded-md px-2 py-1.5 cursor-pointer transition-colors",
-                        assignedUserIds[0] === m.user_id ? "bg-primary/10" : "hover:bg-accent/50"
-                      )}
-                    >
-                      <RadioGroupItem value={m.user_id} />
-                      <span className="text-sm truncate">{m.full_name}</span>
-                    </label>
-                  ))}
-                </RadioGroup>
-              )}
+              <CollaboratorPicker
+                members={teamMembers || []}
+                value={assignedUserIds}
+                onChange={setAssignedUserIds}
+                mode={rotateEnabled ? 'multi' : 'single'}
+              />
 
               {rotateEnabled && assignedUserIds.length < 2 ? (
                 <p className="text-xs text-blue-600 dark:text-blue-400">💡 Seleciona pelo menos 2 para a rotação fazer sentido.</p>

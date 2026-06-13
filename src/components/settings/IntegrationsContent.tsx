@@ -5,20 +5,19 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Webhook, Send, Loader2, Eye, EyeOff, MessageCircle, Mail, Receipt, ArrowLeft, ChevronRight, ChevronDown, Plus, Trash2, Link2, Copy, Check, Users, RefreshCw, Pencil, CheckCircle2, ShieldCheck, Inbox, Megaphone } from "lucide-react";
+import { Webhook, Send, Loader2, Eye, EyeOff, MessageCircle, Mail, Receipt, ArrowLeft, ChevronRight, ChevronDown, Plus, Trash2, Link2, Copy, Check, Users, RefreshCw, Pencil, CheckCircle2, ShieldCheck, Inbox, Megaphone, PowerOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LucideIcon } from "lucide-react";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useOrganizationWebhooks, useCreateWebhook, useToggleWebhook, useDeleteWebhook, OrganizationWebhook } from "@/hooks/useOrganizationWebhooks";
 import { useLeadIntakeWebhooks, useCreateLeadIntakeWebhook, useUpdateLeadIntakeWebhook, useDeleteLeadIntakeWebhook, LeadIntakeWebhook } from "@/hooks/useLeadIntakeWebhooks";
 import { useTeamMembers } from "@/hooks/useTeam";
 import { useTestWebhook } from "@/hooks/useOrganization";
-import { useMessagingChannels, useDeleteChannel, useCleanupOrphanChannels, useUpdateChannelAssignment } from "@/hooks/useMessagingChannels";
+import { useMessagingChannels, useDeleteChannel, useCleanupOrphanChannels, useUpdateChannelAssignment, useLogoutChannel } from "@/hooks/useMessagingChannels";
 import { ConnectWhatsAppModal } from "./ConnectWhatsAppModal";
 import { WhatsAppIcon, InstagramIcon, MessengerIcon } from "./channelIcons";
+import { CollaboratorPicker } from "./CollaboratorPicker";
 import { useAuth } from "@/contexts/AuthContext";
 
 interface IntegrationsContentProps {
@@ -410,8 +409,8 @@ function WebhooksManager() {
 
 type MemberOption = { user_id: string; full_name: string };
 
-// Seletor de utilizadores: rádio (1 só) quando a rotação está desligada,
-// checkboxes (vários) quando está ligada.
+// Seletor de utilizadores (lista com pesquisa): 1 só quando a rotação está
+// desligada, vários quando está ligada.
 function MemberSelector({
   members,
   value,
@@ -423,50 +422,13 @@ function MemberSelector({
   rotate: boolean;
   onChange: (next: string[]) => void;
 }) {
-  if (members.length === 0) {
-    return <p className="text-xs text-muted-foreground">Não há utilizadores na equipa para atribuir.</p>;
-  }
-
-  const rowClass = (checked: boolean) =>
-    cn(
-      "flex items-center gap-2 rounded-md px-2 py-1.5 cursor-pointer transition-colors",
-      checked ? "bg-primary/10" : "hover:bg-accent/50"
-    );
-
-  if (!rotate) {
-    return (
-      <RadioGroup
-        value={value[0] || ''}
-        onValueChange={(v) => onChange([v])}
-        className="grid grid-cols-1 sm:grid-cols-2 gap-1.5"
-      >
-        {members.map((m) => (
-          <label key={m.user_id} className={rowClass(value[0] === m.user_id)}>
-            <RadioGroupItem value={m.user_id} />
-            <span className="text-sm truncate">{m.full_name}</span>
-          </label>
-        ))}
-      </RadioGroup>
-    );
-  }
-
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-      {members.map((m) => {
-        const checked = value.includes(m.user_id);
-        return (
-          <label key={m.user_id} className={rowClass(checked)}>
-            <Checkbox
-              checked={checked}
-              onCheckedChange={() =>
-                onChange(checked ? value.filter((id) => id !== m.user_id) : [...value, m.user_id])
-              }
-            />
-            <span className="text-sm truncate">{m.full_name}</span>
-          </label>
-        );
-      })}
-    </div>
+    <CollaboratorPicker
+      members={members}
+      value={value}
+      onChange={onChange}
+      mode={rotate ? 'multi' : 'single'}
+    />
   );
 }
 
@@ -891,8 +853,10 @@ function InboxesManager() {
   const deleteChannel = useDeleteChannel();
   const cleanupOrphans = useCleanupOrphanChannels();
   const updateAssign = useUpdateChannelAssignment();
+  const logoutChannel = useLogoutChannel();
   const [editId, setEditId] = useState<string | null>(null); // caixa whose "Editar" panel is open
   const [labelDraft, setLabelDraft] = useState('');
+  const [toDisconnect, setToDisconnect] = useState<string | null>(null);
   const orphanCount = channels.filter((c) => c.status !== 'connected').length;
 
   const openEdit = (ch: { id: string; label: string | null }) => {
@@ -997,19 +961,32 @@ function InboxesManager() {
                       </div>
                     </div>
 
-                    {/* Ligação */}
+                    {/* Ligação: ligado -> desconectar; desligado com instância -> reconectar; novo -> ligar */}
                     {ch.channel_type === 'whatsapp' && (
                       <div className="space-y-1.5">
                         <Label className="text-xs">Ligação</Label>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setModal({ open: true, channelId: ch.id })}
-                          className="w-full"
-                        >
-                          <MessageCircle className="h-4 w-4 mr-1.5" />
-                          {connected ? 'Reconectar WhatsApp' : 'Ligar WhatsApp'}
-                        </Button>
+                        {connected ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setToDisconnect(ch.id)}
+                            disabled={logoutChannel.isPending}
+                            className="w-full text-destructive hover:text-destructive"
+                          >
+                            <PowerOff className="h-4 w-4 mr-1.5" />
+                            Desconectar WhatsApp
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setModal({ open: true, channelId: ch.id })}
+                            className="w-full"
+                          >
+                            <MessageCircle className="h-4 w-4 mr-1.5" />
+                            {ch.evolution_instance ? 'Reconectar WhatsApp' : 'Ligar WhatsApp'}
+                          </Button>
+                        )}
                       </div>
                     )}
 
@@ -1023,35 +1000,13 @@ function InboxesManager() {
                       </p>
                     </div>
 
-                    {members.length === 0 ? (
-                      <p className="text-xs text-muted-foreground">Não há colaboradores na equipa.</p>
-                    ) : (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                        {members.map((m) => {
-                          const checked = attendants.includes(m.user_id);
-                          return (
-                            <label
-                              key={m.user_id}
-                              className={cn(
-                                'flex items-center gap-2 rounded-md px-2 py-1.5 cursor-pointer transition-colors',
-                                checked ? 'bg-primary/10' : 'hover:bg-accent/50',
-                              )}
-                            >
-                              <Checkbox
-                                checked={checked}
-                                onCheckedChange={() => {
-                                  const next = checked
-                                    ? attendants.filter((id) => id !== m.user_id)
-                                    : [...attendants, m.user_id];
-                                  updateAssign.mutate({ channelId: ch.id, assigned_user_ids: next });
-                                }}
-                              />
-                              <span className="text-sm truncate">{m.full_name}</span>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    )}
+                    <CollaboratorPicker
+                      members={members}
+                      value={attendants}
+                      onChange={(next) => updateAssign.mutate({ channelId: ch.id, assigned_user_ids: next })}
+                      mode="multi"
+                      emptyHint="Vazio = todos os colaboradores veem esta caixa."
+                    />
 
                     <div className="flex items-center justify-between gap-3 pt-1 border-t">
                       <Label className="text-sm font-normal flex items-center gap-2 pt-2">
@@ -1165,6 +1120,26 @@ function InboxesManager() {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Remover
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!toDisconnect} onOpenChange={(o) => !o && setToDisconnect(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Desconectar este WhatsApp?</AlertDialogTitle>
+            <AlertDialogDescription>
+              A sessão de WhatsApp termina e deixas de receber/enviar mensagens por esta caixa. A caixa mantém-se: podes voltar a ligar (Reconectar) com o mesmo ou outro número quando quiseres.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => { if (toDisconnect) logoutChannel.mutate(toDisconnect); setToDisconnect(null); }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Desconectar
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
