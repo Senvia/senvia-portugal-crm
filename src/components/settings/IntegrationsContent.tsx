@@ -864,15 +864,15 @@ function IntakeWebhookCard({
 // Channel catalog for the "+ Nova caixa" picker. Only WhatsApp is active in
 // Phase 1; Instagram/Facebook/Email are shown as coming soon.
 type ChannelIcon = React.ComponentType<{ className?: string }>;
-const CHANNEL_CATALOG: { type: string; label: string; icon: ChannelIcon; color: string; available: boolean }[] = [
-  { type: 'whatsapp', label: 'WhatsApp', icon: WhatsAppIcon, color: 'text-[#25D366]', available: true },
-  { type: 'instagram', label: 'Instagram', icon: InstagramIcon, color: 'text-[#E4405F]', available: false },
-  { type: 'facebook', label: 'Facebook Messenger', icon: MessengerIcon, color: 'text-[#0084FF]', available: false },
-  { type: 'email', label: 'Email', icon: Mail, color: 'text-muted-foreground', available: false },
+const CHANNEL_CATALOG: { type: string; label: string; icon: ChannelIcon; color: string; tint: string; available: boolean }[] = [
+  { type: 'whatsapp', label: 'WhatsApp', icon: WhatsAppIcon, color: 'text-[#25D366]', tint: 'bg-[#25D366]/10', available: true },
+  { type: 'instagram', label: 'Instagram', icon: InstagramIcon, color: 'text-[#E4405F]', tint: 'bg-[#E4405F]/10', available: false },
+  { type: 'facebook', label: 'Facebook Messenger', icon: MessengerIcon, color: 'text-[#0084FF]', tint: 'bg-[#0084FF]/10', available: false },
+  { type: 'email', label: 'Email', icon: Mail, color: 'text-amber-600', tint: 'bg-amber-500/10', available: false },
 ];
 
 function channelMeta(type: string) {
-  return CHANNEL_CATALOG.find((c) => c.type === type) || { type, label: type, icon: MessageCircle, color: 'text-muted-foreground', available: true };
+  return CHANNEL_CATALOG.find((c) => c.type === type) || { type, label: type, icon: MessageCircle, color: 'text-muted-foreground', tint: 'bg-muted', available: true };
 }
 
 const CHANNEL_STATUS_LABEL: Record<string, string> = {
@@ -928,24 +928,32 @@ function InboxesManager() {
             const editOpen = editId === ch.id;
             const attendants = ch.assigned_user_ids || [];
             return (
-              <div key={ch.id} className="rounded-lg border bg-card overflow-hidden">
-                <div className="flex items-center gap-3 p-3">
-                  <div className={cn('rounded-md p-2 shrink-0', connected ? 'bg-muted' : 'bg-muted opacity-60')}>
-                    <Icon className={cn('h-5 w-5', meta.color)} />
+              <div className={cn(
+                'rounded-xl border overflow-hidden transition-shadow bg-card',
+                editOpen ? 'ring-1 ring-primary/30 shadow-sm' : 'hover:shadow-sm',
+                !connected && 'border-dashed',
+              )} key={ch.id}>
+                <div className="flex items-center gap-3 p-3.5">
+                  <div className={cn('flex h-11 w-11 items-center justify-center rounded-xl shrink-0', meta.tint)}>
+                    <Icon className={cn('h-6 w-6', meta.color)} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm truncate">
+                    <p className="font-semibold text-sm truncate">
                       {ch.label || meta.label}
-                      {ch.phone_number ? ` · +${ch.phone_number}` : ''}
                     </p>
-                    <p className="text-xs text-muted-foreground">
-                      {meta.label} · {CHANNEL_STATUS_LABEL[ch.status] || ch.status}
+                    <p className="text-xs text-muted-foreground truncate">
+                      {meta.label}
+                      {ch.phone_number ? ` · +${ch.phone_number}` : ''}
                       {attendants.length > 0 && ` · ${attendants.length} a atender`}
                     </p>
                   </div>
-                  {connected && (
-                    <Badge variant="outline" className="text-[10px] gap-1 bg-green-500/10 text-green-600 border-green-500/20">
-                      <CheckCircle2 className="h-3 w-3" /> Ligada
+                  {connected ? (
+                    <Badge variant="outline" className="text-[10px] gap-1 bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30">
+                      <span className="h-1.5 w-1.5 rounded-full bg-green-500" /> Ligada
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-[10px] gap-1 bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30">
+                      <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> Por ligar
                     </Badge>
                   )}
                   <Button
@@ -1083,11 +1091,13 @@ function InboxesManager() {
                 <div
                   key={c.type}
                   className={cn(
-                    'flex items-center gap-2 rounded-lg border p-3',
-                    c.available ? '' : 'opacity-50',
+                    'flex items-center gap-2.5 rounded-lg border p-3',
+                    c.available ? 'border-primary/30 bg-primary/5' : 'opacity-60',
                   )}
                 >
-                  <Icon className={cn('h-5 w-5 shrink-0', c.color)} />
+                  <div className={cn('flex h-9 w-9 items-center justify-center rounded-lg shrink-0', c.tint)}>
+                    <Icon className={cn('h-5 w-5', c.color)} />
+                  </div>
                   <span className="text-sm font-medium min-w-0">
                     {c.label}
                     {!c.available && <span className="block text-[10px] text-muted-foreground font-normal">Em breve</span>}
@@ -1114,7 +1124,7 @@ function InboxesManager() {
           </div>
         </div>
       ) : (
-        <Button onClick={() => setPicking(true)} variant="outline" className="w-full">
+        <Button onClick={() => setPicking(true)} variant="outline" className="w-full h-12 border-dashed text-muted-foreground hover:text-foreground hover:border-primary/40">
           <Plus className="mr-2 h-4 w-4" />
           Nova caixa
         </Button>
