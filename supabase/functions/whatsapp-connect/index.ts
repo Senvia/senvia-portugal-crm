@@ -75,7 +75,11 @@ Deno.serve(async (req) => {
     // derive a per-channel name for a brand new channel.
     const instanceName = channelRow.evolution_instance
       || (channel_id ? instanceNameForOrg(org.id) : instanceNameForChannel(org.id, channelRow.id));
-    const inboxName = (channelRow.label || '').trim() || 'WhatsApp';
+    // Chatwoot inbox name: a NEW channel gets a unique name (append a short id) so a
+    // 2nd number never attaches to an existing inbox with the same label. Reconnects
+    // reuse the stored label, matching their existing inbox.
+    const baseLabel = (channelRow.label || '').trim() || 'WhatsApp';
+    const inboxName = channel_id ? baseLabel : `${baseLabel} ${channelRow.id.slice(0, 6)}`;
 
     // 3) Ensure the Evolution instance exists
     const fetchRes = await evolutionFetch(cfg, `/instance/fetchInstances?instanceName=${instanceName}`);
