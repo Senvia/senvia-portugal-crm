@@ -317,6 +317,35 @@ Deno.serve(async (req) => {
       return inst;
     };
 
+    // ===== Per-caixa visibility =====
+    // A caixa (messaging_channels) with assigned_user_ids restricts who sees its
+    // conversations. Admins see everything; caixas with no assignees (or whose
+    // Chatwoot inbox id we don't know yet) are visible to everyone (non-breaking).
+    let _vis: { isAdmin: boolean; restricted: Map<number, Set<string>> } | null = null;
+    const getVisibility = async () => {
+      if (_vis) return _vis;
+      const [{ data: member }, { data: superRole }, { data: chs }] = await Promise.all([
+        auth.admin.from('organization_members').select('role').eq('organization_id', organization_id).eq('user_id', auth.userId).eq('is_active', true).maybeSingle(),
+        auth.admin.from('user_roles').select('role').eq('user_id', auth.userId).eq('role', 'super_admin').maybeSingle(),
+        auth.admin.from('messaging_channels').select('chatwoot_inbox_id, assigned_user_ids').eq('organization_id', organization_id),
+      ]);
+      const isAdmin = (member as { role?: string } | null)?.role === 'admin' || !!superRole;
+      const restricted = new Map<number, Set<string>>();
+      for (const c of (chs || []) as Array<{ chatwoot_inbox_id: number | null; assigned_user_ids: string[] | null }>) {
+        if (c.chatwoot_inbox_id != null && Array.isArray(c.assigned_user_ids) && c.assigned_user_ids.length > 0) {
+          restricted.set(Number(c.chatwoot_inbox_id), new Set(c.assigned_user_ids));
+        }
+      }
+      _vis = { isAdmin, restricted };
+      return _vis;
+    };
+    const canSee = (vis: { isAdmin: boolean; restricted: Map<number, Set<string>> }, inboxId: number | null | undefined) => {
+      if (vis.isAdmin) return true;
+      if (inboxId == null) return true;
+      const allowed = vis.restricted.get(Number(inboxId));
+      return !allowed || allowed.has(auth.userId);
+    };
+
     // Account-level mutations (labels / canned responses affect the WHOLE org)
     // require admin — agents can use them but not create/delete them.
     const ADMIN_ACTIONS = new Set(['create_label', 'delete_label', 'create_canned', 'delete_canned']);
@@ -363,11 +392,14 @@ Deno.serve(async (req) => {
       );
       if (pages[0] === null) return json({ error: 'Falha ao carregar conversas' }, 502);
       const all: any[] = pages.flatMap((p) => p ?? []);
+      // Per-caixa visibility: hide conversations of restricted caixas the viewer
+      // is not assigned to (admins see all).
+      const vis = await getVisibility();
       // Newest activity first, always — Chatwoot page order is not guaranteed
       // across parallel pages. Merge duplicate conversations per contact.
       const sorted = all
         .map((c: any) => ({ raw: c, n: normalizeConversation(c, cfg.chatwootUrl) }))
-        .filter(({ raw, n }) => !isHiddenConversation(raw, n))
+        .filter(({ raw, n }) => !isHiddenConversation(raw, n) && canSee(vis, n.inbox_id))
         .map(({ n }) => n)
         .sort((a, b) => (b.updated_at ?? 0) - (a.updated_at ?? 0));
       return json({ conversations: mergeByContact(sorted) });
@@ -382,9 +414,10 @@ Deno.serve(async (req) => {
       if (!res.ok) return json({ conversations: [] });
       const data = await res.json();
       const payload = data?.payload ?? data?.data?.payload ?? [];
+      const vis = await getVisibility();
       const normalized = payload
         .map((c: any) => ({ raw: c, n: normalizeConversation(c, cfg.chatwootUrl) }))
-        .filter(({ raw, n }: any) => !isHiddenConversation(raw, n))
+        .filter(({ raw, n }: any) => !isHiddenConversation(raw, n) && canSee(vis, n.inbox_id))
         .map(({ n }: any) => n);
       return json({ conversations: normalized });
     }
@@ -394,6 +427,11 @@ Deno.serve(async (req) => {
         ? body.conversation_ids.map(Number).filter(Boolean)
         : conversation_id ? [Number(conversation_id)] : [];
       if (ids.length === 0) return json({ error: 'conversation_id em falta' }, 400);
+
+      // Block reading a restricted caixa the viewer can't access.
+      if (body.inbox_id != null && !canSee(await getVisibility(), Number(body.inbox_id))) {
+        return json({ error: 'Sem acesso a esta caixa' }, 403);
+      }
 
       // "before" pages back through history — applies to the primary conversation.
       const before = body.before ? `?before=${encodeURIComponent(String(body.before))}` : '';
@@ -423,6 +461,10 @@ Deno.serve(async (req) => {
 
     if (action === 'send_message') {
       if (!conversation_id) return json({ error: 'conversation_id em falta' }, 400);
+      // Block replying on a restricted caixa the viewer can't access.
+      if (body.inbox_id != null && !canSee(await getVisibility(), Number(body.inbox_id))) {
+        return json({ error: 'Sem acesso a esta caixa' }, 403);
+      }
       const attachment = body.attachment as
         | { data: string; mimetype: string; filename: string; kind: string }
         | undefined;

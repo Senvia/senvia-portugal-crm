@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo, useCallback, memo } from "react";
-import { useWhatsappChannel } from "@/hooks/useMessagingChannels";
+import { useWhatsappChannel, useMessagingChannels, MessagingChannel } from "@/hooks/useMessagingChannels";
 import {
   useInboxConversations,
   useInboxMessages,
@@ -444,6 +444,13 @@ type ListTab = "all" | "unread" | "waiting" | "mine" | "archived";
 export default function Inbox() {
   const { channel } = useWhatsappChannel();
   const connected = channel?.status === "connected";
+  const { data: channels = [] } = useMessagingChannels();
+  // Caixas that map to a known Chatwoot inbox (so we can filter conversations by them).
+  const channelByInbox = useMemo(() => {
+    const m = new Map<number, MessagingChannel>();
+    for (const c of channels) if (c.chatwoot_inbox_id != null) m.set(c.chatwoot_inbox_id, c);
+    return m;
+  }, [channels]);
   const { toast } = useToast();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -451,6 +458,8 @@ export default function Inbox() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<ListTab>("all");
+  // Inbox filter by caixa (chatwoot_inbox_id). null = all caixas.
+  const [caixaFilter, setCaixaFilter] = useState<number | null>(null);
   const [draft, setDraft] = useState("");
   // Optimistic bubbles: sent messages show instantly, before Evolution mirrors
   // them back into Chatwoot (which only lands on a later poll).
@@ -674,6 +683,7 @@ export default function Inbox() {
 
   const filtered = useMemo(() => {
     let list = visible;
+    if (caixaFilter != null) list = list.filter((c) => c.inbox_id === caixaFilter);
     if (tab === "archived") list = list.filter((c) => c.status === "resolved");
     else {
       list = list.filter((c) => c.status !== "resolved");
@@ -697,7 +707,7 @@ export default function Inbox() {
       if (pa !== pb) return pb - pa;
       return (b.updated_at ?? 0) - (a.updated_at ?? 0);
     });
-  }, [visible, search, tab, searchResults, pinned, user?.id]);
+  }, [visible, search, tab, searchResults, pinned, user?.id, caixaFilter]);
 
   // Number of CONVERSATIONS with unread messages (not message total) — matches
   // the sidebar badge and avoids inflated counts from old imported history.
@@ -1816,6 +1826,40 @@ export default function Inbox() {
               </button>
             ))}
           </div>
+
+          {/* Caixa filter — only when the org has more than one identifiable caixa */}
+          {channelByInbox.size > 1 && (
+            <div className="flex flex-wrap gap-1.5 mt-2 border-t pt-2">
+              <button
+                onClick={() => setCaixaFilter(null)}
+                className={cn(
+                  "rounded-full px-2.5 py-1 text-xs font-medium transition-colors",
+                  caixaFilter === null ? "bg-foreground text-background" : "bg-muted text-muted-foreground hover:bg-accent",
+                )}
+              >
+                Todas as caixas
+              </button>
+              {[...channelByInbox.values()].map((ch) => {
+                const active = caixaFilter === ch.chatwoot_inbox_id;
+                const dot = ch.channel_type === 'whatsapp' ? '#25D366'
+                  : ch.channel_type === 'instagram' ? '#E4405F'
+                  : ch.channel_type === 'facebook' ? '#0084FF' : '#64748b';
+                return (
+                  <button
+                    key={ch.id}
+                    onClick={() => setCaixaFilter(ch.chatwoot_inbox_id ?? null)}
+                    className={cn(
+                      "flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-colors",
+                      active ? "bg-foreground text-background" : "bg-muted text-muted-foreground hover:bg-accent",
+                    )}
+                  >
+                    <span className="h-1.5 w-1.5 rounded-full" style={{ background: dot }} />
+                    {ch.label || 'WhatsApp'}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         <div className="flex-1 overflow-y-auto">
@@ -1848,6 +1892,7 @@ export default function Inbox() {
                 muted={muted.includes(c.id)}
                 taskState={taskStateByPhone.get(phoneSuffix(c.contact_phone)) ?? null}
                 viewers={presence.get(c.id)}
+                caixaLabel={channelByInbox.size > 1 && c.inbox_id != null ? channelByInbox.get(c.inbox_id)?.label ?? null : null}
                 onSelect={setSelectedId}
               />
             ))
@@ -2897,6 +2942,7 @@ const ConversationRow = memo(function ConversationRow({
   muted,
   taskState,
   viewers,
+  caixaLabel,
   onSelect,
 }: {
   conversation: InboxConversation;
@@ -2905,6 +2951,8 @@ const ConversationRow = memo(function ConversationRow({
   muted: boolean;
   taskState?: "open" | "overdue" | null;
   viewers?: PresencePeer[];
+  // Caixa name, shown only when the org has more than one caixa (else redundant).
+  caixaLabel?: string | null;
   // Stable parent callback (setSelectedId) so memo can skip re-renders on
   // unrelated parent state changes (e.g. composer typing).
   onSelect: (id: number) => void;
@@ -2945,6 +2993,11 @@ const ConversationRow = memo(function ConversationRow({
           </p>
           <span className="shrink-0 text-[10px] text-muted-foreground">{formatListDate(conversation.updated_at)}</span>
         </div>
+        {caixaLabel && (
+          <span className="inline-block rounded bg-muted px-1.5 py-px text-[10px] text-muted-foreground mt-0.5 max-w-full truncate">
+            {caixaLabel}
+          </span>
+        )}
         <div className="flex items-center justify-between gap-2">
           <p className="truncate text-xs text-muted-foreground">
             {conversation.last_message ? translateActivity(conversation.last_message) : "—"}
