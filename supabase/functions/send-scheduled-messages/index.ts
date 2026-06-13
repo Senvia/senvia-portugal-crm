@@ -6,6 +6,15 @@ import { corsHeaders, json, getConfig, evolutionFetch, instanceNameForOrg } from
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
+  // Cron guard: when CRON_SECRET is configured, require it (header or ?key=) so
+  // this function can't be invoked publicly to push messages. Permissive until
+  // the secret is set so the existing pg_cron job keeps working during rollout.
+  const cronSecret = Deno.env.get('CRON_SECRET');
+  if (cronSecret) {
+    const provided = req.headers.get('x-cron-secret') || new URL(req.url).searchParams.get('key');
+    if (provided !== cronSecret) return json({ error: 'Não autorizado' }, 401);
+  }
+
   try {
     const cfg = getConfig();
     const admin = createClient(cfg.supabaseUrl, cfg.serviceKey);

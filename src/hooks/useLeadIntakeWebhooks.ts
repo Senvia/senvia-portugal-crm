@@ -13,6 +13,7 @@ export interface LeadIntakeWebhook {
   assigned_user_ids: string[];
   rotate_enabled: boolean;
   round_robin_index: number;
+  notify_all_admins: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -99,12 +100,14 @@ export function useUpdateLeadIntakeWebhook() {
       is_active?: boolean;
       assigned_user_ids?: string[];
       rotate_enabled?: boolean;
+      notify_all_admins?: boolean;
     }) => {
       const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
       if (updates.name !== undefined) payload.name = updates.name;
       if (updates.is_active !== undefined) payload.is_active = updates.is_active;
       if (updates.assigned_user_ids !== undefined) payload.assigned_user_ids = updates.assigned_user_ids;
       if (updates.rotate_enabled !== undefined) payload.rotate_enabled = updates.rotate_enabled;
+      if (updates.notify_all_admins !== undefined) payload.notify_all_admins = updates.notify_all_admins;
 
       const { error } = await supabase
         .from('lead_intake_webhooks' as any)

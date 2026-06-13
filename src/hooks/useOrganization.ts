@@ -55,6 +55,7 @@ interface UpdateOrganizationData {
   commission_matrix?: Json;
   finance_email?: string | null;
   servicos_products_config?: Json;
+  ai_response_mode?: 'global' | 'per_form';
 }
 
 export function useUpdateOrganization() {
@@ -108,10 +109,10 @@ export function useTestWebhook() {
         throw new Error('Organização não encontrada');
       }
 
-      // Fetch real WhatsApp data and AI rules from organization
+      // Fetch form settings (for sample custom fields in the test payload).
       const { data: orgData, error: orgError } = await supabase
         .from('organizations')
-        .select('whatsapp_instance, whatsapp_api_key, whatsapp_base_url, ai_qualification_rules, form_settings, msg_template_hot, msg_template_warm, msg_template_cold')
+        .select('form_settings')
         .eq('id', organization.id)
         .single();
 
@@ -119,9 +120,9 @@ export function useTestWebhook() {
         console.error('Error fetching org data for webhook test:', orgError);
       }
 
-      // Create a real test lead in the database so n8n can update it.
-      // Unique email per run so the de-duplication trigger never folds this
-      // into a previous test lead.
+      // Create a real test lead in the database so the external automation can
+      // react to it. Unique email per run so the de-duplication trigger never
+      // folds this into a previous test lead.
       const testLeadData = {
         organization_id: organization.id,
         name: 'Lead de Teste',
@@ -186,15 +187,6 @@ export function useTestWebhook() {
           id: organization.id,
           name: organization.name,
         },
-        config: {
-          whatsapp_instance: orgData?.whatsapp_instance || null,
-          whatsapp_api_key: orgData?.whatsapp_api_key || null,
-          whatsapp_base_url: orgData?.whatsapp_base_url || null,
-          ai_qualification_rules: orgData?.ai_qualification_rules || null,
-          msg_template_hot: orgData?.msg_template_hot || null,
-          msg_template_warm: orgData?.msg_template_warm || null,
-          msg_template_cold: orgData?.msg_template_cold || null,
-        },
         lead: {
           id: createdLead.id,
           name: testLeadData.name,
@@ -246,8 +238,8 @@ export function useTestWebhook() {
       
       if (error.message === '404_WEBHOOK_TEST') {
         toast({
-          title: 'n8n não está a escutar',
-          description: 'O endpoint /webhook-test/ só funciona quando o workflow n8n está em modo Teste. Use a Production URL (/webhook/) para produção.',
+          title: 'Endpoint de teste inativo',
+          description: 'URLs com /webhook-test/ (ex.: n8n em modo Teste) só respondem com o fluxo aberto. Para produção, use a URL definitiva (/webhook/).',
           variant: 'destructive',
         });
       } else {

@@ -71,7 +71,9 @@ serve(async (req) => {
       );
     }
 
-    const brevoApiKey = org.brevo_api_key || Deno.env.get('BREVO_API_KEY');
+    // Transactional/system email: prefer a dedicated Brevo key (separate from
+    // marketing), then org key, then global secret. Non-breaking.
+    const brevoApiKey = Deno.env.get('BREVO_TRANSACTIONAL_API_KEY') || org.brevo_api_key || Deno.env.get('BREVO_API_KEY');
     const senderEmail = org.brevo_sender_email || 'noreply@senvia.pt';
 
     if (!brevoApiKey) {

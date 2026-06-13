@@ -63,7 +63,7 @@ function suggestTaskFromMessage(
         .from('inbox_tasks')
         .select('id, title, suggested')
         .eq('organization_id', org.id)
-        .like('contact_phone', `%${phone.slice(-9)}`)
+        .eq('phone_key', phone.slice(-9))
         .is('done_at', null);
       const openSuggestions = (existing ?? []).filter((t: any) => t.suggested);
       if (openSuggestions.length >= 3) return;
@@ -143,6 +143,12 @@ Deno.serve(async (req) => {
     if (!event || event.event !== 'message_created') return ok();
     if (event.private) return ok();
 
+    // Evolution API injects system status messages via Chatwoot (as 'incoming')
+    // on every WhatsApp session reconnection (~2h cadence). These are noise —
+    // never show them as push notifications or run AI on them.
+    const EVO_SYSTEM_RE = /^(Connection Successfully established!|Connection timeout\.|Disconnected from WhatsApp|Reconnect|QR code generated|WhatsApp session|Instance (created|updated|deleted)|waitingQrCode|qrRead|connecting|open|close)/i;
+    if (EVO_SYSTEM_RE.test(String(event.content ?? '').trim())) return ok();
+
     const accountId = event.account?.id;
     if (!accountId) return ok();
 
@@ -153,10 +159,34 @@ Deno.serve(async (req) => {
     // Resolve which organization owns this Chatwoot account.
     const { data: org } = await admin
       .from('organizations')
-      .select('id, name, chatwoot_account_token')
+      .select('id, name, chatwoot_account_token, chatwoot_webhook_secret')
       .eq('chatwoot_account_id', accountId)
       .maybeSingle();
     if (!org) return ok();
+
+    // AUTH: the webhook URL is registered with a per-org ?key=<secret>. Reject
+    // forged calls (which could otherwise fire pushes, burn Gemini quota, or
+    // trigger the auto-reply to an arbitrary number). Always answer 200 so a
+    // genuine misconfiguration doesn't make Chatwoot disable the webhook.
+    if (org.chatwoot_webhook_secret) {
+      const key = new URL(req.url).searchParams.get('key');
+      if (key !== org.chatwoot_webhook_secret) {
+        console.warn('chatwoot-webhook: rejected call with bad/missing key for account', accountId);
+        return ok({ ok: false, rejected: true });
+      }
+    }
+
+    // IDEMPOTENCY: Chatwoot retries deliveries, so dedupe by message id to avoid
+    // duplicate pushes / Gemini suggestions. First writer wins.
+    const messageId = Number(event.id);
+    if (messageId) {
+      const { data: claimed } = await admin
+        .from('chatwoot_processed_messages')
+        .upsert({ account_id: accountId, message_id: messageId }, { onConflict: 'account_id,message_id', ignoreDuplicates: true })
+        .select('message_id')
+        .maybeSingle();
+      if (!claimed) return ok({ ok: true, duplicate: true });
+    }
 
     // Realtime nudge FIRST (lowest latency): open Senvia inboxes subscribe to
     // `inbox-<org>` and refetch immediately, instead of waiting for the poll.
@@ -185,12 +215,32 @@ Deno.serve(async (req) => {
     }
 
     // Channel row feeds the AI suggestions (both directions) and the auto-reply.
-    const { data: channel } = await admin
-      .from('messaging_channels')
-      .select('evolution_instance, metadata')
-      .eq('organization_id', org.id)
-      .eq('channel_type', 'whatsapp')
-      .maybeSingle();
+    // Resolve the SPECIFIC channel by the conversation's Chatwoot inbox so
+    // per-inbox config (auto-reply, AI tasks) and the outbound instance are right
+    // when the org has several WhatsApp numbers. Falls back to the org's first
+    // WhatsApp channel (covers the legacy row whose inbox id isn't stored yet).
+    const inboxId = event.conversation?.inbox_id ?? event.inbox?.id ?? null;
+    let channel: { evolution_instance: string | null; metadata: unknown } | null = null;
+    if (inboxId != null) {
+      const { data } = await admin
+        .from('messaging_channels')
+        .select('evolution_instance, metadata')
+        .eq('organization_id', org.id)
+        .eq('chatwoot_inbox_id', inboxId)
+        .maybeSingle();
+      channel = data;
+    }
+    if (!channel) {
+      const { data } = await admin
+        .from('messaging_channels')
+        .select('evolution_instance, metadata')
+        .eq('organization_id', org.id)
+        .eq('channel_type', 'whatsapp')
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      channel = data;
+    }
 
     // AI task suggestions — promises by the agent AND requests by the customer.
     suggestTaskFromMessage(admin, org, event, (channel?.metadata as Record<string, unknown>) ?? null);

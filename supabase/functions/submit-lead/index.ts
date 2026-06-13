@@ -6,8 +6,191 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Fixed system webhook - always dispatched, never visible to clients
-const SENVIA_SYSTEM_WEBHOOK_URL = 'https://n8n-n8n.tx2a4o.easypanel.host/webhook/senvia-os';
+// Run work after the response is sent (Supabase edge runtime); fall back to a
+// floating promise locally.
+function runInBackground(p: Promise<unknown>): void {
+  const er = (globalThis as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } }).EdgeRuntime;
+  if (er?.waitUntil) er.waitUntil(p);
+  else p.catch(() => {});
+}
+
+// Render a message template with the lead's name. Supports the simple {{nome}} /
+// {{primeiro_nome}} placeholders AND the legacy n8n expression
+// ({{ $('Dados').item.json.Nome }}) so templates written for the old n8n flow
+// still work after it was retired.
+// Render a welcome-message template. Supports the canonical variables (kept in
+// sync with MessageTemplateField.WELCOME_VARIABLES), custom form fields via
+// {{campo:Etiqueta}}, and the legacy n8n syntax {{ $('Dados').item.json.X }}.
+// Unknown {{...}} placeholders are stripped so customers never see raw tokens.
+function renderTemplate(
+  tpl: string,
+  lead: any,
+  ctx: { orgName?: string; assigneeName?: string } = {},
+): string {
+  const name = String(lead?.name || '').trim();
+  const first = name.split(/\s+/)[0] || name;
+  const email = lead?.email && lead.email !== 'nao-fornecido@placeholder.local' ? String(lead.email) : '';
+  const phone = lead?.phone && lead.phone !== '000000000' ? String(lead.phone) : '';
+  const company = String(lead?.company_name || '');
+  const nif = String(lead?.company_nif || '');
+  const source = String(lead?.source || '');
+  const custom = (lead?.custom_data && typeof lead.custom_data === 'object') ? lead.custom_data : {};
+
+  const vars: Record<string, string> = {
+    nome: name, name,
+    primeiro_nome: first, first_name: first,
+    email,
+    telefone: phone,
+    empresa: company,
+    nif,
+    fonte: source,
+    responsavel: String(ctx.assigneeName || ''),
+    minha_empresa: String(ctx.orgName || ''),
+  };
+
+  let out = String(tpl || '');
+
+  // Legacy n8n: {{ $('Dados').item.json.Field }} -> map known fields, else name
+  out = out.replace(/\{\{\s*\$\([^)]*\)\.item\.json\.([A-Za-z0-9_]+)\s*\}\}/g, (_m, field) => {
+    const f = String(field).toLowerCase();
+    if (f.includes('email')) return email;
+    if (f.includes('tele') || f.includes('phone') || f.includes('contacto')) return phone;
+    if (f.includes('empresa') || f.includes('company')) return company;
+    if (f.includes('nif')) return nif;
+    return name;
+  });
+
+  // Custom form fields: {{campo:Etiqueta}} (case-insensitive label match)
+  out = out.replace(/\{\{\s*campo\s*:\s*([^}]+?)\s*\}\}/gi, (_m, label) => {
+    const want = String(label).trim().toLowerCase();
+    const key = Object.keys(custom).find((k) => k.toLowerCase() === want);
+    return key ? String(custom[key] ?? '') : '';
+  });
+
+  // Canonical variables (tolerate a stray single brace from old templates)
+  out = out.replace(/\{\{?\s*([a-z_]+)\s*\}?\}/gi, (m, key) => {
+    const k = String(key).toLowerCase();
+    return k in vars ? vars[k] : m;
+  });
+
+  // Strip any remaining {{...}} so customers never receive raw placeholders
+  out = out.replace(/\{\{[^}]*\}\}/g, '');
+
+  // Tidy spaces left by emptied variables
+  return out.replace(/[ \t]{2,}/g, ' ').trim();
+}
+
+// Classify a freshly-created lead's temperature (hot/warm/cold) with Gemini, using
+// the form's AI qualification rules. Falls back to 'warm' when no key/rules or on
+// any error — never throws.
+async function classifyTemperature(rules: string | null, lead: any): Promise<'hot' | 'warm' | 'cold'> {
+  const geminiKey = Deno.env.get('GEMINI_API_KEY');
+  if (!geminiKey || !rules || !String(rules).trim()) return 'warm';
+  try {
+    const MODELS = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash'];
+    const leadInfo = JSON.stringify({
+      name: lead.name, source: lead.source, notes: lead.notes, custom_data: lead.custom_data,
+    }).slice(0, 1500);
+    let aiRes: Response | null = null;
+    for (const model of MODELS) {
+      aiRes = await fetch('https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${geminiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model,
+          temperature: 0,
+          messages: [
+            { role: 'system', content: 'És um assistente de CRM que classifica a TEMPERATURA de um lead recém-criado, a partir das regras do negócio e dos dados do lead. Responde APENAS com JSON válido, sem markdown: {"temperatura":"hot|warm|cold"}.' },
+            { role: 'user', content: `Regras:\n${String(rules).slice(0, 2000)}\n\nDados do lead:\n${leadInfo}` },
+          ],
+        }),
+      });
+      if (aiRes.ok) break;
+      if (aiRes.status !== 503 && aiRes.status !== 429) break; // only retry on overload
+    }
+    if (!aiRes || !aiRes.ok) return 'warm';
+    const data = await aiRes.json();
+    const raw = String(data?.choices?.[0]?.message?.content ?? '').replace(/```json|```/g, '').trim();
+    const out = JSON.parse(raw);
+    const t = String(out?.temperatura || '').toLowerCase();
+    return t === 'hot' || t === 'cold' ? t : 'warm';
+  } catch (e) {
+    console.error('[welcome] classify failed:', (e as Error).message);
+    return 'warm';
+  }
+}
+
+// Proactive first-contact WhatsApp (replaces the retired n8n flow). Picks the
+// form's temperature template, renders it, and sends via the org's CONNECTED
+// Evolution instance — which mirrors the message into the Chatwoot inbox thread.
+// Background-only; never blocks or fails the lead submission.
+function sendWelcomeMessage(supabase: any, org: any, lead: any, formSettings: any): void {
+  runInBackground((async () => {
+    try {
+      // Two mutually-exclusive modes (org.ai_response_mode, default 'global'):
+      //   'global'   -> one org-level config applies to every form
+      //   'per_form' -> each form supplies its own rules + templates, no fallback
+      const mode = org?.ai_response_mode === 'per_form' ? 'per_form' : 'global';
+      const src = mode === 'per_form' ? formSettings : org;
+      const tplHot = src?.msg_template_hot || null;
+      const tplWarm = src?.msg_template_warm || null;
+      const tplCold = src?.msg_template_cold || null;
+      const aiRules = src?.ai_qualification_rules || null;
+      if (!tplHot && !tplWarm && !tplCold) return; // no templates for the active mode
+
+      const digits = String(lead.phone || '').replace(/\D/g, '');
+      if (!digits || digits === '000000000' || digits.length < 9) return; // no real phone
+
+      // Only send through a connected WhatsApp channel (the new Chatwoot/Evolution
+      // instance), so the welcome lands in the inbox.
+      const { data: channel } = await supabase
+        .from('messaging_channels')
+        .select('evolution_instance, status')
+        .eq('organization_id', org.id)
+        .eq('channel_type', 'whatsapp')
+        .maybeSingle();
+      if (!channel?.evolution_instance || channel.status !== 'connected') {
+        console.log('[welcome] skip — WhatsApp channel not connected for org', org.id);
+        return;
+      }
+
+      const temp = await classifyTemperature(aiRules, lead);
+      const byTemp: Record<string, string | null> = { hot: tplHot, warm: tplWarm, cold: tplCold };
+      const tpl = byTemp[temp] || tplWarm || tplHot || tplCold;
+      if (!tpl) return;
+
+      // Resolve the assignee's name only if the template references {{responsavel}}.
+      let assigneeName = '';
+      if (/\{\{\s*responsavel\s*\}\}/i.test(tpl) && lead.assigned_to) {
+        const { data: prof } = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('id', lead.assigned_to)
+          .maybeSingle();
+        assigneeName = prof?.full_name || '';
+      }
+
+      const text = renderTemplate(tpl, lead, { orgName: org?.name, assigneeName });
+      if (!text) return;
+
+      // Best-effort: stamp the classified temperature on the lead.
+      supabase.from('leads').update({ temperature: temp }).eq('id', lead.id).then(() => {}, () => {});
+
+      const evoUrl = (Deno.env.get('EVOLUTION_API_URL') || '').replace(/\/$/, '');
+      const evoKey = Deno.env.get('EVOLUTION_API_KEY') || '';
+      const number = digits.startsWith('351') ? digits : `351${digits}`;
+      const res = await fetch(`${evoUrl}/message/sendText/${channel.evolution_instance}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', apikey: evoKey },
+        body: JSON.stringify({ number, text }),
+      });
+      if (!res.ok) console.error('[welcome] Evolution send failed:', res.status, (await res.text()).slice(0, 200));
+      else console.log('[welcome] sent', temp, 'template to', number, 'for lead', lead.id);
+    } catch (e) {
+      console.error('[welcome] failed:', (e as Error).message);
+    }
+  })());
+}
 
 interface LeadSubmission {
   company_nif?: string | null;
@@ -46,7 +229,7 @@ async function handleWebhookMode(req: Request, token: string): Promise<Response>
   try {
     const { data } = await supabase
       .from('lead_intake_webhooks')
-      .select('id, organization_id, name, is_active, assigned_user_ids, rotate_enabled')
+      .select('id, organization_id, name, is_active, assigned_user_ids, rotate_enabled, notify_all_admins')
       .eq('token', token)
       .maybeSingle();
     intakeWebhook = data;
@@ -203,9 +386,13 @@ async function handleWebhookMode(req: Request, token: string): Promise<Response>
   //  2) Legacy dedicated webhook -> forced single user
   //  3) Legacy general webhook -> org-level round-robin
   let autoAssignedTo: string | null = null;
+  // Notificacao: por defeito todos os admins recebem (legacy/dedicado/standard).
+  // Nos webhooks de entrada, respeita o toggle "notify_all_admins": se false,
+  // so o utilizador a quem o lead foi atribuido e' notificado.
+  const notifyAllAdmins = isIntakeWebhook ? (intakeWebhook?.notify_all_admins !== false) : true;
   if (isIntakeWebhook) {
     autoAssignedTo = intakeAssignee;
-    console.log('Inbound webhook assignee:', autoAssignedTo);
+    console.log('Inbound webhook assignee:', autoAssignedTo, '| notifyAllAdmins:', notifyAllAdmins);
   } else if (dedicatedUserId) {
     autoAssignedTo = dedicatedUserId;
     console.log('Dedicated webhook: bypassing round-robin, assigning to', dedicatedUserId);
@@ -301,7 +488,7 @@ async function handleWebhookMode(req: Request, token: string): Promise<Response>
     .eq('organization_id', org.id)
     .eq('is_active', true);
 
-  const webhookUrls: string[] = [SENVIA_SYSTEM_WEBHOOK_URL];
+  const webhookUrls: string[] = [];
   if (activeWebhooks) {
     for (const wh of activeWebhooks) {
       if (wh.url && !webhookUrls.includes(wh.url)) webhookUrls.push(wh.url);
@@ -329,31 +516,36 @@ async function handleWebhookMode(req: Request, token: string): Promise<Response>
     }).catch((err) => console.error(`Webhook failed: ${whUrl}`, err.message));
   }
 
-  // Push notification - fetch admin IDs to target only admins + assigned
+  // Push notification - target admins (unless this webhook opted out) + assigned
   try {
-    const { data: pushAdminMembers } = await supabase
-      .from('organization_members')
-      .select('user_id')
-      .eq('organization_id', org.id)
-      .eq('role', 'admin')
-      .eq('is_active', true);
-    const pushUserIds = (pushAdminMembers || []).map((m: any) => m.user_id);
+    let pushUserIds: string[] = [];
+    if (notifyAllAdmins) {
+      const { data: pushAdminMembers } = await supabase
+        .from('organization_members')
+        .select('user_id')
+        .eq('organization_id', org.id)
+        .eq('role', 'admin')
+        .eq('is_active', true);
+      pushUserIds = (pushAdminMembers || []).map((m: any) => m.user_id);
+    }
     if (autoAssignedTo && !pushUserIds.includes(autoAssignedTo)) {
       pushUserIds.push(autoAssignedTo);
     }
 
-    fetch(`${supabaseUrl}/functions/v1/send-push-notification`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${serviceRoleKey}` },
-      body: JSON.stringify({
-        organization_id: org.id,
-        user_ids: pushUserIds,
-        title: '🚀 Novo Lead!',
-        body: `${lead.name} - ${lead.source}`,
-        url: '/leads',
-        tag: `lead-${lead.id}`,
-      }),
-    }).catch((err) => console.error('Push failed:', err.message));
+    if (pushUserIds.length > 0) {
+      fetch(`${supabaseUrl}/functions/v1/send-push-notification`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${serviceRoleKey}` },
+        body: JSON.stringify({
+          organization_id: org.id,
+          user_ids: pushUserIds,
+          title: '🚀 Novo Lead!',
+          body: `${lead.name} - ${lead.source}`,
+          url: '/leads',
+          tag: `lead-${lead.id}`,
+        }),
+      }).catch((err) => console.error('Push failed:', err.message));
+    }
   } catch (pushErr) {
     console.error('Error preparing push notification:', pushErr);
   }
@@ -362,22 +554,25 @@ async function handleWebhookMode(req: Request, token: string): Promise<Response>
   try {
     const orgBrevoKey = org.brevo_api_key;
     const orgBrevoEmail = org.brevo_sender_email;
-    const brevoKey = orgBrevoKey || Deno.env.get('BREVO_API_KEY');
+    // Transactional/system email: prefer a dedicated Brevo key (separate from marketing).
+    const brevoKey = Deno.env.get('BREVO_TRANSACTIONAL_API_KEY') || orgBrevoKey || Deno.env.get('BREVO_API_KEY');
     const senderEmail = orgBrevoEmail || 'geral@senvia.pt';
     const senderName = orgBrevoEmail ? org.name : 'Senvia';
 
     if (brevoKey) {
-      // Fetch admin emails
-      const { data: adminMembers } = await supabase
-        .from('organization_members')
-        .select('user_id')
-        .eq('organization_id', org.id)
-        .eq('role', 'admin')
-        .eq('is_active', true);
+      // Fetch admin emails (unless this webhook opted out of admin-wide notification)
+      let adminIds: string[] = [];
+      if (notifyAllAdmins) {
+        const { data: adminMembers } = await supabase
+          .from('organization_members')
+          .select('user_id')
+          .eq('organization_id', org.id)
+          .eq('role', 'admin')
+          .eq('is_active', true);
+        adminIds = (adminMembers || []).map((m: any) => m.user_id);
+      }
 
-      const adminIds = (adminMembers || []).map((m: any) => m.user_id);
-
-      // Add assigned salesperson if not already admin
+      // Add assigned salesperson if not already included
       if (autoAssignedTo && !adminIds.includes(autoAssignedTo)) {
         adminIds.push(autoAssignedTo);
       }
@@ -393,8 +588,8 @@ async function handleWebhookMode(req: Request, token: string): Promise<Response>
           .map((p: any) => ({ email: p.email, name: p.full_name || p.email }));
 
         if (recipients.length > 0) {
-          const leadsUrl = 'https://senvia-portugal-crm.lovable.app/leads';
-          const logoUrl = 'https://senvia-portugal-crm.lovable.app/senvia-logo-white.png';
+          const leadsUrl = 'https://app.senvia.pt/leads';
+          const logoUrl = 'https://app.senvia.pt/senvia-logo-white.png';
 
           const htmlContent = `
 <!DOCTYPE html>
@@ -550,7 +745,7 @@ Deno.serve(async (req) => {
     // Validate public_key and get organization_id (including webhook_url, whatsapp config, and meta_pixels)
     const { data: org, error: orgError } = await supabase
       .from('organizations')
-      .select('id, name, niche, webhook_url, whatsapp_instance, whatsapp_api_key, whatsapp_base_url, meta_pixels, sales_settings, brevo_api_key, brevo_sender_email, slug')
+      .select('id, name, niche, webhook_url, whatsapp_instance, whatsapp_api_key, whatsapp_base_url, meta_pixels, sales_settings, brevo_api_key, brevo_sender_email, slug, ai_response_mode, ai_qualification_rules, msg_template_hot, msg_template_warm, msg_template_cold')
       .eq('public_key', body.public_key)
       .maybeSingle();
 
@@ -583,12 +778,16 @@ Deno.serve(async (req) => {
       assigned_to: null as string | null,
       meta_pixels: null as any[] | null,
       target_stage: null as string | null,
+      // Assignment (parity with lead_intake_webhooks)
+      assigned_user_ids: null as string[] | null,
+      rotate_enabled: false,
+      notify_all_admins: true,
     };
 
     if (body.form_id) {
       const { data: form, error: formError } = await supabase
         .from('forms')
-        .select('id, name, form_settings, ai_qualification_rules, msg_template_hot, msg_template_warm, msg_template_cold, assigned_to, meta_pixels, target_stage')
+        .select('id, name, form_settings, ai_qualification_rules, msg_template_hot, msg_template_warm, msg_template_cold, assigned_to, meta_pixels, target_stage, assigned_user_ids, rotate_enabled, notify_all_admins')
         .eq('id', body.form_id)
         .eq('organization_id', org.id)
         .maybeSingle();
@@ -604,6 +803,9 @@ Deno.serve(async (req) => {
           assigned_to: form.assigned_to,
           meta_pixels: Array.isArray(form.meta_pixels) ? form.meta_pixels : null,
           target_stage: form.target_stage || null,
+          assigned_user_ids: Array.isArray((form as any).assigned_user_ids) ? (form as any).assigned_user_ids : null,
+          rotate_enabled: (form as any).rotate_enabled === true,
+          notify_all_admins: (form as any).notify_all_admins !== false,
         };
         console.log('Form-specific settings loaded for:', form.name);
       }
@@ -651,13 +853,38 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ===== ROUND-ROBIN AUTO-ASSIGN =====
-    // Form-level fixed assignee takes priority over round-robin
-    let autoAssignedTo: string | null = formSettings.assigned_to || null;
+    // ===== AUTO-ASSIGN =====
+    // Priority for form leads:
+    //  1) Form's own recipient list (assigned_user_ids) -> get_next_form_assignee
+    //     (handles rotate on/off atomically, like inbound webhooks)
+    //  2) Legacy single fixed assignee (forms.assigned_to)
+    //  3) Org-level round-robin (sales_settings.auto_assign_leads)
+    let autoAssignedTo: string | null = null;
+    const formUserIds = formSettings.assigned_user_ids || [];
 
-    if (autoAssignedTo) {
-      console.log('Form has fixed assignee, skipping round-robin:', autoAssignedTo);
-    } else {
+    if (body.form_id && formUserIds.length > 0) {
+      try {
+        const { data: assignee, error: faErr } = await supabase.rpc(
+          'get_next_form_assignee',
+          { p_form_id: body.form_id }
+        );
+        if (faErr) {
+          console.error('get_next_form_assignee failed:', faErr);
+        } else {
+          autoAssignedTo = (assignee as string) || null;
+          console.log('Form assignee resolved to:', autoAssignedTo, '| rotate:', formSettings.rotate_enabled);
+        }
+      } catch (faEx) {
+        console.error('Form assignee RPC failed:', faEx);
+      }
+    }
+
+    if (!autoAssignedTo && formSettings.assigned_to) {
+      autoAssignedTo = formSettings.assigned_to;
+      console.log('Form has legacy fixed assignee:', autoAssignedTo);
+    }
+
+    if (!autoAssignedTo) {
       const salesSettings = (org.sales_settings as any) || {};
       if (salesSettings.auto_assign_leads) {
         try {
@@ -738,6 +965,11 @@ Deno.serve(async (req) => {
 
     console.log('Lead created successfully:', lead.id);
 
+    // Proactive first-contact WhatsApp (replaces the retired n8n flow). Sends the
+    // form's temperature template via the org's connected Evolution instance so it
+    // appears in the Chatwoot inbox. Background; never blocks the response.
+    sendWelcomeMessage(supabase, org, lead, formSettings);
+
     // Function to map custom_data IDs to human-readable labels
     const mapCustomDataToLabels = (
       customData: Record<string, unknown> | null,
@@ -777,8 +1009,8 @@ Deno.serve(async (req) => {
       .eq('organization_id', org.id)
       .eq('is_active', true);
 
-    // Collect all webhook URLs: system + user webhooks
-    const webhookUrls: string[] = [SENVIA_SYSTEM_WEBHOOK_URL];
+    // Collect webhook URLs: org-configured outbound webhooks (external integrations).
+    const webhookUrls: string[] = [];
     if (activeWebhooks) {
       for (const wh of activeWebhooks) {
         if (wh.url && !webhookUrls.includes(wh.url)) {
@@ -802,15 +1034,6 @@ Deno.serve(async (req) => {
       form: {
         id: body.form_id || null,
         name: formSettings.form_name || null,
-      },
-      config: {
-        whatsapp_instance: org.whatsapp_instance || null,
-        whatsapp_api_key: org.whatsapp_api_key || null,
-        whatsapp_base_url: org.whatsapp_base_url || null,
-        ai_qualification_rules: formSettings.ai_qualification_rules || null,
-        msg_template_hot: formSettings.msg_template_hot || null,
-        msg_template_warm: formSettings.msg_template_warm || null,
-        msg_template_cold: formSettings.msg_template_cold || null,
       },
       lead: {
         id: lead.id,
@@ -846,15 +1069,19 @@ Deno.serve(async (req) => {
         });
     }
 
-    // Send push notification to admins + assigned salesperson (non-blocking)
+    // Send push notification to admins + assigned salesperson (non-blocking).
+    // When the form opts out of admin-wide notification, only the assignee gets it.
     try {
-      const { data: pushAdmins } = await supabase
-        .from('organization_members')
-        .select('user_id')
-        .eq('organization_id', org.id)
-        .eq('role', 'admin')
-        .eq('is_active', true);
-      const pushUserIds = (pushAdmins || []).map((m: any) => m.user_id);
+      let pushUserIds: string[] = [];
+      if (formSettings.notify_all_admins) {
+        const { data: pushAdmins } = await supabase
+          .from('organization_members')
+          .select('user_id')
+          .eq('organization_id', org.id)
+          .eq('role', 'admin')
+          .eq('is_active', true);
+        pushUserIds = (pushAdmins || []).map((m: any) => m.user_id);
+      }
       if (autoAssignedTo && !pushUserIds.includes(autoAssignedTo)) {
         pushUserIds.push(autoAssignedTo);
       }
@@ -947,20 +1174,23 @@ Deno.serve(async (req) => {
       // Priority: org's own Brevo credentials → fallback to Senvia global
       const orgBrevoKey = org.brevo_api_key;
       const orgBrevoEmail = org.brevo_sender_email;
-      const brevoKey = orgBrevoKey || Deno.env.get('BREVO_API_KEY');
+      // Transactional/system email: prefer a dedicated Brevo key (separate from marketing).
+      const brevoKey = Deno.env.get('BREVO_TRANSACTIONAL_API_KEY') || orgBrevoKey || Deno.env.get('BREVO_API_KEY');
       const senderEmail = orgBrevoEmail || 'geral@senvia.pt';
       const senderName = orgBrevoEmail ? org.name : 'Senvia';
 
       if (brevoKey) {
-        // Fetch admin emails
-        const { data: adminMembers } = await supabase
-          .from('organization_members')
-          .select('user_id')
-          .eq('organization_id', org.id)
-          .eq('role', 'admin')
-          .eq('is_active', true);
-
-        const adminIds = (adminMembers || []).map((m: any) => m.user_id);
+        // Fetch admin emails (unless the form opted out of admin-wide notification)
+        let adminIds: string[] = [];
+        if (formSettings.notify_all_admins) {
+          const { data: adminMembers } = await supabase
+            .from('organization_members')
+            .select('user_id')
+            .eq('organization_id', org.id)
+            .eq('role', 'admin')
+            .eq('is_active', true);
+          adminIds = (adminMembers || []).map((m: any) => m.user_id);
+        }
 
         // Add assigned salesperson if not already admin
         if (autoAssignedTo && !adminIds.includes(autoAssignedTo)) {
@@ -978,8 +1208,8 @@ Deno.serve(async (req) => {
             .map((p: any) => ({ email: p.email, name: p.full_name || p.email }));
 
           if (recipients.length > 0) {
-            const leadsUrl = 'https://senvia-portugal-crm.lovable.app/leads';
-            const logoUrl = 'https://senvia-portugal-crm.lovable.app/senvia-logo-white.png';
+            const leadsUrl = 'https://app.senvia.pt/leads';
+            const logoUrl = 'https://app.senvia.pt/senvia-logo-white.png';
 
             const htmlContent = `
 <!DOCTYPE html>

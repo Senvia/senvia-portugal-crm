@@ -102,9 +102,13 @@ type AddLeadFormData = z.infer<ReturnType<typeof buildLeadSchema>>;
 interface AddLeadModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Pre-fill name/phone/email/source (e.g. opened from an inbox conversation). */
+  initialData?: { name?: string; phone?: string; email?: string; source?: string };
+  /** Called with the new lead id after it is created (e.g. to link a conversation). */
+  onCreated?: (leadId: string) => void;
 }
 
-export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
+export function AddLeadModal({ open, onOpenChange, initialData, onCreated }: AddLeadModalProps) {
   const createLead = useCreateLead();
   const addContactNote = useAddContactNote();
   const uploadAttachment = useUploadLeadAttachment();
@@ -167,6 +171,16 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
       form.setValue('automation_enabled', false);
     }
   }, [form, hasActiveWhatsappAutomation]);
+
+  // Pre-fill from initialData when the modal opens (e.g. from an inbox contact).
+  useEffect(() => {
+    if (!open || !initialData) return;
+    if (initialData.name) form.setValue('name', initialData.name);
+    if (initialData.phone) form.setValue('phone', initialData.phone);
+    if (initialData.email) form.setValue('email', initialData.email);
+    if (initialData.source) form.setValue('source', initialData.source);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const companyNifValue = useWatch({ control: form.control, name: 'company_nif' }) || '';
   const nifValidation = useNifValidation({
@@ -250,6 +264,8 @@ export function AddLeadModal({ open, onOpenChange }: AddLeadModalProps) {
     if (data.notes?.trim() && data.phone?.trim()) {
       addContactNote.mutate({ phone: data.phone.trim(), content: data.notes.trim(), source: "crm" });
     }
+
+    if (lead?.id) onCreated?.(lead.id);
 
     setMatchedClient(null);
     setPendingFiles([]);

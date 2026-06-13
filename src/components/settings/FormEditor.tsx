@@ -44,8 +44,16 @@ import {
   Trash2,
   ToggleLeft,
   ToggleRight,
-  UserPlus
+  UserPlus,
+  Info,
+  RefreshCw,
+  Users,
+  Mail
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { MessageTemplateField, WELCOME_VARIABLES } from './MessageTemplateField';
 import { useUpdateForm } from '@/hooks/useForms';
 import { usePipelineStages } from '@/hooks/usePipelineStages';
 import { useTeamMembers } from '@/hooks/useTeam';
@@ -95,7 +103,30 @@ export function FormEditor({ form, onBack }: FormEditorProps) {
   const [metaPixels, setMetaPixels] = useState<MetaPixel[]>(form.meta_pixels || []);
   
   // Auto-assignment
-  const [assignedTo, setAssignedTo] = useState<string | null>(form.assigned_to || null);
+  // Lead distribution (parity with inbound webhooks): toggleable round-robin,
+  // recipient list, and "also notify admins". Seeds from the legacy single
+  // assignee when the form predates the multi-recipient model.
+  const [assignedUserIds, setAssignedUserIds] = useState<string[]>(
+    form.assigned_user_ids && form.assigned_user_ids.length > 0
+      ? form.assigned_user_ids
+      : (form.assigned_to ? [form.assigned_to] : [])
+  );
+  const [rotateEnabled, setRotateEnabled] = useState<boolean>(form.rotate_enabled ?? false);
+  const [notifyAllAdmins, setNotifyAllAdmins] = useState<boolean>(form.notify_all_admins ?? true);
+
+  // Welcome-message variables + this form's own custom fields ({{campo:Etiqueta}}).
+  const templateVariables = [
+    ...WELCOME_VARIABLES,
+    ...settings.custom_fields.map((f) => ({ token: `{{campo:${f.label}}}`, label: f.label })),
+  ];
+
+  const toggleRotate = (enabled: boolean) => {
+    // Turning rotation off keeps a single recipient (rule: 1 fixed person).
+    if (!enabled && assignedUserIds.length > 1) {
+      setAssignedUserIds([assignedUserIds[0]]);
+    }
+    setRotateEnabled(enabled);
+  };
   
   // Target stage
   const [targetStage, setTargetStage] = useState<string | null>(form.target_stage || null);
@@ -121,7 +152,12 @@ export function FormEditor({ form, onBack }: FormEditorProps) {
         msg_template_cold: msgTemplateCold || null,
         ai_qualification_rules: aiQualificationRules || null,
         meta_pixels: metaPixels,
-        assigned_to: assignedTo,
+        // Keep legacy single-assignee column in sync (first recipient) so any
+        // older reader still works; the array is now authoritative.
+        assigned_to: assignedUserIds[0] || null,
+        assigned_user_ids: assignedUserIds,
+        rotate_enabled: rotateEnabled,
+        notify_all_admins: notifyAllAdmins,
         target_stage: targetStage,
       },
       {
@@ -197,6 +233,11 @@ export function FormEditor({ form, onBack }: FormEditorProps) {
       .substring(0, 50);
   };
 
+  // When the org runs first-contact AI in Global mode, the per-form rules and
+  // templates are ignored, so the form editor hides that section and points to
+  // the global config instead. Defaults to global when unset.
+  const isGlobalAi = organization?.ai_response_mode !== 'per_form';
+
   // Editor content (shared between mobile and desktop)
   const editorContent = (
     <div className="flex-1 overflow-y-auto p-4 sm:p-6">
@@ -270,33 +311,100 @@ export function FormEditor({ form, onBack }: FormEditorProps) {
               <div className="text-left">
                 <span className="font-medium">Atribuição Automática</span>
                 <p className="text-xs text-muted-foreground font-normal">
-                  Colaborador responsável pelos leads
+                  Quem recebe os leads deste formulário
                 </p>
               </div>
             </div>
           </AccordionTrigger>
           <AccordionContent className="pb-4 pt-2 space-y-4">
+            {/* Distribuição rotativa */}
+            <div className="flex items-center justify-between gap-3">
+              <Label className="text-sm font-normal flex items-center gap-2">
+                <RefreshCw className="h-4 w-4 text-muted-foreground" />
+                Distribuição rotativa
+              </Label>
+              <Switch checked={rotateEnabled} onCheckedChange={toggleRotate} />
+            </div>
+            <p className="text-xs text-muted-foreground -mt-2">
+              Distribui os leads em rotação entre vários colaboradores (round-robin).
+            </p>
+
+            {/* Quem recebe */}
             <div className="space-y-2">
-              <Label>Colaborador Responsável</Label>
-              <Select 
-                value={assignedTo || 'none'} 
-                onValueChange={(v) => setAssignedTo(v === 'none' ? null : v)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Nenhum (fica por atribuir)" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Nenhum (fica por atribuir)</SelectItem>
-                  {teamMembers?.map(member => (
-                    <SelectItem key={member.user_id} value={member.user_id}>
-                      {member.full_name}
-                    </SelectItem>
+              <Label className="text-xs flex items-center gap-1.5">
+                <Users className="h-3.5 w-3.5" />
+                {rotateEnabled ? 'Quem recebe os leads (2 ou mais)' : 'Quem recebe os leads (1 pessoa)'}
+              </Label>
+
+              {(!teamMembers || teamMembers.length === 0) ? (
+                <p className="text-xs text-muted-foreground">Não há utilizadores na equipa para atribuir.</p>
+              ) : rotateEnabled ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                  {teamMembers.map((m) => {
+                    const checked = assignedUserIds.includes(m.user_id);
+                    return (
+                      <label
+                        key={m.user_id}
+                        className={cn(
+                          "flex items-center gap-2 rounded-md px-2 py-1.5 cursor-pointer transition-colors",
+                          checked ? "bg-primary/10" : "hover:bg-accent/50"
+                        )}
+                      >
+                        <Checkbox
+                          checked={checked}
+                          onCheckedChange={() =>
+                            setAssignedUserIds(
+                              checked
+                                ? assignedUserIds.filter((id) => id !== m.user_id)
+                                : [...assignedUserIds, m.user_id]
+                            )
+                          }
+                        />
+                        <span className="text-sm truncate">{m.full_name}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              ) : (
+                <RadioGroup
+                  value={assignedUserIds[0] || ''}
+                  onValueChange={(v) => setAssignedUserIds(v ? [v] : [])}
+                  className="grid grid-cols-1 sm:grid-cols-2 gap-1.5"
+                >
+                  {teamMembers.map((m) => (
+                    <label
+                      key={m.user_id}
+                      className={cn(
+                        "flex items-center gap-2 rounded-md px-2 py-1.5 cursor-pointer transition-colors",
+                        assignedUserIds[0] === m.user_id ? "bg-primary/10" : "hover:bg-accent/50"
+                      )}
+                    >
+                      <RadioGroupItem value={m.user_id} />
+                      <span className="text-sm truncate">{m.full_name}</span>
+                    </label>
                   ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Todos os leads que chegarem por este formulário serão automaticamente atribuídos a este colaborador.
-              </p>
+                </RadioGroup>
+              )}
+
+              {rotateEnabled && assignedUserIds.length < 2 ? (
+                <p className="text-xs text-blue-600 dark:text-blue-400">💡 Seleciona pelo menos 2 para a rotação fazer sentido.</p>
+              ) : assignedUserIds.length === 0 ? (
+                <p className="text-xs text-amber-600 dark:text-amber-400">⚠️ Sem ninguém selecionado, o lead fica por atribuir.</p>
+              ) : (
+                <p className="text-xs text-muted-foreground">Quem recebe é notificado por email/push.</p>
+              )}
+            </div>
+
+            {/* Avisar admins */}
+            <div className="space-y-1 pt-1 border-t">
+              <div className="flex items-center justify-between gap-3 pt-3">
+                <Label className="text-sm font-normal flex items-center gap-2">
+                  <Mail className="h-4 w-4 text-muted-foreground" />
+                  Avisar também os administradores
+                </Label>
+                <Switch checked={notifyAllAdmins} onCheckedChange={setNotifyAllAdmins} />
+              </div>
+              <p className="text-xs text-muted-foreground">Recebem o aviso mesmo que não estejam na lista acima.</p>
             </div>
           </AccordionContent>
         </AccordionItem>
@@ -641,6 +749,15 @@ export function FormEditor({ form, onBack }: FormEditorProps) {
             </div>
           </AccordionTrigger>
           <AccordionContent className="pb-4 pt-2 space-y-6">
+            {isGlobalAi ? (
+              <div className="flex gap-3 rounded-lg border bg-muted/40 p-4">
+                <Info className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                <p className="text-sm text-muted-foreground">
+                  A resposta automática está em modo <strong className="text-foreground">Global</strong>: a mensagem e as regras de IA são iguais para todos os formulários e configuram-se em Definições, Formulários de Captação, separador Configuração de IA. Para dar a este formulário mensagens próprias, muda o modo para <strong className="text-foreground">Resposta por Formulário</strong>.
+                </p>
+              </div>
+            ) : (
+            <>
             {/* Message Templates */}
             <div className="space-y-4">
               <div className="flex items-center gap-2">
@@ -648,46 +765,43 @@ export function FormEditor({ form, onBack }: FormEditorProps) {
                 <Label className="font-medium">Modelos de Mensagem por Temperatura</Label>
               </div>
               <p className="text-xs text-muted-foreground">
-                Use <code className="bg-muted px-1 rounded">{"{{ $('Dados').item.json.Nome }}"}</code> para personalizar com o nome do lead.
+                Mensagem de boas-vindas enviada automaticamente por WhatsApp ao novo lead. Clica numa variável para a inserir; é substituída pelos dados do lead no envio.
               </p>
 
               <div className="space-y-4">
-                <div className="space-y-2 p-3 rounded-lg border border-red-200 dark:border-red-900 bg-red-50/50 dark:bg-red-950/20">
-                  <Label className="flex items-center gap-2 text-red-600 dark:text-red-400">
-                    🔥 Lead Quente (Hot)
-                  </Label>
-                  <Textarea
+                <div className="p-3 rounded-lg border border-red-200 dark:border-red-900 bg-red-50/50 dark:bg-red-950/20">
+                  <MessageTemplateField
+                    label={<span className="flex items-center gap-2 text-red-600 dark:text-red-400 font-medium">🔥 Lead Quente</span>}
                     value={msgTemplateHot}
-                    onChange={(e) => setMsgTemplateHot(e.target.value)}
-                    placeholder="Olá {{ $('Dados').item.json.Nome }}! Vimos que tem interesse urgente. Podemos ajudar agora mesmo?"
+                    onChange={setMsgTemplateHot}
+                    placeholder="Olá {{primeiro_nome}}! Vimos que tem interesse urgente. Podemos ajudar agora mesmo?"
                     rows={3}
                     className="text-sm"
+                    variables={templateVariables}
                   />
                 </div>
 
-                <div className="space-y-2 p-3 rounded-lg border border-amber-200 dark:border-amber-900 bg-amber-50/50 dark:bg-amber-950/20">
-                  <Label className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
-                    😐 Lead Morno (Warm)
-                  </Label>
-                  <Textarea
+                <div className="p-3 rounded-lg border border-amber-200 dark:border-amber-900 bg-amber-50/50 dark:bg-amber-950/20">
+                  <MessageTemplateField
+                    label={<span className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-medium">😐 Lead Morno</span>}
                     value={msgTemplateWarm}
-                    onChange={(e) => setMsgTemplateWarm(e.target.value)}
-                    placeholder="Olá {{ $('Dados').item.json.Nome }}! Obrigado pelo seu contacto. Gostaria de saber mais sobre os nossos serviços?"
+                    onChange={setMsgTemplateWarm}
+                    placeholder="Olá {{primeiro_nome}}! Obrigado pelo seu contacto. Gostaria de saber mais sobre os nossos serviços?"
                     rows={3}
                     className="text-sm"
+                    variables={templateVariables}
                   />
                 </div>
 
-                <div className="space-y-2 p-3 rounded-lg border border-blue-200 dark:border-blue-900 bg-blue-50/50 dark:bg-blue-950/20">
-                  <Label className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
-                    🥶 Lead Frio (Cold)
-                  </Label>
-                  <Textarea
+                <div className="p-3 rounded-lg border border-blue-200 dark:border-blue-900 bg-blue-50/50 dark:bg-blue-950/20">
+                  <MessageTemplateField
+                    label={<span className="flex items-center gap-2 text-blue-600 dark:text-blue-400 font-medium">🥶 Lead Frio</span>}
                     value={msgTemplateCold}
-                    onChange={(e) => setMsgTemplateCold(e.target.value)}
-                    placeholder="Olá {{ $('Dados').item.json.Nome }}! Recebemos o seu contacto. Estamos disponíveis para esclarecer qualquer dúvida."
+                    onChange={setMsgTemplateCold}
+                    placeholder="Olá {{primeiro_nome}}! Recebemos o seu contacto. Estamos disponíveis para esclarecer qualquer dúvida."
                     rows={3}
                     className="text-sm"
+                    variables={templateVariables}
                   />
                 </div>
               </div>
@@ -707,18 +821,20 @@ export function FormEditor({ form, onBack }: FormEditorProps) {
                 onChange={(e) => setAiQualificationRules(e.target.value)}
                 placeholder={`Exemplo de regras:
 
-- HOT: Lead que menciona urgência, preço ou quer agendar
-- WARM: Lead com interesse demonstrado mas sem urgência
-- COLD: Lead que apenas pede informações gerais
+Quente: Lead que menciona urgência, preço ou quer agendar
+Morno: Lead com interesse demonstrado mas sem urgência
+Frio: Lead que apenas pede informações gerais
 
 Considerar também:
-- Palavras como "orçamento", "já" → HOT
-- Perguntas sobre funcionamento → WARM
-- Campos opcionais vazios → COLD`}
+Palavras como "orçamento", "já" significam Quente
+Perguntas sobre funcionamento significam Morno
+Campos opcionais vazios significam Frio`}
                 rows={8}
                 className="text-sm font-mono"
               />
             </div>
+            </>
+            )}
           </AccordionContent>
         </AccordionItem>
 

@@ -18,6 +18,16 @@ function json(body: unknown, status = 200): Response {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
+  // Cron guard: this function runs with verify_jwt = false. When CRON_SECRET is
+  // configured, require it (header or ?key=) so it can't be invoked publicly to
+  // spam push notifications. Left permissive until the secret is set so the
+  // existing pg_cron job keeps working during rollout.
+  const cronSecret = Deno.env.get('CRON_SECRET');
+  if (cronSecret) {
+    const provided = req.headers.get('x-cron-secret') || new URL(req.url).searchParams.get('key');
+    if (provided !== cronSecret) return json({ error: 'Não autorizado' }, 401);
+  }
+
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;

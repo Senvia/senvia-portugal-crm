@@ -72,7 +72,7 @@ export function useConversationTasks(phone: string | null | undefined) {
       const { data, error } = await tasksTable()
         .select('*')
         .eq('organization_id', organization.id)
-        .like('contact_phone', `%${suffix}`)
+        .eq('phone_key', suffix) // indexed; replaces unindexed LIKE '%suffix'
         .order('done_at', { ascending: true, nullsFirst: true })
         .order('due_at', { ascending: true, nullsFirst: false })
         .limit(50);
@@ -119,14 +119,16 @@ export function useCreateInboxTask() {
       if (error) throw error;
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['inbox-tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['inbox-tasks', organization?.id] });
     },
   });
 }
 
 // Toggle done/undone — optimistic on every tasks cache (panel, badges, widget).
 export function useToggleInboxTask() {
+  const { organization } = useAuth();
   const queryClient = useQueryClient();
+  const key = ['inbox-tasks', organization?.id];
   return useMutation({
     mutationFn: async ({ id, done }: { id: string; done: boolean }) => {
       const { error } = await tasksTable()
@@ -135,24 +137,25 @@ export function useToggleInboxTask() {
       if (error) throw error;
     },
     onMutate: async ({ id, done }) => {
-      await queryClient.cancelQueries({ queryKey: ['inbox-tasks'] });
-      const snapshots = queryClient.getQueriesData<InboxTask[]>({ queryKey: ['inbox-tasks'] });
-      queryClient.setQueriesData<InboxTask[]>({ queryKey: ['inbox-tasks'] }, (old) =>
+      await queryClient.cancelQueries({ queryKey: key });
+      const snapshots = queryClient.getQueriesData<InboxTask[]>({ queryKey: key });
+      queryClient.setQueriesData<InboxTask[]>({ queryKey: key }, (old) =>
         (old ?? []).map((t) => (t.id === id ? { ...t, done_at: done ? new Date().toISOString() : null } : t)),
       );
       return { snapshots };
     },
     onError: (_e, _v, ctx) => {
-      for (const [key, data] of ctx?.snapshots ?? []) queryClient.setQueryData(key, data);
+      for (const [k, data] of ctx?.snapshots ?? []) queryClient.setQueryData(k, data);
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['inbox-tasks'] });
+      queryClient.invalidateQueries({ queryKey: key });
     },
   });
 }
 
 // Snooze / reschedule / reassign / retitle. Changing due_at re-arms the reminder.
 export function useUpdateInboxTask() {
+  const { organization } = useAuth();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, dueAt, assignedTo, title, description }: {
@@ -174,7 +177,7 @@ export function useUpdateInboxTask() {
       if (error) throw error;
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['inbox-tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['inbox-tasks', organization?.id] });
     },
   });
 }
@@ -182,8 +185,9 @@ export function useUpdateInboxTask() {
 // Accept an AI suggestion: it becomes a real task assigned to the accepting
 // user (reminder arms itself via due_at, which the suggestion already carries).
 export function useAcceptSuggestedTask() {
-  const { user } = useAuth();
+  const { user, organization } = useAuth();
   const queryClient = useQueryClient();
+  const key = ['inbox-tasks', organization?.id];
   return useMutation({
     mutationFn: async (id: string) => {
       const { error } = await tasksTable()
@@ -192,18 +196,18 @@ export function useAcceptSuggestedTask() {
       if (error) throw error;
     },
     onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: ['inbox-tasks'] });
-      const snapshots = queryClient.getQueriesData<InboxTask[]>({ queryKey: ['inbox-tasks'] });
-      queryClient.setQueriesData<InboxTask[]>({ queryKey: ['inbox-tasks'] }, (old) =>
+      await queryClient.cancelQueries({ queryKey: key });
+      const snapshots = queryClient.getQueriesData<InboxTask[]>({ queryKey: key });
+      queryClient.setQueriesData<InboxTask[]>({ queryKey: key }, (old) =>
         (old ?? []).map((t) => (t.id === id ? { ...t, suggested: false, assigned_to: user?.id ?? null } : t)),
       );
       return { snapshots };
     },
     onError: (_e, _v, ctx) => {
-      for (const [key, data] of ctx?.snapshots ?? []) queryClient.setQueryData(key, data);
+      for (const [k, data] of ctx?.snapshots ?? []) queryClient.setQueryData(k, data);
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['inbox-tasks'] });
+      queryClient.invalidateQueries({ queryKey: key });
     },
   });
 }
@@ -235,22 +239,15 @@ export function useSaveAiTasksEnabled() {
   return useMutation({
     mutationFn: async (enabled: boolean) => {
       if (!organization?.id) throw new Error('Organização não encontrada');
-      const { data } = await supabase
-        .from('messaging_channels')
-        .select('metadata')
-        .eq('organization_id', organization.id)
-        .eq('channel_type', 'whatsapp')
-        .maybeSingle();
-      const metadata = { ...((data?.metadata as Record<string, unknown>) ?? {}), ai_tasks_enabled: enabled };
-      // .select() detects silent RLS denials (0 rows updated = no permission).
-      const { data: updated, error } = await supabase
-        .from('messaging_channels')
-        .update({ metadata })
-        .eq('organization_id', organization.id)
-        .eq('channel_type', 'whatsapp')
-        .select('id');
+      // Atomic JSON merge — won't clobber auto_reply or the channel's own config.
+      // The RPC is admin-gated and raises for non-admins.
+      // Cast: the RPC is newer than the generated Supabase types.
+      const { error } = await (supabase.rpc as any)('merge_messaging_channel_metadata', {
+        p_org_id: organization.id,
+        p_channel_type: 'whatsapp',
+        p_patch: { ai_tasks_enabled: enabled },
+      });
       if (error) throw error;
-      if (!updated || updated.length === 0) throw new Error('Apenas administradores podem alterar esta opção.');
     },
     // Optimistic: the sparkles flips on click; rolls back if the server refuses.
     onMutate: async (enabled) => {
@@ -264,31 +261,33 @@ export function useSaveAiTasksEnabled() {
       queryClient.setQueryData(['inbox-ai-tasks-enabled', organization?.id], ctx?.previous);
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['inbox-ai-tasks-enabled'] });
+      queryClient.invalidateQueries({ queryKey: ['inbox-ai-tasks-enabled', organization?.id] });
     },
   });
 }
 
 export function useDeleteInboxTask() {
+  const { organization } = useAuth();
   const queryClient = useQueryClient();
+  const key = ['inbox-tasks', organization?.id];
   return useMutation({
     mutationFn: async (id: string) => {
       const { error } = await tasksTable().delete().eq('id', id);
       if (error) throw error;
     },
     onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: ['inbox-tasks'] });
-      const snapshots = queryClient.getQueriesData<InboxTask[]>({ queryKey: ['inbox-tasks'] });
-      queryClient.setQueriesData<InboxTask[]>({ queryKey: ['inbox-tasks'] }, (old) =>
+      await queryClient.cancelQueries({ queryKey: key });
+      const snapshots = queryClient.getQueriesData<InboxTask[]>({ queryKey: key });
+      queryClient.setQueriesData<InboxTask[]>({ queryKey: key }, (old) =>
         (old ?? []).filter((t) => t.id !== id),
       );
       return { snapshots };
     },
     onError: (_e, _v, ctx) => {
-      for (const [key, data] of ctx?.snapshots ?? []) queryClient.setQueryData(key, data);
+      for (const [k, data] of ctx?.snapshots ?? []) queryClient.setQueryData(k, data);
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['inbox-tasks'] });
+      queryClient.invalidateQueries({ queryKey: key });
     },
   });
 }

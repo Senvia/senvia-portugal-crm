@@ -86,8 +86,12 @@ export interface Form {
   ai_qualification_rules?: string | null;
   // Meta Pixels (per-form)
   meta_pixels?: MetaPixel[];
-  // Auto-assignment (per-form)
+  // Auto-assignment (per-form). assigned_to is the legacy single assignee;
+  // assigned_user_ids + rotate_enabled bring parity with inbound webhooks.
   assigned_to?: string | null;
+  assigned_user_ids?: string[];
+  rotate_enabled?: boolean;
+  notify_all_admins?: boolean;
   // Target pipeline stage (per-form)
   target_stage?: string | null;
   created_at: string;

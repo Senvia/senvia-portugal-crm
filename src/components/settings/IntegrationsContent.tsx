@@ -2,10 +2,11 @@ import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Webhook, Send, Loader2, Eye, EyeOff, MessageCircle, Mail, Receipt, ArrowLeft, ChevronRight, ChevronDown, Plus, Trash2, Link2, Copy, Check, Users, RefreshCw, Pencil, Smartphone, CheckCircle2, ShieldCheck } from "lucide-react";
+import { Webhook, Send, Loader2, Eye, EyeOff, MessageCircle, Mail, Receipt, ArrowLeft, ChevronRight, ChevronDown, Plus, Trash2, Link2, Copy, Check, Users, RefreshCw, Pencil, CheckCircle2, ShieldCheck, Inbox, Megaphone, Instagram, Facebook } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LucideIcon } from "lucide-react";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -15,7 +16,7 @@ import { useOrganizationWebhooks, useCreateWebhook, useToggleWebhook, useDeleteW
 import { useLeadIntakeWebhooks, useCreateLeadIntakeWebhook, useUpdateLeadIntakeWebhook, useDeleteLeadIntakeWebhook, LeadIntakeWebhook } from "@/hooks/useLeadIntakeWebhooks";
 import { useTeamMembers } from "@/hooks/useTeam";
 import { useTestWebhook } from "@/hooks/useOrganization";
-import { useWhatsappChannel } from "@/hooks/useMessagingChannels";
+import { useMessagingChannels, useDeleteChannel } from "@/hooks/useMessagingChannels";
 import { ConnectWhatsAppModal } from "./ConnectWhatsAppModal";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -54,9 +55,17 @@ interface IntegrationsContentProps {
   showKeyinvoiceApiKey: boolean;
   setShowKeyinvoiceApiKey: (value: boolean) => void;
   handleSaveKeyInvoice: () => void;
+  // Personal email-sending config (per-user), moved here from the profile so all
+  // Brevo/email setup lives in one place. Saved via handleSaveProfile.
+  profileSenderEmail: string;
+  setProfileSenderEmail: (value: string) => void;
+  emailSignature: string;
+  setEmailSignature: (value: string) => void;
+  handleSaveProfile: () => void;
+  updateProfileIsPending: boolean;
 }
 
-type IntegrationKey = 'webhook' | 'webhook_inbound' | 'whatsapp' | 'brevo' | 'invoicexpress' | 'keyinvoice';
+type IntegrationKey = 'webhook' | 'webhook_inbound' | 'inboxes' | 'brevo' | 'invoicexpress' | 'keyinvoice';
 
 interface IntegrationDef {
   key: IntegrationKey;
@@ -67,18 +76,18 @@ interface IntegrationDef {
   group: string;
 }
 
-const integrationGroups = ['Automações', 'Comunicações', 'Faturação'] as const;
+const integrationGroups = ['Caixas de Entrada', 'Marketing', 'Automações', 'Faturação eletrónica'] as const;
 
 const integrations: IntegrationDef[] = [
-  { key: 'webhook', icon: Webhook, title: 'Webhooks', description: 'Notificações de novos leads', toggleKey: 'webhook', group: 'Automações' },
-  { key: 'webhook_inbound', icon: Link2, title: 'Webhook de Entrada', description: 'Receber leads via Zapier/Make', toggleKey: 'webhook_inbound', group: 'Automações' },
-  { key: 'whatsapp', icon: MessageCircle, title: 'WhatsApp Business', description: 'Integração com Evolution API', toggleKey: 'whatsapp', group: 'Comunicações' },
-  { key: 'brevo', icon: Mail, title: 'Email (Brevo)', description: 'Envio de emails e propostas', toggleKey: 'brevo', group: 'Comunicações' },
-  { key: 'invoicexpress', icon: Receipt, title: 'InvoiceXpress', description: 'Emissão de faturas automática', toggleKey: 'invoicexpress', group: 'Faturação' },
-  { key: 'keyinvoice', icon: Receipt, title: 'KeyInvoice', description: 'Faturação via API 5.0', toggleKey: 'keyinvoice', group: 'Faturação' },
+  { key: 'inboxes', icon: Inbox, title: 'Caixas de Entrada', description: 'WhatsApp, Instagram, Facebook e Email num só lugar', toggleKey: 'inboxes', group: 'Caixas de Entrada' },
+  { key: 'brevo', icon: Megaphone, title: 'Email Marketing', description: 'Campanhas e automações de email', toggleKey: 'brevo', group: 'Marketing' },
+  { key: 'webhook', icon: Webhook, title: 'Webhook de Saída', description: 'Notificar sistemas externos (Make, Zapier, n8n)', toggleKey: 'webhook', group: 'Automações' },
+  { key: 'webhook_inbound', icon: Link2, title: 'Webhook de Entrada', description: 'Receber leads (Facebook, Zapier, Make)', toggleKey: 'webhook_inbound', group: 'Automações' },
+  { key: 'invoicexpress', icon: Receipt, title: 'InvoiceXpress', description: 'Emissão de faturas automática', toggleKey: 'invoicexpress', group: 'Faturação eletrónica' },
+  { key: 'keyinvoice', icon: Receipt, title: 'KeyInvoice', description: 'Faturação via API 5.0', toggleKey: 'keyinvoice', group: 'Faturação eletrónica' },
 ];
 
-function IntegrationCard({ 
+function IntegrationCard({
   icon: Icon, title, description, badge, onClick 
 }: { 
   icon: LucideIcon; title: string; description: string; 
@@ -88,20 +97,20 @@ function IntegrationCard({
     <button
       onClick={onClick}
       className={cn(
-        "w-full flex items-center gap-3 p-4 rounded-lg border bg-card",
-        "hover:bg-accent/50 cursor-pointer transition-colors text-left"
+        "w-full flex items-center gap-4 p-5 rounded-lg border bg-card",
+        "hover:bg-accent/50 hover:border-primary/30 cursor-pointer transition-colors text-left"
       )}
     >
-      <div className="rounded-md bg-primary/10 p-2 shrink-0">
-        <Icon className="h-5 w-5 text-primary" />
+      <div className="rounded-lg bg-primary/10 p-3 shrink-0">
+        <Icon className="h-6 w-6 text-primary" />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="font-medium text-sm">{title}</p>
-        <p className="text-xs text-muted-foreground truncate">{description}</p>
+        <p className="font-semibold text-base">{title}</p>
+        <p className="text-sm text-muted-foreground">{description}</p>
       </div>
       <div className="flex items-center gap-2 shrink-0">
         {badge}
-        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+        <ChevronRight className="h-5 w-5 text-muted-foreground" />
       </div>
     </button>
   );
@@ -110,25 +119,26 @@ function IntegrationCard({
 export const IntegrationsContent = (props: IntegrationsContentProps) => {
   const [active, setActive] = useState<IntegrationKey | null>(null);
   const { data: webhooks = [] } = useOrganizationWebhooks();
+  const { data: channels = [] } = useMessagingChannels();
+  const connectedChannels = channels.filter((c) => c.status === 'connected').length;
 
   const {
     isLoadingIntegrations,
-    whatsappBaseUrl, setWhatsappBaseUrl, whatsappInstance, setWhatsappInstance,
-    whatsappApiKey, setWhatsappApiKey, showWhatsappApiKey, setShowWhatsappApiKey, handleSaveWhatsApp,
-    brevoApiKey, setBrevoApiKey, brevoSenderEmail, setBrevoSenderEmail,
-    showBrevoApiKey, setShowBrevoApiKey, handleSaveBrevo,
-    invoiceXpressAccountName, setInvoiceXpressAccountName, invoiceXpressApiKey, setInvoiceXpressApiKey,
-    showInvoiceXpressApiKey, setShowInvoiceXpressApiKey, handleSaveInvoiceXpress,
-    integrationsEnabled, onToggleIntegration, updateOrganizationIsPending,
-    keyinvoiceApiKey, setKeyinvoiceApiKey, keyinvoiceApiUrl, setKeyinvoiceApiUrl,
-    showKeyinvoiceApiKey, setShowKeyinvoiceApiKey, handleSaveKeyInvoice,
+    brevoApiKey, brevoSenderEmail,
+    invoiceXpressAccountName, invoiceXpressApiKey,
+    integrationsEnabled, onToggleIntegration,
+    keyinvoiceApiKey,
   } = props;
+
+  const visibleIntegrations = integrations;
+  const visibleGroups = integrationGroups;
+  const showGroupHeaders = true;
 
   const isConfigured = (key: IntegrationKey): boolean => {
     switch (key) {
       case 'webhook': return webhooks.length > 0;
       case 'webhook_inbound': return true; // Always configured (auto-generated token)
-      case 'whatsapp': return !!(whatsappBaseUrl && whatsappInstance && whatsappApiKey);
+      case 'inboxes': return connectedChannels > 0;
       case 'brevo': return !!(brevoApiKey && brevoSenderEmail);
       case 'invoicexpress': return !!(invoiceXpressAccountName && invoiceXpressApiKey);
       case 'keyinvoice': return !!keyinvoiceApiKey;
@@ -136,6 +146,13 @@ export const IntegrationsContent = (props: IntegrationsContentProps) => {
   };
 
   const getBadge = (key: string, configured: boolean) => {
+    // Caixas de Entrada has no on/off toggle: show how many channels are connected.
+    if (key === 'inboxes') {
+      if (connectedChannels > 0) {
+        return <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20 text-[10px]">{connectedChannels} {connectedChannels === 1 ? 'ligada' : 'ligadas'}</Badge>;
+      }
+      return <Badge variant="outline" className="bg-muted/50 text-muted-foreground border-border text-[10px]">Nenhuma ligada</Badge>;
+    }
     if (integrationsEnabled[key] === false) {
       return <Badge variant="outline" className="bg-muted/50 text-muted-foreground border-border text-[10px]">Desativado</Badge>;
     }
@@ -150,18 +167,15 @@ export const IntegrationsContent = (props: IntegrationsContentProps) => {
   if (!active) {
     return (
       <div className="max-w-4xl">
-        <div className="mb-4 p-4 rounded-lg bg-muted/50 border">
-          <p className="text-sm text-muted-foreground">
-            💡 <strong>Dica:</strong> Os modelos de mensagem, regras de IA e Meta Pixels são agora configurados individualmente em cada formulário.
-          </p>
-        </div>
         <div className="space-y-6">
-          {integrationGroups.map((group) => {
-            const items = integrations.filter(i => i.group === group);
+          {visibleGroups.map((group) => {
+            const items = visibleIntegrations.filter(i => i.group === group);
             return (
               <div key={group}>
-                <h3 className="text-sm font-medium text-muted-foreground mb-2">{group}</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {showGroupHeaders && (
+                  <h3 className="text-sm font-medium text-muted-foreground mb-2">{group}</h3>
+                )}
+                <div className="grid grid-cols-1 gap-3">
                   {items.map((item) => (
                     <IntegrationCard
                       key={item.key}
@@ -182,7 +196,7 @@ export const IntegrationsContent = (props: IntegrationsContentProps) => {
   }
 
   return (
-    <div className="max-w-4xl">
+    <div>
       <button
         onClick={() => setActive(null)}
         className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4"
@@ -205,10 +219,12 @@ export const IntegrationsContent = (props: IntegrationsContentProps) => {
         </div>
         <div className="flex items-center gap-2">
           {getBadge(active, isConfigured(active))}
-          <Switch
-            checked={active === 'keyinvoice' ? integrationsEnabled.keyinvoice === true : integrationsEnabled[active] !== false}
-            onCheckedChange={(checked) => onToggleIntegration(active, checked)}
-          />
+          {active !== 'inboxes' && (
+            <Switch
+              checked={active === 'keyinvoice' ? integrationsEnabled.keyinvoice === true : integrationsEnabled[active] !== false}
+              onCheckedChange={(checked) => onToggleIntegration(active, checked)}
+            />
+          )}
         </div>
       </div>
 
@@ -221,7 +237,7 @@ export const IntegrationsContent = (props: IntegrationsContentProps) => {
         <div className="space-y-4">
           {active === 'webhook' && <WebhooksManager />}
           {active === 'webhook_inbound' && <InboundWebhookSection />}
-          {active === 'whatsapp' && <WhatsAppForm {...props} />}
+          {active === 'inboxes' && <InboxesManager />}
           {active === 'brevo' && <BrevoForm {...props} />}
           {active === 'invoicexpress' && <InvoiceXpressForm {...props} />}
           {active === 'keyinvoice' && <KeyInvoiceForm {...props} />}
@@ -244,6 +260,7 @@ function WebhooksManager() {
   const [newName, setNewName] = useState('');
   const [newUrl, setNewUrl] = useState('');
   const [testingId, setTestingId] = useState<string | null>(null);
+  const [showHelp, setShowHelp] = useState(false);
 
   const isValidUrl = (url: string) => {
     if (!url) return false;
@@ -274,13 +291,11 @@ function WebhooksManager() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-lg bg-blue-500/10 border border-blue-500/20 p-4">
-        <h4 className="font-medium text-sm text-blue-900 dark:text-blue-300 mb-1">🔗 O que são Webhooks?</h4>
-        <p className="text-sm text-blue-600 dark:text-blue-400">
-          Webhooks permitem notificar automaticamente sistemas externos (como CRMs, ferramentas de automação ou o n8n) sempre que um novo lead é registado. Cada webhook configurado recebe um pedido HTTP POST com os dados do lead em tempo real, permitindo integrar o Senvia OS com qualquer plataforma.
-        </p>
-      </div>
+    <div className="grid gap-6 lg:gap-10 lg:grid-cols-[minmax(0,1fr)_360px] items-start">
+      <div className="space-y-4 min-w-0">
+      <p className="text-sm text-muted-foreground">
+        Envia um POST com os dados de cada novo lead para sistemas externos (Make, Zapier, n8n…).
+      </p>
 
       {/* Webhook list */}
       {webhooks.length > 0 && (
@@ -354,6 +369,38 @@ function WebhooksManager() {
           Adicionar Webhook
         </Button>
       )}
+      </div>
+
+      {/* Ajuda — coluna direita */}
+      <div className="rounded-lg border h-fit">
+        <button
+          type="button"
+          onClick={() => setShowHelp((v) => !v)}
+          className="w-full flex items-center justify-between p-3 text-sm font-medium hover:bg-accent/40 transition-colors rounded-lg"
+        >
+          <span>📋 Como ligar ao Zapier / Make</span>
+          <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", showHelp && "rotate-180")} />
+        </button>
+        {showHelp && (
+          <div className="px-4 pb-4 space-y-2 border-t pt-3">
+            <ol className="text-sm text-muted-foreground space-y-2 list-decimal list-inside">
+              <li>No Zapier (trigger <strong>Webhooks → Catch Hook</strong>) ou Make (módulo <strong>Webhooks → Custom webhook</strong>), copia o URL que a ferramenta gera.</li>
+              <li>Aqui no Senvia, clica <strong>Adicionar Webhook</strong>, dá um nome e cola esse URL.</li>
+              <li>Usa o botão de teste (<Send className="inline h-3 w-3" />) para disparar um lead de exemplo e mapear os campos do lado do Zapier/Make.</li>
+              <li>A partir daí, cada novo lead é enviado como <strong>POST JSON</strong> com, entre outros:
+                <ul className="ml-4 mt-1 space-y-1 list-disc">
+                  <li><code className="bg-muted px-1 rounded text-xs">lead.name</code> · <code className="bg-muted px-1 rounded text-xs">lead.email</code> · <code className="bg-muted px-1 rounded text-xs">lead.phone</code></li>
+                  <li><code className="bg-muted px-1 rounded text-xs">lead.company_name</code> · <code className="bg-muted px-1 rounded text-xs">lead.source</code> · <code className="bg-muted px-1 rounded text-xs">lead.status</code></li>
+                  <li><code className="bg-muted px-1 rounded text-xs">lead.custom_data</code> (campos do formulário)</li>
+                </ul>
+              </li>
+            </ol>
+            <p className="text-xs text-amber-600 dark:text-amber-400">
+              ⚠️ O POST não é assinado — o destino deve tratar o endpoint como público.
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -381,8 +428,8 @@ function MemberSelector({
 
   const rowClass = (checked: boolean) =>
     cn(
-      "flex items-center gap-2 rounded-md border px-2.5 py-2 cursor-pointer transition-colors",
-      checked ? "border-primary/40 bg-primary/5" : "bg-background hover:bg-accent/50"
+      "flex items-center gap-2 rounded-md px-2 py-1.5 cursor-pointer transition-colors",
+      checked ? "bg-primary/10" : "hover:bg-accent/50"
     );
 
   if (!rotate) {
@@ -476,13 +523,11 @@ function InboundWebhookSection() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-lg bg-primary/5 border border-primary/20 p-4">
-        <h4 className="font-medium text-sm mb-1">🔗 Receber leads de fontes externas</h4>
-        <p className="text-sm text-muted-foreground">
-          Crie um webhook para cada origem de leads (campanha, formulário, parceiro…). Cada um tem o seu próprio link, escolhe quem da equipa recebe os contactos e pode distribuí-los automaticamente.
-        </p>
-      </div>
+    <div className="grid gap-6 lg:gap-10 lg:grid-cols-[minmax(0,1fr)_360px] items-start">
+      <div className="space-y-4 min-w-0">
+      <p className="text-sm text-muted-foreground">
+        Um link por origem de leads (campanha, parceiro…). Cada um escolhe quem da equipa recebe os contactos.
+      </p>
 
       {/* Lista de webhooks */}
       <div className="space-y-2.5">
@@ -512,19 +557,15 @@ function InboundWebhookSection() {
             />
           </div>
 
-          <div className="flex items-center justify-between gap-3 rounded-md border bg-background/60 p-3">
-            <div className="flex items-start gap-2">
-              <RefreshCw className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
-              <div className="space-y-0.5">
-                <Label className="text-sm font-medium">Distribuição rotativa</Label>
-                <p className="text-xs text-muted-foreground">
-                  {newRotate
-                    ? 'Os leads rodam entre os utilizadores escolhidos (round-robin).'
-                    : 'Todos os leads vão para um único utilizador.'}
-                </p>
-              </div>
+          <div className="space-y-1">
+            <div className="flex items-center justify-between gap-3">
+              <Label className="text-sm font-normal flex items-center gap-2">
+                <RefreshCw className="h-4 w-4 text-muted-foreground" />
+                Distribuição rotativa
+              </Label>
+              <Switch checked={newRotate} onCheckedChange={handleToggleRotate} />
             </div>
-            <Switch checked={newRotate} onCheckedChange={handleToggleRotate} />
+            <p className="text-xs text-muted-foreground">Distribui os leads em rotação entre vários colaboradores (round-robin).</p>
           </div>
 
           <div className="space-y-2">
@@ -554,9 +595,10 @@ function InboundWebhookSection() {
           Adicionar Webhook de Entrada
         </Button>
       )}
+      </div>
 
-      {/* Ajuda (recolhida por defeito) */}
-      <div className="rounded-lg border">
+      {/* Ajuda — coluna direita */}
+      <div className="rounded-lg border h-fit">
         <button
           type="button"
           onClick={() => setShowHelp((v) => !v)}
@@ -648,73 +690,78 @@ function IntakeWebhookCard({
 
   return (
     <div className={cn("rounded-lg border bg-card overflow-hidden", !webhook.is_active && "opacity-70")}>
-      {/* Cabeçalho recolhível */}
+      {/* Cabeçalho recolhível — nome editável inline (sem campo Nome duplicado no expandido) */}
       <div className="flex items-center gap-2 p-3">
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
-          className="flex items-center gap-2 flex-1 min-w-0 text-left"
+          className="flex items-center gap-2 shrink-0"
+          aria-label={expanded ? 'Recolher' : 'Expandir'}
         >
-          <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform shrink-0", expanded && "rotate-180")} />
-          <span className={cn("h-2 w-2 rounded-full shrink-0", webhook.is_active ? "bg-green-500" : "bg-muted-foreground/40")} />
-          <span className="text-sm font-medium truncate">{webhook.name}</span>
-          {webhook.is_system && (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground border rounded px-1.5 py-0.5 shrink-0">
-                    <ShieldCheck className="h-3 w-3" /> Predefinido
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p className="text-xs max-w-[220px]">Webhook base da tua conta. Podes editá-lo ou desativá-lo, mas não eliminá-lo.</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
-          {needsAttention && (
-            <span className="text-[10px] text-amber-600 dark:text-amber-400 border border-amber-500/30 bg-amber-500/10 rounded px-1.5 py-0.5 shrink-0">
-              ⚠️ Configurar
-            </span>
-          )}
+          <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", expanded && "rotate-180")} />
+          <span className={cn("h-2 w-2 rounded-full", webhook.is_active ? "bg-green-500" : "bg-muted-foreground/40")} />
         </button>
+
+        {editingName ? (
+          <Input
+            autoFocus
+            value={nameDraft}
+            onChange={(e) => setNameDraft(e.target.value)}
+            onBlur={saveName}
+            onKeyDown={(e) => { if (e.key === 'Enter') saveName(); if (e.key === 'Escape') { setNameDraft(webhook.name); setEditingName(false); } }}
+            className="h-8 text-sm flex-1"
+          />
+        ) : (
+          <>
+            <button
+              type="button"
+              onClick={() => setExpanded((v) => !v)}
+              className="flex items-center gap-1.5 flex-1 min-w-0 text-left"
+            >
+              <span className="text-sm font-medium truncate">{webhook.name}</span>
+              {webhook.is_system && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground border rounded px-1.5 py-0.5 shrink-0">
+                        <ShieldCheck className="h-3 w-3" /> Predefinido
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="text-xs max-w-[220px]">Webhook base da tua conta. Podes editá-lo ou desativá-lo, mas não eliminá-lo.</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+              {needsAttention && (
+                <span className="text-[10px] text-amber-600 dark:text-amber-400 border border-amber-500/30 bg-amber-500/10 rounded px-1.5 py-0.5 shrink-0">
+                  ⚠️ Configurar
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setNameDraft(webhook.name); setEditingName(true); }}
+              className="p-1 text-muted-foreground hover:text-foreground shrink-0"
+              title="Renomear"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </button>
+          </>
+        )}
+
         <span className="hidden sm:block text-xs text-muted-foreground truncate max-w-[160px]">
           {assigneeSummary(webhook, members)}
         </span>
         <Switch
           checked={webhook.is_active}
           onCheckedChange={(checked) => updateWebhook.mutate({ id: webhook.id, is_active: checked })}
-          onClick={(e) => e.stopPropagation()}
         />
       </div>
 
       {/* Conteúdo expandido */}
       {expanded && (
         <div className="px-4 pb-4 pt-1 space-y-4 border-t">
-          {/* Nome */}
-          <div className="space-y-1.5">
-            <Label className="text-xs">Nome</Label>
-            {editingName ? (
-              <Input
-                autoFocus
-                value={nameDraft}
-                onChange={(e) => setNameDraft(e.target.value)}
-                onBlur={saveName}
-                onKeyDown={(e) => { if (e.key === 'Enter') saveName(); if (e.key === 'Escape') { setNameDraft(webhook.name); setEditingName(false); } }}
-                className="h-9 text-sm"
-              />
-            ) : (
-              <button
-                type="button"
-                onClick={() => { setNameDraft(webhook.name); setEditingName(true); }}
-                className="flex items-center gap-1.5 text-sm hover:text-primary transition-colors group w-full"
-              >
-                <span className="truncate">{webhook.name}</span>
-                <Pencil className="h-3 w-3 opacity-40 group-hover:opacity-80 shrink-0" />
-              </button>
-            )}
-          </div>
-
           {/* URL */}
           <div className="space-y-1.5">
             <Label className="text-xs">URL do Webhook</Label>
@@ -728,18 +775,11 @@ function IntakeWebhookCard({
           </div>
 
           {/* Distribuição rotativa */}
-          <div className="flex items-center justify-between gap-3 rounded-md border bg-muted/30 p-3">
-            <div className="flex items-start gap-2">
-              <RefreshCw className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
-              <div className="space-y-0.5">
-                <Label className="text-sm font-medium">Distribuição rotativa</Label>
-                <p className="text-xs text-muted-foreground">
-                  {webhook.rotate_enabled
-                    ? 'Os leads rodam entre os utilizadores selecionados (round-robin).'
-                    : 'Todos os leads vão para um único utilizador.'}
-                </p>
-              </div>
-            </div>
+          <div className="flex items-center justify-between gap-3">
+            <Label className="text-sm font-normal flex items-center gap-2">
+              <RefreshCw className="h-4 w-4 text-muted-foreground" />
+              Distribuição rotativa
+            </Label>
             <Switch checked={webhook.rotate_enabled} onCheckedChange={toggleRotate} />
           </div>
 
@@ -751,21 +791,32 @@ function IntakeWebhookCard({
             </Label>
             <MemberSelector members={members} value={selected} rotate={webhook.rotate_enabled} onChange={setUsers} />
 
-            {rotateOffInvalid && (
+            {rotateOffInvalid ? (
               <p className="text-xs text-amber-600 dark:text-amber-400">
                 {selected.length === 0
-                  ? '⚠️ Seleciona 1 utilizador — sem isso os leads ficam sem responsável (só os admins são notificados).'
-                  : '⚠️ Com a rotação desligada só pode haver 1 utilizador.'}
+                  ? '⚠️ Seleciona 1 colaborador, senão o lead fica sem responsável.'
+                  : '⚠️ Sem rotação, só pode haver 1 colaborador.'}
               </p>
+            ) : rotateOnHint ? (
+              <p className="text-xs text-blue-600 dark:text-blue-400">💡 Seleciona pelo menos 2 para a rotação fazer sentido.</p>
+            ) : (
+              <p className="text-xs text-muted-foreground">Quem recebe é notificado por email/push.</p>
             )}
-            {rotateOnHint && (
-              <p className="text-xs text-blue-600 dark:text-blue-400">
-                💡 Seleciona pelo menos 2 utilizadores para a rotação fazer sentido.
-              </p>
-            )}
-            <p className="text-xs text-muted-foreground">
-              Quem recebe o lead é notificado por email/push. Os administradores são sempre notificados de todos os webhooks.
-            </p>
+          </div>
+
+          {/* Notificar todos os admins */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between gap-3">
+              <Label className="text-sm font-normal flex items-center gap-2">
+                <Mail className="h-4 w-4 text-muted-foreground" />
+                Avisar também os administradores
+              </Label>
+              <Switch
+                checked={webhook.notify_all_admins}
+                onCheckedChange={(checked) => updateWebhook.mutate({ id: webhook.id, notify_all_admins: checked })}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">Recebem o aviso mesmo que não estejam na lista acima.</p>
           </div>
 
           {/* Eliminar (com confirmação) — só webhooks não predefinidos */}
@@ -805,80 +856,183 @@ function IntakeWebhookCard({
 
 // --- Form sub-components ---
 
-function WhatsAppForm({ whatsappBaseUrl, setWhatsappBaseUrl, whatsappInstance, setWhatsappInstance, whatsappApiKey, setWhatsappApiKey, showWhatsappApiKey, setShowWhatsappApiKey, handleSaveWhatsApp, updateOrganizationIsPending }: IntegrationsContentProps) {
-  const [connectOpen, setConnectOpen] = useState(false);
-  const { channel } = useWhatsappChannel();
-  const isConnected = channel?.status === 'connected';
+// Channel catalog for the "+ Nova caixa" picker. Only WhatsApp is active in
+// Phase 1; Instagram/Facebook/Email are shown as coming soon.
+const CHANNEL_CATALOG: { type: string; label: string; icon: LucideIcon; available: boolean }[] = [
+  { type: 'whatsapp', label: 'WhatsApp', icon: MessageCircle, available: true },
+  { type: 'instagram', label: 'Instagram', icon: Instagram, available: false },
+  { type: 'facebook', label: 'Facebook Messenger', icon: Facebook, available: false },
+  { type: 'email', label: 'Email', icon: Mail, available: false },
+];
+
+function channelMeta(type: string) {
+  return CHANNEL_CATALOG.find((c) => c.type === type) || { type, label: type, icon: MessageCircle, available: true };
+}
+
+const CHANNEL_STATUS_LABEL: Record<string, string> = {
+  connected: 'Ligada',
+  connecting: 'A ligar...',
+  disconnected: 'Desligada',
+  error: 'Erro',
+};
+
+// Caixas de Entrada: lists the org's connected channels and lets the admin add a
+// new one. Phase 1 supports WhatsApp (Evolution + Chatwoot); other channels are
+// surfaced as "em breve" until their providers are wired.
+function InboxesManager() {
+  const { data: channels = [] } = useMessagingChannels();
+  const deleteChannel = useDeleteChannel();
+  // Modal target: reconnect (channelId) or create new (label, no channelId).
+  const [modal, setModal] = useState<{ open: boolean; channelId?: string; label?: string }>({ open: false });
+  const [picking, setPicking] = useState(false);
+  const [newLabel, setNewLabel] = useState('');
+  const [toDelete, setToDelete] = useState<string | null>(null);
+
+  const startNewWhatsApp = () => {
+    setModal({ open: true, label: newLabel.trim() || 'WhatsApp' });
+    setPicking(false);
+    setNewLabel('');
+  };
+
   return (
-    <>
-      {/* Multicanal — conectar WhatsApp ao inbox (Chatwoot + Evolution) */}
-      <div className="rounded-lg border p-4 space-y-3">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="rounded-md bg-green-500/10 p-2 shrink-0">
-              <Smartphone className="h-5 w-5 text-green-600" />
-            </div>
-            <div>
-              <p className="font-medium text-sm">Inbox Multicanal</p>
-              <p className="text-xs text-muted-foreground">
-                {isConnected
-                  ? `Conectado${channel?.phone_number ? ` · +${channel.phone_number}` : ''}`
-                  : 'Liga o teu WhatsApp para receber e responder mensagens dentro do CRM.'}
-              </p>
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">
+        Liga as tuas contas para receber e responder mensagens de todos os canais dentro do CRM.
+      </p>
+
+      {/* Connected channels list */}
+      {channels.length > 0 ? (
+        <div className="space-y-2">
+          {channels.map((ch) => {
+            const meta = channelMeta(ch.channel_type);
+            const Icon = meta.icon;
+            const connected = ch.status === 'connected';
+            return (
+              <div key={ch.id} className="flex items-center gap-3 p-3 rounded-lg border bg-card">
+                <div className={cn('rounded-md p-2 shrink-0', connected ? 'bg-green-500/10' : 'bg-muted')}>
+                  <Icon className={cn('h-5 w-5', connected ? 'text-green-600' : 'text-muted-foreground')} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sm truncate">
+                    {ch.label || meta.label}
+                    {ch.phone_number ? ` · +${ch.phone_number}` : ''}
+                  </p>
+                  <p className="text-xs text-muted-foreground">{meta.label} · {CHANNEL_STATUS_LABEL[ch.status] || ch.status}</p>
+                </div>
+                {connected && (
+                  <Badge variant="outline" className="text-[10px] gap-1 bg-green-500/10 text-green-600 border-green-500/20">
+                    <CheckCircle2 className="h-3 w-3" /> Ligada
+                  </Badge>
+                )}
+                {ch.channel_type === 'whatsapp' && (
+                  <Button variant="outline" size="sm" onClick={() => setModal({ open: true, channelId: ch.id })} className="shrink-0">
+                    {connected ? 'Reconectar' : 'Ligar'}
+                  </Button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setToDelete(ch.id)}
+                  className="p-1.5 text-muted-foreground hover:text-destructive transition-colors shrink-0"
+                  title="Remover caixa"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="rounded-lg border border-dashed p-6 text-center">
+          <Inbox className="h-8 w-8 mx-auto text-muted-foreground/50 mb-2" />
+          <p className="text-sm text-muted-foreground">Ainda não tens nenhuma caixa ligada.</p>
+        </div>
+      )}
+
+      {/* Add new */}
+      {picking ? (
+        <div className="rounded-lg border p-3 space-y-3">
+          <p className="text-xs font-medium text-muted-foreground px-1">Escolhe o canal</p>
+          <div className="grid grid-cols-2 gap-2">
+            {CHANNEL_CATALOG.map((c) => {
+              const Icon = c.icon;
+              const isWhatsApp = c.type === 'whatsapp';
+              return (
+                <div
+                  key={c.type}
+                  className={cn(
+                    'flex items-center gap-2 rounded-lg border p-3',
+                    c.available ? '' : 'opacity-50',
+                  )}
+                >
+                  <Icon className="h-5 w-5 shrink-0 text-primary" />
+                  <span className="text-sm font-medium min-w-0">
+                    {c.label}
+                    {!c.available && <span className="block text-[10px] text-muted-foreground font-normal">Em breve</span>}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+          {/* WhatsApp is the only active channel in Phase 1 */}
+          <div className="space-y-2 border-t pt-3">
+            <Label htmlFor="new-inbox-label" className="text-xs">Nome da caixa (WhatsApp)</Label>
+            <Input
+              id="new-inbox-label"
+              value={newLabel}
+              onChange={(e) => setNewLabel(e.target.value)}
+              placeholder="Ex: Vendas, Suporte"
+            />
+            <div className="flex gap-2">
+              <Button size="sm" onClick={startNewWhatsApp} className="flex-1">
+                <MessageCircle className="mr-2 h-4 w-4" /> Ligar WhatsApp
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => { setPicking(false); setNewLabel(''); }}>Cancelar</Button>
             </div>
           </div>
-          {isConnected && (
-            <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20 text-[10px] gap-1">
-              <CheckCircle2 className="h-3 w-3" /> Conectado
-            </Badge>
-          )}
         </div>
-        <Button onClick={() => setConnectOpen(true)} variant={isConnected ? 'outline' : 'default'} className="w-full">
-          <Smartphone className="mr-2 h-4 w-4" />
-          {isConnected ? 'Reconectar WhatsApp' : 'Conectar WhatsApp'}
+      ) : (
+        <Button onClick={() => setPicking(true)} variant="outline" className="w-full">
+          <Plus className="mr-2 h-4 w-4" />
+          Nova caixa
         </Button>
-      </div>
-      <ConnectWhatsAppModal open={connectOpen} onOpenChange={setConnectOpen} />
+      )}
 
-      {/* Legacy — mensagem de receção automática ao novo Lead (Evolution por org) */}
-      <div className="rounded-lg bg-blue-500/10 border border-blue-500/20 p-3 space-y-2">
-        <p className="text-sm text-blue-600 dark:text-blue-400">
-          📩 Os campos abaixo servem para enviar uma mensagem de receção automática ao novo Lead que acabou de subscrever. Exemplo: <em>"Olá, seja bem-vindo! Recebemos os seus dados e em breve um agente vai entrar em contacto."</em>
-        </p>
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="whatsapp-base-url">URL do Servidor</Label>
-        <Input id="whatsapp-base-url" type="url" placeholder="https://api.senvia.com" value={whatsappBaseUrl} onChange={(e) => setWhatsappBaseUrl(e.target.value)} />
-        <p className="text-xs text-muted-foreground">Endereço do seu servidor Evolution API.</p>
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="whatsapp-instance">Nome da Instância</Label>
-        <Input id="whatsapp-instance" placeholder="nome-da-instancia" value={whatsappInstance} onChange={(e) => setWhatsappInstance(e.target.value)} />
-        <p className="text-xs text-muted-foreground">Nome da instância configurada na Evolution API.</p>
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="whatsapp-api-key">API Key da Instância</Label>
-        <div className="relative">
-          <Input id="whatsapp-api-key" type={showWhatsappApiKey ? 'text' : 'password'} placeholder="Chave de autenticação" value={whatsappApiKey} onChange={(e) => setWhatsappApiKey(e.target.value)} />
-          <Button type="button" variant="ghost" size="icon" className="absolute right-0 top-0 h-full px-3" onClick={() => setShowWhatsappApiKey(!showWhatsappApiKey)}>
-            {showWhatsappApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-          </Button>
-        </div>
-        <p className="text-xs text-muted-foreground">Chave de autenticação da Evolution API.</p>
-      </div>
-      <Button onClick={handleSaveWhatsApp} disabled={updateOrganizationIsPending}>
-        {updateOrganizationIsPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-        Guardar
-      </Button>
-    </>
+      <ConnectWhatsAppModal
+        open={modal.open}
+        onOpenChange={(o) => setModal((m) => ({ ...m, open: o }))}
+        channelId={modal.channelId}
+        label={modal.label}
+      />
+
+      <AlertDialog open={!!toDelete} onOpenChange={(o) => !o && setToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover esta caixa?</AlertDialogTitle>
+            <AlertDialogDescription>
+              A caixa deixa de aparecer no CRM e as mensagens desse canal deixam de ser geridas aqui. Esta ação não pode ser anulada.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => { if (toDelete) deleteChannel.mutate(toDelete); setToDelete(null); }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Remover
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
   );
 }
 
-function BrevoForm({ brevoApiKey, setBrevoApiKey, brevoSenderEmail, setBrevoSenderEmail, showBrevoApiKey, setShowBrevoApiKey, handleSaveBrevo, updateOrganizationIsPending }: IntegrationsContentProps) {
+function BrevoForm({ brevoApiKey, setBrevoApiKey, brevoSenderEmail, setBrevoSenderEmail, showBrevoApiKey, setShowBrevoApiKey, handleSaveBrevo, updateOrganizationIsPending, profileSenderEmail, setProfileSenderEmail, emailSignature, setEmailSignature, handleSaveProfile, updateProfileIsPending }: IntegrationsContentProps) {
   return (
     <>
-      <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-3">
-        <p className="text-sm text-amber-600 dark:text-amber-400">O email remetente deve estar verificado na sua conta Brevo para o envio funcionar.</p>
+      <div className="rounded-lg bg-muted/50 border p-3 space-y-1">
+        <p className="text-sm font-medium flex items-center gap-2"><Megaphone className="h-4 w-4 text-muted-foreground" />Envio de campanhas e automações de email</p>
+        <p className="text-xs text-muted-foreground">Atualmente só suportamos o <strong>Brevo</strong> como provedor de email marketing. O email remetente deve estar verificado na tua conta Brevo para o envio funcionar.</p>
       </div>
       <div className="space-y-2">
         <Label htmlFor="brevo-sender-email">Email Remetente</Label>
@@ -909,6 +1063,28 @@ function BrevoForm({ brevoApiKey, setBrevoApiKey, brevoSenderEmail, setBrevoSend
         {updateOrganizationIsPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
         Guardar
       </Button>
+
+      {/* Personal email-sending config (per-user) — moved here from the profile. */}
+      <div className="rounded-lg border p-4 space-y-4 mt-2">
+        <div>
+          <h4 className="font-medium text-sm flex items-center gap-2"><Mail className="h-4 w-4" />O teu envio de email</h4>
+          <p className="text-xs text-muted-foreground mt-0.5">Aplica-se apenas aos emails que <strong>tu</strong> envias. Sobrepõe-se ao remetente da organização.</p>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="profile-brevo-sender">O teu email de envio</Label>
+          <Input id="profile-brevo-sender" type="email" placeholder="o-seu-email@dominio.com" value={profileSenderEmail} onChange={(e) => setProfileSenderEmail(e.target.value)} />
+          <p className="text-xs text-muted-foreground">Deve estar verificado na Brevo. Se vazio, é usado o email da organização acima.</p>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="profile-signature">A tua assinatura de email</Label>
+          <Textarea id="profile-signature" value={emailSignature} onChange={(e) => setEmailSignature(e.target.value)} placeholder="Cole aqui a sua assinatura HTML (nome, cargo, telefone, logo...)" rows={6} className="font-mono text-xs" />
+          <p className="text-xs text-muted-foreground">Anexada automaticamente a todos os emails que enviar (templates, marketing, leads).</p>
+        </div>
+        <Button onClick={handleSaveProfile} disabled={updateProfileIsPending}>
+          {updateProfileIsPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          Guardar
+        </Button>
+      </div>
     </>
   );
 }

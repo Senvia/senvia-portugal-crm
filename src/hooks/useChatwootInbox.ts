@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, useIsMutating, type QueryClient } from '@tanstack/react-query';
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -10,11 +10,17 @@ export interface InboxConversation {
   contact_id: number | null;
   contact_name: string;
   contact_phone: string | null;
+  // Identity for channels without a phone number (Instagram / Messenger / email).
+  contact_email: string | null;
+  contact_identifier: string | null;
   contact_thumbnail: string | null;
   last_message: string | null;
   unread_count: number;
   status: string;
   channel: string | null;
+  // Chatwoot inbox id — which connected account/number this conversation belongs
+  // to. Used to route the outbound reply through the right WhatsApp instance.
+  inbox_id: number | null;
   updated_at: number | null;
   // Set when the LAST message is from the customer (they're waiting on us).
   waiting_since: number | null;
@@ -116,15 +122,18 @@ export function useInboxRealtime(): boolean {
     // list refetch costs Chatwoot real server time.
     let timer: number | null = null;
     let taskTimer: number | null = null;
+    // Private channel (Realtime Authorization): only authenticated org members
+    // may subscribe. setAuth feeds the realtime socket the current JWT.
+    supabase.realtime.setAuth();
     const channel = supabase
-      .channel(`inbox-${orgId}`)
+      .channel(`inbox-${orgId}`, { config: { private: true } })
       .on('broadcast', { event: 'message' }, () => {
         // AI task suggestions land a few seconds after the message — refresh
         // the tasks caches once the classifier has had time to run.
         if (taskTimer !== null) window.clearTimeout(taskTimer);
         taskTimer = window.setTimeout(() => {
           taskTimer = null;
-          queryClient.invalidateQueries({ queryKey: ['inbox-tasks'] });
+          queryClient.invalidateQueries({ queryKey: ['inbox-tasks', orgId] });
         }, 8000);
         if (timer !== null) return;
         timer = window.setTimeout(() => {
@@ -175,8 +184,11 @@ export function useInboxPresence(
   useEffect(() => {
     if (!organization?.id || !user?.id) return;
     const userId = user.id;
+    // Private presence channel: only authenticated org members may join, so agent
+    // names / open-conversation state aren't readable with just the anon key.
+    supabase.realtime.setAuth();
     const channel = supabase.channel(`inbox-presence-${organization.id}`, {
-      config: { presence: { key: userId } },
+      config: { private: true, presence: { key: userId } },
     });
     channelRef.current = channel;
 
@@ -229,38 +241,45 @@ function convKey(c: InboxConversation): string {
   return (c.contact_phone || '').replace(/\D/g, '') || `id-${c.id}`;
 }
 
+// Shared fetch+merge for the conversations cache. BOTH the inbox list and the
+// sidebar unread badge use this exact queryFn under the same key, so the badge's
+// poll can never overwrite the list's merged cache with a raw fetch (the bug
+// that made conversations disappear). Chatwoot is slow per page (>1s): the first
+// load fetches 6 pages; refreshes fetch the 2 newest and merge over the cache.
+async function fetchConversationsMerged(
+  queryClient: QueryClient,
+  orgId: string,
+): Promise<InboxConversation[]> {
+  const previous = queryClient.getQueryData<InboxConversation[]>(['inbox-conversations', orgId]);
+  const mode = previous && previous.length > 0 ? 'fresh' : 'full';
+  const res = await invokeInbox<{ conversations: InboxConversation[] }>(orgId, {
+    action: 'list_conversations',
+    mode,
+  });
+  const fresh = res.conversations || [];
+  if (mode === 'full' || !previous) return fresh;
+  // Merge: fresh rows win; keep cached rows for contacts not in the fresh window
+  // (no recent activity — their state can only have changed through our own
+  // optimistic patches, which are already in `previous`).
+  const seenKeys = new Set(fresh.map(convKey));
+  const seenIds = new Set(fresh.flatMap((c) => [c.id, ...(c.alt_ids ?? [])]));
+  const rest = previous.filter((c) => !seenKeys.has(convKey(c)) && !seenIds.has(c.id));
+  return [...fresh, ...rest];
+}
+
 // List the open conversations for the org's Chatwoot account.
-// Chatwoot is slow per page (>1s), so only the FIRST load fetches the full 6
-// pages; every refresh fetches just the 2 newest pages and merges them over the
-// cached list (recent activity always lands on page 1).
-// With realtime connected (live=true) the poll is just a safety net.
+// With realtime connected (live=true) the poll is just a safety net. Polling is
+// suspended while a mutation is in flight so a refetch can't revert an optimistic
+// patch mid-round-trip.
 export function useInboxConversations(enabled = true, live = false) {
   const { organization } = useAuth();
   const queryClient = useQueryClient();
+  const mutating = useIsMutating() > 0;
   return useQuery({
     queryKey: ['inbox-conversations', organization?.id],
-    queryFn: async (): Promise<InboxConversation[]> => {
-      if (!organization?.id) return [];
-      const previous = queryClient.getQueryData<InboxConversation[]>(
-        ['inbox-conversations', organization.id],
-      );
-      const mode = previous && previous.length > 0 ? 'fresh' : 'full';
-      const res = await invokeInbox<{ conversations: InboxConversation[] }>(organization.id, {
-        action: 'list_conversations',
-        mode,
-      });
-      const fresh = res.conversations || [];
-      if (mode === 'full' || !previous) return fresh;
-      // Merge: fresh rows win; keep cached rows for contacts not in the fresh
-      // window (no recent activity — their state can only have changed through
-      // our own optimistic patches, which are already in `previous`).
-      const seenKeys = new Set(fresh.map(convKey));
-      const seenIds = new Set(fresh.flatMap((c) => [c.id, ...(c.alt_ids ?? [])]));
-      const rest = previous.filter((c) => !seenKeys.has(convKey(c)) && !seenIds.has(c.id));
-      return [...fresh, ...rest];
-    },
+    queryFn: () => (organization?.id ? fetchConversationsMerged(queryClient, organization.id) : Promise.resolve([])),
     enabled: enabled && !!organization?.id,
-    refetchInterval: !enabled ? false : live ? 20000 : 5000,
+    refetchInterval: !enabled || mutating ? false : live ? 20000 : 5000,
   });
 }
 
@@ -298,17 +317,15 @@ export function countUnreadConversations(conversations: InboxConversation[]): nu
 // the inbox page is open; alone it polls at a relaxed 20s.
 export function useInboxUnreadTotal(enabled = true) {
   const { organization } = useAuth();
+  const queryClient = useQueryClient();
+  const mutating = useIsMutating() > 0;
   const query = useQuery({
     queryKey: ['inbox-conversations', organization?.id],
-    queryFn: async (): Promise<InboxConversation[]> => {
-      if (!organization?.id) return [];
-      const res = await invokeInbox<{ conversations: InboxConversation[] }>(organization.id, {
-        action: 'list_conversations',
-      });
-      return res.conversations || [];
-    },
+    // SAME queryFn as useInboxConversations — sharing the merge logic is what
+    // stops the badge poll from clobbering the list cache.
+    queryFn: () => (organization?.id ? fetchConversationsMerged(queryClient, organization.id) : Promise.resolve([])),
     enabled: enabled && !!organization?.id,
-    refetchInterval: enabled ? 20000 : false,
+    refetchInterval: enabled && !mutating ? 20000 : false,
   });
   return { total: countUnreadConversations(query.data || []), isLoading: query.isLoading };
 }
@@ -317,6 +334,7 @@ export function useInboxUnreadTotal(enabled = true) {
 // Passing altIds merges the threads of the contact's other conversations into one.
 export function useInboxMessages(conversationId: number | null, altIds: number[] = [], live = false) {
   const { organization } = useAuth();
+  const mutating = useIsMutating() > 0;
   const allIds = conversationId ? [conversationId, ...altIds] : [];
   return useQuery({
     queryKey: ['inbox-messages', organization?.id, conversationId, altIds.join(',')],
@@ -329,7 +347,9 @@ export function useInboxMessages(conversationId: number | null, altIds: number[]
       return res.messages || [];
     },
     enabled: !!organization?.id && !!conversationId,
-    refetchInterval: !conversationId ? false : live ? 15000 : 2500,
+    // Suspend polling during a mutation so a refetch can't revert the optimistic
+    // bubble/patch mid-send.
+    refetchInterval: !conversationId || mutating ? false : live ? 15000 : 2500,
     // Keep already-opened conversations cached: switching back shows the thread
     // instantly (background refetch updates it) instead of a full-screen loader.
     gcTime: 30 * 60 * 1000,
@@ -383,10 +403,12 @@ export function useMarkConversationRead() {
         conversation_ids: [conversationId, ...altIds],
       });
     },
-    onMutate: async ({ conversationId }) => ({
+    onMutate: async ({ conversationId, altIds = [] }) => ({
       previous: await patchConversations(
         queryClient, organization?.id,
-        (c) => c.id === conversationId,
+        // Cover the primary row whether the id passed is the primary or one of
+        // the merged alt conversations.
+        (c) => c.id === conversationId || (c.alt_ids ?? []).includes(conversationId) || altIds.includes(c.id),
         { unread_count: 0 },
       ),
     }),
@@ -437,12 +459,14 @@ export function useSendInboxMessage() {
       conversationId,
       content,
       contactPhone,
+      inboxId,
       attachment,
       quotedId,
     }: {
       conversationId: number;
       content: string;
       contactPhone?: string | null;
+      inboxId?: number | null;
       attachment?: OutgoingAttachment;
       quotedId?: string | null;
     }) => {
@@ -453,6 +477,8 @@ export function useSendInboxMessage() {
         content,
         // Passing the phone lets the edge function skip a Chatwoot lookup.
         contact_phone: contactPhone ?? undefined,
+        // Routes the reply through the right WhatsApp instance (multi-account).
+        inbox_id: inboxId ?? undefined,
         attachment,
         quoted_id: quotedId ?? undefined,
       });
@@ -551,36 +577,35 @@ export interface ContactMatch {
   name: string;
 }
 
-// Matches by the last 9 digits (PT national number) so formatting differences
-// ("+351 910...", "351910...", "910...") still match.
-export function useContactMatch(phone: string | null | undefined) {
+// Matches a CRM lead/client behind a conversation. By the last 9 digits of the
+// phone (PT national number, so "+351 910...", "351910...", "910..." all match)
+// and/or by email — the email path is what lets channels WITHOUT a phone
+// (Instagram, Messenger, e-mail) still resolve to a CRM record.
+export function useContactMatch(phone: string | null | undefined, email?: string | null) {
   const { organization } = useAuth();
   const digits = (phone || '').replace(/\D/g, '');
-  const suffix = digits.slice(-9);
+  const suffix = digits.length >= 9 ? digits.slice(-9) : '';
+  const mail = (email || '').trim().toLowerCase();
   return useQuery({
-    queryKey: ['inbox-contact-match', organization?.id, suffix],
+    queryKey: ['inbox-contact-match', organization?.id, suffix, mail],
     queryFn: async (): Promise<ContactMatch | null> => {
-      if (!organization?.id || suffix.length < 9) return null;
+      if (!organization?.id || (!suffix && !mail)) return null;
+      // Build an OR filter against phone suffix and/or email. NOTE: in the
+      // PostgREST .or() string syntax the LIKE wildcard is '*', not SQL '%'.
+      const orParts: string[] = [];
+      if (suffix) orParts.push(`phone.like.*${suffix}`);
+      if (mail) orParts.push(`email.eq.${mail}`);
+      const orFilter = orParts.join(',');
       const [{ data: clients }, { data: leads }] = await Promise.all([
-        supabase
-          .from('crm_clients')
-          .select('id, name')
-          .eq('organization_id', organization.id)
-          .like('phone', `%${suffix}`)
-          .limit(1),
-        supabase
-          .from('leads')
-          .select('id, name')
-          .eq('organization_id', organization.id)
-          .like('phone', `%${suffix}`)
-          .limit(1),
+        supabase.from('crm_clients').select('id, name').eq('organization_id', organization.id).or(orFilter).limit(1),
+        supabase.from('leads').select('id, name').eq('organization_id', organization.id).or(orFilter).limit(1),
       ]);
       // A converted client outranks the original lead.
       if (clients && clients.length > 0) return { kind: 'client', id: clients[0].id, name: clients[0].name };
       if (leads && leads.length > 0) return { kind: 'lead', id: leads[0].id, name: leads[0].name };
       return null;
     },
-    enabled: !!organization?.id && suffix.length >= 9,
+    enabled: !!organization?.id && (!!suffix || !!mail),
     staleTime: 60 * 1000,
   });
 }
@@ -839,22 +864,18 @@ export function useSaveAutoReplyConfig() {
   return useMutation({
     mutationFn: async (config: AutoReplyConfig) => {
       if (!organization?.id) throw new Error('Organização não encontrada');
-      const { data } = await supabase
-        .from('messaging_channels')
-        .select('metadata')
-        .eq('organization_id', organization.id)
-        .eq('channel_type', 'whatsapp')
-        .maybeSingle();
-      const metadata = { ...((data?.metadata as Record<string, unknown>) ?? {}), auto_reply: config };
-      const { error } = await supabase
-        .from('messaging_channels')
-        .update({ metadata })
-        .eq('organization_id', organization.id)
-        .eq('channel_type', 'whatsapp');
+      // Atomic JSON merge (metadata = metadata || patch) — never clobbers the
+      // channel's other metadata (ai_tasks_enabled, Evolution/Chatwoot config).
+      // Cast: the RPC is newer than the generated Supabase types.
+      const { error } = await (supabase.rpc as any)('merge_messaging_channel_metadata', {
+        p_org_id: organization.id,
+        p_channel_type: 'whatsapp',
+        p_patch: { auto_reply: config },
+      });
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['inbox-auto-reply'] });
+      queryClient.invalidateQueries({ queryKey: ['inbox-auto-reply', organization?.id] });
     },
   });
 }
@@ -883,7 +904,7 @@ export function useScheduledMessages(phone: string | null | undefined) {
         .select('id, phone, content, send_at, status')
         .eq('organization_id', organization.id)
         .eq('status', 'pending')
-        .like('phone', `%${suffix}`)
+        .eq('phone_key', suffix) // indexed; replaces unindexed LIKE '%suffix'
         .order('send_at', { ascending: true });
       if (error) throw error;
       return (data ?? []) as ScheduledMessage[];
@@ -909,12 +930,13 @@ export function useScheduleMessage() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['inbox-scheduled'] });
+      queryClient.invalidateQueries({ queryKey: ['inbox-scheduled', organization?.id] });
     },
   });
 }
 
 export function useCancelScheduledMessage() {
+  const { organization } = useAuth();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
@@ -922,7 +944,7 @@ export function useCancelScheduledMessage() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['inbox-scheduled'] });
+      queryClient.invalidateQueries({ queryKey: ['inbox-scheduled', organization?.id] });
     },
   });
 }
@@ -1133,7 +1155,9 @@ const TRANSCRIPT_CACHE_PREFIX = 'inbox_transcript_v1_';
 // edge function. Caches the result in localStorage so it survives page reload.
 export function useTranscribeAudio(messageId: number, url: string | null) {
   const { organization } = useAuth();
-  const cacheKey = `${TRANSCRIPT_CACHE_PREFIX}${messageId}`;
+  // Scope by org: message ids are per-Chatwoot-account, so a bare messageId key
+  // could collide across orgs in the same browser.
+  const cacheKey = `${TRANSCRIPT_CACHE_PREFIX}${organization?.id ?? 'x'}_${messageId}`;
 
   const [text, setText] = useState<string | null>(() => {
     try { return localStorage.getItem(cacheKey); } catch { return null; }

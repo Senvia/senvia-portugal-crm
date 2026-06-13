@@ -21,6 +21,9 @@ function transformForm(row: any): Form {
     ai_qualification_rules: row.ai_qualification_rules,
     meta_pixels: Array.isArray(row.meta_pixels) ? row.meta_pixels : [],
     assigned_to: row.assigned_to,
+    assigned_user_ids: Array.isArray(row.assigned_user_ids) ? row.assigned_user_ids : [],
+    rotate_enabled: row.rotate_enabled ?? false,
+    notify_all_admins: row.notify_all_admins ?? true,
     target_stage: row.target_stage || null,
     created_at: row.created_at,
     updated_at: row.updated_at,
@@ -147,6 +150,9 @@ interface UpdateFormData {
   ai_qualification_rules?: string | null;
   meta_pixels?: any[];
   assigned_to?: string | null;
+  assigned_user_ids?: string[];
+  rotate_enabled?: boolean;
+  notify_all_admins?: boolean;
   target_stage?: string | null;
 }
 
@@ -180,6 +186,9 @@ export function useUpdateForm() {
       if (data.ai_qualification_rules !== undefined) updateData.ai_qualification_rules = data.ai_qualification_rules;
       if (data.meta_pixels !== undefined) updateData.meta_pixels = data.meta_pixels;
       if (data.assigned_to !== undefined) updateData.assigned_to = data.assigned_to;
+      if (data.assigned_user_ids !== undefined) updateData.assigned_user_ids = data.assigned_user_ids;
+      if (data.rotate_enabled !== undefined) updateData.rotate_enabled = data.rotate_enabled;
+      if (data.notify_all_admins !== undefined) updateData.notify_all_admins = data.notify_all_admins;
       if (data.target_stage !== undefined) updateData.target_stage = data.target_stage;
 
       const { data: updatedForm, error } = await supabase
@@ -308,6 +317,9 @@ export function useDuplicateForm() {
           is_active: true,
           target_stage: original.target_stage || null,
           assigned_to: original.assigned_to || null,
+          assigned_user_ids: original.assigned_user_ids || [],
+          rotate_enabled: original.rotate_enabled ?? false,
+          notify_all_admins: original.notify_all_admins ?? true,
           meta_pixels: original.meta_pixels || [],
           msg_template_hot: original.msg_template_hot || null,
           msg_template_warm: original.msg_template_warm || null,

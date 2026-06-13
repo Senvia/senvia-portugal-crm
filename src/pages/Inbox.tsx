@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback, memo } from "react";
 import { useWhatsappChannel } from "@/hooks/useMessagingChannels";
 import {
   useInboxConversations,
@@ -66,6 +66,10 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -79,6 +83,7 @@ import {
   ChevronsUpDown, Eye,
 } from "lucide-react";
 import { cn, matchesSearch } from "@/lib/utils";
+import { INBOX_CONFIG } from "@/lib/constants";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 function initials(name: string): string {
@@ -95,6 +100,12 @@ function firstName(name: string): string {
 function displayPhone(phone: string | null | undefined): string {
   const digits = String(phone ?? "").replace(/\D/g, "");
   return digits ? `+${digits}` : "";
+}
+
+// Chatwoot forces label titles to lowercase-hyphenated slugs ("a-fazer").
+// Convert back to a readable form for display ("A Fazer").
+function formatLabel(slug: string): string {
+  return slug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 function toMs(value: string | number | null): number {
@@ -148,8 +159,8 @@ type SlaLevel = "ok" | "warn" | "late";
 function slaLevel(since: number | null): SlaLevel | null {
   if (!since) return null;
   const mins = (Date.now() - since * 1000) / 60000;
-  if (mins >= 60) return "late";
-  if (mins >= 15) return "warn";
+  if (mins >= INBOX_CONFIG.SLA_LATE_MIN) return "late";
+  if (mins >= INBOX_CONFIG.SLA_WARN_MIN) return "warn";
   return "ok";
 }
 const SLA_DOT: Record<SlaLevel, string> = {
@@ -179,15 +190,19 @@ function waitingLabel(since: number | null): string | null {
 // the list preview reads in Portuguese even before the backend (which now hides
 // activities from the preview) is redeployed. Patterns are tightly shaped — a
 // capitalised agent name + a verb — so real customer messages are left untouched.
+// Precompiled once (was rebuilding two RegExp objects per call, per row, per render).
+const _ACT_NAME = String.raw`\p{Lu}[\p{L}]+(?:[ '\-]\p{L}+)*`;
+const _ACT_LABELS = String.raw`[\p{L}\p{N}_-]+(?:,\s*[\p{L}\p{N}_-]+)*`;
+const RE_ACT_ADDED = new RegExp(`^(${_ACT_NAME}) added (${_ACT_LABELS})$`, "u");
+const RE_ACT_REMOVED = new RegExp(`^(${_ACT_NAME}) removed (${_ACT_LABELS})$`, "u");
+
 function translateActivity(text: string): string {
   if (!text) return text;
-  const NAME = String.raw`\p{Lu}[\p{L}]+(?:[ '\-]\p{L}+)*`;
-  const LABELS = String.raw`[\p{L}\p{N}_-]+(?:,\s*[\p{L}\p{N}_-]+)*`;
   let m: RegExpMatchArray | null;
-  if ((m = text.match(new RegExp(`^(${NAME}) added (${LABELS})$`, "u")))) {
+  if ((m = text.match(RE_ACT_ADDED))) {
     return `${m[1]} adicionou ${m[2].includes(",") ? "as etiquetas" : "a etiqueta"} ${m[2]}`;
   }
-  if ((m = text.match(new RegExp(`^(${NAME}) removed (${LABELS})$`, "u")))) {
+  if ((m = text.match(RE_ACT_REMOVED))) {
     return `${m[1]} removeu ${m[2].includes(",") ? "as etiquetas" : "a etiqueta"} ${m[2]}`;
   }
   if ((m = text.match(/^Assigned to (.+?) by (.+)$/))) return `Atribuída a ${m[1]} por ${m[2]}`;
@@ -498,10 +513,14 @@ export default function Inbox() {
   // CRM contact panel: fixed right column on desktop (persisted), Sheet on mobile.
   const [panelOpen, setPanelOpen] = useState<boolean>(() => localStorage.getItem("inbox-panel-v1") !== "0");
   const [sheetOpen, setSheetOpen] = useState(false);
+  // Generic destructive-action confirmation (replaces window.confirm).
+  const [confirm, setConfirm] = useState<{ title: string; description: string; action: () => void } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const prevSelectedRef = useRef<number | null>(null);
   // Latest list/selection/action for the singly-bound keyboard handler.
   const kbdRef = useRef<{
     filtered: InboxConversation[];
@@ -550,7 +569,7 @@ export default function Inbox() {
   const { data: teamMembers = [] } = useTeamMembers();
   const createEvent = useCreateEvent();
 
-  const { data: phoneMatch } = useContactMatch(selected?.contact_phone);
+  const { data: phoneMatch } = useContactMatch(selected?.contact_phone, selected?.contact_email);
   const createLead = useCreateLeadFromContact();
   const createClient = useCreateClientFromContact();
   const linkCrm = useLinkCrm();
@@ -689,7 +708,14 @@ export default function Inbox() {
   );
 
   // Notification sound when new unread messages arrive while the page is open.
+  // Skip the FIRST run so opening the inbox with pre-existing unreads doesn't beep.
+  const beepInitRef = useRef(false);
   useEffect(() => {
+    if (!beepInitRef.current) {
+      beepInitRef.current = true;
+      prevUnreadRef.current = unreadTotal;
+      return;
+    }
     if (unreadTotal > prevUnreadRef.current) playNotificationBeep();
     prevUnreadRef.current = unreadTotal;
   }, [unreadTotal]);
@@ -708,6 +734,44 @@ export default function Inbox() {
     return all.sort((a, b) => toMs(a.created_at) - toMs(b.created_at));
   }, [olderByConv, selectedId, messages, deletedIds]);
 
+  // Thread rows with date separators + WhatsApp-style grouping. Memoized (and
+  // kept ABOVE the early returns so the hook order is stable) — rebuilding this
+  // in the render body cost on every keystroke.
+  type ThreadRow =
+    | { type: "sep"; key: string; label: string }
+    | { type: "msg"; key: string; msg: InboxMessage; firstOfGroup: boolean; lastOfGroup: boolean };
+  const threadRows = useMemo<ThreadRow[]>(() => {
+    const rows: ThreadRow[] = [];
+    const GROUP_WINDOW = INBOX_CONFIG.GROUP_WINDOW_MS;
+    const msgs = thread.filter((m) => !m.is_activity);
+    const sameSender = (a: InboxMessage, b: InboxMessage) =>
+      a.outgoing === b.outgoing &&
+      (a.sender_name || "") === (b.sender_name || "") &&
+      !!a.is_private === !!b.is_private;
+    let lastDay = "";
+    for (let i = 0; i < msgs.length; i++) {
+      const m = msgs[i];
+      const ms = toMs(m.created_at);
+      const k = dayKey(ms);
+      const dayChanged = k !== lastDay;
+      if (dayChanged) {
+        lastDay = k;
+        rows.push({ type: "sep", key: `sep-${k}`, label: dayLabel(ms) });
+      }
+      const prev = msgs[i - 1];
+      const next = msgs[i + 1];
+      const firstOfGroup =
+        dayChanged || !prev || !sameSender(prev, m) || ms - toMs(prev.created_at) > GROUP_WINDOW;
+      const lastOfGroup =
+        !next ||
+        dayKey(toMs(next.created_at)) !== k ||
+        !sameSender(next, m) ||
+        toMs(next.created_at) - ms > GROUP_WINDOW;
+      rows.push({ type: "msg", key: `m-${m.id}`, msg: m, firstOfGroup, lastOfGroup });
+    }
+    return rows;
+  }, [thread]);
+
   // Drop optimistic bubbles once the real (mirrored) message arrives in the feed.
   // Attachment/voice bubbles never text-match the mirror, so confirmed ("sent")
   // bubbles also expire after 8s — by then the mirror is in the thread.
@@ -716,6 +780,9 @@ export default function Inbox() {
     const prune = () =>
       setPending((prev) =>
         prev.filter((p) => {
+          // Hard cap: never keep an optimistic bubble forever (covers attachment
+          // bubbles and pendings of conversations that aren't currently open).
+          if (Date.now() - p.at > 30000) return false;
           if (p.sent && Date.now() - p.at > 8000) return false;
           return !messages.some(
             (m) => m.outgoing && m.content === p.content && p.conversationId === selectedId,
@@ -743,9 +810,20 @@ export default function Inbox() {
 
   const visiblePending = pending.filter((p) => p.conversationId === selectedId);
 
-  // Auto-scroll to the latest message.
+  // Auto-scroll to the latest message — but DON'T yank the view to the bottom
+  // while the agent is reading older history. Always jump on opening a different
+  // conversation; otherwise only follow when already near the bottom.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    const switched = prevSelectedRef.current !== selectedId;
+    prevSelectedRef.current = selectedId;
+    if (switched) {
+      bottomRef.current?.scrollIntoView();
+      return;
+    }
+    const el = scrollRef.current;
+    if (!el) return;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 150;
+    if (nearBottom) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length, visiblePending.length, selectedId]);
 
   // Mark the conversation as read in Chatwoot + WhatsApp when it is opened.
@@ -761,6 +839,30 @@ export default function Inbox() {
     setSelfTyping(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId, markRead]);
+
+  // Cleanup on unmount: stop any live mic stream and clear pending timers so
+  // leaving the page mid-recording doesn't leave the microphone on / intervals
+  // firing.
+  useEffect(() => {
+    return () => {
+      try {
+        recorderRef.current?.stream?.getTracks().forEach((t) => t.stop());
+        if (recorderRef.current?.state === "recording") recorderRef.current.stop();
+      } catch {
+        // recorder already stopped — ignore
+      }
+      if (recordTimerRef.current) window.clearInterval(recordTimerRef.current);
+      if (typingResetRef.current) window.clearTimeout(typingResetRef.current);
+    };
+  }, []);
+
+  // Revoke the previous voice-preview object URL whenever it changes or on
+  // unmount (switching conversation nulls pendingVoice without revoking).
+  useEffect(() => {
+    if (!pendingVoice) return;
+    const url = pendingVoice.url;
+    return () => URL.revokeObjectURL(url);
+  }, [pendingVoice]);
 
   const handleLoadOlder = useCallback(async () => {
     if (!selectedId || thread.length === 0 || loadingOlder) return;
@@ -800,6 +902,7 @@ export default function Inbox() {
           conversationId: selectedId,
           content: text,
           contactPhone: selected?.contact_phone,
+          inboxId: selected?.inbox_id,
           attachment,
           quotedId: replyTo?.waId ?? undefined,
         },
@@ -811,7 +914,9 @@ export default function Inbox() {
           },
           onError: (err) => {
             setPending((prev) => prev.filter((p) => p.key !== key));
-            if (rawText) setDraft(rawText);
+            // Restore the text ONLY if the composer is still empty — never clobber
+            // something the user has started typing since.
+            if (rawText) setDraft((d) => d.trim() ? d : rawText);
             toast({ title: "Falha ao enviar", description: (err as Error).message, variant: "destructive" });
           },
         },
@@ -820,7 +925,7 @@ export default function Inbox() {
       setSelfTyping(false);
       if (typingResetRef.current) window.clearTimeout(typingResetRef.current);
     },
-    [selectedId, selected?.contact_phone, replyTo, sendMessage, toast, signing, myName],
+    [selectedId, selected?.contact_phone, selected?.inbox_id, replyTo, sendMessage, toast, signing, myName],
   );
 
   const handleSend = async (e: React.FormEvent) => {
@@ -855,7 +960,7 @@ export default function Inbox() {
     (files: FileList | File[]) => {
       const accepted: Array<{ file: File; kind: OutgoingAttachment["kind"] }> = [];
       for (const file of Array.from(files)) {
-        if (file.size > 10 * 1024 * 1024) {
+        if (file.size > INBOX_CONFIG.ATTACHMENT_MAX_BYTES) {
           toast({ title: `${file.name} é demasiado grande`, description: "Máximo 10 MB.", variant: "destructive" });
           continue;
         }
@@ -1004,8 +1109,9 @@ export default function Inbox() {
         const what = m.content || (m.attachments.length > 0 ? `[${m.attachments[0].file_type}]` : "");
         return `[${when}] ${who}: ${what}`;
       });
+    const contactRef = displayPhone(selected.contact_phone) || selected.contact_email || "";
     const blob = new Blob(
-      [`Conversa com ${selected.contact_name} (+${selected.contact_phone ?? ""})\n\n${lines.join("\n")}`],
+      [`Conversa com ${selected.contact_name}${contactRef ? ` (${contactRef})` : ""}\n\n${lines.join("\n")}`],
       { type: "text/plain;charset=utf-8" },
     );
     const url = URL.createObjectURL(blob);
@@ -1052,6 +1158,42 @@ export default function Inbox() {
     );
   };
 
+  // Stable callbacks so memoized MessageBubble rows don't re-render on every
+  // composer keystroke (when only `draft` changed).
+  const handleReplyTo = useCallback(
+    (m: InboxMessage) => setReplyTo({ waId: m.wa_id!, content: m.content, outgoing: m.outgoing }),
+    [],
+  );
+  const handleTaskFromMessage = useCallback(
+    (m: InboxMessage) => {
+      setTaskPrefill(m.content || "Follow-up");
+      toast({ title: "Tarefa pré-preenchida", description: "Completa-a no painel de tarefas à direita." });
+    },
+    [toast],
+  );
+  const selectedPhone = selected?.contact_phone ?? null;
+  const handleDeleteMessage = useCallback(
+    (m: InboxMessage) => {
+      if (!selectedPhone) return;
+      setConfirm({
+        title: "Apagar mensagem?",
+        description: "A mensagem será apagada para todos no WhatsApp.",
+        action: () => deleteMessage.mutate(
+          { waId: m.wa_id!, phone: selectedPhone },
+          {
+            onSuccess: () => {
+              setDeletedIds((prev) => new Set([...prev, m.id]));
+              toast({ title: "Mensagem apagada no WhatsApp" });
+            },
+            onError: (err) =>
+              toast({ title: "Falha ao apagar", description: (err as Error).message, variant: "destructive" }),
+          },
+        ),
+      });
+    },
+    [selectedPhone, deleteMessage, toast],
+  );
+
   // Keep the keyboard handler's data fresh without rebinding the listener.
   kbdRef.current = { filtered, selectedId, archive: handleToggleArchive };
   // ---- Keyboard shortcuts (desktop power-use): j/k navigate, e archive,
@@ -1059,6 +1201,9 @@ export default function Inbox() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
+      // Don't let single-key shortcuts (e archive, c new conversation, ...) fire
+      // while a modal/sheet is open — they'd act on the list behind the dialog.
+      if (document.querySelector('[role="dialog"], [role="alertdialog"]')) return;
       const t = e.target as HTMLElement | null;
       const tag = t?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || t?.isContentEditable) {
@@ -1385,19 +1530,20 @@ export default function Inbox() {
                   key={l.id}
                   className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground"
                 >
-                  {l.title}
+                  {formatLabel(l.title)}
                   <button
                     type="button"
-                    title={`Apagar etiqueta "${l.title}"`}
+                    title={`Apagar etiqueta "${formatLabel(l.title)}"`}
                     disabled={deleteLabel.isPending}
-                    onClick={() => {
-                      if (!window.confirm(`Apagar a etiqueta "${l.title}" para toda a equipa? Será removida de todas as conversas.`)) return;
-                      deleteLabel.mutate(l.id, {
+                    onClick={() => setConfirm({
+                      title: `Apagar etiqueta "${formatLabel(l.title)}"?`,
+                      description: "Será removida de toda a equipa e de todas as conversas.",
+                      action: () => deleteLabel.mutate(l.id, {
                         onSuccess: () => toast({ title: "Etiqueta apagada" }),
                         onError: (err) =>
                           toast({ title: "Falha ao apagar", description: (err as Error).message, variant: "destructive" }),
-                      });
-                    }}
+                      }),
+                    })}
                     className="rounded-full p-0.5 hover:bg-red-500/10 hover:text-red-600"
                   >
                     <X className="h-3 w-3" />
@@ -1420,7 +1566,7 @@ export default function Inbox() {
                   active ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-accent",
                 )}
               >
-                {l.title}
+                {formatLabel(l.title)}
               </button>
             );
           })}
@@ -1555,38 +1701,6 @@ export default function Inbox() {
   // Thread rows with date separators interleaved. Consecutive messages from the
   // same sender within a short window are grouped: only the LAST keeps a tail +
   // timestamp, and the gap between them tightens — the WhatsApp "grouped" look.
-  type ThreadRow =
-    | { type: "sep"; key: string; label: string }
-    | { type: "msg"; key: string; msg: InboxMessage; firstOfGroup: boolean; lastOfGroup: boolean };
-  const threadRows: ThreadRow[] = [];
-  const GROUP_WINDOW = 5 * 60 * 1000; // 5 min
-  const msgs = thread.filter((m) => !m.is_activity);
-  const sameSender = (a: InboxMessage, b: InboxMessage) =>
-    a.outgoing === b.outgoing &&
-    (a.sender_name || "") === (b.sender_name || "") &&
-    !!a.is_private === !!b.is_private;
-  let lastDay = "";
-  for (let i = 0; i < msgs.length; i++) {
-    const m = msgs[i];
-    const ms = toMs(m.created_at);
-    const k = dayKey(ms);
-    const dayChanged = k !== lastDay;
-    if (dayChanged) {
-      lastDay = k;
-      threadRows.push({ type: "sep", key: `sep-${k}`, label: dayLabel(ms) });
-    }
-    const prev = msgs[i - 1];
-    const next = msgs[i + 1];
-    const firstOfGroup =
-      dayChanged || !prev || !sameSender(prev, m) || ms - toMs(prev.created_at) > GROUP_WINDOW;
-    const lastOfGroup =
-      !next ||
-      dayKey(toMs(next.created_at)) !== k ||
-      !sameSender(next, m) ||
-      toMs(next.created_at) - ms > GROUP_WINDOW;
-    threadRows.push({ type: "msg", key: `m-${m.id}`, msg: m, firstOfGroup, lastOfGroup });
-  }
-
   return (
     <div className="flex h-screen flex-col overflow-hidden">
       {/* Reconnect banner: channel configured but the WhatsApp session dropped */}
@@ -1734,7 +1848,7 @@ export default function Inbox() {
                 muted={muted.includes(c.id)}
                 taskState={taskStateByPhone.get(phoneSuffix(c.contact_phone)) ?? null}
                 viewers={presence.get(c.id)}
-                onClick={() => setSelectedId(c.id)}
+                onSelect={setSelectedId}
               />
             ))
           )}
@@ -1799,7 +1913,7 @@ export default function Inbox() {
                     </span>
                   )}
                   {selected.labels.map((l) => (
-                    <span key={l} className="rounded-full bg-primary/10 px-1.5 text-[10px] text-primary">{l}</span>
+                    <span key={l} className="rounded-full bg-primary/10 px-1.5 text-[10px] text-primary">{formatLabel(l)}</span>
                   ))}
                 </div>
               </div>
@@ -1844,7 +1958,7 @@ export default function Inbox() {
                 size="icon"
                 title="Painel do contacto"
                 onClick={() => {
-                  if (window.innerWidth >= 1024) {
+                  if (window.innerWidth >= INBOX_CONFIG.DESKTOP_BREAKPOINT) {
                     const next = !panelOpen;
                     setPanelOpen(next);
                     localStorage.setItem("inbox-panel-v1", next ? "1" : "0");
@@ -1890,7 +2004,7 @@ export default function Inbox() {
             )}
 
             {/* Messages */}
-            <div className="flex flex-1 flex-col overflow-y-auto bg-muted/20 p-4">
+            <div ref={scrollRef} className="flex flex-1 flex-col overflow-y-auto bg-muted/20 p-4">
               {loadingMessages && thread.length === 0 ? (
                 <div className="flex items-center justify-center gap-2 py-10 text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -1920,33 +2034,9 @@ export default function Inbox() {
                         firstOfGroup={row.firstOfGroup}
                         lastOfGroup={row.lastOfGroup}
                         onPreview={setPreviewUrl}
-                        onReply={(m) => setReplyTo({ waId: m.wa_id!, content: m.content, outgoing: m.outgoing })}
-                        onTask={
-                          selected.contact_phone
-                            ? (m) => {
-                                setTaskPrefill(m.content || "Follow-up");
-                                toast({ title: "Tarefa pré-preenchida", description: "Completa-a no painel de tarefas à direita." });
-                              }
-                            : undefined
-                        }
-                        onDelete={
-                          row.msg.outgoing && row.msg.wa_id && selected.contact_phone
-                            ? (m) => {
-                                if (!window.confirm("Apagar esta mensagem para todos no WhatsApp?")) return;
-                                deleteMessage.mutate(
-                                  { waId: m.wa_id!, phone: selected.contact_phone! },
-                                  {
-                                    onSuccess: () => {
-                                      setDeletedIds((prev) => new Set([...prev, m.id]));
-                                      toast({ title: "Mensagem apagada no WhatsApp" });
-                                    },
-                                    onError: (err) =>
-                                      toast({ title: "Falha ao apagar", description: (err as Error).message, variant: "destructive" }),
-                                  },
-                                );
-                              }
-                            : undefined
-                        }
+                        onReply={handleReplyTo}
+                        onTask={selectedPhone ? handleTaskFromMessage : undefined}
+                        onDelete={row.msg.outgoing && row.msg.wa_id && selectedPhone ? handleDeleteMessage : undefined}
                       />
                     ),
                   )}
@@ -2284,6 +2374,7 @@ export default function Inbox() {
       {/* Image lightbox */}
       <Dialog open={!!previewUrl} onOpenChange={(open) => !open && setPreviewUrl(null)}>
         <DialogContent className="max-w-4xl border-none bg-transparent p-0 shadow-none">
+          <DialogTitle className="sr-only">Pré-visualização de imagem</DialogTitle>
           {previewUrl && (
             <div className="space-y-2">
               <img src={previewUrl} alt="Imagem" className="max-h-[80vh] w-full rounded-lg object-contain" />
@@ -2486,6 +2577,15 @@ export default function Inbox() {
           <AddLeadModal
             open={createLeadModalOpen}
             onOpenChange={setCreateLeadModalOpen}
+            initialData={{
+              name: selected.contact_name,
+              phone: selected.contact_phone ? displayPhone(selected.contact_phone) : undefined,
+              email: selected.contact_email ?? undefined,
+              source: "whatsapp",
+            }}
+            onCreated={(leadId) => {
+              linkCrm.mutate({ conversationId: selected.id, kind: "lead", id: leadId, name: selected.contact_name });
+            }}
           />
           {/* Edit client inline — no need to leave inbox */}
           <EditClientModal
@@ -2643,11 +2743,30 @@ export default function Inbox() {
           {contactPanel}
         </SheetContent>
       </Sheet>
+
+      {/* Destructive-action confirmation (replaces window.confirm) */}
+      <AlertDialog open={!!confirm} onOpenChange={(o) => !o && setConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{confirm?.title}</AlertDialogTitle>
+            <AlertDialogDescription>{confirm?.description}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => { confirm?.action(); setConfirm(null); }}
+            >
+              Apagar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
 
-function MessageBubble({
+const MessageBubble = memo(function MessageBubble({
   m,
   onPreview,
   onReply,
@@ -2729,7 +2848,7 @@ function MessageBubble({
       )}
     </div>
   );
-}
+});
 
 function ChannelBadge({ channel }: { channel: string | null }) {
   if (!channel) return null;
@@ -2771,14 +2890,14 @@ function ChannelBadge({ channel }: { channel: string | null }) {
   );
 }
 
-function ConversationRow({
+const ConversationRow = memo(function ConversationRow({
   conversation,
   active,
   pinned,
   muted,
   taskState,
   viewers,
-  onClick,
+  onSelect,
 }: {
   conversation: InboxConversation;
   active: boolean;
@@ -2786,14 +2905,16 @@ function ConversationRow({
   muted: boolean;
   taskState?: "open" | "overdue" | null;
   viewers?: PresencePeer[];
-  onClick: () => void;
+  // Stable parent callback (setSelectedId) so memo can skip re-renders on
+  // unrelated parent state changes (e.g. composer typing).
+  onSelect: (id: number) => void;
 }) {
   const open = conversation.status !== "resolved";
   const waiting = open ? waitingLabel(conversation.waiting_since) : null;
   const sla = open ? slaLevel(conversation.waiting_since) : null;
   return (
     <button
-      onClick={onClick}
+      onClick={() => onSelect(conversation.id)}
       className={cn(
         "flex w-full items-center gap-3 border-b px-4 py-3 text-left transition-colors hover:bg-accent/50",
         active && "bg-accent",
@@ -2855,7 +2976,7 @@ function ConversationRow({
               </span>
             )}
             {conversation.labels.slice(0, 3).map((l) => (
-              <span key={l} className="shrink-0 rounded-full bg-primary/10 px-1.5 text-[9px] text-primary">{l}</span>
+              <span key={l} className="shrink-0 rounded-full bg-primary/10 px-1.5 text-[9px] text-primary">{formatLabel(l)}</span>
             ))}
           </div>
         )}
@@ -2867,4 +2988,4 @@ function ConversationRow({
       )}
     </button>
   );
-}
+});

@@ -13,22 +13,28 @@ import { useWhatsappConnect, useWhatsappStatus } from "@/hooks/useMessagingChann
 interface ConnectWhatsAppModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  // Reconnect an existing channel (by id), or create a new one with this label.
+  channelId?: string;
+  label?: string;
 }
 
-export function ConnectWhatsAppModal({ open, onOpenChange }: ConnectWhatsAppModalProps) {
+export function ConnectWhatsAppModal({ open, onOpenChange, channelId, label }: ConnectWhatsAppModalProps) {
   const { mutateAsync: connect, isPending } = useWhatsappConnect();
   const [qr, setQr] = useState<string | null>(null);
   const [pairingCode, setPairingCode] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  // For a new channel the id is only known after the first connect() response.
+  const [activeChannelId, setActiveChannelId] = useState<string | undefined>(channelId);
 
-  const { data: status } = useWhatsappStatus(open);
+  const { data: status } = useWhatsappStatus(open, activeChannelId);
   const connected = status?.status === "connected";
 
   // Fetch (or refresh) the QR code.
   const refreshQr = async () => {
     try {
       setErrorMsg(null);
-      const data = await connect();
+      const data = await connect({ channelId: activeChannelId ?? channelId, label });
+      if (data.channel_id) setActiveChannelId(data.channel_id);
       if (data.already_connected) {
         setQr(null);
         setPairingCode(null);
@@ -44,11 +50,13 @@ export function ConnectWhatsAppModal({ open, onOpenChange }: ConnectWhatsAppModa
   // On open: load the first QR. On close: reset state.
   useEffect(() => {
     if (open) {
+      setActiveChannelId(channelId);
       refreshQr();
     } else {
       setQr(null);
       setPairingCode(null);
       setErrorMsg(null);
+      setActiveChannelId(channelId);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);

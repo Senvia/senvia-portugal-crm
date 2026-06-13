@@ -1,18 +1,21 @@
-import { Building, UsersRound, Package, Link2, Bell, Receipt, Shield, GitBranch, LayoutGrid, FileText, List, KeyRound, UserCog, Network, BellRing, AlertTriangle, Calculator, ShoppingCart, CreditCard, Calendar, Mail, LifeBuoy } from "lucide-react";
+import { Building, UsersRound, Package, Link2, Bell, Receipt, Shield, GitBranch, LayoutGrid, FileText, List, KeyRound, UserCog, Network, BellRing, AlertTriangle, Calculator, ShoppingCart, CreditCard, Calendar, Mail, LifeBuoy, User, FormInput, TrendingUp, Plug } from "lucide-react";
 import { SettingsCard } from "./SettingsCard";
 
-export type SettingsSection = "general" | "security" | "team" | "products" | "finance" | "notifications" | "integrations" | "billing" | "support";
+// Settings information architecture: 8 balanced top-level groups, 2 navigation
+// levels (group card -> tabbed content). Reorganized from the former 9-group /
+// 3-level layout where "Definições Gerais" was an overloaded 7-subsection bucket.
+export type SettingsSection =
+  | "account" | "modules" | "capture" | "sales" | "team" | "integrations" | "finance" | "alerts";
 
 export type SettingsSubSection =
-  | "org-general" | "org-pipeline" | "org-modules" | "org-forms" | "org-fields" | "org-sales" | "org-matrix"
-  | "security"
+  | "account-profile" | "account-security" | "account-company" | "account-plan" | "account-support"
+  | "modules-list" | "modules-fields"
+  | "capture-forms"
+  | "sales-pipeline" | "sales-rules" | "sales-commissions" | "sales-products"
   | "team-access" | "team-profiles" | "team-teams"
-  | "products"
-  | "finance-expenses" | "finance-fiscal"
-  | "notif-push" | "notif-alerts" | "notif-calendar" | "notif-email"
-  | "integrations"
-  | "billing"
-  | "support-tickets";
+  | "integrations-connect"
+  | "finance-fiscal" | "finance-expenses"
+  | "alerts-push" | "alerts-calendar" | "alerts-email" | "alerts-fidelization";
 
 interface MobileSettingsNavProps {
   activeSection: SettingsSection | null;
@@ -32,21 +35,20 @@ interface SectionItem {
 }
 
 const sections: SectionItem[] = [
-  { id: "general", label: "Definições Gerais", icon: Building, description: "Organização, pipeline e formulários" },
-  { id: "security", label: "Segurança", icon: Shield, description: "Password e autenticação" },
+  { id: "account", label: "A Minha Conta", icon: User, description: "Perfil, empresa, plano e suporte" },
+  { id: "modules", label: "Módulos e Campos", icon: LayoutGrid, description: "Funcionalidades e campos do CRM" },
+  { id: "capture", label: "Formulários de Captação", icon: FormInput, description: "Formulários públicos de leads" },
+  { id: "sales", label: "Vendas e Comissões", icon: TrendingUp, description: "Pipeline, regras, comissões e produtos" },
   { id: "team", label: "Equipa e Acessos", icon: UsersRound, description: "Colaboradores, perfis e equipas", requiresTeam: true },
-  { id: "products", label: "Produtos", icon: Package, description: "Catálogo de produtos", requiresIntegrations: true },
-  { id: "finance", label: "Financeiro", icon: Receipt, description: "Despesas e configuração fiscal", requiresIntegrations: true },
-  { id: "notifications", label: "Notificações", icon: Bell, description: "Push e alertas automáticos" },
-  { id: "integrations", label: "Integrações", icon: Link2, description: "WhatsApp, email e faturação", requiresIntegrations: true },
-  { id: "billing", label: "Plano e Faturação", icon: CreditCard, description: "Subscrição e pagamentos" },
-  { id: "support", label: "Suporte", icon: LifeBuoy, description: "Tickets e pedidos de ajuda" },
+  { id: "integrations", label: "Integrações", icon: Plug, description: "WhatsApp, email, webhooks e faturação", requiresIntegrations: true },
+  { id: "finance", label: "Financeiro", icon: Receipt, description: "IVA e tipos de despesas", requiresIntegrations: true },
+  { id: "alerts", label: "Notificações e Alertas", icon: Bell, description: "Push, calendário, email e fidelização" },
 ];
 
-export function MobileSettingsNav({ 
-  activeSection, 
-  onSelectSection, 
-  canManageTeam, 
+export function MobileSettingsNav({
+  activeSection,
+  onSelectSection,
+  canManageTeam,
   canManageIntegrations,
   isTelecom = false,
 }: MobileSettingsNavProps) {
@@ -71,86 +73,87 @@ export function MobileSettingsNav({
   );
 }
 
-// Sub-section definitions per group
+// Sub-section definitions per group. Optional requires* flags gate individual
+// tabs (e.g. Produtos needs the integrations permission even though its group
+// does not). alerts-fidelization is telecom-only (filtered in getVisibleSubSections).
 export interface SubSectionItem {
   id: SettingsSubSection;
   label: string;
   icon: any;
   description: string;
+  requiresTeam?: boolean;
+  requiresIntegrations?: boolean;
 }
 
 export const subSectionsMap: Record<SettingsSection, SubSectionItem[]> = {
-  general: [
-    { id: "org-general", label: "Geral", icon: Building, description: "Nome, logotipo e dados" },
-    { id: "org-pipeline", label: "Pipeline", icon: GitBranch, description: "Etapas do funil de vendas" },
-    { id: "org-modules", label: "Módulos", icon: LayoutGrid, description: "Funcionalidades ativas" },
-    { id: "org-forms", label: "Formulário", icon: FileText, description: "Captação de leads" },
-    { id: "org-fields", label: "Campos", icon: List, description: "Campos por módulo (Leads, Clientes, etc.)" },
-    { id: "org-sales", label: "Vendas", icon: ShoppingCart, description: "Regras de vendas" },
-    { id: "org-matrix", label: "Matriz Comissões", icon: Calculator, description: "Cálculo automático de comissões" },
+  account: [
+    { id: "account-profile", label: "Perfil", icon: User, description: "Os seus dados pessoais" },
+    { id: "account-security", label: "Segurança", icon: Shield, description: "Palavra-passe e 2FA" },
+    { id: "account-company", label: "Dados da Empresa", icon: Building, description: "Nome e código de convite" },
+    { id: "account-plan", label: "Plano e Subscrição", icon: CreditCard, description: "Subscrição e pagamentos" },
+    { id: "account-support", label: "Suporte", icon: LifeBuoy, description: "Tickets e pedidos de ajuda" },
   ],
-  security: [],
+  modules: [
+    { id: "modules-list", label: "Módulos", icon: LayoutGrid, description: "Funcionalidades ativas no menu" },
+    { id: "modules-fields", label: "Campos do CRM", icon: List, description: "Campos por módulo (Leads, Clientes, etc.)" },
+  ],
+  capture: [
+    { id: "capture-forms", label: "Formulários", icon: FileText, description: "Formulários públicos de leads" },
+  ],
+  sales: [
+    { id: "sales-pipeline", label: "Pipeline", icon: GitBranch, description: "Etapas do funil de vendas" },
+    { id: "sales-rules", label: "Regras de Vendas", icon: ShoppingCart, description: "Bloqueios e atribuição de leads" },
+    { id: "sales-commissions", label: "Matriz de Comissões", icon: Calculator, description: "Cálculo automático de comissões" },
+    { id: "sales-products", label: "Produtos & Serviços", icon: Package, description: "Catálogo de produtos", requiresIntegrations: true },
+  ],
   team: [
-    { id: "team-access", label: "Acessos", icon: KeyRound, description: "Convites e permissões" },
+    { id: "team-access", label: "Colaboradores", icon: KeyRound, description: "Convites e permissões" },
     { id: "team-profiles", label: "Perfis", icon: UserCog, description: "Níveis de acesso" },
     { id: "team-teams", label: "Equipas", icon: Network, description: "Hierarquia e líderes" },
   ],
-  products: [],
+  integrations: [
+    { id: "integrations-connect", label: "Integrações", icon: Link2, description: "WhatsApp, email, webhooks e faturação" },
+  ],
   finance: [
+    { id: "finance-fiscal", label: "Fiscal", icon: Calculator, description: "IVA e isenções" },
     { id: "finance-expenses", label: "Tipos de Despesas", icon: Receipt, description: "Categorias de despesas" },
-    { id: "finance-fiscal", label: "Fiscal", icon: Calculator, description: "IVA e configuração fiscal" },
   ],
-  notifications: [
-    { id: "notif-push", label: "Push", icon: BellRing, description: "Notificações no telemóvel" },
-    { id: "notif-calendar", label: "Calendário", icon: Calendar, description: "Lembretes de eventos e reuniões" },
-    { id: "notif-email", label: "Email", icon: Mail, description: "Alertas por email para todas as notificações" },
-    { id: "notif-alerts", label: "Fidelização", icon: AlertTriangle, description: "Alertas de contratos CPE/CUI" },
+  alerts: [
+    { id: "alerts-push", label: "Notificações Push", icon: BellRing, description: "Alertas neste dispositivo" },
+    { id: "alerts-calendar", label: "Calendário", icon: Calendar, description: "Lembretes de eventos e reuniões" },
+    { id: "alerts-email", label: "Email", icon: Mail, description: "Alertas por email do sistema" },
+    { id: "alerts-fidelization", label: "Fidelização", icon: AlertTriangle, description: "Alertas de contratos CPE/CUI" },
   ],
-  integrations: [],
-  billing: [],
-  support: [],
 };
 
-interface MobileSubSectionNavProps {
-  group: SettingsSection;
-  onSelectSubSection: (sub: SettingsSubSection) => void;
+interface SubVisibilityOpts {
   isTelecom?: boolean;
+  canManageTeam?: boolean;
+  canManageIntegrations?: boolean;
 }
 
-export function MobileSubSectionNav({ group, onSelectSubSection, isTelecom = false }: MobileSubSectionNavProps) {
-  const allItems = subSectionsMap[group];
-  const items = allItems.filter(item => {
-    if (item.id === 'notif-alerts' && !isTelecom) return false;
+// Visible sub-sections of a group for the current user: applies the telecom-only
+// filter (Fidelização) and the per-tab permission gates.
+export function getVisibleSubSections(
+  group: SettingsSection,
+  opts: SubVisibilityOpts,
+): SubSectionItem[] {
+  return (subSectionsMap[group] ?? []).filter(item => {
+    if (item.id === 'alerts-fidelization' && !opts.isTelecom) return false;
+    if (item.requiresIntegrations && !opts.canManageIntegrations) return false;
+    if (item.requiresTeam && !opts.canManageTeam) return false;
     return true;
   });
-
-  return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-      {items.map((item) => (
-        <SettingsCard
-          key={item.id}
-          icon={item.icon}
-          title={item.label}
-          description={item.description}
-          onClick={() => onSelectSubSection(item.id)}
-        />
-      ))}
-    </div>
-  );
 }
 
-// Groups that go directly to content (no sub-sections)
-export const directContentGroups: SettingsSection[] = ["security", "products", "integrations", "billing", "support"];
-
-// Section titles
+// Section titles (same as the card labels).
 export const sectionTitles: Record<SettingsSection, string> = {
-  general: "Definições Gerais",
-  security: "Segurança",
+  account: "A Minha Conta",
+  modules: "Módulos e Campos",
+  capture: "Formulários de Captação",
+  sales: "Vendas e Comissões",
   team: "Equipa e Acessos",
-  products: "Produtos",
-  finance: "Financeiro",
-  notifications: "Notificações",
   integrations: "Integrações",
-  billing: "Plano e Faturação",
-  support: "Suporte",
+  finance: "Financeiro",
+  alerts: "Notificações e Alertas",
 };

@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { ArrowLeft } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { PipelineEditor } from '@/components/settings/PipelineEditor';
 import { ProductsTab } from '@/components/settings/ProductsTab';
 import { ModulesTab } from '@/components/settings/ModulesTab';
@@ -17,7 +18,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { TeamTab } from '@/components/settings/TeamTab';
 import { TeamsSection } from '@/components/settings/TeamsSection';
 import { FormsManager } from '@/components/settings/FormsManager';
-import { GeneralContent } from '@/components/settings/GeneralContent';
+import { ProfileContent } from '@/components/settings/ProfileContent';
+import { CompanyContent } from '@/components/settings/CompanyContent';
 import { IntegrationsContent } from '@/components/settings/IntegrationsContent';
 import { FieldsManagerTabs } from '@/components/settings/FieldsManagerTabs';
 import { FidelizationAlertsSettings } from '@/components/settings/FidelizationAlertsSettings';
@@ -32,14 +34,12 @@ import { BillingTab } from '@/components/settings/BillingTab';
 import { SupportTicketsTab } from '@/components/settings/SupportTicketsTab';
 
 import { ProfilesTab } from '@/components/settings/ProfilesTab';
-import { 
-  MobileSettingsNav, 
-  MobileSubSectionNav, 
-  SettingsSection, 
+import {
+  MobileSettingsNav,
+  SettingsSection,
   SettingsSubSection,
-  subSectionsMap,
-  directContentGroups,
-  sectionTitles 
+  getVisibleSubSections,
+  sectionTitles,
 } from '@/components/settings/MobileSettingsNav';
 
 export default function Settings() {
@@ -51,42 +51,50 @@ export default function Settings() {
   const { canManageTeam, canManageIntegrations, isAdmin } = usePermissions();
   const pushNotifications = usePushNotifications();
 
-  // Unified navigation state (3 levels) for both mobile and desktop
+  // Unified navigation state (2 levels): group card -> tabbed content.
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeGroup, setActiveGroup] = useState<SettingsSection | null>(null);
   const [activeSub, setActiveSub] = useState<SettingsSubSection | null>(null);
 
-  // Auto-navigate to billing tab if ?tab=billing is present
+  const isTelecom = organization?.niche === 'telecom';
+  const subOpts = { isTelecom, canManageTeam, canManageIntegrations };
+
+  // Auto-navigate to the plan tab when ?tab=billing (trial / payment banners) or
+  // ?billing=success|cancel (Stripe checkout return) is present. The plan lives
+  // under the "A Minha Conta" group. We only clear ?tab=billing — ?billing=success
+  // must survive so BillingTab can fire the Purchase pixel and refresh the
+  // subscription (it clears the param itself).
   useEffect(() => {
     const tab = searchParams.get('tab');
-    if (tab === 'billing') {
-      setActiveGroup('billing');
-      setActiveSub('billing');
-      setSearchParams({}, { replace: true });
+    const billing = searchParams.get('billing');
+    if (tab === 'billing' || billing) {
+      setActiveGroup('account');
+      setActiveSub('account-plan');
+      if (tab === 'billing') setSearchParams({}, { replace: true });
     }
   }, []);
 
-  
+
   const [isLoadingIntegrations, setIsLoadingIntegrations] = useState(true);
-  
+
   // WhatsApp Business state
   const [whatsappBaseUrl, setWhatsappBaseUrl] = useState('');
   const [whatsappInstance, setWhatsappInstance] = useState('');
   const [whatsappApiKey, setWhatsappApiKey] = useState('');
   const [showWhatsappApiKey, setShowWhatsappApiKey] = useState(false);
-  
+
   // Brevo Email state
   const [brevoApiKey, setBrevoApiKey] = useState('');
   const [brevoSenderEmail, setBrevoSenderEmail] = useState('');
   const [showBrevoApiKey, setShowBrevoApiKey] = useState(false);
-  
+
   // InvoiceXpress state
   const [invoiceXpressAccountName, setInvoiceXpressAccountName] = useState('');
   const [invoiceXpressApiKey, setInvoiceXpressApiKey] = useState('');
   const [showInvoiceXpressApiKey, setShowInvoiceXpressApiKey] = useState(false);
   const [taxRate, setTaxRate] = useState('23');
   const [taxExemptionReason, setTaxExemptionReason] = useState('');
-  
+
 
   // KeyInvoice state
   const [keyinvoiceApiKey, setKeyinvoiceApiKey] = useState('');
@@ -102,7 +110,7 @@ export default function Settings() {
 
   // Organization edit state
   const [orgName, setOrgName] = useState('');
-  
+
   // Profile edit state
   const [fullName, setFullName] = useState('');
   const [profileEmail, setProfileEmail] = useState('');
@@ -133,14 +141,14 @@ export default function Settings() {
   useEffect(() => {
     async function fetchIntegrations() {
       if (!organization?.id) return;
-      
+
       setIsLoadingIntegrations(true);
       const { data, error } = await supabase
         .from('organizations')
         .select('webhook_url, whatsapp_base_url, whatsapp_instance, whatsapp_api_key, form_settings, brevo_api_key, brevo_sender_email, invoicexpress_account_name, invoicexpress_api_key, integrations_enabled, tax_config, billing_provider, keyinvoice_username, keyinvoice_password, keyinvoice_company_code, keyinvoice_api_url')
         .eq('id', organization.id)
         .single();
-      
+
       if (!error && data) {
         setWhatsappBaseUrl(data.whatsapp_base_url || '');
         setWhatsappInstance(data.whatsapp_instance || '');
@@ -164,7 +172,7 @@ export default function Settings() {
             ...((data as any).integrations_enabled as Record<string, boolean>),
           });
         }
-        
+
       }
       setIsLoadingIntegrations(false);
     }
@@ -177,13 +185,13 @@ export default function Settings() {
     if (enabled && key === 'invoicexpress') newState.keyinvoice = false;
     else if (enabled && key === 'keyinvoice') newState.invoicexpress = false;
     setIntegrationsEnabled(newState);
-    
+
     let billingProviderValue: string | undefined;
     if (key === 'invoicexpress' || key === 'keyinvoice') {
       if (newState.invoicexpress) billingProviderValue = 'invoicexpress';
       else if (newState.keyinvoice) billingProviderValue = 'keyinvoice';
     }
-    
+
     if (organization?.id) {
       const updateData: Record<string, any> = { integrations_enabled: newState };
       if (billingProviderValue !== undefined) updateData.billing_provider = billingProviderValue;
@@ -263,15 +271,18 @@ export default function Settings() {
     });
   };
 
-  // Shared props
-  const generalContentProps = {
-    organization, profile, isAdmin, orgName, setOrgName, fullName, setFullName,
+  // Shared props — split between the personal profile and the org identity
+  // (the former GeneralContent was a single component mixing both audiences).
+  const profileContentProps = {
+    profile, fullName, setFullName,
     profileEmail, setProfileEmail, profilePhone, setProfilePhone,
-    emailSignature, setEmailSignature,
-    brevoSenderEmail: profileBrevoSenderEmail, setBrevoSenderEmail: setProfileBrevoSenderEmail,
-    handleSaveOrgName, handleSaveProfile,
-    updateOrganizationIsPending: updateOrganization.isPending,
+    handleSaveProfile,
     updateProfileIsPending: updateProfile.isPending,
+  };
+
+  const companyContentProps = {
+    organization, isAdmin, orgName, setOrgName, handleSaveOrgName,
+    updateOrganizationIsPending: updateOrganization.isPending,
   };
 
   const integrationsContentProps = {
@@ -288,19 +299,20 @@ export default function Settings() {
     integrationsEnabled, onToggleIntegration: handleToggleIntegration,
     handleSaveKeyInvoice, keyinvoiceApiKey, setKeyinvoiceApiKey,
     showKeyinvoiceApiKey, setShowKeyinvoiceApiKey, keyinvoiceApiUrl, setKeyinvoiceApiUrl,
+    // Personal email-sending config (Brevo sender + signature), moved into the
+    // Brevo integration screen. Saved via handleSaveProfile.
+    profileSenderEmail: profileBrevoSenderEmail, setProfileSenderEmail: setProfileBrevoSenderEmail,
+    emailSignature, setEmailSignature,
+    handleSaveProfile,
+    updateProfileIsPending: updateProfile.isPending,
   };
 
   // Render individual sub-section content
   const renderSubContent = (sub: SettingsSubSection) => {
     switch (sub) {
-      case "org-general": return <GeneralContent {...generalContentProps} />;
-      case "org-pipeline": return <PipelineEditor />;
-      case "org-modules": return <ModulesTab />;
-      case "org-forms": return <FormsManager />;
-      case "org-fields": return <FieldsManagerTabs />;
-      case "org-sales": return <SalesSettingsTab />;
-      case "org-matrix": return <CommissionMatrixTab />;
-      case "security": return (
+      // A Minha Conta
+      case "account-profile": return <ProfileContent {...profileContentProps} />;
+      case "account-security": return (
         <SecuritySettings
           newPassword={newPassword} setNewPassword={setNewPassword}
           confirmPassword={confirmPassword} setConfirmPassword={setConfirmPassword}
@@ -309,11 +321,32 @@ export default function Settings() {
           changePasswordIsPending={changePassword.isPending}
         />
       );
+      case "account-company": return <CompanyContent {...companyContentProps} />;
+      case "account-plan": return <BillingTab />;
+      case "account-support": return <SupportTicketsTab />;
+
+      // Módulos e Campos
+      case "modules-list": return <ModulesTab />;
+      case "modules-fields": return <FieldsManagerTabs />;
+
+      // Formulários de Captação
+      case "capture-forms": return <FormsManager />;
+
+      // Vendas e Comissões
+      case "sales-pipeline": return <PipelineEditor />;
+      case "sales-rules": return <SalesSettingsTab />;
+      case "sales-commissions": return <CommissionMatrixTab />;
+      case "sales-products": return <ProductsTab />;
+
+      // Equipa e Acessos
       case "team-access": return <TeamTab />;
       case "team-profiles": return <ProfilesTab />;
       case "team-teams": return <TeamsSection />;
-      case "products": return <ProductsTab />;
-      case "finance-expenses": return <ExpenseCategoriesTab />;
+
+      // Integrações (WhatsApp, email, webhooks e faturação eletrónica)
+      case "integrations-connect": return <IntegrationsContent {...integrationsContentProps} />;
+
+      // Financeiro
       case "finance-fiscal": return (
         <FiscalSettingsTab
           taxRate={taxRate}
@@ -324,60 +357,32 @@ export default function Settings() {
           isPending={updateOrganization.isPending}
         />
       );
-      case "notif-push": return <PushNotificationsCard organizationId={organization?.id} pushNotifications={pushNotifications} />;
-      case "notif-calendar": return <CalendarAlertsSettings />;
-      case "notif-email": return <NotificationEmailSettings />;
-      case "notif-alerts": return <FidelizationAlertsSettings />;
-      case "integrations": return <IntegrationsContent {...integrationsContentProps} />;
-      case "billing": return <BillingTab />;
-      case "support-tickets": return <SupportTicketsTab />;
+      case "finance-expenses": return <ExpenseCategoriesTab />;
+
+      // Notificações e Alertas
+      case "alerts-push": return <PushNotificationsCard organizationId={organization?.id} pushNotifications={pushNotifications} />;
+      case "alerts-calendar": return <CalendarAlertsSettings />;
+      case "alerts-email": return <NotificationEmailSettings />;
+      case "alerts-fidelization": return <FidelizationAlertsSettings />;
+
       default: return null;
     }
   };
 
-  // Get the direct sub-section for groups with no sub-nav
-  const getDirectSub = (group: SettingsSection): SettingsSubSection => {
-    switch (group) {
-      case "security": return "security";
-      case "products": return "products";
-      case "integrations": return "integrations";
-      case "billing": return "billing";
-      case "support": return "support-tickets";
-      default: return "security"; // fallback
-    }
-  };
-
-  // Handle group selection (direct or drill-down)
+  // Select a group and jump straight to its first visible tab (2-level nav).
   const handleGroupSelect = (group: SettingsSection) => {
     setActiveGroup(group);
-    if (directContentGroups.includes(group)) {
-      setActiveSub(getDirectSub(group));
-    } else {
-      setActiveSub(null);
-    }
+    const subs = getVisibleSubSections(group, subOpts);
+    setActiveSub(subs[0]?.id ?? null);
   };
 
-  // Back navigation
+  // Back navigation always returns to the group grid (no intermediate level).
   const handleBack = () => {
-    if (activeSub !== null && !directContentGroups.includes(activeGroup!)) {
-      setActiveSub(null);
-    } else {
-      setActiveGroup(null);
-      setActiveSub(null);
-    }
+    setActiveGroup(null);
+    setActiveSub(null);
   };
 
-  // Breadcrumb title
-  const getTitle = () => {
-    if (!activeGroup) return "Definições";
-    const groupTitle = sectionTitles[activeGroup];
-    if (activeSub && !directContentGroups.includes(activeGroup)) {
-      const subItems = subSectionsMap[activeGroup];
-      const subItem = subItems.find(s => s.id === activeSub);
-      return subItem?.label || groupTitle;
-    }
-    return groupTitle;
-  };
+  const groupSubs = activeGroup ? getVisibleSubSections(activeGroup, subOpts) : [];
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">
@@ -393,35 +398,48 @@ export default function Settings() {
               onSelectSection={handleGroupSelect}
               canManageTeam={canManageTeam}
               canManageIntegrations={canManageIntegrations}
-              isTelecom={organization?.niche === 'telecom'}
+              isTelecom={isTelecom}
             />
           </>
-        ) : activeSub === null ? (
-          // Level 2: Sub-section cards grid
+        ) : (
+          // Level 2: Tabs + content
           <>
-            <div className="flex items-center gap-3 mb-6">
+            <div className="flex items-center gap-3 mb-4">
               <Button variant="ghost" size="icon" onClick={handleBack} className="shrink-0">
                 <ArrowLeft className="h-5 w-5" />
               </Button>
               <h1 className="text-xl sm:text-2xl font-bold text-foreground">{sectionTitles[activeGroup]}</h1>
             </div>
-            <MobileSubSectionNav
-              group={activeGroup}
-              onSelectSubSection={(sub) => setActiveSub(sub)}
-              isTelecom={organization?.niche === 'telecom'}
-            />
-          </>
-        ) : (
-          // Level 3: Content
-          <>
-            <div className="flex items-center gap-3 mb-6">
-              <Button variant="ghost" size="icon" onClick={handleBack} className="shrink-0">
-                <ArrowLeft className="h-5 w-5" />
-              </Button>
-              <h1 className="text-xl sm:text-2xl font-bold text-foreground">{getTitle()}</h1>
-            </div>
-            <div className="max-w-4xl">
-              {renderSubContent(activeSub)}
+
+            {groupSubs.length > 1 && (
+              <div className="flex gap-1.5 overflow-x-auto pb-2 mb-6 border-b border-border">
+                {groupSubs.map((sub) => {
+                  const Icon = sub.icon;
+                  const active = activeSub === sub.id;
+                  return (
+                    <button
+                      key={sub.id}
+                      type="button"
+                      onClick={() => setActiveSub(sub.id)}
+                      className={cn(
+                        "flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium transition-colors shrink-0",
+                        active
+                          ? "bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                      )}
+                    >
+                      <Icon className="h-4 w-4" />
+                      {sub.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            <div>
+              {activeSub ? renderSubContent(activeSub) : (
+                <p className="text-muted-foreground">Sem opções disponíveis nesta secção.</p>
+              )}
             </div>
           </>
         )}

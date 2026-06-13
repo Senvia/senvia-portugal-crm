@@ -180,8 +180,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
       throw new Error("Failed to fetch organization configuration");
     }
 
-    // Use organization's API key or fallback to global secret
-    const BREVO_API_KEY = orgData?.brevo_api_key || Deno.env.get("BREVO_API_KEY");
+    // Transactional/system email: prefer a dedicated Brevo key (separate from the
+    // org's marketing key), then the org key, then the global secret. Non-breaking.
+    const BREVO_API_KEY = Deno.env.get("BREVO_TRANSACTIONAL_API_KEY") || orgData?.brevo_api_key || Deno.env.get("BREVO_API_KEY");
     
     if (!BREVO_API_KEY) {
       throw new Error("API Key do Brevo não configurada. Configure em Definições → Integrações → Email (Brevo)");

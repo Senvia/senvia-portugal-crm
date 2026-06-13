@@ -26,11 +26,17 @@ interface NormalizedConversation {
   contact_id: number | null;
   contact_name: string;
   contact_phone: string | null;
+  // Identity for channels without a phone number (Instagram / Messenger / email).
+  contact_email: string | null;
+  contact_identifier: string | null;
   contact_thumbnail: string | null;
   last_message: string | null;
   unread_count: number;
   status: string;
   channel: string | null;
+  // Chatwoot inbox id — identifies which connected account/number this belongs to
+  // (multi-account routing for outbound sends).
+  inbox_id: number | null;
   updated_at: number | null;
   // Set when the LAST message is from the customer (they're waiting on us).
   waiting_since: number | null;
@@ -85,13 +91,16 @@ function normalizeConversation(c: any, base: string): NormalizedConversation {
     id: c?.id,
     alt_ids: [],
     contact_id: sender?.id ?? null,
-    contact_name: sender?.name || sender?.phone_number || 'Contacto',
+    contact_name: sender?.name || sender?.phone_number || sender?.email || 'Contacto',
     contact_phone: sender?.phone_number ?? null,
+    contact_email: sender?.email ?? null,
+    contact_identifier: sender?.identifier ?? null,
     contact_thumbnail: absoluteUrl(sender?.thumbnail, base),
     last_message: lastMessage,
     unread_count: c?.unread_count ?? 0,
     status: c?.status ?? 'open',
     channel: c?.meta?.channel ?? null,
+    inbox_id: c?.inbox_id ?? null,
     updated_at: c?.last_activity_at ?? c?.timestamp ?? null,
     waiting_since: last && last.message_type === 0 ? (last.created_at ?? null) : null,
     labels: Array.isArray(c?.labels) ? c.labels : [],
@@ -183,7 +192,9 @@ function normalizeMessage(m: any, base: string) {
 
 // Ensure the org's Chatwoot account has a webhook pointing at our
 // chatwoot-webhook function (push notifications for incoming messages).
-// Memoized per account for the lifetime of this edge instance.
+// The URL carries a per-org secret (?key=<secret>) so the webhook can reject
+// forged calls. Any previously-registered webhook for our function with a wrong
+// or missing key is removed. Memoized per account for the edge instance lifetime.
 const webhookEnsured = new Set<number>();
 async function ensureChatwootWebhook(
   cfg: ReturnType<typeof getConfig>,
@@ -193,7 +204,18 @@ async function ensureChatwootWebhook(
   if (webhookEnsured.has(accountId)) return;
   webhookEnsured.add(accountId);
   try {
-    const hookUrl = `${cfg.supabaseUrl}/functions/v1/chatwoot-webhook`;
+    // Resolve the org's webhook secret (service role).
+    const admin = createClient(cfg.supabaseUrl, cfg.serviceKey);
+    const { data: org } = await admin
+      .from('organizations')
+      .select('chatwoot_webhook_secret')
+      .eq('chatwoot_account_id', accountId)
+      .maybeSingle();
+    const secret = (org as { chatwoot_webhook_secret?: string } | null)?.chatwoot_webhook_secret;
+    if (!secret) return; // migration not applied yet — don't register a keyless hook
+
+    const baseHookUrl = `${cfg.supabaseUrl}/functions/v1/chatwoot-webhook`;
+    const desiredUrl = `${baseHookUrl}?key=${secret}`;
     const base = `/api/v1/accounts/${accountId}`;
     const listRes = await chatwootFetch(cfg, token, `${base}/webhooks`);
     if (!listRes.ok) return;
@@ -202,9 +224,19 @@ async function ensureChatwootWebhook(
     // return the array directly) — normalize before checking.
     const raw = data?.payload?.webhooks ?? data?.payload ?? data;
     const hooks: any[] = Array.isArray(raw) ? raw : [];
-    if (hooks.some((h: any) => (h?.url ?? h?.webhook?.url) === hookUrl)) return;
+    let hasDesired = false;
+    for (const h of hooks) {
+      const url = String(h?.url ?? h?.webhook?.url ?? '');
+      const id = h?.id ?? h?.webhook?.id;
+      if (url === desiredUrl) { hasDesired = true; continue; }
+      // Remove stale hooks for our function (keyless or wrong/rotated key).
+      if (id && url.startsWith(baseHookUrl)) {
+        await chatwootFetch(cfg, token, `${base}/webhooks/${id}`, 'DELETE').catch(() => {});
+      }
+    }
+    if (hasDesired) return;
     await chatwootFetch(cfg, token, `${base}/webhooks`, 'POST', {
-      webhook: { url: hookUrl, subscriptions: ['message_created'] },
+      webhook: { url: desiredUrl, subscriptions: ['message_created'] },
     });
   } catch (e) {
     console.error('ensureChatwootWebhook failed:', e);
@@ -262,7 +294,52 @@ Deno.serve(async (req) => {
     if (!cw) return json({ error: 'Esta organização ainda não tem WhatsApp ligado.' }, 409);
 
     const base = `/api/v1/accounts/${cw.accountId}`;
-    const instance = instanceNameForOrg(organization_id);
+
+    // Resolve the Evolution instance for THIS request's conversation by its
+    // Chatwoot inbox (multi-account). Lazy + memoized so hot paths that don't send
+    // (list_conversations) never pay the lookup. Falls back to the org's single /
+    // legacy instance when the inbox can't be matched.
+    let _instance: string | null = null;
+    const getInstance = async (): Promise<string> => {
+      if (_instance) return _instance;
+      let inst = instanceNameForOrg(organization_id);
+      const { data: chs } = await auth.admin
+        .from('messaging_channels')
+        .select('evolution_instance, chatwoot_inbox_id')
+        .eq('organization_id', organization_id);
+      if (chs && chs.length) {
+        const inboxId = body.inbox_id != null ? Number(body.inbox_id) : null;
+        const match = inboxId != null ? chs.find((c: any) => c.chatwoot_inbox_id === inboxId) : null;
+        if (match?.evolution_instance) inst = match.evolution_instance;
+        else if (chs.length === 1 && chs[0].evolution_instance) inst = chs[0].evolution_instance;
+      }
+      _instance = inst;
+      return inst;
+    };
+
+    // Account-level mutations (labels / canned responses affect the WHOLE org)
+    // require admin — agents can use them but not create/delete them.
+    const ADMIN_ACTIONS = new Set(['create_label', 'delete_label', 'create_canned', 'delete_canned']);
+    if (ADMIN_ACTIONS.has(action)) {
+      const [{ data: member }, { data: superRole }] = await Promise.all([
+        auth.admin
+          .from('organization_members')
+          .select('role')
+          .eq('organization_id', organization_id)
+          .eq('user_id', auth.userId)
+          .eq('is_active', true)
+          .maybeSingle(),
+        auth.admin
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', auth.userId)
+          .eq('role', 'super_admin')
+          .maybeSingle(),
+      ]);
+      if ((member as { role?: string } | null)?.role !== 'admin' && !superRole) {
+        return json({ error: 'Apenas administradores podem gerir etiquetas e respostas rápidas.' }, 403);
+      }
+    }
 
     if (action === 'list_conversations') {
       // Fire-and-forget: make sure push notifications are wired for this account.
@@ -380,7 +457,7 @@ Deno.serve(async (req) => {
       if (attachment && attachment.kind === 'voice') {
         // Voice note (recorded in the CRM). encoding:true makes Evolution convert
         // to the WhatsApp ptt format (ogg/opus) server-side.
-        evoRes = await evolutionFetch(cfg, `/message/sendWhatsAppAudio/${instance}`, 'POST', {
+        evoRes = await evolutionFetch(cfg, `/message/sendWhatsAppAudio/${await getInstance()}`, 'POST', {
           number,
           audio: attachment.data,
           encoding: true,
@@ -388,7 +465,7 @@ Deno.serve(async (req) => {
         });
       } else if (attachment) {
         const mediatype = MEDIA_TYPES[attachment.kind] ?? 'document';
-        evoRes = await evolutionFetch(cfg, `/message/sendMedia/${instance}`, 'POST', {
+        evoRes = await evolutionFetch(cfg, `/message/sendMedia/${await getInstance()}`, 'POST', {
           number,
           mediatype,
           mimetype: attachment.mimetype,
@@ -398,7 +475,7 @@ Deno.serve(async (req) => {
           ...(quoted ? { quoted } : {}),
         });
       } else {
-        evoRes = await evolutionFetch(cfg, `/message/sendText/${instance}`, 'POST', {
+        evoRes = await evolutionFetch(cfg, `/message/sendText/${await getInstance()}`, 'POST', {
           number,
           text,
           ...(quoted ? { quoted } : {}),
@@ -437,7 +514,7 @@ Deno.serve(async (req) => {
       const text = String(content ?? '').trim();
       if (!phone || phone.length < 9) return json({ error: 'Número inválido' }, 400);
       if (!text) return json({ error: 'Mensagem vazia' }, 400);
-      const evoRes = await evolutionFetch(cfg, `/message/sendText/${instance}`, 'POST', {
+      const evoRes = await evolutionFetch(cfg, `/message/sendText/${await getInstance()}`, 'POST', {
         number: phone,
         text,
       });
@@ -578,7 +655,7 @@ Deno.serve(async (req) => {
       const phone = String(body.phone ?? '').replace(/\D/g, '');
       if (!phone) return json({ ok: false });
       // Fire-and-forget; never block the composer on this.
-      evolutionFetch(cfg, `/chat/sendPresence/${instance}`, 'POST', {
+      evolutionFetch(cfg, `/chat/sendPresence/${await getInstance()}`, 'POST', {
         number: phone,
         presence: 'composing',
         delay: 4000,
@@ -645,7 +722,7 @@ Deno.serve(async (req) => {
       const waId = String(body.wa_id ?? '').replace(/^WAID:/i, '');
       const phone = String(body.phone ?? '').replace(/\D/g, '');
       if (!waId || !phone) return json({ error: 'Dados em falta' }, 400);
-      const res = await evolutionFetch(cfg, `/chat/deleteMessageForEveryone/${instance}`, 'DELETE', {
+      const res = await evolutionFetch(cfg, `/chat/deleteMessageForEveryone/${await getInstance()}`, 'DELETE', {
         id: waId,
         remoteJid: `${phone}@s.whatsapp.net`,
         fromMe: true,
@@ -723,7 +800,7 @@ Deno.serve(async (req) => {
 
           if (readMessages.length > 0) {
             const evoRes = await evolutionFetch(
-              cfg, `/chat/markMessageAsRead/${instance}`, 'POST', { readMessages },
+              cfg, `/chat/markMessageAsRead/${await getInstance()}`, 'POST', { readMessages },
             );
             if (!evoRes.ok) {
               console.error('Evolution markMessageAsRead failed:', evoRes.status, await evoRes.text());

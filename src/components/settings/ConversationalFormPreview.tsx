@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
-import { Bot, Sparkles, ArrowRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { FormSettings } from "@/types";
+import { AIAvatar } from "@/components/conversational/AIAvatar";
 
 interface ConversationalFormPreviewProps {
   settings: FormSettings;
@@ -41,24 +42,9 @@ export function ConversationalFormPreview({
 
       {/* Content */}
       <div className="p-6 md:p-8">
-        {/* AI Avatar */}
+        {/* AI Avatar / Logo (same component as the live form) */}
         <div className="flex justify-center mb-8">
-          <motion.div className="relative">
-            <div 
-              className="w-16 h-16 rounded-full flex items-center justify-center"
-              style={{ backgroundColor: `${primaryColor}20` }}
-            >
-              <Bot className="h-8 w-8" style={{ color: primaryColor }} />
-            </div>
-            <motion.div
-              className="absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center"
-              style={{ backgroundColor: primaryColor }}
-              animate={{ scale: [1, 1.2, 1] }}
-              transition={{ repeat: Infinity, duration: 2 }}
-            >
-              <Sparkles className="h-3 w-3 text-white" />
-            </motion.div>
-          </motion.div>
+          <AIAvatar primaryColor={primaryColor} logoUrl={settings.logo_url} />
         </div>
 
         {/* Welcome Message */}

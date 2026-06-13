@@ -246,9 +246,9 @@ serve(async (req) => {
         };
 
         // Send email if enabled
-        if (org.fidelization_email_enabled && org.fidelization_email && org.brevo_api_key && org.brevo_sender_email) {
+        if (org.fidelization_email_enabled && org.fidelization_email && (Deno.env.get('BREVO_TRANSACTIONAL_API_KEY') || org.brevo_api_key) && org.brevo_sender_email) {
           const emailSent = await sendBrevoEmail(
-            org.brevo_api_key,
+            Deno.env.get('BREVO_TRANSACTIONAL_API_KEY') || org.brevo_api_key,
             org.brevo_sender_email,
             org.fidelization_email,
             alert,
@@ -371,9 +371,9 @@ serve(async (req) => {
         };
 
         // Send email if enabled
-        if (org.fidelization_email_enabled && org.fidelization_email && org.brevo_api_key && org.brevo_sender_email) {
+        if (org.fidelization_email_enabled && org.fidelization_email && (Deno.env.get('BREVO_TRANSACTIONAL_API_KEY') || org.brevo_api_key) && org.brevo_sender_email) {
           const emailSent = await sendBrevoEmail(
-            org.brevo_api_key,
+            Deno.env.get('BREVO_TRANSACTIONAL_API_KEY') || org.brevo_api_key,
             org.brevo_sender_email,
             org.fidelization_email,
             alert,

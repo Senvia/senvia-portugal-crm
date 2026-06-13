@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -120,7 +120,9 @@ export function ConversationTasks({
   const [title, setTitle] = useState("");
   // Presets adapt to the clock: "Hoje (18h)" disappears once 18h is near/past
   // (replaced by "Hoje à noite (21h)" until ~20h30; after that, tomorrow).
-  const duePresetOptions = useMemo(() => {
+  // Recomputed each render (not memoized once at mount) so a long-open panel
+  // doesn't keep stale options across the 18h/21h boundaries.
+  const duePresetOptions: Array<[string, string]> = (() => {
     const now = new Date();
     const h = now.getHours() + now.getMinutes() / 60;
     const opts: Array<[string, string]> = [["1h", "Daqui a 1 hora"]];
@@ -128,7 +130,7 @@ export function ConversationTasks({
     else if (h < 20.5) opts.push(["tonight", "Hoje à noite (21h)"]);
     opts.push(["tomorrow", "Amanhã (9h)"], ["monday", "Segunda (9h)"], ["custom", "Data à escolha…"], ["none", "Sem prazo"]);
     return opts;
-  }, []);
+  })();
   const [duePreset, setDuePreset] = useState(() => {
     const h = new Date().getHours();
     return h < 17 ? "today" : "tomorrow";

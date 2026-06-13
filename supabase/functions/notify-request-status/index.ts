@@ -98,7 +98,9 @@ Deno.serve(async (req) => {
       .eq("id", organization_id)
       .single();
 
-    if (!org?.brevo_api_key || !org?.brevo_sender_email) {
+    // Transactional/system email: prefer a dedicated Brevo key (separate from marketing).
+    const brevoKey = Deno.env.get("BREVO_TRANSACTIONAL_API_KEY") || org?.brevo_api_key;
+    if (!brevoKey || !org?.brevo_sender_email) {
       return new Response(JSON.stringify({ skipped: true, reason: "No Brevo config" }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -119,7 +121,7 @@ Deno.serve(async (req) => {
     const emailRes = await fetch("https://api.brevo.com/v3/smtp/email", {
       method: "POST",
       headers: {
-        "api-key": org.brevo_api_key,
+        "api-key": brevoKey,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({

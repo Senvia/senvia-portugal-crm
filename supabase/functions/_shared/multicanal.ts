@@ -36,8 +36,37 @@ export function getConfig(): MulticanalConfig {
 }
 
 // Deterministic Evolution instance name for an organization.
+// Legacy single-channel name (the org's first/original WhatsApp instance).
 export function instanceNameForOrg(orgId: string): string {
   return `senvia-${orgId.slice(0, 8)}`;
+}
+
+// Per-channel Evolution instance name, for multi-account support. Existing rows
+// keep their stored evolution_instance (often the legacy name above); only NEW
+// channels get a per-channel suffix so multiple WhatsApp numbers don't collide.
+export function instanceNameForChannel(orgId: string, channelId: string): string {
+  return `senvia-${orgId.slice(0, 8)}-${channelId.slice(0, 8)}`;
+}
+
+// Find a Chatwoot inbox id by name within an account. Used after the Evolution
+// integration auto-creates the inbox, so we can persist chatwoot_inbox_id and
+// route sends/webhooks per inbox. Returns null if not found.
+export async function findChatwootInboxByName(
+  cfg: MulticanalConfig,
+  accountId: number,
+  token: string,
+  name: string,
+): Promise<number | null> {
+  try {
+    const res = await chatwootFetch(cfg, token, `/api/v1/accounts/${accountId}/inboxes`);
+    if (!res.ok) return null;
+    const body = await res.json();
+    const list = Array.isArray(body?.payload) ? body.payload : (Array.isArray(body) ? body : []);
+    const match = list.find((i: { name?: string }) => (i?.name || '').trim() === name.trim());
+    return match?.id ?? null;
+  } catch (_e) {
+    return null;
+  }
 }
 
 // Validate that the caller is an active admin of the given organization.
@@ -142,6 +171,22 @@ export async function getOrgChatwoot(
   return { accountId: org.chatwoot_account_id, token: org.chatwoot_account_token };
 }
 
+// fetch with an abort timeout so a hung Chatwoot/Evolution/Gemini call can't
+// stall the edge function until the platform kills it.
+export async function fetchWithTimeout(
+  url: string,
+  init: RequestInit = {},
+  timeoutMs = 15000,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // Call a Chatwoot Application API endpoint for a given account token.
 export async function chatwootFetch(
   cfg: MulticanalConfig,
@@ -150,7 +195,7 @@ export async function chatwootFetch(
   method: 'GET' | 'POST' | 'PATCH' | 'DELETE' = 'GET',
   body?: unknown,
 ): Promise<Response> {
-  return fetch(`${cfg.chatwootUrl}${path}`, {
+  return fetchWithTimeout(`${cfg.chatwootUrl}${path}`, {
     method,
     headers: { 'Content-Type': 'application/json', api_access_token: token },
     body: body ? JSON.stringify(body) : undefined,
@@ -164,7 +209,7 @@ export async function evolutionFetch(
   method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET',
   body?: unknown,
 ): Promise<Response> {
-  return fetch(`${cfg.evolutionUrl}${path}`, {
+  return fetchWithTimeout(`${cfg.evolutionUrl}${path}`, {
     method,
     headers: { 'Content-Type': 'application/json', apikey: cfg.evolutionKey },
     body: body ? JSON.stringify(body) : undefined,

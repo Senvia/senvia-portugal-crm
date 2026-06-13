@@ -5,6 +5,35 @@ import {
   corsHeaders, json, getConfig, authOrgAdmin, evolutionFetch, instanceNameForOrg,
 } from '../_shared/multicanal.ts';
 
+// Resolve which channel/instance to check: by channel_id (multi-account), else
+// the org's first WhatsApp channel (backward compatible with the single-channel
+// callers). Returns the row id + instance name, or null when there is none.
+async function resolveChannel(
+  admin: { from: (t: string) => any },
+  organizationId: string,
+  channelId?: string,
+): Promise<{ id: string | null; instance: string } | null> {
+  if (channelId) {
+    const { data } = await admin
+      .from('messaging_channels')
+      .select('id, evolution_instance')
+      .eq('id', channelId)
+      .eq('organization_id', organizationId)
+      .maybeSingle();
+    if (!data) return null;
+    return { id: data.id, instance: data.evolution_instance || instanceNameForOrg(organizationId) };
+  }
+  const { data } = await admin
+    .from('messaging_channels')
+    .select('id, evolution_instance')
+    .eq('organization_id', organizationId)
+    .eq('channel_type', 'whatsapp')
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  return { id: data?.id ?? null, instance: data?.evolution_instance || instanceNameForOrg(organizationId) };
+}
+
 // Map Evolution connection states to our channel status vocabulary.
 function mapState(state: string | undefined): 'connected' | 'connecting' | 'disconnected' {
   if (state === 'open') return 'connected';
@@ -18,12 +47,14 @@ Deno.serve(async (req) => {
 
   try {
     const cfg = getConfig();
-    const { organization_id } = await req.json().catch(() => ({}));
+    const { organization_id, channel_id } = await req.json().catch(() => ({}));
     const auth = await authOrgAdmin(req, cfg, organization_id);
     if ('error' in auth) return auth.error;
     const { admin } = auth;
 
-    const instanceName = instanceNameForOrg(organization_id);
+    const resolved = await resolveChannel(admin, organization_id, channel_id);
+    if (!resolved) return json({ status: 'disconnected', phone_number: null });
+    const instanceName = resolved.instance;
 
     // Connection state
     const stateRes = await evolutionFetch(cfg, `/instance/connectionState/${instanceName}`);
@@ -45,12 +76,15 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Sync the channel row
-    await admin
+    // Sync the specific channel row (by id when known; else the org's WhatsApp row).
+    const sync = admin
       .from('messaging_channels')
-      .update({ status, ...(phoneNumber ? { phone_number: phoneNumber } : {}) })
-      .eq('organization_id', organization_id)
-      .eq('channel_type', 'whatsapp');
+      .update({ status, ...(phoneNumber ? { phone_number: phoneNumber } : {}) });
+    if (resolved.id) {
+      await sync.eq('id', resolved.id);
+    } else {
+      await sync.eq('organization_id', organization_id).eq('channel_type', 'whatsapp');
+    }
 
     return json({ status, phone_number: phoneNumber });
   } catch (err) {

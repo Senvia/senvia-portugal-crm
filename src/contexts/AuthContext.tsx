@@ -35,6 +35,11 @@ interface Organization {
   integrations_enabled?: any;
   tax_config?: any;
   sales_settings?: any;
+  ai_qualification_rules?: string | null;
+  msg_template_hot?: string | null;
+  msg_template_warm?: string | null;
+  msg_template_cold?: string | null;
+  ai_response_mode?: 'global' | 'per_form';
 }
 
 interface UserOrganizationMembership {
