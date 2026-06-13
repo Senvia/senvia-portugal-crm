@@ -117,6 +117,9 @@ verify_jwt = false
 [functions.whatsapp-status]
 verify_jwt = false
 
+[functions.whatsapp-disconnect]
+verify_jwt = false
+
 [functions.chatwoot-inbox]
 verify_jwt = false
 

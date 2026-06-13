@@ -16,7 +16,7 @@ import { useOrganizationWebhooks, useCreateWebhook, useToggleWebhook, useDeleteW
 import { useLeadIntakeWebhooks, useCreateLeadIntakeWebhook, useUpdateLeadIntakeWebhook, useDeleteLeadIntakeWebhook, LeadIntakeWebhook } from "@/hooks/useLeadIntakeWebhooks";
 import { useTeamMembers } from "@/hooks/useTeam";
 import { useTestWebhook } from "@/hooks/useOrganization";
-import { useMessagingChannels, useDeleteChannel } from "@/hooks/useMessagingChannels";
+import { useMessagingChannels, useDeleteChannel, useCleanupOrphanChannels } from "@/hooks/useMessagingChannels";
 import { ConnectWhatsAppModal } from "./ConnectWhatsAppModal";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -886,6 +886,8 @@ const CHANNEL_STATUS_LABEL: Record<string, string> = {
 function InboxesManager() {
   const { data: channels = [] } = useMessagingChannels();
   const deleteChannel = useDeleteChannel();
+  const cleanupOrphans = useCleanupOrphanChannels();
+  const orphanCount = channels.filter((c) => c.status !== 'connected').length;
   // Modal target: reconnect (channelId) or create new (label, no channelId).
   const [modal, setModal] = useState<{ open: boolean; channelId?: string; label?: string }>({ open: false });
   const [picking, setPicking] = useState(false);
@@ -998,6 +1000,19 @@ function InboxesManager() {
         <Button onClick={() => setPicking(true)} variant="outline" className="w-full">
           <Plus className="mr-2 h-4 w-4" />
           Nova caixa
+        </Button>
+      )}
+
+      {orphanCount > 0 && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => cleanupOrphans.mutate()}
+          disabled={cleanupOrphans.isPending}
+          className="w-full text-muted-foreground hover:text-destructive"
+        >
+          {cleanupOrphans.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+          Limpar {orphanCount} {orphanCount === 1 ? 'caixa por ligar' : 'caixas por ligar'}
         </Button>
       )}
 

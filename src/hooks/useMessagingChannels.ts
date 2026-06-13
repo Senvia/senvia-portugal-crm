@@ -88,20 +88,40 @@ export function useWhatsappConnect() {
   });
 }
 
-// Delete (disconnect) a channel from the org. Removes the row; the Evolution
-// instance / Chatwoot inbox cleanup is handled separately.
+// Delete (disconnect) a channel: full teardown via the edge function — removes the
+// Evolution instance, the Chatwoot inbox AND the DB row (not just the row).
 export function useDeleteChannel() {
   const { organization } = useAuth();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (channelId: string) => {
       if (!organization?.id) throw new Error('Organização não encontrada');
-      const { error } = await supabase
-        .from('messaging_channels')
-        .delete()
-        .eq('id', channelId)
-        .eq('organization_id', organization.id);
+      const { data, error } = await supabase.functions.invoke('whatsapp-disconnect', {
+        body: { organization_id: organization.id, channel_id: channelId },
+      });
       if (error) throw error;
+      if ((data as { error?: string })?.error) throw new Error((data as { error?: string }).error);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['messaging-channels', organization?.id] });
+    },
+  });
+}
+
+// One-shot cleanup of orphan channels: removes every non-connected channel of the
+// org plus any leftover Evolution instances with the org's prefix.
+export function useCleanupOrphanChannels() {
+  const { organization } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      if (!organization?.id) throw new Error('Organização não encontrada');
+      const { data, error } = await supabase.functions.invoke('whatsapp-disconnect', {
+        body: { organization_id: organization.id, cleanup: true },
+      });
+      if (error) throw error;
+      if ((data as { error?: string })?.error) throw new Error((data as { error?: string }).error);
+      return data as { deleted_instances?: string[]; deleted_rows?: number };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['messaging-channels', organization?.id] });
