@@ -891,8 +891,15 @@ function InboxesManager() {
   const deleteChannel = useDeleteChannel();
   const cleanupOrphans = useCleanupOrphanChannels();
   const updateAssign = useUpdateChannelAssignment();
-  const [accessId, setAccessId] = useState<string | null>(null); // caixa whose "quem atende" panel is open
+  const [editId, setEditId] = useState<string | null>(null); // caixa whose "Editar" panel is open
+  const [labelDraft, setLabelDraft] = useState('');
   const orphanCount = channels.filter((c) => c.status !== 'connected').length;
+
+  const openEdit = (ch: { id: string; label: string | null }) => {
+    if (editId === ch.id) { setEditId(null); return; }
+    setEditId(ch.id);
+    setLabelDraft(ch.label || '');
+  };
   // Modal target: reconnect (channelId) or create new (label, no channelId).
   const [modal, setModal] = useState<{ open: boolean; channelId?: string; label?: string }>({ open: false });
   const [picking, setPicking] = useState(false);
@@ -918,7 +925,7 @@ function InboxesManager() {
             const meta = channelMeta(ch.channel_type);
             const Icon = meta.icon;
             const connected = ch.status === 'connected';
-            const accessOpen = accessId === ch.id;
+            const editOpen = editId === ch.id;
             const attendants = ch.assigned_user_ids || [];
             return (
               <div key={ch.id} className="rounded-lg border bg-card overflow-hidden">
@@ -941,19 +948,14 @@ function InboxesManager() {
                       <CheckCircle2 className="h-3 w-3" /> Ligada
                     </Badge>
                   )}
-                  {ch.channel_type === 'whatsapp' && (
-                    <Button variant="outline" size="sm" onClick={() => setModal({ open: true, channelId: ch.id })} className="shrink-0">
-                      {connected ? 'Reconectar' : 'Ligar'}
-                    </Button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setAccessId(accessOpen ? null : ch.id)}
-                    className={cn('p-1.5 transition-colors shrink-0', accessOpen ? 'text-primary' : 'text-muted-foreground hover:text-foreground')}
-                    title="Quem atende esta caixa"
+                  <Button
+                    variant={editOpen ? 'secondary' : 'outline'}
+                    size="sm"
+                    onClick={() => openEdit(ch)}
+                    className="shrink-0"
                   >
-                    <Users className="h-4 w-4" />
-                  </button>
+                    <Pencil className="h-3.5 w-3.5 mr-1.5" /> Editar
+                  </Button>
                   <button
                     type="button"
                     onClick={() => setToDelete(ch.id)}
@@ -964,8 +966,46 @@ function InboxesManager() {
                   </button>
                 </div>
 
-                {accessOpen && (
-                  <div className="border-t px-4 py-3 space-y-3 bg-muted/20">
+                {editOpen && (
+                  <div className="border-t px-4 py-4 space-y-4 bg-muted/20">
+                    {/* Nome */}
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Nome da caixa</Label>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          value={labelDraft}
+                          onChange={(e) => setLabelDraft(e.target.value)}
+                          placeholder="Ex: Vendas, Suporte"
+                          className="h-9"
+                        />
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={!labelDraft.trim() || labelDraft.trim() === (ch.label || '')}
+                          onClick={() => updateAssign.mutate({ channelId: ch.id, label: labelDraft.trim() })}
+                        >
+                          Guardar
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Ligação */}
+                    {ch.channel_type === 'whatsapp' && (
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Ligação</Label>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setModal({ open: true, channelId: ch.id })}
+                          className="w-full"
+                        >
+                          <MessageCircle className="h-4 w-4 mr-1.5" />
+                          {connected ? 'Reconectar WhatsApp' : 'Ligar WhatsApp'}
+                        </Button>
+                      </div>
+                    )}
+
+                    {/* Quem atende */}
                     <div className="space-y-1">
                       <Label className="text-xs flex items-center gap-1.5">
                         <Users className="h-3.5 w-3.5" /> Quem atende esta caixa

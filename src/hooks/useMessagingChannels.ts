@@ -118,9 +118,10 @@ export function useUpdateChannelAssignment() {
   const { organization } = useAuth();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (vars: { channelId: string; assigned_user_ids?: string[]; rotate_enabled?: boolean }) => {
+    mutationFn: async (vars: { channelId: string; label?: string; assigned_user_ids?: string[]; rotate_enabled?: boolean }) => {
       if (!organization?.id) throw new Error('Organização não encontrada');
       const patch: Record<string, unknown> = {};
+      if (vars.label !== undefined) patch.label = vars.label;
       if (vars.assigned_user_ids !== undefined) patch.assigned_user_ids = vars.assigned_user_ids;
       if (vars.rotate_enabled !== undefined) patch.rotate_enabled = vars.rotate_enabled;
       const { error } = await supabase
