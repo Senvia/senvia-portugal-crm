@@ -1,12 +1,15 @@
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { ArrowLeft, Plus, Pencil, Trash2 } from "lucide-react";
+import { ArrowLeft, Plus, Pencil, Trash2, CheckCircle } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { format, parseISO, startOfDay, endOfDay, isSameMonth } from "date-fns";
 import { pt } from "date-fns/locale";
 import type { DateRange } from "react-day-picker";
@@ -20,6 +23,7 @@ import {
 } from "@/types/sales";
 import { useSales } from "@/hooks/useSales";
 import { useExpenses, useDeleteExpense } from "@/hooks/useExpenses";
+import { useUpdateSalePayment, useCreateSalePayment } from "@/hooks/useSalePayments";
 import { MinhasComissoesContent } from "@/components/finance/MinhasComissoesContent";
 import { TeamCommissionsTab } from "@/components/finance/TeamCommissionsTab";
 import { AddExpenseModal } from "@/components/finance/AddExpenseModal";
@@ -90,8 +94,73 @@ function EmptyRow({ cols }: { cols: number }) {
   );
 }
 
-function PaymentsDetailTable({ payments }: { payments: PaymentWithSale[] }) {
+function PaymentsDetailTable({ payments, allowMarkPaid = false }: { payments: PaymentWithSale[]; allowMarkPaid?: boolean }) {
+  const queryClient = useQueryClient();
+  const updatePayment = useUpdateSalePayment();
+  const createPayment = useCreateSalePayment();
+  const [confirm, setConfirm] = useState<PaymentWithSale | null>(null);
+  const [received, setReceived] = useState("");
+  const [payDate, setPayDate] = useState("");
   const total = payments.reduce((s, p) => s + p.amount, 0);
+  const showActions = allowMarkPaid && payments.some((p) => p.status === "pending");
+
+  const openConfirm = (p: PaymentWithSale) => {
+    setConfirm(p);
+    setReceived(String(p.amount));
+    setPayDate(format(new Date(), "yyyy-MM-dd"));
+  };
+
+  const full = confirm ? Number(confirm.amount) || 0 : 0;
+  const receivedNum = Math.min(full, Math.max(0, parseFloat(received.replace(",", ".")) || 0));
+  const remainder = +(full - receivedNum).toFixed(2);
+  const isPartial = receivedNum > 0 && remainder > 0.005;
+  const busy = updatePayment.isPending || createPayment.isPending;
+
+  const invalidateDerived = () => {
+    // The pending list / commissions are derived from these queries, which the
+    // payment mutations don't touch — refresh them so the UI updates.
+    ["finance-stats", "finance-sales", "my-commissions", "commercial-commissions",
+      "team-commission-total", "commissions-detail"].forEach((key) =>
+      queryClient.invalidateQueries({ queryKey: [key] }));
+  };
+
+  const handleMarkPaid = () => {
+    if (!confirm || receivedNum <= 0) return;
+    const { id, sale_id } = confirm;
+
+    if (!isPartial) {
+      // Full amount received: just flip the parcel to paid on the chosen date.
+      updatePayment.mutate(
+        { paymentId: id, saleId: sale_id, updates: { status: "paid", payment_date: payDate } },
+        { onSuccess: invalidateDerived, onSettled: () => setConfirm(null) },
+      );
+      return;
+    }
+
+    // Partial: mark the received part paid on the chosen date, then keep the
+    // remainder pending on the originally scheduled date.
+    updatePayment.mutate(
+      { paymentId: id, saleId: sale_id, updates: { amount: receivedNum, status: "paid", payment_date: payDate } },
+      {
+        onSuccess: () => {
+          createPayment.mutate(
+            {
+              sale_id,
+              organization_id: confirm.organization_id,
+              amount: remainder,
+              payment_date: confirm.payment_date,
+              status: "pending",
+              payment_method: confirm.payment_method ?? null,
+              notes: confirm.notes ?? null,
+            },
+            { onSuccess: invalidateDerived, onSettled: () => setConfirm(null) },
+          );
+        },
+        onError: () => setConfirm(null),
+      },
+    );
+  };
+
   return (
     <div className="rounded-md border">
       <Table>
@@ -103,11 +172,12 @@ function PaymentsDetailTable({ payments }: { payments: PaymentWithSale[] }) {
             <TableHead className="hidden sm:table-cell">Método</TableHead>
             <TableHead>Estado</TableHead>
             <TableHead className="text-right">Valor</TableHead>
+            {showActions && <TableHead className="text-right">Ações</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
           {payments.length === 0 ? (
-            <EmptyRow cols={6} />
+            <EmptyRow cols={showActions ? 7 : 6} />
           ) : (
             payments.map((p) => (
               <TableRow key={p.id}>
@@ -123,12 +193,67 @@ function PaymentsDetailTable({ payments }: { payments: PaymentWithSale[] }) {
                   </Badge>
                 </TableCell>
                 <TableCell className="text-right font-medium">{formatCurrency(p.amount)}</TableCell>
+                {showActions && (
+                  <TableCell className="text-right">
+                    {p.status === "pending" && (
+                      <Button size="sm" variant="outline" className="gap-1.5" onClick={() => openConfirm(p)}>
+                        <CheckCircle className="h-4 w-4" />
+                        <span className="hidden sm:inline">Marcar Pago</span>
+                      </Button>
+                    )}
+                  </TableCell>
+                )}
               </TableRow>
             ))
           )}
         </TableBody>
       </Table>
       {payments.length > 0 && <TotalFooter count={payments.length} total={total} />}
+
+      <AlertDialog open={!!confirm} onOpenChange={(open) => !open && setConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Marcar pagamento como pago?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirm && (
+                <>
+                  {confirm.client_name || confirm.lead_name || "Cliente"} — venda{" "}
+                  {confirm.sale?.code || "—"} • total agendado {formatCurrency(full)}.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="grid gap-3 py-2">
+            <div className="grid gap-1.5">
+              <Label htmlFor="mp-amount">Valor recebido</Label>
+              <Input
+                id="mp-amount"
+                type="number"
+                step="0.01"
+                min="0"
+                max={full}
+                value={received}
+                onChange={(e) => setReceived(e.target.value)}
+              />
+              {isPartial && (
+                <p className="text-xs text-muted-foreground">
+                  Ficará {formatCurrency(remainder)} agendado (parcela restante).
+                </p>
+              )}
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="mp-date">Data de pagamento</Label>
+              <Input id="mp-date" type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} />
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleMarkPaid} disabled={busy || receivedNum <= 0 || !payDate}>
+              {isPartial ? "Registar parcial" : "Confirmar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -370,8 +495,8 @@ export function FinanceCardDetail({ type, dateRange, payments, allPayments, dueS
 
       {type === "faturado" && <SalesDetailTable dateRange={dateRange} renewals={renewals} />}
       {type === "received" && <PaymentsDetailTable payments={received} />}
-      {type === "pending" && <PaymentsDetailTable payments={pending} />}
-      {type === "overdue" && <PaymentsDetailTable payments={overdue} />}
+      {type === "pending" && <PaymentsDetailTable payments={pending} allowMarkPaid />}
+      {type === "overdue" && <PaymentsDetailTable payments={overdue} allowMarkPaid />}
       {type === "dueSoon" && <PaymentsDetailTable payments={dueSoonPayments} />}
       {type === "expenses" && <ExpensesDetailTable dateRange={dateRange} />}
       {type === "myCommissions" && <MinhasComissoesContent dateRange={dateRange} />}

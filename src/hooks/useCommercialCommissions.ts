@@ -241,10 +241,12 @@ export function useTeamCommissionTotal(dateRange?: DateRange) {
       let total = 0;
       let count = 0;
       for (const s of candidates) {
-        const received =
-          (Number(s.total_value) > 0 && (paidSum.get(s.id) || 0) >= Number(s.total_value) - 0.01) ||
-          s.payment_status === 'paid';
-        if (received) { total += Number(s.comissao || 0); count += 1; }
+        // Commission is earned proportionally to what the client has paid:
+        // a sale 80€-paid of 150€ contributes 80/150 of its commission.
+        const tv = Number(s.total_value) || 0;
+        const fullyPaid = s.payment_status === 'paid' || (tv > 0 && (paidSum.get(s.id) || 0) >= tv - 0.01);
+        const fraction = fullyPaid ? 1 : (tv > 0 ? Math.min(1, (paidSum.get(s.id) || 0) / tv) : 0);
+        if (fraction > 0) { total += Number(s.comissao || 0) * fraction; count += 1; }
       }
 
       const { data: recs } = await (supabase as any)

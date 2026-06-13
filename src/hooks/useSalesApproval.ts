@@ -193,6 +193,9 @@ export interface MyCommissionSale {
   client_name: string | null;
   /** True when the sale is fully paid (sum of paid parcels >= total, or payment_status paid). */
   is_paid: boolean;
+  /** Amount the client has actually paid so far (sum of paid parcels). Used to
+   *  apportion commission proportionally between confirmed and pending. */
+  paid_amount: number;
   /** 'direct' = one-off/initial sale; 'recurring' = a recurring renewal commission. */
   kind: 'direct' | 'recurring';
 }
@@ -283,22 +286,27 @@ export function useMyCommissions() {
         (s.lead_id && leadNameMap.get(s.lead_id)) ||
         null;
 
-      const directResults: MyCommissionSale[] = sales.map((s: any) => ({
-        id: s.id,
-        code: s.code,
-        status: s.status,
-        total_value: s.total_value,
-        comissao: s.comissao,
-        sale_date: s.sale_date,
-        activation_date: s.activation_date,
-        created_at: s.created_at,
-        approved_at: s.approved_at,
-        client_name: nameOfSale(s),
-        is_paid:
-          (Number(s.total_value) > 0 && (paidSum.get(s.id) || 0) >= Number(s.total_value) - 0.01) ||
-          s.payment_status === 'paid',
-        kind: 'direct',
-      }));
+      const directResults: MyCommissionSale[] = sales.map((s: any) => {
+        const paid = paidSum.get(s.id) || 0;
+        const tv = Number(s.total_value) || 0;
+        const fullyPaid = (tv > 0 && paid >= tv - 0.01) || s.payment_status === 'paid';
+        return {
+          id: s.id,
+          code: s.code,
+          status: s.status,
+          total_value: s.total_value,
+          comissao: s.comissao,
+          sale_date: s.sale_date,
+          activation_date: s.activation_date,
+          created_at: s.created_at,
+          approved_at: s.approved_at,
+          client_name: nameOfSale(s),
+          is_paid: fullyPaid,
+          // A sale flagged paid via payment_status (no parcels) counts as fully received.
+          paid_amount: fullyPaid ? tv : paid,
+          kind: 'direct',
+        };
+      });
 
       // Recurring commissions (Stripe + manual renewals) attributed to this user.
       // These are always "earned" (the client already paid the renewal).
@@ -322,6 +330,7 @@ export function useMyCommissions() {
         approved_at: r.created_at,
         client_name: (r.sale_id && saleClientName.get(r.sale_id)) || r.plan || 'Subscrição',
         is_paid: true,
+        paid_amount: Number(r.amount || 0),
         kind: 'recurring',
       }));
 

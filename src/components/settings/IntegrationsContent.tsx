@@ -805,18 +805,22 @@ function IntakeWebhookCard({
           </div>
 
           {/* Notificar todos os admins */}
-          <div className="space-y-1">
-            <div className="flex items-center justify-between gap-3">
-              <Label className="text-sm font-normal flex items-center gap-2">
-                <Mail className="h-4 w-4 text-muted-foreground" />
-                Avisar também os administradores
-              </Label>
-              <Switch
-                checked={webhook.notify_all_admins}
-                onCheckedChange={(checked) => updateWebhook.mutate({ id: webhook.id, notify_all_admins: checked })}
-              />
+          <div className="flex items-center justify-between gap-3 rounded-md border bg-muted/30 p-3">
+            <div className="flex items-start gap-2">
+              <Mail className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+              <div className="space-y-0.5">
+                <Label className="text-sm font-medium">Avisar também os administradores</Label>
+                <p className="text-xs text-muted-foreground">
+                  {webhook.notify_all_admins
+                    ? 'LIGADO: além de quem recebe o lead, todos os administradores recebem o aviso — mesmo que não estejam na lista acima.'
+                    : 'DESLIGADO: só quem está selecionado acima recebe o aviso. Os outros administradores não são notificados.'}
+                </p>
+              </div>
             </div>
-            <p className="text-xs text-muted-foreground">Recebem o aviso mesmo que não estejam na lista acima.</p>
+            <Switch
+              checked={webhook.notify_all_admins}
+              onCheckedChange={(checked) => updateWebhook.mutate({ id: webhook.id, notify_all_admins: checked })}
+            />
           </div>
 
           {/* Eliminar (com confirmação) — só webhooks não predefinidos */}
