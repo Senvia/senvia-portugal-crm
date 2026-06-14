@@ -107,7 +107,12 @@ Deno.serve(async (req) => {
     const existing = fetchRes.ok ? await fetchRes.json() : [];
     const instanceExists = Array.isArray(existing) && existing.length > 0;
 
-    const shouldRecreate = instanceExists && channelRow?.status !== 'connected';
+    // Only recreate when the channel is 'disconnected' (stale/ended session). When
+    // it is 'connecting' we are in the middle of a pairing flow — destroying the
+    // instance would cancel a scan that may be in progress. The 'connecting' state
+    // is transient; a fresh QR refresh just calls /instance/connect/ again which
+    // returns the current (or a freshly generated) QR without rebuilding anything.
+    const shouldRecreate = instanceExists && channelRow?.status === 'disconnected';
 
     if (shouldRecreate) {
       await evolutionFetch(cfg, `/instance/delete/${instanceName}`, 'DELETE');

@@ -89,19 +89,28 @@ export function ConnectWhatsAppModal({ open, onOpenChange, channelId, label }: C
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  // Start a 40s countdown whenever displayQr changes (new QR from Baileys or
-  // from a manual refresh). Resets automatically when status polling picks up a
-  // fresh QR that Baileys generated on its own.
+  // Start a 20s countdown whenever the displayed QR changes. Baileys regenerates
+  // the QR every ~20s; scanning an expired QR leaves the phone stuck on
+  // "A ligar..." indefinitely. We refresh automatically so the user always has
+  // a valid code — no manual button click required.
   useEffect(() => {
-    if (displayQr) setQrExpiry(40);
+    if (displayQr) setQrExpiry(20);
   }, [displayQr]);
 
-  // Tick the countdown down — when it hits 0 the QR is likely expired.
+  // Tick the countdown down.
   useEffect(() => {
     if (!displayQr || qrExpiry <= 0) return;
     const t = setTimeout(() => setQrExpiry((s) => s - 1), 1000);
     return () => clearTimeout(t);
   }, [displayQr, qrExpiry]);
+
+  // Auto-refresh when the countdown reaches 0 — don't wait for the user to click.
+  // whatsapp-connect with a channelId and 'connecting' status skips instance
+  // recreation and just fetches the current QR from Evolution (fast path).
+  useEffect(() => {
+    if (qrExpiry !== 0 || !displayQr || isPending) return;
+    refreshQr();
+  }, [qrExpiry, displayQr, isPending, refreshQr]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -164,12 +173,9 @@ export function ConnectWhatsAppModal({ open, onOpenChange, channelId, label }: C
                   </p>
                 </>
               ) : (
-                <div className="flex flex-col items-center gap-2">
-                  <p className="text-sm text-muted-foreground">QR expirado</p>
-                  <Button variant="outline" size="sm" onClick={refreshQr} disabled={isPending}>
-                    <RefreshCw className="mr-2 h-4 w-4" />
-                    Atualizar QR
-                  </Button>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  A atualizar QR...
                 </div>
               )}
             </div>
