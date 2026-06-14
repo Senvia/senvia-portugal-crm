@@ -104,13 +104,13 @@ export function ConnectWhatsAppModal({ open, onOpenChange, channelId, label }: C
     return () => clearTimeout(t);
   }, [displayQr, qrExpiry]);
 
-  // Auto-refresh when the countdown reaches 0 — don't wait for the user to click.
+  // Auto-refresh when the countdown reaches 0 — but ONLY if not yet connected.
   // whatsapp-connect with a channelId and 'connecting' status skips instance
   // recreation and just fetches the current QR from Evolution (fast path).
   useEffect(() => {
-    if (qrExpiry !== 0 || !displayQr || isPending) return;
+    if (qrExpiry !== 0 || !displayQr || isPending || connected) return;
     refreshQr();
-  }, [qrExpiry, displayQr, isPending, refreshQr]);
+  }, [qrExpiry, displayQr, isPending, connected, refreshQr]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

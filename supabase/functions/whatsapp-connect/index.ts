@@ -168,13 +168,16 @@ Deno.serve(async (req) => {
       inboxId = await findChatwootInboxByName(cfg, accountId, token, inboxName);
     }
 
-    // 6) Persist channel state + flap reset.
+    // 6) Persist channel state + flap reset. Don't overwrite 'connected' with
+    //    'connecting' — the QR auto-refresh calls this function every 20s and
+    //    would otherwise reset a freshly-connected channel back to "Por ligar".
+    const newStatus = channelRow.status === 'connected' ? 'connected' : 'connecting';
     await admin
       .from('messaging_channels')
       .update({
         evolution_instance: instanceName,
         chatwoot_inbox_id: inboxId,
-        status: 'connecting',
+        status: newStatus,
         needs_repair: false,
         flap_count: 0,
         flap_window_start: null,
