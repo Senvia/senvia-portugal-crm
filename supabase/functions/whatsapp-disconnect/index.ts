@@ -14,8 +14,14 @@ import {
 
 // Best-effort teardown of an Evolution instance (logout then delete). Never throws.
 async function deleteEvolutionInstance(cfg: ReturnType<typeof getConfig>, name: string) {
-  try { await evolutionFetch(cfg, `/instance/logout/${name}`, 'DELETE'); } catch (_e) { /* ignore */ }
-  try { await evolutionFetch(cfg, `/instance/delete/${name}`, 'DELETE'); } catch (_e) { /* ignore */ }
+  try {
+    const logoutRes = await evolutionFetch(cfg, `/instance/logout/${name}`, 'DELETE');
+    if (!logoutRes.ok) console.warn(`logout ${name}: ${logoutRes.status} ${await logoutRes.text()}`);
+  } catch (e) { console.warn(`logout ${name} error:`, e); }
+  try {
+    const delRes = await evolutionFetch(cfg, `/instance/delete/${name}`, 'DELETE');
+    if (!delRes.ok) console.error(`delete ${name}: ${delRes.status} ${await delRes.text()}`);
+  } catch (e) { console.error(`delete ${name} error:`, e); }
 }
 
 async function deleteChatwootInbox(
