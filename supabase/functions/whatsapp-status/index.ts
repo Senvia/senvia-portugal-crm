@@ -65,10 +65,19 @@ Deno.serve(async (req) => {
     const stateRes = await evolutionFetch(cfg, `/instance/connectionState/${instanceName}`);
     if (!stateRes.ok) {
       // Instance may not exist yet → treat as disconnected.
-      return json({ status: 'disconnected', phone_number: null });
+      return json({ status: 'disconnected', phone_number: null, qr: null });
     }
     const stateData = await stateRes.json();
     const status = mapState(stateData?.instance?.state);
+
+    // Some Evolution builds include the current QR in the connectionState response
+    // (instance.qrcode.base64). Reading it here is free — no extra API call, no
+    // new QR generation, no Chatwoot event. When present, the modal can auto-display
+    // fresh QRs as Baileys regenerates them without ever calling /instance/connect/
+    // again (which would trigger Chatwoot events on every 30s modal refresh).
+    const qr: string | null = status === 'connecting'
+      ? (stateData?.instance?.qrcode?.base64 ?? null)
+      : null;
 
     // When connected, resolve the phone number from the instance owner JID.
     let phoneNumber: string | null = null;
@@ -91,7 +100,7 @@ Deno.serve(async (req) => {
       await sync.eq('organization_id', organization_id).eq('channel_type', 'whatsapp');
     }
 
-    return json({ status, phone_number: phoneNumber });
+    return json({ status, phone_number: phoneNumber, qr });
   } catch (err) {
     console.error('whatsapp-status error:', err);
     return json({ error: (err as Error).message || 'Erro interno' }, 500);

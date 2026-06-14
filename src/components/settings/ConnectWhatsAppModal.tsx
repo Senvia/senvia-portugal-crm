@@ -7,7 +7,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Loader2, CheckCircle2, RefreshCw, Smartphone, AlertCircle } from "lucide-react";
+import { Loader2, CheckCircle2, RefreshCw, Smartphone, AlertCircle, Clock } from "lucide-react";
 import { useWhatsappConnect, useWhatsappStatus } from "@/hooks/useMessagingChannels";
 
 interface ConnectWhatsAppModalProps {
@@ -23,11 +23,11 @@ export function ConnectWhatsAppModal({ open, onOpenChange, channelId, label }: C
   const [qr, setQr] = useState<string | null>(null);
   const [pairingCode, setPairingCode] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [qrExpiry, setQrExpiry] = useState(0);
   // For a new channel the id is only known after the first connect() response.
   const [activeChannelId, setActiveChannelId] = useState<string | undefined>(channelId);
-  // Refs avoid stale closures in the refresh interval: it always reconnects the
-  // SAME channel instead of creating a new row, and never fires while one is
-  // already in flight (the cause of the duplicate "A ligar..." rows).
+  // Ref avoids stale closures: always reconnects the SAME channel instead of
+  // creating a new row, and never fires while one is already in flight.
   const activeIdRef = useRef<string | undefined>(channelId);
   const inFlightRef = useRef(false);
 
@@ -38,8 +38,16 @@ export function ConnectWhatsAppModal({ open, onOpenChange, channelId, label }: C
   const { data: status } = useWhatsappStatus(open && !!activeChannelId, activeChannelId);
   const connected = status?.status === "connected";
 
-  // Fetch (or refresh) the QR code. Guarded so concurrent/duplicate calls (e.g. the
-  // 30s refresh firing before a slow first connect returns) never create extra rows.
+  // whatsapp-status returns qr when Evolution includes it in connectionState
+  // (some builds do). Use it as the live QR so we never need to call
+  // /instance/connect/ again after the first provision — which would regenerate
+  // the QR, trigger a Chatwoot event, and potentially trip the flap guard.
+  const displayQr = status?.qr ?? qr;
+
+  // Fetch (or refresh) the QR code. Only called on modal open and on manual
+  // "Atualizar QR" clicks — NOT on a timer. Automatic 30-second refreshes were
+  // calling /instance/connect/ repeatedly, which generated a new QR (invalidating
+  // any scan in progress) and sent a Chatwoot event each time.
   const refreshQr = useCallback(async () => {
     if (inFlightRef.current) return;
     inFlightRef.current = true;
@@ -74,21 +82,26 @@ export function ConnectWhatsAppModal({ open, onOpenChange, channelId, label }: C
       setQr(null);
       setPairingCode(null);
       setErrorMsg(null);
+      setQrExpiry(0);
       activeIdRef.current = channelId;
       setActiveChannelId(channelId);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  // The Evolution QR expires (~40s). Refresh every 30s until connected.
+  // Start a 40s countdown whenever displayQr changes (new QR from Baileys or
+  // from a manual refresh). Resets automatically when status polling picks up a
+  // fresh QR that Baileys generated on its own.
   useEffect(() => {
-    if (!open || connected) return;
-    const interval = setInterval(() => {
-      refreshQr();
-    }, 30000);
-    return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, connected]);
+    if (displayQr) setQrExpiry(40);
+  }, [displayQr]);
+
+  // Tick the countdown down — when it hits 0 the QR is likely expired.
+  useEffect(() => {
+    if (!displayQr || qrExpiry <= 0) return;
+    const t = setTimeout(() => setQrExpiry((s) => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [displayQr, qrExpiry]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -124,29 +137,41 @@ export function ConnectWhatsAppModal({ open, onOpenChange, channelId, label }: C
                 Tentar novamente
               </Button>
             </div>
-          ) : isPending && !qr ? (
+          ) : isPending && !displayQr ? (
             <div className="flex flex-col items-center gap-3 text-muted-foreground">
               <Loader2 className="h-10 w-10 animate-spin" />
               <p className="text-sm">A gerar QR code...</p>
             </div>
-          ) : qr ? (
+          ) : displayQr ? (
             <div className="flex flex-col items-center gap-4">
-              <div className="rounded-lg border bg-white p-3">
-                <img src={qr} alt="QR Code do WhatsApp" className="h-56 w-56" />
+              <div className={`rounded-lg border bg-white p-3 transition-opacity ${qrExpiry === 0 ? "opacity-30" : ""}`}>
+                <img src={displayQr} alt="QR Code do WhatsApp" className="h-56 w-56" />
               </div>
-              <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
-                <li>Abre o <strong>WhatsApp</strong> no telemóvel</li>
-                <li>Vai a <strong>Definições → Aparelhos conectados</strong></li>
-                <li>Toca em <strong>Conectar um aparelho</strong> e aponta para o código</li>
-              </ol>
-              {pairingCode && (
-                <p className="text-xs text-muted-foreground">
-                  Ou usa o código: <span className="font-mono font-semibold">{pairingCode}</span>
-                </p>
+              {qrExpiry > 0 ? (
+                <>
+                  <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
+                    <li>Abre o <strong>WhatsApp</strong> no telemóvel</li>
+                    <li>Vai a <strong>Definições → Aparelhos conectados</strong></li>
+                    <li>Toca em <strong>Conectar um aparelho</strong> e aponta para o código</li>
+                  </ol>
+                  {pairingCode && (
+                    <p className="text-xs text-muted-foreground">
+                      Ou usa o código: <span className="font-mono font-semibold">{pairingCode}</span>
+                    </p>
+                  )}
+                  <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+                    <Clock className="h-3 w-3" /> QR expira em {qrExpiry}s
+                  </p>
+                </>
+              ) : (
+                <div className="flex flex-col items-center gap-2">
+                  <p className="text-sm text-muted-foreground">QR expirado</p>
+                  <Button variant="outline" size="sm" onClick={refreshQr} disabled={isPending}>
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    Atualizar QR
+                  </Button>
+                </div>
               )}
-              <p className="text-[11px] text-muted-foreground flex items-center gap-1">
-                <Loader2 className="h-3 w-3 animate-spin" /> À espera da leitura...
-              </p>
             </div>
           ) : (
             <div className="flex flex-col items-center gap-3 text-muted-foreground">

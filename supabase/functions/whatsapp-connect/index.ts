@@ -75,11 +75,16 @@ Deno.serve(async (req) => {
     // derive a per-channel name for a brand new channel.
     const instanceName = channelRow.evolution_instance
       || (channel_id ? instanceNameForOrg(org.id) : instanceNameForChannel(org.id, channelRow.id));
-    // Chatwoot inbox name: a NEW channel gets a unique name (append a short id) so a
-    // 2nd number never attaches to an existing inbox with the same label. Reconnects
-    // reuse the stored label, matching their existing inbox.
+    // Chatwoot inbox name must be STABLE per channel across BOTH connect and reconnect.
+    // If a reconnect used the bare label, a 2nd number would re-attach to the 1st
+    // channel's inbox and hijack its outbound webhook (Chatwoot keeps one webhook_url
+    // per inbox, last writer wins). The org's legacy first channel (its instance equals
+    // instanceNameForOrg) keeps the bare-label inbox (e.g. "WhatsApp"); every other
+    // channel uses label + short id, matching the name it was created with. Keyed on the
+    // instance name, NOT on channel_id, so reconnect agrees with the original create.
     const baseLabel = (channelRow.label || '').trim() || 'WhatsApp';
-    const inboxName = channel_id ? baseLabel : `${baseLabel} ${channelRow.id.slice(0, 6)}`;
+    const isLegacyChannel = channelRow.evolution_instance === instanceNameForOrg(org.id);
+    const inboxName = isLegacyChannel ? baseLabel : `${baseLabel} ${channelRow.id.slice(0, 6)}`;
 
     // Persist the instance name IMMEDIATELY (before the slow Evolution/Chatwoot
     // provisioning) so a status poll for THIS channel resolves to its own instance
@@ -110,52 +115,57 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 4) Wire the Chatwoot integration on the instance (idempotent set). nameInbox
-    //    is per-channel so each WhatsApp number maps to its own Chatwoot inbox.
-    const setRes = await evolutionFetch(cfg, `/chatwoot/set/${instanceName}`, 'POST', {
-      enabled: true,
-      accountId: String(accountId),
-      token,
-      url: cfg.chatwootUrl,
-      signMsg: true,
-      signDelimiter: '\n',
-      nameInbox: inboxName,
-      reopenConversation: true,
-      conversationPending: false,
-      mergeBrazilContacts: false,
-      // History import is disabled: WhatsApp's LID identifiers make imported
-      // chats messy (duplicates, broken send routing). The inbox starts clean.
-      importContacts: false,
-      importMessages: false,
-      daysLimitImportMessages: 7,
-      autoCreate: true,
-      organization: org.name,
-      logo: '',
-    });
-    if (!setRes.ok) {
-      console.error('Chatwoot set failed:', setRes.status, await setRes.text());
-      // Non-fatal for the QR flow; log and continue.
+    // 4) Wire Chatwoot BEFORE fetching the QR. This ensures that when /chatwoot/set/
+    //    causes any internal Evolution session reload, that reload happens BEFORE the
+    //    QR is generated — so the QR the user sees is stable and not invalidated mid-scan
+    //    by a background wiring call. QR events reaching Chatwoot during setup are
+    //    acceptable: they are detected as evo_status and skipped (no AI/push), and the
+    //    flap guard no longer counts them, so they cannot kill the session.
+    const needsChatwootWiring = !instanceExists || !channelRow.chatwoot_inbox_id;
+    if (needsChatwootWiring) {
+      const setRes = await evolutionFetch(cfg, `/chatwoot/set/${instanceName}`, 'POST', {
+        enabled: true,
+        accountId: String(accountId),
+        token,
+        url: cfg.chatwootUrl,
+        signMsg: true,
+        signDelimiter: '\n',
+        nameInbox: inboxName,
+        reopenConversation: true,
+        conversationPending: false,
+        mergeBrazilContacts: false,
+        importContacts: false,
+        importMessages: false,
+        daysLimitImportMessages: 7,
+        autoCreate: true,
+        organization: org.name,
+        logo: '',
+      });
+      if (!setRes.ok) {
+        console.error('Chatwoot set failed:', setRes.status, await setRes.text());
+      }
     }
 
-    // 5) Resolve and persist the Chatwoot inbox id (so sends/webhooks route per
-    //    inbox). Best-effort: the autoCreate may take a moment, so we don't fail
-    //    the flow if it isn't found yet — it'll be retried on the next connect.
+    // 5) Resolve inbox id (needed for send/webhook routing).
     let inboxId = channelRow.chatwoot_inbox_id;
     if (!inboxId) {
       inboxId = await findChatwootInboxByName(cfg, accountId, token, inboxName);
     }
 
-    // 6) Persist the channel state
+    // 6) Persist channel state + flap reset.
     await admin
       .from('messaging_channels')
       .update({
         evolution_instance: instanceName,
         chatwoot_inbox_id: inboxId,
         status: 'connecting',
+        needs_repair: false,
+        flap_count: 0,
+        flap_window_start: null,
       })
       .eq('id', channelRow.id);
 
-    // 7) Fetch the QR code
+    // 7) Fetch the QR code — after wiring so the session is stable.
     const connectRes = await evolutionFetch(cfg, `/instance/connect/${instanceName}`);
     if (!connectRes.ok) {
       console.error('Evolution connect failed:', connectRes.status, await connectRes.text());

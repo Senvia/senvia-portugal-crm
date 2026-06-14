@@ -39,6 +39,7 @@ interface ConnectResponse {
 interface StatusResponse {
   status: ChannelStatus;
   phone_number: string | null;
+  qr?: string | null;
   error?: string;
 }
 

@@ -143,11 +143,27 @@ Deno.serve(async (req) => {
     if (!event || event.event !== 'message_created') return ok();
     if (event.private) return ok();
 
-    // Evolution API injects system status messages via Chatwoot (as 'incoming')
-    // on every WhatsApp session reconnection (~2h cadence). These are noise —
-    // never show them as push notifications or run AI on them.
-    const EVO_SYSTEM_RE = /^(Connection Successfully established!|Connection timeout\.|Disconnected from WhatsApp|Reconnect|QR code generated|WhatsApp session|Instance (created|updated|deleted)|waitingQrCode|qrRead|connecting|open|close)/i;
-    if (EVO_SYSTEM_RE.test(String(event.content ?? '').trim())) return ok();
+    // Evolution injects connection-status messages via Chatwoot (message_type
+    // 'incoming') from its bot contact. The real messages are emoji-prefixed
+    // ("🚀 Connection successfully established!", "QRCode successfully generated!"),
+    // so strip leading non-letters before matching (the old anchored regex never
+    // matched and let them through to AI + push). These are noise AND the signal
+    // for the flap guard below. Generic state words are matched only as the WHOLE
+    // message, so a real customer text ("open tomorrow?") is never misclassified.
+    const evoBody = String(event.content ?? '').replace(/^[^\p{L}]+/u, '').trim().toLowerCase();
+    const isEvoStatus =
+      evoBody.startsWith('connection successfully established') ||
+      evoBody.startsWith('connection timeout') ||
+      evoBody.startsWith('disconnected from whatsapp') ||
+      evoBody.startsWith('qrcode successfully generated') ||
+      evoBody.startsWith('qr code successfully generated') ||
+      evoBody.startsWith('qrcode generation limit') ||
+      evoBody.startsWith('waitingqrcode') ||
+      evoBody.startsWith('qrread') ||
+      // 'init' is an Evolution bot artifact (no customer sends exactly "init").
+      // Deliberately NOT matching bare 'open'/'close'/'connecting' — a real
+      // customer could text those, and we must not silently drop their message.
+      evoBody === 'init';
 
     const accountId = event.account?.id;
     if (!accountId) return ok();
@@ -220,26 +236,82 @@ Deno.serve(async (req) => {
     // when the org has several WhatsApp numbers. Falls back to the org's first
     // WhatsApp channel (covers the legacy row whose inbox id isn't stored yet).
     const inboxId = event.conversation?.inbox_id ?? event.inbox?.id ?? null;
-    let channel: { id?: string; evolution_instance: string | null; metadata: unknown; assigned_user_ids?: string[] | null } | null = null;
+    let channel: { id?: string; evolution_instance: string | null; metadata: unknown; assigned_user_ids?: string[] | null; needs_repair?: boolean } | null = null;
+    // channelExact = resolved by the conversation's inbox id (not the fallback).
+    // The flap guard ONLY acts on an exact match, so a status message we can't
+    // attribute to a specific caixa can never disconnect the wrong one.
+    let channelExact = false;
     if (inboxId != null) {
       const { data } = await admin
         .from('messaging_channels')
-        .select('id, evolution_instance, metadata, assigned_user_ids')
+        .select('id, evolution_instance, metadata, assigned_user_ids, needs_repair')
         .eq('organization_id', org.id)
         .eq('chatwoot_inbox_id', inboxId)
         .maybeSingle();
-      channel = data;
+      if (data) { channel = data; channelExact = true; }
     }
     if (!channel) {
       const { data } = await admin
         .from('messaging_channels')
-        .select('id, evolution_instance, metadata, assigned_user_ids')
+        .select('id, evolution_instance, metadata, assigned_user_ids, needs_repair')
         .eq('organization_id', org.id)
         .eq('channel_type', 'whatsapp')
         .order('created_at', { ascending: true })
         .limit(1)
         .maybeSingle();
       channel = data;
+    }
+
+    // ---- Flap guard: a dead WhatsApp session reconnects in a loop and floods
+    // Chatwoot with status messages (this once saturated the whole server). Count
+    // them per caixa; on a confirmed runaway, remove the broken Evolution instance
+    // at the source and alert the org. Status messages never get AI/push/auto-reply
+    // either way, so we handle them here and return. Only acts on an EXACT inbox
+    // match + a real Evolution instance + a caixa not already flagged (no cycling).
+    //
+    // QR events are NOT counted: they are normal during legitimate connection setup
+    // (Baileys generates a new QR every ~20s while waiting for scan). Only
+    // reconnect-loop events (connection established/timeout/disconnected) indicate
+    // a dead session spinning, and only those should trip the brake.
+    const isFlappingEvent =
+      evoBody.startsWith('connection successfully established') ||
+      evoBody.startsWith('connection timeout') ||
+      evoBody.startsWith('disconnected from whatsapp') ||
+      evoBody.startsWith('qrcode generation limit'); // hitting QR gen limit = problem
+    if (isEvoStatus) {
+      if (isFlappingEvent && channelExact && channel?.id && channel?.evolution_instance && !channel.needs_repair) {
+        try {
+          const { data: tripped } = await admin.rpc('bump_channel_flap', {
+            p_channel_id: channel.id, p_window_seconds: 300, p_threshold: 15,
+          });
+          if (tripped) {
+            console.warn('[flap-guard] runaway flap on', channel.evolution_instance, '— removing instance');
+            const evoUrl = (Deno.env.get('EVOLUTION_API_URL') || '').replace(/\/$/, '');
+            const evoKey = Deno.env.get('EVOLUTION_API_KEY') || '';
+            try {
+              await fetch(`${evoUrl}/instance/delete/${channel.evolution_instance}`, {
+                method: 'DELETE', headers: { apikey: evoKey },
+              });
+            } catch (e) { console.error('[flap-guard] instance delete failed', e); }
+            try {
+              await fetch(`${supabaseUrl}/functions/v1/send-push-notification`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${serviceKey}` },
+                body: JSON.stringify({
+                  organization_id: org.id,
+                  title: '⚠️ Caixa WhatsApp desligada',
+                  body: 'Uma caixa começou a falhar em ciclo e foi desligada automaticamente para proteger o sistema. Reconecte-a em Definições, Caixas de Entrada.',
+                  url: '/settings',
+                  tag: `flap-${channel.id}`,
+                }),
+              });
+            } catch (e) { console.error('[flap-guard] alert failed', e); }
+          }
+        } catch (e) {
+          console.error('[flap-guard] failed', e);
+        }
+      }
+      return ok({ ok: true, evo_status: true });
     }
 
     // AI task suggestions — promises by the agent AND requests by the customer.
