@@ -97,21 +97,29 @@ Deno.serve(async (req) => {
         .eq('id', channelRow.id);
     }
 
-    // 3) Ensure a FRESH Evolution instance exists. If the channel was in a failed/
-    //    connecting state and the instance already exists, its Baileys session can
-    //    have stale or corrupted pairing state — the phone will get "Connecting..."
-    //    and never finish. Fix: delete the old instance so Baileys starts clean.
-    //    We only keep an existing instance when the channel is already connected
-    //    (unnecessary restart) or when there is no instance to begin with.
+    // 3) Fast-path: if the Evolution instance is already open (WhatsApp session
+    //    active), return immediately WITHOUT calling /instance/connect/. That call
+    //    disconnects an active session, which triggers "connection established" spam
+    //    in Chatwoot every time the QR modal auto-refreshes at 20s intervals.
+    const stateRes = await evolutionFetch(cfg, `/instance/connectionState/${instanceName}`);
+    if (stateRes.ok) {
+      const stateData = await stateRes.json();
+      if (stateData?.instance?.state === 'open') {
+        await admin.from('messaging_channels')
+          .update({ status: 'connected', needs_repair: false })
+          .eq('id', channelRow.id);
+        return json({ success: true, channel_id: channelRow.id, instance: instanceName, already_connected: true, qr: null, pairing_code: null });
+      }
+    }
+
+    // Check if the Evolution instance exists.
     const fetchRes = await evolutionFetch(cfg, `/instance/fetchInstances?instanceName=${instanceName}`);
     const existing = fetchRes.ok ? await fetchRes.json() : [];
     const instanceExists = Array.isArray(existing) && existing.length > 0;
 
     // Only recreate when the channel is 'disconnected' (stale/ended session). When
     // it is 'connecting' we are in the middle of a pairing flow — destroying the
-    // instance would cancel a scan that may be in progress. The 'connecting' state
-    // is transient; a fresh QR refresh just calls /instance/connect/ again which
-    // returns the current (or a freshly generated) QR without rebuilding anything.
+    // instance would cancel a scan that may be in progress.
     const shouldRecreate = instanceExists && channelRow?.status === 'disconnected';
 
     if (shouldRecreate) {
