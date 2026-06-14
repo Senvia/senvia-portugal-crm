@@ -41,12 +41,12 @@ Deno.serve(async (req) => {
     // 2) Resolve the target channel row: reconnect an existing one (by id) or
     //    create a new one. New channels get a per-channel instance name + inbox
     //    name so multiple WhatsApp numbers never collide.
-    let channelRow: { id: string; evolution_instance: string | null; label: string | null; chatwoot_inbox_id: number | null } | null = null;
+    let channelRow: { id: string; evolution_instance: string | null; label: string | null; chatwoot_inbox_id: number | null; status: string | null } | null = null;
 
     if (channel_id) {
       const { data } = await admin
         .from('messaging_channels')
-        .select('id, evolution_instance, label, chatwoot_inbox_id')
+        .select('id, evolution_instance, label, chatwoot_inbox_id, status')
         .eq('id', channel_id)
         .eq('organization_id', org.id)
         .maybeSingle();
@@ -62,7 +62,7 @@ Deno.serve(async (req) => {
           status: 'connecting',
           label: (label || '').trim() || 'WhatsApp',
         })
-        .select('id, evolution_instance, label, chatwoot_inbox_id')
+        .select('id, evolution_instance, label, chatwoot_inbox_id, status')
         .single();
       if (insErr || !data) {
         console.error('channel insert failed:', insErr);
@@ -97,12 +97,23 @@ Deno.serve(async (req) => {
         .eq('id', channelRow.id);
     }
 
-    // 3) Ensure the Evolution instance exists
+    // 3) Ensure a FRESH Evolution instance exists. If the channel was in a failed/
+    //    connecting state and the instance already exists, its Baileys session can
+    //    have stale or corrupted pairing state — the phone will get "Connecting..."
+    //    and never finish. Fix: delete the old instance so Baileys starts clean.
+    //    We only keep an existing instance when the channel is already connected
+    //    (unnecessary restart) or when there is no instance to begin with.
     const fetchRes = await evolutionFetch(cfg, `/instance/fetchInstances?instanceName=${instanceName}`);
     const existing = fetchRes.ok ? await fetchRes.json() : [];
     const instanceExists = Array.isArray(existing) && existing.length > 0;
 
-    if (!instanceExists) {
+    const shouldRecreate = instanceExists && channelRow?.status !== 'connected';
+
+    if (shouldRecreate) {
+      await evolutionFetch(cfg, `/instance/delete/${instanceName}`, 'DELETE');
+    }
+
+    if (!instanceExists || shouldRecreate) {
       const createRes = await evolutionFetch(cfg, '/instance/create', 'POST', {
         instanceName,
         integration: 'WHATSAPP-BAILEYS',
@@ -121,7 +132,7 @@ Deno.serve(async (req) => {
     //    by a background wiring call. QR events reaching Chatwoot during setup are
     //    acceptable: they are detected as evo_status and skipped (no AI/push), and the
     //    flap guard no longer counts them, so they cannot kill the session.
-    const needsChatwootWiring = !instanceExists || !channelRow.chatwoot_inbox_id;
+    const needsChatwootWiring = !instanceExists || shouldRecreate || !channelRow.chatwoot_inbox_id;
     if (needsChatwootWiring) {
       const setRes = await evolutionFetch(cfg, `/chatwoot/set/${instanceName}`, 'POST', {
         enabled: true,
