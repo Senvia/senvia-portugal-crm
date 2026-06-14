@@ -1,8 +1,14 @@
 // whatsapp-status — reports the WhatsApp connection state for the org's instance
 // and keeps the messaging_channels row in sync. Polled by the frontend while the
 // QR modal is open.
+//
+// On first successful connection (status becomes 'connected' and chatwoot_inbox_id
+// is still null), wires the Chatwoot integration and stores the inbox id. Doing it
+// here — not in whatsapp-connect — keeps Evolution silent until the session is
+// actually open, preventing event floods during QR scan and reconnect loops.
 import {
   corsHeaders, json, getConfig, authOrgAdmin, evolutionFetch, instanceNameForOrg,
+  ensureChatwootAccount, findChatwootInboxByName,
 } from '../_shared/multicanal.ts';
 
 // Resolve which channel/instance to check: by channel_id (multi-account), else
@@ -74,7 +80,7 @@ Deno.serve(async (req) => {
     // (instance.qrcode.base64). Reading it here is free — no extra API call, no
     // new QR generation, no Chatwoot event. When present, the modal can auto-display
     // fresh QRs as Baileys regenerates them without ever calling /instance/connect/
-    // again (which would trigger Chatwoot events on every 30s modal refresh).
+    // again.
     const qr: string | null = status === 'connecting'
       ? (stateData?.instance?.qrcode?.base64 ?? null)
       : null;
@@ -87,6 +93,60 @@ Deno.serve(async (req) => {
         const list = await fetchRes.json();
         const ownerJid: string | undefined = Array.isArray(list) ? list[0]?.ownerJid : undefined;
         if (ownerJid) phoneNumber = ownerJid.split('@')[0] || null;
+      }
+    }
+
+    // Wire Chatwoot on first successful connection (chatwoot_inbox_id not yet set).
+    // Evolution only starts sending events to Chatwoot AFTER /chatwoot/set/ is called,
+    // so delaying until here means no events reach Chatwoot during QR scan or
+    // Baileys reconnect loops.
+    if (status === 'connected' && resolved.id) {
+      const { data: chRow } = await admin
+        .from('messaging_channels')
+        .select('chatwoot_inbox_id, label')
+        .eq('id', resolved.id)
+        .maybeSingle();
+      if (chRow && !chRow.chatwoot_inbox_id) {
+        try {
+          const { data: orgData } = await admin
+            .from('organizations')
+            .select('id, name, chatwoot_account_id, chatwoot_account_token')
+            .eq('id', organization_id)
+            .single();
+          if (orgData) {
+            const { accountId, token } = await ensureChatwootAccount(admin, cfg, orgData);
+            const baseLabel = (chRow.label || '').trim() || 'WhatsApp';
+            const isLegacy = instanceName === instanceNameForOrg(organization_id);
+            const inboxName = isLegacy ? baseLabel : `${baseLabel} ${resolved.id.slice(0, 6)}`;
+            await evolutionFetch(cfg, `/chatwoot/set/${instanceName}`, 'POST', {
+              enabled: true,
+              accountId: String(accountId),
+              token,
+              url: cfg.chatwootUrl,
+              signMsg: true,
+              signDelimiter: '\n',
+              nameInbox: inboxName,
+              reopenConversation: true,
+              conversationPending: false,
+              mergeBrazilContacts: false,
+              importContacts: false,
+              importMessages: false,
+              daysLimitImportMessages: 7,
+              autoCreate: true,
+              organization: orgData.name,
+              logo: '',
+            });
+            const inboxId = await findChatwootInboxByName(cfg, accountId, token, inboxName);
+            if (inboxId) {
+              await admin
+                .from('messaging_channels')
+                .update({ chatwoot_inbox_id: inboxId })
+                .eq('id', resolved.id);
+            }
+          }
+        } catch (e) {
+          console.error('Chatwoot wiring error:', e);
+        }
       }
     }
 

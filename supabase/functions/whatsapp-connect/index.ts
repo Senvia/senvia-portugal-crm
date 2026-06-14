@@ -1,15 +1,20 @@
-// whatsapp-connect — provisions the org's Chatwoot account + an Evolution instance
-// (with the Chatwoot integration wired), then returns a QR code (base64 PNG) for
-// the client to scan inside Senvia OS. Idempotent: safe to call repeatedly.
+// whatsapp-connect — provisions the org's Chatwoot account + an Evolution instance,
+// then returns a QR code (base64 PNG) for the client to scan inside Senvia OS.
+// Idempotent: safe to call repeatedly.
+//
+// Chatwoot wiring is intentionally NOT done here — it runs from whatsapp-status
+// the first time the instance reaches 'connected'. This prevents "Connection
+// successfully established!" floods during QR scan and Baileys reconnect loops
+// (Evolution sends events to Chatwoot the instant the integration is wired, even
+// before the session is open).
 //
 // Multi-account: an org can have several WhatsApp channels (rows in
 // messaging_channels). Pass `channel_id` to reconnect a specific channel, or omit
 // it (with an optional `label`) to create a NEW channel with its own Evolution
-// instance and Chatwoot inbox.
+// instance.
 import {
   corsHeaders, json, getConfig, authOrgAdmin, evolutionFetch,
   ensureChatwootAccount, instanceNameForOrg, instanceNameForChannel,
-  findChatwootInboxByName,
 } from '../_shared/multicanal.ts';
 
 Deno.serve(async (req) => {
@@ -35,12 +40,14 @@ Deno.serve(async (req) => {
       .single();
     if (orgErr || !org) return json({ error: 'Organização não encontrada' }, 404);
 
-    // 1) Ensure the org has its own Chatwoot account
-    const { accountId, token } = await ensureChatwootAccount(admin, cfg, org);
+    // Ensure the org has its own Chatwoot account (creates it if absent).
+    // Called here — not just in whatsapp-status — so the account exists before
+    // we need to wire it after the WhatsApp session connects.
+    await ensureChatwootAccount(admin, cfg, org);
 
-    // 2) Resolve the target channel row: reconnect an existing one (by id) or
-    //    create a new one. New channels get a per-channel instance name + inbox
-    //    name so multiple WhatsApp numbers never collide.
+    // Resolve the target channel row: reconnect an existing one (by id) or
+    // create a new one. New channels get a per-channel instance name so multiple
+    // WhatsApp numbers never collide.
     let channelRow: { id: string; evolution_instance: string | null; label: string | null; chatwoot_inbox_id: number | null; status: string | null } | null = null;
 
     if (channel_id) {
@@ -75,21 +82,9 @@ Deno.serve(async (req) => {
     // derive a per-channel name for a brand new channel.
     const instanceName = channelRow.evolution_instance
       || (channel_id ? instanceNameForOrg(org.id) : instanceNameForChannel(org.id, channelRow.id));
-    // Chatwoot inbox name must be STABLE per channel across BOTH connect and reconnect.
-    // If a reconnect used the bare label, a 2nd number would re-attach to the 1st
-    // channel's inbox and hijack its outbound webhook (Chatwoot keeps one webhook_url
-    // per inbox, last writer wins). The org's legacy first channel (its instance equals
-    // instanceNameForOrg) keeps the bare-label inbox (e.g. "WhatsApp"); every other
-    // channel uses label + short id, matching the name it was created with. Keyed on the
-    // instance name, NOT on channel_id, so reconnect agrees with the original create.
-    const baseLabel = (channelRow.label || '').trim() || 'WhatsApp';
-    const isLegacyChannel = channelRow.evolution_instance === instanceNameForOrg(org.id);
-    const inboxName = isLegacyChannel ? baseLabel : `${baseLabel} ${channelRow.id.slice(0, 6)}`;
 
-    // Persist the instance name IMMEDIATELY (before the slow Evolution/Chatwoot
-    // provisioning) so a status poll for THIS channel resolves to its own instance
-    // right away, instead of falling back to another channel and reporting a wrong
-    // "connected" while we wait.
+    // Persist the instance name IMMEDIATELY so status polls resolve to the right
+    // instance before the slow Evolution provisioning completes.
     if (!channelRow.evolution_instance) {
       await admin
         .from('messaging_channels')
@@ -97,10 +92,9 @@ Deno.serve(async (req) => {
         .eq('id', channelRow.id);
     }
 
-    // 3) Fast-path: if the Evolution instance is already open (WhatsApp session
-    //    active), return immediately WITHOUT calling /instance/connect/. That call
-    //    disconnects an active session, which triggers "connection established" spam
-    //    in Chatwoot every time the QR modal auto-refreshes at 20s intervals.
+    // Fast-path: if the Evolution instance is already open (WhatsApp session
+    // active), return immediately WITHOUT calling /instance/connect/. That call
+    // disconnects an active session and triggers Chatwoot event spam.
     const stateRes = await evolutionFetch(cfg, `/instance/connectionState/${instanceName}`);
     if (stateRes.ok) {
       const stateData = await stateRes.json();
@@ -139,52 +133,15 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 4) Wire Chatwoot BEFORE fetching the QR. This ensures that when /chatwoot/set/
-    //    causes any internal Evolution session reload, that reload happens BEFORE the
-    //    QR is generated — so the QR the user sees is stable and not invalidated mid-scan
-    //    by a background wiring call. QR events reaching Chatwoot during setup are
-    //    acceptable: they are detected as evo_status and skipped (no AI/push), and the
-    //    flap guard no longer counts them, so they cannot kill the session.
-    const needsChatwootWiring = !instanceExists || shouldRecreate || !channelRow.chatwoot_inbox_id;
-    if (needsChatwootWiring) {
-      const setRes = await evolutionFetch(cfg, `/chatwoot/set/${instanceName}`, 'POST', {
-        enabled: true,
-        accountId: String(accountId),
-        token,
-        url: cfg.chatwootUrl,
-        signMsg: true,
-        signDelimiter: '\n',
-        nameInbox: inboxName,
-        reopenConversation: true,
-        conversationPending: false,
-        mergeBrazilContacts: false,
-        importContacts: false,
-        importMessages: false,
-        daysLimitImportMessages: 7,
-        autoCreate: true,
-        organization: org.name,
-        logo: '',
-      });
-      if (!setRes.ok) {
-        console.error('Chatwoot set failed:', setRes.status, await setRes.text());
-      }
-    }
-
-    // 5) Resolve inbox id (needed for send/webhook routing).
-    let inboxId = channelRow.chatwoot_inbox_id;
-    if (!inboxId) {
-      inboxId = await findChatwootInboxByName(cfg, accountId, token, inboxName);
-    }
-
-    // 6) Persist channel state + flap reset. Don't overwrite 'connected' with
-    //    'connecting' — the QR auto-refresh calls this function every 20s and
-    //    would otherwise reset a freshly-connected channel back to "Por ligar".
+    // Persist channel state + flap reset. When recreating, clear chatwoot_inbox_id
+    // so whatsapp-status re-wires the Chatwoot integration after the new session
+    // connects (the old instance is gone, so its webhook target is gone too).
     const newStatus = channelRow.status === 'connected' ? 'connected' : 'connecting';
     await admin
       .from('messaging_channels')
       .update({
         evolution_instance: instanceName,
-        chatwoot_inbox_id: inboxId,
+        ...(shouldRecreate ? { chatwoot_inbox_id: null } : {}),
         status: newStatus,
         needs_repair: false,
         flap_count: 0,
@@ -192,7 +149,7 @@ Deno.serve(async (req) => {
       })
       .eq('id', channelRow.id);
 
-    // 7) Fetch the QR code — after wiring so the session is stable.
+    // Fetch the QR code.
     const connectRes = await evolutionFetch(cfg, `/instance/connect/${instanceName}`);
     if (!connectRes.ok) {
       console.error('Evolution connect failed:', connectRes.status, await connectRes.text());
@@ -204,9 +161,8 @@ Deno.serve(async (req) => {
       success: true,
       channel_id: channelRow.id,
       instance: instanceName,
-      account_id: accountId,
-      chatwoot_inbox_id: inboxId,
-      qr: connect.base64 ?? null,        // data:image/png;base64,... ready for <img src>
+      chatwoot_inbox_id: channelRow.chatwoot_inbox_id ?? null,
+      qr: connect.base64 ?? null,
       pairing_code: connect.pairingCode ?? null,
       already_connected: !connect.base64 && !connect.pairingCode,
     });
