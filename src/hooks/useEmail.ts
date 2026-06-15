@@ -56,6 +56,7 @@ export interface EmailAttachment {
   inline: boolean;
   content_id: string | null;
   storage_path: string | null;
+  data_b64?: string | null;
 }
 
 // Folders of an email caixa, ordered for the rail (system folders first).
@@ -148,7 +149,9 @@ export function useEmailMessage(messageId: string | null) {
         .from('email_messages').select('*').eq('id', messageId).single();
       if (error) throw error;
       const { data: attachments } = await db
-        .from('email_attachments').select('*').eq('message_id', messageId);
+        .from('email_attachments')
+        .select('id, message_id, filename, content_type, size, inline, content_id, storage_path')
+        .eq('message_id', messageId);
       return { message: message as EmailMessage, attachments: (attachments || []) as EmailAttachment[] };
     },
     enabled: !!messageId,

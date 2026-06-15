@@ -5,6 +5,7 @@ import type { EmailMessage, EmailAddress } from './useEmail';
 
 const db = supabase as unknown as { from: (t: string) => any };
 
+export interface SendAttachment { filename: string; contentType: string; b64: string; }
 export interface SendPayload {
   to: EmailAddress[];
   cc?: EmailAddress[];
@@ -14,6 +15,7 @@ export interface SendPayload {
   text?: string;
   inReplyTo?: string | null;
   references?: string[];
+  attachments?: SendAttachment[];
 }
 
 // Queue email actions/sends as commands; the gateway executes them over IMAP/SMTP.
@@ -47,6 +49,7 @@ export function useEmailActions(channelId: string | null, folderId: string | nul
     spam: (id: string) => { removeFromList(id); return queue('spam', { messageId: id }); },
     trash: (id: string) => { removeFromList(id); return queue('delete', { messageId: id }); },
     move: (id: string, targetFolderId: string) => { removeFromList(id); return queue('move', { messageId: id, targetFolderId }); },
+    fetchAttachment: (attachmentId: string) => queue('fetch_attachment', { attachmentId }),
     send: (payload: SendPayload) => queue('send', payload as unknown as Record<string, unknown>),
   };
 }

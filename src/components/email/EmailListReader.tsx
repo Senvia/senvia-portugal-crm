@@ -3,6 +3,8 @@ import { Paperclip, Star, Loader2, Mail, FileText, Download, Inbox as InboxIcon,
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 import { useEmailMessages, useEmailMessage, useEmailRealtime, useEmailSearch, type EmailAttachment } from '@/hooks/useEmail';
 import { useEmailChannels } from '@/hooks/useEmailChannels';
 import { useEmailActions } from '@/hooks/useEmailActions';
@@ -47,6 +49,20 @@ function EmailBody({ html, text }: { html: string | null; text: string | null })
   );
 }
 
+// Trigger a browser download from base64 content.
+function triggerB64Download(filename: string, contentType: string | null, b64: string) {
+  const bin = atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  const blob = new Blob([arr], { type: contentType || 'application/octet-stream' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename || 'anexo'; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+const attachDb = supabase as unknown as { from: (t: string) => any };
+
 // Message list + reader for one folder. The folder rail lives in the caixa rail.
 export function EmailListReader({ channelId, folderId }: { channelId: string | null; folderId: string | null }) {
   const [messageId, setMessageId] = useState<string | null>(null);
@@ -77,6 +93,30 @@ export function EmailListReader({ channelId, folderId }: { channelId: string | n
   }, [opened?.message?.id]);
 
   const act = (fn: () => void) => { fn(); setMessageId(null); };
+
+  const { toast } = useToast();
+  const [dlId, setDlId] = useState<string | null>(null);
+  const downloadAttachment = async (a: EmailAttachment) => {
+    setDlId(a.id);
+    try {
+      const read = () => attachDb.from('email_attachments').select('data_b64, filename, content_type').eq('id', a.id).single();
+      let { data } = await read();
+      if (!data?.data_b64) {
+        await actions.fetchAttachment(a.id);
+        for (let i = 0; i < 20; i++) {
+          await new Promise((r) => setTimeout(r, 1200));
+          const r = await read();
+          if (r.data?.data_b64) { data = r.data; break; }
+        }
+      }
+      if (!data?.data_b64) throw new Error('Tempo esgotado a obter o anexo');
+      triggerB64Download(data.filename || a.filename || 'anexo', data.content_type || a.content_type, data.data_b64);
+    } catch (e) {
+      toast({ title: 'Falha ao descarregar', description: (e as Error).message, variant: 'destructive' });
+    } finally {
+      setDlId(null);
+    }
+  };
 
   return (
     <>
@@ -194,12 +234,19 @@ export function EmailListReader({ channelId, folderId }: { channelId: string | n
               {opened.attachments.length > 0 && (
                 <div className="mb-4 flex flex-wrap gap-2">
                   {opened.attachments.filter((a) => !a.inline).map((a: EmailAttachment) => (
-                    <div key={a.id} className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm">
+                    <button
+                      key={a.id}
+                      type="button"
+                      onClick={() => downloadAttachment(a)}
+                      disabled={dlId === a.id}
+                      title="Descarregar"
+                      className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm transition-colors hover:bg-accent disabled:opacity-60"
+                    >
                       <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
                       <span className="max-w-[180px] truncate">{a.filename}</span>
                       <span className="text-xs text-muted-foreground">{fmtSize(a.size)}</span>
-                      <Download className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-60" />
-                    </div>
+                      {dlId === a.id ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" /> : <Download className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-60" />}
+                    </button>
                   ))}
                 </div>
               )}

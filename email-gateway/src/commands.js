@@ -2,6 +2,7 @@
 // updates the email tables. Lets the CRM drive actions/sending without the gateway
 // being publicly reachable (it only needs the DB it already talks to).
 import MailComposer from 'nodemailer/lib/mail-composer/index.js';
+import { simpleParser } from 'mailparser';
 import { getEmailCaixa, smtpTransport } from './caixas.js';
 import { getManager } from './idle.js';
 import { syncFolderMessages } from './sync.js';
@@ -66,6 +67,32 @@ function toAddr(list) {
   return arr.map((a) => (typeof a === 'string' ? a : { name: a.name || '', address: a.address })).filter(Boolean);
 }
 
+// Download one attachment's bytes from IMAP and cache them (base64) in the DB,
+// so the browser can download it. Re-parses the message source via mailparser
+// (reliable across providers).
+async function fetchAttachment(client, attachmentId) {
+  const [att] = await q(
+    `SELECT a.id, a.filename, a.content_id, m.uid, f.path
+       FROM email_attachments a
+       JOIN email_messages m ON m.id = a.message_id
+       JOIN email_folders f ON f.id = m.folder_id
+      WHERE a.id=$1`, [attachmentId],
+  );
+  if (!att) throw new Error('anexo inexistente');
+  const lock = await client.getMailboxLock(att.path);
+  let parsed;
+  try {
+    const fetched = await client.fetchOne(String(att.uid), { source: true }, { uid: true });
+    if (!fetched?.source) throw new Error('mensagem sem fonte');
+    parsed = await simpleParser(fetched.source);
+  } finally { lock.release(); }
+  const list = parsed.attachments || [];
+  const match = list.find((a) => (att.content_id && a.cid === att.content_id) || a.filename === att.filename)
+    || list.find((a) => !!a.content);
+  if (!match?.content) throw new Error('anexo não encontrado na mensagem');
+  await q(`UPDATE email_attachments SET data_b64=$2 WHERE id=$1`, [att.id, match.content.toString('base64')]);
+}
+
 async function sendMail(caixa, p) {
   const from = { name: caixa.label || '', address: caixa.meta.email_address };
   const opts = {
@@ -78,6 +105,9 @@ async function sendMail(caixa, p) {
     text: p.text || (p.html ? undefined : ''),
     inReplyTo: p.inReplyTo || undefined,
     references: p.references || undefined,
+    attachments: Array.isArray(p.attachments) && p.attachments.length
+      ? p.attachments.map((a) => ({ filename: a.filename, content: Buffer.from(a.b64 || '', 'base64'), contentType: a.contentType || undefined }))
+      : undefined,
   };
   // Build raw MIME once (for the Sent copy), then send via SMTP.
   const raw = await new Promise((res, rej) =>
@@ -121,6 +151,7 @@ async function execute(cmd) {
       if (!target) throw new Error('pasta destino inexistente');
       return doMove(client, caixa, m, target);
     }
+    case 'fetch_attachment': return fetchAttachment(client, p.attachmentId);
     case 'send': return sendMail(caixa, p);
     default: throw new Error(`tipo desconhecido: ${cmd.type}`);
   }
