@@ -224,7 +224,7 @@ function EmailFullScreenEditor({
 }: {
   channel: EmailChannel | null;
   onDone: () => void;
-  members?: { id: string; full_name: string | null }[];
+  members?: { id: string; user_id?: string; full_name: string | null }[];
 }) {
   const isEdit = !!channel;
   const createChannel = useCreateEmailChannel();
@@ -394,7 +394,7 @@ function EmailFullScreenEditor({
                 <div className="space-y-4">
                   {members.length > 0 ? (
                     <CollaboratorPicker
-                      members={members.map((m) => ({ user_id: m.id, full_name: m.full_name || m.id }))}
+                      members={members.map((m) => ({ user_id: m.user_id ?? m.id, full_name: m.full_name || m.user_id || m.id }))}
                       value={localAttendants}
                       onChange={(next) => { setLocalAttendants(next); updateAssign.mutate({ channelId: channel!.id, assigned_user_ids: next }); }}
                       mode="multi"
@@ -463,7 +463,7 @@ export function EditEmailModal({
   channel: EmailChannel;
   open: boolean;
   onOpenChange: (o: boolean) => void;
-  members?: { id: string; full_name: string | null }[];
+  members?: { id: string; user_id?: string; full_name: string | null }[];
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
