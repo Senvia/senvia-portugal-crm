@@ -241,12 +241,13 @@ function EmailFullScreenEditor({
     setFormError(null);
     setActiveTab('config');
     setLocalColor(isEdit ? (channel?.color ?? null) : null);
+    setLocalAttendants(isEdit ? ((channel as unknown as { assigned_user_ids?: string[] }).assigned_user_ids ?? []) : []);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channel?.id]);
 
-  const attendants: string[] = isEdit
-    ? ((channel as unknown as { assigned_user_ids?: string[] }).assigned_user_ids ?? [])
-    : [];
+  const [localAttendants, setLocalAttendants] = useState<string[]>(
+    isEdit ? ((channel as unknown as { assigned_user_ids?: string[] }).assigned_user_ids ?? []) : []
+  );
 
   const isPending = createChannel.isPending || updateChannel.isPending;
   const canSubmit = !!form.label.trim() && form.email_address.includes('@') &&
@@ -394,8 +395,8 @@ function EmailFullScreenEditor({
                   {members.length > 0 ? (
                     <CollaboratorPicker
                       members={members.map((m) => ({ user_id: m.id, full_name: m.full_name || m.id }))}
-                      value={attendants}
-                      onChange={(next) => updateAssign.mutate({ channelId: channel!.id, assigned_user_ids: next })}
+                      value={localAttendants}
+                      onChange={(next) => { setLocalAttendants(next); updateAssign.mutate({ channelId: channel!.id, assigned_user_ids: next }); }}
                       mode="multi"
                       emptyHint="Vazio = todos os colaboradores vêem esta caixa." />
                   ) : (
