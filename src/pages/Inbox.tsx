@@ -2906,14 +2906,14 @@ function bodyForIframe(content: string | null | undefined, isHtml: boolean): str
     // Inject a base style so the iframe doesn't use browser defaults with huge fonts.
     return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
       *{box-sizing:border-box}
-      body{margin:0;padding:0;font-family:inherit;font-size:13px;line-height:1.6;color:#111;word-break:break-word;overflow-wrap:break-word}
+      body{margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:1.6;color:#111;word-break:break-word;overflow-wrap:break-word}
       a{color:#2563eb}
       img{max-width:100%;height:auto}
     </style></head><body>${body}</body></html>`;
   }
   const escaped = body.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-    body{margin:0;padding:0;font-family:inherit;font-size:13px;line-height:1.6;color:#111;white-space:pre-wrap;word-break:break-word}
+    body{margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:1.6;color:#111;white-space:pre-wrap;word-break:break-word}
   </style></head><body>${escaped}</body></html>`;
 }
 
