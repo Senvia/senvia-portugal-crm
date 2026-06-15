@@ -12,6 +12,7 @@ export interface EmailChannel {
   status: string;
   assigned_user_ids: string[];
   rotate_enabled: boolean;
+  color: string | null;
   metadata: {
     email_address?: string;
     imap_server?: string;

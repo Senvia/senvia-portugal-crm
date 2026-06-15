@@ -464,29 +464,24 @@ export function EditEmailModal({
           )}
 
           {/* Cor da caixa */}
-          {(() => {
-            const chColor = (channel as unknown as { color?: string | null }).color ?? null;
-            return (
-              <div className="space-y-2">
-                <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Cor da caixa</Label>
-                <div className="flex flex-wrap items-center gap-2">
-                  {['#ef4444','#f97316','#f59e0b','#22c55e','#14b8a6','#3b82f6','#6366f1','#a855f7','#ec4899','#64748b'].map((c) => (
-                    <button
-                      key={c}
-                      type="button"
-                      onClick={() => updateAssign.mutate({ channelId: channel.id, color: chColor === c ? null : c })}
-                      className={cn(
-                        'h-6 w-6 rounded-full transition-transform hover:scale-110 ring-offset-background ring-offset-2',
-                        chColor === c ? 'ring-2 ring-foreground scale-110' : '',
-                      )}
-                      style={{ background: c }}
-                      title={chColor === c ? 'Remover cor' : c}
-                    />
-                  ))}
-                </div>
-              </div>
-            );
-          })()}
+          <div className="space-y-2">
+            <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Cor da caixa</Label>
+            <div className="flex flex-wrap items-center gap-2">
+              {['#ef4444','#f97316','#f59e0b','#22c55e','#14b8a6','#3b82f6','#6366f1','#a855f7','#ec4899','#64748b'].map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => updateAssign.mutate({ channelId: channel.id, color: channel.color === c ? null : c })}
+                  className={cn(
+                    'h-6 w-6 rounded-full transition-transform hover:scale-110 ring-offset-background ring-offset-2',
+                    channel.color === c ? 'ring-2 ring-foreground scale-110' : '',
+                  )}
+                  style={{ background: c }}
+                  title={channel.color === c ? 'Remover cor' : c}
+                />
+              ))}
+            </div>
+          </div>
 
           <EmailForm form={form} setForm={setForm} isEdit error={formError} />
         </div>

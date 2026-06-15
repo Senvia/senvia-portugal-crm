@@ -136,6 +136,7 @@ export function useUpdateChannelAssignment() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['messaging-channels', organization?.id] });
+      queryClient.invalidateQueries({ queryKey: ['email-channels', organization?.id] });
     },
   });
 }
