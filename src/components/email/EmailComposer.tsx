@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef } from 'react';
-import { Loader2, Send, X, Paperclip, FileText } from 'lucide-react';
+import { Loader2, Send, X, Paperclip, FileText, BookmarkCheck } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { useEmailActions } from '@/hooks/useEmailActions';
 import { fmtSize } from './emailShared';
-import type { EmailMessage, EmailAddress } from '@/hooks/useEmail';
+import type { EmailMessage, EmailAddress, EmailDraft } from '@/hooks/useEmail';
 
 interface Attached { filename: string; contentType: string; b64: string; size: number; }
 
@@ -38,7 +38,7 @@ function escapeHtml(s: string) {
 }
 
 export function EmailComposer({
-  open, onOpenChange, channelId, folderId, mode, original, selfAddress,
+  open, onOpenChange, channelId, folderId, mode, original, selfAddress, initialDraft,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
@@ -47,39 +47,56 @@ export function EmailComposer({
   mode: ComposeMode;
   original: EmailMessage | null;
   selfAddress?: string;
+  initialDraft?: EmailDraft | null;
 }) {
   const { toast } = useToast();
   const actions = useEmailActions(channelId, folderId);
   const [sending, setSending] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
   const [showCc, setShowCc] = useState(false);
+  const [draftId, setDraftId] = useState<string | null>(null);
 
-  // Prefill from mode + original (recomputed when the dialog (re)opens).
+  // Prefill from initialDraft > mode+original > blank (recomputed when dialog (re)opens).
   const initial = useMemo(() => {
-    if (!original || mode === 'new') return { to: '', cc: '', subject: '', body: '' };
+    if (initialDraft) {
+      return {
+        to: fmtAddrs(initialDraft.to_addresses || []),
+        cc: fmtAddrs(initialDraft.cc_addresses || []),
+        subject: initialDraft.subject || '',
+        body: initialDraft.body_html || '',
+        attachments: ((initialDraft.attachments || []) as unknown as Attached[]),
+      };
+    }
+    if (!original || mode === 'new') return { to: '', cc: '', subject: '', body: '', attachments: [] };
     const from: EmailAddress = { name: original.from_name || '', address: original.from_address || '' };
     if (mode === 'forward') {
       return { to: '', cc: '', subject: ensurePrefix(original.subject || '', 'Fwd:'),
-        body: `\n\n---------- Mensagem reencaminhada ----------\nDe: ${fmtAddrs([from])}\nAssunto: ${original.subject || ''}\n${quoteText(original)}` };
+        body: `\n\n---------- Mensagem reencaminhada ----------\nDe: ${fmtAddrs([from])}\nAssunto: ${original.subject || ''}\n${quoteText(original)}`,
+        attachments: [] };
     }
     const self = (selfAddress || '').toLowerCase();
     const cc = mode === 'replyAll'
       ? [...(original.to_addresses || []), ...(original.cc_addresses || [])]
           .filter((a) => a.address && a.address.toLowerCase() !== self && a.address.toLowerCase() !== from.address.toLowerCase())
       : [];
-    return { to: fmtAddrs([from]), cc: fmtAddrs(cc), subject: ensurePrefix(original.subject || '', 'Re:'), body: quoteText(original) };
+    return { to: fmtAddrs([from]), cc: fmtAddrs(cc), subject: ensurePrefix(original.subject || '', 'Re:'), body: quoteText(original), attachments: [] };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, initialDraft?.id]);
 
   const [to, setTo] = useState(initial.to);
   const [cc, setCc] = useState(initial.cc);
   const [subject, setSubject] = useState(initial.subject);
   const [body, setBody] = useState(initial.body);
-  const [attachments, setAttachments] = useState<Attached[]>([]);
+  const [attachments, setAttachments] = useState<Attached[]>(initial.attachments);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Reset fields each time the dialog opens with a (possibly) new prefill.
   useMemo(() => {
-    if (open) { setTo(initial.to); setCc(initial.cc); setSubject(initial.subject); setBody(initial.body); setShowCc(!!initial.cc); setAttachments([]); }
+    if (open) {
+      setTo(initial.to); setCc(initial.cc); setSubject(initial.subject); setBody(initial.body);
+      setShowCc(!!initial.cc); setAttachments(initial.attachments || []);
+      setDraftId(initialDraft?.id ?? null);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -105,6 +122,28 @@ export function EmailComposer({
 
   const title = mode === 'reply' ? 'Responder' : mode === 'replyAll' ? 'Responder a todos' : mode === 'forward' ? 'Reencaminhar' : 'Novo email';
 
+  const handleSaveDraft = async () => {
+    setSavingDraft(true);
+    try {
+      const result = await actions.saveDraft({
+        id: draftId,
+        to: parseAddrs(to),
+        cc: showCc ? parseAddrs(cc) : [],
+        subject,
+        bodyHtml: body,
+        inReplyTo: original?.message_id ?? initialDraft?.in_reply_to ?? null,
+        replyMessageId: initialDraft?.reply_message_id ?? null,
+        attachments: attachments.map((a) => ({ filename: a.filename, contentType: a.contentType, b64: a.b64 })),
+      });
+      setDraftId(result.id);
+      toast({ title: 'Rascunho guardado' });
+    } catch (e) {
+      toast({ title: 'Falha ao guardar rascunho', description: (e as Error).message, variant: 'destructive' });
+    } finally {
+      setSavingDraft(false);
+    }
+  };
+
   const handleSend = async () => {
     const toList = parseAddrs(to);
     if (toList.length === 0) { toast({ title: 'Indica pelo menos um destinatário', variant: 'destructive' }); return; }
@@ -123,6 +162,11 @@ export function EmailComposer({
         references: refs,
         attachments: attachments.map((a) => ({ filename: a.filename, contentType: a.contentType, b64: a.b64 })),
       });
+      // Delete draft from DB after successful send.
+      const idToDelete = draftId ?? initialDraft?.id ?? null;
+      if (idToDelete) {
+        try { await actions.deleteDraft(idToDelete); } catch { /* non-critical */ }
+      }
       toast({ title: 'Email enviado' });
       onOpenChange(false);
     } catch (e) {
@@ -169,12 +213,18 @@ export function EmailComposer({
         </div>
         <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => onFiles(e.target.files)} />
         <DialogFooter className="sm:justify-between">
-          <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={sending}>
-            <Paperclip className="mr-1.5 h-4 w-4" /> Anexar
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={sending || savingDraft}>
+              <Paperclip className="mr-1.5 h-4 w-4" /> Anexar
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleSaveDraft} disabled={sending || savingDraft}>
+              {savingDraft ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <BookmarkCheck className="mr-1.5 h-4 w-4" />}
+              Guardar rascunho
+            </Button>
+          </div>
           <div className="flex gap-2">
             <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={sending}>Cancelar</Button>
-            <Button onClick={handleSend} disabled={sending}>
+            <Button onClick={handleSend} disabled={sending || savingDraft}>
               {sending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Send className="mr-1.5 h-4 w-4" />}
               Enviar
             </Button>

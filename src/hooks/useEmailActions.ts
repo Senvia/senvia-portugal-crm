@@ -1,7 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import type { EmailMessage, EmailAddress } from './useEmail';
+import type { EmailMessage, EmailAddress, EmailDraft } from './useEmail';
 
 const db = supabase as unknown as { from: (t: string) => any };
 
@@ -18,10 +18,22 @@ export interface SendPayload {
   attachments?: SendAttachment[];
 }
 
+export interface DraftPayload {
+  id?: string | null;
+  to: EmailAddress[];
+  cc?: EmailAddress[];
+  bcc?: EmailAddress[];
+  subject: string;
+  bodyHtml: string;
+  inReplyTo?: string | null;
+  replyMessageId?: string | null;
+  attachments?: SendAttachment[];
+}
+
 // Queue email actions/sends as commands; the gateway executes them over IMAP/SMTP.
 // Optimistic cache updates give an instant feel; Realtime reconciles within ~3s.
 export function useEmailActions(channelId: string | null, folderId: string | null) {
-  const { organization } = useAuth();
+  const { organization, user } = useAuth();
   const qc = useQueryClient();
   const orgId = organization?.id;
 
@@ -31,6 +43,39 @@ export function useEmailActions(channelId: string | null, folderId: string | nul
       organization_id: orgId, channel_id: channelId, type, payload,
     });
     if (error) throw error;
+  };
+
+  const saveDraft = async (draft: DraftPayload): Promise<{ id: string }> => {
+    if (!orgId || !channelId) throw new Error('Caixa não selecionada');
+    const row = {
+      organization_id: orgId,
+      channel_id: channelId,
+      author_id: user?.id ?? null,
+      to_addresses: draft.to,
+      cc_addresses: draft.cc || [],
+      bcc_addresses: draft.bcc || [],
+      subject: draft.subject || null,
+      body_html: draft.bodyHtml || null,
+      in_reply_to: draft.inReplyTo ?? null,
+      reply_message_id: draft.replyMessageId ?? null,
+      attachments: (draft.attachments || []) as unknown as Record<string, unknown>[],
+      updated_at: new Date().toISOString(),
+    };
+    if (draft.id) {
+      const { data, error } = await db.from('email_drafts').update(row).eq('id', draft.id).select('id').single();
+      if (error) throw error;
+      return data as { id: string };
+    }
+    const { data, error } = await db.from('email_drafts').insert(row).select('id').single();
+    if (error) throw error;
+    return data as { id: string };
+  };
+
+  const deleteDraft = async (draftId: string) => {
+    const { error } = await db.from('email_drafts').delete().eq('id', draftId);
+    if (error) throw error;
+    qc.setQueryData(['email-drafts', channelId], (old: EmailDraft[] | undefined) =>
+      Array.isArray(old) ? old.filter((d) => d.id !== draftId) : old);
   };
 
   const patchList = (messageId: string, patch: Partial<EmailMessage>) => {
@@ -51,5 +96,7 @@ export function useEmailActions(channelId: string | null, folderId: string | nul
     move: (id: string, targetFolderId: string) => { removeFromList(id); return queue('move', { messageId: id, targetFolderId }); },
     fetchAttachment: (attachmentId: string) => queue('fetch_attachment', { attachmentId }),
     send: (payload: SendPayload) => queue('send', payload as unknown as Record<string, unknown>),
+    saveDraft,
+    deleteDraft,
   };
 }

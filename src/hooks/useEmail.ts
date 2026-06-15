@@ -112,9 +112,45 @@ export function useEmailRealtime(channelId: string | null) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'email_folders', filter: `channel_id=eq.${channelId}` }, () => {
         qc.invalidateQueries({ queryKey: ['email-folders', channelId] });
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'email_drafts', filter: `channel_id=eq.${channelId}` }, () => {
+        qc.invalidateQueries({ queryKey: ['email-drafts', channelId] });
+      })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [channelId, qc]);
+}
+
+export interface EmailDraft {
+  id: string;
+  channel_id: string;
+  author_id: string | null;
+  to_addresses: EmailAddress[];
+  cc_addresses: EmailAddress[];
+  bcc_addresses: EmailAddress[];
+  subject: string | null;
+  body_html: string | null;
+  in_reply_to: string | null;
+  reply_message_id: string | null;
+  attachments: Array<{ filename: string; contentType: string; b64: string; size?: number }>;
+  created_at: string;
+  updated_at: string;
+}
+
+export function useEmailDrafts(channelId: string | null) {
+  return useQuery({
+    queryKey: ['email-drafts', channelId],
+    queryFn: async (): Promise<EmailDraft[]> => {
+      if (!channelId) return [];
+      const { data, error } = await db
+        .from('email_drafts')
+        .select('*')
+        .eq('channel_id', channelId)
+        .order('updated_at', { ascending: false });
+      if (error) throw error;
+      return (data || []) as EmailDraft[];
+    },
+    enabled: !!channelId,
+  });
 }
 
 // Search across the whole caixa (all folders) by subject / sender / snippet.

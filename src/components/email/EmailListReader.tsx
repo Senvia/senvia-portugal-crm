@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { Paperclip, Star, Loader2, Mail, FileText, Download, Inbox as InboxIcon, Reply, ReplyAll, Forward, Archive, Trash2, ShieldAlert, MailOpen, PenSquare, Search, X } from 'lucide-react';
+import { Paperclip, Star, Loader2, Mail, FileText, Download, Inbox as InboxIcon, Reply, ReplyAll, Forward, Archive, Trash2, ShieldAlert, MailOpen, PenSquare, Search, X, FileEdit } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { useEmailMessages, useEmailMessage, useEmailRealtime, useEmailSearch, type EmailAttachment } from '@/hooks/useEmail';
+import { useEmailFolders, useEmailMessages, useEmailMessage, useEmailRealtime, useEmailSearch, useEmailDrafts, type EmailAttachment, type EmailDraft } from '@/hooks/useEmail';
 import { useEmailChannels } from '@/hooks/useEmailChannels';
 import { useEmailActions } from '@/hooks/useEmailActions';
 import { EmailComposer, type ComposeMode } from './EmailComposer';
@@ -63,11 +63,38 @@ function triggerB64Download(filename: string, contentType: string | null, b64: s
 
 const attachDb = supabase as unknown as { from: (t: string) => any };
 
+// Draft list row (shown when the Rascunhos folder is active).
+function DraftRow({ draft, active, onClick }: { draft: EmailDraft; active: boolean; onClick: () => void }) {
+  const to = (draft.to_addresses || []).map((a) => a.name || a.address).join(', ') || '(sem destinatário)';
+  const snippet = (draft.body_html || '').replace(/<[^>]+>/g, '').slice(0, 120);
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        'flex w-full flex-col gap-0.5 border-b px-4 py-3 text-left transition-colors',
+        active ? 'bg-accent' : 'hover:bg-accent/50',
+      )}
+    >
+      <div className="flex items-center gap-2">
+        <FileEdit className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        <span className="min-w-0 flex-1 truncate text-sm font-medium text-muted-foreground">Para: {to}</span>
+        <span className="shrink-0 text-[11px] text-muted-foreground">{fmtListDate(draft.updated_at)}</span>
+      </div>
+      <span className="truncate text-sm font-semibold text-foreground">{draft.subject || '(sem assunto)'}</span>
+      <span className="truncate text-xs text-muted-foreground">{snippet || '(sem conteúdo)'}</span>
+    </button>
+  );
+}
+
 // Message list + reader for one folder. The folder rail lives in the caixa rail.
 export function EmailListReader({ channelId, folderId }: { channelId: string | null; folderId: string | null }) {
   const [messageId, setMessageId] = useState<string | null>(null);
   useEffect(() => { setMessageId(null); }, [folderId, channelId]);
   useEmailRealtime(channelId);
+
+  // Detect if current folder is Rascunhos.
+  const { data: folders = [] } = useEmailFolders(channelId);
+  const isDraftsFolder = !!folderId && folders.find((f) => f.id === folderId)?.role === 'drafts';
 
   const [search, setSearch] = useState('');
   const [debounced, setDebounced] = useState('');
@@ -75,16 +102,32 @@ export function EmailListReader({ channelId, folderId }: { channelId: string | n
   useEffect(() => { setSearch(''); setDebounced(''); }, [folderId, channelId]);
   const searching = debounced.trim().length >= 2;
 
-  const { data: folderMessages = [], isLoading: loadingFolder } = useEmailMessages(folderId);
+  const { data: folderMessages = [], isLoading: loadingFolder } = useEmailMessages(isDraftsFolder ? null : folderId);
   const { data: searchResults = [], isLoading: loadingSearch } = useEmailSearch(channelId, debounced);
+  const { data: drafts = [], isLoading: loadingDrafts } = useEmailDrafts(isDraftsFolder ? channelId : null);
+
   const messages = searching ? searchResults : folderMessages;
-  const isLoading = searching ? loadingSearch : loadingFolder;
+  const isLoading = isDraftsFolder ? loadingDrafts : (searching ? loadingSearch : loadingFolder);
   const { data: opened } = useEmailMessage(messageId);
 
   const { data: caixas = [] } = useEmailChannels();
   const selfAddress = caixas.find((c) => c.id === channelId)?.metadata?.email_address;
   const actions = useEmailActions(channelId, folderId);
+
   const [compose, setCompose] = useState<{ open: boolean; mode: ComposeMode }>({ open: false, mode: 'new' });
+  const [composeDraft, setComposeDraft] = useState<EmailDraft | null>(null);
+
+  // When opening a draft, reset composed draft and open composer.
+  const openDraft = (draft: EmailDraft) => {
+    setComposeDraft(draft);
+    setCompose({ open: true, mode: 'new' });
+  };
+
+  // Clear composeDraft when composer closes (so next "Novo email" is blank).
+  const handleComposerClose = (o: boolean) => {
+    setCompose((c) => ({ ...c, open: o }));
+    if (!o) setComposeDraft(null);
+  };
 
   // Auto-mark-read when opening an unread message (standard email behaviour).
   useEffect(() => {
@@ -124,33 +167,49 @@ export function EmailListReader({ channelId, folderId }: { channelId: string | n
       <section className="flex w-[26rem] shrink-0 flex-col border-r">
         <header className="space-y-2 border-b px-3 py-2.5">
           <div className="flex items-center justify-between">
-            <Button size="sm" onClick={() => setCompose({ open: true, mode: 'new' })}>
+            <Button size="sm" onClick={() => { setComposeDraft(null); setCompose({ open: true, mode: 'new' }); }}>
               <PenSquare className="mr-1.5 h-4 w-4" /> Novo email
             </Button>
             <span className="text-xs text-muted-foreground">
-              {searching ? `${messages.length} resultado(s)` : `${messages.length} ${messages.length === 1 ? 'email' : 'emails'}`}
+              {isDraftsFolder
+                ? `${drafts.length} ${drafts.length === 1 ? 'rascunho' : 'rascunhos'}`
+                : searching
+                  ? `${messages.length} resultado(s)`
+                  : `${messages.length} ${messages.length === 1 ? 'email' : 'emails'}`}
             </span>
           </div>
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Procurar emails..."
-              className="h-8 pl-8 pr-8 text-sm"
-            />
-            {search && (
-              <button type="button" onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
-          </div>
+          {!isDraftsFolder && (
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Procurar emails..."
+                className="h-8 pl-8 pr-8 text-sm"
+              />
+              {search && (
+                <button type="button" onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          )}
         </header>
         <div className="flex-1 overflow-y-auto">
           {isLoading ? (
             <div className="flex items-center justify-center gap-2 py-10 text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" /><span className="text-sm">A carregar...</span>
             </div>
+          ) : isDraftsFolder ? (
+            drafts.length === 0 ? (
+              <div className="flex flex-col items-center justify-center gap-2 py-16 text-muted-foreground">
+                <FileEdit className="h-8 w-8 opacity-30" /><span className="text-sm">Sem rascunhos</span>
+              </div>
+            ) : (
+              drafts.map((d) => (
+                <DraftRow key={d.id} draft={d} active={composeDraft?.id === d.id && compose.open} onClick={() => openDraft(d)} />
+              ))
+            )
           ) : messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-2 py-16 text-muted-foreground">
               <InboxIcon className="h-8 w-8 opacity-30" /><span className="text-sm">Pasta vazia</span>
@@ -189,9 +248,14 @@ export function EmailListReader({ channelId, folderId }: { channelId: string | n
         </div>
       </section>
 
-      {/* Reader */}
+      {/* Reader — hidden in drafts mode (drafts open in composer instead) */}
       <section className="flex min-w-0 flex-1 flex-col bg-muted/10">
-        {!opened ? (
+        {isDraftsFolder ? (
+          <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
+            <FileEdit className="h-10 w-10 opacity-20" />
+            <p className="text-sm">Clica num rascunho para continuar a escrever</p>
+          </div>
+        ) : !opened ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
             <Mail className="h-10 w-10 opacity-30" />
             <p className="text-sm">Seleciona um email para ler</p>
@@ -264,12 +328,13 @@ export function EmailListReader({ channelId, folderId }: { channelId: string | n
 
       <EmailComposer
         open={compose.open}
-        onOpenChange={(o) => setCompose((c) => ({ ...c, open: o }))}
+        onOpenChange={handleComposerClose}
         channelId={channelId}
         folderId={folderId}
         mode={compose.mode}
         original={opened?.message ?? null}
         selfAddress={selfAddress}
+        initialDraft={composeDraft}
       />
     </>
   );
