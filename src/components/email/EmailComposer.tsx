@@ -263,11 +263,9 @@ export function EmailComposer({
   };
 
   const handleDiscard = async () => {
-    // Delete any draft that was auto-created during this compose session.
-    // If editing a pre-existing draft (initialDraft), preserve it — user can reopen from Rascunhos.
-    const sessionDraftId = draftId && !initialDraft ? draftId : null;
-    if (sessionDraftId) {
-      try { await actions.deleteDraft(sessionDraftId); } catch { /* non-critical */ }
+    const idToDelete = draftId ?? initialDraft?.id ?? null;
+    if (idToDelete) {
+      try { await actions.deleteDraft(idToDelete); } catch { /* non-critical */ }
     }
     onOpenChange(false);
   };
