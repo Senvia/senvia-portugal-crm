@@ -4,7 +4,7 @@
 import 'dotenv/config';
 import { ImapFlow } from 'imapflow';
 import { q, pool } from './db.js';
-import { syncFolders, syncFolderMessages } from './sync.js';
+import { syncFolders, syncFolderMessages, fetchMessageBody } from './sync.js';
 
 const host = process.env.TEST_IMAP_HOST;
 const port = Number(process.env.TEST_IMAP_PORT) || 993;
@@ -35,6 +35,24 @@ if (inbox) {
   console.log(`\n── A sincronizar mensagens da Entrada (${inbox.path}) ──`);
   const n = await syncFolderMessages(client, channel, inbox, 50);
   console.log(`  ${n} mensagens gravadas/atualizadas`);
+}
+
+// Prove body fetch on the most recent message with an attachment (the Zoho invoice),
+// falling back to the latest message of any kind.
+const [target] = await q(
+  `SELECT m.id, m.uid, m.subject, f.path
+     FROM email_messages m JOIN email_folders f ON f.id=m.folder_id
+    WHERE m.channel_id=$1
+    ORDER BY m.has_attachments DESC, m.date DESC LIMIT 1`, [channel.id],
+);
+if (target) {
+  console.log(`\n── A buscar corpo: "${target.subject}" ──`);
+  const body = await fetchMessageBody(client, { ...channel }, target);
+  if (body) {
+    console.log(`  HTML: ${body.html ? `${body.html.length} chars` : '(nenhum)'}`);
+    console.log(`  Texto: ${body.text ? `${body.text.length} chars` : '(nenhum)'}`);
+    console.log(`  Anexos: ${body.attachments.length ? body.attachments.map((a) => `${a.filename} (${a.type}, ${a.size}b)`).join(', ') : '(nenhum)'}`);
+  }
 }
 
 await client.logout().catch(() => {});

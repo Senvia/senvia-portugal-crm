@@ -1,6 +1,7 @@
 // Core sync: IMAP folders + message headers → Postgres (email_folders / email_messages).
 // Body + attachments are fetched lazily (on open) in a later pass — this keeps the
 // initial sync fast even on mailboxes with thousands of messages.
+import { simpleParser } from 'mailparser';
 import { q } from './db.js';
 import { folderRole, roleSort } from './imap-roles.js';
 
@@ -59,6 +60,50 @@ export async function syncFolders(client, channel) {
     byPath.set(box.path, rows[0]);
   }
   return byPath;
+}
+
+// Fetch + parse the full body of one message (on demand, when the user opens it).
+// Downloads the raw RFC822 source, parses MIME (mailparser), stores html/text +
+// attachment metadata. Returns { html, text, attachments }.
+export async function fetchMessageBody(client, channel, msg) {
+  const lock = await client.getMailboxLock(msg.path);
+  try {
+    const fetched = await client.fetchOne(String(msg.uid), { source: true }, { uid: true });
+    if (!fetched?.source) return null;
+    const parsed = await simpleParser(fetched.source);
+
+    const html = parsed.html || (parsed.textAsHtml ?? null);
+    const text = parsed.text || null;
+    const snippet = (parsed.text || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+
+    await q(
+      `UPDATE email_messages
+         SET html_body=$2, text_body=$3, snippet=$4, body_fetched=true, updated_at=now()
+       WHERE id=$1`,
+      [msg.id, html, text, snippet],
+    );
+
+    // Replace attachment metadata (idempotent on re-fetch). Binary content stays
+    // in IMAP; we download to Storage on demand when the user clicks it.
+    await q(`DELETE FROM email_attachments WHERE message_id=$1`, [msg.id]);
+    const atts = parsed.attachments || [];
+    for (const a of atts) {
+      await q(
+        `INSERT INTO email_attachments
+           (organization_id, message_id, part_id, filename, content_type, size, inline, content_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [
+          channel.organization_id, msg.id, a.partId || null,
+          a.filename || 'anexo', a.contentType || 'application/octet-stream',
+          a.size || null, !!a.related || a.contentDisposition === 'inline',
+          a.cid || null,
+        ],
+      );
+    }
+    return { html, text, attachments: atts.map((a) => ({ filename: a.filename, size: a.size, type: a.contentType })) };
+  } finally {
+    lock.release();
+  }
 }
 
 // Sync the most recent `limit` messages (headers only) of one folder into email_messages.
