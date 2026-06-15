@@ -873,7 +873,7 @@ function EditCaixaModal({
               Vazio = todos veem esta caixa no Inbox. Com pessoas selecionadas, só elas (e os administradores) a veem.
             </p>
             <CollaboratorPicker
-              members={members}
+              members={members.map((m) => ({ user_id: m.id, full_name: m.full_name || m.id }))}
               value={attendants}
               onChange={(next) => updateAssign.mutate({ channelId: ch.id, assigned_user_ids: next })}
               mode="multi"
@@ -1076,6 +1076,7 @@ function InboxesManager() {
           channel={editEmailCh}
           open={!!editEmailCh}
           onOpenChange={(o) => { if (!o) setEditEmailCh(null); }}
+          members={members}
         />
       )}
       {/* Add email modal */}

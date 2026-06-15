@@ -953,6 +953,11 @@ Deno.serve(async (req) => {
       // Re-apply Chatwoot integration config on Evolution so the change takes effect immediately.
       if (ch.evolution_instance) {
         try {
+          // Must match the inbox name used by whatsapp-status when wiring:
+          // legacy instance → just the label; new multi-account instance → label + channel ID prefix.
+          const baseLabel = (ch.label || '').trim() || 'WhatsApp';
+          const isLegacy = ch.evolution_instance === instanceNameForOrg(organization_id);
+          const inboxName = isLegacy ? baseLabel : `${baseLabel} ${channelId.slice(0, 6)}`;
           await evolutionFetch(cfg, `/chatwoot/set/${ch.evolution_instance}`, 'POST', {
             enabled: true,
             accountId: String(cw.accountId),
@@ -960,7 +965,7 @@ Deno.serve(async (req) => {
             url: cfg.chatwootUrl,
             signMsg: true,
             signDelimiter: '\n',
-            nameInbox: ch.label || 'WhatsApp',
+            nameInbox: inboxName,
             reopenConversation: true,
             conversationPending: false,
             mergeBrazilContacts: false,

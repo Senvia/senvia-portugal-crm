@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Mail, Settings2, Trash2, Plus, Loader2, Eye, EyeOff, Server, Lock, AlertCircle } from 'lucide-react';
+import { Mail, Settings2, Trash2, Plus, Loader2, Eye, EyeOff, Server, Lock, AlertCircle, UsersRound } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -14,6 +14,8 @@ import {
   useEmailChannels, useCreateEmailChannel, useUpdateEmailChannel, useDeleteEmailChannel,
   type EmailChannel, type EmailChannelInput,
 } from '@/hooks/useEmailChannels';
+import { useUpdateChannelAssignment } from '@/hooks/useMessagingChannels';
+import { CollaboratorPicker } from './CollaboratorPicker';
 
 // ─── Provider presets ──────────────────────────────────────────────────────────
 
@@ -389,11 +391,18 @@ export function AddEmailModal({ open, onOpenChange }: { open: boolean; onOpenCha
 // ─── Edit Modal ────────────────────────────────────────────────────────────────
 
 export function EditEmailModal({
-  channel, open, onOpenChange,
-}: { channel: EmailChannel; open: boolean; onOpenChange: (o: boolean) => void }) {
+  channel, open, onOpenChange, members = [],
+}: {
+  channel: EmailChannel;
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  members?: { id: string; full_name: string | null }[];
+}) {
   const updateChannel = useUpdateEmailChannel();
+  const updateAssign = useUpdateChannelAssignment();
   const [form, setForm] = useState<EmailFormState>(formFromChannel(channel));
   const [formError, setFormError] = useState<string | null>(null);
+  const attendants: string[] = (channel as unknown as { assigned_user_ids?: string[] }).assigned_user_ids ?? [];
 
   useEffect(() => { if (open) { setForm(formFromChannel(channel)); setFormError(null); } }, [channel, open]);
 
@@ -434,7 +443,25 @@ export function EditEmailModal({
             <DialogDescription className="text-xs mt-0.5">{channel.metadata?.email_address ?? ''}</DialogDescription>
           </div>
         </div>
-        <div className="px-6 py-5 overflow-y-auto max-h-[70vh]">
+        <div className="px-6 py-5 space-y-5 overflow-y-auto max-h-[70vh]">
+          {/* Quem atende */}
+          {members.length > 0 && (
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+                <UsersRound className="h-3.5 w-3.5" /> Quem atende esta caixa
+              </Label>
+              <p className="text-[11px] text-muted-foreground">
+                Vazio = todos veem esta caixa no Inbox. Com pessoas selecionadas, só elas (e os administradores) a veem.
+              </p>
+              <CollaboratorPicker
+                members={members.map((m) => ({ user_id: m.id, full_name: m.full_name || m.id }))}
+                value={attendants}
+                onChange={(next) => updateAssign.mutate({ channelId: channel.id, assigned_user_ids: next })}
+                mode="multi"
+                emptyHint="Vazio = todos os colaboradores veem esta caixa."
+              />
+            </div>
+          )}
           <EmailForm form={form} setForm={setForm} isEdit error={formError} />
         </div>
         <div className="flex gap-2 px-6 py-4 border-t">
