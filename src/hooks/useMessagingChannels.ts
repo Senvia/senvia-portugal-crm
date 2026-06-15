@@ -19,6 +19,7 @@ export interface MessagingChannel {
   // visibility, auto-assignment and notifications.
   assigned_user_ids: string[];
   rotate_enabled: boolean;
+  color: string | null;
   metadata: Record<string, unknown> | null;
   created_at: string | null;
   updated_at: string | null;
@@ -119,12 +120,13 @@ export function useUpdateChannelAssignment() {
   const { organization } = useAuth();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (vars: { channelId: string; label?: string; assigned_user_ids?: string[]; rotate_enabled?: boolean }) => {
+    mutationFn: async (vars: { channelId: string; label?: string; assigned_user_ids?: string[]; rotate_enabled?: boolean; color?: string | null }) => {
       if (!organization?.id) throw new Error('Organização não encontrada');
       const patch: Record<string, unknown> = {};
       if (vars.label !== undefined) patch.label = vars.label;
       if (vars.assigned_user_ids !== undefined) patch.assigned_user_ids = vars.assigned_user_ids;
       if (vars.rotate_enabled !== undefined) patch.rotate_enabled = vars.rotate_enabled;
+      if (vars.color !== undefined) patch.color = vars.color;
       const { error } = await supabase
         .from('messaging_channels')
         .update(patch)

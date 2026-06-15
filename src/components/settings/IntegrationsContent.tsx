@@ -846,6 +846,26 @@ function EditCaixaModal({
             </div>
           </div>
 
+          {/* Cor da caixa */}
+          <div className="space-y-2">
+            <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Cor da caixa</Label>
+            <div className="flex flex-wrap items-center gap-2">
+              {['#ef4444','#f97316','#f59e0b','#22c55e','#14b8a6','#3b82f6','#6366f1','#a855f7','#ec4899','#64748b'].map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => updateAssign.mutate({ channelId: ch.id, color: ch.color === c ? null : c })}
+                  className={cn(
+                    'h-6 w-6 rounded-full transition-transform hover:scale-110 ring-offset-background ring-offset-2',
+                    ch.color === c ? 'ring-2 ring-foreground scale-110' : '',
+                  )}
+                  style={{ background: c }}
+                  title={ch.color === c ? 'Remover cor' : c}
+                />
+              ))}
+            </div>
+          </div>
+
           {/* Ligação */}
           {ch.channel_type === 'whatsapp' && (
             <div className="space-y-2">

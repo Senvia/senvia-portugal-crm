@@ -1876,9 +1876,10 @@ export default function Inbox() {
               </button>
               {visibleCaixas.map((ch) => {
                 const active = caixaFilter === ch.chatwoot_inbox_id;
-                const dot = ch.channel_type === 'whatsapp' ? '#25D366'
+                const fallbackDot = ch.channel_type === 'whatsapp' ? '#25D366'
                   : ch.channel_type === 'instagram' ? '#E4405F'
                   : ch.channel_type === 'facebook' ? '#0084FF' : '#64748b';
+                const dot = ch.color || fallbackDot;
                 return (
                   <button
                     key={ch.id}
@@ -1928,6 +1929,7 @@ export default function Inbox() {
                 taskState={taskStateByPhone.get(phoneSuffix(c.contact_phone)) ?? null}
                 viewers={presence.get(c.id)}
                 caixaLabel={visibleCaixas.length > 1 && c.inbox_id != null ? channelByInbox.get(c.inbox_id)?.label ?? null : null}
+                caixaColor={c.inbox_id != null ? channelByInbox.get(c.inbox_id)?.color ?? null : null}
                 onSelect={setSelectedId}
               />
             ))
@@ -3001,6 +3003,7 @@ const ConversationRow = memo(function ConversationRow({
   taskState,
   viewers,
   caixaLabel,
+  caixaColor,
   onSelect,
 }: {
   conversation: InboxConversation;
@@ -3011,6 +3014,8 @@ const ConversationRow = memo(function ConversationRow({
   viewers?: PresencePeer[];
   // Caixa name, shown only when the org has more than one caixa (else redundant).
   caixaLabel?: string | null;
+  // Custom hex color set by the admin for this channel.
+  caixaColor?: string | null;
   // Stable parent callback (setSelectedId) so memo can skip re-renders on
   // unrelated parent state changes (e.g. composer typing).
   onSelect: (id: number) => void;
@@ -3051,7 +3056,13 @@ const ConversationRow = memo(function ConversationRow({
           </p>
           <div className="flex shrink-0 items-center gap-1.5">
             {caixaLabel && (
-              <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold text-primary truncate max-w-[80px]">
+              <span
+                className="rounded-full px-2 py-0.5 text-[10px] font-semibold truncate max-w-[80px]"
+                style={caixaColor
+                  ? { backgroundColor: caixaColor + '28', color: caixaColor }
+                  : { backgroundColor: 'hsl(var(--primary)/.15)', color: 'hsl(var(--primary))' }
+                }
+              >
                 {caixaLabel}
               </span>
             )}
