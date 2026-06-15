@@ -145,14 +145,20 @@ function isHiddenConversation(c: any, normalized: NormalizedConversation): boole
 }
 
 // The same contact can end up with several Chatwoot conversations (imported
-// history + live, LID artifacts...). Merge them into one row per phone — the
+// history + live, LID artifacts...). Merge them into one row per phone PER
+// inbox — conversations from different inboxes (different WhatsApp numbers /
+// channels) are kept separate even when the contact phone is the same. The
 // newest conversation is the primary; the rest become alt_ids whose messages
 // the client merges into one thread.
 function mergeByContact(sorted: NormalizedConversation[]): NormalizedConversation[] {
   const byPhone = new Map<string, NormalizedConversation>();
   const out: NormalizedConversation[] = [];
   for (const c of sorted) {
-    const key = (c.contact_phone || '').replace(/\D/g, '');
+    // Include inbox_id in the key so two different channels (e.g. Thiago WA
+    // and DASPRENT WA) never collapse into one row even when the same contact
+    // phones both numbers from the same device.
+    const phone = (c.contact_phone || '').replace(/\D/g, '');
+    const key = phone ? `${phone}_${c.inbox_id ?? ''}` : '';
     if (!key) {
       out.push(c);
       continue;
