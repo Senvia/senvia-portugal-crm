@@ -697,10 +697,24 @@ export default function Inbox() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, loadingConvos, conversations.length]);
 
-  // Hide the Evolution control bot's QR-code conversations from the inbox.
+  // Chatwoot inbox ids that belong to EMAIL caixas — these are now handled by the
+  // dedicated email client (rail + reader), so they must never show in the chat
+  // conversation list ("Todas as conversas" is messaging-only).
+  const emailInboxIds = useMemo(
+    () => new Set(
+      channels
+        .filter((c) => c.channel_type === "email" && c.chatwoot_inbox_id != null)
+        .map((c) => c.chatwoot_inbox_id as number),
+    ),
+    [channels],
+  );
+
+  // Hide the Evolution control bot's QR-code conversations + email conversations.
   const visible = useMemo(
-    () => conversations.filter((c) => c.contact_name !== "EvolutionAPI"),
-    [conversations],
+    () => conversations.filter(
+      (c) => c.contact_name !== "EvolutionAPI" && !(c.inbox_id != null && emailInboxIds.has(c.inbox_id)),
+    ),
+    [conversations, emailInboxIds],
   );
 
   const filtered = useMemo(() => {
