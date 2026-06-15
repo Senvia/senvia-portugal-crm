@@ -234,11 +234,13 @@ function EmailFullScreenEditor({
   const [form, setForm] = useState<EmailFormState>(() => isEdit ? formFromChannel(channel!) : emptyForm());
   const [formError, setFormError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<EditorTab>('config');
+  const [localColor, setLocalColor] = useState<string | null>(channel?.color ?? null);
 
   useEffect(() => {
     setForm(isEdit ? formFromChannel(channel!) : emptyForm());
     setFormError(null);
     setActiveTab('config');
+    setLocalColor(isEdit ? (channel?.color ?? null) : null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channel?.id]);
 
@@ -374,10 +376,10 @@ function EmailFullScreenEditor({
                     <div className="flex flex-wrap items-center gap-2">
                       {['#ef4444','#f97316','#f59e0b','#22c55e','#14b8a6','#3b82f6','#6366f1','#a855f7','#ec4899','#64748b'].map((c) => (
                         <button key={c} type="button"
-                          onClick={() => updateAssign.mutate({ channelId: channel!.id, color: channel!.color === c ? null : c })}
+                          onClick={() => { const next = localColor === c ? null : c; setLocalColor(next); updateAssign.mutate({ channelId: channel!.id, color: next }); }}
                           className={cn('h-6 w-6 rounded-full transition-transform hover:scale-110 ring-offset-background ring-offset-2',
-                            channel!.color === c ? 'ring-2 ring-foreground scale-110' : '')}
-                          style={{ background: c }} title={channel!.color === c ? 'Remover cor' : c} />
+                            localColor === c ? 'ring-2 ring-foreground scale-110' : '')}
+                          style={{ background: c }} title={localColor === c ? 'Remover cor' : c} />
                       ))}
                     </div>
                   </div>
