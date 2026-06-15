@@ -78,7 +78,12 @@ Deno.serve(async (req) => {
         .maybeSingle();
       if (dup) return json({ error: 'Já existe uma caixa com este endereço de email nesta organização' }, 409);
 
-      // Create Chatwoot email inbox
+      // Create Chatwoot email inbox.
+      // Chatwoot's API uses imap_address / smtp_address (NOT imap_server/smtp_server).
+      // SSL/TLS (port 465) → smtp_ssl=true, smtp_starttls_auto=false.
+      // STARTTLS (port 587) → smtp_ssl=false, smtp_starttls_auto=true.
+      const smtpPort = Number(email_config.smtp_port) || 587;
+      const smtpSsl = email_config.smtp_ssl === true || smtpPort === 465;
       const cwRes = await chatwootFetch(cfg, token, `${base}/inboxes`, 'POST', {
         name: label.trim(),
         channel: {
@@ -86,15 +91,19 @@ Deno.serve(async (req) => {
           email: emailNorm,
           imap_login: (email_config.imap_login || emailNorm).trim(),
           imap_password: email_config.imap_password,
-          imap_server: email_config.imap_server.trim(),
+          imap_address: email_config.imap_server.trim(),
           imap_port: Number(email_config.imap_port) || 993,
-          imap_ssl: email_config.imap_ssl !== false,
+          imap_ssl_tls: email_config.imap_ssl !== false,
           imap_enabled: true,
           smtp_login: (email_config.smtp_login || emailNorm).trim(),
           smtp_password: email_config.smtp_password,
-          smtp_server: email_config.smtp_server.trim(),
-          smtp_port: Number(email_config.smtp_port) || 587,
-          smtp_ssl: email_config.smtp_ssl === true,
+          smtp_address: email_config.smtp_server.trim(),
+          smtp_port: smtpPort,
+          smtp_ssl: smtpSsl,
+          smtp_starttls_auto: !smtpSsl,
+          smtp_domain: email_config.email_address.split('@')[1] || '',
+          smtp_authentication: 'login',
+          smtp_openssl_verify_mode: 'none',
           smtp_enabled: true,
         },
       });
@@ -191,23 +200,30 @@ Deno.serve(async (req) => {
         if (ec.provider_key) newMeta.provider_key = ec.provider_key;
       }
 
-      // Update Chatwoot inbox (best-effort — log but don't fail)
+      // Update Chatwoot inbox (best-effort — log but don't fail).
+      // Chatwoot's API uses imap_address / smtp_address (NOT imap_server/smtp_server).
       if (ch.chatwoot_inbox_id) {
+        const smtpPort = Number(newMeta.smtp_port) || 587;
+        const smtpSsl = newMeta.smtp_ssl === true || smtpPort === 465;
         const cwBody: Record<string, unknown> = {};
         if (label?.trim()) cwBody.name = label.trim();
         cwBody.channel = {
           email: newMeta.email_address,
           imap_login: newMeta.imap_login,
           imap_password: newMeta.imap_password,
-          imap_server: newMeta.imap_server,
+          imap_address: newMeta.imap_server,
           imap_port: newMeta.imap_port,
-          imap_ssl: newMeta.imap_ssl,
+          imap_ssl_tls: newMeta.imap_ssl,
           imap_enabled: true,
           smtp_login: newMeta.smtp_login,
           smtp_password: newMeta.smtp_password,
-          smtp_server: newMeta.smtp_server,
-          smtp_port: newMeta.smtp_port,
-          smtp_ssl: newMeta.smtp_ssl,
+          smtp_address: newMeta.smtp_server,
+          smtp_port: smtpPort,
+          smtp_ssl: smtpSsl,
+          smtp_starttls_auto: !smtpSsl,
+          smtp_domain: String(newMeta.email_address ?? '').split('@')[1] || '',
+          smtp_authentication: 'login',
+          smtp_openssl_verify_mode: 'none',
           smtp_enabled: true,
         };
         const cwRes = await chatwootFetch(cfg, token, `${base}/inboxes/${ch.chatwoot_inbox_id}`, 'PATCH', cwBody);
