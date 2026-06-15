@@ -796,9 +796,16 @@ function EditCaixaModal({
   const meta = channelMeta(ch.channel_type);
   const Icon = meta.icon;
   const connected = ch.status === 'connected';
-  const attendants = ch.assigned_user_ids || [];
   const [labelDraft, setLabelDraft] = useState(ch.label || '');
-  useEffect(() => { setLabelDraft(ch.label || ''); }, [ch.label, open]);
+  const [localColor, setLocalColor] = useState<string | null>(ch.color ?? null);
+  const [localAttendants, setLocalAttendants] = useState<string[]>(ch.assigned_user_ids || []);
+  const [localGroupsEnabled, setLocalGroupsEnabled] = useState<boolean>((ch.metadata as Record<string, unknown> | null)?.groups_enabled !== false);
+  useEffect(() => {
+    setLabelDraft(ch.label || '');
+    setLocalColor(ch.color ?? null);
+    setLocalAttendants(ch.assigned_user_ids || []);
+    setLocalGroupsEnabled((ch.metadata as Record<string, unknown> | null)?.groups_enabled !== false);
+  }, [ch.id, open]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -854,10 +861,10 @@ function EditCaixaModal({
                 <button
                   key={c}
                   type="button"
-                  onClick={() => updateAssign.mutate({ channelId: ch.id, color: ch.color === c ? null : c })}
+                  onClick={() => { const next = localColor === c ? null : c; setLocalColor(next); updateAssign.mutate({ channelId: ch.id, color: next }); }}
                   className={cn(
                     'h-6 w-6 rounded-full transition-transform hover:scale-110 ring-offset-background ring-offset-2',
-                    ch.color === c ? 'ring-2 ring-foreground scale-110' : '',
+                    localColor === c ? 'ring-2 ring-foreground scale-110' : '',
                   )}
                   style={{ background: c }}
                   title={ch.color === c ? 'Remover cor' : c}
@@ -893,9 +900,9 @@ function EditCaixaModal({
               Vazio = todos veem esta caixa no Inbox. Com pessoas selecionadas, só elas (e os administradores) a veem.
             </p>
             <CollaboratorPicker
-              members={members.map((m) => ({ user_id: m.id, full_name: m.full_name || m.id }))}
-              value={attendants}
-              onChange={(next) => updateAssign.mutate({ channelId: ch.id, assigned_user_ids: next })}
+              members={members.map((m) => ({ user_id: m.user_id ?? m.id, full_name: m.full_name || m.user_id || m.id }))}
+              value={localAttendants}
+              onChange={(next) => { setLocalAttendants(next); updateAssign.mutate({ channelId: ch.id, assigned_user_ids: next }); }}
               mode="multi"
               emptyHint="Vazio = todos os colaboradores veem esta caixa."
             />
@@ -930,9 +937,9 @@ function EditCaixaModal({
                   </div>
                 </div>
                 <Switch
-                  checked={(ch.metadata as Record<string, unknown> | null)?.groups_enabled !== false}
+                  checked={localGroupsEnabled}
                   disabled={updateGroups.isPending}
-                  onCheckedChange={(v) => updateGroups.mutate({ channelId: ch.id, groupsEnabled: v })}
+                  onCheckedChange={(v) => { setLocalGroupsEnabled(v); updateGroups.mutate({ channelId: ch.id, groupsEnabled: v }); }}
                 />
               </div>
             )}
@@ -967,6 +974,7 @@ function InboxesManager() {
   const [newOpen, setNewOpen] = useState(false);
   const [newLabel, setNewLabel] = useState('');
   const [addEmailOpen, setAddEmailOpen] = useState(false);
+  const [filterType, setFilterType] = useState<string | null>(null);
 
   const orphanCount = channels.filter((c) => c.channel_type !== 'email' && c.status !== 'connected').length;
 
@@ -988,10 +996,38 @@ function InboxesManager() {
         </Button>
       </div>
 
-      {/* 2-column grid */}
+      {/* Filter pills */}
+      {channels.length > 0 && (() => {
+        const types = Array.from(new Set(channels.map((c) => c.channel_type)));
+        if (types.length <= 1) return null;
+        return (
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setFilterType(null)}
+              className={"${filterType === null ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'} rounded-full px-3 py-1 text-xs font-semibold transition-colors"}
+            >
+              Todas
+            </button>
+            {types.map((t) => {
+              const meta = channelMeta(t);
+              return (
+                <button
+                  key={t}
+                  onClick={() => setFilterType(filterType === t ? null : t)}
+                  className={"${filterType === t ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'} rounded-full px-3 py-1 text-xs font-semibold transition-colors"}
+                >
+                  {meta.label}
+                </button>
+              );
+            })}
+          </div>
+        );
+      })()}
+
+      {/* 3-column grid */}
       {channels.length > 0 ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {channels.map((ch) => {
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {channels.filter((ch) => filterType === null || ch.channel_type === filterType).map((ch) => {
             const meta = channelMeta(ch.channel_type);
             const Icon = meta.icon;
             const isEmail = ch.channel_type === 'email';

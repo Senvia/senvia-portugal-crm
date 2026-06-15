@@ -1972,7 +1972,7 @@ export default function Inbox() {
                 <ArrowLeft className="h-4 w-4" />
               </Button>
               <ContactAvatar name={selected.contact_name} src={selected.contact_thumbnail} className="h-9 w-9" />
-              <div className="min-w-0 flex-1">
+              <div className="min-w-0 flex-1 space-y-1">
                 <div className="flex items-center gap-1.5">
                   <p className="truncate text-sm font-medium">{selected.contact_name}</p>
                   {isPinned && <Pin className="h-3 w-3 shrink-0 text-muted-foreground" />}
@@ -3160,7 +3160,7 @@ const ConversationRow = memo(function ConversationRow({
         <ContactAvatar name={conversation.contact_name} src={conversation.contact_thumbnail} className="h-10 w-10" />
         <ChannelBadge channel={conversation.channel} />
       </div>
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1 space-y-1">
         <div className="flex items-center justify-between gap-2">
           <p className="flex min-w-0 items-center gap-1 truncate text-sm font-medium">
             {pinned && <Pin className="h-3 w-3 shrink-0 text-muted-foreground" />}
