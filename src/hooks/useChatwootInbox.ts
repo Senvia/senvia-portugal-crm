@@ -64,6 +64,8 @@ export interface InboxMessage {
   email_to: string | null;
   email_cc: string | null;
   email_subject: string | null;
+  // Full HTML body from content_attributes.email.html_content.full
+  email_html_body: string | null;
 }
 
 // Attachment payload for sending (base64, no data: prefix).

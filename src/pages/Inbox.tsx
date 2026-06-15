@@ -2921,7 +2921,9 @@ function bodyForIframe(content: string | null | undefined, isHtml: boolean): str
 // Displays From / To / CC / Subject header + full body (rendered in sandboxed iframe).
 function EmailMessageCard({ m, onPreview }: { m: InboxMessage; onPreview: (url: string) => void }) {
   const fromLabel = m.email_from || m.sender_name || (m.outgoing ? 'Você' : 'Contacto');
-  const isHtml = m.content_type === 'html' || m.content_type === 'text/html' || looksLikeHtml(m.content);
+  // Prefer the full HTML body from content_attributes; fall back to content field.
+  const rawBody = m.email_html_body || m.content;
+  const isHtml = !!m.email_html_body || m.content_type === 'html' || m.content_type === 'text/html' || looksLikeHtml(m.content);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   return (
@@ -2943,10 +2945,10 @@ function EmailMessageCard({ m, onPreview }: { m: InboxMessage; onPreview: (url: 
             ))}
           </div>
         )}
-        {m.content ? (
+        {rawBody ? (
           <iframe
             ref={iframeRef}
-            srcDoc={bodyForIframe(m.content, isHtml)}
+            srcDoc={bodyForIframe(rawBody, isHtml)}
             sandbox="allow-same-origin"
             className="w-full border-0"
             style={{ height: '120px' }}

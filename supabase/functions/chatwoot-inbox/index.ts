@@ -225,6 +225,8 @@ function normalizeMessage(m: any, base: string) {
       ? (m.content_attributes.email.cc as string[]).join(', ')
       : null,
     email_subject: m?.content_attributes?.email?.subject ?? null,
+    // Full HTML body of the email (richer than `content` which is plain-text stripped).
+    email_html_body: m?.content_attributes?.email?.html_content?.full ?? null,
   };
 }
 
