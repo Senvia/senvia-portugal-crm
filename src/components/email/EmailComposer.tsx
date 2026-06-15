@@ -74,9 +74,16 @@ function EmailChipInput({
   }, [raw, value, onChange]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === ',' || e.key === ';' || e.key === 'Tab') {
+    if (e.key === ',' || e.key === ';') {
       e.preventDefault();
       commit();
+    } else if (e.key === 'Tab') {
+      // If there is uncommitted text, commit it and stay in the field.
+      // If the field is already empty, let Tab move focus to the next element naturally.
+      if (raw.trim()) {
+        e.preventDefault();
+        commit();
+      }
     } else if (e.key === 'Enter') {
       e.preventDefault();
       commit();
@@ -427,6 +434,7 @@ export function EmailComposer({
             ref={editorRef}
             contentEditable
             suppressContentEditableWarning
+            tabIndex={0}
             onInput={() => setBodyVersion((v) => v + 1)}
             className={cn(
               'min-h-[200px] max-h-[280px] overflow-y-auto px-4 py-3 text-sm outline-none',
