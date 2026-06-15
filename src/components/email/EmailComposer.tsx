@@ -8,11 +8,13 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { useEmailActions } from '@/hooks/useEmailActions';
 import { fmtSize } from './emailShared';
-import { cn } from '@/lib/utils';
 import type { EmailMessage, EmailAddress, EmailDraft } from '@/hooks/useEmail';
 
 interface Attached { filename: string; contentType: string; b64: string; size: number; }
 export type ComposeMode = 'new' | 'reply' | 'replyAll' | 'forward';
+
+const COMPOSER_W = 540;
+const COMPOSER_GAP = 8;
 
 function parseAddrs(s: string): EmailAddress[] {
   return s.split(/[,;]/).map((p) => p.trim()).filter(Boolean).map((p) => {
@@ -20,10 +22,6 @@ function parseAddrs(s: string): EmailAddress[] {
     if (m) return { name: m[1].trim(), address: m[2].trim() };
     return { name: '', address: p };
   });
-}
-
-function fmtAddrs(list: EmailAddress[]) {
-  return (list || []).map((a) => (a.name ? `${a.name} <${a.address}>` : a.address)).join(', ');
 }
 
 function ensurePrefix(subject: string, prefix: 'Re:' | 'Fwd:') {
@@ -48,14 +46,13 @@ function quoteHtml(original: EmailMessage) {
   </div>`;
 }
 
-// Detect if a string is already HTML (has common tags) or plain text.
 function toEditorHtml(s: string | null): string {
   if (!s) return '';
   if (/<(br|p|div|b|i|u|ol|ul|blockquote|strong|em|pre)\b/i.test(s)) return s;
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
 }
 
-// Email chip input: addresses become removable pills; commit on Enter/comma/semicolon/Tab/blur.
+// Email chip input — commit on Enter / comma / semicolon / Tab (when non-empty).
 function EmailChipInput({
   value, onChange, placeholder,
 }: {
@@ -78,12 +75,8 @@ function EmailChipInput({
       e.preventDefault();
       commit();
     } else if (e.key === 'Tab') {
-      // If there is uncommitted text, commit it and stay in the field.
-      // If the field is already empty, let Tab move focus to the next element naturally.
-      if (raw.trim()) {
-        e.preventDefault();
-        commit();
-      }
+      if (raw.trim()) { e.preventDefault(); commit(); }
+      // empty → let Tab move focus naturally
     } else if (e.key === 'Enter') {
       e.preventDefault();
       commit();
@@ -100,16 +93,9 @@ function EmailChipInput({
       onClick={() => inputRef.current?.focus()}
     >
       {value.map((a, i) => (
-        <span
-          key={i}
-          className="flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary"
-        >
+        <span key={i} className="flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
           <span className="max-w-[180px] truncate">{a.name || a.address}</span>
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); remove(i); }}
-            className="text-primary/60 hover:text-primary"
-          >
+          <button type="button" onClick={(e) => { e.stopPropagation(); remove(i); }} className="text-primary/60 hover:text-primary">
             <X className="h-3 w-3" />
           </button>
         </span>
@@ -128,17 +114,21 @@ function EmailChipInput({
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// EmailComposer — one instance per compose window. Positioned via stackIndex
+// (0 = rightmost, 1 = one step left, etc.) so multiple windows stack visually.
+// ─────────────────────────────────────────────────────────────────────────────
 export function EmailComposer({
-  open, onOpenChange, channelId, folderId, mode, original, selfAddress, initialDraft,
+  onClose, channelId, folderId, mode, original, selfAddress, initialDraft, stackIndex,
 }: {
-  open: boolean;
-  onOpenChange: (o: boolean) => void;
+  onClose: () => void;
   channelId: string | null;
   folderId: string | null;
   mode: ComposeMode;
   original: EmailMessage | null;
   selfAddress?: string;
   initialDraft?: EmailDraft | null;
+  stackIndex: number;
 }) {
   const { toast } = useToast();
   const actions = useEmailActions(channelId, folderId);
@@ -159,6 +149,7 @@ export function EmailComposer({
   const [subject, setSubject] = useState('');
   const [attachments, setAttachments] = useState<Attached[]>([]);
 
+  // Compute initial field values once on mount.
   const initial = useMemo(() => {
     if (initialDraft) {
       return {
@@ -175,30 +166,19 @@ export function EmailComposer({
     }
     const from: EmailAddress = { name: original.from_name || '', address: original.from_address || '' };
     if (mode === 'forward') {
-      return {
-        to: [], cc: [], bcc: [],
-        subject: ensurePrefix(original.subject || '', 'Fwd:'),
-        bodyHtml: quoteHtml(original),
-        attachments: [],
-      };
+      return { to: [], cc: [], bcc: [], subject: ensurePrefix(original.subject || '', 'Fwd:'), bodyHtml: quoteHtml(original), attachments: [] };
     }
     const self = (selfAddress || '').toLowerCase();
     const ccAddrs = mode === 'replyAll'
       ? [...(original.to_addresses || []), ...(original.cc_addresses || [])]
           .filter((a) => a.address && a.address.toLowerCase() !== self && a.address.toLowerCase() !== from.address.toLowerCase())
       : [];
-    return {
-      to: [from], cc: ccAddrs, bcc: [],
-      subject: ensurePrefix(original.subject || '', 'Re:'),
-      bodyHtml: quoteHtml(original),
-      attachments: [],
-    };
+    return { to: [from], cc: ccAddrs, bcc: [], subject: ensurePrefix(original.subject || '', 'Re:'), bodyHtml: quoteHtml(original), attachments: [] };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, initialDraft?.id]);
+  }, []);
 
-  // Reset all fields when dialog opens.
+  // Initialise fields on mount.
   useEffect(() => {
-    if (!open) { setMinimized(false); return; }
     setTo(initial.to);
     setCc(initial.cc);
     setBcc(initial.bcc);
@@ -207,29 +187,25 @@ export function EmailComposer({
     setShowCc(initial.cc.length > 0);
     setShowBcc(initial.bcc.length > 0);
     setDraftId(initialDraft?.id ?? null);
-    setBodyVersion(0);
-    // Set editor HTML after mount.
     requestAnimationFrame(() => {
       if (editorRef.current) editorRef.current.innerHTML = initial.bodyHtml;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, initial]);
+  }, []);
 
-  // Auto-save draft (debounced 4 s) when compose is open and has content.
+  // Auto-save draft (debounced 4 s).
+  const draftIdRef = useRef(draftId);
+  useEffect(() => { draftIdRef.current = draftId; }, [draftId]);
   useEffect(() => {
-    if (!open) return;
     const html = editorRef.current?.innerHTML || '';
     const hasContent = to.length > 0 || cc.length > 0 || bcc.length > 0 || subject.trim() || html.replace(/<[^>]+>/g, '').trim();
     if (!hasContent) return;
     const t = setTimeout(async () => {
       try {
         const result = await actions.saveDraft({
-          id: draftId,
-          to,
-          cc: showCc ? cc : [],
-          bcc: showBcc ? bcc : [],
-          subject,
-          bodyHtml: editorRef.current?.innerHTML || '',
+          id: draftIdRef.current,
+          to, cc: showCc ? cc : [], bcc: showBcc ? bcc : [],
+          subject, bodyHtml: editorRef.current?.innerHTML || '',
           inReplyTo: original?.message_id ?? initialDraft?.in_reply_to ?? null,
           replyMessageId: initialDraft?.reply_message_id ?? null,
           attachments: attachments.map((a) => ({ filename: a.filename, contentType: a.contentType, b64: a.b64 })),
@@ -239,24 +215,26 @@ export function EmailComposer({
     }, 4000);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, to, cc, bcc, subject, bodyVersion, attachments.length, showCc, showBcc]);
+  }, [to, cc, bcc, subject, bodyVersion, attachments.length, showCc, showBcc]);
 
-  const format = (cmd: string, value?: string) => {
-    document.execCommand(cmd, false, value);
+  const format = (cmd: string) => {
+    document.execCommand(cmd, false, undefined);
     editorRef.current?.focus();
     setBodyVersion((v) => v + 1);
+  };
+
+  const handleDiscard = async () => {
+    const idToDelete = draftId ?? initialDraft?.id ?? null;
+    if (idToDelete) { try { await actions.deleteDraft(idToDelete); } catch { /* non-critical */ } }
+    onClose();
   };
 
   const handleSaveDraft = async () => {
     setSavingDraft(true);
     try {
       const result = await actions.saveDraft({
-        id: draftId,
-        to,
-        cc: showCc ? cc : [],
-        bcc: showBcc ? bcc : [],
-        subject,
-        bodyHtml: editorRef.current?.innerHTML || '',
+        id: draftId, to, cc: showCc ? cc : [], bcc: showBcc ? bcc : [],
+        subject, bodyHtml: editorRef.current?.innerHTML || '',
         inReplyTo: original?.message_id ?? initialDraft?.in_reply_to ?? null,
         replyMessageId: initialDraft?.reply_message_id ?? null,
         attachments: attachments.map((a) => ({ filename: a.filename, contentType: a.contentType, b64: a.b64 })),
@@ -265,17 +243,7 @@ export function EmailComposer({
       toast({ title: 'Rascunho guardado' });
     } catch (e) {
       toast({ title: 'Falha ao guardar rascunho', description: (e as Error).message, variant: 'destructive' });
-    } finally {
-      setSavingDraft(false);
-    }
-  };
-
-  const handleDiscard = async () => {
-    const idToDelete = draftId ?? initialDraft?.id ?? null;
-    if (idToDelete) {
-      try { await actions.deleteDraft(idToDelete); } catch { /* non-critical */ }
-    }
-    onOpenChange(false);
+    } finally { setSavingDraft(false); }
   };
 
   const handleSend = async () => {
@@ -288,27 +256,19 @@ export function EmailComposer({
         ? [...((original as any).email_references || []), original.message_id].filter(Boolean) as string[]
         : undefined;
       await actions.send({
-        to,
-        cc: showCc ? cc : [],
-        bcc: showBcc ? bcc : [],
-        subject,
-        text,
-        html,
+        to, cc: showCc ? cc : [], bcc: showBcc ? bcc : [],
+        subject, text, html,
         inReplyTo: mode === 'reply' || mode === 'replyAll' ? original?.message_id ?? null : null,
         references: refs,
         attachments: attachments.map((a) => ({ filename: a.filename, contentType: a.contentType, b64: a.b64 })),
       });
       const idToDelete = draftId ?? initialDraft?.id ?? null;
-      if (idToDelete) {
-        try { await actions.deleteDraft(idToDelete); } catch { /* non-critical */ }
-      }
+      if (idToDelete) { try { await actions.deleteDraft(idToDelete); } catch { /* non-critical */ } }
       toast({ title: 'Email enviado' });
-      onOpenChange(false);
+      onClose();
     } catch (e) {
       toast({ title: 'Falha ao enviar', description: (e as Error).message, variant: 'destructive' });
-    } finally {
-      setSending(false);
-    }
+    } finally { setSending(false); }
   };
 
   const onFiles = async (files: FileList | null) => {
@@ -318,15 +278,9 @@ export function EmailComposer({
     const added: Attached[] = [];
     for (const f of Array.from(files)) {
       running += f.size;
-      if (running > MAX) {
-        toast({ title: `${f.name} excede o limite (15 MB no total)`, variant: 'destructive' });
-        continue;
-      }
+      if (running > MAX) { toast({ title: `${f.name} excede o limite (15 MB no total)`, variant: 'destructive' }); continue; }
       const b64 = await new Promise<string>((res, rej) => {
-        const r = new FileReader();
-        r.onload = () => res(String(r.result).split(',')[1] || '');
-        r.onerror = rej;
-        r.readAsDataURL(f);
+        const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1] || ''); r.onerror = rej; r.readAsDataURL(f);
       });
       added.push({ filename: f.name, contentType: f.type || 'application/octet-stream', b64, size: f.size });
     }
@@ -334,114 +288,73 @@ export function EmailComposer({
     if (fileRef.current) fileRef.current.value = '';
   };
 
-  const title = mode === 'reply' ? 'Responder'
+  const baseTitle = mode === 'reply' ? 'Responder'
     : mode === 'replyAll' ? 'Responder a todos'
     : mode === 'forward' ? 'Reencaminhar'
     : 'Nova mensagem';
+  const title = subject.trim() || baseTitle;
 
-  if (!open) return null;
+  const rightPx = 24 + stackIndex * (COMPOSER_W + COMPOSER_GAP);
 
   return (
-    <div
-      className="fixed bottom-0 right-6 z-50 flex flex-col shadow-2xl"
-      style={{ width: 540 }}
-    >
-      {/* ── Header ──────────────────────────────────────────────── */}
+    <div className="fixed bottom-0 z-50 flex flex-col shadow-2xl" style={{ width: COMPOSER_W, right: rightPx }}>
+      {/* Header */}
       <div
-        className="flex select-none items-center gap-2 rounded-t-xl bg-[#1f2937] px-4 py-2.5 text-white"
+        className="flex select-none items-center gap-2 rounded-t-xl bg-[#1f2937] px-4 py-2.5 text-white cursor-pointer"
         onDoubleClick={() => setMinimized((m) => !m)}
       >
         <span className="min-w-0 flex-1 truncate text-sm font-semibold">{title}</span>
-        <button
-          type="button"
-          title="Minimizar"
-          onClick={() => setMinimized((m) => !m)}
-          className="rounded p-0.5 opacity-60 hover:opacity-100 transition-opacity"
-        >
+        <button type="button" title="Minimizar" onClick={() => setMinimized((m) => !m)} className="rounded p-0.5 opacity-60 hover:opacity-100 transition-opacity">
           <Minus className="h-4 w-4" />
         </button>
-        <button
-          type="button"
-          title="Fechar"
-          onClick={() => onOpenChange(false)}
-          className="rounded p-0.5 opacity-60 hover:opacity-100 transition-opacity"
-        >
+        <button type="button" title="Fechar" onClick={onClose} className="rounded p-0.5 opacity-60 hover:opacity-100 transition-opacity">
           <X className="h-4 w-4" />
         </button>
       </div>
 
-      {/* ── Body (hidden when minimized) ────────────────────────── */}
       {!minimized && (
-        <div className="flex flex-col border border-t-0 border-border bg-background dark:bg-background">
+        <div className="flex flex-col border border-t-0 border-border bg-background">
           {/* Para */}
           <div className="flex min-h-[44px] items-center border-b border-border px-4 py-1.5">
             <span className="w-12 shrink-0 text-xs text-muted-foreground">Para</span>
             <EmailChipInput value={to} onChange={setTo} placeholder="nome@exemplo.com" />
             <div className="ml-2 flex shrink-0 gap-2 text-xs text-muted-foreground">
-              {!showCc && (
-                <button type="button" className="hover:text-foreground transition-colors" onClick={() => setShowCc(true)}>Cc</button>
-              )}
-              {!showBcc && (
-                <button type="button" className="hover:text-foreground transition-colors" onClick={() => setShowBcc(true)}>Cco</button>
-              )}
+              {!showCc && <button type="button" className="hover:text-foreground transition-colors" onClick={() => setShowCc(true)}>Cc</button>}
+              {!showBcc && <button type="button" className="hover:text-foreground transition-colors" onClick={() => setShowBcc(true)}>Cco</button>}
             </div>
           </div>
 
-          {/* Cc */}
           {showCc && (
             <div className="flex min-h-[44px] items-center border-b border-border px-4 py-1.5">
               <span className="w-12 shrink-0 text-xs text-muted-foreground">Cc</span>
               <EmailChipInput value={cc} onChange={setCc} placeholder="cc@exemplo.com" />
-              <button
-                type="button"
-                className="ml-2 shrink-0 text-muted-foreground hover:text-foreground"
-                onClick={() => { setShowCc(false); setCc([]); }}
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
+              <button type="button" className="ml-2 shrink-0 text-muted-foreground hover:text-foreground" onClick={() => { setShowCc(false); setCc([]); }}><X className="h-3.5 w-3.5" /></button>
             </div>
           )}
 
-          {/* Cco */}
           {showBcc && (
             <div className="flex min-h-[44px] items-center border-b border-border px-4 py-1.5">
               <span className="w-12 shrink-0 text-xs text-muted-foreground">Cco</span>
               <EmailChipInput value={bcc} onChange={setBcc} placeholder="cco@exemplo.com" />
-              <button
-                type="button"
-                className="ml-2 shrink-0 text-muted-foreground hover:text-foreground"
-                onClick={() => { setShowBcc(false); setBcc([]); }}
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
+              <button type="button" className="ml-2 shrink-0 text-muted-foreground hover:text-foreground" onClick={() => { setShowBcc(false); setBcc([]); }}><X className="h-3.5 w-3.5" /></button>
             </div>
           )}
 
           {/* Assunto */}
           <div className="flex items-center border-b border-border px-4 py-1.5">
             <span className="w-12 shrink-0 text-xs text-muted-foreground">Assunto</span>
-            <Input
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-              placeholder="Assunto"
-              autoComplete="off"
-              className="border-0 p-0 shadow-none focus-visible:ring-0 text-sm bg-transparent"
-            />
+            <Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Assunto" autoComplete="off"
+              className="border-0 p-0 shadow-none focus-visible:ring-0 text-sm bg-transparent" />
           </div>
 
-          {/* Rich-text editor */}
+          {/* Rich-text body */}
           <div
             ref={editorRef}
             contentEditable
             suppressContentEditableWarning
             tabIndex={0}
             onInput={() => setBodyVersion((v) => v + 1)}
-            className={cn(
-              'min-h-[200px] max-h-[280px] overflow-y-auto px-4 py-3 text-sm outline-none',
-              '[&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5',
-              '[&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground',
-              'empty:before:content-["Escreve_a_tua_mensagem..."] empty:before:text-muted-foreground',
-            )}
+            className="min-h-[200px] max-h-[280px] overflow-y-auto px-4 py-3 text-sm outline-none [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"
             style={{ fontFamily: "-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',sans-serif", lineHeight: '1.6' }}
           />
 
@@ -453,109 +366,42 @@ export function EmailComposer({
                   <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                   <span className="max-w-[120px] truncate">{a.filename}</span>
                   <span className="text-muted-foreground">{fmtSize(a.size)}</span>
-                  <button
-                    type="button"
-                    onClick={() => setAttachments((p) => p.filter((_, j) => j !== i))}
-                    className="text-muted-foreground hover:text-foreground"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
+                  <button type="button" onClick={() => setAttachments((p) => p.filter((_, j) => j !== i))} className="text-muted-foreground hover:text-foreground"><X className="h-3 w-3" /></button>
                 </span>
               ))}
             </div>
           )}
 
-          {/* ── Bottom toolbar ────────────────────────────────────── */}
+          {/* Bottom toolbar */}
           <div className="flex items-center gap-1 border-t border-border px-3 py-2">
-            {/* Send */}
-            <Button
-              size="sm"
-              onClick={handleSend}
-              disabled={sending || savingDraft}
-              className="rounded-full px-4 text-xs"
-            >
-              {sending
-                ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                : <Send className="mr-1.5 h-3.5 w-3.5" />}
+            <Button size="sm" onClick={handleSend} disabled={sending || savingDraft} className="rounded-full px-4 text-xs">
+              {sending ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Send className="mr-1.5 h-3.5 w-3.5" />}
               Enviar
             </Button>
-
             <div className="mx-1 h-4 w-px bg-border" />
-
-            {/* Format buttons */}
-            <button
-              type="button"
-              title="Negrito (Ctrl+B)"
-              onClick={() => format('bold')}
-              className="rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-            >
-              <Bold className="h-3.5 w-3.5" />
-            </button>
-            <button
-              type="button"
-              title="Itálico (Ctrl+I)"
-              onClick={() => format('italic')}
-              className="rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-            >
-              <Italic className="h-3.5 w-3.5" />
-            </button>
-            <button
-              type="button"
-              title="Sublinhado (Ctrl+U)"
-              onClick={() => format('underline')}
-              className="rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-            >
-              <Underline className="h-3.5 w-3.5" />
-            </button>
-            <button
-              type="button"
-              title="Lista com marcadores"
-              onClick={() => format('insertUnorderedList')}
-              className="rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-            >
-              <List className="h-3.5 w-3.5" />
-            </button>
-            <button
-              type="button"
-              title="Lista numerada"
-              onClick={() => format('insertOrderedList')}
-              className="rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-            >
-              <ListOrdered className="h-3.5 w-3.5" />
-            </button>
-
+            {[
+              { icon: Bold, cmd: 'bold', title: 'Negrito' },
+              { icon: Italic, cmd: 'italic', title: 'Itálico' },
+              { icon: Underline, cmd: 'underline', title: 'Sublinhado' },
+              { icon: List, cmd: 'insertUnorderedList', title: 'Lista' },
+              { icon: ListOrdered, cmd: 'insertOrderedList', title: 'Lista numerada' },
+            ].map(({ icon: Icon, cmd, title }) => (
+              <button key={cmd} type="button" title={title} onClick={() => format(cmd)}
+                className="rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors">
+                <Icon className="h-3.5 w-3.5" />
+              </button>
+            ))}
             <div className="mx-1 h-4 w-px bg-border" />
-
-            {/* Attach */}
-            <button
-              type="button"
-              title="Anexar ficheiro"
-              onClick={() => fileRef.current?.click()}
-              className="rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-            >
+            <button type="button" title="Anexar" onClick={() => fileRef.current?.click()}
+              className="rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors">
               <Paperclip className="h-3.5 w-3.5" />
             </button>
-
-            {/* Save draft manually */}
-            <button
-              type="button"
-              title="Guardar rascunho"
-              onClick={handleSaveDraft}
-              disabled={savingDraft}
-              className="rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors disabled:opacity-40"
-            >
-              {savingDraft
-                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                : <BookmarkCheck className="h-3.5 w-3.5" />}
+            <button type="button" title="Guardar rascunho" onClick={handleSaveDraft} disabled={savingDraft}
+              className="rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors disabled:opacity-40">
+              {savingDraft ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <BookmarkCheck className="h-3.5 w-3.5" />}
             </button>
-
-            {/* Discard (far right) */}
-            <button
-              type="button"
-              title="Descartar"
-              onClick={handleDiscard}
-              className="ml-auto rounded p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
-            >
+            <button type="button" title="Descartar" onClick={handleDiscard}
+              className="ml-auto rounded p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors">
               <Trash2 className="h-3.5 w-3.5" />
             </button>
           </div>
@@ -566,3 +412,6 @@ export function EmailComposer({
     </div>
   );
 }
+
+// Export the width constant so the parent can compute total stack width if needed.
+export { COMPOSER_W, COMPOSER_GAP };

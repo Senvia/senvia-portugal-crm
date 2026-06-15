@@ -146,20 +146,17 @@ export function EmailListReader({ channelId, folderId }: { channelId: string | n
   const selfAddress = caixas.find((c) => c.id === channelId)?.metadata?.email_address;
   const actions = useEmailActions(channelId, folderId);
 
-  const [compose, setCompose] = useState<{ open: boolean; mode: ComposeMode }>({ open: false, mode: 'new' });
-  const [composeDraft, setComposeDraft] = useState<EmailDraft | null>(null);
-
-  // When opening a draft, reset composed draft and open composer.
-  const openDraft = (draft: EmailDraft) => {
-    setComposeDraft(draft);
-    setCompose({ open: true, mode: 'new' });
+  interface ComposeInstance {
+    id: string;
+    mode: ComposeMode;
+    original: EmailMessage | null;
+    initialDraft: EmailDraft | null;
+  }
+  const [composes, setComposes] = useState<ComposeInstance[]>([]);
+  const addCompose = (mode: ComposeMode, original: EmailMessage | null = null, initialDraft: EmailDraft | null = null) => {
+    setComposes((prev) => [...prev, { id: `${Date.now()}-${Math.random()}`, mode, original, initialDraft }]);
   };
-
-  // Clear composeDraft when composer closes (so next "Novo email" is blank).
-  const handleComposerClose = (o: boolean) => {
-    setCompose((c) => ({ ...c, open: o }));
-    if (!o) setComposeDraft(null);
-  };
+  const closeCompose = (id: string) => setComposes((prev) => prev.filter((c) => c.id !== id));
 
   // Auto-mark-read when opening an unread message (standard email behaviour).
   useEffect(() => {
@@ -204,7 +201,7 @@ export function EmailListReader({ channelId, folderId }: { channelId: string | n
         />
         <header className="space-y-2 border-b px-4 pt-5 pb-3">
           <div className="flex items-center justify-between">
-            <Button size="sm" onClick={() => { setComposeDraft(null); setCompose({ open: true, mode: 'new' }); }}>
+            <Button size="sm" onClick={() => addCompose('new')}>
               <PenSquare className="mr-1.5 h-4 w-4" /> Novo email
             </Button>
             <span className="text-xs text-muted-foreground">
@@ -245,7 +242,7 @@ export function EmailListReader({ channelId, folderId }: { channelId: string | n
               </div>
             ) : (
               drafts.map((d) => (
-                <DraftRow key={d.id} draft={d} active={composeDraft?.id === d.id && compose.open} onClick={() => openDraft(d)} />
+                <DraftRow key={d.id} draft={d} active={composes.some((c) => c.initialDraft?.id === d.id)} onClick={() => addCompose('new', null, d)} />
               ))
             )
           ) : messages.length === 0 ? (
@@ -301,9 +298,9 @@ export function EmailListReader({ channelId, folderId }: { channelId: string | n
         ) : (
           <>
             <div className="flex flex-wrap items-center gap-0.5 border-b bg-background px-3 pt-5 pb-2">
-              <Button size="sm" variant="ghost" onClick={() => setCompose({ open: true, mode: 'reply' })}><Reply className="mr-1.5 h-4 w-4" /> Responder</Button>
-              <Button size="icon" variant="ghost" title="Responder a todos" onClick={() => setCompose({ open: true, mode: 'replyAll' })}><ReplyAll className="h-4 w-4" /></Button>
-              <Button size="icon" variant="ghost" title="Reencaminhar" onClick={() => setCompose({ open: true, mode: 'forward' })}><Forward className="h-4 w-4" /></Button>
+              <Button size="sm" variant="ghost" onClick={() => addCompose('reply', opened.message)}><Reply className="mr-1.5 h-4 w-4" /> Responder</Button>
+              <Button size="icon" variant="ghost" title="Responder a todos" onClick={() => addCompose('replyAll', opened.message)}><ReplyAll className="h-4 w-4" /></Button>
+              <Button size="icon" variant="ghost" title="Reencaminhar" onClick={() => addCompose('forward', opened.message)}><Forward className="h-4 w-4" /></Button>
               <div className="mx-1 h-5 w-px bg-border" />
               <Button size="icon" variant="ghost" title="Marcar como não lida" onClick={() => act(() => actions.setRead(opened.message.id, false))}><MailOpen className="h-4 w-4" /></Button>
               <Button size="icon" variant="ghost" title={opened.message.flagged ? 'Remover estrela' : 'Marcar com estrela'} onClick={() => actions.setFlag(opened.message.id, !opened.message.flagged)}><Star className={cn('h-4 w-4', opened.message.flagged && 'fill-amber-400 text-amber-400')} /></Button>
@@ -364,16 +361,19 @@ export function EmailListReader({ channelId, folderId }: { channelId: string | n
         )}
       </section>
 
-      <EmailComposer
-        open={compose.open}
-        onOpenChange={handleComposerClose}
-        channelId={channelId}
-        folderId={folderId}
-        mode={compose.mode}
-        original={opened?.message ?? null}
-        selfAddress={selfAddress}
-        initialDraft={composeDraft}
-      />
+      {composes.map((c, i) => (
+        <EmailComposer
+          key={c.id}
+          onClose={() => closeCompose(c.id)}
+          channelId={channelId}
+          folderId={folderId}
+          mode={c.mode}
+          original={c.original}
+          selfAddress={selfAddress}
+          initialDraft={c.initialDraft}
+          stackIndex={i}
+        />
+      ))}
     </>
   );
 }
