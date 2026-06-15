@@ -4,6 +4,7 @@
 import 'dotenv/config';
 import Fastify from 'fastify';
 import { startAll, stopAll, managerStatus, getManager } from './idle.js';
+import { startCommandLoop } from './commands.js';
 import { getEmailCaixa } from './caixas.js';
 import { fetchMessageBody } from './sync.js';
 import { q } from './db.js';
@@ -57,6 +58,7 @@ app.post('/messages/:id/body', { preHandler: authed }, async (req, reply) => {
 async function main() {
   const n = await startAll();
   log(`${n} caixa(s) de email a arrancar`);
+  startCommandLoop();
   await app.listen({ port: PORT, host: '0.0.0.0' });
   log(`Email gateway HTTP em :${PORT}`);
 }
