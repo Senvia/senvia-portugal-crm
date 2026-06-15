@@ -70,6 +70,25 @@ function prettyContent(content: string | null): string | null {
   return content;
 }
 
+// Evolution API injects connection-status messages into Chatwoot conversations.
+// Strip the leading emoji/punctuation before matching so "🚀 Connection..." works.
+const EVO_STATUS_PREFIXES = [
+  'connection successfully established',
+  'connection timeout',
+  'disconnected from whatsapp',
+  'qrcode successfully generated',
+  'qr code successfully generated',
+  'qrcode generation limit',
+  'waitingqrcode',
+  'qrread',
+];
+function isEvoStatusContent(content: string | null): boolean {
+  if (!content) return false;
+  const body = content.replace(/^[^\p{L}]+/u, '').trim().toLowerCase();
+  if (body === 'init') return true;
+  return EVO_STATUS_PREFIXES.some((p) => body.startsWith(p));
+}
+
 function normalizeConversation(c: any, base: string): NormalizedConversation {
   const sender = c?.meta?.sender || {};
   const messages = Array.isArray(c?.messages) ? c.messages : [];
@@ -77,7 +96,7 @@ function normalizeConversation(c: any, base: string): NormalizedConversation {
   // messages, message_type 2). But the list window often contains ONLY the last
   // message — if that is an activity, filtering would leave nothing, so fall
   // back to the actual last message and let the client translate it to pt-PT.
-  const realMessages = messages.filter((m: any) => m?.message_type !== 2);
+  const realMessages = messages.filter((m: any) => m?.message_type !== 2 && !isEvoStatusContent(m?.content ?? null));
   const last = realMessages[realMessages.length - 1] ?? messages[messages.length - 1];
   // Media messages have no text — show the type label ("🎵 Áudio") in the
   // list preview instead of an empty dash, WhatsApp-style.
@@ -464,7 +483,7 @@ Deno.serve(async (req) => {
           );
           if (!res.ok) return json({ error: 'Falha ao carregar mensagens' }, 502);
           const data = await res.json();
-          return json({ messages: (data?.payload ?? []).map((m: any) => normalizeMessage(m, cfg.chatwootUrl)) });
+          return json({ messages: (data?.payload ?? []).filter((m: any) => !isEvoStatusContent(m?.content ?? null)).map((m: any) => normalizeMessage(m, cfg.chatwootUrl)) });
         } catch (_e) {
           return json({ messages: [] });
         }
@@ -478,7 +497,7 @@ Deno.serve(async (req) => {
             const res = await chatwootFetch(cfg, cw.token, `${base}/conversations/${id}/messages`);
             if (!res.ok) return [];
             const data = await res.json();
-            return (data?.payload ?? []).map((m: any) => normalizeMessage(m, cfg.chatwootUrl));
+            return (data?.payload ?? []).filter((m: any) => !isEvoStatusContent(m?.content ?? null)).map((m: any) => normalizeMessage(m, cfg.chatwootUrl));
           } catch (_e) {
             return [];
           }
