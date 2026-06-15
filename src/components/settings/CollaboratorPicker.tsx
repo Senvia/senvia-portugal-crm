@@ -65,11 +65,13 @@ export function CollaboratorPicker({
           filtered.map((m) => {
             const checked = value.includes(m.user_id);
             return (
-              <label
+              <div
                 key={m.user_id}
+                role="option"
+                aria-selected={checked}
                 onClick={() => toggle(m.user_id)}
                 className={cn(
-                  'flex items-center gap-2.5 px-3 py-2 cursor-pointer transition-colors',
+                  'flex items-center gap-2.5 px-3 py-2 cursor-pointer transition-colors select-none',
                   checked ? 'bg-primary/10' : 'hover:bg-accent/50',
                 )}
               >
@@ -86,7 +88,7 @@ export function CollaboratorPicker({
                   <Checkbox checked={checked} className="pointer-events-none shrink-0" />
                 )}
                 <span className="text-sm truncate">{m.full_name}</span>
-              </label>
+              </div>
             );
           })
         )}
