@@ -47,8 +47,8 @@ const PROVIDERS: Record<ProviderKey, ProviderPreset> = {
   },
   zoho: {
     label: 'Zoho Mail',
-    imap_server: 'imap.zoho.eu', imap_port: 993, imap_ssl: true,
-    smtp_server: 'smtp.zoho.eu', smtp_port: 587, smtp_ssl: false,
+    imap_server: 'imappro.zoho.eu', imap_port: 993, imap_ssl: true,
+    smtp_server: 'smtppro.zoho.eu', smtp_port: 465, smtp_ssl: true,
   },
   custom: {
     label: 'Servidor personalizado',
