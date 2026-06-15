@@ -442,10 +442,10 @@ function EmailFullScreenEditor({
 export function AddEmailModal({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[95vw] max-w-2xl h-[90vh] max-h-[90vh] p-0 gap-0 flex flex-col overflow-hidden">
+      <DialogContent className="fixed inset-0 z-50 max-w-none w-full h-full rounded-none border-0 p-0 gap-0 flex flex-col translate-x-0 translate-y-0 left-0 top-0">
         <DialogTitle className="sr-only">Adicionar Caixa de Email</DialogTitle>
         <DialogDescription className="sr-only">Configurar IMAP/SMTP para receber e enviar emails no CRM</DialogDescription>
-        <div className="flex-1 min-h-0 px-6 py-5 flex flex-col">
+        <div className="flex-1 min-h-0 flex flex-col max-w-3xl w-full mx-auto px-6 py-6">
           <EmailFullScreenEditor channel={null} onDone={() => onOpenChange(false)} />
         </div>
       </DialogContent>
@@ -465,7 +465,7 @@ export function EditEmailModal({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[95vw] max-w-2xl h-[90vh] max-h-[90vh] p-0 gap-0 flex flex-col overflow-hidden">
+      <DialogContent className="fixed inset-0 z-50 max-w-none w-full h-full rounded-none border-0 p-0 gap-0 flex flex-col translate-x-0 translate-y-0 left-0 top-0">
         <DialogTitle className="sr-only">{channel.label ?? 'Caixa de Email'}</DialogTitle>
         <DialogDescription className="sr-only">{channel.metadata?.email_address ?? ''}</DialogDescription>
         <div className="flex-1 min-h-0 px-6 py-5 flex flex-col">
@@ -498,7 +498,13 @@ export function EmailManager() {
   }
 
   if (view === 'editor') {
-    return <EmailFullScreenEditor channel={editingChannel} onDone={goBack} />;
+    return (
+      <div className="fixed inset-0 z-50 bg-background flex flex-col overflow-hidden">
+        <div className="flex-1 min-h-0 flex flex-col max-w-3xl w-full mx-auto px-6 py-6">
+          <EmailFullScreenEditor channel={editingChannel} onDone={goBack} />
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -549,9 +555,9 @@ export function EmailManager() {
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
-                      <AlertDialogTitle>Eliminar {ch.label}?</AlertDialogTitle>
+                      <AlertDialogTitle>Eliminar "{ch.label}"?</AlertDialogTitle>
                       <AlertDialogDescription>
-                        A caixa sera removida do Chatwoot e do CRM. Os emails ja recebidos ficam no historico do Chatwoot.
+                        A caixa será removida do Chatwoot e do CRM. Os emails já recebidos ficam no histórico do Chatwoot.
                         Esta ação não pode ser anulada.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
