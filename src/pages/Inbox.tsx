@@ -155,13 +155,16 @@ function dayKey(ms: number): string {
 }
 
 // SLA severity by how long the customer has been waiting for a reply.
-// ok < 15 min, warn 15–60 min, late ≥ 60 min. Drives the traffic-light colours.
+// Chat: ok < 15 min, warn 15–60 min, late ≥ 60 min.
+// Email: ok < 4 h, warn 4–24 h, late ≥ 24 h.
 type SlaLevel = "ok" | "warn" | "late";
-function slaLevel(since: number | null): SlaLevel | null {
+function slaLevel(since: number | null, isEmail = false): SlaLevel | null {
   if (!since) return null;
   const mins = (Date.now() - since * 1000) / 60000;
-  if (mins >= INBOX_CONFIG.SLA_LATE_MIN) return "late";
-  if (mins >= INBOX_CONFIG.SLA_WARN_MIN) return "warn";
+  const warnMin = isEmail ? 240 : INBOX_CONFIG.SLA_WARN_MIN;
+  const lateMin = isEmail ? 1440 : INBOX_CONFIG.SLA_LATE_MIN;
+  if (mins >= lateMin) return "late";
+  if (mins >= warnMin) return "warn";
   return "ok";
 }
 const SLA_DOT: Record<SlaLevel, string> = {
@@ -562,6 +565,7 @@ export default function Inbox() {
   const { data: conversations = [], isLoading: loadingConvos } = useInboxConversations(channelConfigured, live);
   const selected = conversations.find((c) => c.id === selectedId) || null;
   const altIds = selected?.alt_ids ?? [];
+  const isEmailSelected = !!(selected?.channel?.toLowerCase().includes('email'));
   const { data: messages = [], isLoading: loadingMessages } = useInboxMessages(selectedId, altIds, live);
   // Debounced server-side search (one request after typing pauses, not per key).
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -1972,12 +1976,12 @@ export default function Inbox() {
                   <p className="truncate text-sm font-medium">{selected.contact_name}</p>
                   {isPinned && <Pin className="h-3 w-3 shrink-0 text-muted-foreground" />}
                   {(() => {
-                    const sla = selected.status !== "resolved" ? slaLevel(selected.waiting_since) : null;
+                    const sla = selected.status !== "resolved" ? slaLevel(selected.waiting_since, isEmailSelected) : null;
                     if (!sla) return null;
                     return (
                       <span
                         className={cn("flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium", SLA_BADGE[sla])}
-                        title={sla === "late" ? "Resposta atrasada (>1h)" : sla === "warn" ? "À espera (>15m)" : "À espera"}
+                        title={sla === "late" ? (isEmailSelected ? "Resposta atrasada (>24h)" : "Resposta atrasada (>1h)") : sla === "warn" ? (isEmailSelected ? "À espera (>4h)" : "À espera (>15m)") : "À espera"}
                       >
                         <span className={cn("h-1.5 w-1.5 rounded-full", SLA_DOT[sla])} />
                         à espera {waitingLabel(selected.waiting_since)}
@@ -1986,9 +1990,11 @@ export default function Inbox() {
                   })()}
                 </div>
                 <div className="flex items-center gap-2">
-                  {selected.contact_phone && (
+                  {isEmailSelected && selected.email_subject ? (
+                    <p className="truncate text-xs font-medium text-foreground/80">{selected.email_subject}</p>
+                  ) : selected.contact_phone ? (
                     <p className="truncate text-xs text-muted-foreground">{displayPhone(selected.contact_phone)}</p>
-                  )}
+                  ) : null}
                   {selected.assigned_name && (
                     <span className="rounded-full bg-muted px-1.5 text-[10px] text-muted-foreground">
                       {selected.assigned_name}
@@ -2115,6 +2121,7 @@ export default function Inbox() {
                         m={row.msg}
                         firstOfGroup={row.firstOfGroup}
                         lastOfGroup={row.lastOfGroup}
+                        emailMode={isEmailSelected}
                         onPreview={setPreviewUrl}
                         onReply={handleReplyTo}
                         onTask={selectedPhone ? handleTaskFromMessage : undefined}
@@ -2231,7 +2238,14 @@ export default function Inbox() {
                 </Button>
               </div>
             ) : (
-              <form onSubmit={handleSend} onPaste={handlePaste} className="flex items-center gap-1.5 border-t p-3">
+              <div className="border-t">
+                {isEmailSelected && selected.email_subject && (
+                  <div className="flex items-center gap-1.5 border-b bg-muted/30 px-4 py-1.5 text-xs text-muted-foreground">
+                    <svg viewBox="0 0 24 24" className="h-3 w-3 shrink-0 fill-current opacity-60"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z"/></svg>
+                    <span className="truncate">Re: {selected.email_subject}</span>
+                  </div>
+                )}
+              <form onSubmit={handleSend} onPaste={handlePaste} className="flex items-center gap-1.5 p-3">
                 <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handlePickFile} />
 
                 {/* "+" menu — groups attach / emoji / schedule / signature to keep the bar uncluttered */}
@@ -2416,8 +2430,8 @@ export default function Inbox() {
                   value={draft}
                   onChange={(e) => {
                     setDraft(e.target.value);
-                    // Show "typing..." on the contact's WhatsApp (throttled).
-                    if (selected?.contact_phone && Date.now() - lastTypingRef.current > 4000) {
+                    // Show "typing..." on the contact's WhatsApp (throttled, not for email).
+                    if (!isEmailSelected && selected?.contact_phone && Date.now() - lastTypingRef.current > 4000) {
                       lastTypingRef.current = Date.now();
                       sendTyping(selected.contact_phone);
                     }
@@ -2426,7 +2440,13 @@ export default function Inbox() {
                     if (typingResetRef.current) window.clearTimeout(typingResetRef.current);
                     typingResetRef.current = window.setTimeout(() => setSelfTyping(false), 3000);
                   }}
-                  placeholder={outAttachments.length > 0 ? "Legenda (opcional)..." : "Escreve uma mensagem..."}
+                  placeholder={
+                    outAttachments.length > 0
+                      ? "Legenda (opcional)..."
+                      : isEmailSelected
+                        ? "Escreve a tua resposta ao email..."
+                        : "Escreve uma mensagem..."
+                  }
                   autoComplete="off"
                 />
 
@@ -2434,12 +2454,13 @@ export default function Inbox() {
                   <Button type="submit" size="icon" disabled={sendMessage.isPending}>
                     {sendMessage.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                   </Button>
-                ) : (
+                ) : !isEmailSelected ? (
                   <Button type="button" size="icon" variant="ghost" title="Gravar mensagem de voz" onClick={startRecording}>
                     <Mic className="h-4 w-4" />
                   </Button>
-                )}
+                ) : null}
               </form>
+              </div>
             )}
           </>
         )}
@@ -2871,12 +2892,59 @@ export default function Inbox() {
   );
 }
 
+// Email message card: shown instead of a chat bubble for email channel messages.
+// Displays From / To / CC / Subject header + full body (HTML rendered in sandboxed iframe).
+function EmailMessageCard({ m, onPreview }: { m: InboxMessage; onPreview: (url: string) => void }) {
+  const fromLabel = m.email_from || m.sender_name || (m.outgoing ? 'Você' : 'Contacto');
+  return (
+    <div className={cn("my-2 w-full max-w-[92%] rounded-xl border bg-card shadow-sm text-sm", m.outgoing ? "ml-auto" : "mr-auto")}>
+      <div className="border-b px-4 py-2.5 space-y-1">
+        {m.email_subject && <p className="font-semibold text-foreground leading-snug">{m.email_subject}</p>}
+        <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
+          <span><span className="font-medium text-foreground/70">De:</span> {fromLabel}</span>
+          {m.email_to && <span><span className="font-medium text-foreground/70">Para:</span> {m.email_to}</span>}
+          {m.email_cc && <span><span className="font-medium text-foreground/70">CC:</span> {m.email_cc}</span>}
+        </div>
+        <p className="text-[10px] text-muted-foreground">{formatTime(m.created_at)}</p>
+      </div>
+      <div className="p-4">
+        {m.attachments?.length > 0 && (
+          <div className="mb-3 space-y-1.5">
+            {m.attachments.map((a, i) => (
+              <AttachmentView key={a.id ?? i} attachment={a} outgoing={m.outgoing} messageId={m.id} onPreview={onPreview} />
+            ))}
+          </div>
+        )}
+        {m.content_type === 'html' ? (
+          <iframe
+            srcDoc={m.content ?? ''}
+            sandbox="allow-same-origin"
+            className="w-full border-0 min-h-[100px]"
+            style={{ height: '200px' }}
+            title="Email"
+            onLoad={(e) => {
+              const iframe = e.currentTarget;
+              try {
+                const h = iframe.contentDocument?.documentElement?.scrollHeight ?? 0;
+                if (h > 0) iframe.style.height = `${Math.min(h + 16, 700)}px`;
+              } catch { /* cross-origin blocked */ }
+            }}
+          />
+        ) : m.content ? (
+          <p className="whitespace-pre-wrap break-words leading-relaxed">{m.content}</p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 const MessageBubble = memo(function MessageBubble({
   m,
   onPreview,
   onReply,
   onDelete,
   onTask,
+  emailMode = false,
   firstOfGroup = true,
   lastOfGroup = true,
 }: {
@@ -2885,6 +2953,7 @@ const MessageBubble = memo(function MessageBubble({
   onReply: (m: InboxMessage) => void;
   onDelete?: (m: InboxMessage) => void;
   onTask?: (m: InboxMessage) => void;
+  emailMode?: boolean;
   firstOfGroup?: boolean;
   lastOfGroup?: boolean;
 }) {
@@ -2898,6 +2967,15 @@ const MessageBubble = memo(function MessageBubble({
       <ClipboardList className="h-3.5 w-3.5" />
     </button>
   ) : null;
+
+  if (emailMode) {
+    return (
+      <div className={cn("group", firstOfGroup ? "mt-3" : "mt-1")}>
+        {taskButton && <div className="mb-1 flex justify-end">{taskButton}</div>}
+        <EmailMessageCard m={m} onPreview={onPreview} />
+      </div>
+    );
+  }
 
   return (
     <div
@@ -3022,7 +3100,8 @@ const ConversationRow = memo(function ConversationRow({
 }) {
   const open = conversation.status !== "resolved";
   const waiting = open ? waitingLabel(conversation.waiting_since) : null;
-  const sla = open ? slaLevel(conversation.waiting_since) : null;
+  const isEmailCh = !!(conversation.channel?.toLowerCase().includes('email'));
+  const sla = open ? slaLevel(conversation.waiting_since, isEmailCh) : null;
   return (
     <button
       onClick={() => onSelect(conversation.id)}
@@ -3069,6 +3148,9 @@ const ConversationRow = memo(function ConversationRow({
             <span className="text-[10px] text-muted-foreground">{formatListDate(conversation.updated_at)}</span>
           </div>
         </div>
+        {isEmailCh && conversation.email_subject && (
+          <p className="truncate text-xs font-medium text-foreground/80">{conversation.email_subject}</p>
+        )}
         <div className="flex items-center justify-between gap-2">
           <p className="truncate text-xs text-muted-foreground">
             {conversation.last_message ? translateActivity(conversation.last_message) : "—"}

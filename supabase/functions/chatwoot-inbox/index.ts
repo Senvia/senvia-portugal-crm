@@ -31,6 +31,8 @@ interface NormalizedConversation {
   contact_identifier: string | null;
   contact_thumbnail: string | null;
   last_message: string | null;
+  // Email: subject from additional_attributes.mail_subject
+  email_subject: string | null;
   unread_count: number;
   status: string;
   channel: string | null;
@@ -116,6 +118,7 @@ function normalizeConversation(c: any, base: string): NormalizedConversation {
     contact_identifier: sender?.identifier ?? null,
     contact_thumbnail: absoluteUrl(sender?.thumbnail, base),
     last_message: lastMessage,
+    email_subject: c?.additional_attributes?.mail_subject ?? null,
     unread_count: c?.unread_count ?? 0,
     status: c?.status ?? 'open',
     channel: c?.meta?.channel ?? null,
@@ -212,6 +215,16 @@ function normalizeMessage(m: any, base: string) {
     // WhatsApp message id (WAID: prefix stripped) — used to quote/reply/delete.
     wa_id: m?.source_id ? String(m.source_id).replace(/^WAID:/i, '') : null,
     attachments,
+    // Email-specific fields (populated for email channel messages only)
+    content_type: m?.content_type ?? null,
+    email_from: m?.content_attributes?.email?.from?.[0] ?? null,
+    email_to: Array.isArray(m?.content_attributes?.email?.to)
+      ? (m.content_attributes.email.to as string[]).join(', ')
+      : (m?.content_attributes?.email?.to ?? null),
+    email_cc: Array.isArray(m?.content_attributes?.email?.cc)
+      ? (m.content_attributes.email.cc as string[]).join(', ')
+      : null,
+    email_subject: m?.content_attributes?.email?.subject ?? null,
   };
 }
 

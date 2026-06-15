@@ -15,6 +15,8 @@ export interface InboxConversation {
   contact_identifier: string | null;
   contact_thumbnail: string | null;
   last_message: string | null;
+  // Email: subject line from Chatwoot additional_attributes.mail_subject
+  email_subject: string | null;
   unread_count: number;
   status: string;
   channel: string | null;
@@ -56,6 +58,12 @@ export interface InboxMessage {
   // WhatsApp message id — used to quote/reply.
   wa_id: string | null;
   attachments: InboxAttachment[];
+  // Email-specific fields (null for non-email channels)
+  content_type: string | null;
+  email_from: string | null;
+  email_to: string | null;
+  email_cc: string | null;
+  email_subject: string | null;
 }
 
 // Attachment payload for sending (base64, no data: prefix).
