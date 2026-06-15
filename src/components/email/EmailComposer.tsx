@@ -114,7 +114,7 @@ function EmailChipInput({
         onKeyDown={handleKeyDown}
         onBlur={commit}
         placeholder={value.length === 0 ? placeholder : ''}
-        autoComplete="off"
+        autoComplete="new-password"
         className="flex-1 min-w-[120px] bg-transparent outline-none text-sm placeholder:text-muted-foreground"
       />
     </div>

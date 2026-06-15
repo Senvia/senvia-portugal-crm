@@ -222,7 +222,7 @@ export function EmailListReader({ channelId, folderId }: { channelId: string | n
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Procurar emails..."
-                autoComplete="off"
+                autoComplete="new-password"
                 className="h-8 pl-8 pr-8 text-sm"
               />
               {search && (
