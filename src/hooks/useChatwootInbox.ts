@@ -292,6 +292,11 @@ export function useInboxConversations(enabled = true, live = false) {
     // Gentle fallback polling (realtime is the primary freshness path). 5s was too
     // aggressive and piled up requests on a slow Chatwoot; 15s is plenty as a net.
     refetchInterval: !enabled || mutating ? false : live ? 20000 : 15000,
+    // Don't stack a fresh fetch on every tab re-focus / re-mount — the poll +
+    // realtime invalidate already keep this fresh. Without this, every focus
+    // change re-ran the read-modify-write merge and re-rendered the whole inbox.
+    staleTime: 10000,
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -338,6 +343,8 @@ export function useInboxUnreadTotal(enabled = true) {
     queryFn: () => (organization?.id ? fetchConversationsMerged(queryClient, organization.id) : Promise.resolve([])),
     enabled: enabled && !!organization?.id,
     refetchInterval: enabled && !mutating ? 20000 : false,
+    staleTime: 10000,
+    refetchOnWindowFocus: false,
   });
   return { total: countUnreadConversations(query.data || []), isLoading: query.isLoading };
 }
@@ -362,6 +369,9 @@ export function useInboxMessages(conversationId: number | null, altIds: number[]
     // Suspend polling during a mutation so a refetch can't revert the optimistic
     // bubble/patch mid-send. Relaxed fallback (was 2.5s, too heavy on a slow Chatwoot).
     refetchInterval: !conversationId || mutating ? false : live ? 15000 : 8000,
+    // Don't refetch a (possibly huge) thread on every tab re-focus — realtime +
+    // the poll already keep the open thread fresh.
+    refetchOnWindowFocus: false,
     // Keep already-opened conversations cached: switching back shows the thread
     // instantly (background refetch updates it) instead of a full-screen loader.
     gcTime: 30 * 60 * 1000,
