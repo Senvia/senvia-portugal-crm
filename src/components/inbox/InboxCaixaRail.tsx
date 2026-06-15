@@ -1,5 +1,7 @@
-import { Mailbox, Inbox as InboxIcon } from 'lucide-react';
+import { useState } from 'react';
+import { Mailbox, Inbox as InboxIcon, SlidersHorizontal, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type { MessagingChannel } from '@/hooks/useMessagingChannels';
 import { EmailFolderList } from '@/components/email/EmailFolderList';
 
@@ -33,14 +35,52 @@ export function InboxCaixaRail({
   onSelectEmail: (ch: MessagingChannel) => void;
   onSelectFolder: (folderId: string) => void;
 }) {
-  const messaging = caixas.filter((c) => c.channel_type !== 'email');
-  const emails = caixas.filter((c) => c.channel_type === 'email');
+  // Which caixas the user chose to show in the rail (persisted per browser).
+  // Useful when there are many caixas — show only the ones you care about.
+  const [hidden, setHidden] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('inbox-rail-hidden-v1') || '[]'); } catch { return []; }
+  });
+  const isHidden = (id: string) => hidden.includes(id);
+  const toggleHidden = (id: string) => setHidden((prev) => {
+    const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
+    localStorage.setItem('inbox-rail-hidden-v1', JSON.stringify(next));
+    return next;
+  });
+
+  const messaging = caixas.filter((c) => c.channel_type !== 'email' && !isHidden(c.id));
+  const emails = caixas.filter((c) => c.channel_type === 'email' && !isHidden(c.id));
   const allActive = !emailChannelId && caixaFilter === null;
 
   return (
     <aside className="hidden w-56 shrink-0 flex-col border-r bg-muted/20 md:flex">
-      <div className="border-b px-3 py-3.5">
+      <div className="flex items-center justify-between border-b px-3 py-3">
         <h1 className="px-1 text-sm font-semibold text-muted-foreground">Caixas</h1>
+        {caixas.length > 1 && (
+          <Popover>
+            <PopoverTrigger asChild>
+              <button title="Escolher caixas a mostrar" className="rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">
+                <SlidersHorizontal className="h-4 w-4" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-60 p-1.5">
+              <p className="px-2 py-1 text-xs font-semibold text-muted-foreground">Mostrar caixas</p>
+              <div className="max-h-72 overflow-y-auto">
+                {caixas.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => toggleHidden(c.id)}
+                    className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent"
+                  >
+                    <span className={cn('flex h-4 w-4 shrink-0 items-center justify-center rounded border', !isHidden(c.id) ? 'border-primary bg-primary text-primary-foreground' : 'border-input')}>
+                      {!isHidden(c.id) && <Check className="h-3 w-3" />}
+                    </span>
+                    <span className="truncate">{c.label || (c.channel_type === 'email' ? 'Email' : 'WhatsApp')}</span>
+                  </button>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
+        )}
       </div>
       <nav className="flex-1 space-y-0.5 overflow-y-auto p-2">
         <p className="px-2.5 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Mensagens</p>
