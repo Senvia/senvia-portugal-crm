@@ -1,14 +1,15 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Webhook, Send, Loader2, Eye, EyeOff, MessageCircle, Mail, Receipt, ArrowLeft, ChevronRight, ChevronDown, Plus, Trash2, Link2, Copy, Check, Users, RefreshCw, Pencil, CheckCircle2, ShieldCheck, Inbox, Megaphone, PowerOff } from "lucide-react";
+import { Webhook, Send, Loader2, Eye, EyeOff, MessageCircle, Mail, Receipt, ArrowLeft, ChevronRight, ChevronDown, Plus, Trash2, Link2, Copy, Check, Users, RefreshCw, Pencil, CheckCircle2, ShieldCheck, Inbox, Megaphone, PowerOff, Settings2, Zap, UsersRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LucideIcon } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useOrganizationWebhooks, useCreateWebhook, useToggleWebhook, useDeleteWebhook, OrganizationWebhook } from "@/hooks/useOrganizationWebhooks";
 import { useLeadIntakeWebhooks, useCreateLeadIntakeWebhook, useUpdateLeadIntakeWebhook, useDeleteLeadIntakeWebhook, LeadIntakeWebhook } from "@/hooks/useLeadIntakeWebhooks";
@@ -844,6 +845,152 @@ const CHANNEL_STATUS_LABEL: Record<string, string> = {
   error: 'Erro',
 };
 
+// Edit modal for a single caixa (replaces the old inline expand panel).
+function EditCaixaModal({
+  ch, members, open, onOpenChange,
+  updateAssign, updateGroups, logoutChannel,
+  onReconnect, onDisconnect,
+}: {
+  ch: ReturnType<typeof useMessagingChannels>['data'] extends (infer T)[] ? T : never;
+  members: { id: string; full_name: string | null }[];
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  updateAssign: ReturnType<typeof useUpdateChannelAssignment>;
+  updateGroups: ReturnType<typeof useUpdateChannelGroups>;
+  logoutChannel: ReturnType<typeof useLogoutChannel>;
+  onReconnect: () => void;
+  onDisconnect: () => void;
+}) {
+  const meta = channelMeta(ch.channel_type);
+  const Icon = meta.icon;
+  const connected = ch.status === 'connected';
+  const attendants = ch.assigned_user_ids || [];
+  const [labelDraft, setLabelDraft] = useState(ch.label || '');
+  useEffect(() => { setLabelDraft(ch.label || ''); }, [ch.label, open]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg p-0 gap-0 overflow-hidden">
+        {/* Colored header */}
+        <div className={cn('relative px-6 py-5 flex items-center gap-4', meta.tint)}>
+          <div className={cn('flex h-12 w-12 items-center justify-center rounded-2xl shadow-sm bg-white/80 dark:bg-black/30 shrink-0')}>
+            <Icon className={cn('h-7 w-7', meta.color)} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <DialogTitle className="text-base font-bold">{ch.label || meta.label}</DialogTitle>
+            <DialogDescription className="text-xs mt-0.5">
+              {meta.label}{ch.phone_number ? ` · +${ch.phone_number}` : ''}
+            </DialogDescription>
+          </div>
+          {connected ? (
+            <span className="flex items-center gap-1.5 text-[11px] font-medium text-green-700 dark:text-green-400 bg-green-500/15 border border-green-500/30 rounded-full px-2.5 py-1">
+              <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" /> Ligada
+            </span>
+          ) : (
+            <span className="flex items-center gap-1.5 text-[11px] font-medium text-amber-700 dark:text-amber-400 bg-amber-500/15 border border-amber-500/30 rounded-full px-2.5 py-1">
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> Por ligar
+            </span>
+          )}
+        </div>
+
+        <div className="px-6 py-5 space-y-5 overflow-y-auto max-h-[70vh]">
+          {/* Nome */}
+          <div className="space-y-2">
+            <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Nome da caixa</Label>
+            <div className="flex gap-2">
+              <Input
+                value={labelDraft}
+                onChange={(e) => setLabelDraft(e.target.value)}
+                placeholder="Ex: Vendas, Suporte"
+                className="h-9"
+              />
+              <Button
+                size="sm"
+                disabled={!labelDraft.trim() || labelDraft.trim() === (ch.label || '')}
+                onClick={() => updateAssign.mutate({ channelId: ch.id, label: labelDraft.trim() })}
+              >
+                Guardar
+              </Button>
+            </div>
+          </div>
+
+          {/* Ligação */}
+          {ch.channel_type === 'whatsapp' && (
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Ligação</Label>
+              {connected ? (
+                <Button variant="outline" size="sm" onClick={onDisconnect} disabled={logoutChannel.isPending}
+                  className="w-full text-destructive hover:text-destructive border-destructive/30 hover:bg-destructive/5">
+                  <PowerOff className="h-4 w-4 mr-1.5" /> Desconectar WhatsApp
+                </Button>
+              ) : (
+                <Button variant="outline" size="sm" onClick={onReconnect} className="w-full">
+                  <MessageCircle className="h-4 w-4 mr-1.5" />
+                  {ch.evolution_instance ? 'Reconectar WhatsApp' : 'Ligar WhatsApp'}
+                </Button>
+              )}
+            </div>
+          )}
+
+          {/* Quem atende */}
+          <div className="space-y-2">
+            <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+              <UsersRound className="h-3.5 w-3.5" /> Quem atende esta caixa
+            </Label>
+            <p className="text-[11px] text-muted-foreground">
+              Vazio = todos veem esta caixa no Inbox. Com pessoas selecionadas, só elas (e os administradores) a veem.
+            </p>
+            <CollaboratorPicker
+              members={members}
+              value={attendants}
+              onChange={(next) => updateAssign.mutate({ channelId: ch.id, assigned_user_ids: next })}
+              mode="multi"
+              emptyHint="Vazio = todos os colaboradores veem esta caixa."
+            />
+          </div>
+
+          {/* Toggles */}
+          <div className="rounded-xl border divide-y overflow-hidden">
+            <div className="flex items-center justify-between gap-4 px-4 py-3">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500/10">
+                  <RefreshCw className="h-4 w-4 text-blue-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Rotação automática</p>
+                  <p className="text-[11px] text-muted-foreground">Distribui contactos novos pelos colaboradores</p>
+                </div>
+              </div>
+              <Switch
+                checked={ch.rotate_enabled}
+                onCheckedChange={(v) => updateAssign.mutate({ channelId: ch.id, rotate_enabled: v })}
+              />
+            </div>
+            {ch.channel_type === 'whatsapp' && (
+              <div className="flex items-center justify-between gap-4 px-4 py-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-green-500/10">
+                    <UsersRound className="h-4 w-4 text-green-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">Mensagens de grupo</p>
+                    <p className="text-[11px] text-muted-foreground">Grupos WhatsApp aparecem na Caixa de Entrada</p>
+                  </div>
+                </div>
+                <Switch
+                  checked={!!(ch.metadata as Record<string, unknown> | null)?.groups_enabled}
+                  disabled={updateGroups.isPending}
+                  onCheckedChange={(v) => updateGroups.mutate({ channelId: ch.id, groupsEnabled: v })}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // Caixas de Entrada: lists the org's connected channels and lets the admin add a
 // new one. Phase 1 supports WhatsApp (Evolution + Chatwoot); other channels are
 // surfaced as "em breve" until their providers are wired.
@@ -855,274 +1002,189 @@ function InboxesManager() {
   const updateAssign = useUpdateChannelAssignment();
   const updateGroups = useUpdateChannelGroups();
   const logoutChannel = useLogoutChannel();
-  const [editId, setEditId] = useState<string | null>(null); // caixa whose "Editar" panel is open
-  const [labelDraft, setLabelDraft] = useState('');
+
+  const [editCh, setEditCh] = useState<typeof channels[0] | null>(null);
   const [toDisconnect, setToDisconnect] = useState<string | null>(null);
+  const [toDelete, setToDelete] = useState<string | null>(null);
+  // WhatsApp connect modal
+  const [connectModal, setConnectModal] = useState<{ open: boolean; channelId?: string; label?: string }>({ open: false });
+  // New caixa dialog
+  const [newOpen, setNewOpen] = useState(false);
+  const [newLabel, setNewLabel] = useState('');
+
   const orphanCount = channels.filter((c) => c.status !== 'connected').length;
 
-  const openEdit = (ch: { id: string; label: string | null }) => {
-    if (editId === ch.id) { setEditId(null); return; }
-    setEditId(ch.id);
-    setLabelDraft(ch.label || '');
-  };
-  // Modal target: reconnect (channelId) or create new (label, no channelId).
-  const [modal, setModal] = useState<{ open: boolean; channelId?: string; label?: string }>({ open: false });
-  const [picking, setPicking] = useState(false);
-  const [newLabel, setNewLabel] = useState('');
-  const [toDelete, setToDelete] = useState<string | null>(null);
-
   const startNewWhatsApp = () => {
-    setModal({ open: true, label: newLabel.trim() || 'WhatsApp' });
-    setPicking(false);
+    setConnectModal({ open: true, label: newLabel.trim() || 'WhatsApp' });
+    setNewOpen(false);
     setNewLabel('');
   };
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">
-        Liga as tuas contas para receber e responder mensagens de todos os canais dentro do CRM.
-      </p>
+      {/* Header with "Nova caixa" always visible at top */}
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground">
+          Liga as tuas contas para receber e responder mensagens de todos os canais num só lugar.
+        </p>
+        <Button onClick={() => setNewOpen(true)} size="sm" className="shrink-0 gap-1.5">
+          <Plus className="h-4 w-4" /> Nova caixa
+        </Button>
+      </div>
 
-      {/* Connected channels list */}
+      {/* 2-column grid */}
       {channels.length > 0 ? (
-        <div className="space-y-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {channels.map((ch) => {
             const meta = channelMeta(ch.channel_type);
             const Icon = meta.icon;
             const connected = ch.status === 'connected';
-            const editOpen = editId === ch.id;
             const attendants = ch.assigned_user_ids || [];
+            const groupsOn = !!(ch.metadata as Record<string, unknown> | null)?.groups_enabled;
             return (
-              <div className={cn(
-                'rounded-xl border overflow-hidden transition-shadow bg-card',
-                editOpen ? 'ring-1 ring-primary/30 shadow-sm' : 'hover:shadow-sm',
-                !connected && 'border-dashed',
-              )} key={ch.id}>
-                <div className="flex items-center gap-3 p-3.5">
-                  <div className={cn('flex h-11 w-11 items-center justify-center rounded-xl shrink-0', meta.tint)}>
+              <div key={ch.id} className={cn(
+                'rounded-2xl border overflow-hidden bg-card shadow-sm hover:shadow-md transition-shadow flex flex-col',
+                !connected && 'border-dashed opacity-80',
+              )}>
+                {/* Colored top strip */}
+                <div className={cn('px-4 pt-4 pb-3 flex items-start gap-3', meta.tint)}>
+                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/80 dark:bg-black/30 shrink-0 shadow-sm">
                     <Icon className={cn('h-6 w-6', meta.color)} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-sm truncate">
-                      {ch.label || meta.label}
-                    </p>
+                    <p className="font-bold text-sm truncate">{ch.label || meta.label}</p>
                     <p className="text-xs text-muted-foreground truncate">
-                      {meta.label}
-                      {ch.phone_number ? ` · +${ch.phone_number}` : ''}
-                      {attendants.length > 0 && ` · ${attendants.length} a atender`}
+                      {meta.label}{ch.phone_number ? ` · +${ch.phone_number}` : ''}
                     </p>
                   </div>
                   {connected ? (
-                    <Badge variant="outline" className="text-[10px] gap-1 bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30">
-                      <span className="h-1.5 w-1.5 rounded-full bg-green-500" /> Ligada
-                    </Badge>
+                    <span className="flex items-center gap-1 text-[10px] font-semibold text-green-700 dark:text-green-400 bg-green-500/20 border border-green-500/30 rounded-full px-2 py-0.5 shrink-0">
+                      <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" /> Ligada
+                    </span>
                   ) : (
-                    <Badge variant="outline" className="text-[10px] gap-1 bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30">
+                    <span className="flex items-center gap-1 text-[10px] font-semibold text-amber-700 bg-amber-500/20 border border-amber-500/30 rounded-full px-2 py-0.5 shrink-0">
                       <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> Por ligar
-                    </Badge>
+                    </span>
                   )}
-                  <Button
-                    variant={editOpen ? 'secondary' : 'outline'}
-                    size="sm"
-                    onClick={() => openEdit(ch)}
-                    className="shrink-0"
-                  >
-                    <Pencil className="h-3.5 w-3.5 mr-1.5" /> Editar
+                </div>
+
+                {/* Stats row */}
+                <div className="flex items-center gap-3 px-4 py-2.5 border-t border-b text-xs text-muted-foreground bg-muted/10">
+                  <span className="flex items-center gap-1">
+                    <UsersRound className="h-3.5 w-3.5" />
+                    {attendants.length > 0 ? `${attendants.length} atendente${attendants.length !== 1 ? 's' : ''}` : 'Todos'}
+                  </span>
+                  {ch.rotate_enabled && (
+                    <span className="flex items-center gap-1 text-blue-600">
+                      <RefreshCw className="h-3 w-3" /> Rotação
+                    </span>
+                  )}
+                  {groupsOn && (
+                    <span className="flex items-center gap-1 text-green-600">
+                      <UsersRound className="h-3 w-3" /> Grupos
+                    </span>
+                  )}
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center gap-2 px-4 py-3 mt-auto">
+                  <Button size="sm" variant="outline" className="flex-1 gap-1.5 h-8" onClick={() => setEditCh(ch)}>
+                    <Settings2 className="h-3.5 w-3.5" /> Editar
                   </Button>
                   <button
                     type="button"
                     onClick={() => setToDelete(ch.id)}
-                    className="p-1.5 text-muted-foreground hover:text-destructive transition-colors shrink-0"
+                    className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-colors"
                     title="Remover caixa"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
                 </div>
-
-                {editOpen && (
-                  <div className="border-t px-4 py-4 space-y-4 bg-muted/20">
-                    {/* Nome */}
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Nome da caixa</Label>
-                      <div className="flex items-center gap-2">
-                        <Input
-                          value={labelDraft}
-                          onChange={(e) => setLabelDraft(e.target.value)}
-                          placeholder="Ex: Vendas, Suporte"
-                          className="h-9"
-                        />
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={!labelDraft.trim() || labelDraft.trim() === (ch.label || '')}
-                          onClick={() => updateAssign.mutate({ channelId: ch.id, label: labelDraft.trim() })}
-                        >
-                          Guardar
-                        </Button>
-                      </div>
-                    </div>
-
-                    {/* Ligação: ligado -> desconectar; desligado com instância -> reconectar; novo -> ligar */}
-                    {ch.channel_type === 'whatsapp' && (
-                      <div className="space-y-1.5">
-                        <Label className="text-xs">Ligação</Label>
-                        {connected ? (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setToDisconnect(ch.id)}
-                            disabled={logoutChannel.isPending}
-                            className="w-full text-destructive hover:text-destructive"
-                          >
-                            <PowerOff className="h-4 w-4 mr-1.5" />
-                            Desconectar WhatsApp
-                          </Button>
-                        ) : (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setModal({ open: true, channelId: ch.id })}
-                            className="w-full"
-                          >
-                            <MessageCircle className="h-4 w-4 mr-1.5" />
-                            {ch.evolution_instance ? 'Reconectar WhatsApp' : 'Ligar WhatsApp'}
-                          </Button>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Quem atende */}
-                    <div className="space-y-1">
-                      <Label className="text-xs flex items-center gap-1.5">
-                        <Users className="h-3.5 w-3.5" /> Quem atende esta caixa
-                      </Label>
-                      <p className="text-[11px] text-muted-foreground">
-                        Vazio = todos veem esta caixa no Inbox. Com pessoas selecionadas, só elas (e os administradores) a veem.
-                      </p>
-                    </div>
-
-                    <CollaboratorPicker
-                      members={members}
-                      value={attendants}
-                      onChange={(next) => updateAssign.mutate({ channelId: ch.id, assigned_user_ids: next })}
-                      mode="multi"
-                      emptyHint="Vazio = todos os colaboradores veem esta caixa."
-                    />
-
-                    <div className="flex items-center justify-between gap-3 pt-1 border-t">
-                      <Label className="text-sm font-normal flex items-center gap-2 pt-2">
-                        <RefreshCw className="h-4 w-4 text-muted-foreground" />
-                        Distribuir contactos novos (rotação)
-                      </Label>
-                      <Switch
-                        checked={ch.rotate_enabled}
-                        onCheckedChange={(v) => updateAssign.mutate({ channelId: ch.id, rotate_enabled: v })}
-                      />
-                    </div>
-                    <p className="text-[11px] text-muted-foreground">
-                      Com rotação, cada contacto novo desta caixa é atribuído a um dos colaboradores acima, à vez.
-                    </p>
-
-                    {ch.channel_type === 'whatsapp' && (
-                      <>
-                        <div className="flex items-center justify-between gap-3 pt-1 border-t">
-                          <Label className="text-sm font-normal flex items-center gap-2 pt-2">
-                            <Users className="h-4 w-4 text-muted-foreground" />
-                            Ativar mensagens de grupo
-                          </Label>
-                          <Switch
-                            checked={!!(ch.metadata as Record<string, unknown> | null)?.groups_enabled}
-                            disabled={updateGroups.isPending}
-                            onCheckedChange={(v) => updateGroups.mutate({ channelId: ch.id, groupsEnabled: v })}
-                          />
-                        </div>
-                        <p className="text-[11px] text-muted-foreground">
-                          Quando ativo, as mensagens de grupos WhatsApp desta caixa aparecem na Caixa de Entrada.
-                        </p>
-                      </>
-                    )}
-                  </div>
-                )}
               </div>
             );
           })}
         </div>
       ) : (
-        <div className="rounded-lg border border-dashed p-6 text-center">
-          <Inbox className="h-8 w-8 mx-auto text-muted-foreground/50 mb-2" />
-          <p className="text-sm text-muted-foreground">Ainda não tens nenhuma caixa ligada.</p>
-        </div>
-      )}
-
-      {/* Add new */}
-      {picking ? (
-        <div className="rounded-lg border p-3 space-y-3">
-          <p className="text-xs font-medium text-muted-foreground px-1">Escolhe o canal</p>
-          <div className="grid grid-cols-2 gap-2">
-            {CHANNEL_CATALOG.map((c) => {
-              const Icon = c.icon;
-              const isWhatsApp = c.type === 'whatsapp';
-              return (
-                <div
-                  key={c.type}
-                  className={cn(
-                    'flex items-center gap-2.5 rounded-lg border p-3',
-                    c.available ? 'border-primary/30 bg-primary/5' : 'opacity-60',
-                  )}
-                >
-                  <div className={cn('flex h-9 w-9 items-center justify-center rounded-lg shrink-0', c.tint)}>
-                    <Icon className={cn('h-5 w-5', c.color)} />
-                  </div>
-                  <span className="text-sm font-medium min-w-0">
-                    {c.label}
-                    {!c.available && <span className="block text-[10px] text-muted-foreground font-normal">Em breve</span>}
-                  </span>
-                </div>
-              );
-            })}
+        <div className="rounded-2xl border border-dashed p-10 text-center bg-muted/20">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted mx-auto mb-3">
+            <Inbox className="h-7 w-7 text-muted-foreground/50" />
           </div>
-          {/* WhatsApp is the only active channel in Phase 1 */}
-          <div className="space-y-2 border-t pt-3">
-            <Label htmlFor="new-inbox-label" className="text-xs">Nome da caixa (WhatsApp)</Label>
-            <Input
-              id="new-inbox-label"
-              value={newLabel}
-              onChange={(e) => setNewLabel(e.target.value)}
-              placeholder="Ex: Vendas, Suporte"
-            />
-            <div className="flex gap-2">
-              <Button size="sm" onClick={startNewWhatsApp} className="flex-1">
-                <MessageCircle className="mr-2 h-4 w-4" /> Ligar WhatsApp
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => { setPicking(false); setNewLabel(''); }}>Cancelar</Button>
-            </div>
-          </div>
+          <p className="text-sm font-medium text-muted-foreground">Ainda não tens nenhuma caixa ligada</p>
+          <p className="text-xs text-muted-foreground mt-1">Clica em "Nova caixa" para começar</p>
         </div>
-      ) : (
-        <Button onClick={() => setPicking(true)} variant="outline" className="w-full h-12 border-dashed text-muted-foreground hover:text-foreground hover:border-primary/40">
-          <Plus className="mr-2 h-4 w-4" />
-          Nova caixa
-        </Button>
       )}
 
       {orphanCount > 0 && (
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => cleanupOrphans.mutate()}
-          disabled={cleanupOrphans.isPending}
-          className="w-full text-muted-foreground hover:text-destructive"
-        >
+        <Button variant="ghost" size="sm" onClick={() => cleanupOrphans.mutate()} disabled={cleanupOrphans.isPending}
+          className="w-full text-muted-foreground hover:text-destructive">
           {cleanupOrphans.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
           Limpar {orphanCount} {orphanCount === 1 ? 'caixa por ligar' : 'caixas por ligar'}
         </Button>
       )}
 
+      {/* Edit modal */}
+      {editCh && (
+        <EditCaixaModal
+          ch={editCh}
+          members={members}
+          open={!!editCh}
+          onOpenChange={(o) => { if (!o) setEditCh(null); }}
+          updateAssign={updateAssign}
+          updateGroups={updateGroups}
+          logoutChannel={logoutChannel}
+          onReconnect={() => { setConnectModal({ open: true, channelId: editCh.id }); setEditCh(null); }}
+          onDisconnect={() => { setToDisconnect(editCh.id); setEditCh(null); }}
+        />
+      )}
+
+      {/* New caixa dialog */}
+      <Dialog open={newOpen} onOpenChange={setNewOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Nova caixa de entrada</DialogTitle>
+            <DialogDescription>Escolhe o canal e dá-lhe um nome.</DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-2 mt-1">
+            {CHANNEL_CATALOG.map((c) => {
+              const Icon = c.icon;
+              return (
+                <div key={c.type} className={cn(
+                  'flex items-center gap-2.5 rounded-xl border p-3',
+                  c.available ? 'border-primary/30 bg-primary/5' : 'opacity-50',
+                )}>
+                  <div className={cn('flex h-9 w-9 items-center justify-center rounded-lg shrink-0', c.tint)}>
+                    <Icon className={cn('h-5 w-5', c.color)} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">{c.label}</p>
+                    {!c.available && <p className="text-[10px] text-muted-foreground">Em breve</p>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="space-y-2 border-t pt-4">
+            <Label htmlFor="new-inbox-label" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Nome da caixa (WhatsApp)</Label>
+            <Input
+              id="new-inbox-label"
+              value={newLabel}
+              onChange={(e) => setNewLabel(e.target.value)}
+              placeholder="Ex: Vendas, Suporte"
+              onKeyDown={(e) => e.key === 'Enter' && startNewWhatsApp()}
+            />
+            <Button onClick={startNewWhatsApp} className="w-full gap-2">
+              <MessageCircle className="h-4 w-4" /> Ligar WhatsApp
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* WhatsApp QR modal */}
       <ConnectWhatsAppModal
-        open={modal.open}
-        onOpenChange={(o) => setModal((m) => ({ ...m, open: o }))}
-        channelId={modal.channelId}
-        label={modal.label}
+        open={connectModal.open}
+        onOpenChange={(o) => setConnectModal((m) => ({ ...m, open: o }))}
+        channelId={connectModal.channelId}
+        label={connectModal.label}
       />
 
       <AlertDialog open={!!toDelete} onOpenChange={(o) => !o && setToDelete(null)}>
@@ -1150,7 +1212,7 @@ function InboxesManager() {
           <AlertDialogHeader>
             <AlertDialogTitle>Desconectar este WhatsApp?</AlertDialogTitle>
             <AlertDialogDescription>
-              A sessão de WhatsApp termina e deixas de receber/enviar mensagens por esta caixa. A caixa mantém-se: podes voltar a ligar (Reconectar) com o mesmo ou outro número quando quiseres.
+              A sessão de WhatsApp termina e deixas de receber/enviar mensagens por esta caixa. A caixa mantém-se: podes voltar a ligar quando quiseres.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
