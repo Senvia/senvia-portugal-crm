@@ -86,9 +86,41 @@ function DraftRow({ draft, active, onClick }: { draft: EmailDraft; active: boole
   );
 }
 
+const DEFAULT_LIST_W = 416; // 26rem
+const MIN_LIST_W = 240;
+const MAX_LIST_W = 640;
+
 // Message list + reader for one folder. The folder rail lives in the caixa rail.
 export function EmailListReader({ channelId, folderId }: { channelId: string | null; folderId: string | null }) {
   const [messageId, setMessageId] = useState<string | null>(null);
+
+  // Resizable list column ─────────────────────────────────────────────────────
+  const [listWidth, setListWidth] = useState<number>(() => {
+    try { return parseInt(localStorage.getItem('email-list-width-v1') || '', 10) || DEFAULT_LIST_W; } catch { return DEFAULT_LIST_W; }
+  });
+  const listWidthRef = useRef(listWidth);
+  useEffect(() => { listWidthRef.current = listWidth; }, [listWidth]);
+  const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
+  const onResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    dragRef.current = { startX: e.clientX, startWidth: listWidthRef.current };
+  };
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!dragRef.current) return;
+      const w = Math.max(MIN_LIST_W, Math.min(MAX_LIST_W, dragRef.current.startWidth + e.clientX - dragRef.current.startX));
+      setListWidth(w);
+    };
+    const onUp = () => {
+      if (!dragRef.current) return;
+      dragRef.current = null;
+      localStorage.setItem('email-list-width-v1', String(listWidthRef.current));
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+  }, []);
+  // ───────────────────────────────────────────────────────────────────────────
   useEffect(() => { setMessageId(null); }, [folderId, channelId]);
   useEmailRealtime(channelId);
 
@@ -163,8 +195,13 @@ export function EmailListReader({ channelId, folderId }: { channelId: string | n
 
   return (
     <>
-      {/* Message list */}
-      <section className="flex w-[26rem] shrink-0 flex-col border-r">
+      {/* Message list — resizable via drag handle on right border */}
+      <section className="relative flex shrink-0 flex-col border-r" style={{ width: listWidth }}>
+        {/* Drag handle */}
+        <div
+          onMouseDown={onResizeStart}
+          className="absolute inset-y-0 right-0 z-10 w-[4px] cursor-col-resize hover:bg-primary/40 active:bg-primary/60 transition-colors"
+        />
         <header className="space-y-2 border-b px-4 pt-5 pb-3">
           <div className="flex items-center justify-between">
             <Button size="sm" onClick={() => { setComposeDraft(null); setCompose({ open: true, mode: 'new' }); }}>
