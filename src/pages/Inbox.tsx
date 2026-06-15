@@ -3049,13 +3049,15 @@ const ConversationRow = memo(function ConversationRow({
               />
             )}
           </p>
-          <span className="shrink-0 text-[10px] text-muted-foreground">{formatListDate(conversation.updated_at)}</span>
+          <div className="flex shrink-0 items-center gap-1.5">
+            {caixaLabel && (
+              <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold text-primary truncate max-w-[80px]">
+                {caixaLabel}
+              </span>
+            )}
+            <span className="text-[10px] text-muted-foreground">{formatListDate(conversation.updated_at)}</span>
+          </div>
         </div>
-        {caixaLabel && (
-          <span className="inline-block rounded bg-muted px-1.5 py-px text-[10px] text-muted-foreground mt-0.5 max-w-full truncate">
-            {caixaLabel}
-          </span>
-        )}
         <div className="flex items-center justify-between gap-2">
           <p className="truncate text-xs text-muted-foreground">
             {conversation.last_message ? translateActivity(conversation.last_message) : "—"}
