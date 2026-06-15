@@ -913,7 +913,7 @@ function EditCaixaModal({
                   </div>
                 </div>
                 <Switch
-                  checked={!!(ch.metadata as Record<string, unknown> | null)?.groups_enabled}
+                  checked={(ch.metadata as Record<string, unknown> | null)?.groups_enabled !== false}
                   disabled={updateGroups.isPending}
                   onCheckedChange={(v) => updateGroups.mutate({ channelId: ch.id, groupsEnabled: v })}
                 />
@@ -975,7 +975,7 @@ function InboxesManager() {
             const Icon = meta.icon;
             const connected = ch.status === 'connected';
             const attendants = ch.assigned_user_ids || [];
-            const groupsOn = !!(ch.metadata as Record<string, unknown> | null)?.groups_enabled;
+            const groupsOn = (ch.metadata as Record<string, unknown> | null)?.groups_enabled !== false;
             return (
               <div key={ch.id} className={cn(
                 'rounded-2xl border overflow-hidden bg-card shadow-sm hover:shadow-md transition-shadow flex flex-col',

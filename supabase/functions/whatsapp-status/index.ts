@@ -118,7 +118,9 @@ Deno.serve(async (req) => {
             const baseLabel = (chRow.label || '').trim() || 'WhatsApp';
             const isLegacy = instanceName === instanceNameForOrg(organization_id);
             const inboxName = isLegacy ? baseLabel : `${baseLabel} ${resolved.id.slice(0, 6)}`;
-            const groupsEnabled = !!((chRow.metadata as Record<string, unknown> | null)?.groups_enabled);
+            // Default to true (groups enabled) when groups_enabled is not set in metadata.
+            // Using !== false means: undefined/null/true → allow groups; only explicit false blocks them.
+            const groupsEnabled = (chRow.metadata as Record<string, unknown> | null)?.groups_enabled !== false;
             await evolutionFetch(cfg, `/chatwoot/set/${instanceName}`, 'POST', {
               enabled: true,
               accountId: String(accountId),
