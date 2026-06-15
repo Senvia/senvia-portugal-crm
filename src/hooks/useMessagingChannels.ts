@@ -138,6 +138,26 @@ export function useUpdateChannelAssignment() {
   });
 }
 
+// Toggle group messages for a WhatsApp channel. Updates metadata in DB and
+// re-applies the setting to the Evolution Chatwoot integration immediately.
+export function useUpdateChannelGroups() {
+  const { organization } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { channelId: string; groupsEnabled: boolean }) => {
+      if (!organization?.id) throw new Error('Organização não encontrada');
+      const { data, error } = await supabase.functions.invoke('chatwoot-inbox', {
+        body: { organization_id: organization.id, action: 'update_groups', channel_id: vars.channelId, groups_enabled: vars.groupsEnabled },
+      });
+      if (error) throw error;
+      if ((data as { error?: string })?.error) throw new Error((data as { error?: string }).error);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['messaging-channels', organization?.id] });
+    },
+  });
+}
+
 // Log out a channel's WhatsApp session WITHOUT deleting it — the instance stays so
 // it can be reconnected (re-scan QR). Status goes to 'disconnected'.
 export function useLogoutChannel() {

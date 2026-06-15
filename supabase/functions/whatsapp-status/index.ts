@@ -103,7 +103,7 @@ Deno.serve(async (req) => {
     if (status === 'connected' && resolved.id) {
       const { data: chRow } = await admin
         .from('messaging_channels')
-        .select('chatwoot_inbox_id, label')
+        .select('chatwoot_inbox_id, label, metadata')
         .eq('id', resolved.id)
         .maybeSingle();
       if (chRow && !chRow.chatwoot_inbox_id) {
@@ -118,6 +118,7 @@ Deno.serve(async (req) => {
             const baseLabel = (chRow.label || '').trim() || 'WhatsApp';
             const isLegacy = instanceName === instanceNameForOrg(organization_id);
             const inboxName = isLegacy ? baseLabel : `${baseLabel} ${resolved.id.slice(0, 6)}`;
+            const groupsEnabled = !!((chRow.metadata as Record<string, unknown> | null)?.groups_enabled);
             await evolutionFetch(cfg, `/chatwoot/set/${instanceName}`, 'POST', {
               enabled: true,
               accountId: String(accountId),
@@ -133,6 +134,7 @@ Deno.serve(async (req) => {
               importMessages: false,
               daysLimitImportMessages: 7,
               autoCreate: true,
+              ignoreGroups: !groupsEnabled,
               organization: orgData.name,
               logo: '',
             });

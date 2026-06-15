@@ -14,7 +14,7 @@ import { useOrganizationWebhooks, useCreateWebhook, useToggleWebhook, useDeleteW
 import { useLeadIntakeWebhooks, useCreateLeadIntakeWebhook, useUpdateLeadIntakeWebhook, useDeleteLeadIntakeWebhook, LeadIntakeWebhook } from "@/hooks/useLeadIntakeWebhooks";
 import { useTeamMembers } from "@/hooks/useTeam";
 import { useTestWebhook } from "@/hooks/useOrganization";
-import { useMessagingChannels, useDeleteChannel, useCleanupOrphanChannels, useUpdateChannelAssignment, useLogoutChannel } from "@/hooks/useMessagingChannels";
+import { useMessagingChannels, useDeleteChannel, useCleanupOrphanChannels, useUpdateChannelAssignment, useLogoutChannel, useUpdateChannelGroups } from "@/hooks/useMessagingChannels";
 import { ConnectWhatsAppModal } from "./ConnectWhatsAppModal";
 import { WhatsAppIcon, InstagramIcon, MessengerIcon } from "./channelIcons";
 import { CollaboratorPicker } from "./CollaboratorPicker";
@@ -853,6 +853,7 @@ function InboxesManager() {
   const deleteChannel = useDeleteChannel();
   const cleanupOrphans = useCleanupOrphanChannels();
   const updateAssign = useUpdateChannelAssignment();
+  const updateGroups = useUpdateChannelGroups();
   const logoutChannel = useLogoutChannel();
   const [editId, setEditId] = useState<string | null>(null); // caixa whose "Editar" panel is open
   const [labelDraft, setLabelDraft] = useState('');
@@ -1021,6 +1022,25 @@ function InboxesManager() {
                     <p className="text-[11px] text-muted-foreground">
                       Com rotação, cada contacto novo desta caixa é atribuído a um dos colaboradores acima, à vez.
                     </p>
+
+                    {ch.channel_type === 'whatsapp' && (
+                      <>
+                        <div className="flex items-center justify-between gap-3 pt-1 border-t">
+                          <Label className="text-sm font-normal flex items-center gap-2 pt-2">
+                            <Users className="h-4 w-4 text-muted-foreground" />
+                            Ativar mensagens de grupo
+                          </Label>
+                          <Switch
+                            checked={!!(ch.metadata as Record<string, unknown> | null)?.groups_enabled}
+                            disabled={updateGroups.isPending}
+                            onCheckedChange={(v) => updateGroups.mutate({ channelId: ch.id, groupsEnabled: v })}
+                          />
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">
+                          Quando ativo, as mensagens de grupos WhatsApp desta caixa aparecem na Caixa de Entrada.
+                        </p>
+                      </>
+                    )}
                   </div>
                 )}
               </div>

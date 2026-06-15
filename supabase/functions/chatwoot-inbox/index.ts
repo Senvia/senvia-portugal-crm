@@ -906,6 +906,53 @@ Deno.serve(async (req) => {
       return json({ ok: cwResults.every((r) => r.ok) });
     }
 
+    if (action === 'update_groups') {
+      const channelId = String(body.channel_id ?? '');
+      const groupsEnabled = !!body.groups_enabled;
+      if (!channelId) return json({ error: 'channel_id em falta' }, 400);
+
+      // Load channel + org name for the Evolution re-config.
+      const [{ data: ch }, { data: orgRow }] = await Promise.all([
+        auth.admin.from('messaging_channels').select('id, evolution_instance, label, metadata').eq('id', channelId).eq('organization_id', organization_id).maybeSingle(),
+        auth.admin.from('organizations').select('name').eq('id', organization_id).maybeSingle(),
+      ]);
+      if (!ch) return json({ error: 'Caixa não encontrada' }, 404);
+
+      // Persist in DB (merge into existing metadata so other keys are preserved).
+      const newMeta = { ...((ch.metadata as Record<string, unknown>) ?? {}), groups_enabled: groupsEnabled };
+      const { error: dbErr } = await auth.admin.from('messaging_channels').update({ metadata: newMeta }).eq('id', channelId);
+      if (dbErr) throw dbErr;
+
+      // Re-apply Chatwoot integration config on Evolution so the change takes effect immediately.
+      if (ch.evolution_instance) {
+        try {
+          await evolutionFetch(cfg, `/chatwoot/set/${ch.evolution_instance}`, 'POST', {
+            enabled: true,
+            accountId: String(cw.accountId),
+            token: cw.token,
+            url: cfg.chatwootUrl,
+            signMsg: true,
+            signDelimiter: '\n',
+            nameInbox: ch.label || 'WhatsApp',
+            reopenConversation: true,
+            conversationPending: false,
+            mergeBrazilContacts: false,
+            importContacts: false,
+            importMessages: false,
+            daysLimitImportMessages: 7,
+            autoCreate: false,
+            ignoreGroups: !groupsEnabled,
+            organization: orgRow?.name ?? '',
+            logo: '',
+          });
+        } catch (e) {
+          console.error('[update_groups] evolution set failed:', e);
+        }
+      }
+
+      return json({ ok: true, groups_enabled: groupsEnabled });
+    }
+
     return json({ error: 'Ação inválida' }, 400);
   } catch (err) {
     console.error('chatwoot-inbox error:', err);
