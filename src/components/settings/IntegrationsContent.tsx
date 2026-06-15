@@ -16,6 +16,7 @@ import { useLeadIntakeWebhooks, useCreateLeadIntakeWebhook, useUpdateLeadIntakeW
 import { useTeamMembers } from "@/hooks/useTeam";
 import { useTestWebhook } from "@/hooks/useOrganization";
 import { useMessagingChannels, useDeleteChannel, useCleanupOrphanChannels, useUpdateChannelAssignment, useLogoutChannel, useUpdateChannelGroups } from "@/hooks/useMessagingChannels";
+import { EmailManager } from "./EmailManager";
 import { ConnectWhatsAppModal } from "./ConnectWhatsAppModal";
 import { WhatsAppIcon, InstagramIcon, MessengerIcon } from "./channelIcons";
 import { CollaboratorPicker } from "./CollaboratorPicker";
@@ -80,7 +81,8 @@ interface IntegrationDef {
 const integrationGroups = ['Caixas de Entrada', 'Marketing', 'Automações', 'Faturação eletrónica'] as const;
 
 const integrations: IntegrationDef[] = [
-  { key: 'inboxes', icon: Inbox, title: 'Caixas de Entrada', description: 'WhatsApp, Instagram, Facebook e Email num só lugar', toggleKey: 'inboxes', group: 'Caixas de Entrada' },
+  { key: 'inboxes', icon: Inbox, title: 'WhatsApp / Social', description: 'WhatsApp, Instagram e Facebook via Chatwoot', toggleKey: 'inboxes', group: 'Caixas de Entrada' },
+  { key: 'email_inboxes', icon: Mail, title: 'Caixas de Email', description: 'Gmail, Outlook, Exchange e qualquer IMAP/SMTP', toggleKey: 'email_inboxes', group: 'Caixas de Entrada' },
   { key: 'brevo', icon: Megaphone, title: 'Email Marketing', description: 'Campanhas e automações de email', toggleKey: 'brevo', group: 'Marketing' },
   { key: 'webhook', icon: Webhook, title: 'Webhook de Saída', description: 'Notificar sistemas externos (Make, Zapier, n8n)', toggleKey: 'webhook', group: 'Automações' },
   { key: 'webhook_inbound', icon: Link2, title: 'Webhook de Entrada', description: 'Receber leads (Facebook, Zapier, Make)', toggleKey: 'webhook_inbound', group: 'Automações' },
@@ -239,6 +241,7 @@ export const IntegrationsContent = (props: IntegrationsContentProps) => {
           {active === 'webhook' && <WebhooksManager />}
           {active === 'webhook_inbound' && <InboundWebhookSection />}
           {active === 'inboxes' && <InboxesManager />}
+          {active === 'email_inboxes' && <EmailManager />}
           {active === 'brevo' && <BrevoForm {...props} />}
           {active === 'invoicexpress' && <InvoiceXpressForm {...props} />}
           {active === 'keyinvoice' && <KeyInvoiceForm {...props} />}

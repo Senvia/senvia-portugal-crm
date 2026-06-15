@@ -126,6 +126,9 @@ verify_jwt = false
 [functions.chatwoot-webhook]
 verify_jwt = false
 
+[functions.email-inbox]
+verify_jwt = false
+
 [functions.task-reminders]
 verify_jwt = false
 

@@ -521,6 +521,33 @@ Deno.serve(async (req) => {
       const text = String(content ?? '').trim();
       if (!text && !attachment) return json({ error: 'Mensagem vazia' }, 400);
 
+      // For email inboxes route via Chatwoot (SMTP), not Evolution.
+      // Detect by matching the inbox_id against email channels in the org.
+      const sendInboxId = body.inbox_id != null ? Number(body.inbox_id) : null;
+      if (sendInboxId) {
+        const { data: emailCh } = await auth.admin
+          .from('messaging_channels')
+          .select('channel_type')
+          .eq('organization_id', organization_id)
+          .eq('chatwoot_inbox_id', sendInboxId)
+          .eq('channel_type', 'email')
+          .maybeSingle();
+        if (emailCh) {
+          // Email: let Chatwoot handle SMTP delivery.
+          if (attachment) return json({ error: 'Anexos em email ainda não suportados nesta versão' }, 422);
+          const emailRes = await chatwootFetch(
+            cfg, cw.token,
+            `${base}/conversations/${conversation_id}/messages`, 'POST',
+            { content: text, message_type: 'outgoing', private: false },
+          );
+          if (!emailRes.ok) {
+            console.error('[chatwoot-inbox] email send failed:', emailRes.status, await emailRes.text());
+            return json({ error: 'Falha ao enviar email' }, 502);
+          }
+          return json({ ok: true });
+        }
+      }
+
       // Send OUTBOUND directly through Evolution (by the contact's phone number),
       // instead of relying on the Chatwoot -> Evolution relay. Imported
       // conversations have a broken contact_inbox.source_id (a random UUID) that
