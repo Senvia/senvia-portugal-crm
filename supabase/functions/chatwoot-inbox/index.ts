@@ -137,11 +137,14 @@ function normalizeConversation(c: any, base: string): NormalizedConversation {
   };
 }
 
-// Hide WhatsApp groups (sending by phone number cannot route to a group) and
-// LID artifacts (duplicate contacts whose "phone" is a long internal id).
-function isHiddenConversation(c: any, normalized: NormalizedConversation): boolean {
+// Hide WhatsApp groups (unless the caixa's groups toggle is ON) and LID
+// artifacts (duplicate contacts whose "phone" is a long internal id).
+function isHiddenConversation(c: any, normalized: NormalizedConversation, groupsInboxes?: Set<number>): boolean {
   const identifier = String(c?.meta?.sender?.identifier ?? '');
-  if (identifier.includes('@g.us')) return true;
+  if (identifier.includes('@g.us')) {
+    // Show groups only for inboxes that explicitly enabled them.
+    return !(groupsInboxes && normalized.inbox_id != null && groupsInboxes.has(Number(normalized.inbox_id)));
+  }
   const digits = (normalized.contact_phone || '').replace(/\D/g, '');
   const nameIsNumber = /^[0-9+\s]+$/.test((normalized.contact_name || '').trim());
   return nameIsNumber && digits.length >= 14;
@@ -361,22 +364,29 @@ Deno.serve(async (req) => {
     // A caixa (messaging_channels) with assigned_user_ids restricts who sees its
     // conversations. Admins see everything; caixas with no assignees (or whose
     // Chatwoot inbox id we don't know yet) are visible to everyone (non-breaking).
-    let _vis: { isAdmin: boolean; restricted: Map<number, Set<string>> } | null = null;
+    let _vis: { isAdmin: boolean; restricted: Map<number, Set<string>>; groupsInboxes: Set<number> } | null = null;
     const getVisibility = async () => {
       if (_vis) return _vis;
       const [{ data: member }, { data: superRole }, { data: chs }] = await Promise.all([
         auth.admin.from('organization_members').select('role').eq('organization_id', organization_id).eq('user_id', auth.userId).eq('is_active', true).maybeSingle(),
         auth.admin.from('user_roles').select('role').eq('user_id', auth.userId).eq('role', 'super_admin').maybeSingle(),
-        auth.admin.from('messaging_channels').select('chatwoot_inbox_id, assigned_user_ids').eq('organization_id', organization_id),
+        auth.admin.from('messaging_channels').select('chatwoot_inbox_id, assigned_user_ids, metadata').eq('organization_id', organization_id),
       ]);
       const isAdmin = (member as { role?: string } | null)?.role === 'admin' || !!superRole;
       const restricted = new Map<number, Set<string>>();
-      for (const c of (chs || []) as Array<{ chatwoot_inbox_id: number | null; assigned_user_ids: string[] | null }>) {
+      // Inboxes whose groups toggle is ON — WhatsApp group conversations are shown
+      // for these. Default ON (only `groups_enabled === false` hides them), to
+      // match the toggle semantics in IntegrationsContent (`groups_enabled !== false`).
+      const groupsInboxes = new Set<number>();
+      for (const c of (chs || []) as Array<{ chatwoot_inbox_id: number | null; assigned_user_ids: string[] | null; metadata: Record<string, unknown> | null }>) {
         if (c.chatwoot_inbox_id != null && Array.isArray(c.assigned_user_ids) && c.assigned_user_ids.length > 0) {
           restricted.set(Number(c.chatwoot_inbox_id), new Set(c.assigned_user_ids));
         }
+        if (c.chatwoot_inbox_id != null && (c.metadata as Record<string, unknown> | null)?.groups_enabled !== false) {
+          groupsInboxes.add(Number(c.chatwoot_inbox_id));
+        }
       }
-      _vis = { isAdmin, restricted };
+      _vis = { isAdmin, restricted, groupsInboxes };
       return _vis;
     };
     const canSee = (vis: { isAdmin: boolean; restricted: Map<number, Set<string>> }, inboxId: number | null | undefined) => {
@@ -445,7 +455,7 @@ Deno.serve(async (req) => {
       // across parallel pages. Merge duplicate conversations per contact.
       const sorted = all
         .map((c: any) => ({ raw: c, n: normalizeConversation(c, cfg.chatwootUrl) }))
-        .filter(({ raw, n }) => !isHiddenConversation(raw, n) && canSee(vis, n.inbox_id))
+        .filter(({ raw, n }) => !isHiddenConversation(raw, n, vis.groupsInboxes) && canSee(vis, n.inbox_id))
         .map(({ n }) => n)
         .sort((a, b) => (b.updated_at ?? 0) - (a.updated_at ?? 0));
       return json({ conversations: mergeByContact(sorted) });
@@ -463,7 +473,7 @@ Deno.serve(async (req) => {
       const vis = await getVisibility();
       const normalized = payload
         .map((c: any) => ({ raw: c, n: normalizeConversation(c, cfg.chatwootUrl) }))
-        .filter(({ raw, n }: any) => !isHiddenConversation(raw, n) && canSee(vis, n.inbox_id))
+        .filter(({ raw, n }: any) => !isHiddenConversation(raw, n, vis.groupsInboxes) && canSee(vis, n.inbox_id))
         .map(({ n }: any) => n);
       return json({ conversations: normalized });
     }
@@ -584,7 +594,10 @@ Deno.serve(async (req) => {
         if (!convRes.ok) return json({ error: 'Conversa não encontrada' }, 502);
         const conv = await convRes.json();
         const sender = conv?.meta?.sender ?? conv?.payload?.meta?.sender ?? {};
-        number = String(sender.phone_number ?? sender.identifier ?? '').replace(/\D/g, '');
+        const ident = String(sender.identifier ?? '');
+        // Groups: send to the full group JID (stripping non-digits would misroute
+        // to a wrong individual number). Evolution's `number` accepts a @g.us JID.
+        number = ident.includes('@g.us') ? ident : String(sender.phone_number ?? sender.identifier ?? '').replace(/\D/g, '');
       }
       if (!number) return json({ error: 'Contacto sem número de telefone' }, 422);
 
@@ -912,6 +925,9 @@ Deno.serve(async (req) => {
           if (!convRes.ok) return;
           const conv = await convRes.json();
           const sender = conv?.meta?.sender ?? conv?.payload?.meta?.sender ?? {};
+          // Skip WhatsApp read receipts for groups (the @s.whatsapp.net JID built
+          // below only applies to 1:1 chats; a stripped group id would misroute).
+          if (String(sender.identifier ?? '').includes('@g.us')) return;
           const rawPhone = String(sender.phone_number ?? sender.identifier ?? '').replace(/\D/g, '');
           if (!rawPhone) return;
           const remoteJid = `${rawPhone}@s.whatsapp.net`;
