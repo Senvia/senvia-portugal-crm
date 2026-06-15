@@ -41,9 +41,11 @@ export function BulkActionsBar({
   const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
 
   return (
-    <AnimatePresence>
-      {selectedCount > 0 && (
+    <>
+      <AnimatePresence>
+        {selectedCount > 0 && (
         <motion.div
+          key="bulk-actions-bar"
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -10 }}
@@ -139,7 +141,8 @@ export function BulkActionsBar({
             </Button>
           </div>
         </motion.div>
-      )}
+        )}
+      </AnimatePresence>
 
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>
@@ -175,6 +178,6 @@ export function BulkActionsBar({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </AnimatePresence>
+    </>
   );
 }
